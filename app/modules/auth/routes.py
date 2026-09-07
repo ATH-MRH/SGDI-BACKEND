@@ -14,10 +14,12 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import AccessRule, User
+from app.core.audit import append_audit
 from app.modules.auth.schemas import (
     AccessRuleIn,
     AccessRuleOut,
     AdminSystemLoginIn,
+    AdminRecoveryIn,
     LoginIn,
     TokenOut,
     UserCreate,
@@ -133,7 +135,10 @@ def is_admin_role(role: str | None) -> bool:
 
 def is_admin_system_username(username: str | None) -> bool:
     normalized = (username or "").strip().upper()
-    return normalized == "ADMIN" or normalized.startswith("ADM") or normalized.startswith("ADG")
+    configured = (settings.admin_system_username or settings.admin_initial_username or "").strip().upper()
+    return bool(normalized) and (
+        normalized == configured or normalized == "ADMIN" or normalized.startswith("ADM") or normalized.startswith("ADG")
+    )
 
 
 def require_admin(user: User) -> None:
@@ -216,10 +221,11 @@ def find_admin_system_user(db: Session) -> User | None:
 
 
 def admin_system_recovery_password_ok(password: str) -> bool:
-    for secret in [settings.admin_system_password, settings.admin_initial_password]:
-        if secret and hmac.compare_digest(password, secret):
-            return True
-    return False
+    return bool(
+        settings.admin_recovery_enabled
+        and settings.admin_recovery_secret
+        and hmac.compare_digest(password, settings.admin_recovery_secret)
+    )
 
 
 def ensure_admin_system_user(db: Session, password: str, username: str | None = None) -> User | None:
@@ -238,36 +244,7 @@ def ensure_admin_system_user(db: Session, password: str, username: str | None = 
     user = find_admin_system_user(db)
     if user is not None:
         return user
-    if not admin_system_recovery_password_ok(password):
-        return None
-    username = admin_system_username_candidates()[0] if admin_system_username_candidates() else "ADG01"
-    user = (
-        db.query(User)
-        .filter(func.lower(User.username) == username.lower())
-        .one_or_none()
-    )
-    if user is None:
-        user = User(
-            username=username,
-            email=None,
-            full_name="Administrateur",
-            role="admin",
-            access_level="H5",
-            authorized_societies=[],
-            authorized_structures=[],
-            authorized_sites=[],
-            password_hash=hash_password(password),
-            is_active=True,
-        )
-        db.add(user)
-    else:
-        user.role = "admin"
-        user.access_level = user.access_level or "H5"
-        user.password_hash = hash_password(password)
-        user.is_active = True
-    db.commit()
-    db.refresh(user)
-    return user
+    return None
 
 
 def find_user_by_identifier(db: Session, identifier: str) -> User | None:
@@ -297,7 +274,14 @@ def find_user_by_identifier(db: Session, identifier: str) -> User | None:
 def register(payload: UserCreate, db: Session = Depends(get_db)):
     if not settings.allow_public_registration:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inscription publique désactivée")
-    return create_user(db, payload)
+    # Une inscription publique ne peut jamais s'attribuer un périmètre global,
+    # quels que soient les champs envoyés par le client.
+    safe_payload = payload.model_copy(update={
+        "role": "user", "access_level": None, "authorized_societies": [],
+        "authorized_structures": [], "authorized_sites": [], "authorized_actions": ["read"],
+        "authorized_modules": [], "global_society_access": False,
+    })
+    return create_user(db, safe_payload)
 
 
 @router.post("/users", response_model=UserOut)
@@ -405,30 +389,58 @@ def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Sessio
     ip = _client_ip(request)
     _enforce_login_rate(ip)
     user = ensure_admin_system_user(db, payload.password, payload.username)
+    # Sans identifiant explicite, plusieurs comptes système historiques peuvent
+    # coexister. Sélectionner celui dont le secret propre correspond, sans jamais
+    # réappliquer un secret de configuration.
+    if not payload.username:
+        for candidate_name in admin_system_username_candidates():
+            candidate = find_user_by_identifier(db, candidate_name)
+            if candidate and candidate.is_active and is_admin_role(candidate.role) and is_admin_system_username(candidate.username):
+                try:
+                    _, authenticated = authenticate(db, candidate.username, payload.password)
+                    user = authenticated
+                    break
+                except HTTPException:
+                    continue
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
-    recovery_password_ok = admin_system_recovery_password_ok(payload.password)
-    password_ok = recovery_password_ok
-    if recovery_password_ok:
-        user.role = "admin"
-        user.access_level = "H5"
-        user.authorized_structures = ["admin"]
-        user.password_hash = hash_password(payload.password)
-        user.is_active = True
-        db.commit()
-        db.refresh(user)
-    else:
-        try:
-            _, authenticated = authenticate(db, user.username, payload.password)
-            password_ok = authenticated.id == user.id and is_admin_role(authenticated.role)
-        except HTTPException:
-            password_ok = False
+    try:
+        _, authenticated = authenticate(db, user.username, payload.password)
+        password_ok = authenticated.id == user.id and is_admin_role(authenticated.role)
+    except HTTPException:
+        password_ok = False
     if not password_ok:
         rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
     rate_limit.clear(f"login:{ip}")
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username, "admin_system": True})
     return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+@router.post("/admin-system-recovery")
+def admin_system_recovery(payload: AdminRecoveryIn, request: Request, db: Session = Depends(get_db)):
+    """Récupération exceptionnelle, désactivée par défaut et jamais appelée au démarrage."""
+    ip = _client_ip(request)
+    _enforce_login_rate(ip)
+    user = find_user_by_identifier(db, payload.username)
+    allowed = admin_system_recovery_password_ok(payload.recovery_secret)
+    if not allowed or user is None or not is_admin_system_username(user.username):
+        append_audit(db, action="admin.recovery", resource="user", resource_id=payload.username,
+                     result="refused", request=request)
+        rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
+        db.commit()
+        raise HTTPException(status_code=403, detail="Récupération administrateur indisponible ou refusée")
+    user.password_hash = hash_password(payload.new_password)
+    user.role = "admin"
+    user.access_level = "H5"
+    user.authorized_structures = ["admin"]
+    user.global_society_access = True
+    user.is_active = True
+    append_audit(db, action="admin.recovery", resource="user", resource_id=user.id,
+                 result="success", user=user, request=request, new_state={"credentials_rotated": True})
+    rate_limit.clear(f"login:{ip}")
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/login", response_model=TokenOut)

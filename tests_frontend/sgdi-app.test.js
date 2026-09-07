@@ -112,7 +112,7 @@ test('la fiche utilisateur propose et transmet les droits par action', () => {
     assert.match(src, new RegExp(`action_\\$\\{action\\.key\\}`));
   }
   assert.match(src, /authorized_actions:data\.actionsAutorisees/);
-  assert.match(src, /Hérités du profil/);
+  assert.match(src, /Aucune case cochée : héritage du profil/);
 });
 
 test('les actions du candidat en réserve proposent la contractualisation contrôlée', () => {
@@ -177,8 +177,8 @@ test('l’aperçu du contrat fusionne le modèle avec les données du futur empl
   assert.match(src, /Aperçu du contrat complété/);
   assert.match(src, /printEmployeeNewContractFromForm\(document\.getElementById\('employee-new-contract-form'\)\)/);
   assert.doesNotMatch(src, /Télécharger l'aperçu du modèle/);
-  assert.match(src, /generated-contracts\/preview-from-form/);
-  assert.match(src, /Contrat complété généré avec les données du futur employé/);
+  assert.match(src, /openEmployeeContractReviewWindow\(draft\.a,draft\)/);
+  assert.match(src, /Le modèle Word sera automatiquement rempli avec toutes les informations saisies du futur employé/);
 });
 
 test('le champ client du contrat charge les clients PostgreSQL et les sites', () => {

@@ -16,7 +16,7 @@ def _add_test_user(db, username, password, role="ops", access_level="H3", struct
         full_name=username,
         role=role,
         access_level=access_level,
-        authorized_societies=[],
+        authorized_societies=["Iron Global Securite"],
         authorized_structures=structures or [],
         authorized_sites=[],
         authorized_modules=modules,
@@ -56,14 +56,15 @@ def test_admin_system_login_accepts_named_h5_admin(client, db):
     assert payload["admin_system"] is True
 
 
-def test_admin_system_login_recovers_named_admin_password(client, db):
+def test_admin_system_login_does_not_recover_named_admin_password(client, db):
     _add_test_user(db, "ADG01", "forgotten", role="admin", access_level="H5", structures=["admin"])
 
     resp = client.post("/api/auth/admin-system-login", json={"username": "ADG01", "password": "test-admin-password"})
 
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 401, resp.text
     user = db.query(User).filter(User.username == "ADG01").one()
-    assert verify_password("test-admin-password", user.password_hash)
+    assert verify_password("forgotten", user.password_hash)
+    assert not verify_password("test-admin-password", user.password_hash)
 
 
 def test_admin_system_login_rejects_structure_prefix(client, db):
@@ -366,7 +367,7 @@ def test_individual_action_permissions_are_returned_and_enforced(client, db):
         full_name="Lecture seule",
         role="ops",
         access_level="H3",
-        authorized_societies=[],
+        authorized_societies=["Iron Global Securite"],
         authorized_structures=["ops"],
         authorized_sites=[],
         authorized_actions=["read"],

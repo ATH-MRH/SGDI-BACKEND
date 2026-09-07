@@ -19,6 +19,8 @@ from app.modules.drh.models import Employee
 from app.modules.ops.models import Site
 from app.modules.materiel.service import ensure_material_schema
 from app.core.photo_storage import normalize_photo_fields
+from app.core.scope_policy import ScopeKind, society_scope
+from app.modules.irongs.legacy_policy import user_can_read_collection
 
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
@@ -243,9 +245,7 @@ def _username_key(value: Any) -> str:
 
 
 def _snapshot_unrestricted(user: Any | None) -> bool:
-    if user is None:
-        return False
-    return _user_role(user) in ADMIN_SNAPSHOT_ROLES or not _user_allowed_societies(user)
+    return society_scope(user).kind is ScopeKind.GLOBAL
 
 
 def _message_participants(item: dict[str, Any]) -> set[str]:
@@ -375,8 +375,9 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
     # (_filter_echanges_for_user, _filter_rows_for_scope) ne modifient jamais les
     # lignes : ils reconstruisent des listes de références. Évite un deepcopy de
     # ~30 Mo par requête /api/irongs/db (génération 49s -> quelques secondes).
+    visible_snapshot = {name: value for name, value in snapshot.items() if user_can_read_collection(user, name)}
     if _snapshot_unrestricted(user):
-        scoped_unrestricted = dict(snapshot)
+        scoped_unrestricted = dict(visible_snapshot)
         echanges = scoped_unrestricted.get("echanges")
         if isinstance(echanges, list):
             scoped_unrestricted["echanges"] = _filter_echanges_for_user(echanges, user)
@@ -385,7 +386,7 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
                 scoped_unrestricted[protected_name] = _protect_mission_financial_data(protected_name, scoped_unrestricted[protected_name], user)
         return scoped_unrestricted
     allowed_societies = _user_allowed_societies(user)
-    scoped: dict[str, list[Any] | dict[str, Any]] = dict(snapshot)
+    scoped: dict[str, list[Any] | dict[str, Any]] = dict(visible_snapshot)
 
     allowed_agent_refs: set[str] = set()
     for name in ("agents", "employees"):

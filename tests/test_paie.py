@@ -87,8 +87,12 @@ def test_closed_payslip_is_not_altered_by_a_later_save(client, auth_headers):
 
 # ── Confidentialité : les salaires ne franchissent pas la frontière société ──
 
-def test_snapshot_hides_foreign_society_payslips(client, auth_headers, restricted_headers):
+def test_snapshot_hides_foreign_society_payslips(client, auth_headers, restricted_headers, db):
     """GET /api/irongs/db : un utilisateur restreint ne voit pas les bulletins d'une autre société."""
+    from app.modules.auth.models import User
+    user = db.query(User).filter(User.username == "testops").one()
+    user.authorized_modules = ["finance"]
+    db.commit()
     _put(client, auth_headers, {"paieBulletins": [
         _bulletin("b_snap_igs", SOC_IGS, 40915),
         _bulletin("b_snap_swd", SOC_SWORD, 99999),
@@ -99,8 +103,12 @@ def test_snapshot_hides_foreign_society_payslips(client, auth_headers, restricte
     assert "b_snap_swd" not in ids, "Le snapshot expose les salaires d'une autre société !"
 
 
-def test_collection_endpoint_hides_foreign_society_payslips(client, auth_headers, restricted_headers):
+def test_collection_endpoint_hides_foreign_society_payslips(client, auth_headers, restricted_headers, db):
     """GET /api/irongs/collections/paieBulletins doit filtrer comme le snapshot."""
+    from app.modules.auth.models import User
+    user = db.query(User).filter(User.username == "testops").one()
+    user.authorized_modules = ["finance"]
+    db.commit()
     _put(client, auth_headers, {"paieBulletins": [
         _bulletin("b_col_igs", SOC_IGS, 40915),
         _bulletin("b_col_swd", SOC_SWORD, 99999),
@@ -111,7 +119,7 @@ def test_collection_endpoint_hides_foreign_society_payslips(client, auth_headers
         "FUITE : les bulletins de salaire d'une autre société sont lisibles via /collections"
 
 
-def test_global_grille_and_cloture_stay_visible_to_restricted_user(client, auth_headers, restricted_headers):
+def test_global_grille_and_cloture_stay_visible_to_restricted_user(client, auth_headers, restricted_headers, db):
     """Le cloisonnement ne doit PAS emporter les références globales de la paie.
 
     Le métier s'appuie dessus : paieGrilleForAgent accepte une grille sans société,
@@ -119,6 +127,10 @@ def test_global_grille_and_cloture_stay_visible_to_restricted_user(client, auth_
     Les jeter ferait perdre le plancher/plafond de grille (base de salaire fausse)
     et rouvrirait un mois pourtant clôturé.
     """
+    from app.modules.auth.models import User
+    user = db.query(User).filter(User.username == "testops").one()
+    user.authorized_modules = ["finance"]
+    db.commit()
     _put(client, auth_headers, {
         "paieGrilles": [
             {"id": "g_global", "fonction": "AGENT DE SECURITE", "min": 40000, "max": 80000},

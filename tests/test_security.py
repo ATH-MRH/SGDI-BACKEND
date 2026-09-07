@@ -35,6 +35,8 @@ def test_message_creation_forces_authenticated_sender(client, db):
         full_name="Gestionnaire RH",
         password_hash=hash_password("secret-test"),
         role="adm",
+        global_society_access=True,
+        authorized_structures=["secretariat"],
         is_active=True,
     )
     db.add(user)

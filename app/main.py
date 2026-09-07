@@ -322,18 +322,16 @@ def on_startup() -> None:
                 authorized_societies=[],
                 authorized_structures=["admin"],
                 authorized_sites=[],
+                global_society_access=True,
                 password_hash=hash_password(admin_reset_password),
                 is_active=True,
             )
             db.add(admin)
             logger.info("Compte administrateur système initialisé: %s", admin_username)
         elif admin is not None and settings.admin_system_password:
-            admin.role = "admin"
-            admin.access_level = "H5"
-            admin.authorized_structures = ["admin"]
-            admin.password_hash = hash_password(settings.admin_system_password)
-            admin.is_active = True
-            logger.info("Mot de passe Administration système réinitialisé au démarrage: %s", admin_username)
+            # Compatibilité de configuration uniquement : ce secret n'est plus jamais
+            # réappliqué à un compte existant pendant un démarrage normal.
+            logger.info("Compte administrateur existant vérifié sans modification de ses identifiants: %s", admin_username)
         elif admin is None:
             logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_USERNAME et ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
         # Compte module FACTURATION — créé UNIQUEMENT si un mot de passe fort est fourni

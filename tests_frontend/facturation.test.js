@@ -26,8 +26,8 @@ test('clientMontantTTC : somme des lignes × 1,19 (TVA 19 %)', () => {
     { prixUnitaire: 500, qte: 3 },    // 1500
   ] };
   assert.strictEqual(t.clientMontantTTC(client), 3500 * 1.19);
-  // qte manquante -> 1 par défaut
-  assert.strictEqual(t.clientMontantTTC({ lignesFacturation: [{ prixUnitaire: 1000 }] }), 1000 * 1.19);
+  // Une ligne catalogue sans quantité n'est pas encore facturable.
+  assert.strictEqual(t.clientMontantTTC({ lignesFacturation: [{ prixUnitaire: 1000 }] }), 0);
   assert.strictEqual(t.clientMontantTTC({ lignesFacturation: [] }), 0);
   assert.strictEqual(t.clientMontantTTC({}), 0);
   assert.strictEqual(t.clientMontantTTC(null), 0);

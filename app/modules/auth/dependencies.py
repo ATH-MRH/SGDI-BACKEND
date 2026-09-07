@@ -6,11 +6,19 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
+from app.core.audit import append_audit
+from app.core.scope_policy import ScopeKind, society_scope
 
 
 security = HTTPBearer(auto_error=False)
 
 AUTHORIZED_ACTIONS = {"read", "create", "update", "validate", "delete", "export", "unlock", "admin"}
+SOCIETY_SCOPED_PREFIXES = (
+    "/api/drh", "/api/ops", "/api/materiel", "/api/commercial",
+    "/api/finance", "/api/accounting", "/api/achats", "/api/ventes", "/api/reporting",
+    "/api/ronde", "/api/loans",
+    "/api/irongs",
+)
 
 
 def request_action(request: Request) -> str:
@@ -48,8 +56,16 @@ def current_user(
     user = get_user(db, int(payload["sub"]))
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur inactif")
+    if request.url.path.lower().startswith(SOCIETY_SCOPED_PREFIXES) and society_scope(user).kind is ScopeKind.NONE:
+        append_audit(db, action="authorization.no_society_scope", resource="api",
+                     resource_id=request.url.path, result="refused", user=user, request=request)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun périmètre société explicite")
     actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
     actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
     if actions and request_action(request) not in actions and "admin" not in actions:
+        append_audit(db, action="authorization.action", resource="api", resource_id=request.url.path,
+                     result="refused", user=user, request=request)
+        db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Action non autorisée : {request_action(request)}")
     return user

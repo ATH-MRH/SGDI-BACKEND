@@ -128,25 +128,23 @@ def test_admin_can_still_replace_any_collection(client, auth_headers):
 def test_who_is_actually_unrestricted():
     """Qui échappe totalement au filtrage ? La réponse décide qui est impacté.
 
-    Un utilisateur est non filtré si son rôle est administrateur OU si sa liste de
-    sociétés autorisées est vide. Seuls les utilisateurs ayant À LA FOIS un rôle
-    non-admin ET une liste de sociétés non vide sont filtrés.
+    Seul un droit global explicite permet d'échapper au filtrage.
     """
     from app.modules.irongs.service import ADMIN_SNAPSHOT_ROLES, _snapshot_unrestricted
 
     class U:
-        def __init__(self, role, societes):
+        def __init__(self, role, societes, global_access=False):
             self.role = role
             self.authorized_societies = societes
+            self.global_society_access = global_access
 
-    # Tous les rôles administrateurs, quelle que soit leur liste de sociétés
+    # Le rôle administrateur seul ne suffit plus.
     for role in ADMIN_SNAPSHOT_ROLES:
-        assert _snapshot_unrestricted(U(role, ["Iron Global Securite"])) is True, role
-        assert _snapshot_unrestricted(U(role.upper(), ["Iron Global Securite"])) is True, role
+        assert _snapshot_unrestricted(U(role, ["Iron Global Securite"])) is False, role
+        assert _snapshot_unrestricted(U(role.upper(), [], True)) is True, role
 
-    # Un rôle métier SANS liste de sociétés est également non filtré (voit tout)
-    assert _snapshot_unrestricted(U("drh", [])) is True
-    assert _snapshot_unrestricted(U("drh", None)) is True
+    assert _snapshot_unrestricted(U("drh", [])) is False
+    assert _snapshot_unrestricted(U("drh", None)) is False
 
     # Seul ce profil est filtré : rôle métier + liste de sociétés explicite
     assert _snapshot_unrestricted(U("drh", ["Iron Global Securite"])) is False
@@ -154,8 +152,8 @@ def test_who_is_actually_unrestricted():
     assert _snapshot_unrestricted(None) is False
 
 
-def test_business_role_without_society_list_sees_all_payslips(client, auth_headers, db):
-    """Un DRH sans liste de sociétés voit toujours toute la paie : rien n'a changé pour lui."""
+def test_business_role_without_society_list_cannot_see_payslips(client, auth_headers, db):
+    """Un DRH sans liste de sociétés ne voit aucune donnée de paie."""
     from app.core.security import hash_password
     from app.modules.auth.models import User
 
@@ -174,10 +172,9 @@ def test_business_role_without_society_list_sees_all_payslips(client, auth_heade
     assert tok.status_code == 200, tok.text
     h = {"Authorization": f"Bearer {tok.json()['access_token']}"}
 
-    snap = client.get("/api/irongs/db", headers=h).json()
-    ids = {b["id"] for b in (snap.get("paieBulletins") or [])}
-    assert {"drhg_igs", "drhg_swd"} <= ids, \
-        "Un DRH sans liste de sociétés a perdu la visibilité sur la paie"
+    response = client.get("/api/irongs/db", headers=h)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Aucun périmètre société explicite"
 
 
 # ── Normalisation des noms de société (accents) ──────────────────────────────
@@ -222,7 +219,7 @@ def test_accented_user_list_matches_unaccented_data(client, auth_headers, db):
         db.add(User(username="testaccent", email="acc@test.com", full_name="Accent",
                     role="agent", access_level="H1",
                     authorized_societies=["IRON GLOBAL SÉCURITÉ"],  # accentué, comme en prod
-                    authorized_structures=[], password_hash=hash_password("testpass123"),
+                    authorized_structures=[], authorized_modules=["finance"], password_hash=hash_password("testpass123"),
                     is_active=True))
         db.commit()
 

@@ -38,13 +38,15 @@ def test_preview_before_validation_always_opens_html_window():
     assert "preview-from-form" not in preview
 
 
-def test_contract_form_does_not_repeat_candidate_emergency_banner():
+def test_contract_form_requires_candidate_wilaya_and_emergency_contact():
     contractualisation = JS.split("function renderContractualisation(view,id){", 1)[1].split(
         "function updateNewContractSummary", 1
     )[0]
-    assert "nc-candidate-contact-row" not in contractualisation
-    assert 'name="candidateWilaya"' not in contractualisation
-    assert 'name="contactUrgenceLien"' not in contractualisation
+    assert "nc-candidate-contact-row" in contractualisation
+    assert 'name="candidateWilaya" required' in contractualisation
+    assert 'name="contactUrgenceLien"' in contractualisation
+    assert 'name="contactUrgenceNom"' in contractualisation
+    assert 'name="contactUrgenceTel"' in contractualisation
 
 
 def test_identity_document_and_nin_are_persisted_separately():
@@ -60,12 +62,14 @@ def test_identity_document_and_nin_are_persisted_separately():
     assert "persistCandidateContractIdentity" in contractualisation
 
 
-def test_missing_emergency_contact_does_not_block_employee_creation():
+def test_emergency_contact_is_transmitted_before_employee_creation():
     confirmation = JS.split("async function confirmCandidateNewContract(form,id){", 1)[1].split(
         "async function recruitContractCandidateToEmployee", 1
     )[0]
-    assert "missingContact" not in confirmation
-    assert "Complétez les informations obligatoires" not in confirmation
+    assert 'c.wilaya=String(candidateDetails.get("candidateWilaya")' in confirmation
+    assert 'c.contactUrgenceLien=String(candidateDetails.get("contactUrgenceLien")' in confirmation
+    assert 'c.contactUrgenceNom=String(candidateDetails.get("contactUrgenceNom")' in confirmation
+    assert 'c.contactUrgenceTel=formatPhoneSGDI(String(candidateDetails.get("contactUrgenceTel")' in confirmation
 
 
 def test_recruitment_does_not_revalidate_all_candidate_sections():

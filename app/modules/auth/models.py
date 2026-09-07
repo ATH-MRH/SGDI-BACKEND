@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, JSON, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Index, JSON, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -29,6 +31,8 @@ class User(Base, TimestampMixin):
     # configurable jusqu'ici — voir isOpsSupervisorReadOnlySession côté frontend). Un admin
     # peut désactiver cette restriction pour un compte précis depuis Périmètres superviseurs.
     supervisor_read_only: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Seul ce droit explicite autorise un périmètre toutes sociétés.
+    global_society_access: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 
@@ -40,3 +44,46 @@ class AccessRule(Base, TimestampMixin):
     module_key: Mapped[str] = mapped_column(String(80), index=True)
     role: Mapped[str] = mapped_column(String(40), index=True)
     allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_user_created", "username", "created_at"),
+        Index("ix_audit_events_society_created", "society", "created_at"),
+        Index("ix_audit_events_action_resource", "action", "resource"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    user_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
+    username: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    resource: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    resource_id: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    society: Mapped[str | None] = mapped_column(String(150), nullable=True, index=True)
+    result: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    old_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_state: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
+
+class PortalPasswordResetToken(Base):
+    __tablename__ = "portal_password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    delivery_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    delivery_target_masked: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+@event.listens_for(AuditEvent, "before_update")
+@event.listens_for(AuditEvent, "before_delete")
+def _protect_audit_event(_mapper, _connection, _target) -> None:
+    raise ValueError("Le journal d'audit est append-only")

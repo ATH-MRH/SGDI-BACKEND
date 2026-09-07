@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     admin_system_username: str | None = None
     admin_initial_username: str | None = None
     admin_initial_password: str | None = None
+    # Procédure exceptionnelle uniquement. Le secret n'est jamais appliqué au démarrage.
+    admin_recovery_enabled: bool = False
+    admin_recovery_secret: str | None = None
+    portal_password_reset_ttl_minutes: int = 15
     # Compte module Facturation : créé UNIQUEMENT si un mot de passe fort est fourni ici.
     fac_initial_password: str | None = None
 

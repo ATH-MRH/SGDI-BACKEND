@@ -19,7 +19,7 @@ def test_delete_store_requires_admin_system_token(client, auth_headers):
 
 def test_delete_store_accepts_admin_system_token(client, auth_headers):
     store = _create_store(client, auth_headers, "Magasin permission systeme")
-    login = client.post("/api/auth/admin-system-login", json={"password": "test-admin-password"})
+    login = client.post("/api/auth/admin-system-login", json={"username": "testadmin", "password": "test-admin-password"})
     assert login.status_code == 200, login.text
     admin_system_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
@@ -59,7 +59,7 @@ def test_delete_article_requires_admin_system_token(client, auth_headers):
 
 def test_delete_article_accepts_admin_system_token(client, auth_headers):
     article = _create_article(client, auth_headers, "ART-SYSTEME")
-    login = client.post("/api/auth/admin-system-login", json={"password": "test-admin-password"})
+    login = client.post("/api/auth/admin-system-login", json={"username": "testadmin", "password": "test-admin-password"})
     assert login.status_code == 200, login.text
     admin_system_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
@@ -83,7 +83,7 @@ def test_delete_article_removes_linked_movements(client, auth_headers):
         headers=auth_headers,
     )
     assert movement.status_code == 200, movement.text
-    login = client.post("/api/auth/admin-system-login", json={"password": "test-admin-password"})
+    login = client.post("/api/auth/admin-system-login", json={"username": "testadmin", "password": "test-admin-password"})
     assert login.status_code == 200, login.text
     admin_system_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 

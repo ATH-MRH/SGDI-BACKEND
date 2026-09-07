@@ -942,34 +942,24 @@
       <!-- ===== RESET PASSWORD FORM ===== -->
       <form class="auth-form" id="form-reset" onsubmit="event.preventDefault(); doResetPassword();">
         <h2 style="font-size:1rem;font-weight:700;color:#043970;margin-bottom:16px;text-align:center;">Réinitialiser le mot de passe</h2>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div class="field">
-            <label>Nom</label>
-            <input type="text" id="rst-nom" autocomplete="family-name" placeholder="DUPONT" required />
-          </div>
-          <div class="field">
-            <label>Prénom</label>
-            <input type="text" id="rst-prenom" autocomplete="given-name" placeholder="Jean" required />
-          </div>
-        </div>
         <div class="field" style="margin-bottom:10px;">
           <label>Matricule / Code employé</label>
           <input type="text" id="rst-code" autocomplete="off" placeholder="A01" required />
         </div>
         <div class="field" style="margin-bottom:10px;">
-          <label>Date de naissance</label>
-          <input type="date" id="rst-ddn" autocomplete="bday" required />
+          <label>Jeton temporaire remis par la DRH</label>
+          <input type="text" id="rst-token" autocomplete="one-time-code" placeholder="Laisser vide pour demander un jeton" />
         </div>
         <div class="field" style="margin-bottom:10px;">
           <label>Nouveau mot de passe</label>
           <div class="input-group">
-            <input type="password" id="rst-pwd" autocomplete="new-password" placeholder="Min. 6 caractères" required />
+            <input type="password" id="rst-pwd" autocomplete="new-password" placeholder="Min. 12 caractères" />
             <button type="button" class="toggle-pwd" onclick="togglePwd('rst-pwd', this)">Afficher</button>
           </div>
         </div>
         <div class="field" style="margin-bottom:16px;">
           <label>Confirmer le mot de passe</label>
-          <input type="password" id="rst-pwd2" autocomplete="new-password" placeholder="••••••••" required />
+          <input type="password" id="rst-pwd2" autocomplete="new-password" placeholder="••••••••" />
         </div>
         <button type="submit" class="btn btn-block">Réinitialiser</button>
         <div style="text-align:center;margin-top:12px;font-size:.82rem;">
@@ -2124,33 +2114,33 @@
 
   async function doResetPassword() {
     hideAlert();
-    const nom    = val('rst-nom');
-    const prenom = val('rst-prenom');
     const code   = val('rst-code');
-    const ddn    = val('rst-ddn');
+    const token  = val('rst-token');
     const pwd    = document.getElementById('rst-pwd').value;
     const pwd2   = document.getElementById('rst-pwd2').value;
-    if (!nom || !prenom || !code || !ddn || !pwd) {
-      showAlert('Tous les champs sont obligatoires'); return;
-    }
-    if (pwd.length < 6) { showAlert('Mot de passe trop court (minimum 6 caractères)'); return; }
-    if (pwd !== pwd2)   { showAlert('Les mots de passe ne correspondent pas'); return; }
+    if (!code) { showAlert('Le matricule est obligatoire'); return; }
+    if (token && pwd.length < 12) { showAlert('Mot de passe trop court (minimum 12 caractères)'); return; }
+    if (token && pwd !== pwd2) { showAlert('Les mots de passe ne correspondent pas'); return; }
 
     try {
-      const res = await fetch(location.origin + '/api/portal/self-reset-password', {
+      const endpoint = token ? '/api/portal/password-reset/confirm' : '/api/portal/password-reset/request';
+      const body = token ? { token, password: pwd } : { code: code.trim().toUpperCase(), channel: 'manual_rh' };
+      const res = await fetch(location.origin + endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nom, prenom, code: code.trim().toUpperCase(), dateNaissance: ddn, password: pwd }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         let detail = 'Erreur réinitialisation';
         try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
         showAlert(detail); return;
       }
-      showAlert('Mot de passe réinitialisé ! Vous pouvez maintenant vous connecter.');
-      // Switch back to login with the code pre-filled
-      document.getElementById('login-id').value = code.trim().toUpperCase();
-      showAuthForm('login');
+      if (token) {
+        showAlert('Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.');
+        document.getElementById('login-id').value = code.trim().toUpperCase();
+      } else {
+        showAlert('Demande enregistrée. Contactez la DRH pour obtenir votre jeton temporaire.');
+      }
     } catch (e) {
       showAlert('Impossible de contacter le serveur.');
     }
@@ -2249,7 +2239,7 @@
   /* ================ CHANGER MOT DE PASSE ============== */
   /* ================================================== */
   function openChangePassword() {
-    document.getElementById('cp-old').value = currentUser?.mustChangePassword ? '123456' : '';
+    document.getElementById('cp-old').value = '';
     document.getElementById('cp-new').value = '';
     document.getElementById('cp-new2').value = '';
     document.getElementById('pwdAlert').classList.remove('show');
@@ -2382,7 +2372,7 @@
       setTimeout(() => {
         openChangePassword();
         const alert = document.getElementById('pwdAlert');
-        alert.textContent = 'Première connexion : remplacez obligatoirement le mot de passe provisoire 123456.';
+        alert.textContent = 'Première connexion : saisissez puis remplacez obligatoirement le mot de passe provisoire reçu.';
         alert.classList.add('show');
       }, 100);
     }

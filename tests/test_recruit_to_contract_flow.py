@@ -108,7 +108,7 @@ def test_future_contract_start_is_preserved(client, auth_headers):
         "avisRecruteur": "REC01", "avisCommentaire": "OK", "adresse": "Rue 2",
         "commune": "Oran", "wilaya": "Oran", "contactUrgenceLien": "frere",
         "contactUrgenceNom": "Contact", "contactUrgenceTel": "0550654321",
-        "typeContrat": "CDD", "contractStartDate": "2026-09-01", "dateFinContrat": "2027-08-31",
+        "typeContrat": "CDD", "contractStartDate": "2999-09-01", "dateFinContrat": "3000-08-31",
     }
     payload = {"first_name": "Contrat", "last_name": "Futur", "phone": "0550123456",
                "desired_position": "APS", "society": "Iron Global Securite", "expected_salary": 50000,
@@ -125,7 +125,7 @@ def test_future_contract_start_is_preserved(client, auth_headers):
     recruited = client.post(f"/api/drh/candidates/{candidate_id}/recruit", headers=auth_headers)
     assert recruited.status_code == 200, recruited.text
     employee = recruited.json()["data"]
-    assert employee["recruit_date"] == "2026-09-01"
+    assert employee["recruit_date"] == "2999-09-01"
     assert employee["status"] == "a_venir"
     contracts = client.get(f"/api/drh/contracts?employee_id={employee['id']}", headers=auth_headers).json()
-    assert contracts[0]["start_date"] == "2026-09-01"
+    assert contracts[0]["start_date"] == "2999-09-01"

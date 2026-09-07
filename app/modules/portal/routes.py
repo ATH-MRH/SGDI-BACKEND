@@ -1,3 +1,4 @@
+import hashlib
 import math
 import re
 import secrets
@@ -11,11 +12,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
+from app.core.audit import append_audit
 from app.core.config import settings
+from app.core.scope_policy import ScopeKind, society_scope
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
-from app.modules.auth.models import User
+from app.modules.auth.models import PortalPasswordResetToken, User
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs import service
@@ -27,7 +30,6 @@ from app.modules.ops.routes import _allowed_assignment_site_ids, _site_society
 router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
-PORTAL_TEMPORARY_PASSWORD = "123456"
 ATTENDANCE_QR_REFRESH_SECONDS = 10
 # Mobile browsers may suspend JavaScript briefly when the screen locks or the
 # application is backgrounded. Keep a short server-side grace period while the
@@ -465,30 +467,111 @@ def portal_self_register(payload: dict[str, Any], request: Request, db: Session 
 
 @router.post("/self-reset-password")
 def portal_self_reset_password(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
-    _limit_public(request, "reset", 8)
-    required = ("nom", "prenom", "code", "dateNaissance", "password")
-    if any(not _clean_text(payload.get(k)) for k in required):
-        raise HTTPException(status_code=400, detail="Tous les champs sont obligatoires")
-    password = _clean_text(payload.get("password"))
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Mot de passe trop court (minimum 6 caractères)")
+    # Adaptateur de compatibilité : l'ancienne preuve d'identité seule est refusée.
+    return portal_confirm_password_reset(payload, request, db)
 
-    agents = service.list_items(db, "agents")
-    agent = next((a for a in agents if isinstance(a, dict) and _agent_matches_signup(a, payload)), None)
-    if not agent:
-        raise HTTPException(status_code=403, detail="Aucun employé ne correspond aux informations saisies")
 
-    matricule = _agent_field(agent, "matricule", "code")
-    account = _find_portal_account(db, matricule)
-    if not account:
-        raise HTTPException(status_code=404, detail="Aucun compte portail. Créez d'abord un compte.")
+def _reset_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
+
+@router.post("/password-reset/request")
+def portal_request_password_reset(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "reset-request", 8)
+    matricule = _clean_text(payload.get("code") or payload.get("matricule"))
+    account = _find_portal_account(db, matricule) if matricule else None
+    if account:
+        raw_token = secrets.token_urlsafe(32)
+        now = datetime.utcnow()
+        db.query(PortalPasswordResetToken).filter(
+            PortalPasswordResetToken.account_id == str(account["id"]),
+            PortalPasswordResetToken.used_at.is_(None),
+        ).update({"used_at": now}, synchronize_session=False)
+        db.add(PortalPasswordResetToken(
+            account_id=str(account["id"]), token_hash=_reset_token_hash(raw_token),
+            delivery_channel=_clean_text(payload.get("channel") or "pending"),
+            delivery_target_masked=None,
+            expires_at=now + timedelta(minutes=settings.portal_password_reset_ttl_minutes),
+        ))
+        append_audit(db, action="portal.password_reset.request", resource="portal_account",
+                     resource_id=account["id"], society=account.get("societe"), result="success", request=request)
+        db.commit()
+        # Le jeton brut sera transmis par un adaptateur email/SMS futur ; jamais dans la réponse/log.
+    return {"ok": True, "message": "Si le compte existe, une procédure de récupération a été initiée."}
+
+
+@router.post("/password-reset/confirm")
+def portal_confirm_password_reset(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "reset-confirm", 8)
+    token = _clean_text(payload.get("token") or payload.get("resetToken"))
+    password = _clean_text(payload.get("password") or payload.get("newPassword"))
+    if not token or len(password) < 12:
+        raise HTTPException(status_code=400, detail="Jeton requis et mot de passe de 12 caractères minimum")
+    now = datetime.utcnow()
+    row = db.query(PortalPasswordResetToken).filter(
+        PortalPasswordResetToken.token_hash == _reset_token_hash(token),
+        PortalPasswordResetToken.used_at.is_(None),
+        PortalPasswordResetToken.expires_at > now,
+    ).one_or_none()
+    if row is None:
+        append_audit(db, action="portal.password_reset.confirm", resource="portal_account",
+                     result="refused", request=request)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Jeton invalide, expiré ou déjà utilisé")
+    account = service.get_item(db, "portalAccounts", row.account_id)
     service.update_item(db, "portalAccounts", account["id"], {
-        "passwordHash": hash_password(password),
-        "mustChangePassword": False,
+        "passwordHash": hash_password(password), "mustChangePassword": False,
         "passwordChangedAt": datetime.now(timezone.utc).isoformat(),
     })
-    return {"ok": True, "message": "Mot de passe réinitialisé avec succès"}
+    row.used_at = now
+    append_audit(db, action="portal.password_reset.confirm", resource="portal_account",
+                 resource_id=account["id"], society=account.get("societe"), result="success", request=request)
+    db.commit()
+    return {"ok": True, "message": "Mot de passe réinitialisé"}
+
+
+def _require_portal_account_manager(user: User, account: dict[str, Any] | None = None) -> None:
+    role = str(user.role or "").strip().lower()
+    structures = {str(value or "").strip().lower() for value in (user.authorized_structures or [])}
+    if role not in {"admin", "adm", "adm1", "adm2", "rh", "drh", "recruteur"} and not (
+        structures & {"admin", "rh", "drh", "recrutement", "gestionnaire_rh"}
+    ):
+        raise HTTPException(status_code=403, detail="Action réservée à la DRH ou à l'administration")
+    if account:
+        scope = society_scope(user)
+        if scope.kind is ScopeKind.NONE or not scope.allows(account.get("societe")):
+            raise HTTPException(status_code=403, detail="Compte salarié hors périmètre société")
+
+
+@router.post("/password-reset/manual-token")
+def portal_issue_manual_reset_token(
+    payload: dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    manager: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Remise RH hors bande : le jeton brut n'est affiché qu'une fois au gestionnaire."""
+    matricule = _clean_text(payload.get("code") or payload.get("matricule"))
+    account = _find_portal_account(db, matricule) if matricule else None
+    if not account:
+        raise HTTPException(status_code=404, detail="Compte portail introuvable")
+    _require_portal_account_manager(manager, account)
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.utcnow()
+    db.query(PortalPasswordResetToken).filter(
+        PortalPasswordResetToken.account_id == str(account["id"]),
+        PortalPasswordResetToken.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+    db.add(PortalPasswordResetToken(
+        account_id=str(account["id"]), token_hash=_reset_token_hash(raw_token),
+        delivery_channel="manual_rh", delivery_target_masked="remise manuelle",
+        expires_at=now + timedelta(minutes=settings.portal_password_reset_ttl_minutes),
+    ))
+    append_audit(db, action="portal.password_reset.manual_issue", resource="portal_account",
+                 resource_id=account["id"], society=account.get("societe"), result="success",
+                 user=manager, request=request, new_state={"channel": "manual_rh"})
+    db.commit()
+    return {"ok": True, "resetToken": raw_token, "expiresInMinutes": settings.portal_password_reset_ttl_minutes}
 
 
 @router.post("/demandes", status_code=status.HTTP_201_CREATED)
@@ -1674,7 +1757,6 @@ def _find_portal_account(db: Session, matricule: str) -> dict[str, Any] | None:
 
 def _public_portal_account(account: dict[str, Any]) -> dict[str, Any]:
     result = {k: v for k, v in account.items() if k != "passwordHash"}
-    result["temporaryPassword"] = PORTAL_TEMPORARY_PASSWORD if account.get("mustChangePassword") else ""
     return result
 
 
@@ -1684,6 +1766,7 @@ def list_portal_accounts(
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> list[dict[str, Any]]:
+    _require_portal_account_manager(admin)
     accounts = service.list_items(db, "portalAccounts")
     rows = [a for a in accounts if isinstance(a, dict)]
     if societe:
@@ -1695,9 +1778,11 @@ def list_portal_accounts(
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)
 def create_portal_account(
     payload: dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> dict[str, Any]:
+    _require_portal_account_manager(admin)
     matricule_raw = _clean_text(payload.get("matricule"))
     if not matricule_raw:
         raise HTTPException(status_code=400, detail="Matricule obligatoire")
@@ -1714,23 +1799,28 @@ def create_portal_account(
         raise HTTPException(status_code=409, detail="Un compte portail existe déjà pour cet employé")
 
     username = _norm_text(matricule_raw)
+    temporary_password = secrets.token_urlsafe(12)
     account: dict[str, Any] = {
         "id": username,
         "username": username,
         "matricule": _agent_field(agent, "matricule", "code"),
-        "passwordHash": hash_password(PORTAL_TEMPORARY_PASSWORD),
+        "passwordHash": hash_password(temporary_password),
         "nom": _agent_field(agent, "nom"),
         "prenom": _agent_field(agent, "prenom", "prénom"),
         "societe": _agent_field(agent, "societe"),
         "active": True,
         "mustChangePassword": True,
         "temporaryPasswordIssuedAt": datetime.now(timezone.utc).isoformat(),
+        "temporaryPasswordExpiresAt": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(),
         "passwordChangedAt": "",
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "createdBy": admin.username,
     }
     created = service.create_item(db, "portalAccounts", account)
-    return _public_portal_account(created)
+    append_audit(db, action="portal.account.create", resource="portal_account", resource_id=created.get("id"),
+                 society=created.get("societe"), result="success", user=admin, request=request)
+    db.commit()
+    return {**_public_portal_account(created), "temporaryPassword": temporary_password}
 
 
 @router.get("/accounts/{matricule}")
@@ -1742,6 +1832,7 @@ def get_portal_account(
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
+    _require_portal_account_manager(admin, account)
     return _public_portal_account(account)
 
 
@@ -1749,32 +1840,45 @@ def get_portal_account(
 def reset_portal_password(
     matricule: str,
     payload: dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> dict[str, Any]:
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
+    _require_portal_account_manager(admin, account)
     issued_at = datetime.now(timezone.utc).isoformat()
+    temporary_password = secrets.token_urlsafe(12)
     updated = service.update_item(db, "portalAccounts", account["id"], {
-        "passwordHash": hash_password(PORTAL_TEMPORARY_PASSWORD),
+        "passwordHash": hash_password(temporary_password),
         "mustChangePassword": True,
         "temporaryPasswordIssuedAt": issued_at,
+        "temporaryPasswordExpiresAt": (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat(),
         "passwordChangedAt": "",
     })
-    return _public_portal_account(updated)
+    append_audit(db, action="portal.account.temporary_password", resource="portal_account", resource_id=account["id"],
+                 society=account.get("societe"), result="success", user=admin, request=request)
+    db.commit()
+    return {**_public_portal_account(updated), "temporaryPassword": temporary_password}
 
 
 @router.delete("/accounts/{matricule}")
 def delete_portal_account(
     matricule: str,
+    request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> dict[str, str]:
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
-    return service.delete_item(db, "portalAccounts", account["id"])
+    _require_portal_account_manager(admin, account)
+    result = service.delete_item(db, "portalAccounts", account["id"])
+    append_audit(db, action="portal.account.delete", resource="portal_account", resource_id=account["id"],
+                 society=account.get("societe"), result="success", user=admin, request=request)
+    db.commit()
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1796,6 +1900,15 @@ def portal_login(payload: dict[str, Any], request: Request, db: Session = Depend
     )
     if not account or not account.get("active"):
         raise HTTPException(status_code=403, detail="Identifiant ou mot de passe incorrect")
+    if account.get("mustChangePassword") and account.get("temporaryPasswordExpiresAt"):
+        try:
+            expires = datetime.fromisoformat(str(account["temporaryPasswordExpiresAt"]).replace("Z", "+00:00"))
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if expires <= datetime.now(timezone.utc):
+                raise HTTPException(status_code=403, detail="Mot de passe provisoire expiré")
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Mot de passe provisoire invalide")
     if not verify_password(password, account.get("passwordHash", "")):
         raise HTTPException(status_code=403, detail="Identifiant ou mot de passe incorrect")
 
@@ -1865,13 +1978,14 @@ def portal_change_password(
     if not verify_password(old_password, account.get("passwordHash", "")):
         raise HTTPException(status_code=403, detail="Mot de passe actuel incorrect")
 
-    if new_password == PORTAL_TEMPORARY_PASSWORD:
-        raise HTTPException(status_code=400, detail="Choisissez un mot de passe différent du mot de passe provisoire")
+    if verify_password(new_password, account.get("passwordHash", "")):
+        raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit être différent")
     changed_at = datetime.now(timezone.utc).isoformat()
     service.update_item(db, "portalAccounts", account["id"], {
         "passwordHash": hash_password(new_password),
         "mustChangePassword": False,
         "passwordChangedAt": changed_at,
+        "temporaryPasswordExpiresAt": "",
     })
     return {"ok": True, "passwordChangedAt": changed_at}
 

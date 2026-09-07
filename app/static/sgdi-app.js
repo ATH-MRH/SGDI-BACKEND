@@ -1331,6 +1331,9 @@ function candidateContractAgentProxy(c){
     adresse:c.adresse||"",
     commune:c.commune||"",
     wilaya:c.wilaya||"",
+    contactUrgenceNom:c.contactUrgenceNom||"",
+    contactUrgenceTel:c.contactUrgenceTel||"",
+    contactUrgenceLien:c.contactUrgenceLien||"",
     societe:soc,
     typeContrat:cleanContractType(c.typeContrat)||"CDD",
     fonction:candidatePosteCleanValue(c.posteContrat)||candidatePosteCleanValue(c.posteSouhaite)||"AGENT DE PREVENTION ET DE SECURITE",
@@ -11861,6 +11864,10 @@ function employeeNewContractDefaults(a){
     periodeEssai:a?.periodeEssaiContrat||"3m",
     numeroPieceIdentite:a?.numeroPieceIdentite||a?.pieceIdentiteNumero||"",
     nin:a?.nin||"",
+    candidateWilaya:a?.wilaya||"",
+    contactUrgenceLien:a?.contactUrgenceLien||"",
+    contactUrgenceNom:a?.contactUrgenceNom||"",
+    contactUrgenceTel:a?.contactUrgenceTel||"",
     adresseSite:a?.adresseSite||site?.adresse||"",
     wilaya:a?.wilayaContrat||a?.wilaya||site?.wilaya||"",
     commune:a?.commune||site?.commune||"",
@@ -11985,6 +11992,10 @@ function employeeNewContractDraftFromForm(form){
     periodeEssai:String(fd.get("periodeEssai")||"3m").trim(),
     numeroPieceIdentite:String(fd.get("numeroPieceIdentite")||"").trim(),
     nin:String(fd.get("nin")||a?.nin||"").trim(),
+    candidateWilaya:String(fd.get("candidateWilaya")||a?.wilaya||"").trim(),
+    contactUrgenceLien:String(fd.get("contactUrgenceLien")||a?.contactUrgenceLien||"").trim(),
+    contactUrgenceNom:String(fd.get("contactUrgenceNom")||a?.contactUrgenceNom||"").trim(),
+    contactUrgenceTel:formatPhoneSGDI(String(fd.get("contactUrgenceTel")||a?.contactUrgenceTel||"").trim()),
     adresseSite:String(fd.get("adresseSite")||"").trim(),
     wilaya:String(fd.get("wilaya")||"").trim(),
     commune:String(fd.get("commune")||"").trim(),
@@ -12266,7 +12277,11 @@ function openEmployeeContractReviewWindow(a,draft){
     salaireLettres:draft.salaireLettres||"",
     missions:draft.missions||"",
     articleOverrides:draft.articleOverrides||{},
-    observation:draft.observation||""
+    observation:draft.observation||"",
+    candidateWilaya:draft.candidateWilaya||"",
+    contactUrgenceLien:draft.contactUrgenceLien||"",
+    contactUrgenceNom:draft.contactUrgenceNom||"",
+    contactUrgenceTel:draft.contactUrgenceTel||""
   };
   const archiveMeta={agentId:a.id||a.backendId||a.matricule,employeeBackendId:a.backendId||"",matricule:a.matricule||"",title:"Contrat",category:"Contrats",type:"contrat",reference:draft.reference||"",date:draft.dateDebut||today(),contractDraft};
   const html=apsContractDocumentHTML(a,draft)
@@ -12875,6 +12890,12 @@ function renderContractualisation(view,id){
             <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selectedSociete)}</select></div>
             <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','nin',this.value)"/></div>
+            <div class="nc-candidate-contact-row">
+              <div class="nc-field"><label>Wilaya du candidat <span class="req">*</span></label><select class="select" name="candidateWilaya" required><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
+              <div class="nc-field"><label>Lien contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}" required/></div>
+              <div class="nc-field"><label>Nom contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}" required/></div>
+              <div class="nc-field"><label>Téléphone d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)" required/></div>
+            </div>
           </div>
         </div>
         ${newContractClientCustomField(p.client)}
@@ -13050,6 +13071,10 @@ function candidateNewContractFormData(form,draft){
   fd.set("dureeEssai",String(contractDurationApproxDays(draft.periodeEssai)||90));
   fd.set("dateFinEssai",contractEndDate(draft.dateDebut||today(),draft.periodeEssai||"3m")||"");
   fd.set("articleOverrides",JSON.stringify(draft.articleOverrides||{}));
+  fd.set("candidateWilaya",draft.candidateWilaya||"");
+  fd.set("contactUrgenceLien",draft.contactUrgenceLien||"");
+  fd.set("contactUrgenceNom",draft.contactUrgenceNom||"");
+  fd.set("contactUrgenceTel",draft.contactUrgenceTel||"");
   return fd;
 }
 async function confirmCandidateNewContract(form,id){
@@ -13063,6 +13088,8 @@ async function confirmCandidateNewContract(form,id){
   }
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
   const draft=employeeNewContractDraftFromForm(form);
+  const candidateDetails=new FormData(form);
+  if(String(draft.contactUrgenceTel||"").replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
   c.typeContrat=draft.typeContrat;
@@ -13074,6 +13101,10 @@ async function confirmCandidateNewContract(form,id){
   c.periodeEssaiContrat=draft.periodeEssai;
   c.numeroPieceIdentite=draft.numeroPieceIdentite||c.numeroPieceIdentite||"";
   c.nin=draft.nin||c.nin||"";
+  c.wilaya=String(candidateDetails.get("candidateWilaya")||"").trim();
+  c.contactUrgenceLien=String(candidateDetails.get("contactUrgenceLien")||"").trim();
+  c.contactUrgenceNom=String(candidateDetails.get("contactUrgenceNom")||"").trim();
+  c.contactUrgenceTel=formatPhoneSGDI(String(candidateDetails.get("contactUrgenceTel")||"").trim());
   c.salaireNet=draft.salaireNet;
   c.client=draft.client||c.client||"";
   c.adresseSite=draft.adresseSite||c.adresseSite||"";
@@ -13089,6 +13120,10 @@ async function confirmCandidateNewContract(form,id){
     const agent=await recruitContractCandidateToEmployee(c,candidateNewContractFormData(form,draft));
     agent.periodeEssaiContrat=draft.periodeEssai;
     agent.numeroPieceIdentite=draft.numeroPieceIdentite||agent.numeroPieceIdentite||"";
+    agent.wilaya=draft.candidateWilaya||agent.wilaya||"";
+    agent.contactUrgenceLien=draft.contactUrgenceLien||agent.contactUrgenceLien||"";
+    agent.contactUrgenceNom=draft.contactUrgenceNom||agent.contactUrgenceNom||"";
+    agent.contactUrgenceTel=draft.contactUrgenceTel||agent.contactUrgenceTel||"";
     agent.client=draft.client||agent.client||"";
     agent.adresseSite=draft.adresseSite||agent.adresseSite||"";
     agent.wilayaContrat=draft.wilaya||agent.wilayaContrat||"";
@@ -15256,7 +15291,7 @@ async function loadPortalAccountSection(matricule){
       panel.innerHTML=`<div class="p-3 rounded bg-slate-50 text-slate-500 text-sm mb-4">Aucun compte portail pour cet employé.</div>`
         +(isAdminSystemSession()?`<form onsubmit="event.preventDefault();createPortalAccount('${escapeHTML(matricule)}',this)" class="grid grid-2 gap-3 max-w-lg">
           <div><label class="label">Identifiant</label><input class="input" name="username" value="${escapeHTML(matricule.toLowerCase())}" required /></div>
-          <div><label class="label">Mot de passe provisoire</label><input class="input font-mono font-bold" value="123456" readonly /></div>
+          <div><label class="label">Mot de passe provisoire</label><input class="input" value="Généré à la création" readonly /></div>
           <div class="col-span-2"><button type="submit" class="btn btn-primary">Créer le compte portail</button></div>
         </form>`:"");
     }else if(res.ok){
@@ -15267,10 +15302,11 @@ async function loadPortalAccountSection(matricule){
           <span class="text-sm text-slate-500">Créé le ${acc.createdAt?formatDate(acc.createdAt):"—"} par <b>${escapeHTML(acc.createdBy||"—")}</b></span>
         </div>
         <div class="p-3 rounded mb-4 text-sm" style="background:${acc.mustChangePassword?"#fef3c7":"#dcfce7"};color:${acc.mustChangePassword?"#92400e":"#166534"}">
-          ${acc.mustChangePassword?`<b>Changement obligatoire.</b> Mot de passe provisoire : <b class="font-mono">123456</b>`:`<b>Mot de passe personnel configuré ✓</b>${acc.passwordChangedAt?` · Modifié le ${new Date(acc.passwordChangedAt).toLocaleString("fr-FR")}`:""}`}
+          ${acc.mustChangePassword?`<b>Changement obligatoire.</b> Le mot de passe aléatoire n’est affiché qu’au moment de sa génération.`:`<b>Mot de passe personnel configuré ✓</b>${acc.passwordChangedAt?` · Modifié le ${new Date(acc.passwordChangedAt).toLocaleString("fr-FR")}`:""}`}
         </div>`
         +(isAdminSystemSession()?`<div class="flex gap-3 items-center flex-wrap mb-4">
-          <button type="button" class="btn btn-secondary" onclick="resetPortalPassword('${escapeHTML(matricule)}')">Réinitialiser à 123456</button>
+          <button type="button" class="btn btn-secondary" onclick="resetPortalPassword('${escapeHTML(matricule)}')">Générer un nouveau mot de passe</button>
+          <button type="button" class="btn btn-secondary" onclick="issuePortalResetToken('${escapeHTML(matricule)}')">Jeton de récupération</button>
         </div>
         <button type="button" class="btn btn-danger text-xs" onclick="deletePortalAccount('${escapeHTML(matricule)}')">Supprimer le compte portail</button>`:"");
     }else{
@@ -15287,17 +15323,26 @@ async function createPortalAccount(matricule,form){
   const username=form.querySelector('[name="username"]').value.trim();
   try{
     const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({matricule,username})});
-    if(res.ok){toast("Compte portail créé","success");loadPortalAccountSection(matricule)}
+    if(res.ok){const data=await res.json();alert(`Mot de passe provisoire (affiché une seule fois) : ${data.temporaryPassword}`);loadPortalAccountSection(matricule)}
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur création","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
 
 async function resetPortalPassword(matricule){
-  if(!confirm(`Réinitialiser le mot de passe de ${matricule} à 123456 ?`))return;
+  if(!confirm(`Générer un nouveau mot de passe provisoire pour ${matricule} ?`))return;
   const token=sgdiAuthToken();
   try{
     const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:"{}"});
-    if(res.ok){toast("Mot de passe réinitialisé à 123456","success");loadPortalAccountSection(matricule)}
+    if(res.ok){const data=await res.json();alert(`Mot de passe provisoire (affiché une seule fois) : ${data.temporaryPassword}`);loadPortalAccountSection(matricule)}
+    else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
+  }catch(err){toast("Erreur réseau","error")}
+}
+
+async function issuePortalResetToken(matricule){
+  const token=sgdiAuthToken();
+  try{
+    const res=await fetch("/api/portal/password-reset/manual-token",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({matricule})});
+    if(res.ok){const data=await res.json();alert(`Jeton de récupération (affiché une seule fois, valable ${data.expiresInMinutes} min) : ${data.resetToken}`)}
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
@@ -20214,7 +20259,7 @@ async function renderPortailComptes(view){
           <label class="text-xs text-slate-500 block mb-1">Matricule</label>
           <input type="text" name="matricule" class="input text-sm" placeholder="Ex: A01" required style="width:120px" />
         </div>
-        <div><label class="text-xs text-slate-500 block mb-1">Mot de passe provisoire</label><input class="input text-sm font-mono font-bold" value="123456" readonly style="width:170px" /></div>
+        <div><label class="text-xs text-slate-500 block mb-1">Mot de passe provisoire</label><input class="input text-sm" value="Généré aléatoirement" readonly style="width:170px" /></div>
         <button type="submit" class="btn btn-primary" ${canManage?"":"disabled"}>Créer le compte</button>
         <div class="text-xs text-slate-500">Astuce : utilisez le bouton “Créer” dans la ligne d'un employé sans compte.</div>
       </form>
@@ -20291,10 +20336,11 @@ function portalComptesFilter(){
       ?`<span class="pill ${acc.active!==false?"pill-green":"pill-red"}">${acc.active!==false?"Actif":"Désactivé"}</span>`
       :`<span class="pill pill-amber">Sans compte</span>`;
     const passwordState=!hasAccount?"—":acc.mustChangePassword
-      ?`<div><span class="pill pill-amber">À modifier</span><div class="font-mono font-bold text-xs mt-1">123456</div></div>`
+      ?`<div><span class="pill pill-amber">À modifier</span><div class="text-xs mt-1">Secret déjà remis</div></div>`
       :`<div><span class="pill pill-green">Configuré ✓</span>${acc.passwordChangedAt?`<div class="text-[10px] text-slate-500 mt-1">${new Date(acc.passwordChangedAt).toLocaleString("fr-FR")}</div>`:""}</div>`;
     const action=!canManage?`<span class="text-xs text-slate-400">Lecture seule</span>`:(hasAccount?`<div class="flex gap-1 justify-end flex-wrap">
-      <button type="button" class="btn btn-secondary text-xs" onclick="portalComptesResetPwd('${jsString(mRaw)}')">Réinit. 123456</button>
+      <button type="button" class="btn btn-secondary text-xs" onclick="portalComptesResetPwd('${jsString(mRaw)}')">Nouveau secret</button>
+      <button type="button" class="btn btn-secondary text-xs" onclick="issuePortalResetToken('${jsString(mRaw)}')">Jeton reset</button>
       <button class="btn btn-primary text-xs" onclick="portalComptesNotify('${jsString(mRaw)}')">Notifier</button>
       <button class="btn btn-danger text-xs" onclick="portalComptesDelete('${jsString(mRaw)}')">Supprimer</button>
     </div>`:`<button class="btn btn-primary text-xs" onclick="portalComptesQuickCreate('${jsString(mRaw)}')">Créer</button>`);
@@ -20303,7 +20349,7 @@ function portalComptesFilter(){
 }
 
 function portalComptesQuickCreate(matricule){
-  if(!confirm(`Créer le compte ${matricule} avec le mot de passe provisoire 123456 ?`))return;
+  if(!confirm(`Créer le compte ${matricule} avec un mot de passe provisoire aléatoire ?`))return;
   portalComptesCreatePayload({matricule});
 }
 function portalComptesUpsertAccount(account){
@@ -20356,6 +20402,7 @@ async function portalComptesCreatePayload(payload,showNetworkToast=true){
       const account=await res.json().catch(()=>null);
       if(account)portalComptesUpsertAccount(account);
       else portalComptesRefreshSubtitle();
+      if(account?.temporaryPassword)alert(`Mot de passe provisoire (affiché une seule fois) : ${account.temporaryPassword}`);
       toast("Compte créé","success");
       return true;
     }
@@ -20368,13 +20415,14 @@ async function portalComptesCreatePayload(payload,showNetworkToast=true){
 
 async function portalComptesResetPwd(matricule){
   if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
-  if(!confirm(`Réinitialiser le mot de passe de ${matricule} à 123456 ?`))return;
+  if(!confirm(`Générer un nouveau mot de passe provisoire pour ${matricule} ?`))return;
   const token=sgdiAuthToken();
   try{
     const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:"{}"});
     if(res.ok){
       const account=await res.json().catch(()=>null);if(account)portalComptesUpsertAccount(account);
-      toast("Mot de passe réinitialisé à 123456","success");
+      if(account?.temporaryPassword)alert(`Mot de passe provisoire (affiché une seule fois) : ${account.temporaryPassword}`);
+      toast("Mot de passe provisoire régénéré","success");
     }
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
   }catch(err){toast("Erreur réseau","error")}

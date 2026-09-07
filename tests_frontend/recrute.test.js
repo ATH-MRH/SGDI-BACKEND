@@ -43,7 +43,7 @@ test("tableau de bord recrutement: indicateurs et accès rapides", () => {
 test("recrutement: transmet le candidat à la DRH sans créer employé ni contrat", () => {
   assert.match(source, /function transmitCandidateToDrh\(/);
   assert.match(source, /marquer-contractualisation/);
-  assert.match(source, /Aucun employé et aucun contrat ne seront créés/);
+  assert.match(source, /Aucun employé ni contrat ne sera créé avant validation par la DRH/);
   assert.doesNotMatch(source, /onclick="openContractForCandidate\(\$\{item\.id\}\)">Recruter/);
   assert.doesNotMatch(source, /\{key:"contrat",label:"Contrat"\}/);
 });

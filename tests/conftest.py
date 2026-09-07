@@ -78,14 +78,10 @@ def _seed_admin():
                 access_level="H5",
                 authorized_societies=[],
                 authorized_structures=[],
-                # Doit correspondre à ADMIN_SYSTEM_PASSWORD : on_startup() réinitialise
-                # de force le mot de passe de ce compte à chaque démarrage (y compris à
-                # chaque instanciation de TestClient, donc avant CHAQUE test) dès que
-                # ADMIN_SYSTEM_PASSWORD est défini — un mot de passe différent ici serait
-                # systématiquement écrasé.
                 password_hash=hash_password("test-admin-password"),
                 validation_password_hash=hash_password("test-validation-password"),
                 is_active=True,
+                global_society_access=True,
             ))
         # Utilisateur RESTREINT à une seule société : role != admin ET access_level != H5,
         # sinon unrestricted_scope() court-circuite toutes les gardes de périmètre.
