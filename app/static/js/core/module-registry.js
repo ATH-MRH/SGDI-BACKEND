@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2g-users";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2g-permissions";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.

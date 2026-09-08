@@ -1663,7 +1663,8 @@
     ],
     "files": [
       "app/static/js/modules/administration.js",
-      "app/static/js/modules/administration-users.js"
+      "app/static/js/modules/administration-users.js",
+      "app/static/js/modules/administration-permissions.js"
     ],
     "functions": [
       "adminRoleColor",
@@ -1674,36 +1675,45 @@
       "adminFilterUsers",
       "adminToggleUserActiveByKey",
       "adminDeleteUserByKey",
-      "adminDeleteUser"
+      "adminDeleteUser",
+      "openGranularPermissionsByKey",
+      "granularPermissionKey",
+      "granularActiveModule",
+      "granularFeatureState",
+      "renderGranularPermissionsEditor",
+      "granularSetModuleSearch",
+      "granularSetFeatureSearch",
+      "granularSetFeatureFilter",
+      "granularSelectModule",
+      "granularTogglePermission",
+      "granularToggleFeature",
+      "granularToggleModule",
+      "granularResetModule",
+      "saveGranularPermissions",
+      "renderAdminDroits",
+      "canAccessOriginal",
+      "adminFilterDroitsTable",
+      "adminToggleDroit",
+      "adminResetDroits",
+      "renderAdminNiveaux",
+      "adminNiveauCheckGrid",
+      "openAdminNiveauModal",
+      "confirmAdminNiveau",
+      "adminDeleteNiveau"
     ],
     "retained": [
-      "adminProfileModuleLabel",
-      "normalizeAdminProfileModules",
-      "adminAccessModuleLabel",
-      "adminAccessModuleGroup",
-      "canAccessModuleHostKey",
-      "adminSupervisorUsers",
-      "adminSupervisorSiteScopeFromUser",
-      "adminUserByUsername",
-      "openAdminUserModalByKey",
-      "adminSuggestUsernameForForm",
-      "openAdminUserModal",
+      "secretariatAccessLevel",
+      "ensureNiveauxAcces",
+      "adminAccessCheckboxHTML",
       "previewUserAccessLevel",
       "syncUserAccessLevelWithRole",
-      "confirmAdminUserByKey",
-      "adminNormalizeProfileModuleKey",
-      "normalizeAdminUserRole",
-      "adminUsernamePrefixFromForm",
-      "adminNextUsername",
-      "confirmAdminUser",
-      "adminUserFromApi",
-      "adminUsernamePrefixForStructure"
+      "defaultNiveauxAcces"
     ],
-    "linesMoved": 133,
+    "linesMoved": 348,
     "measurements": {
-      "lines": 29722,
-      "bytes": 2452650,
-      "gzip": 656205
+      "lines": 29510,
+      "bytes": 2423745,
+      "gzip": 649584
     }
   }
 }
