@@ -1,16 +1,18 @@
 /* Administration permissions — déplacement sans modification de droits. */
 async function openGranularPermissionsByKey(encodedUsername){
+  const current=adminCaptureView(document.getElementById("view"),document.getElementById("modal-host"));
   const username=decodeURIComponent(String(encodedUsername||""));
   const target=adminUserByUsername(username);
   if(!target||!target.backendId){toast("Utilisateur backend introuvable","error");return}
   try{
     sgdiShowDataLoadingBar("Chargement des permissions granulaires...");
     const [catalog,state]=await Promise.all([SGDI.auth.granularFeatureCatalog(),SGDI.auth.userFeaturePermissions(target.backendId)]);
+    if(!current())return;
     granularPermissionEditor={userId:Number(target.backendId),username:state.username,catalog,state,activeModule:catalog.modules?.[0]?.module_key||"",selected:new Set((state.permissions||[]).map(p=>p.module_key+":"+p.feature_key+":"+p.action_key)),moduleSearch:"",featureSearch:"",featureFilter:"all"};
     openModal('<div class="granular-permissions-shell" id="granular-permissions-editor"></div>');
     renderGranularPermissionsEditor();
-  }catch(e){toast("Permissions granulaires indisponibles : "+(e.message||e),"error")}
-  finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar()}
+  }catch(e){if(!current())return;toast("Permissions granulaires indisponibles : "+(e.message||e),"error")}
+  finally{if(current()&&typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar()}
 }
 
 function granularPermissionKey(moduleKey,featureKey,actionKey){return moduleKey+":"+featureKey+":"+actionKey}

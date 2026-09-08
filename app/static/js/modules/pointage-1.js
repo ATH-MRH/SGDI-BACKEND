@@ -307,42 +307,90 @@ function ptEmployeeQrScanCard(){
   </div>`;
 }
 
-async function ptEmployeeQrStart(){
+// Une session garde son instance jusqu'au règlement du démarrage et au nettoyage.
+let ptEmployeeQrGeneration=0,ptEmployeeQrSession=null;
+let ptEmployeeQrCleanup=Promise.resolve();
+const ptEmployeeQrTimeouts=new Set();
+function ptEmployeeQrSessionCurrent(ticket){
+  return ptEmployeeQrSession===ticket&&ticket.generation===ptEmployeeQrGeneration&&
+    ticket.hash===location.hash&&ticket.viewGeneration===sgdiViewRenderGeneration&&
+    document.getElementById("pt-employee-qr-reader")===ticket.reader&&
+    window.SGDIModules?.activeModuleKey==="pointage"&&SGDIModules.isModuleInitialized("pointage");
+}
+function ptEmployeeQrDispose(ticket){
+  if(!ticket.cleanup)ticket.cleanup=(async()=>{
+    if(ticket.scanner){
+      try{await ticket.scanner.stop()}catch(e){}
+      try{await ticket.scanner.clear()}catch(e){}
+    }
+  })();
+  return ticket.cleanup;
+}
+function ptEmployeeQrTimeout(fn,delay){
+  const id=setTimeout(()=>{ptEmployeeQrTimeouts.delete(id);fn()},delay);
+  ptEmployeeQrTimeouts.add(id);
+}
+function ptEmployeeQrStart(){
   const reader=document.getElementById("pt-employee-qr-reader");
   const button=document.getElementById("pt-employee-qr-open");
   const result=document.getElementById("pt-employee-qr-result");
-  if(!reader)return;
+  if(!reader)return Promise.resolve();
+  const previousCleanup=ptEmployeeQrStop();
+  const ticket={generation:++ptEmployeeQrGeneration,hash:location.hash,viewGeneration:sgdiViewRenderGeneration,reader,scanner:null,cleanup:null,started:false};
+  ptEmployeeQrSession=ticket;
   if(result)result.textContent="";
-  try{
-    if(window.sgdiLoadHtml5QR)await window.sgdiLoadHtml5QR();
-    if(!window.Html5Qrcode)throw new Error("Scanner QR indisponible");
-    await ptEmployeeQrStop();
-    reader.style.display="block";
-    if(button){button.textContent="✕ Fermer le scanner";button.onclick=ptEmployeeQrStop;}
-    _ptEmployeeQrScanner=new Html5Qrcode("pt-employee-qr-reader");
-    await _ptEmployeeQrScanner.start(
-      {facingMode:"environment"},
-      {fps:12,qrbox:{width:250,height:250},aspectRatio:1},
-      decoded=>ptEmployeeQrSubmit(decoded),
-      ()=>{}
-    );
-  }catch(e){
-    if(result){result.textContent=e.message||"Impossible d’ouvrir la caméra";result.style.color="#dc2626";}
-    if(button){button.textContent="📷 Ouvrir le scanner";button.onclick=ptEmployeeQrStart;}
-  }
+  ticket.task=(async()=>{
+    try{
+      // Ne pas laisser deux instances manipuler le même lecteur/caméra.
+      await previousCleanup;
+      if(!ptEmployeeQrSessionCurrent(ticket))return;
+      if(window.sgdiLoadHtml5QR)await window.sgdiLoadHtml5QR();
+      if(!ptEmployeeQrSessionCurrent(ticket))return;
+      if(!window.Html5Qrcode)throw new Error("Scanner QR indisponible");
+      reader.style.display="block";
+      if(button){button.textContent="✕ Fermer le scanner";button.onclick=ptEmployeeQrStop;}
+      ticket.scanner=new Html5Qrcode("pt-employee-qr-reader");
+      await ticket.scanner.start(
+        {facingMode:"environment"},
+        {fps:12,qrbox:{width:250,height:250},aspectRatio:1},
+        decoded=>{if(ticket.started&&ptEmployeeQrSessionCurrent(ticket))ptEmployeeQrSubmit(decoded)},
+        ()=>{}
+      );
+      if(!ptEmployeeQrSessionCurrent(ticket)){await ptEmployeeQrDispose(ticket);return;}
+      ticket.started=true;
+      _ptEmployeeQrScanner=ticket.scanner;
+    }catch(e){
+      await ptEmployeeQrDispose(ticket);
+      if(!ptEmployeeQrSessionCurrent(ticket))return;
+      if(result){result.textContent=e.message||"Impossible d’ouvrir la caméra";result.style.color="#dc2626";}
+      if(button){button.textContent="📷 Ouvrir le scanner";button.onclick=ptEmployeeQrStart;}
+      ptEmployeeQrSession=null;
+    }finally{
+      if(ptEmployeeQrSession===ticket&&!ticket.started)ptEmployeeQrSession=null;
+    }
+  })();
+  return ticket.task;
 }
-
-async function ptEmployeeQrStop(){
-  const scanner=_ptEmployeeQrScanner;
+function ptEmployeeQrStop(){
+  ++ptEmployeeQrGeneration;
+  const ticket=ptEmployeeQrSession;
+  ptEmployeeQrSession=null;
   _ptEmployeeQrScanner=null;
-  if(scanner){try{await scanner.stop()}catch(e){}try{await scanner.clear()}catch(e){}}
+  ptEmployeeQrTimeouts.forEach(clearTimeout);ptEmployeeQrTimeouts.clear();
+  _ptEmployeeQrBusy=false;
+  // Un start pending est nettoyé APRÈS sa résolution, une seule fois.
+  if(ticket)ptEmployeeQrCleanup=ticket.task.then(()=>ptEmployeeQrDispose(ticket));
   const reader=document.getElementById("pt-employee-qr-reader");
   const button=document.getElementById("pt-employee-qr-open");
-  if(reader){reader.style.display="none";reader.innerHTML="";}
+  if(reader)reader.style.display="none";
   if(button){button.textContent="📷 Ouvrir le scanner";button.onclick=ptEmployeeQrStart;}
+  return ptEmployeeQrCleanup;
 }
 
 async function ptEmployeeQrSubmit(token){
+  const hash=location.hash,generation=sgdiViewRenderGeneration,view=document.getElementById("view");
+  let scannerGeneration=ptEmployeeQrGeneration;
+  const current=()=>scannerGeneration===ptEmployeeQrGeneration&&hash===location.hash&&generation===sgdiViewRenderGeneration&&document.getElementById("view")===view&&window.SGDIModules?.activeModuleKey==="pointage";
   if(_ptEmployeeQrBusy)return;
   _ptEmployeeQrBusy=true;
   const result=document.getElementById("pt-employee-qr-result");
@@ -354,18 +402,21 @@ async function ptEmployeeQrSubmit(token){
     });
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
-    await ptEmployeeQrStop();
+    if(!current())return;
+    const cleanup=ptEmployeeQrStop();scannerGeneration=ptEmployeeQrGeneration;
+    await cleanup;
+    if(!current())return;
     const employee=data.employee||{};
     const name=[employee.nom,employee.prenom].filter(Boolean).join(" ");
     const action=data.action==="depart"?"DÉPART":"ARRIVÉE";
     if(result){result.innerHTML=`<div style="padding:12px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:800">✓ ${escapeHTML(name)} · ${action} ${escapeHTML(data.heure||"")}</div>`;}
     toast(`${name} · ${action} enregistré`,"success");
     await sgdiPullState({silent:true,force:true}).catch(()=>null);
-    setTimeout(()=>renderView(),900);
+    if(current())ptEmployeeQrTimeout(()=>{if(current())renderView()},900);
   }catch(e){
-    if(result){result.textContent=e.message||"QR invalide";result.style.color="#dc2626";}
+    if(current()&&result){result.textContent=e.message||"QR invalide";result.style.color="#dc2626";}
   }finally{
-    setTimeout(()=>{_ptEmployeeQrBusy=false},1200);
+    if(current())ptEmployeeQrTimeout(()=>{_ptEmployeeQrBusy=false},1200);
   }
 }
 

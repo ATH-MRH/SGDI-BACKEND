@@ -127,6 +127,8 @@ test('le parcours réel conserve backendId puis ouvre la modale granulaire', asy
 
   // Empêche uniquement le rafraîchissement automatique du rendu : le chargement réel vient d'être testé.
   window.sessionStorage.removeItem('sgdi_api_token_v1');
+  await window.SGDIModules.loadAndInitModule('administration');
+  window.SGDIModules.markActiveModule('administration');
   T.render(window.document.getElementById('view'));
   const permissionsButton = Array.from(window.document.querySelectorAll('.admin-user-actions button'))
     .find(button => button.textContent === 'Permissions');

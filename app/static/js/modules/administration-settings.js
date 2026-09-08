@@ -2,10 +2,12 @@
 function adminDashboardCard(title,desc,route,color,icon){return`<button class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px"><div class="text-2xl mb-2">${icon||""}</div><div class="font-black text-lg mb-1">${title}</div><div class="text-sm text-slate-500 leading-relaxed">${desc}</div></button>`}
 
 async function renderAdminSystemDashboard(view){
+  const current=adminCaptureView(view);
   ensureNiveauxAcces();
   if(session&&sgdiAuthToken()){
     sgdiShowDataLoadingBar("Chargement des compteurs...");
     await sgdiRefreshSidebarStats().catch(()=>null);
+    if(!current())return;
   }
   const adminSoc=adminActiveSociete();
   const agents=(db.agents||[]).filter(adminMatchesSociete);
@@ -371,9 +373,10 @@ function renderAdminMessagesHistory(view){
 }
 
 function renderAdminLoans(view){
+  const current=adminCaptureView(view);
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700">Accès refusé</h2><p>Cette section est réservée à l’Administration système.</p></div>`;return}
   view.innerHTML=`<div class="card p-6 text-center text-slate-500">Chargement des paramètres…</div>`;
-  SGDI_API.request("/api/loans/settings",{method:"GET"}).then(data=>{adminLoanSettingsCache=data;renderAdminLoansContent(view)}).catch(e=>{view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||"Chargement impossible")}</div>`});
+  SGDI_API.request("/api/loans/settings",{method:"GET"}).then(data=>{if(!current())return;adminLoanSettingsCache=data;renderAdminLoansContent(view)}).catch(e=>{if(!current())return;view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||"Chargement impossible")}</div>`});
 }
 
 function renderAdminLoansContent(view){
@@ -391,25 +394,29 @@ function renderAdminLoansContent(view){
 }
 
 async function saveAdminLoanSettings(){
+  const view=document.getElementById("view"),current=adminCaptureView(view);
   const s=adminLoanSettingsCache||{},payload={};
   ["module_enabled","require_active_employee","enforce_contract_end","allow_eligibility_override","require_dg_signature","require_secretariat_validation","require_beneficiary_signature","require_cash_validation"].forEach(k=>payload[k]=document.getElementById(k).checked);
   ["advance_min_seniority_months","loan_min_seniority_months","debt_ratio_limit","advance_salary_multiple","loan_salary_multiple","advance_max_installments","loan_max_installments","merit_threshold","default_interest_rate","maximum_interest_rate"].forEach(k=>payload[k]=Number(document.getElementById(k).value));
   ["manager_roles","secretariat_roles","cash_roles"].forEach(k=>payload[k]=document.getElementById(k).value.split(",").map(x=>x.trim()).filter(Boolean));
   ["secretariat_notification_email","cash_notification_email"].forEach(k=>payload[k]=document.getElementById(k).value.trim()||null);payload.decision_prefix=document.getElementById("decision_prefix").value.trim()||"DEC-";payload.contract_prefix=document.getElementById("contract_prefix").value.trim()||"CONV-";
-  try{adminLoanSettingsCache=await SGDI_API.request("/api/loans/settings",{method:"PUT",body:payload});logActivity("Configuration prêts & avances","mise à jour");toast("Configuration enregistrée","success");renderAdminLoansContent(document.getElementById("view"))}catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
+  try{adminLoanSettingsCache=await SGDI_API.request("/api/loans/settings",{method:"PUT",body:payload});logActivity("Configuration prêts & avances","mise à jour");if(!current())return;toast("Configuration enregistrée","success");renderAdminLoansContent(view)}catch(e){if(!current())return;toast("Enregistrement refusé : "+(e.message||e),"error")}
 }
 
 function renderAdminCommercialDc(view){
+  const current=adminCaptureView(view);
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
   view.innerHTML=`<div class="card p-6"><div class="text-center text-slate-500">Chargement…</div></div>`;
   Promise.all([
     SGDI_API.request("/api/commercial/dc/settings",{method:"GET"}),
     SGDI_API.request("/api/commercial/dc/access-rules",{method:"GET"})
   ]).then(([settings,rules])=>{
+    if(!current())return;
     adminCommercialDcSettingsCache=settings;
     adminCommercialDcRulesCache=rules;
     renderAdminCommercialDcContent(view);
   }).catch(e=>{
+    if(!current())return;
     view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Erreur</h2><p class="text-slate-600">${escapeHTML(e.message||"Chargement impossible")}</p></div>`;
   });
 }
@@ -751,9 +758,11 @@ function renderAdminMagasins(view){
 }
 
 async function renderAdminCatalogue(view){
+  const current=adminCaptureView(view);
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6 text-red-700 font-bold">Accès refusé.</div>`;return}
   sgdiShowDataLoadingBar("Chargement des articles...");
-  try{await refreshStockArticlesFromPostgres()}catch(e){console.warn("Articles PostgreSQL non rechargés pour administration",e)}
+  try{await refreshStockArticlesFromPostgres()}catch(e){if(current())console.warn("Articles PostgreSQL non rechargés pour administration",e)}
+  if(!current())return;
   const adminSoc=adminActiveSociete();
   const articles=(db.stockArticles||[]).filter(adminDataMatchesSociete).slice().sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
   const totalQty=articles.reduce((sum,a)=>sum+(stockGetActuel?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0)),0);

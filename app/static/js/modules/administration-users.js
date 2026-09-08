@@ -2,6 +2,7 @@
 function adminRoleColor(role){const b=normalizeAdminUserRole(role);if(b==="agent")return"#0f766e";if(b==="ops")return"#043970";if(b==="dispatch")return"#7c3aed";if(b==="ADM")return"#dc2626";return"#64748b"}
 
 function renderAdmin(view,sub,arg){
+  adminViewEpoch++;
   positionsStopInteractions();
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
   const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","commercial-dc","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients"];
@@ -51,8 +52,9 @@ function ensureAdminUsersFresh(){
   if(window.__sgdiAdminUsersFreshKey===key&&Date.now()-(window.__sgdiAdminUsersFreshAt||0)<10000)return;
   window.__sgdiAdminUsersFreshKey=key;
   window.__sgdiAdminUsersFreshAt=Date.now();
+  const current=adminCaptureView(document.getElementById("view"),ensureAdminUsersFresh);
   sgdiLoadAuthState().then(()=>{
-    if(String(location.hash||"")===key&&typeof renderView==="function")renderView();
+    if(current()&&typeof renderView==="function")renderView();
   }).catch(e=>console.warn("Rechargement utilisateurs impossible",e));
 }
 

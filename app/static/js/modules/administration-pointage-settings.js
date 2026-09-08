@@ -45,8 +45,9 @@ async function assignEmployeeRotation(){
 async function removeAdminSiteRotation(id){if(!confirm("Retirer cette rotation du site ? Les présences historiques seront conservées."))return;try{await sgdiApi("/ops/site-rotations/"+id,{method:"DELETE",legacy:false});toast("Association retirée","success");renderView()}catch(e){toast(e.message||String(e),"error")}}
 
 async function renderAdminRotations(view){
+  const current=adminCaptureView(view);
   view.innerHTML=`<div class="card p-8 text-center">Chargement des rotations…</div>`;
-  try{const [rotations,links]=await Promise.all([sgdiApi("/ops/rotations",{legacy:false}),sgdiApi("/ops/site-rotations",{legacy:false})]);adminRotationData={rotations,links}}catch(e){view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||String(e))}</div>`;return}
+  try{const [rotations,links]=await Promise.all([sgdiApi("/ops/rotations",{legacy:false}),sgdiApi("/ops/site-rotations",{legacy:false})]);if(!current())return;adminRotationData={rotations,links}}catch(e){if(!current())return;view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||String(e))}</div>`;return}
   const rotations=adminRotationData.rotations,links=adminRotationData.links;
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s));
   const agents=(db.agents||[]).filter(adminMatchesSociete);

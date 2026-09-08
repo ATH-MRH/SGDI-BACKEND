@@ -303,6 +303,7 @@ function toggleAdminDocumentTemplate(id){const t=ensureAdminDocumentTemplates().
 function deleteAdminDocumentTemplate(id){const t=ensureAdminDocumentTemplates().find(x=>String(x.id)===String(id));if(!t)return;if(!confirm("Supprimer le modèle "+(t.title||t.code)+" ?"))return;if(!Array.isArray(db.deletedDocumentTemplateCodes))db.deletedDocumentTemplateCodes=[];const code=normalizeDocTemplateCode(t.code);if(code&&!db.deletedDocumentTemplateCodes.includes(code))db.deletedDocumentTemplateCodes.push(code);db.documentTemplates=db.documentTemplates.filter(x=>String(x.id)!==String(id));logActivity("Suppression modèle document",t.title||t.code);saveDB();toast("Modèle supprimé","success");renderView()}
 
 function renderAdminContratsPersonnel(view){
+  const current=adminCaptureView(view);
   view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">CONTRAT</h1><p class="text-sm text-slate-500 mt-1">Ajouter tous les modèles de contrat Word .docx, paramétrer les clauses conditionnelles et générer les contrats depuis la fiche employé.</p></div>
     <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800"><b>Balises disponibles :</b> {{NOM}}, {{PRENOM}}, {{NOM_PRENOM}}, {{ADRESSE}}, {{NIN}}, {{DATE_DEBUT}}, {{DATE_FIN}}, {{POSTE}}, {{FONCTION}}, {{SALAIRE}}, {{SOCIETE}}, {{CLAUSES_CONDITIONNELLES}}.</div>
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -314,7 +315,7 @@ function renderAdminContratsPersonnel(view){
     <div class="flex flex-wrap justify-end gap-2 mb-3"><button class="btn btn-secondary" onclick="openAdminContractClauseModal()">➕ Paragraphe conditionnel</button><button class="btn btn-secondary" onclick="openGenerateContractModal()">⚙ Générer un contrat</button><button class="btn btn-primary" onclick="openAdminContractTemplateModal()">⬆ Ajouter modèle Word</button></div>
     <div id="admin-contract-templates" class="card p-5 text-sm text-slate-500">Chargement des modèles PostgreSQL...</div>
     <div id="admin-generated-contracts" class="card p-5 mt-4 text-sm text-slate-500">Chargement des contrats générés...</div>`;
-  setTimeout(loadAdminContractTemplates,0);
+  setTimeout(()=>{if(current())loadAdminContractTemplates()},0);
 }
 
 function openAdminContractClauseModal(){
@@ -716,6 +717,7 @@ function renderAdminCandidats(view){
 }
 
 async function renderAdminPostes(view){
+  const current=adminCaptureView(view);
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé</h2><p>Cette page est réservée au compte Administration système.</p></div>`;return}
   const selSoc=sessionStorage.getItem("adminPostesFilterSoc")||"";
   let allPostes=[];
@@ -723,6 +725,7 @@ async function renderAdminPostes(view){
     const qs=selSoc?`?society=${encodeURIComponent(selSoc)}`:"";
     allPostes=await sgdiApi(`/api/irongs/positions${qs}`,{method:"GET",legacy:false});
   }catch(_){}
+  if(!current())return;
   if(Array.isArray(allPostes)&&allPostes.length)POSTES=allPostes.map(p=>p.name||p);
   const societes=["IRON GLOBAL SOLUTION","IRON GLOBAL SÉCURITÉ","SWORD Corporation","SWORD Construction"];
   const socOptions=`<option value="">Toutes les sociétés</option>`+societes.map(s=>`<option value="${escapeHTML(s)}" ${selSoc===s?"selected":""}>${escapeHTML(s)}</option>`).join("");

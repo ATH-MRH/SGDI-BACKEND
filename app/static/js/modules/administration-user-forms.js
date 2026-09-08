@@ -75,6 +75,7 @@ function adminSuggestUsernameForForm(force){
 }
 
 async function openAdminUserModal(username){
+  const current=adminCaptureView(document.getElementById("view"),document.getElementById("modal-host"));
   username=String(username||"").trim();
   // Le périmètre "sites autorisés" doit couvrir TOUTES les sociétés, pas seulement
   // celles déjà chargées en cache local (db.sites ne contient que ce qui a été
@@ -82,9 +83,11 @@ async function openAdminUserModal(username){
   try{
     sgdiShowDataLoadingBar("Chargement des sites...");
     const rows=await SGDI.sites.list({});
+    if(!current())return;
     (Array.isArray(rows)?rows:[]).map(siteFromApi).forEach(s=>sgdiUpsertServerItem("sites",s));
-  }catch(e){console.warn("Liste complète des sites indisponible pour le périmètre sites",e);}
-  finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
+  }catch(e){if(current())console.warn("Liste complète des sites indisponible pour le périmètre sites",e);}
+  finally{if(current()&&typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
+  if(!current())return;
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
   const u=isNew?{username:"",email:"",password:"",validationPassword:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],modulesAutorises:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
