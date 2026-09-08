@@ -23,5 +23,10 @@
   "toggleInlineSitePositionMap",
   "toggleSitesDashboardMap",
   "toggleSuperviseurDemandeMenu",
-  "renderPortailComptes"
+  "renderPortailComptes",
+  "renderFiches",
+  "badgePhotoScheduleSave",
+  "badgePhotoPointerUp",
+  "renderMateriel",
+  "renderAdmin"
 ]

@@ -52,5 +52,14 @@
     "gzip9": 478121,
     "bootstrapJSBytes": 1737881,
     "lazyScripts": 34
+  },
+  {
+    "commit": "8378310b75533059ce128228e458a977c6a7690a",
+    "message": "refactor(frontend): extract portal requests with navigation cleanup",
+    "lines": 20830,
+    "bytes": 1611419,
+    "gzip9": 465881,
+    "bootstrapJSBytes": 1685464,
+    "lazyScripts": 35
   }
 ]

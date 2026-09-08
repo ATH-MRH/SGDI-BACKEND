@@ -67,6 +67,7 @@ function sgdiCheckSortantDotationAlert(){
 }
 
 function renderMateriel(view,sub,arg){
+  positionsStopInteractions();
   if(!db.materiel)db.materiel=[];
   if(!db.magasins)db.magasins=[];
   if(!db.magasinArticles)db.magasinArticles=[];
@@ -1242,4 +1243,4 @@ async function reverseAllDotation(agentId){
   renderSidebar();renderView();
 }
 
-SGDIModules.registerModule({key: "material", routes: ["materiel"], dependencies: ["material-stores","material-inventory","material-movements"], init: function(){}, destroy: function(){}});
+SGDIModules.registerModule({key: "material", routes: ["materiel"], dependencies: ["positions","material-stores","material-inventory","material-movements"], init: function(){}, destroy: function(){positionsStopInteractions()}});

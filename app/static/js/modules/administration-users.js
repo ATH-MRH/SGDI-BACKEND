@@ -2,6 +2,7 @@
 function adminRoleColor(role){const b=normalizeAdminUserRole(role);if(b==="agent")return"#0f766e";if(b==="ops")return"#043970";if(b==="dispatch")return"#7c3aed";if(b==="ADM")return"#dc2626";return"#64748b"}
 
 function renderAdmin(view,sub,arg){
+  positionsStopInteractions();
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
   const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","commercial-dc","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}

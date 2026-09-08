@@ -146,7 +146,7 @@ test('Matériel : listes, magasins, catalogue, formulaires et mouvements après 
     if (sub.endsWith('nouveau')) assert.ok(r.view().querySelector('form'), sub + ' formulaire présent');
     r.go('#/dashboard'); await tick();
   }
-  assert.equal(r.downloads.length, 4);
+  assert.equal(r.downloads.length, inventory.positions ? 5 : 4);
   assert.deepEqual(r.errors, []);
 });
 
@@ -480,5 +480,49 @@ test('Portail/Demandes : navigation, debounce nettoyé et comptes tardifs ignor�
   const html = r.view().innerHTML;
   finishAccounts([]); await tick();
   assert.equal(r.view().innerHTML, html);
+  assert.deepEqual(r.errors, []);
+});
+
+test('Positions/Badges : dépendances, impression, recadrage et réponse tardive', async () => {
+  if (!inventory.positions) return;
+  const r = boot(), w = r.window;
+  await tick(); r.go('#/dashboard'); await tick();
+  r.T().setSession({ username: 'admin', role: 'admin', adminSystem: true, access_level: 'H5', authorized_modules: ['all'], transverse: 'admin' });
+  const agent = { id: 'badge-test', backendId: 'employee-test', nom: 'TEST', prenom: 'Badge', matricule: 'B001', statut: 'actif', photo: 'data:image/png;base64,AA==' };
+  r.T().setDb(new Proxy({ agents: [agent] }, { get(t, k) { return t[k] ?? (t[k] = []); } }));
+  w.sgdiEnsureEmployeesForDisplay = () => null;
+  for (const [route, key] of [['materiel/fiches','material'], ['admin/fiches','administration'], ['fiches','positions'], ['badge','positions']]) {
+    r.go('#/' + route); await tick();
+    assert.equal(w.SGDIModules.activeModuleKey, key);
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+  }
+  assert.equal(r.downloads.filter(p => p.endsWith('/positions.js')).length, 1);
+  assert.match(w.badgeHTML(agent), /B001/);
+  let printed = '';
+  w.open = () => ({ document: { open() {}, write(s) { printed += s; }, close() {} } });
+  await w.printBadge(agent.id);
+  assert.match(printed, /B001/); assert.match(printed, /window.print/);
+  const listeners = new Set(), add = w.addEventListener.bind(w), remove = w.removeEventListener.bind(w);
+  w.addEventListener = (type, fn, opts) => { if (type.startsWith('pointer')) listeners.add(type); return add(type, fn, opts); };
+  w.removeEventListener = (type, fn, opts) => { if (type.startsWith('pointer')) listeners.delete(type); return remove(type, fn, opts); };
+  const saved = [];
+  w.persistBadgePhotoCrop = async id => { saved.push(id); };
+  for (const route of ['fiches/badge', 'materiel/fiches', 'admin/fiches']) {
+    r.go('#/' + route); await tick();
+    w.badgePhotoPointerDown({ button: 0, clientX: 0, clientY: 0, preventDefault() {}, currentTarget: r.view() }, agent.id);
+    w.badgePhotoPointerMove({ clientX: 12, clientY: 9 });
+    assert.equal(listeners.size, 3);
+    const count = saved.length;
+    r.go('#/dashboard'); await tick();
+    assert.equal(listeners.size, 0); assert.equal(saved.length, count + 1);
+    assert.equal(saved.at(-1), agent.id);
+  }
+  assert.equal(agent.backendId, 'employee-test');
+  let finish;
+  w.sgdiEnsureEmployeesForDisplay = () => new Promise(resolve => { finish = resolve; });
+  r.go('#/fiches'); await tick();
+  assert.equal(typeof finish, 'function');
+  r.go('#/dashboard'); await tick(); const html = r.view().innerHTML;
+  finish(); await tick(); assert.equal(r.view().innerHTML, html);
   assert.deepEqual(r.errors, []);
 });
