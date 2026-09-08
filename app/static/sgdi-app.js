@@ -1540,6 +1540,9 @@ window.SGDI_API={
     granularPermissionCatalog:()=>sgdiApi("/auth/granular-permissions/catalog",{method:"GET",legacy:false}),
     userModulePermissions:(userId)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/module-permissions",{method:"GET",legacy:false}),
     replaceUserModulePermissions:(userId,permissions)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/module-permissions",{method:"PUT",body:{permissions},legacy:false}),
+    granularFeatureCatalog:()=>sgdiApi("/auth/granular-permissions/feature-catalog",{method:"GET",legacy:false}),
+    userFeaturePermissions:(userId)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/feature-permissions",{method:"GET",legacy:false}),
+    replaceUserFeaturePermissions:(userId,permissions)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/feature-permissions",{method:"PUT",body:{permissions},legacy:false}),
     accessRules:()=>sgdiApi("/auth/access-rules",{method:"GET",legacy:false}),
     saveAccessRules:(rules)=>sgdiApi("/auth/access-rules",{method:"PUT",body:rules,legacy:false}),
     sendOtp:(email,purpose)=>sgdiApi("/auth/otp/send",{method:"POST",body:{email,purpose},legacy:false}),
@@ -35771,18 +35774,61 @@ async function openGranularPermissionsByKey(encodedUsername){
   if(!target||!target.backendId){toast("Utilisateur backend introuvable","error");return}
   try{
     sgdiShowDataLoadingBar("Chargement des permissions granulaires...");
-    const [catalog,state]=await Promise.all([SGDI.auth.granularPermissionCatalog(),SGDI.auth.userModulePermissions(target.backendId)]);
-    const selected=new Set((state.permissions||[]).map(p=>p.module_key+":"+p.action_key));
-    const labels={read:"Lire",create:"Créer",update:"Modifier",validate:"Valider",delete:"Supprimer",export:"Exporter",unlock:"Déverrouiller",admin:"Administrer",sign:"Signer",pay:"Payer",recruit:"Recruter",execute:"Exécuter"};
-    const rows=(catalog.modules||[]).map(moduleKey=>`<div style="display:grid;grid-template-columns:minmax(150px,1fr) repeat(12,minmax(52px,auto));gap:6px;align-items:center;padding:8px;border-bottom:1px solid #e2e8f0"><b>${escapeHTML(moduleKey)}</b>${(catalog.actions||[]).map(actionKey=>`<label title="${escapeHTML(labels[actionKey]||actionKey)}" style="text-align:center"><input type="checkbox" data-granular-permission data-module="${escapeHTML(moduleKey)}" data-action="${escapeHTML(actionKey)}" ${selected.has(moduleKey+":"+actionKey)?"checked":""}/><small style="display:block;font-size:9px">${escapeHTML(labels[actionKey]||actionKey)}</small></label>`).join("")}</div>`).join("");
-    openModal(`<div style="max-width:min(96vw,1500px)"><h3 class="font-bold text-lg mb-2">Permissions granulaires · ${escapeHTML(state.username)}</h3><div class="p-3 mb-3 rounded-lg" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412"><b>Permissions préparées — non actives.</b><br><small>Les autorisations legacy restent applicables. Sociétés : ${escapeHTML((state.authorized_societies||[]).join(", ")||"configuration legacy")} · Sites : ${escapeHTML((state.authorized_sites||[]).join(", ")||"configuration legacy")}</small></div><form onsubmit="event.preventDefault();saveGranularPermissions(${Number(target.backendId)})"><div style="overflow:auto;max-height:62vh;min-width:900px">${rows}</div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer les permissions préparées</button></div></form></div>`);
+    const [catalog,state]=await Promise.all([SGDI.auth.granularFeatureCatalog(),SGDI.auth.userFeaturePermissions(target.backendId)]);
+    granularPermissionEditor={userId:Number(target.backendId),username:state.username,catalog,state,activeModule:catalog.modules?.[0]?.module_key||"",selected:new Set((state.permissions||[]).map(p=>p.module_key+":"+p.feature_key+":"+p.action_key)),moduleSearch:"",featureSearch:"",featureFilter:"all"};
+    openModal('<div class="granular-permissions-shell" id="granular-permissions-editor"></div>');
+    renderGranularPermissionsEditor();
   }catch(e){toast("Permissions granulaires indisponibles : "+(e.message||e),"error")}
   finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar()}
 }
-async function saveGranularPermissions(userId){
-  const permissions=[...document.querySelectorAll("[data-granular-permission]:checked")].map(input=>({module_key:input.dataset.module,action_key:input.dataset.action}));
+let granularPermissionEditor=null;
+const GRANULAR_ACTION_LABELS={read:"Lire",create:"Créer",update:"Modifier",validate:"Valider",delete:"Supprimer",export:"Exporter",unlock:"Déverrouiller",admin:"Administrer",sign:"Signer",pay:"Payer",recruit:"Recruter",execute:"Exécuter"};
+function granularPermissionKey(moduleKey,featureKey,actionKey){return moduleKey+":"+featureKey+":"+actionKey}
+function granularActiveModule(){return granularPermissionEditor?.catalog?.modules?.find(module=>module.module_key===granularPermissionEditor.activeModule)||null}
+function granularFeatureState(moduleKey,feature){
+  const actions=feature.applicable_actions||[];
+  const count=actions.filter(action=>granularPermissionEditor.selected.has(granularPermissionKey(moduleKey,feature.feature_key,action))).length;
+  return{count,total:actions.length,checked:actions.length>0&&count===actions.length,indeterminate:count>0&&count<actions.length};
+}
+function renderGranularPermissionsEditor(){
+  const editor=granularPermissionEditor,host=document.getElementById("granular-permissions-editor");if(!editor||!host)return;
+  const module=granularActiveModule();if(!module)return;
+  const moduleQuery=normalizedSearchText(editor.moduleSearch||"");
+  const modules=(editor.catalog.modules||[]).filter(item=>!moduleQuery||normalizedSearchText(item.label+" "+item.domain).includes(moduleQuery));
+  const featureQuery=normalizedSearchText(editor.featureSearch||"");
+  const features=(module.features||[]).filter(feature=>{
+    const state=granularFeatureState(module.module_key,feature);
+    const searchOk=!featureQuery||normalizedSearchText(feature.label+" "+feature.description).includes(featureQuery);
+    const filterOk=editor.featureFilter==="all"||(editor.featureFilter==="selected"&&state.count>0)||(editor.featureFilter==="empty"&&state.count===0);
+    return searchOk&&filterOk;
+  });
+  const applicable=(module.features||[]).reduce((sum,feature)=>sum+(feature.applicable_actions||[]).length,0);
+  const selected=(module.features||[]).reduce((sum,feature)=>sum+granularFeatureState(module.module_key,feature).count,0);
+  const notApplicable=(module.features||[]).length*(editor.catalog.actions||[]).length-applicable;
+  const moduleAll=applicable>0&&selected===applicable,moduleSome=selected>0&&selected<applicable;
+  host.innerHTML=`<div class="granular-head"><div><span>Permissions granulaires — utilisateur</span><h2>${escapeHTML(editor.username)}</h2></div><button type="button" aria-label="Fermer" onclick="closeModal()">×</button></div>
+    <div class="granular-warning"><b>Permissions préparées — non actives.</b><span>Les autorisations legacy restent applicables.</span></div>
+    <div class="granular-layout"><aside class="granular-modules"><label class="granular-search"><span>⌕</span><input type="search" placeholder="Rechercher un module..." value="${escapeHTML(editor.moduleSearch)}" oninput="granularSetModuleSearch(this.value)"></label><div class="granular-module-list">${modules.map(item=>`<button type="button" class="${item.module_key===module.module_key?"active":""}" onclick="granularSelectModule('${escapeHTML(item.module_key)}')"><i>${escapeHTML(item.label.charAt(0))}</i><span><b>${escapeHTML(item.label)}</b><small>${escapeHTML(item.domain)}</small></span></button>`).join("")||'<p class="granular-empty">Aucun module</p>'}</div></aside>
+    <main class="granular-main"><header class="granular-module-head"><i>${escapeHTML(module.label.charAt(0))}</i><div><h3>${escapeHTML(module.label)}</h3><a>${escapeHTML(module.domain)}</a><p>${escapeHTML(module.description)}</p></div></header>
+    <div class="granular-toolbar"><label class="granular-search"><span>⌕</span><input type="search" placeholder="Rechercher une fonctionnalité..." value="${escapeHTML(editor.featureSearch)}" oninput="granularSetFeatureSearch(this.value)"></label><select onchange="granularSetFeatureFilter(this.value)"><option value="all" ${editor.featureFilter==="all"?"selected":""}>Toutes les fonctionnalités</option><option value="selected" ${editor.featureFilter==="selected"?"selected":""}>Avec sélection</option><option value="empty" ${editor.featureFilter==="empty"?"selected":""}>Non sélectionnées</option></select><label class="granular-select-module"><input id="granular-module-all" type="checkbox" ${moduleAll?"checked":""} onchange="granularToggleModule(this.checked)"> Sélectionner tout le module</label></div>
+    <div class="granular-table-wrap"><table class="granular-table"><thead><tr><th>Fonctionnalité / Rubrique</th><th>Tout</th>${(editor.catalog.actions||[]).map(action=>`<th>${escapeHTML(GRANULAR_ACTION_LABELS[action]||action)}</th>`).join("")}</tr></thead><tbody>${features.map(feature=>{const state=granularFeatureState(module.module_key,feature),actions=new Set(feature.applicable_actions||[]);return`<tr><td><b>${escapeHTML(feature.label)}</b><small>${escapeHTML(feature.description)}</small></td><td><input class="granular-feature-all" data-feature="${escapeHTML(feature.feature_key)}" type="checkbox" ${state.checked?"checked":""} onchange="granularToggleFeature('${escapeHTML(feature.feature_key)}',this.checked)"></td>${(editor.catalog.actions||[]).map(action=>{const enabled=actions.has(action),checked=enabled&&editor.selected.has(granularPermissionKey(module.module_key,feature.feature_key,action));return`<td class="${enabled?"":"not-applicable"}"><input data-feature-permission type="checkbox" data-module="${escapeHTML(module.module_key)}" data-feature="${escapeHTML(feature.feature_key)}" data-action="${escapeHTML(action)}" ${checked?"checked":""} ${enabled?`onchange="granularTogglePermission(this)"`:'disabled aria-label="Non applicable"'}></td>`}).join("")}</tr>`}).join("")||'<tr><td colspan="14" class="granular-empty">Aucune fonctionnalité ne correspond au filtre.</td></tr>'}</tbody></table></div>
+    <footer class="granular-footer"><div class="granular-counters"><span><b>${module.features.length}</b> fonctionnalités</span><span><b>${selected}</b> autorisations sélectionnées</span><span><b>${applicable-selected}</b> non sélectionnées</span><span><b>${notApplicable}</b> non applicables</span></div><div class="granular-actions"><button type="button" class="btn btn-ghost" onclick="granularResetModule()">Réinitialiser ce module</button><button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" onclick="saveGranularPermissions()">Enregistrer (préparer)</button></div></footer></main></div>`;
+  const moduleCheckbox=document.getElementById("granular-module-all");if(moduleCheckbox)moduleCheckbox.indeterminate=moduleSome;
+  document.querySelectorAll(".granular-feature-all").forEach(input=>{const feature=module.features.find(item=>item.feature_key===input.dataset.feature);if(feature)input.indeterminate=granularFeatureState(module.module_key,feature).indeterminate});
+}
+function granularSetModuleSearch(value){granularPermissionEditor.moduleSearch=value;renderGranularPermissionsEditor()}
+function granularSetFeatureSearch(value){granularPermissionEditor.featureSearch=value;renderGranularPermissionsEditor()}
+function granularSetFeatureFilter(value){granularPermissionEditor.featureFilter=value;renderGranularPermissionsEditor()}
+function granularSelectModule(moduleKey){granularPermissionEditor.activeModule=moduleKey;granularPermissionEditor.featureSearch="";granularPermissionEditor.featureFilter="all";renderGranularPermissionsEditor()}
+function granularTogglePermission(input){const key=granularPermissionKey(input.dataset.module,input.dataset.feature,input.dataset.action);input.checked?granularPermissionEditor.selected.add(key):granularPermissionEditor.selected.delete(key);renderGranularPermissionsEditor()}
+function granularToggleFeature(featureKey,checked){const module=granularActiveModule(),feature=module?.features?.find(item=>item.feature_key===featureKey);if(!feature)return;(feature.applicable_actions||[]).forEach(action=>{const key=granularPermissionKey(module.module_key,featureKey,action);checked?granularPermissionEditor.selected.add(key):granularPermissionEditor.selected.delete(key)});renderGranularPermissionsEditor()}
+function granularToggleModule(checked){const module=granularActiveModule();if(!module)return;(module.features||[]).forEach(feature=>(feature.applicable_actions||[]).forEach(action=>{const key=granularPermissionKey(module.module_key,feature.feature_key,action);checked?granularPermissionEditor.selected.add(key):granularPermissionEditor.selected.delete(key)}));renderGranularPermissionsEditor()}
+function granularResetModule(){granularToggleModule(false)}
+async function saveGranularPermissions(){
+  const editor=granularPermissionEditor;if(!editor)return;
+  const permissions=[...editor.selected].sort().map(key=>{const[module_key,feature_key,action_key]=key.split(":");return{module_key,feature_key,action_key}});
   if(!confirm("Remplacer les permissions granulaires préparées par cette sélection ?"))return;
-  try{const result=await SGDI.auth.replaceUserModulePermissions(userId,permissions);closeModal();toast("Permissions préparées enregistrées : "+result.permission_count,"success")}
+  try{const result=await SGDI.auth.replaceUserFeaturePermissions(editor.userId,permissions);closeModal();toast("Permissions préparées enregistrées : "+result.permission_count,"success")}
   catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
 }
 function adminDeleteUserByKey(encodedUsername){

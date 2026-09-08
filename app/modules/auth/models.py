@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, JS
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
-from app.core.permission_catalog import CANONICAL_ACTIONS, CANONICAL_MODULES
+from app.core.permission_catalog import CANONICAL_ACTIONS, CANONICAL_FEATURE_PAIRS, CANONICAL_MODULES
 
 
 class User(Base, TimestampMixin):
@@ -72,6 +72,70 @@ class UserModulePermission(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     module_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    action_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+def _feature_pair_check_sql() -> str:
+    by_module: dict[str, list[str]] = {}
+    for module_key, feature_key in sorted(CANONICAL_FEATURE_PAIRS):
+        by_module.setdefault(module_key, []).append(feature_key)
+    return " OR ".join(
+        f"(module_key = {module_key!r} AND feature_key IN ({', '.join(repr(value) for value in feature_keys)}))"
+        for module_key, feature_keys in by_module.items()
+    )
+
+
+def _feature_action_check_sql() -> str:
+    from app.core.permission_catalog import FEATURE_CATALOG
+    return " OR ".join(
+        "(module_key = {module!r} AND feature_key = {feature!r} AND action_key IN ({actions}))".format(
+            module=module_key,
+            feature=feature_key,
+            actions=", ".join(repr(value) for value in feature[2]),
+        )
+        for module_key, module in FEATURE_CATALOG.items()
+        for feature_key, feature in module["features"].items()
+    )
+
+
+class UserFeaturePermission(Base):
+    """Permission préparée utilisateur × module × fonctionnalité × action.
+
+    Cette table est indépendante du stockage 0.5-A et n'est consultée par aucun
+    endpoint métier.
+    """
+
+    __tablename__ = "user_feature_permissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "module_key", "feature_key", "action_key",
+            name="uq_user_feature_permission",
+        ),
+        CheckConstraint(
+            "module_key IN (" + ", ".join(repr(value) for value in CANONICAL_MODULES) + ")",
+            name="ck_user_feature_permission_module",
+        ),
+        CheckConstraint(_feature_pair_check_sql(), name="ck_user_feature_permission_feature"),
+        CheckConstraint(
+            "action_key IN (" + ", ".join(repr(value) for value in CANONICAL_ACTIONS) + ")",
+            name="ck_user_feature_permission_action",
+        ),
+        CheckConstraint(
+            _feature_action_check_sql(),
+            name="ck_user_feature_permission_applicable",
+        ),
+        Index("ix_user_feature_permissions_user_module", "user_id", "module_key"),
+        Index("ix_user_feature_permissions_module_feature", "module_key", "feature_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    module_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    feature_key: Mapped[str] = mapped_column(String(100), nullable=False)
     action_key: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     created_by_user_id: Mapped[int | None] = mapped_column(

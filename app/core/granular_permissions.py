@@ -6,8 +6,8 @@ from typing import Iterable, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.permission_catalog import is_canonical_action, is_canonical_module
-from app.modules.auth.models import User, UserModulePermission
+from app.core.permission_catalog import applicable_actions, is_canonical_action, is_canonical_feature, is_canonical_module
+from app.modules.auth.models import User, UserFeaturePermission, UserModulePermission
 
 
 GLOBAL_ADMIN_ROLES = frozenset({"ADMIN", "ADM", "ADM1", "ADM2"})
@@ -97,6 +97,86 @@ def replace_explicit_permissions(
         db.add(UserModulePermission(
             user_id=user_id,
             module_key=module_key,
+            action_key=action_key,
+            created_by_user_id=created_by_user_id,
+        ))
+    db.flush()
+    return additions, removals
+
+
+class FeaturePermissionGrant(Protocol):
+    module_key: str
+    feature_key: str
+    action_key: str
+
+
+def load_feature_permissions(db: Session, user_id: int) -> tuple[UserFeaturePermission, ...]:
+    rows = db.execute(
+        select(UserFeaturePermission)
+        .where(UserFeaturePermission.user_id == user_id)
+        .order_by(
+            UserFeaturePermission.module_key,
+            UserFeaturePermission.feature_key,
+            UserFeaturePermission.action_key,
+        )
+    ).scalars()
+    return tuple(rows)
+
+
+def validate_feature_permissions(
+    permissions: Iterable[FeaturePermissionGrant],
+) -> tuple[tuple[str, str, str], ...]:
+    triples: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for permission in permissions:
+        triple = (permission.module_key, permission.feature_key, permission.action_key)
+        if not is_canonical_module(triple[0]):
+            raise ValueError(f"Module granulaire inconnu : {triple[0]}")
+        if not is_canonical_feature(triple[0], triple[1]):
+            raise ValueError(f"Fonctionnalité granulaire inconnue : {triple[0]}/{triple[1]}")
+        if not is_canonical_action(triple[2]):
+            raise ValueError(f"Action granulaire inconnue : {triple[2]}")
+        if triple[2] not in applicable_actions(triple[0], triple[1]):
+            raise ValueError(
+                f"Action non applicable : {triple[0]}/{triple[1]}/{triple[2]}"
+            )
+        if triple in seen:
+            raise ValueError(
+                f"Permission granulaire dupliquée : {triple[0]}/{triple[1]}/{triple[2]}"
+            )
+        seen.add(triple)
+        triples.append(triple)
+    return tuple(sorted(triples))
+
+
+def replace_feature_permissions(
+    db: Session,
+    *,
+    user_id: int,
+    created_by_user_id: int,
+    permissions: Iterable[FeaturePermissionGrant],
+) -> tuple[tuple[tuple[str, str, str], ...], tuple[tuple[str, str, str], ...]]:
+    requested = set(validate_feature_permissions(permissions))
+    existing_rows = tuple(
+        db.execute(
+            select(UserFeaturePermission)
+            .where(UserFeaturePermission.user_id == user_id)
+            .with_for_update()
+        ).scalars()
+    )
+    existing = {
+        (row.module_key, row.feature_key, row.action_key): row
+        for row in existing_rows
+    }
+    additions = tuple(sorted(requested - set(existing)))
+    removals = tuple(sorted(set(existing) - requested))
+    for triple in removals:
+        db.delete(existing[triple])
+    for module_key, feature_key, action_key in additions:
+        db.add(UserFeaturePermission(
+            user_id=user_id,
+            module_key=module_key,
+            feature_key=feature_key,
             action_key=action_key,
             created_by_user_id=created_by_user_id,
         ))

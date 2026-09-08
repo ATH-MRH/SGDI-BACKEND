@@ -90,6 +90,54 @@ class UserModulePermissionsOut(BaseModel):
     authorized_sites: list[int] | None = None
 
 
+class FeaturePermissionIn(BaseModel):
+    module_key: str = Field(min_length=1, max_length=80)
+    feature_key: str = Field(min_length=1, max_length=100)
+    action_key: str = Field(min_length=1, max_length=40)
+
+
+class FeaturePermissionsReplaceIn(BaseModel):
+    permissions: list[FeaturePermissionIn] = Field(default_factory=list)
+
+
+class FeaturePermissionOut(BaseModel):
+    module_key: str
+    feature_key: str
+    action_key: str
+
+
+class FeatureCatalogItemOut(BaseModel):
+    feature_key: str
+    label: str
+    description: str
+    applicable_actions: list[str]
+
+
+class FeatureCatalogModuleOut(BaseModel):
+    module_key: str
+    label: str
+    domain: str
+    description: str
+    features: list[FeatureCatalogItemOut]
+
+
+class FeaturePermissionCatalogOut(BaseModel):
+    modules: list[FeatureCatalogModuleOut]
+    actions: list[str]
+    granular_permissions_active: bool = False
+
+
+class UserFeaturePermissionsOut(BaseModel):
+    user_id: int
+    username: str
+    permissions: list[FeaturePermissionOut]
+    permission_count: int
+    granular_permissions_active: bool = False
+    legacy_permissions_active: bool = True
+    authorized_societies: list[str] | None = None
+    authorized_sites: list[int] | None = None
+
+
 class UserOut(BaseModel):
     id: int
     username: str

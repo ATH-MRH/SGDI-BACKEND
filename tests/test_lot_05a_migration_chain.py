@@ -97,7 +97,7 @@ def test_full_alembic_chain_on_disposable_database(tmp_path):
     database = tmp_path / "lot_05a_chain.sqlite"
     database_url = f"sqlite:///{database}"
 
-    upgraded = _run_alembic(repo, database_url, "upgrade", "head")
+    upgraded = _run_alembic(repo, database_url, "upgrade", "20260907_0033")
     assert upgraded.returncode == 0, upgraded.stdout + upgraded.stderr
 
     _assert_complete_schema(database_url)
@@ -105,7 +105,7 @@ def test_full_alembic_chain_on_disposable_database(tmp_path):
 
     downgraded = _run_alembic(repo, database_url, "downgrade", "20260907_0032")
     assert downgraded.returncode == 0, downgraded.stdout + downgraded.stderr
-    reapplied = _run_alembic(repo, database_url, "upgrade", "head")
+    reapplied = _run_alembic(repo, database_url, "upgrade", "20260907_0033")
     assert reapplied.returncode == 0, reapplied.stdout + reapplied.stderr
     _assert_complete_schema(database_url)
     _assert_empty_and_at_revision(database, "20260907_0033")
@@ -119,7 +119,7 @@ def test_preexisting_conforming_table_is_strictly_accepted(tmp_path):
     before = _run_alembic(repo, database_url, "upgrade", "20260907_0032")
     assert before.returncode == 0, before.stdout + before.stderr
     _assert_complete_schema(database_url)
-    upgraded = _run_alembic(repo, database_url, "upgrade", "head")
+    upgraded = _run_alembic(repo, database_url, "upgrade", "20260907_0033")
     assert upgraded.returncode == 0, upgraded.stdout + upgraded.stderr
     _assert_complete_schema(database_url)
     _assert_empty_and_at_revision(database, "20260907_0033")
@@ -193,7 +193,7 @@ def test_preexisting_nonconforming_table_fails_without_advancing_revision(
     assert before.returncode == 0, before.stdout + before.stderr
     definition_before = _replace_table(database, columns, indexes=indexes)
 
-    upgraded = _run_alembic(repo, database_url, "upgrade", "head")
+    upgraded = _run_alembic(repo, database_url, "upgrade", "20260907_0033")
 
     assert upgraded.returncode != 0
     assert "Schéma existant user_module_permissions non conforme" in upgraded.stderr
