@@ -594,5 +594,51 @@
       "bytes": 1686929,
       "gzip": 484304
     }
+  },
+  "agenda": {
+    "routes": [
+      "agenda"
+    ],
+    "files": [
+      "app/static/js/modules/agenda.js"
+    ],
+    "functions": [
+      "agendaEventTypeMeta",
+      "agendaWeekStart",
+      "agendaStatusPill",
+      "agendaScopeLabel",
+      "agendaEventCard",
+      "agendaCompactRows",
+      "agendaWeekEventCard",
+      "agendaMonthStart",
+      "agendaMonthOffset",
+      "agendaCalendarEvent",
+      "agendaMiniMonth",
+      "agendaCalendarSidebar",
+      "renderAgenda",
+      "openAgendaEventModal",
+      "saveAgendaEvent",
+      "completeAgendaEvent",
+      "deleteAgendaEvent"
+    ],
+    "retained": [
+      "agendaEvents",
+      "agendaAutomaticEvents",
+      "agendaEventIsDone",
+      "agendaEventIsReminderDue",
+      "agendaDateOffset"
+    ],
+    "linesMoved": 205,
+    "collections": [
+      "agendaEvents",
+      "users"
+    ],
+    "apiPaths": [],
+    "timers": [],
+    "measurements": {
+      "lines": 21473,
+      "bytes": 1663933,
+      "gzip": 479096
+    }
   }
 }

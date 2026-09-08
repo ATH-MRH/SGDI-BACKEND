@@ -432,3 +432,21 @@ test('Commercial : liens directs, éditeur devis et menu sans listener dupliqué
   assert.equal(new Set(r.downloads).size, r.downloads.length);
   assert.deepEqual(r.errors, []);
 });
+
+test('Agenda : dépendance Secrétariat chargée une fois, route autonome et modale', async () => {
+  if (!inventory.agenda) return;
+  const r = boot(), w = r.window;
+  r.go('#/secretariat/agenda'); await tick();
+  assert.equal(w.SGDIModules.activeModuleKey, 'secretariat');
+  assert.equal(w.SGDIModules.isModuleInitialized('agenda'), false, 'dépendance déclarative sans init concurrent');
+  assert.match(r.view().textContent, /Agenda|AGENDA/);
+  w.openAgendaEventModal();
+  assert.ok(w.document.querySelector('#modal-host [name="titre"]'));
+  w.closeModal();
+  r.go('#/agenda'); await tick();
+  assert.equal(w.SGDIModules.activeModuleKey, 'agenda');
+  r.go('#/dashboard'); await tick();
+  r.go('#/secretariat/agenda'); await tick();
+  assert.equal(r.downloads.filter(p => p.endsWith('/agenda.js')).length, 1);
+  assert.deepEqual(r.errors, []);
+});

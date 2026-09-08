@@ -170,6 +170,7 @@ async function saveSecretariatCourrier(form){
     window.SGDIModules.registerModule({
       key: "secretariat",
       routes: ["secretariat"],
+      dependencies: ["agenda"],
       // Les fonctions sont déjà globales dès le chargement du script : rien à
       // initialiser. Pas de timer ni de listener propre au module -> destroy vide.
       init: function () {},

@@ -34,5 +34,14 @@
     "gzip9": 509786,
     "bootstrapJSBytes": 1882414,
     "lazyScripts": 31
+  },
+  {
+    "commit": "dcba513ae9c3191e8672b0e04e8ea8f29ce987e0",
+    "message": "refactor(frontend): extract commercial views and scoped UI callbacks",
+    "lines": 21675,
+    "bytes": 1686929,
+    "gzip9": 483307,
+    "bootstrapJSBytes": 1760857,
+    "lazyScripts": 33
   }
 ]
