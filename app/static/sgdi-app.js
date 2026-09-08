@@ -2729,7 +2729,6 @@ function normalizePostesInDB(persist=true){
   if(changed&&persist)saveDB();
 }
 
-function uid(p="x"){return p+"_"+Math.random().toString(36).slice(2,10)}
 function today(){return new Date().toISOString().slice(0,10)}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)}
 function addYears(d,n){const x=new Date(d);x.setFullYear(x.getFullYear()+n);return x.toISOString().slice(0,10)}
@@ -2865,7 +2864,6 @@ function bindRequiredFieldCleanup(form){
     el.dataset.requiredCleanupBound="1";
   });
 }
-function money(n){if(n===null||n===undefined||n==="")return"—";const v=Number(n);if(isNaN(v))return"—";return v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DA"}
 function parseMoneyInput(v){if(v===null||v===undefined||v==="")return"";const n=Number(String(v).replace(/\s/g,"").replace(",",".").replace(/[^\d.-]/g,""));return isNaN(n)?"":n}
 function formatMoneyInputValue(v){const n=parseMoneyInput(v);return n===""?"":n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function formatMoneyInputValueDA(v){const s=formatMoneyInputValue(v);return s?`${s} DA`:""}
@@ -2909,7 +2907,6 @@ function moneyToFrenchWords(v){
   return text+" net par mois";
 }
 function qty(n){if(n===null||n===undefined||n==="")return"—";const v=Number(n);if(isNaN(v))return"—";const isInt=v===Math.floor(v);return v.toLocaleString("fr-FR",{minimumFractionDigits:isInt?0:2,maximumFractionDigits:isInt?0:2})}
-function formatDate(d){if(!d)return"—";try{return new Date(d).toLocaleDateString("fr-FR")}catch(e){return d}}
 function formatTime(d){if(!d)return"—";try{return new Date(d).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}catch(e){return"—"}}
 function movementTimeLabel(m){
   const source=m?.createdAt||m?.created_at||m?.updatedAt||m?.updated_at||"";
@@ -3001,7 +2998,6 @@ function stockStoreHistoryCountersHTML(mvts){
   </div>`;
 }
 function daysBetween(a,b){return Math.ceil((new Date(b)-new Date(a))/(1000*60*60*24))}
-function escapeHTML(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function jsString(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g,"\\n").replace(/\r/g,"")}
 function safe(s){return s===null||s===undefined||s===""?"—":escapeHTML(s)}
 let feedRecording=false;

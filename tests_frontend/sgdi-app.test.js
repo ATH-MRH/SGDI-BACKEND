@@ -9,7 +9,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { JSDOM } = require('jsdom');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+const coreUtils = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
+const appSrc = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+const src = coreUtils + '\n' + appSrc;
 
 const dom = new JSDOM(
   '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div></body></html>',
