@@ -231,7 +231,7 @@ test('course : une navigation plus récente gagne (vue non remplacée par le mod
 
 test('routes restées dans le monolithe : portillon inerte (aucune injection)', async () => {
   const r = bootRouter();
-  for (const hash of ['#/dashboard', '#/incidents/dashboard', '#/agenda/dashboard']) {
+  for (const hash of ['#/dashboard', '#/rapports', '#/dossiers']) {
     r.go(hash);
     await flush(2);
     assert.doesNotMatch(r.view().innerHTML, /Chargement du module/, hash + ' rendu sans portillon');

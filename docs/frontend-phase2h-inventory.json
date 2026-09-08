@@ -225,5 +225,43 @@
       "bytes": 1978708,
       "gzip": 549610
     }
+  },
+  "incidents": {
+    "routes": [
+      "incidents"
+    ],
+    "files": [
+      "app/static/js/modules/incidents.js"
+    ],
+    "functions": [
+      "renderMainCouranteDashboard",
+      "incidentFromApi",
+      "renderIncidentsServer",
+      "renderIncidents",
+      "mainCouranteCardHTML",
+      "filterMainCourante",
+      "openIncidentModal",
+      "saveIncident",
+      "incidentAction"
+    ],
+    "retained": [
+      "incidentNorm",
+      "incidentPillClass",
+      "viewIncident",
+      "incidentComment"
+    ],
+    "linesMoved": 151,
+    "collections": [
+      "agents",
+      "incidents",
+      "sites"
+    ],
+    "apiPaths": [],
+    "timers": [],
+    "measurements": {
+      "lines": 24730,
+      "bytes": 1962570,
+      "gzip": 546153
+    }
   }
 }

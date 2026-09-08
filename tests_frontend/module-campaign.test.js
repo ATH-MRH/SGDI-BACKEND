@@ -48,6 +48,9 @@ function boot() {
 test('campagne : vrais scripts lazy, parcours répété ×3, aucun doublon ni erreur', async () => {
   const r = boot(), R = r.window.SGDIModules;
   const routeKeys = Object.entries(R.MODULE_ROUTES);
+  for (const route of ['sites', 'incidents', 'facturation', 'commercial', 'agenda', 'portail', 'fiches', 'badge']) {
+    if (!routeKeys.some(([key]) => key === route)) routeKeys.push([route, null]);
+  }
   assert.equal(r.downloads.length, 0);
   for (const [key] of Object.entries(inventory)) assert.equal(R.isModuleRegistered(key), false);
   const inits = {}, destroys = {};
@@ -334,6 +337,26 @@ test('Sites : formulaire lazy, destruction des cartes et chargement cartographiq
   r.go('#/dashboard'); await tick();
   resolveStores([]); await tick();
   assert.equal(w.document.getElementById('site-form'), null, w.location.hash + ' ' + r.view().textContent.slice(0,250) + JSON.stringify(r.errors));
+  assert.equal(w.SGDIModules.activeModuleKey, null);
+  assert.deepEqual(r.errors, []);
+});
+
+test('Incidents : modale et réponse serveur tardive sans rendu obsolète', async () => {
+  if (!inventory.incidents) return;
+  const r = boot(), w = r.window;
+  r.go('#/incidents/site'); await tick();
+  w.openIncidentModal('site');
+  assert.ok(w.document.querySelector('#modal-host [name="sujet"]'));
+  w.closeModal();
+  let resolvePage;
+  w.sgdiAuthToken = () => 'fixture-token';
+  w.SGDI.events.page = () => new Promise(resolve => { resolvePage = resolve; });
+  r.go('#/incidents/autres'); await tick();
+  assert.equal(typeof resolvePage, 'function');
+  r.go('#/dashboard'); await tick();
+  const html = r.view().innerHTML;
+  resolvePage({ items: [], total: 0 }); await tick();
+  assert.equal(r.view().innerHTML, html);
   assert.equal(w.SGDIModules.activeModuleKey, null);
   assert.deepEqual(r.errors, []);
 });

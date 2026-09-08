@@ -9,5 +9,6 @@
   "saveSite",
   "toggleInlineSitePositionMap",
   "toggleSitesDashboardMap",
-  "toggleSuperviseurDemandeMenu"
+  "toggleSuperviseurDemandeMenu",
+  "renderIncidentsServer"
 ]
