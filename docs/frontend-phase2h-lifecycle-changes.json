@@ -22,5 +22,6 @@
   "sgdiClientRowMenu",
   "toggleInlineSitePositionMap",
   "toggleSitesDashboardMap",
-  "toggleSuperviseurDemandeMenu"
+  "toggleSuperviseurDemandeMenu",
+  "renderPortailComptes"
 ]

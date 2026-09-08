@@ -640,5 +640,110 @@
       "bytes": 1663933,
       "gzip": 479096
     }
+  },
+  "portal": {
+    "routes": [
+      "portail",
+      "demandes_personnel",
+      "demandes_structure"
+    ],
+    "files": [
+      "app/static/js/modules/portal.js"
+    ],
+    "functions": [
+      "demandePersonnelCurrentAgent",
+      "demandePersonnelSlaInfo",
+      "demandePersonnelFileInputHTML",
+      "demandePersonnelEmployeeKey",
+      "demandePersonnelEmployeeLabel",
+      "groupDemandesPersonnelByEmployee",
+      "openPortailEmployeHistory",
+      "renderPortailPersonnel",
+      "submitPortailPersonnel",
+      "demandePersonnelCardHTML",
+      "demandePersonnelTypeLabel",
+      "demandePersonnelSelectedId",
+      "selectDemandePersonnel",
+      "selectDemandePersonnelEmployee",
+      "setDemandesPersonnelFilter",
+      "setDemandesPersonnelSearch",
+      "demandePersonnelDetailHTML",
+      "demandePersonnelResponseTemplates",
+      "_normKey",
+      "portalComptesCanManage",
+      "portalComptesNorm",
+      "portalComptesEmployeeMatricule",
+      "portalComptesEmployeeName",
+      "portalComptesEmployeeSociete",
+      "portalComptesAccountKey",
+      "portalComptesEmployeeKey",
+      "portalComptesCurrentSoc",
+      "portalComptesFetchJSON",
+      "portalComptesFetchEmployees",
+      "portalComptesBuildRows",
+      "renderPortailComptes",
+      "portalComptesFilter",
+      "portalComptesQuickCreate",
+      "portalComptesUpsertAccount",
+      "portalComptesRefreshSubtitle",
+      "portalComptesCreateNew",
+      "portalComptesCreatePayload",
+      "portalComptesResetPwd",
+      "portalComptesDelete",
+      "portalComptesNotify",
+      "renderDemandesPersonnel",
+      "openTraiterDemandePersonnel",
+      "saveTraitementDemandePersonnel",
+      "openDemanderDocumentPersonnel",
+      "saveDocumentRequestPersonnel",
+      "openUploadDocumentDemande",
+      "saveUploadDocumentDemande"
+    ],
+    "retained": [
+      "ensureDemandesPersonnel",
+      "ensureDemandesStructure",
+      "migrateStructureDemandes",
+      "portalDemandesPersonnel",
+      "incomingPortalDemandesPersonnel",
+      "structureOpenCount",
+      "demandePersonnelSociete",
+      "demandePersonnelIsAlert",
+      "demandePersonnelStatusPill",
+      "demandePersonnelStatusLabel",
+      "readSmallFile",
+      "renderDemandesStructure",
+      "isStructureDemand",
+      "normalizeStructureDemand",
+      "structureDemandReceived",
+      "structureDemandSent",
+      "openNewStructureDemand",
+      "saveNewStructureDemand",
+      "structureDemandCardHTML",
+      "renderDemandesStructureDashboard",
+      "openTraiterStructureDemand",
+      "saveTraiterStructureDemand",
+      "currentStructureKey",
+      "structureDemandStatusPill"
+    ],
+    "linesMoved": 645,
+    "collections": [
+      "agents",
+      "assignments",
+      "demandesPersonnel"
+    ],
+    "apiPaths": [
+      "/api/portal/accounts",
+      "/api/portal/accounts/${encodeURIComponent",
+      "/api/portal/push/send/${encodeURIComponent"
+    ],
+    "timers": [
+      "demandesPersonnelSearchTimer=setTimeout(()=>renderView(),250);",
+      "const timeout=setTimeout(()=>{try{controller?.abort()}catch(e){}},12000);"
+    ],
+    "measurements": {
+      "lines": 20828,
+      "bytes": 1611229,
+      "gzip": 466774
+    }
   }
 }

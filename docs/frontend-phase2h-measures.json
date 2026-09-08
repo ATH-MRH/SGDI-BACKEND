@@ -43,5 +43,14 @@
     "gzip9": 483307,
     "bootstrapJSBytes": 1760857,
     "lazyScripts": 33
+  },
+  {
+    "commit": "b272df1d09050e989e154b4795d2d6ca8d456416",
+    "message": "refactor(frontend): lazy load agenda as a shared route dependency",
+    "lines": 21472,
+    "bytes": 1663933,
+    "gzip9": 478121,
+    "bootstrapJSBytes": 1737881,
+    "lazyScripts": 34
   }
 ]

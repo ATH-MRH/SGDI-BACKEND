@@ -450,3 +450,35 @@ test('Agenda : dépendance Secrétariat chargée une fois, route autonome et mod
   assert.equal(r.downloads.filter(p => p.endsWith('/agenda.js')).length, 1);
   assert.deepEqual(r.errors, []);
 });
+
+test('Portail/Demandes : navigation, debounce nettoyé et comptes tardifs ignorés', async () => {
+  if (!inventory.portal) return;
+  const r = boot(), w = r.window;
+  await tick(); r.go("#/dashboard"); await tick();
+  for (const route of ['portail', 'demandes_personnel', 'demandes_structure']) {
+    r.go('#/' + route); await tick();
+    assert.equal(w.SGDIModules.activeModuleKey, 'portal');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+  }
+  r.go('#/demandes_personnel'); await tick();
+  assert.equal(r.view().classList.contains('dp-wide-view'), true);
+  let staleRenders = 0;
+  const render = w.renderView;
+  w.renderView = () => { staleRenders++; return render(); };
+  w.setDemandesPersonnelSearch('test');
+  r.go('#/dashboard'); await tick(); await tick();
+  assert.equal(staleRenders, 0);
+  assert.equal(r.view().classList.contains('dp-wide-view'), false);
+  w.renderView = render;
+  let finishAccounts;
+  w.sgdiAuthToken = () => 'fixture-token';
+  w.portalComptesFetchJSON = () => new Promise(resolve => { finishAccounts = resolve; });
+  w.portalComptesFetchEmployees = async () => [];
+  r.go('#/portail/comptes'); await tick();
+  assert.equal(typeof finishAccounts, 'function');
+  r.go('#/dashboard'); await tick();
+  const html = r.view().innerHTML;
+  finishAccounts([]); await tick();
+  assert.equal(r.view().innerHTML, html);
+  assert.deepEqual(r.errors, []);
+});
