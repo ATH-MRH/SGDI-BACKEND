@@ -1,7 +1,11 @@
 from pathlib import Path
 
 
-JS = (Path(__file__).parents[1] / "app/static/sgdi-app.js").read_text(encoding="utf-8")
+STATIC = Path(__file__).parents[1] / "app/static"
+JS = (STATIC / "sgdi-app.js").read_text(encoding="utf-8") + "\n" + "\n".join(
+    module.read_text(encoding="utf-8")
+    for module in sorted((STATIC / "js/modules").glob("*.js"))
+)
 
 
 def test_recruitment_unwraps_action_response_before_mapping_employee():

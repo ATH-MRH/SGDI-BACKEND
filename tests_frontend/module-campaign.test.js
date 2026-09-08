@@ -164,3 +164,27 @@ test('Recrutement : formulaire lazy et navigation annulée conservent la saisie'
   assert.equal(w.SGDIModules.activeModuleKey, 'recruitment');
   assert.deepEqual(r.errors, []);
 });
+
+test('dépendances : aucun helper lazy appelé sans garde depuis le core', () => {
+  const core = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.js'), 'utf8');
+  const start = core.indexOf('    switch(root){', core.indexOf('function renderView(){'));
+  const end = core.indexOf('  }catch(e){console.error(e);view.innerHTML=', start);
+  assert.ok(start > 0 && end > start);
+  const shared = core.slice(0, start) + core.slice(end);
+  for (const domain of Object.values(inventory)) {
+    for (const name of domain.functions) {
+      assert.doesNotMatch(shared, new RegExp('\\b' + name + '\\b'), name + ' doit rester synchrone ou avoir une dépendance explicite');
+    }
+  }
+});
+
+test('deep links isolés : chaque domaine démarre sans avoir visité un autre module', async () => {
+  for (const domain of Object.values(inventory)) {
+    const r = boot();
+    r.go('#/' + domain.routes[0]); await tick();
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+    assert.deepEqual(r.errors, [], domain.routes[0]);
+    r.go('#/dashboard'); await tick();
+    assert.equal(r.timers.size, 0);
+  }
+});

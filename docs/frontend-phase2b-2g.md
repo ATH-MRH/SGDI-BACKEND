@@ -61,3 +61,9 @@ fiches agents, Administration et synchronisation restent dans le core.
 partagées restent synchrones. Le debounce d’autosauvegarde conserve sa sémantique
 existante (pas d’annulation silencieuse d’une saisie à la sortie). Les listeners
 d’autosauvegarde restent attachés aux champs et protégés par candidatDraftBound.
+
+### Contrats
+
+Vues de tableau de bord, listes, exports et actions isolées déplacées. Le moteur
+de documents contractuels et les formulaires employés partagés restent dans le
+core pour préserver leurs appels synchrones depuis les autres domaines.

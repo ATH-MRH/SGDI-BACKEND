@@ -336,23 +336,9 @@ async function ensureCandidatePositionInCatalog(candidate){
   }
 }
 
-function sgdiInvalidCandidateFunctionSummaryText(value){
-  const text=String(value||"").trim();
-  if(!text)return false;
-  const invalidToken="(?:\\d{4,6}|\\d{1,2}[\\/.\\-]\\d{1,2}[\\/.\\-]\\d{2,4})";
-  const pairPattern=new RegExp(`\\b${invalidToken}\\s*:\\s*\\d+\\b`,"g");
-  const pairs=text.match(pairPattern)||[];
-  if(pairs.length>=2)return true;
-  return new RegExp(`^${invalidToken}\\s*:\\s*\\d+(?:\\s*[·•|,;]\\s*${invalidToken}\\s*:\\s*\\d+)*$`).test(text);
-}
 
-function sgdiCleanCandidateFunctionSummaryText(value){
-  const text=String(value||"");
-  if(!sgdiInvalidCandidateFunctionSummaryText(text))return text;
-  const counts=[...text.matchAll(/:\s*(\d+)/g)].map(m=>parseInt(m[1],10)||0);
-  const total=counts.reduce((sum,n)=>sum+n,0);
-  return total>0?`Non renseigné : ${total}`:"Non renseigné";
-}
+
+
 
 
 
