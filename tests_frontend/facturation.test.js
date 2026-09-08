@@ -22,10 +22,7 @@ test('sgdi-app.js se charge et expose les calculs facturation', () => {
 
 test('les bibliothèques PDF sont différées jusqu’au téléchargement', async () => {
   const root = path.join(__dirname, '..');
-  const html = fs.readFileSync(path.join(root, 'app', 'static', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(root, 'app', 'static', 'sgdi-app.js'), 'utf8');
-  assert.doesNotMatch(html, /<script[^>]+\/static\/js\/features\/pdf\.js/);
-  assert.doesNotMatch(html, /<script defer src="\/static\/(?:jspdf\.umd\.min|html2canvas\.min)\.js/);
   assert.match(app, /sgdiLoadFeatureScript\("\/static\/js\/features\/pdf\.js\?v=20260908-modular"\)/);
 
   const loaderScript = fs.readFileSync(path.join(root, 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
@@ -52,6 +49,21 @@ test('les bibliothèques PDF sont différées jusqu’au téléchargement', asyn
   dom.window.close();
 });
 
+test('les quatre pages chargent les utilitaires avant l\'application sans PDF au bootstrap', () => {
+  const staticRoot = path.join(__dirname, '..', 'app', 'static');
+  for (const file of ['index.html', 'paie.html', 'conges.html', 'facturation.html']) {
+    const html = fs.readFileSync(path.join(staticRoot, file), 'utf8');
+    const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
+    assert.ok(!scripts.some((src) => src.includes('jspdf.umd.min.js')), `${file} charge jsPDF au bootstrap`);
+    assert.ok(!scripts.some((src) => src.includes('html2canvas.min.js')), `${file} charge html2canvas au bootstrap`);
+    const utilsIndex = scripts.findIndex((src) => src.includes('/static/js/core/utils.js'));
+    const appIndex = scripts.findIndex((src) => src.includes('/static/sgdi-app.js'));
+    assert.ok(utilsIndex >= 0, `${file} ne charge pas utils.js`);
+    assert.ok(appIndex >= 0, `${file} ne charge pas sgdi-app.js`);
+    assert.ok(utilsIndex < appIndex, `${file} doit charger utils.js avant sgdi-app.js`);
+  }
+});
+
 test('le chargeur de feature déduplique les chargements concurrents', async () => {
   const core = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
@@ -72,6 +84,94 @@ test('le chargeur de feature déduplique les chargements concurrents', async () 
   assert.deepStrictEqual(loaded.map((url) => new URL(url).pathname), ['/static/js/features/pdf.js']);
   dom.window.close();
 });
+
+test('le chargeur de feature libère un échec puis réutilise le chargement réussi', async () => {
+  const core = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
+    url: 'https://atlas.example/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  let insertions = 0;
+  window.document.head.appendChild = (script) => {
+    insertions += 1;
+    queueMicrotask(() => insertions === 1 ? script.onerror(new Error('network')) : script.onload());
+    return script;
+  };
+  window.eval(core);
+  await assert.rejects(window.sgdiLoadFeatureScript('/static/js/features/pdf.js'));
+  const successful = window.sgdiLoadFeatureScript('/static/js/features/pdf.js');
+  await successful;
+  const reused = window.sgdiLoadFeatureScript('/static/js/features/pdf.js');
+  assert.strictEqual(reused, successful);
+  await reused;
+  assert.strictEqual(insertions, 2);
+  dom.window.close();
+});
+
+test('le chargeur PDF retente après un échec html2canvas puis réutilise le succès', async () => {
+  const loaderScript = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
+    url: 'https://atlas.example/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  const loaded = [];
+  let htmlAttempts = 0;
+  window.document.head.appendChild = (script) => {
+    loaded.push(new URL(script.src).pathname);
+    queueMicrotask(() => {
+      if (script.src.includes('html2canvas')) {
+        htmlAttempts += 1;
+        if (htmlAttempts === 1) return script.onerror(new Error('network'));
+        window.html2canvas = () => {};
+      } else {
+        window.jspdf = { jsPDF: function jsPDF() {} };
+      }
+      script.onload();
+    });
+    return script;
+  };
+  window.eval(loaderScript);
+  await assert.rejects(window.sgdiLoadPDFLibs());
+  await window.sgdiLoadPDFLibs();
+  await window.sgdiLoadPDFLibs();
+  assert.deepStrictEqual(loaded, [
+    '/static/html2canvas.min.js', '/static/html2canvas.min.js', '/static/jspdf.umd.min.js',
+  ]);
+  dom.window.close();
+});
+
+test('le chargeur PDF ne recharge que jsPDF après son échec', async () => {
+  const loaderScript = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
+    url: 'https://atlas.example/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  const loaded = [];
+  let jsPdfAttempts = 0;
+  window.document.head.appendChild = (script) => {
+    loaded.push(new URL(script.src).pathname);
+    queueMicrotask(() => {
+      if (script.src.includes('html2canvas')) {
+        window.html2canvas = () => {};
+        return script.onload();
+      }
+      jsPdfAttempts += 1;
+      if (jsPdfAttempts === 1) return script.onerror(new Error('network'));
+      window.jspdf = { jsPDF: function jsPDF() {} };
+      script.onload();
+    });
+    return script;
+  };
+  window.eval(loaderScript);
+  await assert.rejects(window.sgdiLoadPDFLibs());
+  await window.sgdiLoadPDFLibs();
+  await window.sgdiLoadPDFLibs();
+  assert.deepStrictEqual(loaded, [
+    '/static/html2canvas.min.js', '/static/jspdf.umd.min.js', '/static/jspdf.umd.min.js',
+  ]);
+  dom.window.close();
+});
+
 // ── TVA / montants ───────────────────────────────────────────────────────────
 
 test('clientMontantTTC : somme des lignes × 1,19 (TVA 19 %)', () => {
