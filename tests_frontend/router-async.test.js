@@ -20,6 +20,10 @@ function bootRouter() {
 
   const SGDI = window.SGDIModules;
   assert.ok(SGDI && typeof SGDI.routeNeedsModuleLoad === 'function', 'registre chargé');
+  // En test, load-app.js concatène aussi js/modules/*.js : le module "secretariat"
+  // est donc déjà enregistré. On repart d'un registre vide pour exercer le portillon
+  // de chargement (les fonctions renderSecretariat… restent globales, elles).
+  SGDI._resetModuleRegistry();
 
   const injectCalls = [];
   let pending = [];

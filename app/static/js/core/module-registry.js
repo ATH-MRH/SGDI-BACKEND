@@ -45,7 +45,8 @@
   // C'est elle qui permet au routeur de savoir qu'une route « appartient » à un
   // module encore non chargé. Une extraction future ajoute une entrée ici.
   R.MODULE_ROUTES = R.MODULE_ROUTES || {
-    // "secretariat": "secretariat"   <-- ajouté par l'extraction pilote
+    // Racine de route -> clé de module extrait, chargé à la demande.
+    "secretariat": "secretariat"
   };
 
   var registry = Object.create(null);   // key -> { key, init, destroy, routes, dependencies, initialized }
