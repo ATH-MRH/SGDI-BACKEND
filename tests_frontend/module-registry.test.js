@@ -35,13 +35,55 @@ test('registerModule exige une clé et est idempotent', () => {
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 1, 'pas de doublon');
 });
 
-test('routeNeedsModuleLoad : vrai tant que le module déclaré n’est pas enregistré', () => {
+test('routeNeedsModuleLoad : requiert module CHARGÉ *et* INITIALISÉ', () => {
   const SGDI = freshSGDI();
   SGDI.MODULE_ROUTES.demo = 'demo';
-  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true);
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'absent -> requis');
   assert.strictEqual(SGDI.routeNeedsModuleLoad('inconnue'), false);
-  SGDI.registerModule({ key: 'demo', routes: ['demo'] });
-  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), false, 'plus de chargement une fois enregistré');
+  SGDI.registerModule({ key: 'demo', routes: ['demo'], init() {} });
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'enregistré mais pas initialisé -> encore requis');
+  SGDI.initModule('demo');
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), false, 'chargé + initialisé -> prêt');
+  SGDI.destroyModule('demo');
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'détruit (désinitialisé) -> de nouveau requis');
+});
+
+test('deactivateIfChanged / markActiveModule : cycle de vie du module actif', () => {
+  const SGDI = freshSGDI();
+  let destroyedA = 0;
+  let destroyedB = 0;
+  SGDI.registerModule({ key: 'a', routes: ['a'], init() {}, destroy() { destroyedA += 1; } });
+  SGDI.registerModule({ key: 'b', routes: ['b'], init() {}, destroy() { destroyedB += 1; } });
+
+  // Aucun module actif -> deactivate est un no-op.
+  SGDI.deactivateIfChanged('a');
+  assert.strictEqual(destroyedA + destroyedB, 0);
+
+  // markActive seulement pour un module initialisé (le routeur appelle initModule avant).
+  SGDI.initModule('a');
+  SGDI.markActiveModule('a');
+  assert.strictEqual(SGDI.activeModuleKey, 'a');
+
+  // Même clé -> pas de destroy.
+  SGDI.deactivateIfChanged('a');
+  assert.strictEqual(destroyedA, 0);
+
+  // Clé différente -> destroy de l'ancien + activeModuleKey remis à null.
+  SGDI.deactivateIfChanged('b');
+  assert.strictEqual(destroyedA, 1);
+  assert.strictEqual(SGDI.activeModuleKey, null);
+  assert.strictEqual(SGDI.isModuleInitialized('a'), false, 'destroy a désinitialisé a');
+
+  // Passage vers une route legacy (nextKey null) -> destroy du module actif.
+  SGDI.initModule('b');
+  SGDI.markActiveModule('b');
+  SGDI.deactivateIfChanged(null);
+  assert.strictEqual(destroyedB, 1);
+  assert.strictEqual(SGDI.activeModuleKey, null);
+
+  // markActiveModule(null) est un no-op.
+  SGDI.markActiveModule(null);
+  assert.strictEqual(SGDI.activeModuleKey, null);
 });
 
 test('loadModule : succès -> résout, met en cache, n’injecte qu’une fois', async () => {
@@ -175,10 +217,13 @@ test('dependencies : un module charge ses dépendances avant lui', async () => {
 
 test('_resetModuleRegistry : remet le registre à zéro', () => {
   const SGDI = freshSGDI();
-  SGDI.registerModule({ key: 'a', routes: ['a'] });
+  SGDI.registerModule({ key: 'a', routes: ['a'], init() {} });
   SGDI.registerModule({ key: 'b', routes: ['b'] });
+  SGDI.initModule('a');
+  SGDI.markActiveModule('a');
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 2);
   SGDI._resetModuleRegistry();
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 0);
   assert.strictEqual(SGDI.isModuleRegistered('a'), false);
+  assert.strictEqual(SGDI.activeModuleKey, null, 'module actif remis à zéro');
 });

@@ -22,17 +22,19 @@ test('le code secrétariat a quitté le monolithe pour son module', () => {
   assert.match(MODULE_SRC, /routes: \["secretariat"\]/);
 });
 
-test('le module s’enregistre et la route /secretariat lui est associée', () => {
-  const { window, T, loadError } = loadSgdiApp([]);
+test('le module s’enregistre ; la route /secretariat est prête APRÈS init()', () => {
+  const { window, loadError } = loadSgdiApp([]);
   assert.ifError(loadError);
   const SGDI = window.SGDIModules;
   assert.strictEqual(SGDI.isModuleRegistered('secretariat'), true);
   assert.strictEqual(SGDI.moduleKeyForRoute('secretariat'), 'secretariat');
-  // Concaténé en test -> déjà enregistré -> pas de chargement supplémentaire.
-  assert.strictEqual(SGDI.routeNeedsModuleLoad('secretariat'), false);
+  // Concaténé en test -> enregistré, mais pas encore initialisé : le portillon
+  // doit encore passer (pour lancer init() une fois).
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('secretariat'), true, 'chargé mais pas initialisé');
+  SGDI.initModule('secretariat');
+  assert.strictEqual(SGDI.routeNeedsModuleLoad('secretariat'), false, 'prêt après init');
   const snap = SGDI.moduleRegistrySnapshot().find((m) => m.key === 'secretariat');
-  assert.ok(snap && snap.routes.includes('secretariat'));
-  void T;
+  assert.ok(snap && snap.routes.includes('secretariat') && snap.initialized === true);
 });
 
 test('secretariatScopedItems : sans filtre société renvoie tout, liste vide gérée', () => {

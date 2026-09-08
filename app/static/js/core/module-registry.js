@@ -89,13 +89,36 @@
     return routeIndex[root] || R.MODULE_ROUTES[root] || null;
   };
 
-  // Le routeur doit-il charger un module avant de rendre cette racine de route ?
-  // Vrai uniquement si la route mappe vers un module PAS encore enregistré
-  // (= dont le script n'a pas encore tourné).
+  // Le routeur doit-il préparer un module avant de rendre cette racine de route ?
+  // Une route modulaire n'est PRÊTE que si son module est à la fois enregistré
+  // (script chargé) ET initialisé (init() terminé avec succès). Tant que l'un des
+  // deux manque — script absent, ou init échoué / non retenté, ou module détruit
+  // au départ puis ré-ouvert — le portillon doit repasser (retry init inclus).
   R.routeNeedsModuleLoad = function (root) {
     var key = R.moduleKeyForRoute(root);
     if (!key) return false;
-    return !registry[key];
+    var mod = registry[key];
+    return !mod || !mod.initialized;
+  };
+
+  // ── Cycle de vie « module actif » piloté par le routeur ────────────────────
+  // Le routeur mémorise le module de la route courante. Au changement de module
+  // (ou passage vers une route legacy), il détruit le précédent.
+  R.activeModuleKey = null;
+
+  // Détruit le module actif s'il diffère de la cible. no-op si identique, si
+  // aucun module actif, ou si le module actif n'est pas initialisé (destroyModule
+  // garde déjà ce cas).
+  R.deactivateIfChanged = function (nextKey) {
+    if (R.activeModuleKey && R.activeModuleKey !== nextKey) {
+      R.destroyModule(R.activeModuleKey);
+      R.activeModuleKey = null;
+    }
+  };
+
+  // Marque un module comme actif (après un rendu modulaire réussi).
+  R.markActiveModule = function (key) {
+    if (key) R.activeModuleKey = key;
   };
 
   // Injection réelle d'un <script>. Surcharge­able par les tests.
@@ -177,6 +200,7 @@
     Object.keys(registry).forEach(function (k) { delete registry[k]; });
     Object.keys(loading).forEach(function (k) { delete loading[k]; });
     Object.keys(routeIndex).forEach(function (k) { delete routeIndex[k]; });
+    R.activeModuleKey = null;
   };
 
   // Snapshot lisible pour diagnostic / tests.
