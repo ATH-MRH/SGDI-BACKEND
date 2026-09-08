@@ -1,0 +1,89 @@
+{
+  "paie": {
+    "routes": [
+      "paie"
+    ],
+    "files": [
+      "app/static/js/modules/paie.js"
+    ],
+    "functions": [
+      "paieAgentFonction",
+      "paieGrilleForAgent",
+      "paieGrilleBounds",
+      "paieClosedInfo",
+      "paieElementsFor",
+      "paieBulletinFor",
+      "paieBulletinDrift",
+      "paieCalcForAgent",
+      "paiePeriodBounds",
+      "paieEmploymentRatio",
+      "calcPaieAgent",
+      "paiePointageAbsenceInfo",
+      "paiePointageAbsenceDays",
+      "paieNetFromBase",
+      "paieBaseBruteForAgent",
+      "paieOptimizeFromNet",
+      "paieActiveSocieteScope",
+      "setPaieFilter",
+      "savePaieConfig",
+      "paieExportCSV",
+      "paieExportCNAS",
+      "paieExportIRG",
+      "paieBulletinSnapshot",
+      "paieEligibleAgents",
+      "paieValidationForAgents",
+      "paieCloseMonth",
+      "paieFicheHTML",
+      "previewPaieFiche",
+      "printPaieFiche",
+      "paieFindAgent",
+      "paieAgentElementsTableHTML",
+      "savePaieAgentSalary",
+      "renderPaieAgent",
+      "paieRubriquesHTML",
+      "paieGrillesHTML",
+      "openPaieGrilleModal",
+      "paieSaveGrille",
+      "paieDeleteGrille",
+      "openPaieRubriqueModal",
+      "paieSaveRubrique",
+      "paieDeleteRubrique",
+      "openPaieElementsModal",
+      "paieSaveElements",
+      "paieOptimizerHTML",
+      "paieSetOptimNet",
+      "paieApplyOptimization",
+      "renderPaie"
+    ],
+    "retained": [
+      "paieConfig",
+      "paieIsClosed",
+      "irgSalaireAlgerie",
+      "paieMonthLabel",
+      "paieDownloadCSV",
+      "defaultPaieConfig",
+      "paieEnsure",
+      "irgBaremeMensuel",
+      "defaultPaieRubriques"
+    ],
+    "linesMoved": 650,
+    "collections": [
+      "agents",
+      "paieBulletins",
+      "paieClotures",
+      "paieConfig",
+      "paieElements",
+      "paieGrilles",
+      "paieRubriques"
+    ],
+    "apiPaths": [],
+    "timers": [
+      "w.document.write(`<html><head><title>Fiche paie ${a?escapeHTML(a.matricule):\"\"}</title></head><body>${paieFicheHTML(agentId,ym)}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body></html>`);"
+    ],
+    "measurements": {
+      "lines": 40935,
+      "bytes": 3453423,
+      "gzip": 889178
+    }
+  }
+}

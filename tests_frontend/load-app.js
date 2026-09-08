@@ -22,7 +22,7 @@ const SRC = [CORE_UTILS, MODULE_REGISTRY, APP, MODULES].join('\n');
 function loadSgdiApp(names = [], options = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div></body></html>',
-    { url: 'https://drh.irongs.com/', runScripts: 'outside-only', pretendToBeVisual: true }
+    { url: 'https://drh.irongs.com/', runScripts: options.lazyModules ? 'dangerously' : 'outside-only', pretendToBeVisual: true }
   );
   const { window } = dom;
 
@@ -62,7 +62,14 @@ ${exposed}
   let loadError = null;
   try {
     const source = options.withoutModules ? [CORE_UTILS, APP].join("\n") : SRC;
-    window.eval(source + suffix);
+    if (options.lazyModules) {
+      // Scripts classiques séparés : les let/const globaux gardent la portée navigateur.
+      for (const code of [CORE_UTILS, MODULE_REGISTRY, APP + suffix]) {
+        const script = window.document.createElement('script');
+        script.textContent = code;
+        window.document.head.appendChild(script);
+      }
+    } else window.eval(source + suffix);
   } catch (e) {
     loadError = e;
   }

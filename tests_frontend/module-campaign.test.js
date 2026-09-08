@@ -1,0 +1,86 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { loadSgdiApp } = require('./load-app');
+const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/frontend-phase2b-2g-inventory.json')));
+const tick = () => new Promise(resolve => setTimeout(resolve, 150));
+
+function boot() {
+  const ctx = loadSgdiApp(['renderView'], { lazyModules: true });
+  assert.ifError(ctx.loadError);
+  const { window: w, T } = ctx;
+  const errors = [], requests = [], downloads = [], timers = new Map();
+  w.addEventListener('error', e => { errors.push(e.error || e.message); e.preventDefault(); });
+  w.console.error = (...args) => errors.push(args);
+  w.fetch = url => { requests.push(String(url)); return Promise.resolve({ ok: true, json: async () => ({}), text: async () => '' }); };
+  let timer = 10000;
+  w.setInterval = (fn, ms) => { const id = ++timer; timers.set(id, { fn, ms }); return id; };
+  w.clearInterval = id => timers.delete(id);
+  const append = w.document.head.appendChild.bind(w.document.head);
+  w.document.head.appendChild = el => {
+    if (el.src && el.src.includes('/static/js/modules/')) {
+      const url = new URL(el.src);
+      const filename = path.join(__dirname, '../app', url.pathname);
+      assert.ok(fs.existsSync(filename), 'aucun 404 : ' + url.pathname);
+      downloads.push(url.pathname);
+      assert.strictEqual(url.searchParams.get('v'), w.SGDIModules.MODULE_VERSION);
+      el.removeAttribute('src');
+      el.textContent = fs.readFileSync(filename, 'utf8');
+      append(el);
+      queueMicrotask(() => el.onload());
+      return el;
+    }
+    return append(el);
+  };
+  T().setDb(new Proxy({}, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  T().setSession({ username: 'tester', role: 'admin', access_level: 'H5', authorized_modules: ['all'], transverse: 'admin', societe: '' });
+  T().setFullDataReady(true);
+  T().setViewMode(true);
+  const go = hash => { w.history.replaceState(null, '', hash); assert.equal(T().renderView(), undefined); };
+  return { ...ctx, errors, requests, downloads, timers, go, view: () => w.document.getElementById('view') };
+}
+
+test('campagne : vrais scripts lazy, parcours répété ×3, aucun doublon ni erreur', async () => {
+  const r = boot(), R = r.window.SGDIModules;
+  const routeKeys = Object.entries(R.MODULE_ROUTES);
+  assert.equal(r.downloads.length, 0);
+  for (const [key] of Object.entries(inventory)) assert.equal(R.isModuleRegistered(key), false);
+  const inits = {}, destroys = {};
+  const register = R.registerModule;
+  R.registerModule = def => {
+    const init = def.init || (() => {}), destroy = def.destroy || (() => {});
+    return register({ ...def, init() { inits[def.key] = (inits[def.key] || 0) + 1; return init(); },
+      destroy() { destroys[def.key] = (destroys[def.key] || 0) + 1; return destroy(); } });
+  };
+  for (let turn = 0; turn < 3; turn++) {
+    for (const [route, key] of routeKeys) {
+      r.go('#/' + route);
+      await tick();
+      assert.equal(R.activeModuleKey, key, route);
+      assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible|Chargement du module/);
+      r.go('#/dashboard'); await tick();
+      assert.equal(R.activeModuleKey, null);
+      assert.equal(r.timers.size, 0, 'aucun timer de domaine après ' + route);
+    }
+  }
+  assert.equal(new Set(r.downloads).size, r.downloads.length, 'chaque script téléchargé une fois');
+  for (const key of new Set(routeKeys.map(([, key]) => key))) assert.equal(inits[key], destroys[key]);
+  assert.deepEqual(r.errors, []);
+});
+
+test('campagne : navigation rapide, dernier module demandé gagne', async () => {
+  const r = boot(), R = r.window.SGDIModules;
+  const routes = Object.keys(R.MODULE_ROUTES);
+  for (const route of routes) r.go('#/' + route);
+  await tick();
+  const last = routes.at(-1);
+  assert.equal(R.activeModuleKey, R.MODULE_ROUTES[last]);
+  for (const row of R.moduleRegistrySnapshot()) {
+    if (row.key !== R.MODULE_ROUTES[last]) assert.equal(row.initialized, false, 'aucune init obsolète : ' + row.key);
+  }
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  r.go('#/dashboard'); await tick();
+  assert.equal(R.activeModuleKey, null);
+  assert.deepEqual(r.errors, []);
+});

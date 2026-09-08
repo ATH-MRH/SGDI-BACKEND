@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2a-lifecycle-v2";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2b";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.
@@ -46,7 +46,8 @@
   // module encore non chargé. Une extraction future ajoute une entrée ici.
   R.MODULE_ROUTES = R.MODULE_ROUTES || {
     // Racine de route -> clé de module extrait, chargé à la demande.
-    "secretariat": "secretariat"
+    "secretariat": "secretariat",
+    "paie": "paie"
   };
 
   var registry = Object.create(null);   // key -> { key, init, destroy, routes, dependencies, initialized }
