@@ -7,6 +7,7 @@ const { JSDOM } = require('jsdom');
 
 const STATIC = path.join(__dirname, '..', 'app', 'static');
 const CORE_UTILS = fs.readFileSync(path.join(STATIC, 'js', 'core', 'utils.js'), 'utf8');
+const CORE_FILES = fs.readFileSync(path.join(STATIC, "js", "core", "files.js"), "utf8");
 const MODULE_REGISTRY = fs.readFileSync(path.join(STATIC, 'js', 'core', 'module-registry.js'), 'utf8');
 const APP = fs.readFileSync(path.join(STATIC, 'sgdi-app.js'), 'utf8');
 // Modules extraits : en navigateur ils sont chargés à la demande ; pour les tests
@@ -17,7 +18,7 @@ const MODULES = fs.existsSync(MODULES_DIR)
   ? fs.readdirSync(MODULES_DIR).filter((f) => f.endsWith('.js')).sort()
       .map((f) => fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')).join('\n')
   : '';
-const SRC = [CORE_UTILS, MODULE_REGISTRY, APP, MODULES].join('\n');
+const SRC = [CORE_UTILS, MODULE_REGISTRY, CORE_FILES, APP, MODULES].join('\n');
 
 function loadSgdiApp(names = [], options = {}) {
   const dom = new JSDOM(
@@ -70,10 +71,24 @@ ${exposed}
 
   let loadError = null;
   try {
-    const source = options.withoutModules ? [CORE_UTILS, APP].join("\n") : SRC;
+    const source = options.withoutModules ? [CORE_UTILS, CORE_FILES, APP].join("\n") : SRC;
     if (options.lazyModules) {
       // Scripts classiques séparés : les let/const globaux gardent la portée navigateur.
-      for (const code of [CORE_UTILS, MODULE_REGISTRY, APP + suffix]) {
+      let scripts = [CORE_UTILS, MODULE_REGISTRY, CORE_FILES, APP + suffix];
+      if (options.entryHTML) {
+        // Respecte les dépendances et leur ordre réellement déclarés par ce HTML.
+        // Les autres assets (ERP, communes) restent hors de ce banc de routeur.
+        const html = fs.readFileSync(path.join(STATIC, options.entryHTML), 'utf8');
+        scripts = [];
+        for (const [, attrs, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+          const src = attrs.match(/src="([^"?]+)(?:\?[^" ]*)?"/);
+          if (!src) { scripts.push(body); continue; }
+          if (!/^\/static\/(?:js\/core\/[^/]+|sgdi-app)\.js$/.test(src[1])) continue;
+          scripts.push(fs.readFileSync(path.join(STATIC, src[1].slice('/static/'.length)), 'utf8') +
+            (src[1] === '/static/sgdi-app.js' ? suffix : ''));
+        }
+      }
+      for (const code of scripts) {
         const script = window.document.createElement('script');
         script.textContent = code;
         window.document.head.appendChild(script);

@@ -61,5 +61,14 @@
     "gzip9": 465881,
     "bootstrapJSBytes": 1685464,
     "lazyScripts": 35
+  },
+  {
+    "commit": "f289c34b3cbf141aa54d0d497e60ac92efd900fb",
+    "message": "refactor(frontend): extract positions and clean up badge interactions",
+    "lines": 20076,
+    "bytes": 1554274,
+    "gzip9": 450982,
+    "bootstrapJSBytes": 1628375,
+    "lazyScripts": 36
   }
 ]

@@ -1,0 +1,28 @@
+{
+  "classification": "VALIDÉ",
+  "file": "app/static/js/core/files.js",
+  "functions": [
+    "compressImage",
+    "sgdiHtmlDataUrlWithInlineStyles",
+    "viewDoc",
+    "printArchiveA4Current",
+    "viewDocA4",
+    "docUploadField",
+    "handleDocUpload",
+    "removeDoc"
+  ],
+  "linesMoved": 89,
+  "collections": [],
+  "dependencies": [
+    "dotationDocumentInlineStyle",
+    "escapeHTML",
+    "toast",
+    "openModal"
+  ],
+  "globals": [
+    "window._archiveA4CurrentDoc"
+  ],
+  "bootstrap": "Déclarations uniquement, sans API ni timer au chargement",
+  "timers": "Temporisations historiques des fenêtres d’impression uniquement",
+  "retained": "handlePhotoUpload : logique métier candidat/employé ; dotationDocumentInlineStyle : styles métier Matériel."
+}

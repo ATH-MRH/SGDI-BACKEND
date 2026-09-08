@@ -8,8 +8,8 @@ const phase2hInventory = path.join(__dirname, '../docs/frontend-phase2h-inventor
 if (fs.existsSync(phase2hInventory)) Object.assign(inventory, JSON.parse(fs.readFileSync(phase2hInventory)));
 const tick = () => new Promise(resolve => setTimeout(resolve, 150));
 
-function boot() {
-  const ctx = loadSgdiApp(['renderView'], { lazyModules: true });
+function boot(options = {}) {
+  const ctx = loadSgdiApp(['renderView'], { lazyModules: true, ...options });
   assert.ifError(ctx.loadError);
   ctx.dom.reconfigure({ url: 'http://localhost/' });
   const { window: w, T } = ctx;
@@ -177,7 +177,7 @@ test('dépendances : aucun helper lazy appelé sans garde depuis le core', () =>
   const start = core.indexOf('    switch(root){', core.indexOf('function renderView(){'));
   const end = core.indexOf('  }catch(e){console.error(e);view.innerHTML=', start);
   assert.ok(start > 0 && end > start);
-  const shared = core.slice(0, start) + core.slice(end);
+  const shared = core.slice(0, start) + core.slice(end) + fs.readFileSync(path.join(__dirname, "../app/static/js/core/files.js"), "utf8");
   for (const domain of Object.values(inventory)) {
     for (const name of domain.functions) {
       assert.doesNotMatch(shared, new RegExp('\\b' + name + '\\b'), name + ' doit rester synchrone ou avoir une dépendance explicite');
@@ -524,5 +524,34 @@ test('Positions/Badges : dépendances, impression, recadrage et réponse tardive
   assert.equal(typeof finish, 'function');
   r.go('#/dashboard'); await tick(); const html = r.view().innerHTML;
   finish(); await tick(); assert.equal(r.view().innerHTML, html);
+  assert.deepEqual(r.errors, []);
+});
+
+test('entrées autonomes réelles : Facturation, Paie, Congés chargent leurs dépendances', async () => {
+  for (const [entry, route, key, transverse] of [['facturation.html','facturation','facturation','facmod'], ['paie.html','paie','paie','paie'], ['conges.html','conges','drh','conges']]) {
+    const r = boot({ entryHTML: entry }), w = r.window;
+    await tick();
+    r.T().setSession({ username: 'tester', role: 'admin', access_level: 'H5', authorized_modules: ['all'], transverse });
+    r.go('#/' + route); await tick();
+    assert.equal(w.SGDIModules.activeModuleKey, key, entry);
+    assert.equal(typeof w.viewDoc, 'function', entry + ' fichiers partagés');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible|Chargement du module/);
+    assert.deepEqual(r.errors, []);
+    r.go('#/dashboard'); await tick();
+  }
+});
+
+test('parcours demandé : transitions directes entre domaines répétées trois fois', async () => {
+  const r = boot(), R = r.window.SGDIModules;
+  await tick();
+  const routes = ['dashboard', 'sites', 'incidents', 'dashboard', 'facturation', 'commercial', 'agenda', 'portail', 'fiches', 'badge', 'admin', 'pointage', 'ops', 'materiel', 'drh', 'dashboard'];
+  for (let turn = 0; turn < 3; turn++) for (const route of routes) {
+    r.go('#/' + route); await tick();
+    assert.equal(R.activeModuleKey, R.moduleKeyForRoute(route), route);
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible|Chargement du module/);
+    assert.ok(R.moduleRegistrySnapshot().filter(m => m.initialized).length <= 1, 'une seule route initialisée');
+  }
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  assert.equal(r.timers.size, 0);
   assert.deepEqual(r.errors, []);
 });
