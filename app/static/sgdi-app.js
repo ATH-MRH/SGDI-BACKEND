@@ -7982,6 +7982,30 @@ function renderView(){
   sgdiResetViewScroll=false;
   if(view&&resetScroll)view.scrollTop=0;
   const [root,sub,arg]=path.split("/");
+  // ── Phase 2A : chargement paresseux d'un module de route ───────────────────
+  // Si la racine de route appartient à un module déclaré mais pas encore chargé,
+  // on affiche un écran d'attente puis on relance renderView() une fois le module
+  // prêt. Même patron que la porte « données non prêtes » ci-dessus : renderView
+  // reste SYNCHRONE, aucun appelant historique ne reçoit de Promise. Quand aucun
+  // module n'est déclaré pour la route (cas par défaut), ce bloc est inerte.
+  if(view&&window.SGDIModules&&typeof SGDIModules.routeNeedsModuleLoad==="function"&&SGDIModules.routeNeedsModuleLoad(root)){
+    const _moduleGen=sgdiViewRenderGeneration;
+    const _moduleHash=String(location.hash||"");
+    const _moduleKey=SGDIModules.moduleKeyForRoute(root);
+    view.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement du module…</div><div class="text-sm">Préparation de l'espace demandé.</div></div>`;
+    if(typeof uiProgressDone==="function")uiProgressDone();
+    SGDIModules.loadAndInitModule(_moduleKey).then(()=>{
+      // Une navigation plus récente a-t-elle eu lieu ? Si oui, ne pas réécrire la vue.
+      if(_moduleGen===sgdiViewRenderGeneration&&_moduleHash===String(location.hash||"")&&document.getElementById("view")){
+        renderView();
+      }
+    }).catch((err)=>{
+      if(_moduleGen!==sgdiViewRenderGeneration||_moduleHash!==String(location.hash||""))return;
+      const v=document.getElementById("view");
+      if(v)v.innerHTML=`<div class="card p-6"><h2 class="text-lg font-black text-red-700 mb-2">Module indisponible</h2><p class="text-sm text-slate-600 mb-3">${escapeHTML(String(err&&err.message||err))}</p><button type="button" class="btn btn-primary" onclick="renderView()">Réessayer</button></div>`;
+    });
+    return;
+  }
   try{
     switch(root){
       case"dashboard":renderDashboard(view);break;

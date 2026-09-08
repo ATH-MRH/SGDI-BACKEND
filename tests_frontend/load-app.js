@@ -5,8 +5,19 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const CORE_UTILS = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
-const SRC = CORE_UTILS + '\n' + fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+const STATIC = path.join(__dirname, '..', 'app', 'static');
+const CORE_UTILS = fs.readFileSync(path.join(STATIC, 'js', 'core', 'utils.js'), 'utf8');
+const MODULE_REGISTRY = fs.readFileSync(path.join(STATIC, 'js', 'core', 'module-registry.js'), 'utf8');
+const APP = fs.readFileSync(path.join(STATIC, 'sgdi-app.js'), 'utf8');
+// Modules extraits : en navigateur ils sont chargés à la demande ; pour les tests
+// « appeler les vraies fonctions », on les concatène (leur script tourne alors au
+// chargement, donc SGDI.registerModule est appelé et routeNeedsModuleLoad est faux).
+const MODULES_DIR = path.join(STATIC, 'js', 'modules');
+const MODULES = fs.existsSync(MODULES_DIR)
+  ? fs.readdirSync(MODULES_DIR).filter((f) => f.endsWith('.js')).sort()
+      .map((f) => fs.readFileSync(path.join(MODULES_DIR, f), 'utf8')).join('\n')
+  : '';
+const SRC = [CORE_UTILS, MODULE_REGISTRY, APP, MODULES].join('\n');
 
 function loadSgdiApp(names = []) {
   const dom = new JSDOM(
@@ -41,6 +52,10 @@ ${exposed}
   setSession: (v) => { session = v; },
   setViewMode: (v) => { sgdiViewModeActive = v; },
   setHydrated: (v) => { sgdiHydrated = v; },
+  setFullDataReady: (v) => { sgdiFullDataReady = v; },
+  setFormUnsaved: (v) => { sgdiFormHasUnsavedChanges = v; },
+  getRenderGeneration: () => sgdiViewRenderGeneration,
+  getLastRenderedPath: () => sgdiLastRenderedPath,
 };
 `;
 
