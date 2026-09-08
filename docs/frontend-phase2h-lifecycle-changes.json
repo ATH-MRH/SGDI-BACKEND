@@ -1,0 +1,13 @@
+[
+  "initInlineSitePositionMap",
+  "initSitePositionMap",
+  "initSitesDashboardMap",
+  "openOpsSiteConfigModal",
+  "renderSiteForm",
+  "renderSites",
+  "renderSitesServer",
+  "saveSite",
+  "toggleInlineSitePositionMap",
+  "toggleSitesDashboardMap",
+  "toggleSuperviseurDemandeMenu"
+]

@@ -4,12 +4,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadSgdiApp } = require('./load-app');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/frontend-phase2b-2g-inventory.json')));
+const phase2hInventory = path.join(__dirname, '../docs/frontend-phase2h-inventory.json');
+if (fs.existsSync(phase2hInventory)) Object.assign(inventory, JSON.parse(fs.readFileSync(phase2hInventory)));
 const tick = () => new Promise(resolve => setTimeout(resolve, 150));
 
 function boot() {
   const ctx = loadSgdiApp(['renderView'], { lazyModules: true });
   assert.ifError(ctx.loadError);
+  ctx.dom.reconfigure({ url: 'http://localhost/' });
   const { window: w, T } = ctx;
+  for (const id of ['sidebar-nav', 'view']) w.document.getElementById('app').appendChild(w.document.getElementById(id));
   const errors = [], requests = [], downloads = [], timers = new Map();
   w.addEventListener('error', e => { errors.push(e.error || e.message); e.preventDefault(); });
   w.console.error = (...args) => errors.push(args);
@@ -306,4 +310,30 @@ test('registre absent : chaque nouvelle route affiche un rechargement compréhen
     assert.match(view.textContent, /Module indisponible/);
     assert.equal(view.querySelector('button').textContent, 'Recharger');
   }
+});
+
+test('Sites : formulaire lazy, destruction des cartes et chargement cartographique tardif ignoré', async () => {
+  if (!inventory.sites) return;
+  const r = boot(), w = r.window;
+  let resolveMap, creations = 0, removals = 0;
+  w.loadMapLibre = () => new Promise(resolve => { resolveMap = resolve; });
+  r.go('#/sites/nouveau'); await tick();
+  assert.ok(w.document.getElementById('site-form'));
+  for (const key of ['__sgdiSitesDashboardMap', '__sgdiInlineSitePositionMap', '__sgdiSitePositionMap']) w[key] = { remove() { removals++; } };
+  r.go('#/dashboard'); await tick();
+  assert.equal(removals, 3);
+  if (resolveMap) resolveMap({ Map: class { constructor() { creations++; } } });
+  await tick();
+  assert.equal(creations, 0);
+  let resolveStores;
+  w.sgdiAuthToken = () => 'fixture-token';
+  w.SGDI.stock.stores = () => new Promise(resolve => { resolveStores = resolve; });
+  w.SGDI.commercial.clients = async () => [];
+  r.go('#/sites/nouveau'); await tick();
+  assert.equal(typeof resolveStores, 'function', r.view().textContent + JSON.stringify(r.errors));
+  r.go('#/dashboard'); await tick();
+  resolveStores([]); await tick();
+  assert.equal(w.document.getElementById('site-form'), null, w.location.hash + ' ' + r.view().textContent.slice(0,250) + JSON.stringify(r.errors));
+  assert.equal(w.SGDIModules.activeModuleKey, null);
+  assert.deepEqual(r.errors, []);
 });
