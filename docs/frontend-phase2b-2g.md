@@ -28,3 +28,12 @@ Init est dédupliqué par le registre. Les composants purement déclaratifs ont 
 hooks vides ; les ressources de vues doivent être arrêtées dans destroy.
 Les fonctions synchrones encore utilisées hors route ne deviennent jamais des
 wrappers Promise. Les permissions et les appels API restent identiques.
+
+## 2C — Pointage
+
+1 675 lignes extraites en deux scripts de route ; fonctions de calcul partagées,
+QR utilisé par OPS et overlay global d’enregistrement conservés dans le core.
+Le timer de relève 30s quitte le bootstrap. Destroy arrête relève, QR tablette,
+présence live, planning, saisie automatique et scanner. Une réouverture attend
+la fermeture du scanner. Les démarrages différés vérifient leur vue ; la reprise
+après chargement des employés vérifie hash/génération/vue.

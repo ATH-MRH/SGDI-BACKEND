@@ -84,3 +84,24 @@ test('campagne : navigation rapide, dernier module demandé gagne', async () => 
   assert.equal(R.activeModuleKey, null);
   assert.deepEqual(r.errors, []);
 });
+
+test('Pointage : QR, planning et saisie ; timers arrêtés même après un démarrage différé', async () => {
+  if (!inventory.pointage) return;
+  const r = boot();
+  const values = { agents: [{ id: 'a1', nom: 'TEST', prenom: 'Agent', statut: 'actif', societe: '', matricule: '001' }],
+    sites: [{ id: 's1', backendId: 's1', nom: 'Site test', actif: true, societe: '' }] };
+  r.T().setDb(new Proxy(values, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  for (const sub of ['qr', 'planning', 'saisie', 'auto', 'feuille']) {
+    r.go('#/pointage/' + sub); await tick();
+    assert.equal(r.window.SGDIModules.activeModuleKey, 'pointage');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+    assert.ok(r.timers.size >= 1, 'timer de relève actif');
+    r.go('#/dashboard'); await tick();
+    assert.equal(r.timers.size, 0, 'arrêt immédiat des timers : ' + sub);
+  }
+  r.go('#/pointage/qr');
+  await new Promise(resolve => setTimeout(resolve, 5));
+  r.go('#/dashboard'); await tick();
+  assert.equal(r.timers.size, 0, 'timeout QR obsolète ne redémarre rien');
+  assert.deepEqual(r.errors, []);
+});
