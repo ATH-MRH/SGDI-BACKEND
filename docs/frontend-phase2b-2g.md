@@ -79,3 +79,10 @@ les fiches de position les appellent directement. Aucun changement de state db.
 1 622 lignes extraites en drh, drh-dashboard et leaves. Le calcul d’entitlement
 et les filtres société partagés restent dans le core. Les règles de congés,
 formulaires et endpoints ne changent pas. Aucun intervalle/listener global ajouté.
+
+## 2G — Administration
+
+Extraction par sous-bloc : contrôleur/utilisateurs, permissions, puis paramètres
+et workflows. Chaque étape conserve ses dépendances synchrones tant que le
+sous-bloc suivant n’est pas chargé. Le point d’entrée déclare les dépendances
+des sous-modules. Les règles effectives, scopes et avertissements restent identiques.

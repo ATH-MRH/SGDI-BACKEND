@@ -21,7 +21,7 @@ const SRC = [CORE_UTILS, MODULE_REGISTRY, APP, MODULES].join('\n');
 
 function loadSgdiApp(names = [], options = {}) {
   const dom = new JSDOM(
-    '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div></body></html>',
+    '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div><div id="modal-host"></div></body></html>',
     { url: 'https://drh.irongs.com/', runScripts: options.lazyModules ? 'dangerously' : 'outside-only', pretendToBeVisual: true }
   );
   const { window } = dom;

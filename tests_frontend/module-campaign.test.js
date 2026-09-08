@@ -219,3 +219,32 @@ test('DRH : congés, social, périodes d’essai et statistiques réouvrent sans
   }
   assert.deepEqual(r.errors, []);
 });
+
+test('Administration : utilisateurs/permissions ×3, autre utilisateur, backendId et avertissement préservés', async () => {
+  if (!inventory.administration) return;
+  const r = boot(), w = r.window, calls = [];
+  r.T().setSession({ username: 'admin', role: 'admin', adminSystem: true, access_level: 'H5', authorized_modules: ['all'], transverse: 'admin' });
+  const users = [{ username: 'alice', backendId: 42, role: 'agent', actif: true }, { username: 'bob', backendId: 84, role: 'ops', actif: true }];
+  r.T().setDb(new Proxy({ users }, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  w.SGDI.auth.granularFeatureCatalog = async () => ({ actions: ['read', 'pay'], modules: [{ module_key: 'drh', label: 'DRH', domain: 'RH', features: [{ feature_key: 'employees', label: 'Employés', applicable_actions: ['read'] }] }] });
+  w.SGDI.auth.userFeaturePermissions = async id => { calls.push(id); return { username: id === 42 ? 'alice' : 'bob', permissions: id === 42 ? [{ module_key: 'drh', feature_key: 'employees', action_key: 'read' }] : [] }; };
+  w.SGDI.auth.saveUserFeaturePermissions = () => { throw new Error('Aucune écriture de permission autorisée dans ce parcours'); };
+  for (let turn = 0; turn < 3; turn++) {
+    r.go('#/admin/users'); await tick();
+    assert.match(r.view().textContent, /Gestion des utilisateurs/);
+    for (const user of users) {
+      await w.openGranularPermissionsByKey(encodeURIComponent(user.username));
+      const editor = w.document.getElementById('granular-permissions-editor');
+      assert.ok(editor); assert.match(editor.textContent, /Permissions préparées — non actives/);
+      assert.match(editor.textContent, new RegExp(user.username));
+      assert.equal(editor.querySelector('[data-action="read"]').checked, user.backendId === 42);
+      assert.equal(editor.querySelector('[data-action="pay"]').disabled, true);
+      w.closeModal();
+    }
+    r.go('#/dashboard'); await tick();
+  }
+  assert.deepEqual(calls, [42, 84, 42, 84, 42, 84]);
+  assert.deepEqual(users.map(user => user.backendId), [42, 84]);
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  assert.deepEqual(r.errors, []);
+});

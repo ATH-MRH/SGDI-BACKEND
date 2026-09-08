@@ -1655,5 +1655,55 @@
       "bytes": 2463663,
       "gzip": 658605
     }
+  },
+  "administration": {
+    "routes": [
+      "admin",
+      "parametres"
+    ],
+    "files": [
+      "app/static/js/modules/administration.js",
+      "app/static/js/modules/administration-users.js"
+    ],
+    "functions": [
+      "adminRoleColor",
+      "renderAdmin",
+      "ensureAdminUsersFresh",
+      "renderAdminUsers",
+      "adminSetUserStatusFilter",
+      "adminFilterUsers",
+      "adminToggleUserActiveByKey",
+      "adminDeleteUserByKey",
+      "adminDeleteUser"
+    ],
+    "retained": [
+      "adminProfileModuleLabel",
+      "normalizeAdminProfileModules",
+      "adminAccessModuleLabel",
+      "adminAccessModuleGroup",
+      "canAccessModuleHostKey",
+      "adminSupervisorUsers",
+      "adminSupervisorSiteScopeFromUser",
+      "adminUserByUsername",
+      "openAdminUserModalByKey",
+      "adminSuggestUsernameForForm",
+      "openAdminUserModal",
+      "previewUserAccessLevel",
+      "syncUserAccessLevelWithRole",
+      "confirmAdminUserByKey",
+      "adminNormalizeProfileModuleKey",
+      "normalizeAdminUserRole",
+      "adminUsernamePrefixFromForm",
+      "adminNextUsername",
+      "confirmAdminUser",
+      "adminUserFromApi",
+      "adminUsernamePrefixForStructure"
+    ],
+    "linesMoved": 133,
+    "measurements": {
+      "lines": 29722,
+      "bytes": 2452650,
+      "gzip": 656205
+    }
   }
 }
