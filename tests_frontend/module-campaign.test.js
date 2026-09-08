@@ -174,6 +174,10 @@ test('dépendances : aucun helper lazy appelé sans garde depuis le core', () =>
   for (const domain of Object.values(inventory)) {
     for (const name of domain.functions) {
       assert.doesNotMatch(shared, new RegExp('\\b' + name + '\\b'), name + ' doit rester synchrone ou avoir une dépendance explicite');
+      const cases = core.slice(start, end).matchAll(/case"([^"]+)":([\s\S]*?)(?=\n\s*case"|\n\s*default:|$)/g);
+      for (const [, route, body] of cases) {
+        if (!domain.routes.includes(route)) assert.doesNotMatch(body, new RegExp('\\b' + name + '\\b'), route + ' ne charge pas ' + name);
+      }
     }
   }
 });
@@ -199,6 +203,18 @@ test('Effectif et contrats : listes et fiche employé avec backendId préservé'
     assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
     assert.equal(employee.backendId, 42);
     if (route === 'effectif/agent/employee-test') assert.ok(r.view().querySelector('form'), 'fiche employé');
+    r.go('#/dashboard'); await tick();
+  }
+  assert.deepEqual(r.errors, []);
+});
+
+test('DRH : congés, social, périodes d’essai et statistiques réouvrent sans erreur', async () => {
+  if (!inventory.drh) return;
+  const r = boot();
+  for (const route of ['drh/conges', 'conges', 'drh/social', 'drh/essai', 'drh/stats_fonction']) {
+    r.go('#/' + route); await tick();
+    assert.equal(r.window.SGDIModules.activeModuleKey, 'drh');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
     r.go('#/dashboard'); await tick();
   }
   assert.deepEqual(r.errors, []);

@@ -73,3 +73,9 @@ core pour préserver leurs appels synchrones depuis les autres domaines.
 Vues/listes et actions isolées extraites. Les fiches agents, décisions RH et
 contrôles partagés restent synchrones, car Matériel, OPS, Administration et
 les fiches de position les appellent directement. Aucun changement de state db.
+
+### DRH / Congés
+
+1 622 lignes extraites en drh, drh-dashboard et leaves. Le calcul d’entitlement
+et les filtres société partagés restent dans le core. Les règles de congés,
+formulaires et endpoints ne changent pas. Aucun intervalle/listener global ajouté.
