@@ -6,7 +6,7 @@ const { JSDOM } = require('jsdom');
 
 const coreUtils = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
 const moduleRegistry = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'module-registry.js'), 'utf8');
-const appSrc = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+const appSrc = require('./read-client-source')();
 const src = coreUtils + '\n' + moduleRegistry + '\n' + appSrc;
 const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
 

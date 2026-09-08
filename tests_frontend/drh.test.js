@@ -38,7 +38,7 @@ test('sgdi-app.js se charge et expose les fonctions DRH', () => {
 });
 
 test('dashboard Contrats moderne: restitue les zones validées et des actions réelles', () => {
-  const js = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+  const js = require('./read-client-source')();
   const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
   for (const label of ['Santé contractuelle', 'Échéances des 90 prochains jours', 'À faire maintenant', 'File de traitement intelligente', 'Portefeuille actif']) {
     assert.ok(js.includes(label), `zone manquante: ${label}`);

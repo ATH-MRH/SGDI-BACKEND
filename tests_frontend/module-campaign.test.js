@@ -142,3 +142,25 @@ test('Matériel : listes, magasins, catalogue, formulaires et mouvements après 
   assert.equal(r.downloads.length, 4);
   assert.deepEqual(r.errors, []);
 });
+
+test('Recrutement : formulaire lazy et navigation annulée conservent la saisie', async () => {
+  if (!inventory.recruitment) return;
+  const r = boot(), w = r.window;
+  r.go('#/recrutement/nouveau'); await tick();
+  const form = w.document.getElementById('candidat-form');
+  assert.ok(form, 'formulaire candidat réellement rendu');
+  const input = form.querySelector('[name="nom"]');
+  assert.ok(input); input.value = 'SAISIE À CONSERVER';
+  r.T().setViewMode(false); r.T().setFormUnsaved(true);
+  w.navigate('dashboard');
+  assert.equal(w.location.hash, '#/recrutement/nouveau');
+  assert.ok(w.document.getElementById('sgdi-nav-guard'));
+  w._sgdiNavGuardCancel();
+  assert.equal(input.value, 'SAISIE À CONSERVER');
+  assert.equal(w.document.getElementById('candidat-form'), form);
+  r.T().setFormUnsaved(false); r.T().setViewMode(true);
+  r.go('#/dashboard'); await tick();
+  r.go('#/recrutement'); await tick();
+  assert.equal(w.SGDIModules.activeModuleKey, 'recruitment');
+  assert.deepEqual(r.errors, []);
+});

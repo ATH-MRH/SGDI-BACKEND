@@ -54,3 +54,10 @@ magasins), material-inventory (catalogue/inventaire), material-movements
 5 000 lignes. Les listeners de formulaires restent attachés à leurs éléments,
 aucun polling global ajouté. Les helpers de stock/dotation appelés depuis les
 fiches agents, Administration et synchronisation restent dans le core.
+
+## 2F — Recrutement
+
+1 426 lignes déplacées, vues/formulaires et actions. Les fonctions de validation
+partagées restent synchrones. Le debounce d’autosauvegarde conserve sa sémantique
+existante (pas d’annulation silencieuse d’une saisie à la sortie). Les listeners
+d’autosauvegarde restent attachés aux champs et protégés par candidatDraftBound.
