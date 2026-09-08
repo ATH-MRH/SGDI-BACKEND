@@ -70,5 +70,14 @@
     "gzip9": 450982,
     "bootstrapJSBytes": 1628375,
     "lazyScripts": 36
+  },
+  {
+    "commit": "f8767cbd0313df5e701a6fe091808dfa2a8666e7",
+    "message": "refactor(frontend): extract shared files and align standalone bootstraps",
+    "lines": 19993,
+    "bytes": 1546552,
+    "gzip9": 449190,
+    "bootstrapJSBytes": 1628603,
+    "lazyScripts": 36
   }
 ]

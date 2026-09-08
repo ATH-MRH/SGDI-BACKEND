@@ -442,7 +442,43 @@
       "saveSite('${jsString(s.id)}')"
     ],
     "apiPaths": [],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ : 150 fonctions en deux scripts. Helpers de carte et de périmètre appelés hors Sites conservés synchrones.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 150,
+    "finalMovedLines": 2339,
+    "finalRetained": [
+      "installClickableSiteCardsDelegation",
+      "siteEditRouteId",
+      "initSitesDashboardMap",
+      "employeeStatusKey",
+      "employeeDisplayStatus",
+      "employeeMatchesAssignmentRefs",
+      "backendAssignmentRefsForSite",
+      "siteBackendMetricForSite",
+      "siteIsOperationalByOpeningDate",
+      "siteAgentsAffectes",
+      "siteEffectifsNorm",
+      "siteRotationForGroup",
+      "siteSetEmployeeSingleGroup",
+      "inferSiteRotationSystem",
+      "findSiteByRef",
+      "siteLatLng",
+      "loadMapLibre",
+      "sgdiMapLibreStyle",
+      "sgdiAllSitesForMap",
+      "sgdiMapLibreMarkerHTML",
+      "siteBackendNumber",
+      "siteBackendSituationForSite",
+      "siteBackendAssignmentRows",
+      "assignmentEmployeeRefs",
+      "siteOpeningDateValue",
+      "siteRotationFromSystem",
+      "siteGroupEmployeeAliases",
+      "siteNormalizeGroupAssignments",
+      "sitesPageSocieteFilter",
+      "siteGroupEmployeeKey"
+    ]
   },
   {
     "key": "incidents",
@@ -523,7 +559,17 @@
       "incidentComment('${id}')"
     ],
     "apiPaths": [],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ : 9 fonctions ; détails/commentaires partagés conservés dans le socle.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 9,
+    "finalMovedLines": 151,
+    "finalRetained": [
+      "incidentNorm",
+      "incidentPillClass",
+      "viewIncident",
+      "incidentComment"
+    ]
   },
   {
     "key": "facturation",
@@ -758,7 +804,15 @@
       "/api/irongs/collections/factures/items/",
       "/api/irongs/factures/"
     ],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ : route facturation seule ; routes comptables historiques restent dans erp-frontend.js. Formules déplacées verbatim.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 85,
+    "finalMovedLines": 1564,
+    "finalRetained": [
+      "factureStatutPaye",
+      "deleteDevis"
+    ]
   },
   {
     "key": "commercial",
@@ -1171,7 +1225,96 @@
       "/api/irongs/collections/missionBillables/items",
       "/api/irongs/collections/missions/items"
     ],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ : 71 fonctions en deux scripts ; gestion client et calculs communs conservés synchrones.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 71,
+    "finalMovedLines": 1479,
+    "finalRetained": [
+      "formatDZD",
+      "saveClientInPlace",
+      "clientChampsLibresSync",
+      "syncMissionWorkflowCollections",
+      "dcMissionStatusLabel",
+      "previewClientPortalLogo",
+      "openClientModal",
+      "lockClientReadOnly",
+      "confirmClient",
+      "deleteClient",
+      "devisEditorAutoResize",
+      "deleteDevis",
+      "commPrestationsOptionsHTML",
+      "clientContractPrestationAdd",
+      "prospSyncHidden",
+      "prospAddReunion",
+      "prospInitReunions",
+      "parseDZD",
+      "clientLigneAdd",
+      "clientLigneRemove",
+      "clientLigneUpdate",
+      "clientLigneSyncHidden",
+      "clientCatalogSyncAllSites",
+      "techUnlockDonneesTechniques",
+      "techSiteTab",
+      "techSitesSyncHidden",
+      "clientSiteLigneSyncHidden",
+      "clientSiteLigneUpdateTotal",
+      "ctsSiteTab",
+      "ctsSitesRerender",
+      "ctsSitesSyncHidden",
+      "clientSitesResize",
+      "clientSitesRender",
+      "clientSiteFieldChanged",
+      "clientSiteAdd",
+      "techSiteTabBtnHTML",
+      "techSiteRemove",
+      "techSitePanelHTML",
+      "clientLockIdentification",
+      "clientUnlockIdentification",
+      "clientValiderContrat",
+      "clientLockContrat",
+      "clientUnlockContrat",
+      "clientChampsLibresAdd",
+      "clientCreerContrat",
+      "clientCreerAvenant",
+      "clientContractRenewalInfo",
+      "updateClientContractEndDate",
+      "sgdiTabsHTML",
+      "sgdiTabSwitch",
+      "dcMissionMoneyValue",
+      "dcMissionCostRowHTML",
+      "dcMissionAddCostRow",
+      "dcMissionRemoveCostRow",
+      "dcMissionRecalculate",
+      "dcMissionHistoryHTML",
+      "validateDcMission",
+      "commPrestationsForSociete",
+      "prospReunionCardHTML",
+      "prospRemoveReunion",
+      "clientCatalogPrice",
+      "clientSiteDesignationOptionsHTML",
+      "clientLignesTotalHTML",
+      "techLockDonneesTechniques",
+      "techRecapUpdate",
+      "techCalcTotalEffectif",
+      "techPosteRowHTML",
+      "techPosteSalaireUpdate",
+      "techPostesSyncJSON",
+      "techPosteCalcTotals",
+      "techPostesSyncFromLignes",
+      "clientMaterielSync",
+      "clientMaterielAdd",
+      "clientMaterielRemove",
+      "clientSiteLigneAdd",
+      "clientSiteLigneRemove",
+      "clientSiteLigneUpdate",
+      "clientSitesMirror",
+      "clientSiteTabLabelSync",
+      "clientContractAddPeriod",
+      "dcMissionNextNumber",
+      "dcMissionInternalCostRows",
+      "clientCurrentCatalog"
+    ]
   },
   {
     "key": "agenda",
@@ -1285,7 +1428,18 @@
       "closeModal()"
     ],
     "apiPaths": [],
-    "classification": "À DÉCOUPLER"
+    "classification": "À DÉCOUPLER",
+    "finalReview": "VALIDÉ après découplage : dépendance explicite de secretariat vers agenda ; 17 fonctions déplacées, 5 helpers de données partagés conservés.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 17,
+    "finalMovedLines": 205,
+    "finalRetained": [
+      "agendaEvents",
+      "agendaAutomaticEvents",
+      "agendaEventIsDone",
+      "agendaEventIsReminderDue",
+      "agendaDateOffset"
+    ]
   },
   {
     "key": "portal",
@@ -1487,7 +1641,37 @@
       "/api/portal/accounts/${encodeURIComponent",
       "/api/portal/push/send/${encodeURIComponent"
     ],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ : Portail/Demandes personnel ; traitement des demandes structure partagé avec les autres domaines conservé synchrone.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 47,
+    "finalMovedLines": 645,
+    "finalRetained": [
+      "ensureDemandesPersonnel",
+      "ensureDemandesStructure",
+      "migrateStructureDemandes",
+      "portalDemandesPersonnel",
+      "incomingPortalDemandesPersonnel",
+      "structureOpenCount",
+      "demandePersonnelSociete",
+      "demandePersonnelIsAlert",
+      "demandePersonnelStatusPill",
+      "demandePersonnelStatusLabel",
+      "readSmallFile",
+      "renderDemandesStructure",
+      "isStructureDemand",
+      "normalizeStructureDemand",
+      "structureDemandReceived",
+      "structureDemandSent",
+      "openNewStructureDemand",
+      "saveNewStructureDemand",
+      "structureDemandCardHTML",
+      "renderDemandesStructureDashboard",
+      "openTraiterStructureDemand",
+      "saveTraiterStructureDemand",
+      "currentStructureKey",
+      "structureDemandStatusPill"
+    ]
   },
   {
     "key": "positions",
@@ -1745,7 +1929,29 @@
     "apiPaths": [
       "/api/public/badge/"
     ],
-    "classification": "VALIDÉ"
+    "classification": "VALIDÉ",
+    "finalReview": "VALIDÉ après découplage : dépendances explicites de material et administration vers positions ; vérification publique et helpers communs conservés synchrones.",
+    "finalClassification": "VALIDÉ",
+    "finalMovedFunctions": 55,
+    "finalMovedLines": 765,
+    "finalRetained": [
+      "ficheAgentInConge",
+      "ficheAgentInMaladie",
+      "ficheAgentInAbandon",
+      "ficheAgentIsSortantArchive",
+      "refreshOpenAgentDocumentsModal",
+      "openAgentDocumentsModal",
+      "renderBadgeVerify",
+      "agentArchivedDocumentsHTML",
+      "badgeQrSrc",
+      "badgePhotoTransform",
+      "publicBadgeEmployee",
+      "badgeVerifyURL",
+      "badgePhotoCrop",
+      "badgePublicLinkRef",
+      "ensureBadgePublicLink",
+      "fetchBadgePublicLink"
+    ]
   },
   {
     "key": "photos",
@@ -1963,6 +2169,8 @@
       "/api/irongs/collections/secretariatArchives/items${existing?",
       "/api/irongs/collections/secretariatArchives/items/${encodeURIComponent"
     ],
-    "classification": "À DÉCOUPLER"
+    "classification": "À DÉCOUPLER",
+    "finalReview": "PARTIEL : 8 fonctions de documents réellement partagées dans core/files.js ; gestion métier candidat/employé et styles dotation conservés (REPORTÉ).",
+    "finalClassification": "REPORTÉ (partie métier), VALIDÉ (documents partagés)"
   }
 ]
