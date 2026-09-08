@@ -19,7 +19,7 @@ const MODULES = fs.existsSync(MODULES_DIR)
   : '';
 const SRC = [CORE_UTILS, MODULE_REGISTRY, APP, MODULES].join('\n');
 
-function loadSgdiApp(names = []) {
+function loadSgdiApp(names = [], options = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div></body></html>',
     { url: 'https://drh.irongs.com/', runScripts: 'outside-only', pretendToBeVisual: true }
@@ -61,7 +61,8 @@ ${exposed}
 
   let loadError = null;
   try {
-    window.eval(SRC + suffix);
+    const source = options.withoutModules ? [CORE_UTILS, APP].join("\n") : SRC;
+    window.eval(source + suffix);
   } catch (e) {
     loadError = e;
   }

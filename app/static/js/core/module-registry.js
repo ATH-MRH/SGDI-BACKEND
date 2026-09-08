@@ -14,7 +14,7 @@
      SGDIModules.registerModule({
        key,                       // identifiant unique (ex. "secretariat")
        routes,                    // racines de route gérées (ex. ["secretariat"])
-       init,                      // appelé une fois, à la 1re ouverture
+       init,                      // sync ou Promise ; une fois par cycle de vie
        destroy,                   // appelé au départ du module (nettoyage)
        dependencies               // clés d'autres modules à charger avant
      })
@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2a";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2a-lifecycle-v2";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.
@@ -69,7 +69,8 @@
       destroy: typeof def.destroy === "function" ? def.destroy : noop,
       routes: Array.isArray(def.routes) ? def.routes.map(String) : [],
       dependencies: Array.isArray(def.dependencies) ? def.dependencies.map(String) : [],
-      initialized: false
+      initialized: false,
+      initPromise: null
     };
     registry[mod.key] = mod;
     mod.routes.forEach(function (r) { routeIndex[r] = mod.key; });
@@ -80,6 +81,9 @@
   R.isModuleRegistered = function (key) { return !!registry[key]; };
   R.isModuleInitialized = function (key) {
     return !!(registry[key] && registry[key].initialized);
+  };
+  R.isModuleInitializing = function (key) {
+    return !!(registry[key] && registry[key].initPromise);
   };
   R.isModuleLoading = function (key) { return !!loading[key]; };
 
@@ -111,14 +115,13 @@
   // garde déjà ce cas).
   R.deactivateIfChanged = function (nextKey) {
     if (R.activeModuleKey && R.activeModuleKey !== nextKey) {
-      R.destroyModule(R.activeModuleKey);
-      R.activeModuleKey = null;
+      return R.destroyModule(R.activeModuleKey);
     }
   };
 
-  // Marque un module comme actif (après un rendu modulaire réussi).
+  // Marque un module prêt comme actif, juste avant son rendu.
   R.markActiveModule = function (key) {
-    if (key) R.activeModuleKey = key;
+    if (R.isModuleInitialized(key)) R.activeModuleKey = key;
   };
 
   // Injection réelle d'un <script>. Surcharge­able par les tests.
@@ -172,22 +175,40 @@
     return p;
   };
 
+  // loaded = enregistré ; initializing = initPromise ; initialized = succès ;
+  // active = activeModuleKey. La Promise est publiée AVANT l'appel du hook,
+  // y compris pour un hook synchrone, afin de dédupliquer les appels réentrants.
   R.initModule = function initModule(key) {
     var mod = registry[key];
-    if (!mod) throw new Error("SGDIModules.initModule: module inconnu « " + key + " »");
-    if (mod.initialized) return mod; // jamais deux fois
-    mod.init();
-    mod.initialized = true;
-    return mod;
+    if (!mod) return Promise.reject(new Error("SGDIModules.initModule: module inconnu « " + key + " »"));
+    if (mod.initialized) return Promise.resolve(mod);
+    if (mod.initPromise) return mod.initPromise;
+    mod.initPromise = Promise.resolve().then(function () {
+      return mod.init();
+    }).then(function () {
+      mod.initialized = true;
+      mod.initPromise = null;
+      return mod;
+    }, function (err) {
+      mod.initialized = false;
+      mod.initPromise = null;
+      throw err;
+    });
+    return mod.initPromise;
   };
 
+  // Le nettoyage d'un hook reste sa responsabilité (utiliser finally pour ses
+  // ressources). Même s'il jette, libérer notre état et retourner l'erreur au
+  // routeur pour diagnostic ; une erreur de nettoyage ne bloque pas la navigation.
   R.destroyModule = function destroyModule(key) {
     var mod = registry[key];
-    if (!mod || !mod.initialized) return; // sûr même si jamais initialisé
     try {
-      mod.destroy();
+      if (mod && mod.initialized) mod.destroy();
+    } catch (err) {
+      return err;
     } finally {
-      mod.initialized = false;
+      if (mod) mod.initialized = false;
+      if (R.activeModuleKey === key) R.activeModuleKey = null;
     }
   };
 
@@ -206,7 +227,7 @@
   // Snapshot lisible pour diagnostic / tests.
   R.moduleRegistrySnapshot = function () {
     return Object.keys(registry).map(function (k) {
-      return { key: k, routes: registry[k].routes.slice(), initialized: registry[k].initialized };
+      return { key: k, routes: registry[k].routes.slice(), initialized: registry[k].initialized, initializing: !!registry[k].initPromise, active: R.activeModuleKey === k };
     });
   };
 })();

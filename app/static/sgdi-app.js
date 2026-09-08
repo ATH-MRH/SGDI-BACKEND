@@ -7989,7 +7989,16 @@ function renderView(){
   const _moduleKey=_sgdiMods?_sgdiMods.moduleKeyForRoute(root):null;
   // Changement de module (ou passage vers une route legacy) -> détruire le module
   // actif précédent. no-op si même module, aucun module actif, ou non initialisé.
-  if(_sgdiMods)_sgdiMods.deactivateIfChanged(_moduleKey);
+  if(_sgdiMods){
+    const destroyError=_sgdiMods.deactivateIfChanged(_moduleKey);
+    if(destroyError)console.error("Échec du nettoyage du module précédent",destroyError);
+  }
+  // Information minimale indépendante du registre pour sa propre panne réseau.
+  if(view&&!_sgdiMods&&root==="secretariat"){
+    view.innerHTML=`<div class="card p-6"><h2 class="text-lg font-black text-red-700 mb-2">Module indisponible</h2><p class="text-sm text-slate-600 mb-3">Le composant de chargement des modules n'a pas pu être chargé.</p><button type="button" class="btn btn-primary" onclick="location.reload()">Recharger</button></div>`;
+    if(typeof uiProgressDone==="function")uiProgressDone();
+    return;
+  }
   // Une route modulaire n'est PRÊTE que si son module est chargé ET initialisé.
   // Le portillon repasse donc aussi après un init() échoué (retry) ou un destroy.
   if(view&&_sgdiMods&&_moduleKey&&_sgdiMods.routeNeedsModuleLoad(root)){
@@ -8002,8 +8011,20 @@ function renderView(){
     // chargement, on n'initialise PAS et on ne rend PAS le module tardif.
     _sgdiMods.loadModule(_moduleKey).then(()=>{
       if(!_stillCurrent())return;
-      _sgdiMods.initModule(_moduleKey); // peut jeter -> .catch (carte d'erreur)
-      renderView();                     // re-render : le portillon est alors franchi
+      return _sgdiMods.initModule(_moduleKey).then(()=>{
+        if(!_stillCurrent()){
+          // A -> dashboard -> A réutilise l'init en cours. Ne pas détruire A
+          // si une navigation plus récente le demande encore. Sinon nettoyer
+          // son init tardif, sans activation ni rendu de la route obsolète.
+          const currentRoot=(location.hash||"#/dashboard").slice(2).split("/")[0];
+          if(!document.getElementById("view")||_sgdiMods.moduleKeyForRoute(currentRoot)!==_moduleKey){
+            const destroyError=_sgdiMods.destroyModule(_moduleKey);
+            if(destroyError)console.error("Échec du nettoyage du module obsolète",destroyError);
+          }
+          return;
+        }
+        renderView(); // init terminé et navigation toujours courante
+      });
     }).catch((err)=>{
       if(!_stillCurrent())return;
       const v=document.getElementById("view");

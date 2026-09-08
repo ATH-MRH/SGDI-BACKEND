@@ -13,7 +13,7 @@ const flush = async (n = 4) => { for (let i = 0; i < n; i += 1) await tick(); };
 // _injectScript. Chaque module compte ses init/destroy. Le mode 'hold' garde les
 // injections en attente (résolution manuelle via r.pending()).
 function bootRouter(opts = {}) {
-  const ctx = loadSgdiApp(['renderView', 'navigate']);
+  const ctx = loadSgdiApp(['renderView', 'navigate'], opts);
   assert.ifError(ctx.loadError);
   const { window, T } = ctx;
   T().setSession({ transverse: 'secretariat', username: 'tester', societe: '' });
@@ -25,6 +25,11 @@ function bootRouter(opts = {}) {
   T().setViewMode(true);
 
   const SGDI = window.SGDIModules;
+  if (opts.withoutModules) {
+    const view = () => window.document.getElementById('view');
+    const go = h => { window.history.replaceState(null, '', h); T().renderView(); };
+    return { window, T, view, go };
+  }
   assert.ok(SGDI && typeof SGDI.routeNeedsModuleLoad === 'function', 'registre chargé');
   SGDI._resetModuleRegistry(); // load-app.js concatène js/modules/* -> on repart net
 
@@ -69,12 +74,12 @@ function bootRouter(opts = {}) {
 
 // ── §1 — portillon : chargé ≠ prêt ; retry de init() ────────────────────────
 
-test('routeNeedsModuleLoad distingue LOADED de INITIALIZED', () => {
+test('routeNeedsModuleLoad distingue LOADED de INITIALIZED', async () => {
   const r = bootRouter({ routes: ['demo'] });
   assert.strictEqual(r.SGDI.routeNeedsModuleLoad('demo'), true, 'absent -> requis');
   r.SGDI.registerModule({ key: 'demo', routes: ['demo'], init() {} });
   assert.strictEqual(r.SGDI.routeNeedsModuleLoad('demo'), true, 'enregistré mais non initialisé -> encore requis');
-  r.SGDI.initModule('demo');
+  await r.SGDI.initModule('demo');
   assert.strictEqual(r.SGDI.routeNeedsModuleLoad('demo'), false, 'chargé + initialisé -> prêt');
   r.SGDI.destroyModule('demo');
   assert.strictEqual(r.SGDI.routeNeedsModuleLoad('demo'), true, 'détruit -> de nouveau requis');
@@ -264,4 +269,157 @@ test('module de route : écran d’attente, chargement unique, puis rendu réel'
   assert.strictEqual(r.injectCalls.length, 1);
   assert.strictEqual(r.initCounts.secretariat, 1);
   assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+});
+
+
+function deferredInitRouter() {
+  const r = bootRouter();
+  let calls = 0;
+  const pending = [];
+  r.SGDI.registerModule({ key: 'secretariat', routes: ['secretariat'],
+    init() {
+      calls++;
+      return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+    },
+    destroy() { r.destroyCounts.secretariat = (r.destroyCounts.secretariat || 0) + 1; }
+  });
+  return Object.assign(r, { initCalls: () => calls, initPending: pending });
+}
+
+test('route init async : pas de rendu ni activation avant résolution', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat');
+  await flush();
+  assert.strictEqual(r.initCalls(), 1);
+  assert.strictEqual(r.SGDI.isModuleInitialized('secretariat'), false);
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.match(r.view().textContent, /Chargement du module/);
+  r.initPending[0].resolve();
+  await flush();
+  assert.strictEqual(r.SGDI.isModuleInitialized('secretariat'), true);
+  assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+  assert.doesNotMatch(r.view().textContent, /Chargement du module|Module indisponible/);
+});
+
+test('route init async rejet : carte contrôlée puis retry réussi', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat'); await flush();
+  r.initPending[0].reject(new Error('async KO'));
+  await flush();
+  assert.match(r.view().textContent, /Module indisponible.*async KO.*Réessayer/s);
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.strictEqual(r.SGDI.getModule('secretariat').initPromise, null);
+  assert.strictEqual(r.SGDI.isModuleInitialized('secretariat'), false);
+  r.T().renderView(); await flush();
+  assert.strictEqual(r.initCalls(), 2);
+  r.initPending[1].resolve(); await flush();
+  assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+  assert.doesNotMatch(r.view().textContent, /Module indisponible/);
+});
+
+test('init A pending -> dashboard : succès tardif nettoyé sans activation ni rendu', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat'); await flush();
+  r.go('#/dashboard'); await flush();
+  const html = r.view().innerHTML;
+  r.initPending[0].resolve(); await flush();
+  assert.strictEqual(r.view().innerHTML, html);
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.strictEqual(r.SGDI.isModuleInitialized('secretariat'), false);
+  assert.strictEqual(r.destroyCounts.secretariat, 1);
+});
+
+test('init A pending -> dashboard -> A : même init, seul le dernier rendu gagne', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat'); await flush();
+  const first = r.SGDI.getModule('secretariat').initPromise;
+  r.go('#/dashboard');
+  r.go('#/secretariat');
+  r.T().renderView(); // plusieurs abonnés de la même navigation
+  await flush();
+  assert.strictEqual(r.SGDI.getModule('secretariat').initPromise, first);
+  assert.strictEqual(r.initCalls(), 1);
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  r.initPending[0].resolve(); await flush();
+  assert.strictEqual(r.initCalls(), 1);
+  assert.strictEqual(r.destroyCounts.secretariat || 0, 0);
+  assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+});
+
+test('init A rejet tardif après dashboard : aucune carte obsolète', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat'); await flush();
+  r.go('#/dashboard'); await flush();
+  const html = r.view().innerHTML;
+  r.initPending[0].reject(new Error('late KO')); await flush();
+  assert.strictEqual(r.view().innerHTML, html);
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.strictEqual(r.SGDI.getModule('secretariat').initPromise, null);
+  r.go('#/secretariat'); await flush();
+  r.initPending[1].resolve(); await flush();
+  assert.strictEqual(r.initCalls(), 2);
+  assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+});
+
+test('init résolu sans #view : aucune activation, nettoyage', async () => {
+  const r = deferredInitRouter();
+  r.go('#/secretariat'); await flush();
+  r.view().remove();
+  r.initPending[0].resolve(); await flush();
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.strictEqual(r.destroyCounts.secretariat, 1);
+});
+
+test('destroy jette : destination rendue, diagnostic, retour sans double abonnement', async () => {
+  const r = bootRouter();
+  const listeners = new Set(), errors = [];
+  let inits = 0, destroys = 0;
+  r.window.console.error = (...args) => errors.push(args);
+  r.SGDI.registerModule({ key: 'secretariat', routes: ['secretariat'],
+    init() { inits++; listeners.add(() => {}); assert.strictEqual(listeners.size, 1); },
+    destroy() {
+      destroys++;
+      // Le hook garantit son nettoyage, même si une autre opération échoue.
+      try { throw new Error('destroy KO'); } finally { listeners.clear(); }
+    }
+  });
+  r.go('#/secretariat'); await flush();
+  assert.doesNotThrow(() => r.go('#/dashboard'));
+  await flush();
+  assert.strictEqual(r.SGDI.activeModuleKey, null);
+  assert.strictEqual(r.SGDI.isModuleInitialized('secretariat'), false);
+  assert.strictEqual(listeners.size, 0);
+  assert.match(r.view().textContent, /Effectif actif/);
+  assert.strictEqual(errors.length, 1);
+  assert.match(errors[0][1].message, /destroy KO/);
+  r.go('#/secretariat'); await flush();
+  assert.strictEqual(inits, 2);
+  assert.strictEqual(destroys, 1);
+  assert.strictEqual(listeners.size, 1);
+  assert.strictEqual(r.SGDI.activeModuleKey, 'secretariat');
+});
+
+test('registre réellement absent : dashboard fonctionne, Secrétariat contrôlé, reprise possible', async () => {
+  const r = bootRouter({ withoutModules: true });
+  assert.strictEqual(r.window.SGDIModules, undefined);
+  assert.strictEqual(r.window.renderSecretariat, undefined);
+  r.go('#/dashboard'); await flush();
+  assert.match(r.view().textContent, /Effectif actif/);
+  r.go('#/secretariat'); await flush();
+  assert.match(r.view().textContent, /Module indisponible/);
+  assert.match(r.view().textContent, /Le composant de chargement des modules n'a pas pu être chargé/);
+  assert.doesNotMatch(r.view().textContent, /ReferenceError|renderSecretariat| at /);
+  assert.strictEqual(r.view().querySelector('button').getAttribute('onclick'), 'location.reload()');
+  // Simuler le retour des scripts après rechargement ; rendu local sans réseau.
+  const fs = require('fs'), path = require('path');
+  const base = path.join(__dirname, '../app/static');
+  r.window.eval(fs.readFileSync(path.join(base, 'js/core/module-registry.js'), 'utf8'));
+  r.window.SGDIModules._injectScript = key => {
+    r.window.renderSecretariat = view => { view.textContent = 'Secrétariat restauré'; };
+    r.window.SGDIModules.registerModule({ key });
+    return Promise.resolve();
+  };
+  r.T().renderView(); await flush();
+  assert.strictEqual(r.window.SGDIModules.activeModuleKey, 'secretariat');
+  assert.match(r.view().textContent, /Secrétariat restauré/);
 });

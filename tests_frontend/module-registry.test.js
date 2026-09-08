@@ -35,20 +35,20 @@ test('registerModule exige une clé et est idempotent', () => {
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 1, 'pas de doublon');
 });
 
-test('routeNeedsModuleLoad : requiert module CHARGÉ *et* INITIALISÉ', () => {
+test('routeNeedsModuleLoad : requiert module CHARGÉ *et* INITIALISÉ', async () => {
   const SGDI = freshSGDI();
   SGDI.MODULE_ROUTES.demo = 'demo';
   assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'absent -> requis');
   assert.strictEqual(SGDI.routeNeedsModuleLoad('inconnue'), false);
   SGDI.registerModule({ key: 'demo', routes: ['demo'], init() {} });
   assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'enregistré mais pas initialisé -> encore requis');
-  SGDI.initModule('demo');
+  await SGDI.initModule('demo');
   assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), false, 'chargé + initialisé -> prêt');
   SGDI.destroyModule('demo');
   assert.strictEqual(SGDI.routeNeedsModuleLoad('demo'), true, 'détruit (désinitialisé) -> de nouveau requis');
 });
 
-test('deactivateIfChanged / markActiveModule : cycle de vie du module actif', () => {
+test('deactivateIfChanged / markActiveModule : cycle de vie du module actif', async () => {
   const SGDI = freshSGDI();
   let destroyedA = 0;
   let destroyedB = 0;
@@ -60,7 +60,7 @@ test('deactivateIfChanged / markActiveModule : cycle de vie du module actif', ()
   assert.strictEqual(destroyedA + destroyedB, 0);
 
   // markActive seulement pour un module initialisé (le routeur appelle initModule avant).
-  SGDI.initModule('a');
+  await SGDI.initModule('a');
   SGDI.markActiveModule('a');
   assert.strictEqual(SGDI.activeModuleKey, 'a');
 
@@ -75,7 +75,7 @@ test('deactivateIfChanged / markActiveModule : cycle de vie du module actif', ()
   assert.strictEqual(SGDI.isModuleInitialized('a'), false, 'destroy a désinitialisé a');
 
   // Passage vers une route legacy (nextKey null) -> destroy du module actif.
-  SGDI.initModule('b');
+  await SGDI.initModule('b');
   SGDI.markActiveModule('b');
   SGDI.deactivateIfChanged(null);
   assert.strictEqual(destroyedB, 1);
@@ -149,7 +149,7 @@ test('loadModule : échec d’injection -> état libéré, nouvelle tentative po
   assert.strictEqual(attempt, 2);
 });
 
-test('initModule : n’exécute init qu’une fois ; destroyModule sûr même non initialisé', () => {
+test('initModule : n’exécute init qu’une fois ; destroyModule sûr même non initialisé', async () => {
   const SGDI = freshSGDI();
   let inits = 0;
   let destroys = 0;
@@ -158,8 +158,8 @@ test('initModule : n’exécute init qu’une fois ; destroyModule sûr même no
   SGDI.destroyModule('demo'); // non initialisé -> no-op
   assert.strictEqual(destroys, 0);
 
-  SGDI.initModule('demo');
-  SGDI.initModule('demo');
+  await SGDI.initModule('demo');
+  await SGDI.initModule('demo');
   assert.strictEqual(inits, 1, 'init une seule fois');
   assert.strictEqual(SGDI.isModuleInitialized('demo'), true);
 
@@ -167,22 +167,22 @@ test('initModule : n’exécute init qu’une fois ; destroyModule sûr même no
   assert.strictEqual(destroys, 1);
   assert.strictEqual(SGDI.isModuleInitialized('demo'), false);
 
-  SGDI.initModule('demo'); // ré-initialisation contrôlée
+  await SGDI.initModule('demo'); // ré-initialisation contrôlée
   assert.strictEqual(inits, 2);
 
-  assert.throws(() => SGDI.initModule('absent'), /inconnu/);
+  await assert.rejects(SGDI.initModule('absent'), /inconnu/);
 });
 
-test('initModule : un init qui échoue laisse le module ré-initialisable', () => {
+test('initModule : un init qui échoue laisse le module ré-initialisable', async () => {
   const SGDI = freshSGDI();
   let calls = 0;
   SGDI.registerModule({
     key: 'demo', routes: ['demo'],
     init: () => { calls += 1; if (calls === 1) throw new Error('init KO'); },
   });
-  assert.throws(() => SGDI.initModule('demo'), /init KO/);
+  await assert.rejects(SGDI.initModule('demo'), /init KO/);
   assert.strictEqual(SGDI.isModuleInitialized('demo'), false);
-  SGDI.initModule('demo');
+  await SGDI.initModule('demo');
   assert.strictEqual(SGDI.isModuleInitialized('demo'), true);
   assert.strictEqual(calls, 2);
 });
@@ -215,15 +215,80 @@ test('dependencies : un module charge ses dépendances avant lui', async () => {
   assert.strictEqual(SGDI.isModuleRegistered('base'), true);
 });
 
-test('_resetModuleRegistry : remet le registre à zéro', () => {
+test('_resetModuleRegistry : remet le registre à zéro', async () => {
   const SGDI = freshSGDI();
   SGDI.registerModule({ key: 'a', routes: ['a'], init() {} });
   SGDI.registerModule({ key: 'b', routes: ['b'] });
-  SGDI.initModule('a');
+  await SGDI.initModule('a');
   SGDI.markActiveModule('a');
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 2);
   SGDI._resetModuleRegistry();
   assert.strictEqual(SGDI.moduleRegistrySnapshot().length, 0);
   assert.strictEqual(SGDI.isModuleRegistered('a'), false);
   assert.strictEqual(SGDI.activeModuleKey, null, 'module actif remis à zéro');
+});
+
+
+test('init async partagé : pending, succès, aucun double abonnement', async () => {
+  const R = freshSGDI();
+  let finish, calls = 0;
+  const listeners = new Set();
+  const mod = R.registerModule({ key: 'a', init() {
+    calls++;
+    listeners.add(() => {});
+    return new Promise(resolve => { finish = resolve; });
+  } });
+  const first = R.initModule('a');
+  const second = R.initModule('a');
+  assert.strictEqual(first, second);
+  assert.strictEqual(mod.initPromise, first);
+  assert.strictEqual(R.isModuleInitializing('a'), true);
+  assert.strictEqual(mod.initialized, false);
+  R.markActiveModule('a');
+  assert.strictEqual(R.activeModuleKey, null);
+  await tick();
+  assert.strictEqual(calls, 1);
+  assert.strictEqual(listeners.size, 1);
+  finish();
+  assert.strictEqual(await first, mod);
+  assert.strictEqual(mod.initialized, true);
+  assert.strictEqual(mod.initPromise, null);
+  assert.strictEqual(R.isModuleInitializing('a'), false);
+  assert.strictEqual(await R.initModule('a'), mod);
+  assert.strictEqual(calls, 1);
+});
+
+test('init async rejet : Promise nettoyée et retry partagé possible', async () => {
+  const R = freshSGDI();
+  let reject, calls = 0;
+  const mod = R.registerModule({ key: 'a', init() {
+    calls++;
+    if (calls === 1) return new Promise((_, fail) => { reject = fail; });
+  } });
+  const first = R.initModule('a');
+  const rejected = assert.rejects(first, /async KO/);
+  await tick();
+  reject(new Error('async KO'));
+  await rejected;
+  assert.strictEqual(mod.initialized, false);
+  assert.strictEqual(mod.initPromise, null);
+  const retry = R.initModule('a');
+  assert.strictEqual(R.initModule('a'), retry);
+  await retry;
+  assert.strictEqual(calls, 2);
+  assert.strictEqual(mod.initialized, true);
+});
+
+test('destroy qui jette : erreur retournée et état actif libéré', async () => {
+  const R = freshSGDI();
+  const failure = new Error('cleanup KO');
+  let calls = 0;
+  R.registerModule({ key: 'a', destroy() { calls++; throw failure; } });
+  await R.initModule('a');
+  R.markActiveModule('a');
+  assert.strictEqual(R.deactivateIfChanged(null), failure);
+  assert.strictEqual(R.activeModuleKey, null);
+  assert.strictEqual(R.isModuleInitialized('a'), false);
+  R.destroyModule('a');
+  assert.strictEqual(calls, 1);
 });
