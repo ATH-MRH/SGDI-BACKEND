@@ -45,3 +45,12 @@ Les opérations partagées (historique d’affectation, documents missions, port
 client administrateur) restent synchrones dans le core. Destroy arrête les alertes
 60s, le QR, les callbacks différés et le listener de menu missions. Les callbacks
 différés de vues vérifient hash et génération avant exécution.
+
+## 2E — Matériel
+
+3 901 lignes extraites : material (vues/dotations), material-stores (retours et
+magasins), material-inventory (catalogue/inventaire), material-movements
+(formulaires mouvements). Dépendances déclarées ; aucun nouveau fichier de
+5 000 lignes. Les listeners de formulaires restent attachés à leurs éléments,
+aucun polling global ajouté. Les helpers de stock/dotation appelés depuis les
+fiches agents, Administration et synchronisation restent dans le core.

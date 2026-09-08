@@ -128,3 +128,17 @@ test('OPS : le menu missions ne duplique pas le listener et destroy le retire', 
   assert.equal(r.timers.size, 0);
   assert.deepEqual(r.errors, []);
 });
+
+test('Matériel : listes, magasins, catalogue, formulaires et mouvements après lazy load', async () => {
+  if (!inventory.material) return;
+  const r = boot();
+  for (const sub of ['inventaire', 'magasins', 'magasin-nouveau', 'articles', 'article-nouveau', 'mouvements', 'dotation', 'reversement']) {
+    r.go('#/materiel/' + sub); await tick();
+    assert.equal(r.window.SGDIModules.activeModuleKey, 'material');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+    if (sub.endsWith('nouveau')) assert.ok(r.view().querySelector('form'), sub + ' formulaire présent');
+    r.go('#/dashboard'); await tick();
+  }
+  assert.equal(r.downloads.length, 4);
+  assert.deepEqual(r.errors, []);
+});
