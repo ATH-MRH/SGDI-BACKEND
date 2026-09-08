@@ -1,14 +1,21 @@
 [
+  "factureEditorClientSearch",
+  "factureEditorClientSearchClose",
+  "factureEditorSave",
+  "factureEditorScheduleDraft",
+  "factureToggleAddMenu",
   "initInlineSitePositionMap",
   "initSitePositionMap",
   "initSitesDashboardMap",
   "openOpsSiteConfigModal",
+  "renderFacturation",
+  "renderFactureEditor",
+  "renderIncidentsServer",
   "renderSiteForm",
   "renderSites",
   "renderSitesServer",
   "saveSite",
   "toggleInlineSitePositionMap",
   "toggleSitesDashboardMap",
-  "toggleSuperviseurDemandeMenu",
-  "renderIncidentsServer"
+  "toggleSuperviseurDemandeMenu"
 ]

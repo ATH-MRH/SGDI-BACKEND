@@ -360,3 +360,49 @@ test('Incidents : modale et réponse serveur tardive sans rendu obsolète', asyn
   assert.equal(w.SGDIModules.activeModuleKey, null);
   assert.deepEqual(r.errors, []);
 });
+
+test('Facturation : calculs identiques, listeners uniques et brouillon conservé à la sortie', async () => {
+  if (!inventory.facturation) return;
+  const r = boot(), w = r.window, writes = [];
+  let finishSave;
+  w.sgdiApi = async (url, options) => {
+    if (String(url).includes('/collections/factures/items') && options?.body?.data) {
+      writes.push(JSON.parse(JSON.stringify(options.body.data)));
+      return new Promise(resolve => { finishSave = () => resolve(options.body.data); });
+    }
+    return {};
+  };
+  w.__factureEditId = 'new';
+  r.go('#/facturation/factures'); await tick();
+  let schedules = 0;
+  const schedule = w.factureEditorScheduleDraft;
+  w.factureEditorScheduleDraft = () => { schedules++; return schedule(); };
+  for (let i = 0; i < 3; i++) { r.go('#/facturation/factures'); await tick(); }
+  const object = w.document.getElementById('fact-objet');
+  assert.ok(object);
+  object.value = 'BROUILLON À CONSERVER';
+  w.factureEditorLigneAdd('article');
+  const row = w.document.querySelector('.fact-ligne-row[data-type="article"]');
+  row.querySelector('.fact-ligne-desig').value = 'Prestation';
+  row.querySelector('.fact-ligne-qte').value = '2';
+  row.querySelector('.fact-ligne-prix').value = '100';
+  object.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal(schedules, 1, 'une seule réaction après trois rendus');
+  r.go('#/dashboard'); await tick();
+  assert.equal(writes.length, 1, 'un seul enregistrement avant destruction du DOM');
+  assert.equal(writes[0].objet, 'BROUILLON À CONSERVER');
+  assert.equal(writes[0].montantHT, 200);
+  assert.equal(writes[0].montantTTC, 238);
+  r.view().insertAdjacentHTML('beforeend', '<input id="unrelated-field">');
+  w.document.getElementById('unrelated-field').dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal(schedules, 1, 'aucun listener facture restant sur Dashboard');
+  assert.equal(w.SGDIModules.activeModuleKey, null);
+  w.__factureEditId = 'new';
+  r.go('#/facturation/factures'); await tick();
+  const newState = w.document.getElementById('fact-draft-state');
+  newState.textContent = 'NOUVEAU BROUILLON';
+  finishSave(); await tick();
+  assert.equal(newState.textContent, 'NOUVEAU BROUILLON', 'la réponse ancienne ne marque pas le nouveau brouillon enregistré');
+  r.go('#/dashboard'); await tick();
+  assert.deepEqual(r.errors, []);
+});

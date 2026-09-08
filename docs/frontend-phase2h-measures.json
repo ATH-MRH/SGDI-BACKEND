@@ -16,5 +16,14 @@
     "gzip9": 548361,
     "bootstrapJSBytes": 2052539,
     "lazyScripts": 28
+  },
+  {
+    "commit": "14d0ddd17338178e6529619761d9bdb22c982121",
+    "message": "refactor(frontend): extract incidents with guarded async rendering",
+    "lines": 24729,
+    "bytes": 1962570,
+    "gzip9": 544941,
+    "bootstrapJSBytes": 2036431,
+    "lazyScripts": 29
   }
 ]

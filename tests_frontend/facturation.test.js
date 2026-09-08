@@ -22,7 +22,7 @@ test('sgdi-app.js se charge et expose les calculs facturation', () => {
 
 test('les bibliothèques PDF sont différées jusqu’au téléchargement', async () => {
   const root = path.join(__dirname, '..');
-  const app = fs.readFileSync(path.join(root, 'app', 'static', 'sgdi-app.js'), 'utf8');
+  const app = require('./read-client-source')();
   assert.match(app, /sgdiLoadFeatureScript\("\/static\/js\/features\/pdf\.js\?v=20260908-modular"\)/);
 
   const loaderScript = fs.readFileSync(path.join(root, 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
