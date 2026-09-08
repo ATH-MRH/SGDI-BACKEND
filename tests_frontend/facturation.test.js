@@ -3,6 +3,9 @@
 // échu / annulé, reste à payer, avoirs déduits. Plus TVA et numérotation.
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
 const { loadSgdiApp } = require('./load-app');
 
 const { loadError, T } = loadSgdiApp([
@@ -17,6 +20,37 @@ test('sgdi-app.js se charge et expose les calculs facturation', () => {
   }
 });
 
+test('les bibliothèques PDF sont différées jusqu’au téléchargement', async () => {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'app', 'static', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'app', 'static', 'sgdi-app.js'), 'utf8');
+  assert.match(html, /\/static\/js\/features\/pdf\.js/);
+  assert.doesNotMatch(html, /<script defer src="\/static\/(?:jspdf\.umd\.min|html2canvas\.min)\.js/);
+  assert.match(app, /if\(typeof window\.sgdiLoadPDFLibs==="function"\)await window\.sgdiLoadPDFLibs\(\)/);
+
+  const loaderScript = fs.readFileSync(path.join(root, 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
+    url: 'https://atlas.example/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  const loaded = [];
+  window.document.head.appendChild = (script) => {
+    loaded.push(script.src);
+    if (script.src.includes('html2canvas')) window.html2canvas = () => {};
+    if (script.src.includes('jspdf')) window.jspdf = { jsPDF: function jsPDF() {} };
+    queueMicrotask(() => script.onload());
+    return script;
+  };
+  window.eval(loaderScript);
+  assert.deepStrictEqual(loaded, [], 'aucune bibliothèque PDF ne doit partir au bootstrap');
+  await Promise.all([window.sgdiLoadPDFLibs(), window.sgdiLoadPDFLibs()]);
+  assert.deepStrictEqual(loaded.map((url) => new URL(url).pathname), [
+    '/static/html2canvas.min.js', '/static/jspdf.umd.min.js',
+  ]);
+  await window.sgdiLoadPDFLibs();
+  assert.strictEqual(loaded.length, 2, 'les bibliothèques déjà chargées doivent être réutilisées');
+  dom.window.close();
+});
 // ── TVA / montants ───────────────────────────────────────────────────────────
 
 test('clientMontantTTC : somme des lignes × 1,19 (TVA 19 %)', () => {
