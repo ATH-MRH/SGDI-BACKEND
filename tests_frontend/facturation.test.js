@@ -24,9 +24,9 @@ test('les bibliothèques PDF sont différées jusqu’au téléchargement', asyn
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'app', 'static', 'index.html'), 'utf8');
   const app = fs.readFileSync(path.join(root, 'app', 'static', 'sgdi-app.js'), 'utf8');
-  assert.match(html, /\/static\/js\/features\/pdf\.js/);
+  assert.doesNotMatch(html, /<script[^>]+\/static\/js\/features\/pdf\.js/);
   assert.doesNotMatch(html, /<script defer src="\/static\/(?:jspdf\.umd\.min|html2canvas\.min)\.js/);
-  assert.match(app, /if\(typeof window\.sgdiLoadPDFLibs==="function"\)await window\.sgdiLoadPDFLibs\(\)/);
+  assert.match(app, /sgdiLoadFeatureScript\("\/static\/js\/features\/pdf\.js\?v=20260908-modular"\)/);
 
   const loaderScript = fs.readFileSync(path.join(root, 'app', 'static', 'js', 'features', 'pdf.js'), 'utf8');
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
@@ -49,6 +49,27 @@ test('les bibliothèques PDF sont différées jusqu’au téléchargement', asyn
   ]);
   await window.sgdiLoadPDFLibs();
   assert.strictEqual(loaded.length, 2, 'les bibliothèques déjà chargées doivent être réutilisées');
+  dom.window.close();
+});
+
+test('le chargeur de feature déduplique les chargements concurrents', async () => {
+  const core = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core', 'utils.js'), 'utf8');
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
+    url: 'https://atlas.example/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  const loaded = [];
+  window.document.head.appendChild = (script) => {
+    loaded.push(script.src);
+    queueMicrotask(() => script.onload());
+    return script;
+  };
+  window.eval(core);
+  await Promise.all([
+    window.sgdiLoadFeatureScript('/static/js/features/pdf.js'),
+    window.sgdiLoadFeatureScript('/static/js/features/pdf.js'),
+  ]);
+  assert.deepStrictEqual(loaded.map((url) => new URL(url).pathname), ['/static/js/features/pdf.js']);
   dom.window.close();
 });
 // ── TVA / montants ───────────────────────────────────────────────────────────

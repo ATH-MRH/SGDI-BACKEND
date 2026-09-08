@@ -28087,6 +28087,10 @@ function facturePrintApercu(){
 async function factureTelechargerPDF(){
   const source=document.getElementById("fact-print-area");if(!source){toast("Aperçu introuvable","error");return}
   const sheet=source.querySelector(".fact-pdf-sheet");if(!sheet){toast("Aperçu introuvable","error");return}
+  try{
+    if(typeof window.sgdiLoadPDFLibs!=="function")await sgdiLoadFeatureScript("/static/js/features/pdf.js?v=20260908-modular");
+    await window.sgdiLoadPDFLibs();
+  }catch(e){toast("Génération PDF indisponible : "+(e.message||e),"error");return}
   if(typeof html2canvas==="undefined"||!window.jspdf?.jsPDF){toast("Génération PDF indisponible : librairie non chargée","error");return}
   const clone=sheet.cloneNode(true);
   const sourceCanvases=sheet.querySelectorAll("canvas"),cloneCanvases=clone.querySelectorAll("canvas");

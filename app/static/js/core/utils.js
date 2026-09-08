@@ -21,3 +21,17 @@ function escapeHTML(value){
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   })[character]);
 }
+
+const sgdiFeatureScriptPromises=new Map();
+function sgdiLoadFeatureScript(src){
+  if(sgdiFeatureScriptPromises.has(src))return sgdiFeatureScriptPromises.get(src);
+  const promise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    script.src=src;
+    script.onload=resolve;
+    script.onerror=error=>{sgdiFeatureScriptPromises.delete(src);reject(error);};
+    document.head.appendChild(script);
+  });
+  sgdiFeatureScriptPromises.set(src,promise);
+  return promise;
+}
