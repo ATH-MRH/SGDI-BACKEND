@@ -287,7 +287,7 @@ function paieFicheHTML(agentId,ym){
   const totalGains=Number(c.gains||0)||((c.elements||[]).filter(e=>e.type!=="retenue").reduce((s,e)=>s+(Number(e.montant)||0),0));
   const ligne=(lib,base,taux,gain,retenue)=>`<tr><td>${escapeHTML(lib)}</td><td class="r">${base}</td><td class="r">${taux}</td><td class="r">${gain}</td><td class="r">${retenue}</td></tr>`;
   return`<div class="bulletin-paie">
-    
+
     <div class="bp-head">
       <div><div class="bp-title">Fiche de paie</div><div class="bp-sub">Période : ${escapeHTML(mois)} · SGDI${bulletin?" · Bulletin clôturé":""}</div></div>
       <div style="text-align:right"><div style="font-size:18px;font-weight:900">${escapeHTML(a.societe||"")}</div><div class="bp-sub">Établie le ${formatDate(today())}</div></div>

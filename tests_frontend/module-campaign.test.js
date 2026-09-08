@@ -274,3 +274,36 @@ test('Administration : liens directs paramètres, profils, postes et formulaires
   assert.equal(new Set(r.downloads).size, r.downloads.length);
   assert.deepEqual(r.errors, []);
 });
+
+test('navigation navigateur : précédent/suivant réactive le module sans recharger les scripts', async () => {
+  const r = boot(), w = r.window;
+  r.dom.reconfigure({ url: 'http://localhost/' });
+  r.T().setSession({ username: 'admin', role: 'admin', adminSystem: true, access_level: 'H5', authorized_modules: ['all'], transverse: 'admin' });
+  w.location.hash = '#/drh'; await tick();
+  assert.equal(w.SGDIModules.activeModuleKey, 'drh');
+  w.location.hash = '#/ops'; await tick();
+  assert.equal(w.SGDIModules.activeModuleKey, 'ops');
+  w.history.back(); await tick();
+  assert.equal(w.location.hash, '#/drh');
+  assert.equal(w.SGDIModules.activeModuleKey, 'drh');
+  w.history.forward(); await tick();
+  assert.equal(w.location.hash, '#/ops');
+  assert.equal(w.SGDIModules.activeModuleKey, 'ops');
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  assert.deepEqual(r.errors, []);
+});
+
+test('registre absent : chaque nouvelle route affiche un rechargement compréhensible', () => {
+  const r = loadSgdiApp(['renderView'], { withoutModules: true }), w = r.window;
+  assert.ifError(r.loadError);
+  r.T().setSession({ username: 'admin', role: 'admin', adminSystem: true, transverse: 'admin' });
+  r.T().setDb(new Proxy({}, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  r.T().setFullDataReady(true);
+  for (const domain of Object.values(inventory)) for (const route of domain.routes) {
+    w.history.replaceState(null, '', '#/' + route);
+    assert.equal(r.T().renderView(), undefined);
+    const view = w.document.getElementById('view');
+    assert.match(view.textContent, /Module indisponible/);
+    assert.equal(view.querySelector('button').textContent, 'Recharger');
+  }
+});
