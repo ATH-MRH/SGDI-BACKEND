@@ -188,3 +188,18 @@ test('deep links isolés : chaque domaine démarre sans avoir visité un autre m
     assert.equal(r.timers.size, 0);
   }
 });
+
+test('Effectif et contrats : listes et fiche employé avec backendId préservé', async () => {
+  if (!inventory.employees) return;
+  const r = boot();
+  const employee = { id: 'employee-test', backendId: 42, nom: 'TEST', prenom: 'Employé', statut: 'actif', societe: '', matricule: '042' };
+  r.T().setDb(new Proxy({ agents: [employee] }, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  for (const route of ['effectif/actifs', 'effectif/agent/employee-test', 'contrats', 'contrats/nouveau_contrat', 'effectif/sortants']) {
+    r.go('#/' + route); await tick();
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+    assert.equal(employee.backendId, 42);
+    if (route === 'effectif/agent/employee-test') assert.ok(r.view().querySelector('form'), 'fiche employé');
+    r.go('#/dashboard'); await tick();
+  }
+  assert.deepEqual(r.errors, []);
+});

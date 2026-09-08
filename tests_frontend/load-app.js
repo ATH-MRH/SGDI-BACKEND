@@ -37,6 +37,15 @@ function loadSgdiApp(names = [], options = {}) {
   window.webkitAudioContext = window.AudioContext;
   window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
   window.scrollTo = () => {};
+  // CSS.escape est disponible dans les navigateurs, absent de cette version de jsdom.
+  window.CSS = window.CSS || {};
+  window.CSS.escape = value => Array.from(String(value), (char, index) => {
+    const code = char.codePointAt(0), first = String(value)[0];
+    if (code === 0) return '\uFFFD';
+    if (code < 32 || code === 127 || (/\d/.test(char) && (index === 0 || (index === 1 && first === '-')))) return '\\' + code.toString(16) + ' ';
+    if (index === 0 && char === '-' && String(value).length === 1) return '\\-';
+    return code >= 128 || /[\w-]/.test(char) ? char : '\\' + char;
+  }).join('');
   window.setInterval = () => 0; // neutralise les boucles de fond (sinon le process ne rend jamais la main)
 
   const exposed = names

@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2f-contracts";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20260908-phase2f-employees";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.
@@ -47,6 +47,8 @@
   R.MODULE_ROUTES = R.MODULE_ROUTES || {
     // Racine de route -> clé de module extrait, chargé à la demande.
     "secretariat": "secretariat",
+    "effectif": "employees",
+    "agents": "employees",
     "contrats": "contracts",
     "recrutement": "recruitment",
     "reserve": "recruitment",

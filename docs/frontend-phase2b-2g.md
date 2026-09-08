@@ -67,3 +67,9 @@ d’autosauvegarde restent attachés aux champs et protégés par candidatDraftB
 Vues de tableau de bord, listes, exports et actions isolées déplacées. Le moteur
 de documents contractuels et les formulaires employés partagés restent dans le
 core pour préserver leurs appels synchrones depuis les autres domaines.
+
+### Effectif
+
+Vues/listes et actions isolées extraites. Les fiches agents, décisions RH et
+contrôles partagés restent synchrones, car Matériel, OPS, Administration et
+les fiches de position les appellent directement. Aucun changement de state db.
