@@ -1,0 +1,119 @@
+[
+  {
+    "commit": "31795cc79a4cdbbb3f24e3f341f8096cfc0f5c58",
+    "message": "fix(frontend): support async module init and safe routing fallback",
+    "lines": 41578,
+    "bytes": 3516632,
+    "gzip9": 900419,
+    "bootstrapJSBytes": 3590032,
+    "lazyScripts": 1
+  },
+  {
+    "commit": "86c25a7a855e5f3bda41a2fe48017f612d8d1032",
+    "message": "refactor(frontend): lazy load isolated payroll views",
+    "lines": 40934,
+    "bytes": 3453423,
+    "gzip9": 886563,
+    "bootstrapJSBytes": 3526830,
+    "lazyScripts": 2
+  },
+  {
+    "commit": "d7431e58cfc7aebcb7a4fbfb2ec821431c3d840b",
+    "message": "refactor(frontend): extract pointage views and scope route timers",
+    "lines": 39308,
+    "bytes": 3308123,
+    "gzip9": 852791,
+    "bootstrapJSBytes": 3381558,
+    "lazyScripts": 4
+  },
+  {
+    "commit": "44fda7f956f7580a1189c666a8f5c979a45095a5",
+    "message": "refactor(frontend): extract OPS views with scoped resources",
+    "lines": 38095,
+    "bytes": 3178479,
+    "gzip9": 822826,
+    "bootstrapJSBytes": 3251958,
+    "lazyScripts": 6
+  },
+  {
+    "commit": "17e4454224af5ebd527cdb4da194612c4901ab3c",
+    "message": "refactor(frontend): split lazy material inventory stores and movements",
+    "lines": 34226,
+    "bytes": 2865567,
+    "gzip9": 753657,
+    "bootstrapJSBytes": 2939074,
+    "lazyScripts": 10
+  },
+  {
+    "commit": "5834483b74142f5ef55d2b042e469ddf126c1115",
+    "message": "refactor(frontend): lazy load recruitment views and workflows",
+    "lines": 32842,
+    "bytes": 2747757,
+    "gzip9": 726269,
+    "bootstrapJSBytes": 2821381,
+    "lazyScripts": 12
+  },
+  {
+    "commit": "8a19f9593a8dc7889172911d2214662bb6fe16fc",
+    "message": "refactor(frontend): extract contract views and preserve shared render helpers",
+    "lines": 31918,
+    "bytes": 2669854,
+    "gzip9": 707275,
+    "bootstrapJSBytes": 2743505,
+    "lazyScripts": 13
+  },
+  {
+    "commit": "5785a1433c9aca387f17f3abdfd999fd349a89ad",
+    "message": "refactor(frontend): extract employee list views",
+    "lines": 31393,
+    "bytes": 2620874,
+    "gzip9": 694771,
+    "bootstrapJSBytes": 2694581,
+    "lazyScripts": 14
+  },
+  {
+    "commit": "b7a6cdb5252f4e6a83222fcad1e500151cc7efea",
+    "message": "refactor(frontend): split lazy DRH dashboards and leave views",
+    "lines": 29848,
+    "bytes": 2467347,
+    "gzip9": 658228,
+    "bootstrapJSBytes": 2541087,
+    "lazyScripts": 17
+  },
+  {
+    "commit": "2f5fabeb429a05bf8695941343190019a3d51ffc",
+    "message": "refactor(frontend): lazy load administration user views",
+    "lines": 29721,
+    "bytes": 2452650,
+    "gzip9": 654556,
+    "bootstrapJSBytes": 2526455,
+    "lazyScripts": 19
+  },
+  {
+    "commit": "932b3b6bd4b1e89a9aa468efa6fcfdfdd8e355d0",
+    "message": "refactor(frontend): extract administration permission views",
+    "lines": 29509,
+    "bytes": 2423745,
+    "gzip9": 647941,
+    "bootstrapJSBytes": 2497556,
+    "lazyScripts": 20
+  },
+  {
+    "commit": "a7ae6c45da815a76e7683ccaafaed68210772a5b",
+    "message": "refactor(frontend): split administration settings and workflows",
+    "lines": 27192,
+    "bytes": 2179859,
+    "gzip9": 592992,
+    "bootstrapJSBytes": 2253667,
+    "lazyScripts": 26
+  },
+  {
+    "commit": "5ef4c3c71db6e2093160d54b2b432d81f253d3a6",
+    "message": "test(frontend): verify history navigation and registry fallback",
+    "lines": 27192,
+    "bytes": 2179859,
+    "gzip9": 592992,
+    "bootstrapJSBytes": 2253667,
+    "lazyScripts": 26
+  }
+]

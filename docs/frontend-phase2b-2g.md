@@ -94,3 +94,12 @@ configuration des accès, RH, Pointage, maintenance et paramètres généraux (5
 829 lignes de fonctions par fichier). Les callbacks de formulaires existants restent
 locaux à leurs éléments ; aucun nouveau timer global ou polling n’est introduit.
 Les collections/API de cet ensemble sont recensées dans l’inventaire JSON.
+
+## Bilan et limites
+
+Le [rapport final](frontend-phase2b-2g-report.md) donne les tests, revues et reports.
+Les [mesures par commit](frontend-phase2b-2g-measures.json) utilisent le même niveau
+Gzip et les mêmes fichiers bootstrap. Le core passe de 41 578 à 27 192 lignes :
+l’objectif de moins de 20 000 lignes reste non atteint. Les dépendances synchrones
+partagées sont conservées. La première ouverture hors ligne d’un domaine non encore
+chargé n’est pas garantie ; aucune modification du service worker dans cette campagne.
