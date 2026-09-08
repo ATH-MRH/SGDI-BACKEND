@@ -57,7 +57,7 @@ fiches agents, Administration et synchronisation restent dans le core.
 
 ## 2F — Recrutement
 
-1 426 lignes déplacées, vues/formulaires et actions. Les fonctions de validation
+1 387 lignes déplacées, vues/formulaires et actions. Les fonctions de validation
 partagées restent synchrones. Le debounce d’autosauvegarde conserve sa sémantique
 existante (pas d’annulation silencieuse d’une saisie à la sortie). Les listeners
 d’autosauvegarde restent attachés aux champs et protégés par candidatDraftBound.
@@ -76,7 +76,7 @@ les fiches de position les appellent directement. Aucun changement de state db.
 
 ### DRH / Congés
 
-1 622 lignes extraites en drh, drh-dashboard et leaves. Le calcul d’entitlement
+1 571 lignes extraites en drh, drh-dashboard et leaves. Le calcul d’entitlement
 et les filtres société partagés restent dans le core. Les règles de congés,
 formulaires et endpoints ne changent pas. Aucun intervalle/listener global ajouté.
 
@@ -86,3 +86,11 @@ Extraction par sous-bloc : contrôleur/utilisateurs, permissions, puis paramètr
 et workflows. Chaque étape conserve ses dépendances synchrones tant que le
 sous-bloc suivant n’est pas chargé. Le point d’entrée déclare les dépendances
 des sous-modules. Les règles effectives, scopes et avertissements restent identiques.
+
+
+2 681 lignes de fonctions Administration/Paramètres déplacées au total, en neuf
+scripts dont un point d’entrée. Les six derniers regroupent formulaires utilisateurs,
+configuration des accès, RH, Pointage, maintenance et paramètres généraux (58 à
+829 lignes de fonctions par fichier). Les callbacks de formulaires existants restent
+locaux à leurs éléments ; aucun nouveau timer global ou polling n’est introduit.
+Les collections/API de cet ensemble sont recensées dans l’inventaire JSON.

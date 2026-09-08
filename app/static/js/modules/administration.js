@@ -1,2 +1,2 @@
-/* Point d’entrée Administration : sous-domaines chargés ensemble, droits inchangés. */
-SGDIModules.registerModule({key:"administration",routes:["admin","parametres"],dependencies:["administration-users","administration-permissions"]});
+/* Administration : dépendances de vues chargées à la demande, droits inchangés. */
+SGDIModules.registerModule({key:"administration",routes:["admin","parametres"],dependencies:["administration-users","administration-permissions","administration-pointage-settings","administration-access-settings","administration-user-forms","administration-settings","administration-rh-settings","administration-maintenance"]});

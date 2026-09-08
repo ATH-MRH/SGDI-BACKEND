@@ -248,3 +248,29 @@ test('Administration : utilisateurs/permissions ×3, autre utilisateur, backendI
   assert.equal(new Set(r.downloads).size, r.downloads.length);
   assert.deepEqual(r.errors, []);
 });
+
+test('Administration : liens directs paramètres, profils, postes et formulaires utilisateurs', async () => {
+  if (!inventory.administration) return;
+  const r = boot(), w = r.window;
+  r.T().setSession({ username: 'admin', role: 'admin', adminSystem: true, access_level: 'H5', authorized_modules: ['all'], transverse: 'admin' });
+  const user = { username: 'alice', backendId: 42, role: 'agent', actif: true, sitesAutorises: [], modules: [] };
+  const fetch = w.fetch;
+  w.fetch = (url, opts) => String(url).includes('/irongs/positions') ? Promise.resolve({ ok: true, json: async () => [] }) : fetch(url, opts);
+  r.T().setDb(new Proxy({ users: [user], settings: {} }, { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  for (const route of ['admin/users', 'admin/niveaux', 'admin/droits', 'admin/access_sgdi', 'admin/access_societes', 'admin/access_structures', 'admin/access_code', 'admin/menu', 'admin/counters', 'admin/effectifs', 'admin/postes', 'admin/document-models', 'parametres', 'parametres/log']) {
+    r.go('#/' + route); await tick();
+    assert.equal(w.SGDIModules.activeModuleKey, 'administration', route);
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible|Chargement du module|Accès refusé/);
+    r.go('#/dashboard'); await tick();
+  }
+  r.go('#/admin/users'); await tick();
+  w.SGDI.sites.list = async () => [];
+  w.openAdminUserModalByKey('alice'); await tick();
+  assert.equal(w.document.querySelector('#modal-host [name="username"]').value, 'alice');
+  assert.equal(user.backendId, 42);
+  w.closeModal();
+  r.go('#/dashboard'); await tick();
+  assert.equal(r.timers.size, 0);
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  assert.deepEqual(r.errors, []);
+});
