@@ -25,5 +25,14 @@
     "gzip9": 544941,
     "bootstrapJSBytes": 2036431,
     "lazyScripts": 29
+  },
+  {
+    "commit": "f920385abf26c378c0aabca0dd63b0260c1f0ad3",
+    "message": "refactor(frontend): lazy load billing and preserve pending drafts",
+    "lines": 23166,
+    "bytes": 1808517,
+    "gzip9": 509786,
+    "bootstrapJSBytes": 1882414,
+    "lazyScripts": 31
   }
 ]

@@ -406,3 +406,29 @@ test('Facturation : calculs identiques, listeners uniques et brouillon conservé
   r.go('#/dashboard'); await tick();
   assert.deepEqual(r.errors, []);
 });
+
+test('Commercial : liens directs, éditeur devis et menu sans listener dupliqué', async () => {
+  if (!inventory.commercial) return;
+  const r = boot(), w = r.window, listeners = new Set();
+  for (const route of ['commercial/prospects', 'commercial/clients', 'commercial/devis', 'commercial/catalogue', 'commercial/calendrier']) {
+    r.go('#/' + route); await tick();
+    assert.equal(w.SGDIModules.activeModuleKey, 'commercial');
+    assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError|Module indisponible/);
+  }
+  const add = w.document.addEventListener.bind(w.document), remove = w.document.removeEventListener.bind(w.document);
+  w.document.addEventListener = (type, fn, opts) => { if (fn.name === 'commercialDismissMenu') listeners.add(fn); return add(type, fn, opts); };
+  w.document.removeEventListener = (type, fn, opts) => { if (fn.name === 'commercialDismissMenu') listeners.delete(fn); return remove(type, fn, opts); };
+  const button = w.document.createElement('button'); r.view().appendChild(button);
+  for (let i = 0; i < 3; i++) { w.sgdiClientRowMenu(button, 'c1'); await tick(); }
+  assert.equal(listeners.size, 1);
+  assert.equal(w.document.querySelectorAll('.sgdi-client-row-menu').length, 1);
+  r.go('#/dashboard'); await tick();
+  assert.equal(listeners.size, 0);
+  assert.equal(w.document.querySelectorAll('.sgdi-client-row-menu').length, 0);
+  w.__devisEditorId = 'new';
+  r.go('#/commercial/devis'); await tick();
+  assert.ok(w.document.getElementById('dev-objet'));
+  r.go('#/dashboard'); await tick();
+  assert.equal(new Set(r.downloads).size, r.downloads.length);
+  assert.deepEqual(r.errors, []);
+});

@@ -1,4 +1,5 @@
 [
+  "devisCalcCout",
   "factureEditorClientSearch",
   "factureEditorClientSearchClose",
   "factureEditorSave",
@@ -7,7 +8,9 @@
   "initInlineSitePositionMap",
   "initSitePositionMap",
   "initSitesDashboardMap",
+  "openGrilleSalaire",
   "openOpsSiteConfigModal",
+  "renderDevisEditor",
   "renderFacturation",
   "renderFactureEditor",
   "renderIncidentsServer",
@@ -15,6 +18,8 @@
   "renderSites",
   "renderSitesServer",
   "saveSite",
+  "sgdiCalAddTache",
+  "sgdiClientRowMenu",
   "toggleInlineSitePositionMap",
   "toggleSitesDashboardMap",
   "toggleSuperviseurDemandeMenu"
