@@ -37,3 +37,11 @@ Le timer de relève 30s quitte le bootstrap. Destroy arrête relève, QR tablett
 présence live, planning, saisie automatique et scanner. Une réouverture attend
 la fermeture du scanner. Les démarrages différés vérifient leur vue ; la reprise
 après chargement des employés vérifie hash/génération/vue.
+
+## 2D — OPS
+
+1 229 lignes de vues/actions OPS et Superviseur extraites en deux scripts.
+Les opérations partagées (historique d’affectation, documents missions, portail
+client administrateur) restent synchrones dans le core. Destroy arrête les alertes
+60s, le QR, les callbacks différés et le listener de menu missions. Les callbacks
+différés de vues vérifient hash et génération avant exécution.

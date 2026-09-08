@@ -2,7 +2,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-JS = (ROOT / "app/static/sgdi-app.js").read_text(encoding="utf-8")
+JS = (ROOT / "app/static/sgdi-app.js").read_text(encoding="utf-8") + "\n" + "\n".join(
+    module.read_text(encoding="utf-8")
+    for module in sorted((ROOT / "app/static/js/modules").glob("*.js"))
+)
 CSS = (ROOT / "app/static/sgdi-app.css").read_text(encoding="utf-8")
 
 

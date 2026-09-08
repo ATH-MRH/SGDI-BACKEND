@@ -41,7 +41,11 @@ def _function(source: str, name: str) -> str:
 
 
 def _run(expression: str):
-    source = JS.read_text(encoding="utf-8")
+    # Même code livré au navigateur : core + modules chargés à la demande.
+    source = JS.read_text(encoding="utf-8") + "\n" + "\n".join(
+        module.read_text(encoding="utf-8")
+        for module in sorted((JS.parent / "js" / "modules").glob("*.js"))
+    )
     names = (
         "defaultPaieConfig",
         "irgBaremeMensuel",

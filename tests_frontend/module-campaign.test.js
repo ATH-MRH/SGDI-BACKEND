@@ -105,3 +105,26 @@ test('Pointage : QR, planning et saisie ; timers arrêtés même après un déma
   assert.equal(r.timers.size, 0, 'timeout QR obsolète ne redémarre rien');
   assert.deepEqual(r.errors, []);
 });
+
+test('OPS : le menu missions ne duplique pas le listener et destroy le retire', async () => {
+  if (!inventory.ops) return;
+  const r = boot(), w = r.window;
+  r.T().setDb(new Proxy({ missions: [{ id: 'mission-test', agentId: 'agent-test', workflowStatus: 'transmise_ops' }] },
+    { get(target, key) { return target[key] ?? (target[key] = []); } }));
+  const listeners = new Set();
+  const add = w.document.addEventListener.bind(w.document), remove = w.document.removeEventListener.bind(w.document);
+  w.document.addEventListener = (type, fn, opts) => { if (fn?.name === 'opsMissionDismiss') listeners.add(fn); return add(type, fn, opts); };
+  w.document.removeEventListener = (type, fn, opts) => { listeners.delete(fn); return remove(type, fn, opts); };
+  r.go('#/ops/missions'); await tick();
+  const button = w.document.createElement('button'); r.view().appendChild(button);
+  w.openOpsMissionActions(button, 'mission-test');
+  w.openOpsMissionActions(button, 'mission-test');
+  await tick();
+  assert.equal(listeners.size, 1);
+  assert.equal(w.document.querySelectorAll('.ops-mission-row-menu').length, 1);
+  r.go('#/dashboard'); await tick();
+  assert.equal(listeners.size, 0);
+  assert.equal(w.document.querySelectorAll('.ops-mission-row-menu').length, 0);
+  assert.equal(r.timers.size, 0);
+  assert.deepEqual(r.errors, []);
+});
