@@ -319,7 +319,9 @@ def list_candidates_page(
 
     rows = db.execute(stmt.order_by(Candidate.id.desc())).scalars().all()
     selected_mode = (mode or "").strip().lower()
-    if selected_mode in {"archive", "archived", "archives"}:
+    if selected_mode == "drh_pending":
+        rows = [row for row in rows if not _candidate_is_recruited(row)]
+    elif selected_mode in {"archive", "archived", "archives"}:
         rows = [row for row in rows if _candidate_is_archived(row) or bool((row.data or {}).get("recruitmentArchivedAt"))]
     elif selected_mode in {"reserve", "reserves"}:
         rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row) and not _candidate_is_transmitted(row)]

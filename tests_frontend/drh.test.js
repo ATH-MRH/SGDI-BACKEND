@@ -203,7 +203,7 @@ test('DRH recruitment displays shared unassigned candidates without edit control
   const view=app.window.document.getElementById('view');
   await app.T().renderRecrutement(view,'new');
   assert.equal(request.society,undefined);
-  assert.equal(request.mode,undefined);
+  assert.equal(request.mode,"drh_pending");
   assert.match(view.textContent,/PUBLIC CANDIDATE/);
   assert.match(view.textContent,/a_contractualiser/);
   assert.match(view.textContent,/Non affecté/);

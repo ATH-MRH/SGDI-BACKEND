@@ -559,8 +559,8 @@ async function renderDrhRecruitmentReadOnly(view,mode="new"){
   try{
     // The same shared candidate pool as recrute.irongs.com includes applications
     // awaiting a recruitment society. Do not filter it by the current DRH society.
-    // DRH keeps the full history, including dossiers already sent to contracts.
-    const result=await SGDI.rh.candidatesPage({...(mode==="new"?{}:{mode:recrutementModeToApi(mode)}),page:recrutementCurrentPage(mode),page_size:25});
+    // Keep pending contracts visible, but exclude candidates already hired.
+    const result=await SGDI.rh.candidatesPage({mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
     if(!current())return;
     const rows=(result.items||[]).map(c=>{
       const info=[["Email",c.email],["Téléphone",c.phone],["Adresse",c.address||c.data?.adresse],["Date de naissance",c.birth_date||c.data?.dateNaissance],["Lieu de naissance",c.birth_place||c.data?.lieuNaissance],["Expérience",c.data?.experience],["Commentaire",c.data?.commentaire]];

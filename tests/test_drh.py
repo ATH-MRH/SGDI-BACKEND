@@ -446,7 +446,7 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     assert mark.json()["data"]["status"] == "a_contractualiser"
 
     # Recruitment archives are a presentation category, not the DRH business status.
-    for mode, present in (("", True), ("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
+    for mode, present in (("drh_pending", True), ("", True), ("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
         page = client.get(f"/api/drh/candidates/page?mode={mode}&page_size=100", headers=auth_headers)
         assert page.status_code == 200, page.text
         assert (cid in [row["id"] for row in page.json()["items"]]) is present
@@ -462,6 +462,10 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     contracts = client.get(f"/api/drh/contracts?employee_id={emp_id}", headers=auth_headers)
     assert contracts.status_code == 200
     assert len(contracts.json()) >= 1, "Le recrutement doit générer un contrat"
+
+    pending = client.get("/api/drh/candidates/page?mode=drh_pending&page_size=100", headers=auth_headers)
+    assert pending.status_code == 200
+    assert cid not in [row["id"] for row in pending.json()["items"]]
 
     # Un second clic/retry réseau est idempotent : même salarié, aucun contrat en double.
     retry = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
