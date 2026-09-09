@@ -461,6 +461,13 @@
 
 /* Périmètres du formulaire utilisateur — lecture horizontale sur grand écran. */
 .modal:has(.admin-access-functions){max-width:min(1180px,96vw)}
+
+/* Fiche de renseignement candidat — modale « Consulter » du module DRH (lecture seule). */
+.modal:has(.drh-candidate-fiche-readonly){max-width:min(1080px,96vw)}
+.drh-candidate-fiche-readonly .candidate-main{display:flex;flex-direction:column;gap:14px}
+.drh-candidate-fiche-readonly .candidate-section-card{margin:0}
+.drh-candidate-fiche-readonly input:disabled,.drh-candidate-fiche-readonly select:disabled,.drh-candidate-fiche-readonly textarea:disabled{opacity:1;color:#0f172a;-webkit-text-fill-color:#0f172a;background:#f8fafc;cursor:default}
+
 .admin-access-societies,.admin-access-primary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px 24px;margin-top:8px}
 .admin-access-primary{grid-template-columns:repeat(6,minmax(110px,1fr))}
 .admin-access-societies label,.admin-access-primary label,.admin-access-functions label{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px;line-height:1.25;color:#1e293b}

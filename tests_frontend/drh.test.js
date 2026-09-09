@@ -214,6 +214,43 @@ test('DRH recruitment displays shared unassigned candidates without edit control
   app.dom.window.close();
 });
 
+test('DRH recruitment "Consulter" opens the full candidate fiche read-only in a modal', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly','openDrhCandidateFicheModal']);
+  assert.equal(app.loadError,null,app.loadError&&app.loadError.stack);
+  app.T().setSession({username:'RH',transverse:'drh'});
+  app.window.SGDI={rh:{candidatesPage:async()=>({items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',desired_position:'AGENT DE SECURITE',society:null,phone:'0770000000',status:'a_contractualiser',data:{nom:'PUBLIC',prenom:'CANDIDATE',posteSouhaite:'AGENT DE SECURITE',adresse:'12 RUE DES OLIVIERS',dateNaissance:'1990-05-04',avisCommentaire:'RAS',experience:[{employeur:'ACME',poste:'VIGILE'}]}}],total:1,page:1,pages:1})}};
+  const doc=app.window.document;
+  const view=doc.getElementById('view');
+  await app.T().renderDrhRecruitmentReadOnly(view,'new');
+
+  const openBtn=view.querySelector('.drh-fiche-open-btn');
+  assert.ok(openBtn,'bouton Consulter absent');
+  assert.match(openBtn.textContent,/Consulter/);
+  assert.equal(view.querySelectorAll('details').length,0,'plus de dépliant <details>');
+  assert.equal(view.querySelectorAll('input,select,textarea,form,script').length,0,'la liste reste sans contrôle de saisie');
+
+  app.T().openDrhCandidateFicheModal('42');
+  const modal=doc.getElementById('modal-host');
+  const fiche=modal.querySelector('.drh-candidate-fiche-readonly');
+  assert.ok(fiche,'modale fiche non rendue');
+  assert.match(modal.textContent,/Fiche de renseignement/);
+  assert.match(modal.textContent,/IDENTIFICATION DU CANDIDAT/,'section identification absente');
+  assert.match(modal.textContent,/E\. Coordonnées/,'section coordonnées absente');
+  assert.match(modal.textContent,/G\. Expérience professionnelle/,'section expérience absente');
+
+  const nom=fiche.querySelector('[name="nom"]');
+  assert.ok(nom&&nom.disabled,'le champ Nom doit être désactivé');
+  assert.equal(nom.value,'PUBLIC');
+  const editable=[...fiche.querySelectorAll('input,select,textarea')].filter(el=>!el.disabled);
+  assert.equal(editable.length,0,'aucun champ ne doit rester modifiable');
+
+  const labels=[...fiche.querySelectorAll('button')].map(b=>b.textContent.trim().toLowerCase());
+  assert.ok(!labels.some(l=>l.includes('enregistrer')||l.includes('valider')||l.includes('modifier')||l.includes('supprimer')||l.includes('archiver')),'aucune action d\'édition ne doit subsister');
+  assert.ok(labels.some(l=>l==='fermer'),'bouton Fermer attendu');
+
+  app.dom.window.close();
+});
+
 test('DRH recruitment ignores response after navigation and never restores cached candidates on error', async () => {
   const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
   app.T().setSession({username:'RH',transverse:'drh'});

@@ -562,16 +562,66 @@ async function renderDrhRecruitmentReadOnly(view,mode="new"){
     // Keep pending contracts visible, but exclude candidates already hired.
     const result=await SGDI.rh.candidatesPage({mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
     if(!current())return;
-    const rows=(result.items||[]).map(c=>{
-      const info=[["Email",c.email],["Téléphone",c.phone],["Adresse",c.address||c.data?.adresse],["Date de naissance",c.birth_date||c.data?.dateNaissance],["Lieu de naissance",c.birth_place||c.data?.lieuNaissance],["Expérience",c.data?.experience],["Commentaire",c.data?.commentaire]];
-      const details=info.filter(([,v])=>v!==null&&v!==undefined&&v!=="").map(([label,v])=>`<dt class="font-semibold">${escapeHTML(label)}</dt><dd class="mb-2">${escapeHTML(typeof v==="object"?JSON.stringify(v):String(v))}</dd>`).join("");
-      return `<tr><td>${escapeHTML([c.last_name,c.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(c.desired_position||"—")}</td><td>${escapeHTML(c.society||"Non affecté")}</td><td>${escapeHTML(c.phone||"—")}</td><td>${escapeHTML(c.status||"—")}</td><td><details><summary class="cursor-pointer">Consulter</summary><dl class="p-3">${details||"Aucune information complémentaire."}</dl></details></td></tr>`;
+    drhReadOnlyFicheCache={};
+    const rows=(result.items||[]).map((row,index)=>{
+      const c=candidateFromApi(row);
+      const key=String(row.id||c.backendId||c.id||("row"+index));
+      drhReadOnlyFicheCache[key]=c;
+      return `<tr><td>${escapeHTML([row.last_name,row.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(row.desired_position||"—")}</td><td>${escapeHTML(row.society||"Non affecté")}</td><td>${escapeHTML(row.phone||"—")}</td><td>${escapeHTML(row.status||"—")}</td><td><button type="button" class="btn btn-ghost text-xs drh-fiche-open-btn" onclick="openDrhCandidateFicheModal('${jsString(key)}')">▶ Consulter</button></td></tr>`;
     }).join("");
     const page=result.page||1,pages=result.pages||1;
     view.innerHTML=`<div data-drh-recruitment-readonly="1"><h1 class="text-2xl font-bold">Candidatures — lecture seule</h1><p class="text-slate-500 mb-4">Dossiers partagés avec le module Recrutement. Leur traitement s’effectue dans recrute.irongs.com.</p><div class="card overflow-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Dossier</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Aucune candidature.</td></tr>'}</tbody></table><div class="p-3 flex justify-between"><span>${result.total||0} candidature(s) · page ${page}/${pages}</span><div><button class="btn btn-ghost" ${page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${page-1})">Précédent</button><button class="btn btn-ghost" ${page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${page+1})">Suivant</button></div></div></div></div>`;
   }catch(error){
     if(current())view.innerHTML=`<div class="card p-6" role="alert">Chargement impossible : ${escapeHTML(error.message||String(error))}<button class="btn btn-ghost" onclick="renderView()">Réessayer</button></div>`;
   }
+}
+
+// Cache local des fiches candidat affichées dans la vue DRH « lecture seule ».
+// Alimenté à chaque rendu de la liste, lu par la modale « Consulter ». On ne
+// touche pas à db.candidats : cette vue est un miroir en lecture du vivier partagé.
+let drhReadOnlyFicheCache={};
+
+function drhCandidateFicheReadOnlyHTML(c){
+  // Fiche complète : on force chaque section « validée » pour que
+  // renderCandidatEtape1/2 rendent les 7 sections quel que soit l'avancement.
+  const full={...c,sectionValidations:Object.fromEntries(CANDIDAT_SECTIONS.map(s=>[s.key,{by:"",at:""}]))};
+  const name=((c.nom||"")+" "+(c.prenom||"")).trim()||"Candidat";
+  return `<div class="drh-candidate-fiche-readonly">
+    <div class="flex items-start justify-between gap-3 mb-4">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-500">Fiche de renseignement · lecture seule</div>
+        <h3 class="text-xl font-bold">${escapeHTML(name)}</h3>
+        <div class="text-sm text-slate-500">${escapeHTML(c.posteSouhaite||"Poste non renseigné")} · ${escapeHTML(c.societe||"Société non affectée")}</div>
+      </div>
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
+    </div>
+    <div class="candidate-dossier"><div class="candidate-main">
+      ${renderCandidatEtape1(full)}
+      ${renderCandidatEtape2(full)}
+    </div></div>
+    <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>
+  </div>`;
+}
+
+function openDrhCandidateFicheModal(key){
+  const c=drhReadOnlyFicheCache&&drhReadOnlyFicheCache[key];
+  if(!c){toast("Fiche indisponible : actualisez la liste des candidatures.","error");return}
+  openModal(drhCandidateFicheReadOnlyHTML(c));
+  const scope=document.getElementById("modal-host")?.querySelector(".drh-candidate-fiche-readonly");
+  if(!scope)return;
+  // Neutralise toute saisie et toute action d'édition : la fiche est consultable, pas modifiable.
+  scope.querySelectorAll("input,select,textarea").forEach(el=>{el.disabled=true;el.setAttribute("aria-readonly","true")});
+  scope.querySelectorAll(".candidate-section-footer,.candidate-document-picker,[data-section-action]").forEach(el=>el.remove());
+  scope.querySelectorAll("button").forEach(btn=>{
+    const onclick=btn.getAttribute("onclick")||"";
+    if(/closeModal\(\)/.test(onclick))return;
+    // On conserve uniquement les boutons « Voir » (consultation d'une pièce jointe).
+    if(/viewDoc\(/.test(onclick)||(btn.textContent||"").trim().toLowerCase()==="voir")return;
+    btn.remove();
+  });
+  scope.querySelectorAll(".photo-clickzone").forEach(el=>{el.removeAttribute("onclick");el.style.pointerEvents="none";el.style.cursor="default"});
+  scope.querySelectorAll(".photo-remove-badge,.photo-cam-overlay").forEach(el=>el.remove());
+  scope.querySelectorAll(".candidate-section-card").forEach(el=>el.classList.remove("opacity-80"));
 }
 
 async function renderRecrutementServer(view,mode){
