@@ -550,6 +550,29 @@ function recrutementStatsCardsHTML(mode,socFilter,items,total,pageCount,loading)
   </div>`;
 }
 
+async function renderDrhRecruitmentReadOnly(view,mode="new"){
+  const requestSeq=++sgdiRecruitmentRequestSeq;
+  const hash=location.hash;
+  const generation=sgdiViewRenderGeneration;
+  const current=()=>requestSeq===sgdiRecruitmentRequestSeq&&location.hash===hash&&generation===sgdiViewRenderGeneration&&isDrhModuleContext()&&view.isConnected;
+  view.innerHTML='<div class="card p-6">Chargement des candidatures…</div>';
+  try{
+    // The same shared candidate pool as recrute.irongs.com includes applications
+    // awaiting a recruitment society. Do not filter it by the current DRH society.
+    const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
+    if(!current())return;
+    const rows=(result.items||[]).map(c=>{
+      const info=[["Email",c.email],["Téléphone",c.phone],["Adresse",c.address||c.data?.adresse],["Date de naissance",c.birth_date||c.data?.dateNaissance],["Lieu de naissance",c.birth_place||c.data?.lieuNaissance],["Expérience",c.data?.experience],["Commentaire",c.data?.commentaire]];
+      const details=info.filter(([,v])=>v!==null&&v!==undefined&&v!=="").map(([label,v])=>`<dt class="font-semibold">${escapeHTML(label)}</dt><dd class="mb-2">${escapeHTML(typeof v==="object"?JSON.stringify(v):String(v))}</dd>`).join("");
+      return `<tr><td>${escapeHTML([c.last_name,c.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(c.desired_position||"—")}</td><td>${escapeHTML(c.society||"Non affecté")}</td><td>${escapeHTML(c.phone||"—")}</td><td>${escapeHTML(c.status||"—")}</td><td><details><summary class="cursor-pointer">Consulter</summary><dl class="p-3">${details||"Aucune information complémentaire."}</dl></details></td></tr>`;
+    }).join("");
+    const page=result.page||1,pages=result.pages||1;
+    view.innerHTML=`<div data-drh-recruitment-readonly="1"><h1 class="text-2xl font-bold">Candidatures — lecture seule</h1><p class="text-slate-500 mb-4">Dossiers partagés avec le module Recrutement. Leur traitement s’effectue dans recrute.irongs.com.</p><div class="card overflow-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Dossier</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Aucune candidature.</td></tr>'}</tbody></table><div class="p-3 flex justify-between"><span>${result.total||0} candidature(s) · page ${page}/${pages}</span><div><button class="btn btn-ghost" ${page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${page-1})">Précédent</button><button class="btn btn-ghost" ${page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${page+1})">Suivant</button></div></div></div></div>`;
+  }catch(error){
+    if(current())view.innerHTML=`<div class="card p-6" role="alert">Chargement impossible : ${escapeHTML(error.message||String(error))}<button class="btn btn-ghost" onclick="renderView()">Réessayer</button></div>`;
+  }
+}
+
 async function renderRecrutementServer(view,mode){
   const requestSeq=++sgdiRecruitmentRequestSeq;
   const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
@@ -580,6 +603,7 @@ async function renderRecrutementServer(view,mode){
 }
 
 function renderRecrutement(view,mode){
+  if(isDrhModuleContext())return renderDrhRecruitmentReadOnly(view,mode);
   if(sgdiAuthToken()&&!window.__sgdiLocalRecrutementFallback){renderRecrutementServer(view,mode);return}
   cleanupDuplicateCandidates(true);
   const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
@@ -880,6 +904,7 @@ function modifierCandidatForm(id){
 }
 
 function renderCandidatForm(view,id,options){
+  if(isDrhModuleContext())return renderDrhRecruitmentReadOnly(view,"new");
   const formOptions=options||{};
   let c;
   if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate((location.hash||"").includes("#/candidats_archives")?"candidats_archives":"reserve")}}

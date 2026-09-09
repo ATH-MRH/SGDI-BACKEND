@@ -193,3 +193,38 @@ test('cycle de vie candidat: archivé / recruté / actif s\'excluent correctemen
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });
+
+test('DRH recruitment displays shared unassigned candidates without edit controls', async () => {
+  const app = loadSgdiApp(['renderRecrutement', 'renderCandidatForm']);
+  assert.equal(app.loadError, null);
+  app.T().setSession({username:'RH',transverse:'drh',societe:'Selected society'});
+  let request;
+  app.window.SGDI={rh:{candidatesPage:async params=>{request=params;return {items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',society:null,phone:'0770000000',data:{adresse:'<script>bad()</script>'}}],total:1,page:1,pages:1}}}};
+  const view=app.window.document.getElementById('view');
+  await app.T().renderRecrutement(view,'new');
+  assert.equal(request.society,undefined);
+  assert.match(view.textContent,/PUBLIC CANDIDATE/);
+  assert.match(view.textContent,/Non affecté/);
+  assert.equal(view.querySelectorAll('input,select,textarea,form,script').length,0);
+  assert.match(view.textContent,/lecture seule/);
+  await app.T().renderCandidatForm(view,null);
+  assert.equal(view.querySelectorAll('form,input,textarea').length,0);
+  app.dom.window.close();
+});
+
+test('DRH recruitment ignores response after navigation and never restores cached candidates on error', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
+  app.T().setSession({username:'RH',transverse:'drh'});
+  const view=app.window.document.getElementById('view');
+  let resolve;
+  app.window.SGDI={rh:{candidatesPage:()=>new Promise(r=>{resolve=r})}};
+  const pending=app.T().renderDrhRecruitmentReadOnly(view);
+  app.T().setSession({username:'RH',transverse:'ops'});view.innerHTML='Destination';
+  resolve({items:[{last_name:'STALE'}],total:1});await pending;
+  assert.equal(view.textContent,'Destination');
+  app.T().setSession({username:'RH',transverse:'drh'});
+  app.window.SGDI.rh.candidatesPage=async()=>{throw Error('Refus serveur')};
+  await app.T().renderDrhRecruitmentReadOnly(view);
+  assert.match(view.textContent,/Refus serveur/);assert.doesNotMatch(view.textContent,/STALE/);
+  app.dom.window.close();
+});
