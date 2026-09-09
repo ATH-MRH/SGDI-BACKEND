@@ -45,3 +45,49 @@ test('stats refresh updates only the visible commercial panel and stops after de
   assert.doesNotMatch(panel.textContent,/999/);
   w.close();
 });
+
+test('Clients : rafraîchissement sans écran vide, requêtes dédupliquées et DOM identique conservé',async()=>{
+  const a=loadSgdiApp(['renderCommClientsServer','normalizePageHeader']);const w=a.window,t=a.T();
+  t.setSession({username:'TEST',societe:'IRON GLOBAL SOLUTION'});
+  w.history.replaceState(null,'','#/commercial/clients');
+  const view=w.document.createElement('div');w.document.body.appendChild(view);
+  const result={items:[{id:1,name:'Client stable',society:'IRON GLOBAL SOLUTION',data:{}}],total:1,page:1,page_size:25};
+  w.SGDI.commercial.clientsPage=async()=>result;
+  await t.renderCommClientsServer(view);
+  const panel=view.querySelector('.clients-panel'),button=panel.querySelector('button');button.focus();
+  t.normalizePageHeader(view);
+  assert.equal(view.firstElementChild,panel);
+  let resolve,calls=0;
+  w.SGDI.commercial.clientsPage=()=>{calls++;return new Promise(r=>resolve=r)};
+  const p1=t.renderCommClientsServer(view),p2=t.renderCommClientsServer(view);
+  await Promise.resolve();
+  assert.equal(calls,1);
+  assert.equal(view.querySelector('.clients-panel'),panel);
+  assert.doesNotMatch(view.textContent,/Chargement/);
+  resolve(result);await Promise.all([p1,p2]);
+  assert.equal(view.querySelector('.clients-panel'),panel);
+  assert.equal(w.document.activeElement,button);
+  w.SGDI.commercial.clientsPage=async()=>{throw Error('offline')};
+  await t.renderCommClientsServer(view);
+  assert.equal(view.querySelector('.clients-panel'),panel);
+  w.close();
+});
+
+test('Clients : réponse tardive ignorée après navigation ou changement de société',async()=>{
+  const a=loadSgdiApp(['renderCommClientsServer']);const w=a.window,t=a.T();
+  t.setSession({username:'TEST',societe:'IRON GLOBAL SOLUTION'});
+  w.history.replaceState(null,'','#/commercial/clients');
+  const view=w.document.createElement('div');w.document.body.appendChild(view);
+  let resolve;
+  w.SGDI.commercial.clientsPage=()=>new Promise(r=>resolve=r);
+  const pending=t.renderCommClientsServer(view);await Promise.resolve();
+  w.history.replaceState(null,'','#/dashboard');view.innerHTML='<h1>Dashboard</h1>';
+  resolve({items:[{id:1,name:'Ancien client',data:{}}],total:1});await pending;
+  assert.equal(view.textContent,'Dashboard');
+  w.history.replaceState(null,'','#/commercial/clients');
+  const next=t.renderCommClientsServer(view);await Promise.resolve();
+  t.setSession({username:'TEST',societe:'SWORD CORPORATION'});view.innerHTML='<h1>Autre société</h1>';
+  resolve({items:[{id:1,name:'Ancienne société',data:{}}],total:1});await next;
+  assert.equal(view.textContent,'Autre société');
+  w.close();
+});

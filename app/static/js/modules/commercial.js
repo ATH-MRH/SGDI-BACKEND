@@ -286,10 +286,20 @@ async function convertProspect(id){
 
 async function renderCommClientsServer(view,options={}){
   const soc=mySoc();const page=sgdiServerCurrentPage("comm-clients",soc||"all");
-  if(!options.preserveContent)view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
-  sgdiShowDataLoadingBar("Chargement des clients...");
+  const hash=location.hash,ticket=(view.__clientsTicket||0)+1;
+  view.__clientsTicket=ticket;
+  const current=()=>view.isConnected&&location.hash===hash&&mySoc()===soc&&view.__clientsTicket===ticket&&!view.querySelector("form[data-client-editor='1']");
+  const retained=view.querySelector('.clients-panel')&&view.__clientsScope===soc;
+  if(!retained)view.innerHTML='<div class="clients-panel" style="min-height:190px;padding:24px" role="status">Chargement des clients…</div>';
+  const requestKey=JSON.stringify([soc,page]);
   try{
-    const result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
+    if(!view.__clientsRequest||view.__clientsRequest.key!==requestKey){
+      const pending={key:requestKey};
+      pending.promise=Promise.resolve().then(()=>SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25})).finally(()=>{if(view.__clientsRequest===pending)view.__clientsRequest=null});
+      view.__clientsRequest=pending;
+    }
+    const result=await view.__clientsRequest.promise;
+    if(!current())return;
     const list=serverItems(result).map(clientFromApi);
     list.forEach(c=>sgdiUpsertServerItem("clients",c));
     if(!document.body.contains(view)||!String(location.hash||"").startsWith("#/commercial/clients"))return;
@@ -298,7 +308,7 @@ async function renderCommClientsServer(view,options={}){
     // (et les valeurs déjà saisies) par la liste reçue en arrière-plan.
     if(view.querySelector("form[data-client-editor='1']"))return;
     const _factReadOnly=session?.transverse==="facmod"||session?.transverse==="facturation";
-    view.innerHTML=`<div class="clients-panel">
+    const markup=`<div class="clients-panel">
     <div class="clients-panel-header">
       <div class="clients-header-left">
         <div class="clients-title-block"><h1>Clients</h1><span class="clients-count-badge">${result?.total??list.length}</span></div>
@@ -308,8 +318,17 @@ async function renderCommClientsServer(view,options={}){
     </div>
     ${commTabs("clients")}
     <div class="clients-table-wrap">${list.length===0?clientsEmptyStateHTML(!_factReadOnly):`<table id="clients-table"><thead><tr>${[["nom","Nom"],["prestation","Prestation fournie"],["contact","Contact"],["tel","Tel"],["wilaya","Wilaya"],["nbrsite","Nbr site","center"],["nbr","Total eff.","center"],["montant","Montant TTC","right"],["fin","Fin contrat"],["statut","Statut"]].map(([col,label,align])=>`<th style="cursor:pointer;user-select:none;white-space:nowrap${align?";text-align:"+align:""}" onclick="clientTableSort('${col}')" id="clients-th-${col}">${label} <span id="clients-sort-${col}" style="font-size:10px;color:#94a3b8"></span></th>`).join("")}<th style="width:56px;text-align:center">Actions</th></tr></thead><tbody id="clients-tbody">${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const ttc=clientMontantTTC(c);const montantCell=ttc>0?formatDZD(ttc):"—";const totalEffectif=clientTotalEffectif(c);const nbrSite=clientNbrSites(c);return `<tr data-searchable data-nom="${escapeHTML(c.nom||"").toLowerCase()}" data-prestation="${escapeHTML((c.prestationsServices||"").split("\n")[0]||"").toLowerCase()}" data-contact="${escapeHTML(c.contact||"").toLowerCase()}" data-tel="${escapeHTML(c.tel||"").toLowerCase()}" data-wilaya="${escapeHTML(c.wilaya||"").toLowerCase()}" data-nbr="${totalEffectif}" data-nbrsite="${nbrSite}" data-montant="${ttc}" data-fin="${c.dateFinContrat||""}" data-statut="${escapeHTML(c.statut||"").toLowerCase()}" style="${alert?"background:#fff7ed;":""}cursor:pointer" onclick="openClientModal('${c.id}',${_factReadOnly})" ><td class="font-semibold" style="color:#1d4ed8">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="font-bold" style="text-align:center">${nbrSite}</td><td class="font-bold" style="text-align:center;color:#043970">${totalEffectif}</td><td class="text-xs font-mono" style="white-space:nowrap;text-align:right;padding-right:16px">${escapeHTML(montantCell)}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td style="text-align:center"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();sgdiClientRowMenu(this,'${jsString(c.id)}')">⋯</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}</div>`;
+    view.removeAttribute('aria-label');
+    if(view.__clientsMarkup===markup&&view.__clientsPanel===view.querySelector('.clients-panel'))return;
+    const scrollTop=view.scrollTop,scrollLeft=view.scrollLeft;
+    view.innerHTML=markup;
+    view.__clientsMarkup=markup;view.__clientsScope=soc;view.__clientsPanel=view.querySelector('.clients-panel');
+    if(retained&&_clientSortCol)clientTableSort(_clientSortCol,true);
+    view.scrollTop=scrollTop;view.scrollLeft=scrollLeft;
   }catch(e){
+    if(!current())return;
     console.warn("Clients serveur indisponibles",e);
+    if(retained){view.setAttribute('aria-label','Clients — actualisation indisponible, données précédentes conservées');return;}
     window.__sgdiCommClientsLocalFallback=true;
     if(!view.querySelector("form[data-client-editor='1']"))renderCommClients(view);
   }
@@ -365,10 +384,10 @@ function techSitesRerender(val){
   clientSitesResize("ts",val);
 }
 
-function clientTableSort(col){
+function clientTableSort(col,preserveDirection=false){
   const tbody=document.getElementById("clients-tbody");
   if(!tbody)return;
-  if(_clientSortCol===col){_clientSortAsc=!_clientSortAsc;}else{_clientSortCol=col;_clientSortAsc=true;}
+  if(!preserveDirection){if(_clientSortCol===col){_clientSortAsc=!_clientSortAsc;}else{_clientSortCol=col;_clientSortAsc=true;}}
   document.querySelectorAll("[id^='clients-sort-']").forEach(el=>el.textContent="");
   const ind=document.getElementById("clients-sort-"+col);
   if(ind)ind.textContent=_clientSortAsc?"▲":"▼";
