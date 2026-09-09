@@ -10374,3 +10374,16 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .comm-contract-finance-card>small,.comm-contract-finance-note{font-size:11px;line-height:1.5;color:#64748b}
 .comm-contract-finance-note{margin:14px 0 0}
 @media(max-width:650px){.comm-contract-finance-grid{grid-template-columns:1fr}}
+/* Catalogue contractuel pour composer une facture par sélection. */
+.fact-commercial-catalog{margin:0 0 12px;padding:14px;border:1px solid #b9ddd6;border-radius:12px;background:#f4fbf9}
+.fact-commercial-catalog[hidden]{display:none}
+.fact-commercial-catalog header{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:12px}
+.fact-commercial-catalog h3{font-size:15px;color:#0f5149;margin:0 0 5px}
+.fact-commercial-catalog p,.fact-commercial-catalog label{font-size:12px;color:#526875;margin:0}
+.fact-commercial-catalog select{max-width:220px;padding:6px;border:1px solid #b9ddd6;border-radius:6px;background:white}
+.fact-catalog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;max-height:340px;overflow:auto}
+.fact-catalog-card{display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid #d9e6e3;border-radius:9px;background:white;font-size:12px}
+.fact-catalog-card strong{color:#153247}.fact-catalog-card small{color:#64748b}.fact-catalog-card b{color:#0f766e}
+.fact-catalog-card button{margin-top:auto;padding:7px 10px;background:#0f766e;color:white;border:0;border-radius:6px;font-weight:700;cursor:pointer}
+.fact-catalog-card button:disabled{background:#e2e8f0;color:#526875;cursor:default}
+@media(max-width:650px){.fact-commercial-catalog header{flex-direction:column}.fact-catalog-grid{grid-template-columns:1fr}}

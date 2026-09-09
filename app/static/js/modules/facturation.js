@@ -302,10 +302,10 @@ function factureEditorLigneHTML(l){
   const uniteOpts=DEVIS_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
   const SEL="border:1px solid #e5e7eb;border-radius:4px;padding:5px 6px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
   const total2=qte*prix;
-  return '<tr class="fact-ligne-row" data-type="article"'+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
-    '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="2" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea></td>'+
+  return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+Number(l.contractQuantity??l.qte??1)+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
+    '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="2" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" style="'+SEL+'">'+uniteOpts+'</select></td>'+
-    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
+    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+qte+'" '+on+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
     '<td style="padding:4px 6px;text-align:center;vertical-align:middle;width:70px;white-space:nowrap">'+
@@ -409,6 +409,7 @@ function factureEditorLigneRemove(btn){
   const tr=btn.closest("tr");
   const siteNom=tr?.dataset?.siteNom;
   tr?.remove();
+  factureEditorCatalogSites();factureEditorCatalogRender();factureEditorScheduleDraft();
   if(siteNom){
     const remaining=Array.from(document.querySelectorAll(".fact-ligne-row")).filter(r=>r.dataset.siteNom===siteNom);
     if(remaining.length===0){
@@ -418,7 +419,7 @@ function factureEditorLigneRemove(btn){
   }
   factureEditorCalcTotals();
   const tbody=document.getElementById("fact-lignes-body");
-  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — cliquez sur « + Ajouter / créer un article »</td></tr>';
+  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — choisissez une prestation dans le catalogue ci-dessus</td></tr>';
 }
 
 function factureCalcEcheance(){
@@ -446,6 +447,64 @@ function factureClientPaymentDefaults(c,dateFacture){
   };
 }
 
+function factureCommercialArticles(client){
+  const prices=clientCatalogMap(client),items=[],used=new Set();
+  const append=(line,key,siteNom,price)=>{
+    const designation=String(line.designation||"").trim();if(!designation)return;
+    const q=Number(line.qte??line.quantite??1);
+    items.push({catalogKey:JSON.stringify([String(client.id),key]),designation,siteNom,
+      prixUnitHT:Number(price)||0,qte:Number.isFinite(q)&&q>0?q:1,
+      unite:line.unite||"Mois"});
+  };
+  (client.tech_sites||[]).forEach((site,i)=>{
+    (site.lignesFacturation||[]).forEach((line,j)=>{
+      used.add(line.designation);
+      append(line,"site:"+i+":"+j,site.denomination||site.nom||("Site "+(i+1)),prices[line.designation]);
+    });
+  });
+  (client.lignesFacturation||[]).forEach((line,i)=>{
+    if(line.qte!=null||!used.has(line.designation))append(line,"catalogue:"+i,"",line.prixUnitaire);
+  });
+  return items;
+}
+
+function factureEditorCatalogRender(){
+  const el=document.getElementById("fact-commercial-catalog");if(!el)return;
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(invoice&&invoice.statut&&invoice.statut!=="brouillon"){el.hidden=true;return;}
+  const client=(db.clients||[]).find(c=>String(c.id)===String(document.getElementById("fact-clientId")?.value));
+  if(!client||(mySoc()&&client.societe!==mySoc())){el.innerHTML='<p>Choisissez un client pour afficher ses prestations commerciales.</p>';return;}
+  const items=factureCommercialArticles(client);
+  const current=el.querySelector('select')?.value||"";
+  const sites=[...new Set(items.map(x=>x.siteNom).filter(Boolean))];
+  const filter=sites.includes(current)?current:"";
+  const selected=new Set([...document.querySelectorAll('.fact-ligne-row[data-catalog-key]')].map(r=>r.dataset.catalogKey));
+  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. La quantité contractuelle est préremplie et reste ajustable pour la période facturée.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
+    items.map((item,i)=>({item,i})).filter(({item})=>!filter||item.siteNom===filter).map(({item,i})=>{
+      const added=selected.has(item.catalogKey),missing=item.prixUnitHT<=0;
+      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT / '+escapeHTML(item.unite)+'</b><span>Quantité contrat : '+item.qte+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
+    }).join('')+(items.length?'':'<p>Aucune prestation disponible dans le contrat Commercial.</p>')+'</div>';
+}
+
+function factureEditorCatalogSites(){
+  const input=document.getElementById('fact-siteNom');
+  if(input)input.value=[...new Set([...document.querySelectorAll('.fact-ligne-row[data-site-nom]')].map(r=>r.dataset.siteNom).filter(Boolean))].join(', ');
+}
+
+function factureEditorCatalogAdd(index){
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(invoice&&invoice.statut&&invoice.statut!=="brouillon")return;
+  const client=(db.clients||[]).find(c=>String(c.id)===String(document.getElementById("fact-clientId")?.value));
+  if(!client||(mySoc()&&client.societe!==mySoc()))return;
+  const item=factureCommercialArticles(client)[index];
+  const body=document.getElementById('fact-lignes-body');
+  if(!body||!item||item.prixUnitHT<=0||[...body.querySelectorAll('[data-catalog-key]')].some(r=>r.dataset.catalogKey===item.catalogKey))return;
+  document.getElementById('fact-lignes-empty')?.remove();
+  body.insertAdjacentHTML('beforeend',factureEditorLigneHTML({...item,contractQuantity:item.qte}));
+  body.querySelectorAll('.fact-ligne-desig').forEach(devisEditorAutoResize);
+  factureEditorCatalogSites();factureEditorCalcTotals();factureEditorCatalogRender();factureEditorScheduleDraft();
+}
+
 function factureEditorClientChange(sel){
   const c=(db.clients||[]).find(x=>x.id===sel.value);if(!c)return;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||"";};
@@ -459,34 +518,8 @@ function factureEditorClientChange(sel){
   // Objet ← Prestations et Services Fournis
   const objetEl=document.getElementById("fact-objet");
   if(objetEl){const prest=(c.prestationsServices||"").trim();if(prest)objetEl.value=prest;}
-  // Articles ← Lignes de facturation du client
-  const tbody=document.getElementById("fact-lignes-body");
-  if(tbody&&(c.lignesFacturation||[]).length){
-    tbody.innerHTML="";
-    c.lignesFacturation.forEach(l=>{
-      tbody.insertAdjacentHTML("beforeend",factureEditorLigneHTML({
-        type:"article",designation:l.designation||"",prixUnitHT:l.prixUnitaire||0,qte:l.qte||1
-      }));
-    });
-    tbody.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
-    factureEditorCalcTotals();
-  }
-  // Sites ← tech_sites du client
-  const siteDiv=document.getElementById("fact-site-selector");
-  if(siteDiv){
-    const sites=(c.tech_sites||[]).filter(s=>s.denomination||s.nom);
-    if(sites.length){
-      siteDiv.innerHTML='<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Sites</div>'+
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
-        sites.map((s,i)=>{
-          const nom=s.denomination||s.nom||("Site "+(i+1));
-          return '<button type="button" class="fact-site-pill" data-nom="'+escapeHTML(nom)+'" onclick="factureEditorSelectSite(this)" style="padding:5px 12px;border-radius:20px;border:1.5px solid #d1d5db;background:#fff;font-size:12px;font-weight:600;color:#374151;cursor:pointer">'+escapeHTML(nom)+'</button>';
-        }).join("")+
-        '</div></div>';
-    } else {
-      siteDiv.innerHTML="";
-    }
-  }
+  // Le contrat alimente le catalogue ; seules les prestations choisies entrent en facture.
+  factureEditorCatalogRender();
   factureEditorRenderClientInfo(c);
 }
 
@@ -520,6 +553,11 @@ function factureEditorClientSearch(input){
 function factureEditorChooseClient(id){
   const c=(db.clients||[]).find(x=>String(x.id)===String(id));if(!c)return;
   const hidden=document.getElementById("fact-clientId"),search=document.getElementById("fact-client-search"),results=document.getElementById("fact-client-results");
+  if(hidden&&hidden.value&&hidden.value!==String(c.id)&&document.querySelector('.fact-ligne-row')){
+    if(!confirm("Changer de client et retirer les articles de ce brouillon ?"))return;
+    document.getElementById('fact-lignes-body').innerHTML='';
+    factureEditorCalcTotals();
+  }
   if(hidden)hidden.value=c.id;if(search){search.value=c.nom||"";search.style.borderColor="";search.style.background="";}if(results)results.style.display="none";
   factureEditorClientChange({value:c.id});factureEditorScheduleDraft();
 }
@@ -537,41 +575,8 @@ async function factureEditorCreateClient(form){
 }
 
 function factureEditorSelectSite(btn){
-  const nom=btn.dataset.nom||"";
-  const isSelected=btn.dataset.selected==="1";
-  if(isSelected){
-    btn.dataset.selected="";
-    btn.style.background="#fff";btn.style.color="#374151";btn.style.borderColor="#d1d5db";
-    Array.from(document.querySelectorAll(".fact-ligne-row")).filter(r=>r.dataset.siteNom===nom).forEach(r=>r.remove());
-    factureEditorCalcTotals();
-  }else{
-    btn.dataset.selected="1";
-    btn.style.background="#16a34a";btn.style.color="#fff";btn.style.borderColor="#16a34a";
-    const tbody=document.getElementById("fact-lignes-body");
-    if(tbody){
-      const empty=document.getElementById("fact-lignes-empty");if(empty)empty.remove();
-      const clientId=document.getElementById("fact-clientId")?.value;
-      const client=(db.clients||[]).find(x=>x.id===clientId);
-      const siteData=(client?.tech_sites||[]).find(s=>(s.denomination||s.nom||"")===nom)||{};
-      const postes_list=siteData.postes_list||[];
-      let added=0;
-      postes_list.forEach(p=>{
-        if(p.nbr>0){
-          tbody.insertAdjacentHTML("beforeend",factureEditorLigneHTML({type:"article",designation:p.nom,qte:p.nbr,prixUnitHT:p.salaire||0,siteNom:nom}));
-          added++;
-        }
-      });
-      if(!added){
-        tbody.insertAdjacentHTML("beforeend",factureEditorLigneHTML({type:"article",designation:nom,prixUnitHT:0,qte:1,siteNom:nom}));
-      }
-      tbody.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
-      factureEditorCalcTotals();
-    }
-  }
-  const tbody=document.getElementById("fact-lignes-body");
-  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — cliquez sur « + Ajouter / créer un article »</td></tr>';
-  const selectedNoms=Array.from(document.querySelectorAll(".fact-site-pill[data-selected='1']")).map(b=>b.dataset.nom);
-  const inp=document.getElementById("fact-siteNom");if(inp)inp.value=selectedNoms.join(", ");
+  const filter=document.querySelector('#fact-commercial-catalog select');
+  if(filter){filter.value=btn.dataset.nom||"";factureEditorCatalogRender();}
 }
 
 function factureEditorRenderClientInfo(c){
@@ -680,7 +685,7 @@ async function factureEditorSave(options){
       const prixUnitHT=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
       const qte=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
       const totalHT=qte*prixUnitHT;
-      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT});
+      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT,siteNom:tr.dataset.siteNom||"",catalogKey:tr.dataset.catalogKey||"",contractQuantity:Number(tr.dataset.contractQuantity)||null});
     }
   });
   const totals=factureComputeLinesTotals(lignes,tvaPct);
@@ -974,6 +979,7 @@ function renderFactureEditor(view){
     '<legend>Objet de la facture</legend>'+
     '<input id="fact-objet" class="input" style="width:100%" value="'+escapeHTML(f.objet||f.remarque||"")+'" placeholder="Ex: Prestation de gardiennage — Période : Mars 2026">'+
     '</fieldset>'+
+    '<section id="fact-commercial-catalog" class="fact-commercial-catalog"'+(isDraft?'':' hidden')+'></section>'+
     // Articles fieldset
     '<fieldset class="rh-op-box" style="margin-bottom:10px;padding:0;overflow:hidden">'+
     '<legend style="margin-left:12px;padding-top:2px">Articles</legend>'+
@@ -987,7 +993,7 @@ function renderFactureEditor(view){
     '<th style="border-bottom:2px solid #e5e7eb;background:#f9fafb;width:36px"></th>'+
     '</tr></thead>'+
     '<tbody id="fact-lignes-body">'+
-    (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Ajouter / créer un article</td></tr>':lignesHTML)+
+    (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+
     '</tbody>'+
     '</table></div>'+
     '<div style="padding:10px 14px;border-top:1px solid #e5e7eb;background:#f9fafb">'+
@@ -1069,24 +1075,7 @@ function renderFactureEditor(view){
     document.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
     if(selClient)factureEditorRenderClientInfo(selClient);
     else if(f.client||f.clientNom){factureEditorRenderClientInfo({nom:f.client||f.clientNom,rc:f.rc||f.clientRc||"",nif:f.nif||""});}
-    // Restore selected site pill for existing facture
-    if(f.siteNom&&f.clientId){
-      const c2=(db.clients||[]).find(x=>x.id===f.clientId);
-      const siteDiv=document.getElementById("fact-site-selector");
-      if(siteDiv&&c2){
-        const sites=(c2.tech_sites||[]).filter(s=>s.denomination||s.nom);
-        if(sites.length){
-          siteDiv.innerHTML='<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Sites</div>'+
-            '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
-            sites.map((s,i)=>{
-              const nom=s.denomination||s.nom||("Site "+(i+1));
-              const sel=nom===f.siteNom;
-              return '<button type="button" class="fact-site-pill" data-nom="'+escapeHTML(nom)+'" onclick="factureEditorSelectSite(this)" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(sel?"#0f2d5a":"#d1d5db")+';background:'+(sel?"#0f2d5a":"#fff")+';font-size:12px;font-weight:600;color:'+(sel?"#fff":"#374151")+';cursor:pointer">'+escapeHTML(nom)+'</button>';
-            }).join("")+
-            '</div></div>';
-        }
-      }
-    }
+    if(isDraft)factureEditorCatalogRender();
   },0);
 }
 

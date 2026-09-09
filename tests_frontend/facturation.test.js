@@ -378,3 +378,37 @@ test('Facturation affiche le même TTC contractuel que Commercial depuis les cli
   assert.strictEqual(view.querySelectorAll('tbody tr td')[7].textContent,t.formatDZD(1500*1.19));
   w.close();
 });
+
+test('catalogue Commercial : sélection explicite, quantité par site, anti-doublon et facture figée',()=>{
+  const app=loadSgdiApp(['factureCommercialArticles','factureEditorClientChange','factureEditorCatalogRender','factureEditorCatalogAdd','factureEditorLigneHTML','facturationLeaveEditor']);
+  assert.strictEqual(app.loadError,null);
+  const w=app.window,t=app.T();
+  t.setSession({username:'TEST',societe:'IRON GLOBAL SOLUTION'});
+  const client={id:'c1',nom:'Test',societe:'IRON GLOBAL SOLUTION',lignesFacturation:[{designation:'APS',prixUnitaire:100},{designation:'Sans tarif',prixUnitaire:0}],tech_sites:[{nom:'Site A',lignesFacturation:[{designation:'APS',qte:4}]},{nom:'Site B',lignesFacturation:[{designation:'APS',qte:7}]}]};
+  t.setDb({clients:[client],factures:[]});
+  w.document.body.innerHTML='<input id="fact-clientId" value="c1"><section id="fact-commercial-catalog"></section><table><tbody id="fact-lignes-body"></tbody></table>';
+  t.factureEditorClientChange({value:'c1'});
+  assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,0);
+  assert.equal(w.document.querySelectorAll('.fact-catalog-card').length,3);
+  assert.match(w.document.querySelector('.fact-catalog-card:last-child').textContent,/Tarif à compléter/);
+  t.factureEditorCatalogAdd(0);t.factureEditorCatalogAdd(0);
+  assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,1);
+  let row=w.document.querySelector('.fact-ligne-row');
+  assert.equal(row.querySelector('.fact-ligne-qte').value,'4');
+  assert.equal(row.querySelector('.fact-ligne-prix').value,'100,00');
+  assert.equal(row.dataset.siteNom,'Site A');
+  assert.equal(row.dataset.contractQuantity,'4');
+  t.factureEditorCatalogAdd(1);
+  assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,2);
+  t.factureEditorCatalogAdd(2);
+  assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,2);
+  client.lignesFacturation[0].prixUnitaire=900;
+  t.factureEditorCatalogRender();
+  assert.equal(row.querySelector('.fact-ligne-prix').value,'100,00');
+  const filter=w.document.querySelector('#fact-commercial-catalog select');filter.value='Site B';t.factureEditorCatalogRender();
+  assert.equal(w.document.querySelectorAll('.fact-catalog-card').length,1);
+  w.__factureEditId='issued';t.setDb({clients:[client],factures:[{id:'issued',statut:'emise'}]});
+  t.factureEditorCatalogRender();assert.equal(w.document.getElementById('fact-commercial-catalog').hidden,true);
+  row.remove();t.factureEditorCatalogAdd(0);assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,1);
+  t.facturationLeaveEditor();w.close();
+});
