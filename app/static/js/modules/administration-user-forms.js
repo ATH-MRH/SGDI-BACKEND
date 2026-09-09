@@ -74,6 +74,19 @@ function adminSuggestUsernameForForm(force){
   input.value=adminNextUsername(adminUsernamePrefixFromForm(form));
 }
 
+function adminPasswordFieldHTML(name,label,isNew,isDefined){
+  const id="admin-user-"+name;
+  const hint=isNew?"":isDefined?"Mot de passe déjà défini — laissez vide pour le conserver.":"Aucun mot de passe de validation défini.";
+  return `<div><label class="label" for="${id}">${label}${isNew?" *":""}</label><div style="display:flex;gap:6px;align-items:center"><input id="${id}" class="input" type="password" name="${name}" autocomplete="new-password" placeholder="${isNew?"Saisir un mot de passe":isDefined?"Inchangé":"Définir un mot de passe"}" aria-describedby="${id}-hint"/><button type="button" class="btn btn-secondary" aria-controls="${id}" aria-label="Afficher le ${label.toLowerCase()}" aria-pressed="false" data-password-label="${label.toLowerCase()}" onclick="adminTogglePasswordVisibility(this)"><span aria-hidden="true">👁</span></button></div><small id="${id}-hint" class="text-slate-500">${hint}</small></div>`;
+}
+function adminTogglePasswordVisibility(button){
+  const input=document.getElementById(button.getAttribute("aria-controls"));if(!input)return;
+  const visible=input.type==="password";
+  input.type=visible?"text":"password";
+  button.setAttribute("aria-pressed",String(visible));
+  button.setAttribute("aria-label",`${visible?"Masquer":"Afficher"} le ${button.dataset.passwordLabel}`);
+  button.title=button.getAttribute("aria-label");
+}
 async function openAdminUserModal(username){
   const current=adminCaptureView(document.getElementById("view"),document.getElementById("modal-host"));
   username=String(username||"").trim();
@@ -100,8 +113,8 @@ async function openAdminUserModal(username){
       <div class="grid grid-2 gap-3">
         <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, SUP01, ATL01, ADM01, ADG01.</div></div>
         <div><label class="label">Email personnel de l'utilisateur *</label><input class="input" type="email" name="email" value="${escapeHTML(u.email||"")}" placeholder="utilisateur@exemple.com" required/></div>
-        <div><label class="label">Mot de passe de connexion ${isNew?"*":"(vide = inchangé)"}</label><input class="input" type="password" name="password" autocomplete="new-password" /></div>
-        <div><label class="label">Mot de passe de validation ${isNew?"*":"(vide = inchangé)"}</label><input class="input" type="password" name="validationPassword" autocomplete="new-password" placeholder="Secret distinct pour les validations"/></div>
+        ${adminPasswordFieldHTML("password","Mot de passe de connexion",isNew,!isNew)}
+        ${adminPasswordFieldHTML("validationPassword","Mot de passe de validation",isNew,!!u.hasValidationPassword)}
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
         <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>

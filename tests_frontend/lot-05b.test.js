@@ -186,3 +186,31 @@ test('le parcours réel conserve backendId puis ouvre la modale granulaire', asy
 
   dom.window.close();
 });
+
+test('mots de passe du compte : état conservé et visibilité indépendante sans ressaisie', () => {
+  const ctx = require('./load-app').loadSgdiApp(['adminPasswordFieldHTML', 'adminTogglePasswordVisibility']);
+  assert.ifError(ctx.loadError);
+  const { window, T } = ctx;
+  try {
+    const host = window.document.getElementById('modal-host');
+    host.innerHTML = '<form>' + T().adminPasswordFieldHTML('password', 'Mot de passe de connexion', false, true)
+      + T().adminPasswordFieldHTML('validationPassword', 'Mot de passe de validation', false, true) + '</form>';
+    assert.match(host.textContent, /Mot de passe déjà défini/);
+    const fields = host.querySelectorAll('input');
+    assert.strictEqual(fields[0].value, '');
+    assert.strictEqual(fields[1].value, '');
+    fields[0].value = 'nouveau-secret-test';
+    const button = host.querySelector('button');
+    assert.strictEqual(button.type, 'button');
+    T().adminTogglePasswordVisibility(button);
+    assert.strictEqual(fields[0].type, 'text');
+    assert.strictEqual(fields[1].type, 'password');
+    assert.strictEqual(button.getAttribute('aria-pressed'), 'true');
+    T().adminTogglePasswordVisibility(button);
+    assert.strictEqual(fields[0].type, 'password');
+    assert.strictEqual(fields[0].value, 'nouveau-secret-test');
+    assert.strictEqual(button.getAttribute('aria-pressed'), 'false');
+    assert.match(T().adminPasswordFieldHTML('validationPassword', 'Mot de passe de validation', false, false), /Aucun mot de passe de validation défini/);
+    assert.doesNotMatch(T().adminPasswordFieldHTML('password', 'Mot de passe de connexion', true, false), /déjà défini/);
+  } finally { window.close(); }
+});
