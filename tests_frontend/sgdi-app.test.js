@@ -420,3 +420,21 @@ test('sélecteur société : les synchronisations conservent les nœuds et les c
     assert.ok(app.querySelector('[data-module-society-selector]'));
   }finally{c.window.close();}
 });
+
+test('fenêtres : sélectionner un champ et relâcher hors de la fenêtre ne ferme pas',()=>{
+  const a=require('./load-app').loadSgdiApp(['openModal','closeModal']);const w=a.window,t=a.T();
+  if(!w.document.getElementById('modal-host')){const host=w.document.createElement('div');host.id='modal-host';w.document.body.appendChild(host);}
+  t.openModal('<input value="Sélection de texte"><button onclick="closeModal()">Fermer</button>');
+  let bg=w.document.querySelector('.modal-bg'),input=bg.querySelector('input');
+  const pointer=(target,type,id=1)=>{const e=new w.Event(type,{bubbles:true});Object.assign(e,{button:0,pointerId:id});target.dispatchEvent(e)};
+  pointer(input,'pointerdown');pointer(bg,'pointerup');bg.click();
+  assert.ok(w.document.querySelector('.modal-bg'),'le glisser depuis le champ doit conserver la fenêtre');
+  pointer(bg,'pointerdown');pointer(input,'pointerup');bg.click();
+  assert.ok(w.document.querySelector('.modal-bg'),'un relâchement dans la fenêtre ne ferme pas');
+  pointer(bg,'pointerdown');pointer(bg,'pointercancel');pointer(bg,'pointerup');bg.click();
+  assert.ok(w.document.querySelector('.modal-bg'),'un geste annulé ne ferme pas');
+  pointer(bg,'pointerdown');pointer(bg,'pointerup');bg.click();
+  assert.equal(w.document.querySelector('.modal-bg'),null,'un vrai clic sur le fond ferme');
+  t.openModal('<input>');t.closeModal();assert.equal(w.document.querySelector('.modal-bg'),null);
+  w.close();
+});

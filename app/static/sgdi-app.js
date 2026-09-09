@@ -3062,7 +3062,26 @@ function destroySitesDashboardMap(){
   window.__sgdiSitesDashboardSearchMarker=null;
   document.querySelectorAll("#sites-map-frame").forEach(el=>{try{el.remove()}catch(_){}});
 }
-function openModal(html){const sx=window.scrollX,sy=window.scrollY;const host=document.getElementById("modal-host");host.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes(host);applyLanguagePreference(host);sgdiSyncOverlayState();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
+function sgdiBindBackdropDismiss(backdrop,dismiss){
+  if(!backdrop)return;
+  let pointer=null,startedOnBackdrop=false,endedOnBackdrop=false;
+  const reset=()=>{pointer=null;startedOnBackdrop=false;endedOnBackdrop=false};
+  backdrop.addEventListener("pointerdown",event=>{
+    reset();
+    if(event.button!==0)return;
+    pointer=event.pointerId;startedOnBackdrop=event.target===backdrop;
+  });
+  backdrop.addEventListener("pointerup",event=>{
+    endedOnBackdrop=startedOnBackdrop&&event.pointerId===pointer&&event.target===backdrop;
+  });
+  backdrop.addEventListener("pointercancel",reset);
+  backdrop.addEventListener("click",event=>{
+    const shouldDismiss=startedOnBackdrop&&endedOnBackdrop&&event.target===backdrop;
+    reset();
+    if(shouldDismiss)dismiss();
+  });
+}
+function openModal(html){const sx=window.scrollX,sy=window.scrollY;const host=document.getElementById("modal-host");host.innerHTML=`<div class="modal-bg"><div class="modal p-6">${html}</div></div>`;sgdiBindBackdropDismiss(host.querySelector(".modal-bg"),closeModal);stripCryptogrammes(host);applyLanguagePreference(host);sgdiSyncOverlayState();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
 function closeModal(){document.getElementById("modal-host").innerHTML="";sgdiSyncOverlayState()}
 function uiProgressStart(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.remove("done");p.classList.add("active")}
 function uiProgressDone(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.add("done");setTimeout(()=>p.classList.remove("active","done"),260);sgdiHideDataLoadingBar()}
@@ -3219,11 +3238,12 @@ function commandRoutes(){
 function openCommandPalette(){
   if(document.getElementById("ui-command-bg"))return;
   const items=commandRoutes();
-  const html=`<div class="ui-command-bg" id="ui-command-bg" onclick="if(event.target===this)closeCommandPalette()"><div class="ui-command">
+  const html=`<div class="ui-command-bg" id="ui-command-bg"><div class="ui-command">
     <div class="ui-command-head"><span class="text-slate-400">Recherche</span><input id="ui-command-input" placeholder="Aller vers un module ou une page..." oninput="renderCommandItems(this.value)" autofocus/><span class="ui-command-kbd">Esc</span></div>
     <div class="ui-command-list" id="ui-command-list"></div>
   </div></div>`;
   document.body.insertAdjacentHTML("beforeend",html);
+  sgdiBindBackdropDismiss(document.getElementById("ui-command-bg"),closeCommandPalette);
   window.__commandItems=items;
   renderCommandItems("");
   setTimeout(()=>document.getElementById("ui-command-input")?.focus(),20);
@@ -3814,7 +3834,7 @@ function requestCriticalActionPassword(action){
     document.body.appendChild(host);
     const finish=ok=>{removeCriticalActionPasswordModal();resolve(ok)};
     host.querySelector("[data-critical-auth-cancel]")?.addEventListener("click",()=>finish(false));
-    host.querySelector(".modal-bg")?.addEventListener("click",event=>{if(event.target===event.currentTarget)finish(false)});
+    sgdiBindBackdropDismiss(host.querySelector(".modal-bg"),()=>finish(false));
     host.querySelector("form")?.addEventListener("submit",event=>{
       event.preventDefault();
       const code=String(event.currentTarget.code?.value||"").trim();
