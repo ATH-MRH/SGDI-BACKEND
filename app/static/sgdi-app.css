@@ -9035,7 +9035,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 }
 #view .fp-display-controls{
   display:grid!important;
-  grid-template-columns:auto minmax(210px,260px) 78px 126px!important;
+  grid-template-columns:auto minmax(210px,260px) 126px!important;
   align-items:center!important;
   gap:10px!important;
   min-width:0!important;
@@ -9108,12 +9108,12 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-filter-main{grid-template-columns:1fr 1fr!important}
   #view .fp-search-field{grid-column:1/-1!important}
   #view .fp-filter-footer{grid-template-columns:1fr!important}
-  #view .fp-display-controls{justify-self:stretch!important;grid-template-columns:auto minmax(180px,1fr) 78px 126px!important}
+  #view .fp-display-controls{justify-self:stretch!important;grid-template-columns:auto minmax(180px,1fr) 126px!important}
 }
 @media(max-width:720px){
   #view .fp-filter-main{grid-template-columns:1fr!important}
   #view .fp-search-field{grid-column:auto!important}
-  #view .fp-display-controls{grid-template-columns:1fr 78px 126px!important}
+  #view .fp-display-controls{grid-template-columns:minmax(0,1fr) 126px!important}
   #view .fp-display-controls>label{display:none!important}
 }
 
@@ -9189,7 +9189,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   width:auto!important;
   margin-left:auto!important;
   display:grid!important;
-  grid-template-columns:auto minmax(220px,280px) 82px 128px!important;
+  grid-template-columns:auto minmax(220px,280px) 128px!important;
   align-items:center!important;
   gap:10px!important;
   min-width:0!important;
@@ -9212,7 +9212,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-page.fp-stable-layout .fp-display-controls{
     width:100%!important;
     margin-left:0!important;
-    grid-template-columns:auto minmax(180px,1fr) 82px 128px!important;
+    grid-template-columns:auto minmax(180px,1fr) 128px!important;
   }
 }
 @media(max-width:720px){
@@ -9221,7 +9221,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-page.fp-stable-layout .fp-filter-main{grid-template-columns:1fr!important}
   #view .fp-page.fp-stable-layout .fp-search-field{grid-column:auto!important}
   #view .fp-page.fp-stable-layout .fp-filter-footer{padding:12px!important}
-  #view .fp-page.fp-stable-layout .fp-display-controls{grid-template-columns:1fr 82px 128px!important}
+  #view .fp-page.fp-stable-layout .fp-display-controls{grid-template-columns:minmax(0,1fr) 128px!important}
   #view .fp-page.fp-stable-layout .fp-display-controls>label{display:none!important}
 }
 

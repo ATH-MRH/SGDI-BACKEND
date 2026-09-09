@@ -178,7 +178,7 @@ function renderFiches(view,sub,_skipEnsure){
       </details>
       <div class="fp-filter-footer">
         <div class="fp-result-count"><strong>${list.length}</strong> fiche${list.length!==1?"s":""} affichée${list.length!==1?"s":""}</div>
-        <div class="fp-display-controls"><label>Trier par</label><select onchange="setFpFilter('sort',this.value)">
+        <div class="fp-display-controls"><label for="fp-sort">Trier par</label><select id="fp-sort" onchange="setFpFilter('sort',this.value)">
           <option value="alpha_asc" ${fpFilter.sort==="alpha_asc"?"selected":""}>Alphabetique A-Z</option>
           <option value="alpha_desc" ${fpFilter.sort==="alpha_desc"?"selected":""}>Alphabetique Z-A</option>
           <option value="recruit_desc" ${fpFilter.sort==="recruit_desc"?"selected":""}>Recrutement recent d'abord</option>
