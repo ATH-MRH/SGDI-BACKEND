@@ -141,6 +141,18 @@ def test_convocation_email_copies_administration(monkeypatch):
     assert message["Bcc"] == "adm.conv@irongs.com"
     assert "adm.conv@irongs.com" in message["From"]
     assert captured["message"] is message
+    plain = message.get_body(preferencelist=("plain",)).get_content()
+    html = message.get_body(preferencelist=("html",)).get_content()
+    assert "BONJOUR NADIA TEST" in plain
+    assert "DATE : 10/09/2026" in plain
+    assert "2026/09/10" in html
+    assert "<strong>HEURE : 09:30</strong>" in html
+    assert "<strong>LIEU : SIÈGE</strong>" in html
+    assert "<strong>OBJET : ENTRETIEN</strong>" in html
+    assert 'lang="ar" dir="rtl"' in html
+    assert "مقابلة" in html
+    assert html.count("0770 112 034") == 2
+
 
 
 def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):
