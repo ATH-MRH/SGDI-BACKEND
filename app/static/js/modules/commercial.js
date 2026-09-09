@@ -142,6 +142,37 @@ function sgdiCalDeleteTache(idx){
   renderView();
 }
 
+function commercialContractFinancePanel(){
+  const scope=mySoc();
+  const contracts=sgdiBackendModuleCounters("commercial",scope);
+  const finance=sgdiBackendModuleCounters("facturation",scope);
+  const value=(source,key,amount=false)=>{
+    const n=source?.[key];
+    return typeof n==="number"&&Number.isFinite(n)?(amount?money(n):String(n)):"—";
+  };
+  return `<article class="comm-modern-panel comm-contract-finance">
+    <div class="comm-modern-panel-head"><h2>Contrats, facturation et paiements</h2><span>Société active · cumul enregistré</span></div>
+    <div class="comm-contract-finance-grid">
+      <div class="comm-contract-finance-card contracts"><span>Contrats actifs</span><strong>${value(contracts,"contracts_active")}</strong><small>Contrats commerciaux en vigueur</small></div>
+      <div class="comm-contract-finance-card invoices"><span>Facturation TTC</span><strong>${value(finance,"invoiced_ttc",true)}</strong><small>${value(finance,"invoices_issued")} facture(s) · hors brouillons et annulations</small></div>
+      <div class="comm-contract-finance-card payments"><span>Paiements enregistrés</span><strong>${value(finance,"payments_amount",true)}</strong><small>${value(finance,"payments_total")} paiement(s) enregistré(s)</small></div>
+    </div>
+    <p class="comm-contract-finance-note">${contracts?.contracts_active==null||finance?.invoiced_ttc==null||finance?.payments_amount==null?"Statistiques indisponibles ou en cours de synchronisation — aucun montant estimé.":"Source : contrats Commercial et écritures Facturation. Les paiements ne constituent pas un rapprochement bancaire."}</p>
+  </article>`;
+}
+
+function refreshCommercialFinancePanel(){
+  if(!["#/commercial", "#/commercial/dashboard"].includes(location.hash))return;
+  const panel=document.querySelector("#view .comm-contract-finance");
+  if(!panel)return;
+  const markup=commercialContractFinancePanel();
+  if(panel.__financeMarkup===markup)return;
+  const template=document.createElement("template");template.innerHTML=markup;
+  const replacement=template.content.firstElementChild;
+  replacement.__financeMarkup=markup;
+  panel.replaceWith(replacement);
+}
+
 function renderCommDashboard(view){
   const prospects=bySoc(db.prospects||[]);const clients=bySoc(db.clients||[]);const opps=bySoc(db.opportunites||[]);const visites=bySoc(db.visites||[]);
   const oppsActives=opps.filter(o=>!["gagnee","perdue"].includes(o.etape));
@@ -157,8 +188,6 @@ function renderCommDashboard(view){
     ...upcomingVisits.map(v=>({title:`Visite · ${v.client||v.clientNom||v.objet||"Client"}`,meta:`${formatDate(v.date)}${v.heure?` · ${v.heure}`:""}`,status:"Planifiée",tone:"info"})),
     ...oppsActives.map(o=>({title:o.nom||o.titre||o.client||"Opportunité commerciale",meta:`${String(o.etape||"nouveau").replaceAll("_"," ")} · ${money(o.montant||0)}`,status:"À suivre",tone:"info"}))
   ].slice(0,4);
-  const stageData=ETAPES_OPP.map(e=>({key:e,count:opps.filter(o=>o.etape===e).length,total:opps.filter(o=>o.etape===e).reduce((s,o)=>s+(o.montant||0),0)}));
-  const stageMax=Math.max(1,...stageData.map(x=>x.count));
   const wonCount=opps.filter(o=>o.etape==="gagnee").length;
   const avgWon=wonCount?ca/wonCount:0;
   view.innerHTML=`<div class="comm-modern-dashboard">
@@ -177,7 +206,7 @@ function renderCommDashboard(view){
       <button type="button" class="comm-modern-kpi tone-amber" onclick="navigate('commercial/opportunites')"><span>Chiffre d'affaires gagné</span><strong>${money(ca)}</strong><small>${wonCount} affaire(s) conclue(s)</small></button>
     </section>
     <section class="comm-modern-content">
-      <article class="comm-modern-panel comm-modern-pipeline"><div class="comm-modern-panel-head"><h2>Pipeline commercial</h2><span>Nombre et valeur par étape</span></div><div class="comm-modern-bars">${stageData.map(x=>`<button type="button" class="comm-modern-stage ${x.key==="gagnee"?"is-won":x.key==="perdue"?"is-lost":""}" onclick="navigate('commercial/opportunites')"><span class="comm-modern-bar" style="height:${Math.max(18,Math.round((x.count/stageMax)*100))}%"></span><strong>${x.count}</strong><small>${escapeHTML(x.key.replaceAll("_"," "))}</small><em>${money(x.total)}</em></button>`).join("")}</div></article>
+      ${commercialContractFinancePanel()}
       <article class="comm-modern-panel"><div class="comm-modern-panel-head"><h2>Priorités</h2><span>${priorities.length} action(s)</span></div><div class="comm-modern-priorities">${priorities.length?priorities.map(p=>`<div class="comm-modern-priority"><div><strong>${escapeHTML(p.title)}</strong><small>${escapeHTML(p.meta)}</small></div><span class="${p.tone}">${escapeHTML(p.status)}</span></div>`).join(""):`<div class="comm-modern-empty">Aucune priorité commerciale en attente.</div>`}</div></article>
     </section>
     <section class="comm-modern-secondary">
@@ -1225,7 +1254,7 @@ function calcIRGAlgerie(salaireB){
   return irgSalaireAlgerie(Math.max(0,netApCnas),paieConfig()).irg;
 }
 
-SGDIModules.registerModule({key: "commercial", routes: ["commercial"], dependencies: ["commercial-1"], init: function(){}, destroy: commercialModuleDestroy});
+SGDIModules.registerModule({key: "commercial", routes: ["commercial"], dependencies: ["commercial-1"], init: function(){window.addEventListener("sgdi:sidebar-stats",refreshCommercialFinancePanel)}, destroy: commercialModuleDestroy});
 
 const commercialModuleTimeouts=new Set();
 function commercialModuleTimeout(callback,delay){
@@ -1235,6 +1264,7 @@ function commercialModuleTimeout(callback,delay){
 }
 function commercialDismissMenu(){document.querySelectorAll(".sgdi-client-row-menu").forEach(menu=>menu.remove())}
 function commercialModuleDestroy(){
+  window.removeEventListener("sgdi:sidebar-stats",refreshCommercialFinancePanel);
   commercialModuleTimeouts.forEach(clearTimeout);commercialModuleTimeouts.clear();
   document.removeEventListener("click",commercialDismissMenu);commercialDismissMenu();
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from copy import deepcopy
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from threading import Lock
 from typing import Any
 
@@ -129,6 +130,12 @@ def _commercial_stats(db: Session, society: str | list[str] | None = None) -> di
     clients = stmt.all()
     today = date.today()
     active_clients = [client for client in clients if _norm(client.status) not in {"inactif", "inactive", "archive", "archivé"}]
+    def contract_valid(client):
+        data = client.data if isinstance(client.data, dict) else {}
+        if "dc_contract_status" in data:
+            return data["dc_contract_status"] == "valide"
+        return bool(client.contract_start)
+
     contracts_30j = sum(1 for client in active_clients if client.contract_end and 0 <= (client.contract_end - today).days <= 30)
     sites = 0
     employees = 0
@@ -145,6 +152,13 @@ def _commercial_stats(db: Session, society: str | list[str] | None = None) -> di
         "opportunities_open": sum(1 for row in _legacy_rows(db, "opportunites") if _matches_society(row, society) and _norm(row.get("etape")) not in {"gagnee", "gagnée", "perdue"}),
         "visits_total": _count_legacy_items(db, "visites", society),
         "contracts_30d": contracts_30j,
+        "contracts_active": sum(
+            1 for c in active_clients
+            if _norm(c.status) in {"actif", "active"}
+            and (not c.contract_start or c.contract_start <= today)
+            and (not c.contract_end or c.contract_end >= today)
+            and contract_valid(c)
+        ),
         "tarifs_total": _count_legacy_items(db, "catalogue", society),
     }
 
@@ -227,7 +241,7 @@ def _staffing_stats(db: Session, society: str | list[str] | None = None) -> dict
             "gap": len(actual_ids) - contractual, "contracts": len(clients)}
 
 
-def _finance_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
+def _finance_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int | float]:
     def scoped(model):
         query = db.query(model)
         values = _scope_values(society)
@@ -236,11 +250,20 @@ def _finance_stats(db: Session, society: str | list[str] | None = None) -> dict[
         return query
 
     invoices = scoped(Invoice).all()
+    excluded = {"brouillon", "draft", "annulee", "annulée", "annule", "annulé", "cancelled", "canceled"}
+    issued = [invoice for invoice in invoices if _norm(invoice.status) not in excluded]
+    # Aggregate canonical SQL amounts, not opportunities or browser-side estimates.
+    paid_amount = scoped(Payment).with_entities(Payment.amount).all()
+    def total(values):
+        return float(sum((Decimal(str(value or 0)) for value in values), Decimal("0")).quantize(Decimal("0.01")))
     overdue_statuses = {"echue", "échue", "overdue"}
     return {
         "quotes_total": _count_legacy_items(db, "devis", society),
         "invoices_total": len(invoices),
-        "payments_total": scoped(Payment).count(),
+        "payments_total": len(paid_amount),
+        "invoices_issued": len(issued),
+        "invoiced_ttc": total(invoice.total_ttc for invoice in issued),
+        "payments_amount": total(row[0] for row in paid_amount),
         "overdue_invoices": sum(1 for invoice in invoices if _norm(invoice.status) in overdue_statuses),
         "advances_total": scoped(Advance).count(),
         "credit_notes_total": scoped(CreditNote).count(),

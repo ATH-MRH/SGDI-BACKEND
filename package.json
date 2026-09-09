@@ -3,7 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test tests_frontend/sgdi-app.test.js tests_frontend/drh.test.js tests_frontend/ops.test.js tests_frontend/paie.test.js tests_frontend/irongs.test.js tests_frontend/materiel.test.js tests_frontend/pointage.test.js tests_frontend/facturation.test.js tests_frontend/pointeur.test.js tests_frontend/recrute.test.js tests_frontend/lot-05b.test.js tests_frontend/module-registry.test.js tests_frontend/router-async.test.js tests_frontend/secretariat-module.test.js tests_frontend/module-campaign.test.js tests_frontend/shared-files.test.js tests_frontend/module-races.test.js"
+    "test": "node --test tests_frontend/commercial-finance.test.js tests_frontend/sgdi-app.test.js tests_frontend/drh.test.js tests_frontend/ops.test.js tests_frontend/paie.test.js tests_frontend/irongs.test.js tests_frontend/materiel.test.js tests_frontend/pointage.test.js tests_frontend/facturation.test.js tests_frontend/pointeur.test.js tests_frontend/recrute.test.js tests_frontend/lot-05b.test.js tests_frontend/module-registry.test.js tests_frontend/router-async.test.js tests_frontend/secretariat-module.test.js tests_frontend/module-campaign.test.js tests_frontend/shared-files.test.js tests_frontend/module-races.test.js"
   },
   "devDependencies": {
     "jsdom": "29.1.1"

@@ -10363,3 +10363,14 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .drh-movement-values th,.drh-movement-values td{padding:4px 6px;text-align:center;border-bottom:1px solid #e2e8f0}
 .drh-movement-values th:first-child{text-align:left}
 .drh-movement-values thead{color:#64748b}
+
+/* Statistiques contractuelles et financières du tableau commercial. */
+.comm-contract-finance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+.comm-contract-finance-card{display:flex;flex-direction:column;gap:12px;padding:18px 14px;border:1px solid #dbe5f0;border-top:4px solid #1765aa;border-radius:12px;background:#f8fbff;min-width:0}
+.comm-contract-finance-card.invoices{border-top-color:#0f766e;background:#f0fdfa}
+.comm-contract-finance-card.payments{border-top-color:#15803d;background:#f0fdf4}
+.comm-contract-finance-card>span{font-size:12px;font-weight:800;color:#334155}
+.comm-contract-finance-card>strong{font-size:clamp(18px,1.6vw,27px);line-height:1.3;color:#0c284b;overflow-wrap:anywhere}
+.comm-contract-finance-card>small,.comm-contract-finance-note{font-size:11px;line-height:1.5;color:#64748b}
+.comm-contract-finance-note{margin:14px 0 0}
+@media(max-width:650px){.comm-contract-finance-grid{grid-template-columns:1fr}}
