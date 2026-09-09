@@ -433,3 +433,29 @@ test('archive request deduplicates clicks and permits retry after rejection', as
   assert.equal(candidate.statut,'archive');assert.equal(f.isConnected,false);
   app.dom.window.close();
 });
+
+
+test('archive closes after PostgreSQL confirmation without waiting for counters or a global reload', async () => {
+  const app=loadSgdiApp(['openArchiveContractCandidateModal','confirmArchiveContractCandidate']);
+  const candidate={id:'c1',backendId:1,nom:'TEST',statut:'a_contractualiser'};
+  app.T().setDb({candidats:[candidate]});
+  app.window.eval(`window.messages=[];window.renderCount=0;window.pullCount=0;window.counterCount=0;
+    toast=(message)=>window.messages.push(message);
+    persistCandidateToPostgres=()=>new Promise(resolve=>window.confirmSave=resolve);
+    sgdiPullState=()=>{window.pullCount++;return new Promise(()=>{})};
+    sgdiRefreshCountersNow=()=>{window.counterCount++;return new Promise((resolve,reject)=>window.rejectCounters=reject)};
+    renderView=()=>{window.renderCount++};`);
+  app.T().openArchiveContractCandidateModal('c1');
+  const form=app.window.document.getElementById('archive-contract-candidate-form');
+  form.elements.motifArchive[0].checked=true;
+  const pending=app.T().confirmArchiveContractCandidate('c1');
+  assert.equal(form.isConnected,true);assert.equal(candidate.statut,'a_contractualiser');
+  app.window.confirmSave();await pending;
+  assert.equal(form.isConnected,false);assert.equal(candidate.statut,'archive');
+  assert.equal(app.window.renderCount,1);assert.equal(app.window.pullCount,0);assert.equal(app.window.counterCount,1);
+  assert.ok(app.window.messages.includes('Candidat archivé'));
+  app.window.rejectCounters(Error('Compteurs lents'));await Promise.resolve();await Promise.resolve();
+  assert.equal(app.window.messages.some(m=>m.includes('Archivage refusé')),false);
+  assert.equal(candidate.statut,'archive');
+  app.dom.window.close();
+});

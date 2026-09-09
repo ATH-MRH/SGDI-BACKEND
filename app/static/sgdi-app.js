@@ -9738,12 +9738,15 @@ async function confirmArchiveContractCandidate(id){
   try{
     await persistCandidateToPostgres(draft);
     Object.assign(c,draft);
-    await sgdiPullState({silent:true,render:false,force:true,light:true});
-    if(f.isConnected)closeModal();
-    toast("Candidat archivé","success");
-    renderView();
-  }catch(e){toast("Archivage refusé : "+(e.message||e),"error")}
+  }catch(e){toast("Archivage refusé : "+(e.message||e),"error");return}
   finally{delete f.dataset.saving;submit.textContent="Archiver candidat";submit.removeAttribute("aria-busy");updateArchiveContractCandidateForm(f)}
+  // PostgreSQL has confirmed the change; the mapped candidate is already current.
+  // Do not hold the modal open for a global synchronization or unrelated requests.
+  if(f.isConnected)closeModal();
+  toast("Candidat archivé","success");
+  try{renderView()}catch(e){console.warn("Actualisation après archivage",e)}
+  Promise.resolve().then(()=>sgdiRefreshCountersNow({reason:"candidate-archived"}))
+    .catch(e=>console.warn("Compteurs après archivage indisponibles",e));
 }
 
 
