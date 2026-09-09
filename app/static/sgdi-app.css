@@ -10352,3 +10352,14 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 [data-module-society-selector] .company-portal-module,
 [data-module-society-selector] .company-portal-title,
 [data-module-society-selector] .company-portal-foot{animation:none!important}
+
+/* Légende et valeurs des mouvements RH, lisibles sans distinction des couleurs. */
+.drh-movement-legend{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;font-size:12px;margin-bottom:4px}
+.drh-movement-legend span{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.drh-movement-legend i{display:inline-block;width:18px;height:4px;border-radius:2px}
+.drh-movement-legend small{color:#64748b}
+.drh-movement-values{overflow-x:auto}
+.drh-movement-values table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+.drh-movement-values th,.drh-movement-values td{padding:4px 6px;text-align:center;border-bottom:1px solid #e2e8f0}
+.drh-movement-values th:first-child{text-align:left}
+.drh-movement-values thead{color:#64748b}

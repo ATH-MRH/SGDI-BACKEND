@@ -129,13 +129,22 @@ function renderDRHDashboard(view){
   const seriesSites=months.map(m=>si.filter(s=>monthOf(s.createdAt||s.dateCreation||s.updatedAt)===m).length);
   const seriesMasse=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)&&a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire||a.salaireNet||0)||0),0));
   const chart=(seriesA,seriesB)=>{
-    const max=Math.max(1,...seriesA,...seriesB);
-    const pts=arr=>arr.map((v,i)=>`${i*60},${80-(v/max*68)}`).join(" ");
-    return `<svg class="dashboard-compact-chart" viewBox="0 0 300 100" style="width:100%;height:82px;display:block">
-      <polyline points="${pts(seriesA)}" fill="none" stroke="#047857" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      <polyline points="${pts(seriesB)}" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      ${months.map((m,i)=>`<text x="${i*60}" y="98" font-size="9" fill="#64748b">${monthLabel(m)}</text>`).join("")}
-    </svg>`;
+    const peak=Math.max(1,...seriesA,...seriesB);
+    const step=Math.max(1,Math.ceil(peak/4));
+    const max=step*4;
+    const x=i=>40+i*96;
+    const y=v=>112-v/max*88;
+    const pts=arr=>arr.map((v,i)=>`${x(i)},${y(v)}`).join(" ");
+    return `<div class="drh-movement-chart">
+      <div class="drh-movement-legend"><span><i style="background:#047857"></i>Recrutements</span><span><i style="background:#dc2626"></i>Départs</span><small>Nombre de personnes par mois</small></div>
+      <svg class="dashboard-compact-chart" viewBox="0 0 560 142" role="img" aria-label="Recrutements en vert et départs en rouge sur six mois. Valeurs détaillées dans le tableau ci-dessous.">
+        ${Array.from({length:5},(_,i)=>i*step).map(v=>`<line x1="40" x2="520" y1="${y(v)}" y2="${y(v)}" stroke="#e2e8f0"/><text x="30" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#64748b">${v}</text>`).join("")}
+        <polyline points="${pts(seriesA)}" fill="none" stroke="#047857" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="${pts(seriesB)}" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"/>
+        ${months.map((m,i)=>`<text x="${x(i)}" y="134" text-anchor="middle" font-size="11" fill="#64748b">${monthLabel(m)}</text>`).join("")}
+      </svg>
+      <div class="drh-movement-values"><table aria-label="Recrutements et départs mensuels"><thead><tr><th scope="col">Mouvement</th>${months.map(m=>`<th scope="col">${monthLabel(m)}</th>`).join("")}</tr></thead><tbody><tr><th scope="row">Recrutements</th>${seriesA.map(v=>`<td>${v}</td>`).join("")}</tr><tr><th scope="row">Départs</th>${seriesB.map(v=>`<td>${v}</td>`).join("")}</tr></tbody></table></div>
+    </div>`;
   };
   const miniCurve=(title,value,series,color,route)=>{const max=Math.max(1,...series);const pts=series.map((v,i)=>`${i*34},${56-(v/max*46)}`).join(" ");return `<a href="${route}" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit">
       <div class="flex items-start justify-between gap-2"><div><div class="text-xs text-slate-500 uppercase font-bold">${title}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></div><div class="text-xs text-slate-400">${months.length} mois</div></div>
