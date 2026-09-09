@@ -513,7 +513,7 @@ function sgdiAutoRender(){
     try{if(typeof renderSidebar==="function")renderSidebar();}catch(e){}
     try{if(typeof refreshModuleCountersRibbon==="function")refreshModuleCountersRibbon();}catch(e){}
   }else if(typeof render==="function"){
-    render();
+    render({announceStructure:false});
   }
 }
 async function sgdiAutoSync(reason){
@@ -4794,7 +4794,7 @@ function renderModuleHostSocieteSelector(cfg){
     <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
   </div>`;
 }
-function renderModuleHostPortal(cfg){
+function renderModuleHostPortal(cfg,options={}){
   sgdiApplyModuleHostSession(false);
   const userName=session?.nom||session?.username||"Utilisateur";
   const sections=(cfg.sections||[]).filter(s=>s&&s.route);
@@ -4817,9 +4817,9 @@ function renderModuleHostPortal(cfg){
     </main>
     <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
   </div>`;
-  sgdiSpeakStructure();
+  if(options.announceStructure!==false)sgdiSpeakStructure();
 }
-function renderSocietePortal(){
+function renderSocietePortal(options={}){
   const soc=session?.societe||"";
   const userName=session?.nom||session?.username||"Utilisateur";
   const logo=societePortalLogo(soc);
@@ -4851,7 +4851,7 @@ function renderSocietePortal(){
     </main>
     <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
   </div>`;
-  sgdiSpeakStructure();
+  if(options.announceStructure!==false)sgdiSpeakStructure();
 }
 
 function structureTopbarItems(){
@@ -5922,14 +5922,14 @@ document.addEventListener("click",(event)=>{
     setTimeout(()=>closeSgdiMobileSidebar(),120);
   }
 });
-function render(){
+function render(options={}){
   // Wrapper : garantit que la barre de progression du haut (#ui-progress, démarrée au
   // hashchange) est TOUJOURS terminée, même sur les pages à retour anticipé (portail,
   // select-societe, sélecteur de société...). Sans ça, ces pages laissaient la barre
   // bloquée à 76 %.
-  try{renderInternal()}finally{if(typeof uiProgressDone==="function")uiProgressDone()}
+  try{renderInternal(options)}finally{if(typeof uiProgressDone==="function")uiProgressDone()}
 }
-function renderInternal(){
+function renderInternal(options={}){
   sanitizeCandidatesInDB();
   if(!session)renderOverlayHost();
   if(!session){renderLogin();return}
@@ -5941,12 +5941,12 @@ function renderInternal(){
     const hostPath=(location.hash||"").replace(/^#\/?/,"");
     if(["","login","select-societe","societe-portal","dashboard","module-portal"].includes(hostPath)){
       if(hostCfg.skipPortal&&session.societe){location.hash="#/"+hostCfg.homeRoute;return}
-      renderModuleHostPortal(hostCfg);return
+      renderModuleHostPortal(hostCfg,options);return
     }
   }
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){
-    renderSocietePortal();return
+    renderSocietePortal(options);return
   }
   // En mode transverse, restreindre aux routes du module sélectionné
   if(session.transverse){

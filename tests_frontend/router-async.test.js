@@ -423,3 +423,36 @@ test('registre réellement absent : dashboard fonctionne, Secrétariat contrôl�
   assert.strictEqual(r.window.SGDIModules.activeModuleKey, 'secretariat');
   assert.match(r.view().textContent, /Secrétariat restauré/);
 });
+
+for (const portal of ['societe', 'module']) {
+  test(`portail ${portal} : les actualisations ne répètent pas l'annonce vocale`, () => {
+    const ctx = loadSgdiApp(['render', 'sgdiAutoRender']);
+    assert.ifError(ctx.loadError);
+    const { window, T } = ctx;
+    try {
+      T().setSession({ username: 'tester', societe: 'IRON GLOBAL SECURITE' });
+      T().setDb(new Proxy({}, { get: (obj, key) => obj[key] || (obj[key] = []) }));
+      window.history.replaceState(null, '', '#/societe-portal');
+      window.document.getElementById('view').remove();
+      window.document.getElementById('sidebar-nav').remove();
+      window.sgdiModuleHostConfig = () => portal === 'module'
+        ? { key: 'admin', title: 'Administration', sections: [] } : null;
+      window.sgdiApplyModuleHostSession = () => true;
+      window.sgdiModuleHostRequiresSociete = () => false;
+      window.societePortalModules = () => [];
+      const spoken = [];
+      window._sgdiSpeakText = text => spoken.push(text);
+      T().render();
+      assert.deepStrictEqual(spoken, ['Choisissez votre structure.']);
+      for (let i = 0; i < 3; i++) {
+        const previous = window.document.querySelector('.company-portal');
+        T().sgdiAutoRender();
+        assert.ok(window.document.querySelector('.company-portal'));
+        assert.notStrictEqual(window.document.querySelector('.company-portal'), previous);
+      }
+      assert.strictEqual(spoken.length, 1, 'trois rafraîchissements restent silencieux');
+      T().render();
+      assert.strictEqual(spoken.length, 2, 'une nouvelle entrée explicite conserve son annonce');
+    } finally { window.close(); }
+  });
+}
