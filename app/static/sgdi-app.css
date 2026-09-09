@@ -10347,3 +10347,8 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .drh-pilot-compact .drh-pilot-footer{margin:0 12px 8px;padding:6px 10px}
 @media(max-width:1200px){.drh-pilot-compact .drh-pilot-curves{grid-template-columns:repeat(3,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis .health{grid-column:span 1}}
 @media(max-width:620px){.drh-pilot-compact .drh-pilot-head{flex-wrap:wrap}.drh-pilot-compact .drh-pilot-staffing{grid-template-columns:1fr}.drh-pilot-compact .drh-pilot-kpis,.drh-pilot-compact .drh-pilot-curves{grid-template-columns:repeat(2,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis .health{grid-column:span 2}.drh-pilot-compact .drh-pilot-footer{flex-wrap:wrap}}
+
+/* Sélecteur de société : immédiatement visible, même lors des synchronisations. */
+[data-module-society-selector] .company-portal-module,
+[data-module-society-selector] .company-portal-title,
+[data-module-society-selector] .company-portal-foot{animation:none!important}

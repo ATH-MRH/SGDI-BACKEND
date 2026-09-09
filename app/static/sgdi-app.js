@@ -4770,7 +4770,8 @@ function renderModuleHostAccessDenied(cfg){
 function renderModuleHostSocieteSelector(cfg){
   const userName=session?.nom||session?.username||"Utilisateur";
   const societes=currentAllowedSocietes();
-  document.getElementById("app").innerHTML=`<div class="company-portal module-host-portal module-host-${escapeHTML(cfg.key)}">
+  const app=document.getElementById("app");
+  const markup=`<div data-module-society-selector="1" class="company-portal module-host-portal module-host-${escapeHTML(cfg.key)}">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     <div class="company-portal-context">
       <span>Module actif</span>
@@ -4788,6 +4789,11 @@ function renderModuleHostSocieteSelector(cfg){
     </main>
     ${connectedAccountHeadingHTML()}
   </div>`;
+  // La synchronisation peut rappeler render() sans changement de société/droits.
+  // Conserver les nœuds évite de rejouer leur entrée et de perdre le focus.
+  if(app.firstElementChild?.matches('[data-module-society-selector]')&&app.__societySelectorMarkup===markup)return;
+  app.innerHTML=markup;
+  app.__societySelectorMarkup=markup;
 }
 function renderModuleHostPortal(cfg,options={}){
   sgdiApplyModuleHostSession(false);

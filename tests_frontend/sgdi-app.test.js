@@ -392,3 +392,31 @@ test('PostgreSQL : les droits vides de la liste des comptes écrasent le cache l
     await c.T().sgdiLoadAuthState();assert.equal(data.users[0].societesAutorisees.length,0);assert.equal(data.users[0].structuresAutorisees.length,0);assert.equal(data.users[0].niveau,'H1');assert.equal(data.users[0].email,'test@example.com');assert.equal(data.users[0].modulesAutorises.length,0);
   }finally{c.window.close();}
 });
+
+test('sélecteur société : les synchronisations conservent les nœuds et les changements restent visibles',()=>{
+  const c=require('./load-app').loadSgdiApp(['renderModuleHostSocieteSelector']);
+  assert.ifError(c.loadError);
+  try{
+    c.T().setDb({users:[],settings:{}});
+    c.T().setSession({username:'TEST',role:'admin',niveau:'H5'});
+    const cfg={key:'commercial',title:'Portail Commercial'};
+    c.T().renderModuleHostSocieteSelector(cfg);
+    const app=c.window.document.getElementById('app'),root=app.firstElementChild;
+    const button=root.querySelector('button');button.focus();
+    for(let i=0;i<3;i++)c.T().renderModuleHostSocieteSelector(cfg);
+    assert.strictEqual(app.firstElementChild,root);
+    assert.strictEqual(c.window.document.activeElement,button);
+    c.T().setSession({username:'AUTRE',role:'admin',niveau:'H5'});
+    c.T().renderModuleHostSocieteSelector(cfg);
+    assert.notStrictEqual(app.firstElementChild,root);
+    assert.ok(app.textContent.includes('AUTRE'));
+    c.T().setSession({username:'AUTRE',permissionsFromServer:true,globalSocietyAccess:false,societesAutorisees:[]});
+    c.T().renderModuleHostSocieteSelector(cfg);
+    assert.strictEqual(app.querySelectorAll('.module-host-soc-card').length,0);
+    assert.ok(app.textContent.includes('Aucune société autorisée'));
+
+    app.innerHTML='<div>Autre page</div>';
+    c.T().renderModuleHostSocieteSelector(cfg);
+    assert.ok(app.querySelector('[data-module-society-selector]'));
+  }finally{c.window.close();}
+});
