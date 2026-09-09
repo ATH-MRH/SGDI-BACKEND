@@ -2401,7 +2401,8 @@ function sgdiCurrentRouteRoot(){
 function sgdiSqlSyncScope(options){
   const opt=options||{};
   const all={drh:true,ops:true,materiel:true,commercial:true};
-  if(opt.full||opt.blocking||isAdminSystemSession())return all;
+  // Attendre la synchronisation ne doit pas élargir les domaines demandés.
+  if(isAdminSystemSession())return all;
   const scope={drh:false,ops:false,materiel:false,commercial:false,superviseur:false};
   const cfg=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
   const route=sgdiCurrentRouteRoot();
@@ -2421,10 +2422,7 @@ function sgdiSqlSyncScope(options){
   add(cfg?.key);
   add(session?.transverse);
   add(route);
-  if(!scope.drh&&!scope.ops&&!scope.materiel&&!scope.commercial&&!scope.superviseur&&session?.societe){
-    scope.drh=true;
-    scope.ops=true;
-  }
+  // Sur le portail, attendre le choix du module avant ses appels métier.
   return scope;
 }
 async function sgdiBackgroundSqlSync(options){
@@ -2460,6 +2458,13 @@ async function sgdiBackgroundSqlSync(options){
   });
   return sgdiSqlSyncInProgress;
 }
+function sgdiShouldSyncCandidates(){
+  const role=String(session?.role||"").trim().toLowerCase();
+  const username=String(session?.username||"").trim().toUpperCase();
+  const structures=(session?.structuresAutorisees||[]).map(value=>String(value).trim().toLowerCase());
+  // Même critère que la garde recrutement côté serveur ; aucun droit n’est accordé ici.
+  return ["admin","adm","adm1","adm2","rh","drh","recruteur"].includes(role)||username.startsWith("REC")||structures.some(key=>["drh","recrutement","recruteur","gestionnaire_rh"].includes(key));
+}
 function sgdiSqlSyncTasks(options){
   const scope=sgdiSqlSyncScope(options);
   const tasks=[];
@@ -2468,7 +2473,7 @@ function sgdiSqlSyncTasks(options){
     if(!employeesTask)employeesTask=sgdiPullEmployees({silent:true});
     return employeesTask;
   };
-  if(scope.drh)tasks.push((async()=>{await Promise.all([ensureEmployees(),syncCandidatesFromPostgres()])})());
+  if(scope.drh)tasks.push((async()=>{await Promise.all([ensureEmployees(),...(sgdiShouldSyncCandidates()?[syncCandidatesFromPostgres()]:[])])})());
   if(scope.ops){
     tasks.push((async()=>{
       // Employés et sites n'ont pas de dépendance entre eux : les lancer ensemble (2 requêtes,

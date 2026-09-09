@@ -319,3 +319,38 @@ test('identifiant connecté : utilise le login exact et échappe le contenu', ()
     assert.strictEqual(ctx.T().connectedAccountHeadingHTML(),'');
   } finally {ctx.window.close();}
 });
+
+for (const scenario of [
+  {name:'maîtrise DRH',role:'dispatch',module:'drh',expected:['employees']},
+  {name:'recruteur DRH',role:'recruteur',module:'drh',expected:['employees','candidates']},
+  {name:'structure RH autorisée',role:'dispatch',module:'drh',structures:['gestionnaire_rh'],expected:['employees','candidates']},
+  {name:'portail avant sélection',role:'dispatch',module:null,expected:[]},
+  {name:'commercial',role:'dispatch',module:'commercial',expected:['clients']},
+]) {
+  test(`synchronisation bloquante : ${scenario.name} ne charge que les données pertinentes`, async () => {
+    const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
+    assert.ifError(ctx.loadError);
+    const {window,T}=ctx;
+    try {
+      T().setSession({username:'TEST',role:scenario.role,societe:'IRON',transverse:scenario.module,structuresAutorisees:scenario.structures||[]});
+      window.sgdiModuleHostConfig=()=>null;
+      window.history.replaceState(null,'',scenario.module?'#/'+scenario.module+'/dashboard':'#/societe-portal');
+      const calls=[];
+      for(const [fn,key] of Object.entries({sgdiPullEmployees:'employees',syncCandidatesFromPostgres:'candidates',syncSitesFromPostgres:'sites',syncAssignmentsFromPostgres:'assignments',syncOpsMovementsFromPostgres:'movements',syncMaterielFromPostgres:'stock',syncClientsFromPostgres:'clients'}))window[fn]=async()=>{calls.push(key);};
+      await Promise.all(T().sgdiSqlSyncTasks({blocking:true,full:true}));
+      assert.deepStrictEqual(calls,scenario.expected);
+    } finally {window.close();}
+  });
+}
+
+test('synchronisation ciblée : les erreurs réelles restent rejetées', async()=>{
+  const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
+  assert.ifError(ctx.loadError);
+  try {
+    ctx.T().setSession({username:'TEST',role:'dispatch',societe:'IRON',transverse:'commercial'});
+    ctx.window.sgdiModuleHostConfig=()=>null;
+    ctx.window.history.replaceState(null,'','#/commercial/dashboard');
+    ctx.window.syncClientsFromPostgres=async()=>{throw new Error('Serveur indisponible');};
+    await assert.rejects(Promise.all(ctx.T().sgdiSqlSyncTasks({blocking:true})),/Serveur indisponible/);
+  } finally {ctx.window.close();}
+});
