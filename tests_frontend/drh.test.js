@@ -459,3 +459,28 @@ test('archive closes after PostgreSQL confirmation without waiting for counters 
   assert.equal(candidate.statut,'archive');
   app.dom.window.close();
 });
+
+
+test('read-only recruitment layout remains identical before and after repeated async refreshes', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly','normalizeCentralPage']);
+  const t=app.T(),view=app.window.document.getElementById('view');
+  t.setSession({username:'RH',transverse:'drh',societe:'A'});
+  let resolve;
+  app.window.SGDI={rh:{candidatesPage:()=>new Promise(r=>resolve=r)}};
+  const result={items:[{id:42,last_name:'TEST',society:'A'}],total:1,page:1,pages:1};
+  const initial=t.renderDrhRecruitmentReadOnly(view);resolve(result);await initial;
+  const html=view.innerHTML;
+  assert.ok(view.querySelector('[data-drh-recruitment-readonly] > header > h1'));
+  assert.equal(view.querySelector('header table'),null);
+  for(let i=0;i<3;i++){
+    const refresh=t.renderDrhRecruitmentReadOnly(view);
+    t.normalizeCentralPage(view);
+    assert.equal(view.innerHTML,html,'pending reload must not restyle the old content');
+    resolve(result);await refresh;
+    t.normalizeCentralPage(view);
+    assert.equal(view.innerHTML,html,'resolved reload must preserve the same layout');
+    assert.equal(view.querySelector('.module-page-header,.module-page-header-actions'),null);
+    assert.equal(view.querySelectorAll('table').length,1);
+  }
+  app.dom.window.close();
+});
