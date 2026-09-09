@@ -446,7 +446,7 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     assert mark.json()["data"]["status"] == "a_contractualiser"
 
     # Recruitment archives are a presentation category, not the DRH business status.
-    for mode, present in (("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
+    for mode, present in (("", True), ("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
         page = client.get(f"/api/drh/candidates/page?mode={mode}&page_size=100", headers=auth_headers)
         assert page.status_code == 200, page.text
         assert (cid in [row["id"] for row in page.json()["items"]]) is present

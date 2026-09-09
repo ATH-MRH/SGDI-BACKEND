@@ -199,11 +199,13 @@ test('DRH recruitment displays shared unassigned candidates without edit control
   assert.equal(app.loadError, null);
   app.T().setSession({username:'RH',transverse:'drh',societe:'Selected society'});
   let request;
-  app.window.SGDI={rh:{candidatesPage:async params=>{request=params;return {items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',society:null,phone:'0770000000',data:{adresse:'<script>bad()</script>'}}],total:1,page:1,pages:1}}}};
+  app.window.SGDI={rh:{candidatesPage:async params=>{request=params;return {items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',status:'a_contractualiser',society:null,phone:'0770000000',data:{adresse:'<script>bad()</script>'}}],total:1,page:1,pages:1}}}};
   const view=app.window.document.getElementById('view');
   await app.T().renderRecrutement(view,'new');
   assert.equal(request.society,undefined);
+  assert.equal(request.mode,undefined);
   assert.match(view.textContent,/PUBLIC CANDIDATE/);
+  assert.match(view.textContent,/a_contractualiser/);
   assert.match(view.textContent,/Non affecté/);
   assert.equal(view.querySelectorAll('input,select,textarea,form,script').length,0);
   assert.match(view.textContent,/lecture seule/);
