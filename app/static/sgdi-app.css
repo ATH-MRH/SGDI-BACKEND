@@ -10434,3 +10434,37 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 #modal-host #archive-contract-candidate-form .archive-candidate-submit:hover:not(:disabled){background:#b91c1c!important;border-color:#b91c1c!important}
 #modal-host #archive-contract-candidate-form .archive-candidate-submit:disabled{background:#e2e8f0!important;border-color:#cbd5e1!important;color:#64748b!important;cursor:not-allowed;box-shadow:none!important;opacity:1!important}
 #modal-host #archive-contract-candidate-form .archive-candidate-submit:focus-visible{outline:3px solid #fca5a5;outline-offset:3px}
+
+/* Tableau de bord RH : densité accrue, sans réduire la lisibilité des données. */
+.drh-pilot-dashboard.drh-pilot-compact{border-radius:10px;padding:0!important}
+.drh-pilot-compact .drh-pilot-head{min-height:70px;padding:10px 14px!important;gap:12px}
+.drh-pilot-compact .drh-pilot-head h1{font-size:24px;margin:2px 0!important}
+.drh-pilot-compact .drh-pilot-head p{font-size:12px}
+.drh-pilot-compact .drh-pilot-head-actions{flex-wrap:wrap}
+.drh-pilot-compact .drh-pilot-staffing{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 12px 0;margin:0}
+.drh-pilot-staffing article{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 12px;background:#fff;border:1px solid #d9e3ee;border-left:4px solid #0d6ecc;border-radius:8px;padding:9px 12px;min-width:0}
+.drh-pilot-staffing span{font-size:11px;font-weight:800;letter-spacing:.04em}
+.drh-pilot-staffing strong{grid-column:2;grid-row:1/3;font-size:27px;font-variant-numeric:tabular-nums;line-height:1.1}
+.drh-pilot-staffing small{color:#61758d;font-size:11px}
+.drh-pilot-staffing .shortage{border-left-color:#dc2626;background:#fff7f7}.drh-pilot-staffing .shortage strong{color:#b91c1c}
+.drh-pilot-staffing .surplus{border-left-color:#d97706;background:#fffbeb}.drh-pilot-staffing .surplus strong{color:#92400e}
+.drh-pilot-staffing .balanced{border-left-color:#059669}.drh-pilot-staffing .balanced strong{color:#047857}
+.drh-pilot-compact .drh-pilot-kpis{gap:8px;padding:8px 12px}
+.drh-pilot-compact .drh-pilot-kpis>a,.drh-pilot-compact .drh-pilot-kpis>article{min-height:82px;padding:10px 12px}
+.drh-pilot-compact .drh-pilot-kpis strong{margin:6px 0;font-size:25px}
+.drh-pilot-compact .drh-pilot-kpis .ring{width:48px;height:48px}
+.drh-pilot-compact .drh-pilot-main{gap:8px;padding:0 12px 8px}
+.drh-pilot-compact .drh-pilot-panel>header,.drh-pilot-compact .drh-pilot-stats>header{min-height:46px;padding:8px 12px}
+.drh-pilot-compact .drh-pilot-main-chart{padding:8px 12px}
+.drh-pilot-compact .drh-pilot-main-chart .dashboard-compact-chart{height:125px!important}
+.drh-pilot-compact .drh-pilot-alerts{padding:0 12px 4px}
+.drh-pilot-compact .drh-pilot-alerts a{padding:7px 0}
+.drh-pilot-compact .drh-pilot-sites,.drh-pilot-compact .drh-pilot-work{padding:3px 12px 6px}
+.drh-pilot-compact .drh-pilot-sites a,.drh-pilot-compact .drh-pilot-work>a{padding:7px 0}
+.drh-pilot-compact .drh-pilot-stats{margin:0 12px 8px}
+.drh-pilot-compact .drh-pilot-curves{grid-template-columns:repeat(6,minmax(0,1fr))}
+.drh-pilot-compact .drh-pilot-curve{min-height:100px;padding:9px}
+.drh-pilot-compact .drh-pilot-curve svg{height:42px;margin-top:4px}
+.drh-pilot-compact .drh-pilot-footer{margin:0 12px 8px;padding:6px 10px}
+@media(max-width:1200px){.drh-pilot-compact .drh-pilot-curves{grid-template-columns:repeat(3,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis .health{grid-column:span 1}}
+@media(max-width:620px){.drh-pilot-compact .drh-pilot-head{flex-wrap:wrap}.drh-pilot-compact .drh-pilot-staffing{grid-template-columns:1fr}.drh-pilot-compact .drh-pilot-kpis,.drh-pilot-compact .drh-pilot-curves{grid-template-columns:repeat(2,minmax(0,1fr))}.drh-pilot-compact .drh-pilot-kpis .health{grid-column:span 2}.drh-pilot-compact .drh-pilot-footer{flex-wrap:wrap}}

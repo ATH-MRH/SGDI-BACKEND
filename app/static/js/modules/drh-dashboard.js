@@ -44,6 +44,14 @@ function drhSiteBucketsFromAgents(agents,sites=db.sites||[]){
   return [...buckets.values()].sort((a,b)=>b.actif-a.actif||a.label.localeCompare(b.label));
 }
 
+// Aucun repli sur les collections locales : ces compteurs sont calculés ensemble
+// par PostgreSQL, sur les contrats Commercial et les affectations OPS/DRH.
+function drhStaffingTotals(){
+  const counters=sgdiBackendModuleCounters("staffing",drhActiveSocieteFilter());
+  if(!counters||![counters.contract,counters.actual,counters.gap].every(Number.isFinite))return null;
+  return counters;
+}
+
 function renderDRHDashboard(view){
   const selSoc=drhActiveSocieteFilter();
   sgdiRefreshDrhStats(selSoc).catch(()=>null);
@@ -139,6 +147,7 @@ function renderDRHDashboard(view){
     </a>`};
   const showPayrollCounters=typeof isAdminSystemSession==="function"&&isAdminSystemSession();
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
+  const staffing=drhStaffingTotals();
   const dashboardHealth=Math.max(0,Math.min(100,Math.round((dashActifs/Math.max(dashEmployees,1))*100)));
   const siteBuckets=drhSiteBucketsFromAgents(activeAg,si).slice(0,4);
   const maxSite=Math.max(1,...siteBuckets.map(x=>x.total));
@@ -149,9 +158,10 @@ function renderDRHDashboard(view){
     congesAttente?{n:3,title:"Valider les demandes de congé",sub:`${congesAttente} demande(s) en attente`,tag:"À TRAITER",route:"#/drh/conges"}:null,
     socialAlertes?{n:4,title:"Compléter les dossiers sociaux",sub:`${socialAlertes} dossier(s) CNAS / Chifa`,tag:"À VÉRIFIER",route:"#/effectif/recap"}:null
   ].filter(Boolean);
-  view.innerHTML=`<div class="drh-pilot-dashboard">
+  view.innerHTML=`<div class="drh-pilot-dashboard drh-pilot-compact">
     <header class="drh-pilot-head"><div><span>CENTRE DE PILOTAGE</span><h1>Tableau de bord RH</h1><p>${escapeHTML(selSoc?drhSocieteLabel(selSoc):"Toutes sociétés autorisées")} · Données opérationnelles en temps réel</p></div><div class="drh-pilot-head-actions"><a href="#/drh/stats">Rapport détaillé</a><button onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">↻ Synchroniser</button><button class="primary" onclick="navigate('effectif/recap')">+ Action RH</button></div></header>
     ${drhTabs("dashboard")}
+    <section class="drh-pilot-staffing" aria-label="Comparaison des effectifs"><article data-staffing="contract"><span>EFF CONTRAT</span><strong>${staffing?.contract??"—"}</strong><small>Contrats Commercial en vigueur</small></article><article data-staffing="actual"><span>EFF RÉEL</span><strong>${staffing?.actual??"—"}</strong><small>Salariés DRH affectés par OPS</small></article><article data-staffing="gap" class="${!staffing?"":staffing.gap<0?"shortage":staffing.gap>0?"surplus":"balanced"}"><span>ÉCART</span><strong>${staffing?(staffing.gap>0?"+":"")+staffing.gap:"—"}</strong><small>Réel − contrat · ${!staffing?"Données serveur en attente":staffing.gap<0?"Déficit":staffing.gap>0?"Excédent":"Équilibre"}</small></article></section>
     <section class="drh-pilot-kpis"><article class="health"><div><span>Santé des effectifs</span><strong>${dashboardHealth}%</strong><small>${dashActifs} opérationnel(s) sur ${dashEmployees}</small></div><div class="ring" style="--health:${dashboardHealth}"><b>${dashboardHealth}</b></div></article><a href="#/effectif/actifs"><span>Effectif actif</span><strong>${dashActifs}</strong><small>Population opérationnelle</small></a><a href="#/pointage/feuille"><span>Absences aujourd'hui</span><strong>${dashAbsents+dashConge+dashMaladie}</strong><small>${dashConge} congé · ${dashMaladie} maladie · ${dashAbsents} absent</small></a><a href="#/contrats/situation"><span>Alertes contrat</span><strong>${contratsAlerte.length}</strong><small>${contratsFin30.length} échéance(s) sous 30 jours</small></a><a href="#/demandes_personnel/dashboard"><span>Demandes à traiter</span><strong>${demandesPersonnel+congesAttente}</strong><small>Priorité de traitement DRH</small></a></section>
     <section class="drh-pilot-main"><article class="drh-pilot-panel"><header><div><h2>Évolution des effectifs</h2><p>Recrutements et départs sur les six derniers mois</p></div><a href="#/drh/stats">Voir le rapport →</a></header><div class="drh-pilot-main-chart">${chart(recrutements,departs)}</div></article><article class="drh-pilot-panel"><header><div><h2>Alertes prioritaires</h2><p>Situations nécessitant une décision</p></div><a href="#/agenda/dashboard">Tout afficher →</a></header><div class="drh-pilot-alerts"><a href="#/contrats/situation" class="danger"><i></i><span><b>${contratsAlerte.length} contrat(s) à contrôler</b><small>${contratsExpires.length} expiré(s), ${contratsFin30.length} sous 30 jours</small></span><em>Ouvrir</em></a><a href="#/effectif/suspension" class="warning"><i></i><span><b>${dashSusp} employé(s) suspendu(s)</b><small>Suivi administratif requis</small></span><em>Ouvrir</em></a><a href="#/demandes_personnel/dashboard"><i></i><span><b>${demandesPersonnel+congesAttente} demande(s) en attente</b><small>Personnel et congés</small></span><em>Ouvrir</em></a><a href="#/incidents/site" class="success"><i></i><span><b>${dashIncidents} incident(s) ouvert(s)</b><small>${dashIncidents?"Traitement opérationnel requis":"Situation maîtrisée"}</small></span><em>Détail</em></a></div></article></section>
     <section class="drh-pilot-main equal"><article class="drh-pilot-panel"><header><div><h2>Répartition opérationnelle par site</h2><p>Effectifs actifs actuellement affectés</p></div><a href="#/sites/actifs">Voir les sites →</a></header><div class="drh-pilot-sites">${siteBuckets.length?siteBuckets.map(x=>`<a href="#/sites/actifs"><span>${escapeHTML(x.label)}</span><i><em style="width:${Math.round(x.total/maxSite*100)}%"></em></i><b>${x.total}</b></a>`).join(""):`<div class="p-5 text-slate-500">Aucune affectation active.</div>`}</div></article><article class="drh-pilot-panel"><header><div><h2>File de travail DRH</h2><p>Actions classées automatiquement par priorité</p></div><a href="#/agenda/dashboard">Agenda RH →</a></header><div class="drh-pilot-work">${workQueue.length?workQueue.map(x=>`<a href="${x.route}"><i>${x.n}</i><span><b>${escapeHTML(x.title)}</b><small>${escapeHTML(x.sub)}</small></span><em>${escapeHTML(x.tag)}</em></a>`).join(""):`<div class="p-5 text-emerald-700">Aucune action prioritaire.</div>`}</div></article></section>

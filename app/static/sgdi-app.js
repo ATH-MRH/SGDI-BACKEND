@@ -7806,7 +7806,7 @@ function normalizePageHeader(view){
   // leurs boutons vers le style d'action jaune admin (repère déjà vu sur .ops-dash-hero,
   // dont le dégradé disparaissait entièrement à cause de cette règle).
   // This page owns its header; its table and pagination are not header actions.
-  if(first.matches('[data-drh-recruitment-readonly]'))return;
+  if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard'))return;
   if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero')||first.classList.contains('drh-leave-page'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');

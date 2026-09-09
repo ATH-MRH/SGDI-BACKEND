@@ -484,3 +484,32 @@ test('read-only recruitment layout remains identical before and after repeated a
   }
   app.dom.window.close();
 });
+
+test('dashboard RH: attend les compteurs serveur sans inventer de zéro local', () => {
+  const app=loadSgdiApp(['drhStaffingTotals']);
+  app.T().setSession({societe:'IRON GLOBAL SOLUTION'});
+  app.T().setDb({agents:[],sites:[]});
+  assert.strictEqual(app.T().drhStaffingTotals(),null);
+  app.window.SGDI_SIDEBAR_STATS={scope:{active_society:'IRON GLOBAL SOLUTION'},generated_at:new Date().toISOString(),staffing:{contract:100,actual:92,gap:-8}};
+  assert.strictEqual(app.T().drhStaffingTotals().gap,-8);
+  app.T().setSession({societe:'IRON GLOBAL SÉCURITÉ'});
+  assert.strictEqual(app.T().drhStaffingTotals(),null);
+
+  app.window.close();
+});
+
+test('dashboard RH: le normaliseur préserve les compteurs et la structure compacte', () => {
+  const app=loadSgdiApp(['renderDRHDashboard','normalizePageHeader']);
+  const t=app.T();
+  t.setSession({societe:'IRON GLOBAL SOLUTION',username:'TEST'});
+  t.setDb({agents:[],sites:[],conges:[],incidents:[],demandesPersonnel:[],users:[],contrats:[],societes:[]});
+  const view=app.window.document.getElementById('view');
+  t.renderDRHDashboard(view);
+  const before=view.innerHTML;
+  t.normalizePageHeader(view);
+  t.normalizePageHeader(view);
+  assert.strictEqual(view.innerHTML,before);
+  assert.strictEqual(view.querySelectorAll('.drh-pilot-staffing article').length,3);
+  assert.strictEqual(view.querySelector('[data-staffing="gap"] strong').textContent,'—');
+  app.window.close();
+});

@@ -149,6 +149,53 @@ def _commercial_stats(db: Session, society: str | list[str] | None = None) -> di
     }
 
 
+def _staffing_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
+    """Commercial contracts versus distinct DRH employees assigned by OPS.
+
+    Read-only: never infer client identity from a free-text site/client name.
+    The caller supplies the user's effective society scope.
+    """
+    from app.modules.drh.models import Employee
+    from app.modules.ops.models import Assignment, Site
+    from app.modules.erp.service import EXIT_STATUSES, _status_key
+
+    today = date.today()
+    values = _scope_values(society)
+    query = db.query(Client)
+    if values is not None:
+        query = query.filter(Client.society.in_(values))
+    clients = [c for c in query.all()
+               if _status_key(c.status) in {"actif", "active"}
+               and c.contract_start and c.contract_start <= today
+               and (c.contract_end is None or c.contract_end >= today)]
+    client_ids = {c.id for c in clients}
+    contractual = sum(max(0, _client_effectif_count(c.data or {})) for c in clients)
+    actual_ids: set[int] = set()
+    if client_ids:
+        rows = (db.query(Employee.id, Employee.status, Employee.society, Site.equipment_plan, Client.society)
+                .select_from(Employee)
+                .join(Assignment, Assignment.employee_id == Employee.id)
+                .join(Site, Site.id == Assignment.site_id)
+                .join(Client, Client.id == Site.client_id)
+                .filter(Client.id.in_(client_ids), Site.active == 1, Assignment.active == 1,
+                        Assignment.start_date <= today,
+                        or_(Assignment.end_date.is_(None), Assignment.end_date >= today)))
+        for employee_id, employee_status, employee_society, equipment_plan, client_society in rows.all():
+            # Both ends of the assignment must belong to the same society.
+            if society_key(employee_society) != society_key(client_society):
+                continue
+            plan = equipment_plan if isinstance(equipment_plan, dict) else {}
+            legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
+            site_society = plan.get("societe") or plan.get("society") or legacy.get("societe") or legacy.get("society")
+            if site_society and society_key(site_society) != society_key(client_society):
+                continue
+            if _status_key(employee_status) in EXIT_STATUSES:
+                continue
+            actual_ids.add(employee_id)
+    return {"contract": contractual, "actual": len(actual_ids),
+            "gap": len(actual_ids) - contractual, "contracts": len(clients)}
+
+
 def _finance_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
     def scoped(model):
         query = db.query(model)
@@ -358,6 +405,7 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     erp = _apply_legacy_fallbacks(db, build_erp_counters(db, user, society), effective_scope)
     erp.setdefault("ops", {})["missions_current"] = _count_legacy_items(db, "missions", effective_scope)
     commercial = _commercial_stats(db, effective_scope)
+    staffing = _staffing_stats(db, effective_scope)
     finance = _finance_stats(db, effective_scope)
     secretariat = _secretariat_stats(db, effective_scope)
     from app.modules.drh.models import Candidate
@@ -386,6 +434,7 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
             "active_society": (society or "").strip(),
         },
         "erp": erp,
+        "staffing": staffing,
         "drh": {
             "recrutement": {
                 "total": erp["drh"]["candidates_total"],
