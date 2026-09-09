@@ -149,7 +149,9 @@ def test_convocation_email_copies_administration(monkeypatch):
     assert "<strong>HEURE : 09:30</strong>" in html
     assert "<strong>LIEU : SIÈGE</strong>" in html
     assert "<strong>OBJET : ENTRETIEN</strong>" in html
-    assert 'lang="ar" dir="rtl"' in html
+    assert 'lang="ar" dir="rtl" align="right"' in html
+    assert '<table role="presentation" width="100%"' in html
+    assert html.count('<p align="right" dir="rtl"') == 5
     assert "مقابلة" in html
     assert html.count("0770 112 034") == 2
 

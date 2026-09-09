@@ -50,12 +50,16 @@ def send_candidate_convocation_email(
     )
     french_details = "<br>".join(f"<strong>{label} : {escape(value)}</strong>" for label, value in french_fields)
     arabic_details = "<br>".join(f'<strong>{label}: <bdi dir="auto">{escape(value)}</bdi></strong>' for label, value in arabic_fields)
+    rtl_paragraph = '<p align="right" dir="rtl" style="text-align:right;direction:rtl;margin:16px 0">'
     message.add_alternative(
         '<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;line-height:1.7">'
         f'<section lang="fr" dir="ltr"><p>BONJOUR {escape(candidate_name.upper())},</p><p>{french_intro}</p>'
         f'<p>{french_details}</p><p>{french_documents}</p><p>{french_contact} <strong style="white-space:nowrap">{phone}</strong>.</p></section><hr>'
-        f'<section lang="ar" dir="rtl" style="text-align:right"><p>مرحبًا <bdi>{escape(candidate_name)}</bdi>،</p><p>{arabic_intro}</p>'
-        f'<p>{arabic_details}</p><p>{arabic_documents}</p><p>{arabic_contact} <strong dir="ltr" style="display:inline-block;white-space:nowrap">{phone}</strong>.</p></section>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse"><tr>'
+        '<td lang="ar" dir="rtl" align="right" style="width:100%;text-align:right;direction:rtl;font-family:Arial,sans-serif;line-height:1.7">'
+        f'{rtl_paragraph}مرحبًا <span dir="ltr" style="unicode-bidi:embed">{escape(candidate_name)}</span>،</p>{rtl_paragraph}{arabic_intro}</p>'
+        f'{rtl_paragraph}{arabic_details}</p>{rtl_paragraph}{arabic_documents}</p>{rtl_paragraph}{arabic_contact} <strong dir="ltr" style="display:inline-block;direction:ltr;unicode-bidi:embed;white-space:nowrap">{phone}</strong>.</p>'
+        '</td></tr></table>'
         f'<p dir="ltr">SERVICE RECRUTEMENT IRONGS / مصلحة التوظيف<br>{escape(settings.convocation_from_email)}</p></body></html>',
         subtype="html",
     )
