@@ -444,9 +444,8 @@ async function ptAutoSaisieLiveRefresh(){
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
     _ptAutoSaisieError="";
-    const scrollY=window.scrollY;
-    renderView();
-    requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+    if(String(location.hash||"")!==route)return;
+    sgdiRefreshViewSafely();
   }catch(e){
     _ptAutoSaisieError=e?.message||"Impossible de charger les pointages DRH.";
     const box=document.getElementById("pt-auto-sync-error");

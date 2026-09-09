@@ -47,3 +47,22 @@ test("recrutement: transmet le candidat à la DRH sans créer employé ni contra
   assert.doesNotMatch(source, /onclick="openContractForCandidate\(\$\{item\.id\}\)">Recruter/);
   assert.doesNotMatch(source, /\{key:"contrat",label:"Contrat"\}/);
 });
+
+
+test("candidate reload retains the list and ignores an older response", async () => {
+  const vm=require('node:vm');
+  const wrap={dataset:{loadedTab:'new'},innerHTML:'Liste existante'};
+  const pending=[];
+  const state={page:1,items:[]};
+  const ctx={tabState:{new:state},activeTab:'new',PAGE_SIZE:25,URLSearchParams,
+    document:{getElementById:()=>wrap},window:{scrollX:0,scrollY:120},
+    apiFetch:()=>new Promise(resolve=>pending.push(resolve)),
+    renderTabs(){},renderCounters(){},renderPagination(){},renderList(){wrap.innerHTML=state.items[0].name},esc:String};
+  vm.createContext(ctx);
+  vm.runInContext(source.slice(source.indexOf('async function loadTab(tab){'),source.indexOf('function matchesSearch(')),ctx);
+  const a=ctx.loadTab('new'),b=ctx.loadTab('new');
+  assert.equal(wrap.innerHTML,'Liste existante');
+  pending[1]({items:[{name:'Nouveau'}],total:1});await b;
+  pending[0]({items:[{name:'Obsolète'}],total:1});await a;
+  assert.equal(wrap.innerHTML,'Nouveau');
+});

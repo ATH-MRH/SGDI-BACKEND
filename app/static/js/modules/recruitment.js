@@ -553,14 +553,16 @@ function recrutementStatsCardsHTML(mode,socFilter,items,total,pageCount,loading)
 async function renderDrhRecruitmentReadOnly(view,mode="new"){
   const requestSeq=++sgdiRecruitmentRequestSeq;
   const hash=location.hash;
+  const society=drhActiveSocieteFilter();
+  const account=session?.username;
+  sgdiInstallStableView(view);
   const generation=sgdiViewRenderGeneration;
-  const current=()=>requestSeq===sgdiRecruitmentRequestSeq&&location.hash===hash&&generation===sgdiViewRenderGeneration&&isDrhModuleContext()&&view.isConnected;
+  const current=()=>requestSeq===sgdiRecruitmentRequestSeq&&location.hash===hash&&generation===sgdiViewRenderGeneration&&isDrhModuleContext()&&session?.username===account&&drhActiveSocieteFilter()===society&&view.isConnected;
+  if(!society){view.innerHTML='<div class="card p-6">Choisissez une société pour consulter ses candidatures.</div>';return}
   view.innerHTML='<div class="card p-6">Chargement des candidatures…</div>';
   try{
-    // The same shared candidate pool as recrute.irongs.com includes applications
-    // awaiting a recruitment society. Do not filter it by the current DRH society.
-    // Keep pending contracts visible, but exclude candidates already hired.
-    const result=await SGDI.rh.candidatesPage({mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
+    // Filter on the server before pagination; counters use the same active scope.
+    const result=await SGDI.rh.candidatesPage({society,mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
     if(!current())return;
     const rows=(result.items||[]).map(c=>{
       const info=[["Email",c.email],["Téléphone",c.phone],["Adresse",c.address||c.data?.adresse],["Date de naissance",c.birth_date||c.data?.dateNaissance],["Lieu de naissance",c.birth_place||c.data?.lieuNaissance],["Expérience",c.data?.experience],["Commentaire",c.data?.commentaire]];

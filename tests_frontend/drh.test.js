@@ -194,19 +194,19 @@ test('cycle de vie candidat: archivé / recruté / actif s\'excluent correctemen
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });
 
-test('DRH recruitment displays shared unassigned candidates without edit controls', async () => {
+test('DRH recruitment requests the active society without edit controls', async () => {
   const app = loadSgdiApp(['renderRecrutement', 'renderCandidatForm']);
   assert.equal(app.loadError, null);
   app.T().setSession({username:'RH',transverse:'drh',societe:'Selected society'});
   let request;
-  app.window.SGDI={rh:{candidatesPage:async params=>{request=params;return {items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',status:'a_contractualiser',society:null,phone:'0770000000',data:{adresse:'<script>bad()</script>'}}],total:1,page:1,pages:1}}}};
+  app.window.SGDI={rh:{candidatesPage:async params=>{request=params;return {items:[{id:42,last_name:'PUBLIC',first_name:'CANDIDATE',status:'a_contractualiser',society:'Selected society',phone:'0770000000',data:{adresse:'<script>bad()</script>'}}],total:1,page:1,pages:1}}}};
   const view=app.window.document.getElementById('view');
   await app.T().renderRecrutement(view,'new');
-  assert.equal(request.society,undefined);
+  assert.equal(request.society,'Selected society');
   assert.equal(request.mode,"drh_pending");
   assert.match(view.textContent,/PUBLIC CANDIDATE/);
   assert.match(view.textContent,/a_contractualiser/);
-  assert.match(view.textContent,/Non affecté/);
+  assert.match(view.textContent,/Selected society/);
   assert.equal(view.querySelectorAll('input,select,textarea,form,script').length,0);
   assert.match(view.textContent,/lecture seule/);
   await app.T().renderCandidatForm(view,null);
@@ -216,7 +216,7 @@ test('DRH recruitment displays shared unassigned candidates without edit control
 
 test('DRH recruitment ignores response after navigation and never restores cached candidates on error', async () => {
   const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
-  app.T().setSession({username:'RH',transverse:'drh'});
+  app.T().setSession({username:'RH',transverse:'drh',societe:'A'});
   const view=app.window.document.getElementById('view');
   let resolve;
   app.window.SGDI={rh:{candidatesPage:()=>new Promise(r=>{resolve=r})}};
@@ -224,7 +224,7 @@ test('DRH recruitment ignores response after navigation and never restores cache
   app.T().setSession({username:'RH',transverse:'ops'});view.innerHTML='Destination';
   resolve({items:[{last_name:'STALE'}],total:1});await pending;
   assert.equal(view.textContent,'Destination');
-  app.T().setSession({username:'RH',transverse:'drh'});
+  app.T().setSession({username:'RH',transverse:'drh',societe:'A'});
   app.window.SGDI.rh.candidatesPage=async()=>{throw Error('Refus serveur')};
   await app.T().renderDrhRecruitmentReadOnly(view);
   assert.match(view.textContent,/Refus serveur/);assert.doesNotMatch(view.textContent,/STALE/);
@@ -312,5 +312,60 @@ test('ribbon percentages require an explicit meaningful denominator', () => {
   const app=loadSgdiApp(['moduleCounterItemHTML']);
   assert.doesNotMatch(app.T().moduleCounterItemHTML({label:'FACTURES',value:4},12),/33%/);
   assert.match(app.T().moduleCounterItemHTML({label:'ACTIFS',value:4,pctBase:8},99),/50%/);
+  app.dom.window.close();
+});
+
+
+test('DRH society switch rejects the old response and keeps pagination scoped', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
+  const t=app.T(),view=app.window.document.getElementById('view');
+  const requests=[];
+  app.window.SGDI={rh:{candidatesPage:params=>new Promise(resolve=>requests.push({params,resolve}))}};
+  t.setSession({username:'RH',transverse:'drh',societe:'A'});
+  app.window.sessionStorage.setItem('recrutementPage:new:A','3');
+  const first=t.renderDrhRecruitmentReadOnly(view);
+  t.setSession({username:'RH',transverse:'drh',societe:'B'});
+  const second=t.renderDrhRecruitmentReadOnly(view);
+  assert.equal(requests[0].params.society,'A');assert.equal(requests[0].params.page,3);
+  assert.equal(requests[1].params.society,'B');assert.equal(requests[1].params.page,1);
+  requests[1].resolve({items:[{last_name:'CURRENT',society:'B'}],total:1});await second;
+  requests[0].resolve({items:[{last_name:'STALE',society:'A'}],total:1});await first;
+  assert.match(view.textContent,/CURRENT/);assert.doesNotMatch(view.textContent,/STALE/);
+  app.dom.window.close();
+});
+
+test('stable view keeps content during loading and restores focus, details and scroll after async replacement', async () => {
+  const app=loadSgdiApp(['sgdiInstallStableView']);
+  const view=app.window.document.getElementById('view');
+  app.T().setSession({username:'RH',transverse:'drh',societe:'A'});
+  app.T().sgdiInstallStableView(view);
+  view.innerHTML='<input id="search" value="abc"><details><summary>Dossier</summary>Info</details><div id="list">Ancien</div>';
+  const input=view.querySelector('input');input.focus();input.setSelectionRange(1,2);
+  view.querySelector('details').open=true;view.scrollTop=180;view.querySelector('#list').scrollTop=40;
+  view.innerHTML='<div>Chargement des données…</div>';
+  assert.equal(view.querySelector('input'),input);assert.equal(view.scrollTop,180);
+  await Promise.resolve();
+  view.innerHTML='<input id="search" value="abc"><details><summary>Dossier</summary>Info</details><div id="list">Nouveau</div>';
+  assert.equal(app.window.document.activeElement.id,'search');assert.equal(app.window.document.activeElement.selectionStart,1);
+  assert.equal(view.scrollTop,180);assert.equal(view.querySelector('#list').scrollTop,40);assert.equal(view.querySelector('details').open,true);
+  app.T().setSession({username:'RH',transverse:'drh',societe:'B'});
+  view.innerHTML='<div>Chargement des données…</div>';
+  assert.doesNotMatch(view.textContent,/Nouveau/);
+  app.dom.window.close();
+});
+
+
+test('automatic refresh does not replace a dirty form or an active select', () => {
+  const app=loadSgdiApp(['sgdiRefreshViewSafely','sgdiAutoRender']);
+  const view=app.window.document.getElementById('view');
+  app.T().setViewMode(true);
+  view.innerHTML='<form data-dirty="1"><input value="Travail non enregistré"></form>';
+  const form=view.firstElementChild;
+  app.T().sgdiRefreshViewSafely();app.T().sgdiAutoRender();
+  assert.equal(view.firstElementChild,form);
+  view.innerHTML='<select><option>Choix en cours</option></select>';
+  const select=view.firstElementChild;select.focus();
+  app.T().sgdiRefreshViewSafely();app.T().sgdiAutoRender();
+  assert.equal(view.firstElementChild,select);
   app.dom.window.close();
 });

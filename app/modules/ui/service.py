@@ -364,16 +364,17 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     from app.modules.drh.service import _candidate_is_recruited, _candidate_is_transmitted
     from app.modules.drh.routes import _ensure_recruitment_access
     from fastapi import HTTPException
-    recruitment_pending = None
-    try:
-        _ensure_recruitment_access(user)
-        recruitment_pending = sum(not _candidate_is_recruited(row) for row in db.query(Candidate).all())
-    except HTTPException:
-        pass
     candidate_query = db.query(Candidate)
     if effective_scope is not None:
         candidate_query = candidate_query.filter(Candidate.society.in_(effective_scope))
-    contracts_pending = sum(_candidate_is_transmitted(row) and not _candidate_is_recruited(row) for row in candidate_query.all())
+    scoped_candidates = candidate_query.all()
+    recruitment_pending = None
+    try:
+        _ensure_recruitment_access(user)
+        recruitment_pending = sum(not _candidate_is_recruited(row) for row in scoped_candidates)
+    except HTTPException:
+        pass
+    contracts_pending = sum(_candidate_is_transmitted(row) and not _candidate_is_recruited(row) for row in scoped_candidates)
 
 
     return {

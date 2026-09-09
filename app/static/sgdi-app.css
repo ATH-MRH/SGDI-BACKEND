@@ -10408,3 +10408,6 @@ body:has(.dhl-login-page),html:has(.dhl-login-page),body:has(.dhl-login-page) #a
 .company-portal:has(>.sgdi-account-heading)>.company-portal-context{top:60px!important}
 .company-portal:has(>.sgdi-account-heading)>.company-portal-main{padding-top:112px!important}
 @media print{.sgdi-account-heading{display:none!important}}
+
+/* Réserver la largeur de défilement lors des chargements et rafraîchissements. */
+html,#view,#sidebar-nav{scrollbar-gutter:stable}

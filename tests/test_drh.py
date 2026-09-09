@@ -988,3 +988,18 @@ def test_repair_employee_codes_renumbers_alphabetically(client, auth_headers, db
 
     # Idempotence
     assert repair_employee_codes_if_needed(db) == 0
+
+
+def test_drh_pending_candidates_and_counter_use_active_society(client, auth_headers):
+    society = "IRON GLOBAL SOLUTION"
+    own = _cand(client, auth_headers, first="Scoped", last="Own", society=society)
+    other = _cand(client, auth_headers, first="Scoped", last="Other", society="IRON GLOBAL SÉCURITÉ")
+    unassigned = _cand(client, auth_headers, first="Scoped", last="Unassigned", society="")
+    page = client.get("/api/drh/candidates/page", headers=auth_headers,
+                      params={"mode": "drh_pending", "society": society, "page_size": 1})
+    assert page.status_code == 200, page.text
+    assert [row["id"] for row in page.json()["items"]] == [own["id"]]
+    assert page.json()["total"] == 1
+    stats = client.get("/api/ui/sidebar-stats", headers=auth_headers, params={"society": society})
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["drh"]["recrutement"]["shared_pending"] == page.json()["total"]

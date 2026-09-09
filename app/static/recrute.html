@@ -569,7 +569,7 @@ function dashboardOpenCandidate(id,action="open"){
 }
 async function renderRecruitDashboard(refresh=false){
   const host=document.getElementById("dashboardSection");
-  host.innerHTML='<div class="empty">Chargement du tableau de bord…</div>';
+  if(!host.hasChildNodes())host.innerHTML='<div class="empty">Chargement du tableau de bord…</div>';
   if(refresh){
     await Promise.all(["new","reserve","recruited","archive"].map(async mode=>{
       try{
@@ -616,7 +616,7 @@ async function renderRecruitDashboard(refresh=false){
 }
 async function renderRecruitInterviews(refresh=false){
   const host=document.getElementById("interviewsSection");
-  host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
+  if(!host.hasChildNodes())host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
   if(refresh){
     try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
   }
@@ -763,7 +763,9 @@ function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilt
 function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.societyFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";document.getElementById("candidateSocietyFilter").value="";loadTab(activeTab)}
 async function loadTab(tab){
   const state=tabState[tab];
-  if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
+  const request=state.request=(state.request||0)+1;
+  const wrap=document.getElementById("listWrap");
+  if(tab===activeTab&&wrap.dataset.loadedTab!==tab)wrap.innerHTML='<div class="empty">Chargement…</div>';
   try{
     const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:String(PAGE_SIZE)});
     if(state.societyFilter)params.set("society",state.societyFilter);
@@ -772,14 +774,19 @@ async function loadTab(tab){
     if(state.avisFilter)params.set("recruiter_opinion",state.avisFilter);
     if(state.sortKey){params.set("sort_key",state.sortKey);params.set("sort_direction",state.sortDirection)}
     const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
+    if(request!==state.request)return;
     state.items=result.items||[];
     state.total=result.total||0;
     state.pages=result.pages||1;
     state.page=result.page||1;
     renderTabs();
-    if(tab===activeTab){renderCounters();renderList();renderPagination()}
+    if(tab===activeTab){
+      const x=window.scrollX,y=window.scrollY;
+      renderCounters();renderList();renderPagination();wrap.dataset.loadedTab=tab;
+      if(window.scrollX!==x||window.scrollY!==y)window.scrollTo(x,y);
+    }
   }catch(error){
-    if(tab===activeTab)document.getElementById("listWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
+    if(request===state.request&&tab===activeTab)document.getElementById("listWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
   }
 }
 function matchesSearch(item,q){
@@ -1262,7 +1269,7 @@ let contractReadyCandidates=[];
 async function loadContractReadyCandidates(){
   const wrap=document.getElementById("contractReadyWrap");
   if(!wrap)return;
-  wrap.innerHTML='<div class="empty">Chargement…</div>';
+  if(!wrap.hasChildNodes())wrap.innerHTML='<div class="empty">Chargement…</div>';
   try{
     const params=new URLSearchParams({status:"a_contractualiser"});if(activeSociety)params.set("society",activeSociety);
     const result=await apiFetch("/api/drh/candidates?"+params.toString());contractReadyCandidates=Array.isArray(result)?result:[];renderContractReadyCandidates();

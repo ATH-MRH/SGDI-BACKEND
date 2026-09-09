@@ -482,7 +482,7 @@ function sgdiEditingBlocksRender(){
   const el=document.activeElement;
   if(el){
     const tag=String(el.tagName||"").toUpperCase();
-    if(tag==="INPUT"||tag==="TEXTAREA"||el.closest?.("[contenteditable='true']"))return true;
+    if(tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||el.closest?.("[contenteditable='true']"))return true;
   }
   if(document.querySelector("form[data-dirty='1'],[data-dirty='1']"))return true;
   return false;
@@ -493,7 +493,12 @@ function sgdiAutoSyncSafe(){return !sgdiEditingBlocksRender();}
 // (sgdiNextScrollRestore, consommé et nettoyé par renderView) — évite tout saut en haut de page.
 // NB : ne PAS redéfinir sgdiCaptureScroll/sgdiRestoreScroll ici, ces noms existent déjà plus bas
 // (sgdiScrollSnapshot/sgdiRestoreScroll) et une redéfinition les écraserait.
+function sgdiRefreshViewSafely(){
+  if(sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;return}
+  renderView();
+}
 function sgdiAutoRender(){
+  if(document.getElementById("view")&&sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;return}
   sgdiPendingAutoRender=false;
   sgdiPendingAutoRenderReason="";
   sgdiClearRefreshAvailable();
@@ -1642,8 +1647,7 @@ function sgdiEnsureEmployeesForDisplay(options){
     window.__sgdiEnsuredAt[_ensureKey]=Date.now();
     const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
-      if(typeof renderView==="function")renderView();
-      else if(typeof render==="function")render();
+      if(normalizeSocieteName(sgdiActiveStatsSociety())===scopeNorm)sgdiRefreshViewSafely();
     }
     return rows;
   }).catch(e=>{
@@ -1741,8 +1745,8 @@ async function sgdiRefreshDrhStats(society,options){
 window.sgdiRefreshDrhStats=sgdiRefreshDrhStats;
 window.addEventListener("sgdi:drh-stats",()=>{
   const hash=String(location.hash||"");
-  if((hash==="#/drh"||hash.startsWith("#/drh/dashboard")||hash==="#/dashboard")&&!sgdiEditingBlocksRender()){
-    try{renderView()}catch(_e){}
+  if((hash==="#/drh"||hash.startsWith("#/drh/dashboard")||hash==="#/dashboard")&&!sgdiAutoSyncRunning&&!sgdiEditingBlocksRender()){
+    try{sgdiRefreshViewSafely()}catch(_e){}
   }
 });
 function sgdiActiveStatsSociety(){
@@ -1813,7 +1817,7 @@ window.addEventListener("sgdi:sidebar-stats",()=>{
     // chaque tick de stats sidebar (au mieux toutes les 5s, déclenché depuis de nombreux autres
     // écrans) doublait le rendu complet du tableau de bord DRH sans raison, avec son coût de
     // recalcul (O(effectif × congés/incidents)) — c'était une cause majeure de lenteur perçue.
-    if(hash==="#/materiel"||hash.startsWith("#/materiel/dashboard"))renderView();
+    if(!sgdiAutoSyncRunning&&(hash==="#/materiel"||hash.startsWith("#/materiel/dashboard")))sgdiRefreshViewSafely();
   }catch(e){}
 });
 function userPermissionCache(){
@@ -7861,6 +7865,47 @@ function normalizeCentralPage(view){
   view.querySelectorAll("table").forEach(t=>t.classList.add("module-table-clean"));
   view.querySelectorAll(".card").forEach(c=>c.classList.add("module-card-clean"));
 }
+// Keep an already displayed view in place while its same-scope data reloads.
+// The instance setter covers legacy and lazy renderers, including async writes.
+function sgdiInstallStableView(view){
+  if(!view||view.__sgdiStableView)return;
+  const native=Object.getOwnPropertyDescriptor(Element.prototype,"innerHTML");
+  const context=()=>[location.hash,session?.username,session?.transverse,sgdiActiveStatsSociety()].join("|");
+  let renderedContext=context();
+  Object.defineProperty(view,"innerHTML",{
+    configurable:true,
+    get(){return native.get.call(this)},
+    set(html){
+      const next=String(html),key=context(),same=key===renderedContext;
+      const existing=native.get.call(this);
+      if(same&&existing&&next.length<1000){
+        const text=next.replace(/<[^>]*>/g,"").trim();
+        if(/^Chargement(?: (?:des|du|de|en cours)\b|…|\.)/i.test(text))return;
+      }
+      const x=window.scrollX||0,y=window.scrollY||0,top=this.scrollTop,left=this.scrollLeft;
+      const active=document.activeElement;
+      const focused=same&&this.contains(active)?active:null;
+      const identity=focused&&(focused.id||focused.name);
+      const selection=focused&&typeof focused.selectionStart==="number"?[focused.selectionStart,focused.selectionEnd]:null;
+      const openDetails=same?Array.from(this.querySelectorAll("details[open]")).map(el=>el.textContent):[];
+      const nested=same?Array.from(this.querySelectorAll("[id]")).filter(el=>el.scrollTop||el.scrollLeft).map(el=>[el.id,el.scrollTop,el.scrollLeft]):[];
+      native.set.call(this,next);
+      renderedContext=key;
+      if(same){
+        for(const el of this.querySelectorAll("details"))if(openDetails.includes(el.textContent))el.open=true;
+        if(identity){
+          const replacement=Array.from(this.querySelectorAll("input,textarea,select,button,a,[tabindex]")).find(el=>el.tagName===focused.tagName&&(focused.id?el.id===identity:el.name===identity));
+          if(replacement){replacement.focus({preventScroll:true});if(selection&&replacement.setSelectionRange)try{replacement.setSelectionRange(...selection)}catch(_e){}}
+        }
+        for(const [id,t,l] of nested){const el=document.getElementById(id);if(el&&this.contains(el)){el.scrollTop=t;el.scrollLeft=l}}
+        this.scrollTop=top;this.scrollLeft=left;
+        // Restore in the same task, before paint, including async module completion.
+        if(window.scrollX!==x||window.scrollY!==y)window.scrollTo(x,y);
+      }
+    }
+  });
+  view.__sgdiStableView=true;
+}
 function sgdiScrollSnapshot(){
   const view=document.getElementById("view");
   return {
@@ -7959,6 +8004,7 @@ function renderView(){
   // leur rendu. Ainsi, la navigation suivante retrouve toujours le shell ERP.
   document.body.classList.remove("dp-focus-layout");
   const previousView=document.getElementById("view");
+  sgdiInstallStableView(previousView);
   previousView?.classList.remove("site-create-view","dp-wide-view");
   previousView?.closest("main")?.classList.remove("dp-wide-main");
   const activeRenderHash=String(location.hash||"#/dashboard");
