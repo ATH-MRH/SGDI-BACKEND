@@ -68,6 +68,15 @@ def _ensure_recruitment_access(user: User, *, destructive: bool = False) -> None
         or username.startswith("REC")
         or bool(structures & {"drh", "recrutement", "recruteur", "gestionnaire_rh"})
     )
+    # Explicit module grants stored on the server are authoritative. Only legacy
+    # accounts with NULL modules use the historical role/structure fallback.
+    from app.modules.auth.dependencies import _normalized_module_keys
+    from app.modules.auth.routes import is_admin_role
+
+    if is_admin_role(user.role):
+        allowed = True
+    elif user.authorized_modules is not None:
+        allowed = bool(_normalized_module_keys(user.authorized_modules) & {"drh", "recrute"})
     if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès réservé au recrutement / DRH")
     if destructive and role not in {"admin", "adm", "adm1", "adm2", "rh", "drh"}:

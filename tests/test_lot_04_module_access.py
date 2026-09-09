@@ -111,3 +111,34 @@ def test_admin_role_keeps_transversal_module_access(client, db):
 
     assert client.get("/api/drh/dashboard", headers=_headers(user)).status_code == 200
     assert client.get("/api/ops/dashboard", headers=_headers(user)).status_code == 200
+
+
+def test_explicit_recruitment_modules_allow_non_rh_profile_and_preserve_restrictions(client, db):
+    from fastapi import HTTPException
+    from app.modules.drh.routes import _ensure_recruitment_access
+    import pytest
+
+    for module in ("drh", "recrute"):
+        user = _user(db, "BUSINESS_" + module, [module], role="dispatch")
+        headers = _headers(user)
+        response = client.get("/api/drh/candidates", headers=headers)
+        assert response.status_code == 200, response.text
+        assert client.get("/api/auth/me", headers=headers).json()["recruitment_access"] is True
+        with pytest.raises(HTTPException) as denied:
+            _ensure_recruitment_access(user, destructive=True)
+        assert denied.value.status_code == 403
+        assert denied.value.detail == "Suppression réservée à la DRH"
+        assert client.get("/api/ops/dashboard", headers=headers).status_code == 403
+        user.authorized_modules = []
+        db.commit()
+        assert client.get("/api/drh/candidates", headers=headers).status_code == 403
+        assert client.get("/api/auth/me", headers=headers).json()["recruitment_access"] is False
+
+
+def test_explicit_unrelated_module_does_not_inherit_legacy_recruitment_grant(client, db):
+    user = _user(db, "REC_EXPLICIT_OTHER", ["ops"], role="dispatch")
+    user.authorized_structures = ["drh"]
+    db.commit()
+    headers = _headers(user)
+    assert client.get("/api/drh/candidates", headers=headers).status_code == 403
+    assert client.get("/api/auth/me", headers=headers).json()["recruitment_access"] is False
