@@ -9682,10 +9682,10 @@ const CONTRACT_CANDIDATE_ARCHIVE_MOTIFS=["Désistement","Annulation","Problème 
 function openArchiveContractCandidateModal(id){
   const c=findCandidatById(id)||{};
   openModal(`<h3 class="font-bold text-lg mb-4">Archiver candidat</h3>
-    <form onsubmit="event.preventDefault();confirmArchiveContractCandidate('${jsString(id)}')">
+    <form id="archive-contract-candidate-form" oninput="updateArchiveContractCandidateForm(this)" onchange="updateArchiveContractCandidateForm(this)" onsubmit="event.preventDefault();confirmArchiveContractCandidate('${jsString(id)}')">
       <div class="mb-4 text-sm text-slate-600">Choisissez le motif d'archivage${c.nom||c.prenom?` pour <b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b>`:""}. Le dossier quitte « Contrats à établir » sans créer d'employé.</div>
       <div class="mb-4 flex flex-col gap-2">
-        ${CONTRACT_CANDIDATE_ARCHIVE_MOTIFS.map((m,i)=>`<label class="flex items-center gap-2"><input type="radio" name="motifArchive" value="${escapeHTML(m)}" ${i===0?"required":""} onchange="document.getElementById('archiveContractProblemDetail').classList.toggle('hidden',this.value!=='Problème dossier administratif')"> ${escapeHTML(m)}</label>`).join("")}
+        ${CONTRACT_CANDIDATE_ARCHIVE_MOTIFS.map((m,i)=>`<label class="flex items-center gap-2"><input type="radio" name="motifArchive" value="${escapeHTML(m)}" ${i===0?"required":""}> ${escapeHTML(m)}</label>`).join("")}
         <div id="archiveContractProblemDetail" class="hidden ml-6">
           <label class="label">Préciser le problème *</label>
           <textarea class="textarea" name="motifArchiveDetail" rows="2" placeholder="Décrivez le problème de dossier administratif"></textarea>
@@ -9693,17 +9693,27 @@ function openArchiveContractCandidateModal(id){
       </div>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-        <button class="btn btn-danger">Archiver candidat</button>
+        <button type="submit" class="btn btn-danger archive-candidate-submit" disabled>Archiver candidat</button>
       </div>
     </form>`);
 }
+function updateArchiveContractCandidateForm(f){
+  if(!f)return;
+  const motif=f.querySelector('[name="motifArchive"]:checked')?.value||"";
+  const needsDetail=motif==="Problème dossier administratif";
+  const detail=f.elements.motifArchiveDetail;
+  f.querySelector('#archiveContractProblemDetail').classList.toggle('hidden',!needsDetail);
+  detail.required=needsDetail;
+  const submit=f.querySelector('[type="submit"]');
+  submit.disabled=!!f.dataset.saving||!CONTRACT_CANDIDATE_ARCHIVE_MOTIFS.includes(motif)||(needsDetail&&!detail.value.trim());
+}
 async function confirmArchiveContractCandidate(id){
-  const f=document.querySelector(".modal-bg form");if(!f)return;
+  const f=document.getElementById("archive-contract-candidate-form");if(!f||f.dataset.saving)return;
   const motif=String(new FormData(f).get("motifArchive")||"").trim();
   const detail=String(new FormData(f).get("motifArchiveDetail")||"").trim();
   const c=findCandidatById(id);
   if(!c){toast("Candidat introuvable","error");return}
-  if(!motif){toast("Choisissez un motif d'archivage","error");return}
+  if(!CONTRACT_CANDIDATE_ARCHIVE_MOTIFS.includes(motif)){toast("Choisissez un motif d'archivage","error");return}
   if(motif==="Problème dossier administratif"&&!detail){toast("Précisez le problème de dossier administratif","error");return}
   const draft={...c};
   draft.statut="archive";
@@ -9723,14 +9733,17 @@ async function confirmArchiveContractCandidate(id){
     delete draft.fichePositionValideeBy;
   }
   delete draft.isNew;
+  const submit=f.querySelector('[type="submit"]');
+  f.dataset.saving="1";submit.disabled=true;submit.textContent="Archivage en cours…";submit.setAttribute("aria-busy","true");
   try{
     await persistCandidateToPostgres(draft);
     Object.assign(c,draft);
     await sgdiPullState({silent:true,render:false,force:true,light:true});
-    closeModal();
+    if(f.isConnected)closeModal();
     toast("Candidat archivé","success");
     renderView();
   }catch(e){toast("Archivage refusé : "+(e.message||e),"error")}
+  finally{delete f.dataset.saving;submit.textContent="Archiver candidat";submit.removeAttribute("aria-busy");updateArchiveContractCandidateForm(f)}
 }
 
 

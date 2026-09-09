@@ -10428,3 +10428,9 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .drh-candidate-photo img,.drh-candidate-photo>span{width:76px;height:88px;object-fit:cover;border-radius:10px;background:#e8eef6;display:grid;place-items:center}
 .drh-candidate-readonly footer{position:sticky;bottom:0;background:white;padding:12px 0 0;display:flex;justify-content:flex-end}
 @media(max-width:640px){.drh-candidate-readonly dl{grid-template-columns:1fr}}
+
+/* Action d’archivage : priorité sur les styles bleus génériques des modales. */
+#modal-host #archive-contract-candidate-form .archive-candidate-submit{background:#dc2626!important;border-color:#dc2626!important;color:#fff!important;min-height:40px;padding:9px 18px!important}
+#modal-host #archive-contract-candidate-form .archive-candidate-submit:hover:not(:disabled){background:#b91c1c!important;border-color:#b91c1c!important}
+#modal-host #archive-contract-candidate-form .archive-candidate-submit:disabled{background:#e2e8f0!important;border-color:#cbd5e1!important;color:#64748b!important;cursor:not-allowed;box-shadow:none!important;opacity:1!important}
+#modal-host #archive-contract-candidate-form .archive-candidate-submit:focus-visible{outline:3px solid #fca5a5;outline-offset:3px}

@@ -394,3 +394,42 @@ test('Consulter opens the complete candidate dossier as non-editable values', as
   assert.equal(app.window.document.querySelector('.drh-candidate-readonly'),null);
   app.dom.window.close();
 });
+
+test('archive button requires a valid reason and administrative detail', () => {
+  const app=loadSgdiApp(['openArchiveContractCandidateModal','updateArchiveContractCandidateForm']);
+  app.T().setDb({candidats:[{id:'c1',nom:'TEST'}]});
+  app.T().openArchiveContractCandidateModal('c1');
+  const f=app.window.document.getElementById('archive-contract-candidate-form'),submit=f.querySelector('[type="submit"]');
+  assert.equal(submit.disabled,true);
+  f.elements.motifArchive[0].checked=true;app.T().updateArchiveContractCandidateForm(f);
+  assert.equal(submit.disabled,false);
+  f.elements.motifArchive[2].checked=true;app.T().updateArchiveContractCandidateForm(f);
+  assert.equal(submit.disabled,true);assert.equal(f.elements.motifArchiveDetail.required,true);
+  f.elements.motifArchiveDetail.value='Pièce expirée';app.T().updateArchiveContractCandidateForm(f);
+  assert.equal(submit.disabled,false);
+  f.elements.motifArchive[1].checked=true;app.T().updateArchiveContractCandidateForm(f);
+  assert.equal(f.elements.motifArchiveDetail.required,false);
+  assert.equal(f.querySelector('#archiveContractProblemDetail').classList.contains('hidden'),true);
+  app.dom.window.close();
+});
+
+test('archive request deduplicates clicks and permits retry after rejection', async () => {
+  const app=loadSgdiApp(['openArchiveContractCandidateModal','confirmArchiveContractCandidate','updateArchiveContractCandidateForm']);
+  const candidate={id:'c1',backendId:1,nom:'TEST',statut:'a_contractualiser'};
+  app.T().setDb({candidats:[candidate]});
+  app.window.eval('window.archiveCalls=0;persistCandidateToPostgres=function(draft){window.archiveCalls++;window.archiveDraft=draft;return new Promise((resolve,reject)=>{window.archiveResolve=resolve;window.archiveReject=reject})};sgdiPullState=async()=>true;renderView=()=>{};');
+  app.T().openArchiveContractCandidateModal('c1');
+  const f=app.window.document.getElementById('archive-contract-candidate-form');
+  f.elements.motifArchive[0].checked=true;app.T().updateArchiveContractCandidateForm(f);
+  const pending=app.T().confirmArchiveContractCandidate('c1');
+  await app.T().confirmArchiveContractCandidate('c1');
+  assert.equal(app.window.archiveCalls,1);assert.equal(f.querySelector('[type="submit"]').disabled,true);
+  assert.equal(candidate.statut,'a_contractualiser');
+  app.window.archiveReject(Error('Refus serveur'));await pending;
+  assert.equal(candidate.statut,'a_contractualiser');assert.equal(f.querySelector('[type="submit"]').disabled,false);
+  const retry=app.T().confirmArchiveContractCandidate('c1');
+  assert.equal(app.window.archiveCalls,2);assert.equal(app.window.archiveDraft.archiveSource,'a_contractualiser');
+  app.window.archiveResolve();await retry;
+  assert.equal(candidate.statut,'archive');assert.equal(f.isConnected,false);
+  app.dom.window.close();
+});
