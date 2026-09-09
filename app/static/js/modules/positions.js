@@ -267,6 +267,9 @@ function fichePositionCard(a){
   const contractEnd=employeePositionContractEndDate(a);
   const opsFicheReadOnly=isOpsFicheReadOnlyContext();
   const completeness=agentCompleteness(a);
+  // Rouge sous 50 %, orange à 75 %, puis progression jusqu’au vert à 100 %.
+  const completenessHue=completeness.pct<50?0:completeness.pct<=75?(completeness.pct-50)*1.2:30+(Math.min(completeness.pct,100)-75)*3.6;
+  const completenessColor=`hsl(${completenessHue}, 75%, 45%)`;
   const contractDays=contractEnd?daysBetween(today(),contractEnd):null;
   const warning=status.key==="suspendu"?"Suivi de suspension en cours":completeness.missing.length?`${completeness.missing.length} information${completeness.missing.length>1?"s":""} à compléter`:contractDays!==null&&contractDays>=0&&contractDays<=60?`Contrat à renouveler dans ${contractDays} jour${contractDays>1?"s":""}`:"Dossier conforme et à jour";
   const warningTone=status.key==="suspendu"||completeness.missing.length||contractDays!==null&&contractDays>=0&&contractDays<=60?"warning":"ok";
@@ -280,7 +283,7 @@ function fichePositionCard(a){
       <div><span>Site</span><strong>${safe(aff.siteName)||"Non affecté"}</strong></div>
       <div><span>Contrat</span><strong>${safe(cleanContractType(a.typeContrat))||"—"}${contractEnd?` · fin ${formatDate(contractEnd)}`:""}</strong></div>
       <div><span>Société</span><strong>${safe(a.societe)||"—"}</strong></div>
-      <div><span>Complétude</span><strong>${completeness.pct}%</strong><i><b style="width:${completeness.pct}%"></b></i></div>
+      <div><span>Complétude</span><strong>${completeness.pct}%</strong><i><b style="width:${completeness.pct}%;background:${completenessColor}!important"></b></i></div>
     </div>
     <div class="fp-agent-compliance ${warningTone}"><span></span>${escapeHTML(warning)}</div>
     <div class="fp-agent-actions">

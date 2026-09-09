@@ -12318,6 +12318,7 @@ window.removeFamilleRow=function(button){
 function markAgentFormDirty(){
   const form=document.getElementById("agent-form");if(!form)return;
   form.dataset.dirty="true";
+  highlightAgentIncompleteFields(form);
   const state=document.getElementById("agent-save-state");if(state){state.classList.add("is-dirty");state.innerHTML="<span></span>Modifications non enregistrées"}
   form.querySelector(".rh-save-submit")?.removeAttribute("disabled");
   form.querySelector(".rh-save-cancel")?.removeAttribute("disabled");
@@ -12353,8 +12354,16 @@ function validateAgentForm(form){
   if(errors.length){const tab=errors[0].closest("[data-fp-tab-panel]")?.dataset.fpTabPanel||"identite";fichePositionSwitchTab(tab);errors[0].focus();toast(`${errors.length} information(s) à corriger avant l'enregistrement`,"error");return false}
   return true;
 }
+function highlightAgentIncompleteFields(form){
+  form.querySelectorAll("input,select,textarea").forEach(el=>{
+    const editable=!el.disabled&&!el.readOnly&&!['hidden','checkbox','radio','button','submit','reset','file','range','color'].includes(el.type);
+    const incomplete=editable&&(!String(el.value||"").trim()||!el.validity.valid);
+    el.classList.toggle("rh-field-incomplete",incomplete);
+  });
+}
 function bindAgentFormDirtyState(){
   const form=document.getElementById("agent-form");if(!form)return;
+  highlightAgentIncompleteFields(form);
   form.querySelectorAll("input:not([type='hidden']),select,textarea").forEach(el=>{
     el.addEventListener("input",markAgentFormDirty);
     el.addEventListener("change",markAgentFormDirty);

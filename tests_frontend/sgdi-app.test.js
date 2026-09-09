@@ -274,3 +274,35 @@ test('sgdiEditingBlocksRender: bloque le réaffichage si le formulaire est déve
 
 // Sortie propre (des timers/handlers résiduels pourraient sinon maintenir le process en vie)
 test.after(() => { try { dom.window.close(); } catch (e) {} setTimeout(() => process.exit(0), 50); });
+
+test('fiche employé : champs incomplets signalés dès ouverture et actualisés à la saisie', () => {
+  const ctx = require('./load-app').loadSgdiApp(['bindAgentFormDirtyState']);
+  assert.ifError(ctx.loadError);
+  const { window, T } = ctx;
+  try {
+    window.document.getElementById('view').innerHTML = `<form id="agent-form">
+      <input name="telephone" value=""><input name="email" type="email" value="invalide">
+      <input name="nom" value="Martin"><input name="hidden" type="hidden">
+      <input name="computed" readonly><input name="disabled" disabled>
+      <select name="banque"><option value="">Choisir</option><option value="B">Banque</option></select>
+      <textarea name="adresse"></textarea><input name="actif" type="checkbox">
+      <div id="agent-save-state">Aucune modification</div>
+      <button class="rh-save-submit" disabled>Enregistrer</button><button class="rh-save-cancel" disabled>Annuler</button>
+    </form>`;
+    T().bindAgentFormDirtyState();
+    const form = window.document.getElementById('agent-form');
+    const field = name => form.querySelector(`[name="${name}"]`);
+    for (const name of ['telephone', 'email', 'banque', 'adresse']) assert.ok(field(name).classList.contains('rh-field-incomplete'));
+    for (const name of ['nom', 'hidden', 'computed', 'disabled', 'actif']) assert.ok(!field(name).classList.contains('rh-field-incomplete'));
+    assert.ok(form.querySelector('.rh-save-submit').disabled);
+    field('email').value = 'test@example.com';
+    field('email').dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.ok(!field('email').classList.contains('rh-field-incomplete'));
+    assert.strictEqual(form.dataset.dirty, 'true');
+    assert.ok(!form.querySelector('.rh-save-submit').disabled);
+    assert.ok(window.document.getElementById('agent-save-state').classList.contains('is-dirty'));
+    field('nom').value = '  ';
+    field('nom').dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.ok(field('nom').classList.contains('rh-field-incomplete'));
+  } finally { window.close(); }
+});
