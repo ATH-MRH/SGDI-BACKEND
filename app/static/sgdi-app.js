@@ -10673,27 +10673,75 @@ function bindNewContractRequiredFields(form){
 
 function contractVerificationItems(){return [["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat de résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Copie pièce d'identité biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]]}
 function updateVerifBanner(){const f=document.getElementById("contract-documents-form")||document.getElementById("contract-form");if(!f)return;const keys=contractVerificationItems().map(x=>x[0]);const ok=keys.filter(k=>f.querySelector(`[name="verif${k}"]`)?.checked).length;const warn=document.getElementById("banner-warn");const done=document.getElementById("banner-ok");if(warn)warn.classList.toggle("hidden",ok===keys.length);if(done)done.classList.toggle("hidden",ok!==keys.length);const n=document.getElementById("nbmissing");if(n)n.textContent=keys.length-ok}
+function contractDocumentExpiry(issued,type){
+  const months={CasierJudiciaire:3,ActeNaissance:6,TestDrogue:2}[type];
+  if(!months||!/^\d{4}-\d{2}-\d{2}$/.test(issued||""))return "";
+  const [y,m,d]=issued.split("-").map(Number);
+  const target=new Date(Date.UTC(y,m-1+months,1));
+  const last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();
+  target.setUTCDate(Math.min(d,last));return target.toISOString().slice(0,10);
+}
+function contractDocumentRow(key,label,doc={},checked=false,standard=false){
+  const type=doc.documentType||(standard?key:"Autre");
+  const types=[...contractVerificationItems(),["TestDrogue","Test de drogue"],["Autre","Autre document"]];
+  return `<div class="card p-3 mb-3" data-contract-document="${escapeHTML(key)}">
+    <div class="flex items-center gap-2 mb-3">${standard?`<label><input type="checkbox" name="verif${key}" ${checked?"checked":""} onchange="updateVerifBanner()"> Vérifié</label>`:""}<span class="text-sm font-semibold">${escapeHTML(label)}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+    <label>Désignation<input class="input w-full" data-doc-designation value="${escapeHTML(doc.designation||label)}"></label>
+    <label>Type de document<select class="input w-full" data-doc-type onchange="updateContractDocumentDates(this)">${types.map(([k,l])=>`<option value="${k}" ${k===type?"selected":""}>${l}</option>`).join("")}</select></label>
+    <label>Date d’établissement<input class="input w-full" type="date" data-doc-issued value="${escapeHTML(doc.issuedAt||"")}" onchange="updateContractDocumentDates(this)"></label>
+    <label>Date d’expiration<input class="input w-full" type="date" data-doc-expires value="${escapeHTML(doc.expiresAt||"")}"></label>
+    </div><div class="flex gap-3 items-center mt-3"><label><input type="checkbox" data-doc-no-expiry ${doc.noExpiry?"checked":""} onchange="updateContractDocumentDates(this)"> Sans expiration</label><span class="text-sm text-slate-500" data-doc-rule></span></div>
+    <div class="mt-3">${docUploadField(key,label,doc.url,doc.name)}</div></div>`;
+}
+function updateContractDocumentDates(field){
+  const row=field.closest("[data-contract-document]");if(!row)return;
+  const type=row.querySelector("[data-doc-type]").value,issued=row.querySelector("[data-doc-issued]").value;
+  const expiry=row.querySelector("[data-doc-expires]"),none=row.querySelector("[data-doc-no-expiry]");
+  const months={CasierJudiciaire:3,ActeNaissance:6,TestDrogue:2}[type];
+  if(months||type==="PieceIdentite")none.checked=false;
+  none.disabled=!!months||type==="PieceIdentite";
+  expiry.readOnly=!!months;expiry.disabled=none.checked;
+  if(months)expiry.value=contractDocumentExpiry(issued,type);else if(none.checked)expiry.value="";
+  expiry.min=issued;
+  row.querySelector("[data-doc-rule]").textContent=months?`Expiration automatique : date d’établissement + ${months} mois.`:type==="PieceIdentite"?"Saisissez la date inscrite sur la pièce.":"Date libre ou sans expiration.";
+}
+function addContractDocumentRow(){
+  const host=document.getElementById("contract-document-rows");if(!host)return;
+  host.insertAdjacentHTML("beforeend",contractDocumentRow(uid("document"),"",{}));
+  const row=host.lastElementChild;updateContractDocumentDates(row.querySelector("[data-doc-type]"));row.querySelector("[data-doc-designation]").focus();
+}
 function openContractDocumentsModal(id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
-  const verifs=contractVerificationItems();
+  const verifs=contractVerificationItems(),keys=new Set(verifs.map(([k])=>k));
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
-  openModal(`<h3 class="font-bold text-lg mb-2">Ajouter document</h3><p class="text-sm text-slate-500 mb-4">Vérification & agrément du dossier contractualisation.</p>
-    <form id="contract-documents-form" onsubmit="event.preventDefault();saveContractDocuments('${id}')">
-      <div id="banner-warn" class="section-banner banner-amber ${nbOk===verifs.length?"hidden":""}">⚠ Vérifications manquantes — <span id="nbmissing">${verifs.length-nbOk}</span> pièce(s)</div>
-      <div id="banner-ok" class="section-banner banner-green ${nbOk===verifs.length?"":"hidden"}">✅ Toutes les vérifications sont validées</div>
-      <div class="space-y-2 mt-3">${verifs.map(([k,l])=>{const ex=c.documents?.[k];return`<div class="grid grid-6 items-center p-3 bg-slate-100 rounded-lg"><div class="col-span-3 flex items-center gap-2"><input type="checkbox" name="verif${k}" ${c["verif"+k]?"checked":""} onchange="updateVerifBanner()"/><span class="text-sm">${l}</span></div><div class="col-span-3 flex justify-end gap-2 items-center">${docUploadField(k,l,ex?.url,ex?.name)}</div></div>`}).join("")}</div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary">Enregistrer documents</button></div>
+  const extra=Object.entries(c.documents||{}).filter(([k])=>!keys.has(k));
+  openModal(`<h3 class="font-bold text-lg mb-2">Documents du dossier</h3><p class="text-sm text-slate-500 mb-4">Ajoutez les pièces nécessaires et leurs dates de validité.</p>
+    <form id="contract-documents-form" onsubmit="event.preventDefault();saveContractDocuments('${jsString(id)}')">
+      <div id="banner-warn" class="section-banner banner-amber ${nbOk===verifs.length?"hidden":""}">Vérifications manquantes — <span id="nbmissing">${verifs.length-nbOk}</span> pièce(s)</div>
+      <div id="banner-ok" class="section-banner banner-green ${nbOk===verifs.length?"":"hidden"}">Toutes les vérifications sont validées</div>
+      <div id="contract-document-rows" class="mt-3">${verifs.map(([k,l])=>contractDocumentRow(k,l,c.documents?.[k]||{},!!c["verif"+k],true)).join("")}${extra.map(([k,d])=>contractDocumentRow(k,d.designation||d.label||d.name||"Document",d)).join("")}</div>
+      <button type="button" class="btn btn-secondary" onclick="addContractDocumentRow()">+ Ajouter un document</button>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button type="submit" class="btn btn-primary">Enregistrer documents</button></div>
     </form>`);
+  document.querySelectorAll("#contract-document-rows [data-doc-type]").forEach(updateContractDocumentDates);
 }
 async function saveContractDocuments(id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
-  const f=document.getElementById("contract-documents-form");if(!f)return;
-  const keys=contractVerificationItems().map(x=>x[0]);
-  c.documents=c.documents||{};
-  keys.forEach(k=>{c["verif"+k]=!!f.querySelector(`[name="verif${k}"]`)?.checked});
-  [...f.querySelectorAll("[name^=\"doc_\"][name$=\"_url\"]")].forEach(inp=>{const k=inp.name.replace("doc_","").replace("_url","");const nm=f.querySelector(`[name="doc_${k}_name"]`)?.value||"fichier";if(inp.value)c.documents[k]=normalizeCandidateStoredDocument(k,{url:inp.value,name:nm},c);else delete c.documents[k]});
-  try{await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});await sgdiPullState({silent:true,render:false,force:true,light:true});closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}
+  const f=document.getElementById("contract-documents-form");if(!f||f.dataset.saving)return;
+  const draft={...c,documents:{...(c.documents||{})}};
+  contractVerificationItems().forEach(([k])=>{draft["verif"+k]=!!f.querySelector(`[name="verif${k}"]`)?.checked});
+  for(const row of f.querySelectorAll("[data-contract-document]")){
+    const key=row.dataset.contractDocument,url=row.querySelector('[name$="_url"]').value;
+    if(!url){delete draft.documents[key];continue;}
+    const designation=row.querySelector("[data-doc-designation]").value.trim(),issuedAt=row.querySelector("[data-doc-issued]").value,expiresAt=row.querySelector("[data-doc-expires]").value,noExpiry=row.querySelector("[data-doc-no-expiry]").checked;
+    if(!designation||!issuedAt||(!noExpiry&&!expiresAt)||expiresAt&&expiresAt<issuedAt){toast("Complétez la désignation et les dates valides de chaque document téléversé.","error");return;}
+    draft.documents[key]={...normalizeCandidateStoredDocument(key,{...(c.documents?.[key]||{}),url,name:row.querySelector('[name$="_name"]').value||"fichier"},draft),designation,issuedAt,expiresAt,noExpiry,documentType:row.querySelector("[data-doc-type]").value};
+  }
+  const submit=f.querySelector('[type="submit"]');f.dataset.saving="1";submit.disabled=true;
+  try{await persistCandidateToPostgres(draft,{allowCreate:!sqlBackendId(draft.backendId)});Object.assign(c,draft);closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}finally{delete f.dataset.saving;submit.disabled=false;}
 }
+
 
 
 function contractDurationApproxDays(value){

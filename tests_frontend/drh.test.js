@@ -230,3 +230,51 @@ test('DRH recruitment ignores response after navigation and never restores cache
   assert.match(view.textContent,/Refus serveur/);assert.doesNotMatch(view.textContent,/STALE/);
   app.dom.window.close();
 });
+
+test('contract document expiry uses calendar months and clamps month ends', () => {
+  const app=loadSgdiApp(['contractDocumentExpiry']);
+  assert.equal(app.loadError,null);
+  const expiry=app.T().contractDocumentExpiry;
+  assert.equal(expiry('2026-09-09','CasierJudiciaire'),'2026-12-09');
+  assert.equal(expiry('2026-08-31','ActeNaissance'),'2027-02-28');
+  assert.equal(expiry('2023-12-31','TestDrogue'),'2024-02-29');
+  assert.equal(expiry('2026-09-09','PieceIdentite'),'');
+  app.dom.window.close();
+});
+
+test('contract documents preserve existing files and allow repeated extra rows with manual identity expiry', () => {
+  const app=loadSgdiApp(['openContractDocumentsModal','addContractDocumentRow','updateContractDocumentDates']);
+  app.T().setDb({candidats:[{id:'c1',nom:'TEST',prenom:'Test',documents:{PieceIdentite:{url:'/uploads/id.pdf',name:'id.pdf',issuedAt:'2026-01-01',expiresAt:'2036-01-01'},custom:{url:'/uploads/custom.pdf',name:'custom.pdf',designation:'Attestation',noExpiry:true}}}]});
+  app.T().openContractDocumentsModal('c1');
+  const doc=app.window.document;
+  assert.equal(doc.querySelector('[name="doc_custom_url"]').value,'/uploads/custom.pdf');
+  const identity=doc.querySelector('[data-contract-document="PieceIdentite"]');
+  assert.equal(identity.querySelector('[data-doc-expires]').value,'2036-01-01');
+  assert.equal(identity.querySelector('[data-doc-expires]').readOnly,false);
+  assert.equal(identity.querySelector('[data-doc-no-expiry]').disabled,true);
+  for(let i=0;i<30;i++)app.T().addContractDocumentRow();
+  assert.equal(doc.querySelectorAll('[data-contract-document]').length,40);
+  const row=doc.querySelector('#contract-document-rows').lastElementChild;
+  row.querySelector('[data-doc-type]').value='TestDrogue';
+  row.querySelector('[data-doc-issued]').value='2026-09-09';
+  app.T().updateContractDocumentDates(row.querySelector('[data-doc-type]'));
+  assert.equal(row.querySelector('[data-doc-expires]').value,'2026-11-09');
+  assert.equal(row.querySelector('[data-doc-expires]').readOnly,true);
+  app.dom.window.close();
+});
+
+test('document save persists metadata and leaves original data intact when server rejects', async () => {
+  const app=loadSgdiApp(['openContractDocumentsModal','saveContractDocuments']);
+  const candidate={id:'c1',backendId:1,nom:'TEST',prenom:'Test',documents:{CasierJudiciaire:{url:'/uploads/casier.pdf',name:'casier.pdf',issuedAt:'2026-09-09',expiresAt:'2026-12-09'}}};
+  app.T().setDb({candidats:[candidate]});
+  app.window.eval('persistCandidateToPostgres=async function(draft){window.savedDraft=draft;throw Error("Serveur indisponible")};');
+  app.T().openContractDocumentsModal('c1');
+  app.window.document.querySelector('[data-doc-designation]').value='Acte';
+  await app.T().saveContractDocuments('c1');
+  assert.equal(app.window.savedDraft.documents.CasierJudiciaire.expiresAt,'2026-12-09');
+  assert.equal(app.window.savedDraft.documents.CasierJudiciaire.designation,'Casier judiciaire');
+  assert.equal(candidate.documents.CasierJudiciaire.designation,undefined);
+  assert.ok(app.window.document.getElementById('contract-documents-form'));
+  assert.equal(app.window.document.querySelector('#contract-documents-form [type="submit"]').disabled,false);
+  app.dom.window.close();
+});
