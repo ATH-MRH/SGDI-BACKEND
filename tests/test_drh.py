@@ -1003,3 +1003,25 @@ def test_drh_pending_candidates_and_counter_use_active_society(client, auth_head
     stats = client.get("/api/ui/sidebar-stats", headers=auth_headers, params={"society": society})
     assert stats.status_code == 200, stats.text
     assert stats.json()["drh"]["recrutement"]["shared_pending"] == page.json()["total"]
+
+
+def test_archiving_contract_candidate_removes_drh_recruitment_and_counter(client, auth_headers):
+    cid = _make_reserve_candidate(client, auth_headers, nom="ARCHIVE", prenom="Contrat")
+    response = client.post(f"/api/drh/candidates/{cid}/marquer-contractualisation", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    def pending():
+        return client.get("/api/drh/candidates/page", headers=auth_headers, params={"mode": "drh_pending", "page_size": 100}).json()
+    before = pending()
+    assert cid in [row["id"] for row in before["items"]]
+    archived = client.put(f"/api/drh/candidates/{cid}", headers=auth_headers, json={
+        "status": "archive", "data": {"statut": "archive", "status": "archive", "archiveSource": "a_contractualiser", "motifArchive": "Désistement", "archivedAt": "2026-09-09T20:00:00Z"}
+    })
+    assert archived.status_code == 200, archived.text
+    after = pending()
+    assert cid not in [row["id"] for row in after["items"]]
+    assert after["total"] == before["total"] - 1
+    stats = client.get("/api/ui/sidebar-stats", headers=auth_headers)
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["drh"]["recrutement"]["shared_pending"] == after["total"]
+    archives = client.get("/api/drh/candidates/page", headers=auth_headers, params={"mode": "archive", "page_size": 100}).json()
+    assert cid in [row["id"] for row in archives["items"]]

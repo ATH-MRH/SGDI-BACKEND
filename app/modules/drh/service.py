@@ -272,6 +272,12 @@ def _candidate_is_transmitted(row: Candidate) -> bool:
     return "a_contractualiser" in statuses
 
 
+def _candidate_is_drh_pending(row: Candidate) -> bool:
+    # Transmission to contracts is still pending; an actual archive closes the dossier.
+    # recruitmentArchivedAt alone only moves the source copy to Recruitment archives.
+    return not _candidate_is_recruited(row) and not _candidate_is_archived(row)
+
+
 def _candidate_matches_text(row: Candidate, query: str) -> bool:
     if not query:
         return True
@@ -320,7 +326,7 @@ def list_candidates_page(
     rows = db.execute(stmt.order_by(Candidate.id.desc())).scalars().all()
     selected_mode = (mode or "").strip().lower()
     if selected_mode == "drh_pending":
-        rows = [row for row in rows if not _candidate_is_recruited(row)]
+        rows = [row for row in rows if _candidate_is_drh_pending(row)]
     elif selected_mode in {"archive", "archived", "archives"}:
         rows = [row for row in rows if _candidate_is_archived(row) or bool((row.data or {}).get("recruitmentArchivedAt"))]
     elif selected_mode in {"reserve", "reserves"}:

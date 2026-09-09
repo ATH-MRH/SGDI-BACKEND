@@ -361,7 +361,7 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     finance = _finance_stats(db, effective_scope)
     secretariat = _secretariat_stats(db, effective_scope)
     from app.modules.drh.models import Candidate
-    from app.modules.drh.service import _candidate_is_recruited, _candidate_is_transmitted
+    from app.modules.drh.service import _candidate_is_drh_pending, _candidate_is_recruited, _candidate_is_transmitted
     from app.modules.drh.routes import _ensure_recruitment_access
     from fastapi import HTTPException
     candidate_query = db.query(Candidate)
@@ -371,7 +371,7 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     recruitment_pending = None
     try:
         _ensure_recruitment_access(user)
-        recruitment_pending = sum(not _candidate_is_recruited(row) for row in scoped_candidates)
+        recruitment_pending = sum(_candidate_is_drh_pending(row) for row in scoped_candidates)
     except HTTPException:
         pass
     contracts_pending = sum(_candidate_is_transmitted(row) and not _candidate_is_recruited(row) for row in scoped_candidates)
