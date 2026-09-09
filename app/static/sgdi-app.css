@@ -10280,8 +10280,8 @@ body:has(.dhl-login-page),html:has(.dhl-login-page),body:has(.dhl-login-page) #a
 .admin-password-hint{display:block;margin-top:6px;color:#64748b;font-size:11px;line-height:1.5}
 
 /* Identifiant du compte connecté : repère commun, centré et lisible. */
-.sgdi-account-heading{display:block;flex:0 0 auto;width:100%;min-height:48px;padding:8px 16px;box-sizing:border-box;text-align:center;font-size:25px!important;font-weight:800;line-height:32px;color:#073d77;background:#f8fbff;overflow-wrap:anywhere}
-.company-portal>.sgdi-account-heading{position:fixed;top:0;left:0;z-index:20;border-bottom:1px solid #dbe5f0}
+.sgdi-account-heading{display:block;flex:0 0 auto;width:100%;min-height:48px;padding:8px 16px;box-sizing:border-box;text-align:center;font-size:25px!important;font-weight:800;line-height:32px;color:#073d77;background:transparent;overflow-wrap:anywhere}
+.company-portal>.sgdi-account-heading{position:fixed;top:0;left:0;z-index:20;border-bottom:0}
 .company-portal:has(>.sgdi-account-heading)>.company-portal-logout,
 .company-portal:has(>.sgdi-account-heading)>.company-portal-change,
 .company-portal:has(>.sgdi-account-heading)>.company-portal-context{top:60px!important}
