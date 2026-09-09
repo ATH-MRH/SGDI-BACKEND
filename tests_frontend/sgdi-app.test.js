@@ -354,3 +354,41 @@ test('synchronisation ciblée : les erreurs réelles restent rejetées', async()
     await assert.rejects(Promise.all(ctx.T().sgdiSqlSyncTasks({blocking:true})),/Serveur indisponible/);
   } finally {ctx.window.close();}
 });
+
+test('PostgreSQL : les listes vides remplacent le cache, les collections omises restent en mémoire',()=>{
+  const c=require('./load-app').loadSgdiApp(['hydrateDB']);assert.ifError(c.loadError);
+  try{c.T().setDb({agents:[{id:'old'}],clients:[{id:'client'}],settings:{}});const remote={agents:[]};const result=c.T().hydrateDB(remote,{partialSql:true});assert.equal(result.agents.length,0);assert.equal(result.clients[0].id,'client');assert.equal(remote.agents.length,0);}finally{c.window.close();}
+});
+
+test('PostgreSQL : les lectures sites, clients et candidats ne réinjectent ni ne suppriment de données',async()=>{
+  const c=require('./load-app').loadSgdiApp(['syncSitesFromPostgres','syncClientsFromPostgres','syncCandidatesFromPostgres','hydrateDB']);assert.ifError(c.loadError);
+  try{
+    const data={sites:[{id:'old-site'}],clients:[{id:'old-client'}],candidats:[{id:'old-candidate',nom:'Ancien',prenom:'Test'}],settings:{}};c.T().setDb(data);c.window.sgdiAuthToken=()=> 'test';
+    c.window.SGDI.sites.list=async()=>[];c.window.SGDI.commercial.clients=async()=>[];c.window.SGDI.rh.candidates=async()=>[];
+    c.window.persistSiteToPostgres=c.window.persistClientToPostgres=c.window.deleteCandidateFromPostgres=()=>{throw new Error('Écriture interdite pendant une lecture');};
+    await c.T().syncSitesFromPostgres();await c.T().syncClientsFromPostgres();await c.T().syncCandidatesFromPostgres();
+    assert.equal(data.sites.length,0);assert.equal(data.clients.length,0);assert.equal(data.candidats.length,0);
+  }finally{c.window.close();}
+});
+
+test('PostgreSQL : un retrait de droits serveur remplace les anciens droits locaux',async()=>{
+  const c=require('./load-app').loadSgdiApp(['sgdiRefreshSessionFromServer','currentUserRecord','currentAllowedSocietes','canAccessStructureKey','_bootCacheLoad']);assert.ifError(c.loadError);
+  try{
+    c.T().setDb({users:[{username:'TEST',role:'admin',niveau:'H5',societesAutorisees:['IRON'],structuresAutorisees:['admin']}],settings:{}});
+    c.T().setSession({username:'TEST',role:'admin',niveau:'H5',societe:'IRON',permissionsFromServer:true,effectiveModules:['drh'],globalSocietyAccess:true});c.window.sgdiAuthToken=()=> 'test';
+    c.window.SGDI.auth.me=async()=>({id:9,username:'TEST',full_name:'Serveur',role:'dispatch',access_level:'H1',authorized_societies:[],authorized_sites:[],authorized_structures:[],authorized_actions:[],authorized_modules:[],effective_modules:[],module_access_global:false,global_society_access:false,recruitment_access:false});
+    await c.T().sgdiRefreshSessionFromServer();assert.equal(c.T().currentUserRecord().role,'dispatch');assert.equal(c.T().currentAllowedSocietes().length,0);assert.equal(c.T().canAccessStructureKey('drh'),false);
+    c.window.localStorage.setItem('atlas_boot_cache',JSON.stringify({u:'TEST',t:Date.now(),d:{users:[{role:'admin'}]}}));assert.equal(c.T()._bootCacheLoad('TEST'),null);
+  }finally{c.window.close();}
+});
+
+test('PostgreSQL : les droits vides de la liste des comptes écrasent le cache legacy',async()=>{
+  const c=require('./load-app').loadSgdiApp(['sgdiLoadAuthState']);assert.ifError(c.loadError);
+  try{
+    const data={users:[{username:'TEST',role:'admin',niveau:'H5',societesAutorisees:['IRON'],structuresAutorisees:['admin']}],settings:{userSocietePermissions:{TEST:{societesAutorisees:['IRON'],structuresAutorisees:['admin'],niveau:'H5'}}}};
+    c.T().setDb(data);c.T().setSession({username:'ADM01',role:'admin'});c.window.sgdiAuthToken=()=> 'test';
+    c.window.SGDI.auth.listUsers=async()=>[{id:3,username:'TEST',role:'dispatch',access_level:'H1',authorized_societies:[],authorized_structures:[],authorized_sites:[],authorized_actions:[],authorized_modules:[],email:'test@example.com'}];
+    c.window.SGDI.auth.accessRules=async()=>[];
+    await c.T().sgdiLoadAuthState();assert.equal(data.users[0].societesAutorisees.length,0);assert.equal(data.users[0].structuresAutorisees.length,0);assert.equal(data.users[0].niveau,'H1');assert.equal(data.users[0].email,'test@example.com');assert.equal(data.users[0].modulesAutorises.length,0);
+  }finally{c.window.close();}
+});

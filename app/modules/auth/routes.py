@@ -727,4 +727,21 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(user=Depends(current_user)):
-    return user
+    # Expose the existing server policy; the browser must not reconstruct grants
+    # from cached profiles or interpret an empty list as unrestricted access.
+    from app.modules.auth.dependencies import _legacy_module_keys, _normalized_module_keys
+    from app.modules.drh.routes import _ensure_recruitment_access
+
+    result = UserOut.model_validate(user).model_dump()
+    result["module_access_global"] = is_admin_role(user.role)
+    result["effective_modules"] = sorted(
+        _legacy_module_keys(user) if user.authorized_modules is None
+        else _normalized_module_keys(user.authorized_modules)
+    )
+    try:
+        _ensure_recruitment_access(user)
+        result["recruitment_access"] = True
+    except HTTPException:
+        result["recruitment_access"] = False
+    result["has_validation_password"] = bool(user.validation_password_hash)
+    return result

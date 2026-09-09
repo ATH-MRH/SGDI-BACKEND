@@ -384,3 +384,51 @@ def test_individual_action_permissions_are_returned_and_enforced(client, db):
     denied = client.post("/api/ops/sites", headers=headers, json={})
     assert denied.status_code == 403
     assert "create" in denied.json()["detail"]
+
+
+def test_me_reports_server_policy_and_revocations(client, db):
+    _add_test_user(db, "REC_SERVER", "secret", role="dispatch", structures=["recrutement"], modules=["recrute"])
+    login = client.post("/api/auth/login", json={"username": "REC_SERVER", "password": "secret"})
+    headers = {"Authorization": "Bearer " + login.json()["access_token"]}
+    first = client.get("/api/auth/me", headers=headers)
+    assert first.status_code == 200
+    assert first.json()["effective_modules"] == ["recrute"]
+    assert first.json()["recruitment_access"] is True
+    assert first.json()["module_access_global"] is False
+    user = db.query(User).filter(User.username == "REC_SERVER").one()
+    user.authorized_modules = []
+    user.authorized_societies = []
+    db.commit()
+    second = client.get("/api/auth/me", headers=headers)
+    assert second.json()["effective_modules"] == []
+    assert second.json()["authorized_societies"] == []
+    assert second.json()["global_society_access"] is False
+
+
+def test_me_legacy_modules_are_computed_by_existing_server_policy(client, db):
+    _add_test_user(db, "COM_SERVER", "secret", role="dispatch", modules=None)
+    login = client.post("/api/auth/login", json={"username": "COM_SERVER", "password": "secret"})
+    headers = {"Authorization": "Bearer " + login.json()["access_token"]}
+    result = client.get("/api/auth/me", headers=headers).json()
+    assert "dc" in result["effective_modules"]
+    assert result["recruitment_access"] is False
+
+
+def test_snapshot_cache_changes_when_permissions_are_revoked(db):
+    from app.modules.irongs.service import _snapshot_cache_key
+    _add_test_user(db, "CACHE_SCOPE", "secret", modules=["drh"])
+    user = db.query(User).filter(User.username == "CACHE_SCOPE").one()
+    before = _snapshot_cache_key(user, False)
+    user.authorized_modules = []
+    assert _snapshot_cache_key(user, False) != before
+    before = _snapshot_cache_key(user, False)
+    user.global_society_access = True
+    assert _snapshot_cache_key(user, False) != before
+
+
+def test_light_snapshot_omits_sql_collections_instead_of_returning_empty(db):
+    from app.modules.irongs import service, sql_bridge
+    user = db.query(User).filter(User.username == "testadmin").one()
+    service._snapshot_cache_invalidate()
+    result = service.get_database(db, user, include_sql=False)
+    assert not (set(result) & sql_bridge.SQL_COLLECTIONS)

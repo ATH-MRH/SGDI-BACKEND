@@ -122,7 +122,11 @@ def _current_events_signature() -> str:
 def _snapshot_cache_key(user: Any, include_sql: bool) -> str:
     username = _user_username(user)
     societies = ",".join(sorted(_user_allowed_societies(user)))
-    return f"{username}|{societies}|{include_sql}"
+    permissions = repr(tuple(getattr(user, key, None) for key in (
+        "role", "access_level", "global_society_access", "authorized_modules",
+        "authorized_structures", "authorized_sites", "authorized_actions", "supervisor_read_only",
+    )))
+    return f"{username}|{societies}|{include_sql}|{permissions}"
 
 
 def _snapshot_cache_get(key: str) -> dict | None:
@@ -513,8 +517,8 @@ def get_database(
     else:
         # Mode léger : les collections SQL ont déjà des endpoints dédiés.
         # Éviter leur reconstruction supprime le plus gros coût de /api/irongs/db.
-        for name in sorted(sql_bridge.SQL_COLLECTIONS):
-            result[name] = []
+        # Omitted means not loaded. An explicit empty list means no records.
+        pass
     scoped = scope_database_for_user(result, user)
     _snapshot_cache_set(cache_key, scoped)
     return scoped

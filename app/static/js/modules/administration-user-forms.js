@@ -230,30 +230,12 @@ async function confirmAdminUser(originalUsername){
       const payload={email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,is_active:data.actif};
       if(password)payload.password=password;
       if(validationPassword)payload.validation_password=validationPassword;
-      await SGDI.auth.updateUser(originalUsername,payload);
+      const updated=await SGDI.auth.updateUser(originalUsername,payload);
+      db.users[idx]={...adminUserFromApi(updated),validationCodeEnabled:data.validationCodeEnabled};
     }catch(e){
-      const msg=String(e.message||e||"");
-      if(/not found|introuvable|404/i.test(msg)){
-        try{
-          if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
-          if(!validationPassword){toast("Mot de passe de validation obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,password,validation_password:validationPassword});
-          toast("Utilisateur recréé dans PostgreSQL","warning");
-        }catch(createErr){
-          const createMsg=String(createErr.message||createErr||"");
-          if(/déjà existant|deja existant|already/i.test(createMsg)){
-            toast("Utilisateur déjà présent dans PostgreSQL : modification locale appliquée.","warning");
-          }else{
-            toast("Modification PostgreSQL refusée : "+createMsg,"error");
-            return;
-          }
-        }
-      }else{
-        toast("Modification PostgreSQL refusée : "+msg,"error");
-        return;
-      }
+      toast("Modification PostgreSQL refusée : "+String(e.message||e||""),"error");
+      return;
     }
-    db.users[idx]=Object.assign({},db.users[idx],data,password?{password}:{});
     logActivity("Modification utilisateur",username);
   }
   const savedForScope=adminUserByUsername(username);
@@ -263,8 +245,8 @@ async function confirmAdminUser(originalUsername){
     const scopeIdx=db.supervisorScopes.findIndex(x=>String(x.username||"").toLowerCase()===String(item.username||"").toLowerCase());
     if(scopeIdx>=0)db.supervisorScopes[scopeIdx]=item;else db.supervisorScopes.push(item);
   }
-  rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees,data.validationCodeEnabled);
-  if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees,societesAutorisees:data.societesAutorisees,sitesAutorises:data.sitesAutorises,actionsAutorisees:data.actionsAutorisees};saveSession(session)}
+  rememberUserPermissions(username,savedForScope?.societesAutorisees||[],savedForScope?.niveau||"",savedForScope?.structuresAutorisees||[],data.validationCodeEnabled);
+  if(session&&session.username===username)await sgdiRefreshSessionFromServer();
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
   saveDB();closeModal();toastCenter("Données enregistrées","success");render();
 }

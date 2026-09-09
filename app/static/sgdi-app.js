@@ -867,18 +867,18 @@ async function sgdiPullState(options){
   }
   const run=(async()=>{
     try{
+      await sgdiRefreshSessionFromServer();
       const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
       const snapshotPath=(opt.light||opt.deferSql||opt.deferSecondary||opt.auto)?"/api/irongs/db?light=1":"/api/irongs/db";
       let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
       if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
         window.__SGDI_BACKEND_ENABLED__=true;
-        const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents","factures","paiements","avances","avoirs","caisse"];
-        const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
+
         // Attend qu'un cycle de sync des collections SQL déjà en cours (sites,
         // affectations...) se termine avant de remplacer db en bloc.
         if(sgdiSqlSyncInProgress)await sgdiSqlSyncInProgress.catch(()=>{});
-        hydrateDB(remote);
-        if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
+        hydrateDB(remote,{partialSql:snapshotPath.includes("light=1")});
+
         sanitizeCandidatesInDB();
         sgdiPostgresReady=true;
         sgdiHydrated=true;
@@ -1431,16 +1431,11 @@ async function sgdiPullEmployees(options){
       }
       if(!Array.isArray(employees))throw primaryError;
     }
-    // Une réponse vide transitoire ne doit jamais effacer un référentiel déjà chargé.
-    if(!employees.length&&previousAgents.length){
-      console.warn("Réponse employés vide ignorée : conservation du dernier référentiel valide");
-      return previousAgents;
-    }
     const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
     if(scopeNorm){
       const previous=previousAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
       const scoped=backendAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
-      db.agents=scoped.length?dedupeEmployeesByBackendId([...previous,...scoped]):previousAgents;
+      db.agents=dedupeEmployeesByBackendId([...previous,...scoped]);
     }else{
       db.agents=backendAgents;
     }
@@ -1828,29 +1823,48 @@ function rememberUserPermissions(username,societes,niveau,structures,validationC
   const prev=cache[username]||{};
   cache[username]={societesAutorisees:Array.isArray(societes)?societes:[],structuresAutorisees:normalizeStructureList(Array.isArray(structures)?structures:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[])),niveau:niveau||"",validationCodeEnabled:validationCodeEnabled!==undefined?!!validationCodeEnabled:!!prev.validationCodeEnabled};
 }
+async function sgdiRefreshSessionFromServer(){
+  if(!session||!sgdiAuthToken())return;
+  const previous=session;
+  const user=await SGDI.auth.me();
+  if(session!==previous)return;
+  if(!user?.username||String(user.username).toLowerCase()!==String(previous.username).toLowerCase())throw new Error("Compte serveur incohérent : reconnectez-vous.");
+  session={...previous,username:user.username,nom:user.full_name||user.username,role:user.role,niveau:user.access_level||"",backendId:user.id,
+    sitesAutorises:Array.isArray(user.authorized_sites)?user.authorized_sites:[],societesAutorisees:Array.isArray(user.authorized_societies)?user.authorized_societies:[],
+    structuresAutorisees:normalizeStructureList(user.authorized_structures),actionsAutorisees:Array.isArray(user.authorized_actions)?user.authorized_actions:[],
+    modulesAutorises:user.authorized_modules,effectiveModules:user.effective_modules||[],moduleAccessGlobal:user.module_access_global===true,
+    globalSocietyAccess:user.global_society_access===true,recruitmentAccess:user.recruitment_access===true,permissionsFromServer:true,
+    supervisorReadOnly:user.supervisor_read_only!==false,adminSystem:previous.adminSystem===true&&user.module_access_global===true};
+  if((!previous.permissionsFromServer)||JSON.stringify([previous.role,previous.niveau,previous.societesAutorisees,previous.structuresAutorisees,previous.effectiveModules,previous.globalSocietyAccess,previous.sitesAutorises,previous.actionsAutorisees,previous.moduleAccessGlobal,previous.recruitmentAccess])!==JSON.stringify([session.role,session.niveau,session.societesAutorisees,session.structuresAutorisees,session.effectiveModules,session.globalSocietyAccess,session.sitesAutorises,session.actionsAutorisees,session.moduleAccessGlobal,session.recruitmentAccess])){
+    db=emptyDB();sgdiPostgresReady=false;_bootCacheClear();
+    sgdiViewRenderGeneration+=1;
+    const view=document.getElementById("view");
+    if(view)view.innerHTML='<div class="card p-6">Actualisation des droits et des données…</div>';
+    if(session.societe&&!session.globalSocietyAccess&&!session.societesAutorisees.some(s=>normalizeSocieteName(s)===normalizeSocieteName(session.societe))){session.societe=null;session.transverse=null;location.hash="#/select-societe";}
+    else if(session.transverse&&!serverAllowsStructure(session.transverse)){session.transverse=null;location.hash="#/select-societe";}
+
+  }
+  saveSession(session);
+}
 async function sgdiLoadAuthState(){
   if(!sgdiAuthToken()||!db)return;
   if(!isAdmin())return;
   try{
     const users=await SGDI.auth.listUsers();
     const cache=userPermissionCache();
-    const previous={};
-    (db.users||[]).forEach(u=>{if(u&&u.username)previous[u.username]=u});
     db.users=(users||[]).map(u=>{
       const cached=cache[u.username]||{};
-      const prev=previous[u.username]||{};
       const pgSoc=Array.isArray(u.authorized_societies)?u.authorized_societies:[];
       const pgStruct=normalizeStructureList(u.authorized_structures);
-      const savedSoc=Array.isArray(cached.societesAutorisees)?cached.societesAutorisees:(Array.isArray(prev.societesAutorisees)?prev.societesAutorisees:[]);
-      const savedStruct=normalizeStructureList(Array.isArray(cached.structuresAutorisees)?cached.structuresAutorisees:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[]));
-      const socs=pgSoc.length?pgSoc:savedSoc;
-      const structs=pgStruct.length?pgStruct:savedStruct;
-      const niveau=u.access_level||u.niveau||cached.niveau||prev.niveau||(String(u.role||"").toUpperCase().startsWith("ADM")||u.role==="admin"?"H5":"H3");
-      const validationCodeEnabled=!!(cached.validationCodeEnabled??prev.validationCodeEnabled);
+      const socs=pgSoc;
+      const structs=pgStruct;
+      const niveau=u.access_level||"";
+      const validationCodeEnabled=!!cached.validationCodeEnabled;
       rememberUserPermissions(u.username,socs,niveau,structs,validationCodeEnabled);
       return {
         backendId:u.id||u.backendId||null,
         username:u.username,
+        email:u.email||"",modulesAutorises:u.authorized_modules,hasValidationPassword:!!u.has_validation_password,
         nom:u.full_name||u.username,
         role:u.role||"agent",
         niveau,
@@ -1975,26 +1989,8 @@ async function syncCandidatesFromPostgres(){
   if(!sgdiAuthToken()||!db)return;
   try{
     const rows=await SGDI.rh.candidates();
-    const mappedRows=(rows||[]).map(candidateFromApi);
-    mappedRows.filter(c=>!candidateHasMinimumData(c)&&sqlBackendId(c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Candidat vide non supprimé",e)));
-    mappedRows.filter(c=>isRemovedQQQCandidate(c)&&sqlBackendId(c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Candidat QQQ QQ non supprimé PostgreSQL",e)));
-    const fromPg=mappedRows.filter(c=>candidateHasMinimumData(c)&&!isRemovedQQQCandidate(c));
-    sanitizeCandidatesInDB();
-    const byKey=new Map();
-    (db.candidats||[]).filter(candidateHasMinimumData).forEach(c=>{const k=candidateDedupeKey(c)||String(c.backendId||c.id);if(!byKey.has(k)||candidateCompletenessScore(c)>candidateCompletenessScore(byKey.get(k)))byKey.set(k,c)});
-    fromPg.forEach(c=>{
-      const k=candidateDedupeKey(c)||String(c.backendId||c.id);
-      const prev=byKey.get(k);
-      if(prev&&prev.backendId&&c.backendId&&String(prev.backendId)!==String(c.backendId)){
-        const keep=candidateCompletenessScore(prev)>=candidateCompletenessScore(c)?prev:c;
-        const drop=keep===prev?c:prev;
-        if(sqlBackendId(drop.backendId))deleteCandidateFromPostgres(drop).catch(e=>console.warn("Doublon candidat non supprimé",e));
-        byKey.set(k,{...prev,...keep});
-      }else{
-        byKey.set(k,{...(prev||{}),...c});
-      }
-    });
-    db.candidats=[...byKey.values()].filter(candidateHasMinimumData);
+    if(!Array.isArray(rows))throw new Error("Réponse candidats invalide");
+    db.candidats=rows.map(candidateFromApi);
   }catch(e){
     console.warn("Candidats PostgreSQL indisponibles",e);
     throw e;
@@ -2091,7 +2087,7 @@ function siteFromApi(row){
   delete data._legacy;
   return {...data,isNew:false,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",clientId:row.client_id||data.clientId||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",dateOuverture:data.dateOuverture||data.date_ouverture||"",siteOuvertPar:data.siteOuvertPar||data.site_ouvert_par||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
 async function persistSiteToPostgres(site){if(!site)return null;sgdiRequireServerWrite();const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id,isNew:false});return site}
-async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e);throw e}}
+async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e);throw e}}
 function assignmentFromApi(row){
   const employee=(db.agents||[]).find(a=>String(a.backendId||"")===String(row.employee_id||"")||String(a.id||"")===String(row.employee_id||""));
   const site=(db.sites||[]).find(s=>String(s.backendId||"")===String(row.site_id||"")||String(s.id||"")===String(row.site_id||""));
@@ -2393,7 +2389,7 @@ function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()|
 function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",ai:data.ai||row.ai||"",nis:data.nis||row.nis||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||"",portalSlug:row.portal_slug||data.portalSlug||"",portalEnabled:row.portal_enabled!==undefined?row.portal_enabled:(data.portalEnabled!==false)}}
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const bid=c.backendId&&Number.isInteger(Number(c.backendId))&&Number(c.backendId)>0?Number(c.backendId):null;const saved=bid?await SGDI.commercial.updateClient(bid,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
-async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
+async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
 let sgdiSqlSyncInProgress=null;
 function sgdiCurrentRouteRoot(){
   return String(location.hash||"").replace(/^#\/?/,"").split("/")[0]||"";
@@ -2459,6 +2455,7 @@ async function sgdiBackgroundSqlSync(options){
   return sgdiSqlSyncInProgress;
 }
 function sgdiShouldSyncCandidates(){
+  if(session?.permissionsFromServer)return session.recruitmentAccess===true&&(session.moduleAccessGlobal||session.effectiveModules.some(k=>["drh","recrute"].includes(k)));
   const role=String(session?.role||"").trim().toLowerCase();
   const username=String(session?.username||"").trim().toUpperCase();
   const structures=(session?.structuresAutorisees||[]).map(value=>String(value).trim().toLowerCase());
@@ -2579,31 +2576,23 @@ function sgdiAutoRepairDB(options){
   }
   return report;
 }
-// Collections coûteuses à recharger dont une réponse VIDE ne doit jamais écraser des
-// données déjà chargées avec succès (une requête SQL lente/en erreur sur UNE seule
-// collection ne doit pas faire "disparaître" les employés/sites déjà affichés le temps
-// qu'une prochaine synchro réussisse — sinon la page se vide puis se recharge en boucle).
-const SGDI_SKIP_EMPTY_ON_HYDRATE=new Set(["agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence","factures","paiements","avances","avoirs","caisse"]);
-function hydrateDB(source){
+// Un snapshot léger omet les collections SQL non chargées. Une liste vide
+// explicite reste autoritaire et remplace toujours les données précédentes.
+const SGDI_SERVER_SQL_COLLECTIONS=new Set(["candidats","employees","assignments","affectations","contrats","agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence","factures","paiements","avances","avoirs","caisse"]);
+function hydrateDB(source,options={}){
   const base=emptyDB();
   const incoming=(source&&typeof source==="object"&&!Array.isArray(source))?source:{};
   const previous=(db&&typeof db==="object")?db:null;
-  SGDI_SKIP_EMPTY_ON_HYDRATE.forEach(k=>{
-    if(Array.isArray(incoming[k])&&incoming[k].length===0&&Array.isArray(previous?.[k])&&previous[k].length>0){
-      delete incoming[k];
-    }
-  });
   db={...base,...incoming};
-  SGDI_SKIP_EMPTY_ON_HYDRATE.forEach(k=>{
-    if(!(k in incoming)&&Array.isArray(previous?.[k]))db[k]=previous[k];
+  SGDI_SERVER_SQL_COLLECTIONS.forEach(k=>{
+    if(options.partialSql&&!(k in incoming)&&Array.isArray(previous?.[k]))db[k]=previous[k];
   });
   Object.keys(base).forEach(k=>{
     if(Array.isArray(base[k])&&!Array.isArray(db[k]))db[k]=[];
   });
   if(!db.settings||typeof db.settings!=="object")db.settings=base.settings;
   if(!db.societesConfig||typeof db.societesConfig!=="object")db.societesConfig=base.societesConfig;
-  const repaired=sgdiAutoRepairDB({silent:true});
-  if(repaired.length&&sgdiAuthToken())setTimeout(()=>{if(sgdiPostgresReady)sgdiBackendSave()},200);
+  sgdiAutoRepairDB({silent:true});
   return db;
 }
 function loadDB(){return emptyDB()}
@@ -3589,35 +3578,19 @@ async function login(u,p,opt={}){
         }
       }
       saveSession(session);
-      // Tentative de rendu immédiat depuis le cache (même utilisateur, < 3 min)
-      const loginCached=_bootCacheLoad(session.username);
-      if(loginCached&&!opt.adminSystem){
-        setLoginBusy(true,"Ouverture...");
-        hydrateDB(loginCached);
-        sanitizeCandidatesInDB();
-        sgdiPostgresReady=true;
-        if(typeof loadCustomSocietes==="function")loadCustomSocietes();
-        const localUserC=(db.users||[]).find(x=>x.username===session.username);
-        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,sitesAutorises:Array.isArray(localUserC.sitesAutorises)&&localUserC.sitesAutorises.length?localUserC.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
-        showDailyValidationCodeIfNeeded();
-        sgdiSpeakWelcome();
-        location.hash="#/select-societe";route();
-        sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db);else _bootCacheResyncFailed();}).catch(()=>_bootCacheResyncFailed());
-        return;
-      }
+      await sgdiRefreshSessionFromServer();
       setLoginBusy(true,"Ouverture...");
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       db=db||loadDB();
       sgdiPullState({render:true,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
-      const localUser=(db.users||[]).find(x=>x.username===session.username);
-      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,sitesAutorises:Array.isArray(localUser.sitesAutorises)&&localUser.sitesAutorises.length?localUser.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
       location.hash="#/select-societe";route();return;
     }catch(e){
       sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+      session=null;
       saveSession(null);
       setLoginBusy(false);
       toast("Connexion obligatoire : "+(e.message||"identifiants incorrects"),"error");return
@@ -3730,8 +3703,9 @@ function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(lo
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
 function isAdm2(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM2","ADMI2","ADMIN2"].includes(normalizeAccessCode(v)))}
-function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
+function currentUserRecord(){if(session?.permissionsFromServer)return {...((db.users||[]).find(u=>u.username===session.username)||{}),...session};return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
 function currentAllowedSocietes(){
+  if(session?.permissionsFromServer){if(session.globalSocietyAccess)return SOCIETES.slice();return uniqueSocieteNames(session.societesAutorisees||[]).filter(s=>!isRemovedSociete(s));}
   if(isAdminGeneralSession())return SOCIETES.slice();
   const u=currentUserRecord();
   const list=Array.isArray(u?.societesAutorisees)?u.societesAutorisees:(Array.isArray(session?.societesAutorisees)?session.societesAutorisees:[]);
@@ -17686,8 +17660,14 @@ const ADMIN_ACCESS_IMPLICATIONS={
 function adminAccessIncludes(allowed,key){
   return allowed.includes(key)||(ADMIN_ACCESS_IMPLICATIONS[key]||[]).some(alias=>allowed.includes(alias));
 }
-function canAccessModuleHostKey(key){const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh")))}
-function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh"))}
+function serverAllowsStructure(key){
+  if(!session?.permissionsFromServer)return null;
+  if(session.moduleAccessGlobal)return true;
+  const aliases={commercial:["dc"],facturation:["finances","fac"],facmod:["fac"],superviseur:["ops","pointeur"],recrutement:["drh","recrute"],recruteur:["drh","recrute"],gestionnaire_rh:["drh"],contrats:["drh"],paie:["paie","drh"],conges:["conges","drh"],pointage:["pointage","pointeur","ops"]};
+  return (aliases[key]||[key]).some(k=>(session.effectiveModules||[]).includes(k));
+}
+function canAccessModuleHostKey(key){const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh")))}
+function canAccessStructureKey(key){const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh"))}
 function adminAccessBaseRole(role){const r=String(role||"").trim();const u=r.toUpperCase();if(u.startsWith("AG"))return"agent";if(u.startsWith("CAD")||u==="RH")return"ops";if(u.startsWith("SUP"))return"dispatch";if(u.startsWith("ADM")||u==="ADMIN")return"admin";return r.toLowerCase()}
 
 
@@ -19588,34 +19568,10 @@ function ptAutoApercu(){
 
 
 /* ---- INIT ---- */
-// ── Cache démarrage rapide ────────────────────────────────────────────────────
-// Rendu instantané depuis un instantané local très récent, TOUJOURS suivi d'une
-// resynchro immédiate en arrière-plan (voir bootApp/login). Fenêtre de fraîcheur
-// volontairement courte (contrairement à l'ancien TTL de 2h qui pouvait laisser
-// afficher des données fantômes) : au-delà, on repart d'un chargement serveur pur.
-// Les écritures restent bloquées tant que sgdiHydrated n'est pas vrai (donc tant
-// que la resynchro réelle n'a pas confirmé les données), donc aucune sauvegarde
-// ne peut jamais partir sur la base de ce cache d'affichage seul.
+// Les données du navigateur ne remplacent jamais les réponses PostgreSQL.
 const BOOT_CACHE_KEY="atlas_boot_cache";
-const BOOT_CACHE_TTL=180000; // 3 min
-const BOOT_CACHE_MAX=3*1024*1024; // 3 MB max
-function _bootCacheLoad(username){
-  try{
-    const r=localStorage.getItem(BOOT_CACHE_KEY);
-    if(!r)return null;
-    const c=JSON.parse(r);
-    if(c.u!==username)return null;
-    if(Date.now()-c.t>BOOT_CACHE_TTL)return null;
-    return c.d||null;
-  }catch(e){return null}
-}
-function _bootCacheSave(username,data){
-  try{
-    const s=JSON.stringify(data);
-    if(s.length>BOOT_CACHE_MAX)return;
-    localStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({u:username,t:Date.now(),d:data}));
-  }catch(e){}
-}
+function _bootCacheLoad(username){return null}
+function _bootCacheSave(username,data){_bootCacheClear()}
 function _bootCacheClear(){try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}}
 function _bootCacheResyncFailed(){
   if(typeof toast==="function")toast("Actualisation impossible : les données affichées peuvent être obsolètes. Vérifiez votre connexion.","error");
@@ -19641,25 +19597,7 @@ async function bootApp(){
   if(session&&!sgdiAuthToken()){session=null;saveSession(null);_bootCacheClear();location.hash="#/login";}
   unlockedAgents=loadUnlocked();
   if(session&&sgdiAuthToken()){
-    // Tentative de rendu immédiat depuis le cache
-    const cached=_bootCacheLoad(session.username);
-    if(cached){
-      hydrateDB(cached);
-      sanitizeCandidatesInDB();
-      sgdiPostgresReady=true;
-      if(typeof loadCustomSocietes==="function")loadCustomSocietes();
-      if(session.societe&&!canUseSociete(session.societe)){session.societe=null;session.transverse=null;saveSession(session);location.hash="#/select-societe";}
-      const mhr=sgdiModuleHostDefaultRoute();
-      sgdiApplyModuleHostSession(true);
-      if(!location.hash)location.hash=mhr||(session.societe?"#/societe-portal":(session.transverse?"#/"+(session.transverse==="materiel"?"materiel/dashboard":session.transverse+"/dashboard"):"#/select-societe"));
-      route(); // ← rendu immédiat depuis le cache
-      // Resync en arrière-plan
-      sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{
-        if(loaded)_bootCacheSave(session?.username,db);
-        else _bootCacheResyncFailed();
-      }).catch(()=>_bootCacheResyncFailed());
-      return;
-    }
+    try{await sgdiRefreshSessionFromServer()}catch(e){session=null;saveSession(null);renderLogin();toast("Vérification du compte impossible : reconnectez-vous.","error");return}
     // Pas de cache : ouverture immédiate, puis chargement données en arrière-plan.
     sgdiPostgresReady=true;
     db=db||loadDB();

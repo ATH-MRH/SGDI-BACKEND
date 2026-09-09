@@ -157,6 +157,10 @@ class UserOut(BaseModel):
     credentials_email_error: str | None = None
     is_active: bool
 
+    effective_modules: list[str] | None = None
+    module_access_global: bool = False
+    recruitment_access: bool = False
+
     model_config = {"from_attributes": True}
 
 
