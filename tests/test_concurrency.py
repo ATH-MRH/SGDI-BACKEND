@@ -4,6 +4,7 @@ Aucun mock : vrai serveur (TestClient), vraie base, vrais threads en parallèle,
 chaque requête ayant sa propre session (fixture `live_client`). On vérifie qu'aucune
 écriture concurrente n'est perdue et qu'aucune ne casse la base.
 """
+from tests.site_fixtures import historical_legacy_site
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
@@ -41,7 +42,7 @@ def test_concurrent_employee_creation_no_loss(live_client, live_headers):
 def test_concurrent_assignments_all_persist(live_client, live_headers):
     """N employés + 1 site, puis N affectations créées en parallèle -> toutes actives."""
     # 1 site
-    site_resp = live_client.post("/api/irongs/collections/sites/items", headers=live_headers, json={
+    site_resp = historical_legacy_site(live_client, headers=live_headers, json={
         "data": {"nom": "Site Concurrence", "indicatif": "SCC", "societe": "Iron Global Securite", "actif": True}
     })
     assert site_resp.status_code in (200, 201)

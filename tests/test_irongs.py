@@ -12,7 +12,11 @@ SOC = "Iron Global Securite"
 
 
 def _post_item(client, h, name, data):
-    r = client.post(f"/api/irongs/collections/{name}/items", headers=h, json={"data": data})
+    if name == "sites":
+        from tests.site_fixtures import historical_legacy_site
+        r = historical_legacy_site(client, headers=h, json={"data":data})
+    else:
+        r = client.post(f"/api/irongs/collections/{name}/items", headers=h, json={"data": data})
     assert r.status_code in (200, 201), r.text
     return r.json()
 

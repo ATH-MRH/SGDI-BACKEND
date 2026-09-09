@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 from app.core.security import hash_password
 from app.modules.auth.models import User
 
@@ -10,8 +11,8 @@ def test_event_stream_without_ticket_returns_401_not_422(client):
 
 
 def test_limited_user_can_update_legacy_site_with_allowed_society(client, db, auth_headers):
-    created = client.post(
-        "/api/ops/sites",
+    created = historical_site(
+        client,
         json={"name": "Site legacy sans societe", "indicatif": "LEG"},
         headers=auth_headers,
     )

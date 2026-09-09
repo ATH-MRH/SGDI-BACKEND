@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 def _create_store(client, headers, name):
     resp = client.post(
         "/api/materiel/stores",
@@ -126,8 +127,8 @@ def test_duplicate_stock_movement_same_voucher_is_idempotent_for_all_stores(clie
 
 def test_site_dotation_deducts_stock_without_employee(client, auth_headers):
     article = _create_article(client, auth_headers, "ART-SITE-DOT")
-    site_resp = client.post(
-        "/api/ops/sites",
+    site_resp = historical_site(
+        client,
         json={"name": "Site dotation matériel", "indicatif": "SDM"},
         headers=auth_headers,
     )

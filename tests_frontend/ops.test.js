@@ -283,3 +283,21 @@ test('isOpsSupervisorReadOnlySession: sans session -> false', () => {
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });
+
+
+test('OPS : création autonome bloquée et quatre types de PV disponibles', async () => {
+  const app=loadSgdiApp(['openOpsSiteConfigModal','openSitePVModal','siteOperationPVData']);
+  const t=app.T();t.setSession({username:'ops',transverse:'ops',role:'ops'});
+  t.setDb({sites:[{id:'s',backendId:1,nom:'Site DC',societe:'IRON GLOBAL SOLUTION'}],agents:[],assignments:[]});
+  await t.openOpsSiteConfigModal();
+  assert.strictEqual(app.window.document.getElementById('opsSiteName'),null);
+  t.openSitePVModal('s');
+  const form=app.window.document.getElementById('site-operation-pv-form');
+  assert.ok(form);
+  assert.strictEqual(form.elements.kind.options.length,4);
+  form.elements.kind.value='augmentation';form.elements.before.value='10';form.elements.after.value='12';form.elements.reason.value='Renfort demandé';
+  assert.strictEqual(t.siteOperationPVData(form).after,12);
+  form.elements.after.value='8';assert.throws(()=>t.siteOperationPVData(form));
+  form.elements.kind.value='diminution';assert.strictEqual(t.siteOperationPVData(form).after,8);
+  app.window.close();
+});

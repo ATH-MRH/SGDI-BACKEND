@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 from datetime import date
 from types import SimpleNamespace
 
@@ -21,7 +22,7 @@ def _rotation_payload(code: str, work_day: int = 0):
 
 
 def test_multiple_rotations_can_be_linked_to_same_site(client, auth_headers):
-    site = client.post("/api/ops/sites", headers=auth_headers, json={"name": "Site multi rotation", "active": 1}).json()
+    site = historical_site(client, headers=auth_headers, json={"name": "Site multi rotation", "active": 1}).json()
     r1 = client.post("/api/ops/rotations", headers=auth_headers, json=_rotation_payload("ROT-T1"))
     r2 = client.post("/api/ops/rotations", headers=auth_headers, json=_rotation_payload("ROT-T2", 1))
     assert r1.status_code == 201, r1.text

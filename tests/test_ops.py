@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 """Couverture COMPLÈTE du module OPS (backend) — vrais endpoints, vraie base, sans mock.
 
 Palier 2 : OPS. Sites, postes, affectations, rotations, pointage journalier,
@@ -23,7 +24,7 @@ def _site(client, h, name, rotation="24/48", staff=0, active=1, opening="2020-01
     plan = {"societe": SOCIETY}
     if opening:
         plan["dateOuverture"] = opening
-    r = client.post("/api/ops/sites", headers=h, json={
+    r = historical_site(client, headers=h, json={
         "name": name, "indicatif": name[:3].upper(), "rotation_system": rotation,
         "contractual_staff": staff, "active": active, "equipment_plan": plan,
     })
@@ -626,7 +627,7 @@ def test_movements_count_matches_header(client, auth_headers, db):
 
 def _foreign_site(client, auth_headers, name="Site Etranger"):
     """Site rattaché à une société que l'utilisateur restreint n'a PAS le droit de voir."""
-    r = client.post("/api/ops/sites", headers=auth_headers, json={
+    r = historical_site(client, headers=auth_headers, json={
         "name": name, "indicatif": "ETR", "active": 1,
         "equipment_plan": {"societe": "Sword Corporation", "dateOuverture": "2020-01-01"},
     })

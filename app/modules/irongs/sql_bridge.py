@@ -514,8 +514,10 @@ def upsert_site(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     if not row and indicatif:
         row = db.execute(select(Site).where(Site.indicatif == str(indicatif))).scalar_one_or_none()
     if not row:
-        row = Site(name=str(item.get("nom") or item.get("name") or "Site"))
-        db.add(row)
+        raise HTTPException(status_code=403, detail="Création de site réservée au Commercial : validez le contrat dans dc.irongs.com")
+    original_plan = dict(row.equipment_plan or {})
+    locked = bool(original_plan.get("contractualReadOnly"))
+    contract_fields = {field: getattr(row, field) for field in ("contractual_staff", "day_staff", "night_staff", "groups_count")}
     eff = item.get("effectifs") if isinstance(item.get("effectifs"), dict) else {}
     row.name = str(item.get("nom") or item.get("name") or row.name)
     row.indicatif = indicatif
@@ -533,6 +535,17 @@ def upsert_site(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     row.groups_count = as_int(eff.get("groupes")) or 0
     row.active = 1 if item.get("actif", item.get("active", True)) else 0
     row.equipment_plan = {**(row.equipment_plan or {}), **deepcopy(item), "_legacy": deepcopy(item)}
+    if locked:
+        for field, value in contract_fields.items():
+            setattr(row, field, value)
+        protected = {key: value for key, value in original_plan.items() if key in {
+            "positionQuotas", "groupQuotas", "groupPositionQuotas", "dcContractClientId",
+            "dcContractSiteKey", "dcContractVersion", "contractualSource", "contractualReadOnly"}}
+        effectifs = {"totalContractuel": row.contractual_staff, "jour": row.day_staff,
+                     "nuit": row.night_staff, "groupes": row.groups_count,
+                     "weekend": row.weekend_staff, "feries": row.holiday_staff}
+        row.equipment_plan = {**row.equipment_plan, **protected, "effectifs": effectifs,
+                              "_legacy": {**(row.equipment_plan.get("_legacy") or {}), **protected, "effectifs": effectifs}}
     db.flush()
     return site_to_item(row)
 

@@ -318,9 +318,10 @@ test('registre absent : chaque nouvelle route affiche un rechargement compréhen
 test('Sites : formulaire lazy, destruction des cartes et chargement cartographique tardif ignoré', async () => {
   if (!inventory.sites) return;
   const r = boot(), w = r.window;
+  r.T().setDb(new Proxy({sites:[{id:'site-test',backendId:1,nom:'Site Commercial',actif:true,effectifs:{}}]}, {get(target,key){return target[key]??(target[key]=[]);}}));
   let resolveMap, creations = 0, removals = 0;
   w.loadMapLibre = () => new Promise(resolve => { resolveMap = resolve; });
-  r.go('#/sites/nouveau'); await tick();
+  r.go('#/sites/site-test'); await tick();
   assert.ok(w.document.getElementById('site-form'));
   for (const key of ['__sgdiSitesDashboardMap', '__sgdiInlineSitePositionMap', '__sgdiSitePositionMap']) w[key] = { remove() { removals++; } };
   r.go('#/dashboard'); await tick();
@@ -332,7 +333,7 @@ test('Sites : formulaire lazy, destruction des cartes et chargement cartographiq
   w.sgdiAuthToken = () => 'fixture-token';
   w.SGDI.stock.stores = () => new Promise(resolve => { resolveStores = resolve; });
   w.SGDI.commercial.clients = async () => [];
-  r.go('#/sites/nouveau'); await tick();
+  r.go('#/sites/site-test'); await tick();
   assert.equal(typeof resolveStores, 'function', r.view().textContent + JSON.stringify(r.errors));
   r.go('#/dashboard'); await tick();
   resolveStores([]); await tick();

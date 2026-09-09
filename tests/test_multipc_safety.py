@@ -19,9 +19,8 @@ def _create_employee(client, headers, code, society="Iron Global Securite", stat
 
 
 def _create_site(client, headers, nom="Site MPC", indicatif="SMP"):
-    r = client.post("/api/irongs/collections/sites/items", headers=headers, json={
-        "data": {"nom": nom, "indicatif": indicatif, "societe": "Iron Global Securite", "actif": True}
-    })
+    from tests.site_fixtures import historical_site
+    r = historical_site(client, json={"name":nom,"indicatif":indicatif,"active":1,"equipment_plan":{"societe":"Iron Global Securite"}})
     assert r.status_code in (200, 201), r.text
     return r.json().get("backendId") or r.json().get("id")
 

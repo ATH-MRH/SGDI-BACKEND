@@ -67,6 +67,7 @@ function updateSitePosteTotal(row){
 }
 
 function updateSiteEffectifTotalContractuel(){
+  if(document.getElementById("site-form")?.dataset.dcContractLocked==="1")return;
   const totalTarget=document.querySelector('[name="eff_totalContractuel"]');
   const jourTarget=document.querySelector('[name="eff_jour"]');
   const nuitTarget=document.querySelector('[name="eff_nuit"]');
@@ -192,6 +193,7 @@ function addSiteMaterielRow(){
 function siteCanEditFromCurrentModule(site){
   if(site?.isNew)return true;
   if(isAdminSystemSession())return true;
+  if(session?.transverse==="ops"&&!isOpsSupervisorReadOnlySession())return true;
   if(site?.ficheTechniqueLocked||site?.siteFormLocked)return false;
   if(session?.transverse==="materiel")return false;
   return ["admin","ops"].includes(session?.transverse);
@@ -667,7 +669,11 @@ function openSiteProceduresModal(siteId){
 
 function applySiteFormLock(){
   const form=document.getElementById("site-form");
-  if(!form||form.dataset.locked!=="1")return;
+  if(!form)return;
+  if(form.dataset.dcContractLocked==="1"){
+    form.querySelectorAll('[name^="eff_"],[name^="poste_"],[name="clientId"],[name="client"],[name="societe"]').forEach(el=>{el.disabled=true;});
+  }
+  if(form.dataset.locked!=="1")return;
   form.querySelectorAll("input,select,textarea").forEach(el=>{el.disabled=true;el.classList.add("bg-slate-100")});
   form.querySelectorAll("button[data-site-lock-keep]").forEach(btn=>{btn.disabled=false;btn.classList.remove("bg-slate-100")});
 }
@@ -696,8 +702,8 @@ function siteTechnicalIdentityHTML(site){
 
 async function renderSiteForm(view,id){
   const siteFormHash=location.hash,siteFormGeneration=sgdiViewRenderGeneration;
-  if(isOpsSupervisorReadOnlySession()&&!id){
-    toast("Accès superviseur OPS : création de site non autorisée.","error");
+  if(!id){
+    toast("Création des sites réservée au Commercial : dc.irongs.com", "info");
     navigate("sites/actifs");
     return;
   }
@@ -723,6 +729,7 @@ async function renderSiteForm(view,id){
   if(location.hash!==siteFormHash||sgdiViewRenderGeneration!==siteFormGeneration||document.getElementById("view")!==view)return;
   if(supervisorModuleActive()&&!siteInSupervisorScope(s)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Ce site ne fait pas partie des sites autorisés pour ce superviseur.</p></div>`;return}
   const rotationSystem=inferSiteRotationSystem(s);
+  const dcLocked=!!(s.contractualReadOnly||s.equipment_plan?.contractualReadOnly);
   const eff=siteEffectifsNorm(s);
   const canEditSite=siteCanEditFromCurrentModule(s)&&!isOpsSupervisorReadOnlySession();
   const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
@@ -730,7 +737,7 @@ async function renderSiteForm(view,id){
   const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
   const siteIdentity=s.isNew?`<div class="site-form-title w-full"><h1>CRÉATION DE SITE</h1></div>`:siteTechnicalIdentityHTML(s);
   view.innerHTML=`<div class="w-full">${siteIdentity}${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
-  <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
+  <form id="site-form" class="site-editor-wide site-form-layout" data-dc-contract-locked="${dcLocked?"1":"0"}" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
     <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-3">${isAdminSystemSession()?`<label class="label">Société</label><select class="select" name="societe">${uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]).map(soc=>`<option value="${escapeHTML(soc)}" ${normalizeSocieteName(s.societe)===normalizeSocieteName(soc)?"selected":""}>${escapeHTML(soc)}</option>`).join("")}</select>`:`<label class="label">Société</label><input class="input bg-slate-50" value="${escapeHTML(s.societe||"—")}" readonly/>`}</div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div><div class="col-span-2"><label class="label">Client (fiche commerciale liée)</label><select class="select" name="clientId"><option value="">— Aucun —</option>${(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")).map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}" ${String(s.clientId||"")===String(c.backendId||c.id||"")?"selected":""}>${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select><p style="font-size:11px;color:#64748b;margin-top:4px">Détermine quels agents ce client verra depuis son portail dédié (si activé).</p></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
@@ -764,7 +771,7 @@ async function renderSiteForm(view,id){
       <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
       ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSitePVModal('${jsString(s.id)}')">Établir un PV</button>`}${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
   </form></div>`;
   sitesModuleTimeout(()=>{updateSiteEffectifTotalContractuel();initInlineSitePositionMap();applySiteFormLock()},0);
 }
@@ -831,7 +838,7 @@ function siteDraftFromCurrentForm(id){
     postes:{...(existing.postes||{}),...postes},
     equipements:equipements.length?equipements:(existing.equipements||existing.materiel||[]),
     rotationPlanning:(()=>{try{return JSON.parse(fd.get("rotationPlanningJson")||"{}")}catch(e){return {}}})(),
-    effectifs:{...(existing.effectifs||{}),totalContractuel,jour:totalJour,nuit:totalNuit,groupes:+fd.get("eff_groupes")||existing.effectifs?.groupes||0,weekend:+fd.get("eff_weekend")||existing.effectifs?.weekend||0,feries:+fd.get("eff_feries")||existing.effectifs?.feries||0}
+    effectifs:(existing.contractualReadOnly||existing.equipment_plan?.contractualReadOnly)?existing.effectifs:{...(existing.effectifs||{}),totalContractuel,jour:totalJour,nuit:totalNuit,groupes:+fd.get("eff_groupes")||existing.effectifs?.groupes||0,weekend:+fd.get("eff_weekend")||existing.effectifs?.weekend||0,feries:+fd.get("eff_feries")||existing.effectifs?.feries||0}
   };
 }
 
@@ -904,13 +911,6 @@ function sitePVControlsHTML(meta){
 async function archiveSitePVFromWindow(docWindow,meta){
   if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return false;
   let site=(db.sites||[]).find(s=>String(s.id)===String(meta?.siteId)||String(s.backendId||"")===String(meta?.siteBackendId)||String(s.indicatif||"")===String(meta?.indicatif||""));
-  if(!site&&meta?.siteDraft){
-    site={...meta.siteDraft,id:meta.siteDraft.id||uid("st"),actif:meta.siteDraft.actif!==false};
-    db.sites=db.sites||[];
-    db.sites.push(site);
-  }else if(site&&meta?.siteDraft){
-    Object.assign(site,{...meta.siteDraft,id:site.id||meta.siteDraft.id,backendId:site.backendId||meta.siteDraft.backendId});
-  }
   if(!site){toast("Site introuvable pour archivage du PV","error");return false}
   const safeSociete=siteSafeSociete(site);
   if(!safeSociete){toast("Société autorisée introuvable pour enregistrer le PV","error");return false}
@@ -923,12 +923,49 @@ async function archiveSitePVFromWindow(docWindow,meta){
   const key=employeeDocumentSafeKey("pv_site",reference);
   site.documents=site.documents||{};
   if(!String(html||"").trim()){toast("Archivage refusé : contenu du document obligatoire pour PostgreSQL","error");return false}
-  site.documents[key]={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),html,name:employeeDocumentFileName("PROCES VERBAL",reference),title:"PROCES VERBAL",reference,category:"Sites",type:"pv_site",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"SGDI",generated:true};
+  site.documents[key]={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),html,name:employeeDocumentFileName("PROCES VERBAL",reference),title:meta.title||"PROCES VERBAL",reference,category:"Sites",type:"pv_site",pvKind:meta.kind||"ouverture",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"SGDI",generated:true};
   site.updatedAt=today();
   try{await persistSiteToPostgres(site)}catch(e){toast("PV non enregistré : "+(e.message||e),"error");return false}
   if(!(await saveDBAndWaitToast("PV non confirmé")))return false;
   toast("PV enregistré dans la fiche site","success");
   return true;
+}
+
+function openSitePVModal(id){
+  if(guardOpsSupervisorMutation("site","Édition des PV non autorisée."))return;
+  const site=(db.sites||[]).find(s=>String(s.id)===String(id)||String(s.backendId)===String(id));
+  if(!site?.backendId){toast("Choisissez un site transmis par Commercial.","error");return;}
+  const actual=siteAgentsAffectes(site).length;
+  openModal(`<h2>Procès-verbal du site</h2><p>${escapeHTML(site.nom||"Site")}</p>
+    <form id="site-operation-pv-form" onsubmit="event.preventDefault();generateSiteOperationPV('${jsString(id)}')">
+      <label class="label">Type de PV</label><select class="select" name="kind" onchange="this.form.querySelector('[data-pv-change]').hidden=this.value==='ouverture'||this.value==='fermeture'"><option value="ouverture">Ouverture de site</option><option value="augmentation">Augmentation des effectifs</option><option value="diminution">Diminution des effectifs</option><option value="fermeture">Fermeture de site</option></select>
+      <label class="label">Date de l'opération</label><input class="input" type="date" name="date" value="${today()}" required>
+      <div data-pv-change hidden><label class="label">Effectif avant l'opération</label><input class="input" type="number" min="0" step="1" name="before" value="${actual}"><label class="label">Effectif après l'opération</label><input class="input" type="number" min="0" step="1" name="after" value="${actual}"></div>
+      <label class="label">Motif / observations</label><textarea class="input" name="reason" required></textarea>
+      <p class="text-sm text-slate-500">Le PV sera conservé dans les documents du site. Les affectations et besoins contractuels sont gérés dans leurs écrans dédiés.</p>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Préparer le PV</button></div>
+    </form>`);
+}
+function siteOperationPVData(form){
+  const fd=new FormData(form),kind=String(fd.get("kind")||""),reason=String(fd.get("reason")||"").trim();
+  const labels={ouverture:"Ouverture de site",augmentation:"Augmentation des effectifs",diminution:"Diminution des effectifs",fermeture:"Fermeture de site"};
+  const date=String(fd.get("date")||"");
+  if(!labels[kind]||!date||!reason)throw new Error("Renseignez le type, la date et le motif du PV.");
+  const before=Number(fd.get("before")),after=Number(fd.get("after"));
+  if(["augmentation","diminution"].includes(kind)&&(!Number.isInteger(before)||!Number.isInteger(after)||before<0||after<0||(kind==="augmentation"?after<=before:after>=before)))throw new Error("Les effectifs avant/après doivent correspondre au type de PV.");
+  return {kind,title:`PV — ${labels[kind]}`,date,reason,before,after};
+}
+function generateSiteOperationPV(id){
+  if(guardOpsSupervisorMutation("site","Édition des PV non autorisée."))return;
+  const site=(db.sites||[]).find(s=>String(s.id)===String(id)||String(s.backendId)===String(id));
+  if(!site?.backendId)return;
+  let data;try{data=siteOperationPVData(document.getElementById("site-operation-pv-form"));}catch(e){toast(e.message,"error");return;}
+  const reference=`PV-${data.kind.toUpperCase()}-${data.date.replaceAll("-","")}-${site.backendId}-${Date.now()}`;
+  const meta={...data,reference,siteId:site.id,siteBackendId:site.backendId};
+  const change=["augmentation","diminution"].includes(data.kind)?`<p><b>Effectif avant :</b> ${data.before} · <b>Effectif après :</b> ${data.after} · <b>Variation :</b> ${data.after-data.before}</p>`:"";
+  const html=`<!doctype html><html lang="fr"><meta charset="utf-8"><title>${escapeHTML(data.title)}</title><style>body{font:15px Arial;color:#12233c;max-width:900px;margin:32px auto;padding:20px}h1{color:#043970}p{line-height:1.6}.signatures{display:flex;justify-content:space-between;margin-top:70px}@media print{.no-print{display:none!important}}</style><body>${sitePVControlsHTML(meta)}<h1>${escapeHTML(data.title)}</h1><p><b>Référence :</b> ${escapeHTML(reference)}<br><b>Société :</b> ${escapeHTML(site.societe||site.society||"—")}<br><b>Client :</b> ${escapeHTML(site.client||"—")}<br><b>Site :</b> ${escapeHTML(site.nom||"—")}<br><b>Date :</b> ${escapeHTML(formatDate(data.date))}</p>${change}<h2>Motif et constat</h2><p style="white-space:pre-wrap">${escapeHTML(data.reason)}</p><p>Établi par : ${escapeHTML(session?.username||"OPS")}</p><div class="signatures"><span>Responsable OPS<br>Signature et cachet</span><span>Représentant du client<br>Signature et cachet</span></div></body></html>`;
+  const w=window.open("","_blank","width=1000,height=800");if(!w){toast("Ouverture bloquée par le navigateur","error");return;}
+  w.document.write(html);w.document.close();closeModal();
 }
 
 function editSiteOpeningPV(id){
@@ -1107,10 +1144,7 @@ async function saveSite(id){
     toast("Fiche site verrouillée : modification réservée à Administration système","error");
     return;
   }
-  if(!s){
-    s={id,actif:true,dateCreation:today(),societe:scopeSociete,rotation:ROTATION_DEFAUT.map(r=>({...r}))};
-    db.sites.push(s);
-  }
+  if(!s){toast("Création des sites dans Commercial : dc.irongs.com", "info");return;}
   // Ne JAMAIS réécrire silencieusement la société d'un site existant à partir du
   // contexte courant de l'éditeur (bug source des sites mal rattachés : sauvegarder
   // une fiche pendant qu'on a une autre société active la faisait basculer). Seule
@@ -1138,6 +1172,8 @@ async function saveSite(id){
   s.siteOuvertPar=(fd.get("siteOuvertPar")||"").trim();
   s.type=fd.get("type");
   s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};
+  const dcLocked=!!(s.contractualReadOnly||s.equipment_plan?.contractualReadOnly);
+  const dcEffectifs=s.effectifs,dcPostes=s.postes,dcClient=s.client,dcClientId=s.clientId;
   s.client=fd.get("client")||s.contact.nom;
   s.clientId=(fd.get("clientId")||"").trim();
   s.postes={};
@@ -1152,6 +1188,7 @@ async function saveSite(id){
     s.postes[nom]={total,jour,nuit,rotationSystem};
   });
   s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};
+  if(dcLocked){s.effectifs=dcEffectifs;s.postes=dcPostes;s.client=dcClient;s.clientId=dcClientId;}
   s.equipements=[];
   let siteMaterielInvalid=false;
   document.querySelectorAll("#site-materiel-body .site-materiel-row").forEach(row=>{
@@ -1191,6 +1228,7 @@ async function saveSite(id){
   s.horairesReleves="";
   s.rotationSystem=fd.get("rotationSystem")||"24/48";
   s.rotation=siteRotationFromSystem(s.rotationSystem);
+  s.clientPortalRotation={...(s.clientPortalRotation||s.equipment_plan?.clientPortalRotation||{}),system:s.rotationSystem};
   try{s.rotationPlanning=JSON.parse(fd.get("rotationPlanningJson")||"{}")}catch(e){s.rotationPlanning={}}
   s.ficheTechniqueLocked=true;
   s.siteFormLocked=true;

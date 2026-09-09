@@ -4,6 +4,7 @@ Vérifie la base du temps réel (la signature d'événements change quand une do
 change), que le snapshot reflète les écritures, et que les compteurs serveur
 (sidebar-stats) donnent la vérité (effectif, affectés, sans affectation).
 """
+from tests.site_fixtures import historical_legacy_site
 from datetime import date
 
 
@@ -67,7 +68,7 @@ def test_sidebar_stats_without_assignment_is_server_truth(client, auth_headers):
     """without_assignment (compteur serveur) = employés actifs sans affectation active."""
     # Un employé affecté ne doit pas compter comme "sans affectation"
     emp = _create_employee(client, auth_headers, "WA001")
-    site = client.post("/api/irongs/collections/sites/items", headers=auth_headers, json={
+    site = historical_legacy_site(client, headers=auth_headers, json={
         "data": {"nom": "Site WA", "indicatif": "SWA", "societe": "Iron Global Securite", "actif": True}
     }).json()
     site_id = site.get("backendId") or site.get("id")

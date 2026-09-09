@@ -1092,7 +1092,7 @@ let sitesCache=[];
 
 async function loadSites(options={}){
   const host=document.getElementById("sitesList");
-  const canAddSite=session?.permissions?.create_sites!==false;
+  const canAddSite=false;
   document.getElementById("addSiteBtn")?.classList.toggle("hidden",!canAddSite);
   if(session?.permissions?.view_sites===false){host.innerHTML='<div class="empty">La consultation des sites n’est pas activée pour votre compte.</div>';return}
   if(!options.silent)host.innerHTML='<div class="empty">Chargement…</div>';
@@ -1217,7 +1217,7 @@ function resetSiteConfigFields(){
 function openSiteModal(){
   const select=document.getElementById("siteExistingSelect");
   select.innerHTML='<option value="">— Choisir un site —</option>'+sitesCache.map(site=>`<option value="${site.id}">${esc(site.name)}</option>`).join("");
-  setSiteConfigMode("create");
+  setSiteConfigMode("edit");
   document.getElementById("siteError").classList.remove("show");
   document.getElementById("siteModalBackdrop").classList.remove("hidden");
 }
@@ -1231,6 +1231,8 @@ function openPlanningConfiguration(){
   requestAnimationFrame(()=>{const backdrop=document.getElementById("siteModalBackdrop"),section=document.getElementById("sitePlanningConfiguration");if(backdrop&&section)backdrop.scrollTo({top:Math.max(0,section.offsetTop-24),behavior:"smooth"})});
 }
 function setSiteConfigMode(mode){
+  if(mode==="create"){showBanner("Création des sites réservée au Commercial.","error");return;}
+  document.querySelector('[data-site-mode="create"]')?.classList.add("hidden");
   siteConfigMode=mode;
   document.querySelectorAll(".site-config-tab").forEach(button=>button.classList.toggle("active",button.dataset.siteMode===mode));
   document.getElementById("siteExistingSelector").classList.toggle("hidden",mode==="create");

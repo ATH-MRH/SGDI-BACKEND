@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 """Pointage QR employé + saisie manuelle (pointeur) — vrais endpoints, vraie base.
 
 Couvre /api/portal/attendance-qr/scan (via le refactor _register_attendance) et les
@@ -132,7 +133,7 @@ def test_manual_scan_requires_auth(client):
 
 
 def _site(client, h, name):
-    r = client.post("/api/ops/sites", headers=h, json={
+    r = historical_site(client, headers=h, json={
         "name": name, "indicatif": name[:3].upper(), "rotation_system": "24/48",
         "contractual_staff": 0, "active": 1, "equipment_plan": {"societe": SOCIETY},
     })
@@ -223,7 +224,7 @@ def test_attendance_staffing_returns_current_shift_requirements_for_authorized_s
     from app.core.security import hash_password
     from app.modules.auth.models import User
 
-    created = client.post("/api/ops/sites", headers=auth_headers, json={
+    created = historical_site(client, headers=auth_headers, json={
         "name": "Site Quotas Shift", "active": 1, "contractual_staff": 12,
         "equipment_plan": {
             "societe": SOCIETY,
@@ -275,6 +276,17 @@ def test_dc_contract_is_source_of_truth_for_ops_and_pointage(client, auth_header
     assert body["source"] == "dc.irongs.com"
     assert body["sites_count"] == 1
     site_id = body["published_site_ids"][0]
+    # DC structuré prévaut sur les anciens besoins techniques et publie un seul site.
+    from app.modules.ui.service import _staffing_stats
+    from app.db.session import get_db
+    provider = client.app.dependency_overrides[get_db]()
+    db_session = next(provider)
+    try:
+        counters = _staffing_stats(db_session, [SOCIETY])
+        assert counters["contract"] >= 20  # (3 caristes + 2 polyvalents) × 4 groupes
+    finally:
+        provider.close()
+
 
     staffing = client.get("/api/portal/attendance-staffing", headers=auth_headers)
     assert staffing.status_code == 200, staffing.text

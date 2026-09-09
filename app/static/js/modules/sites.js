@@ -108,7 +108,7 @@ async function renderSitesServer(view){
     window.__SGDI_SITE_SITUATION_BY_SITE=situationBySite;
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
     const opsReadOnly=isOpsSupervisorReadOnlySession();
-    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="openOpsSiteConfigModal()">➕ Nouveau site</button>`}</div>
+    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1><span class="text-sm text-slate-500">Sites transmis par le Commercial</span></div>
     ${opsSupervisorReadOnlyNoticeHTML()}
     ${sitesSocieteSelectorHTML(mapSites)}
     ${session?.transverse==="materiel"?"":situationData?siteSyntheseServerHTML(situationData,mapSites):siteSyntheseGeneraleHTML(mapSites)}
@@ -143,7 +143,7 @@ function renderSites(view){
   const soc=sitesPageSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
   const opsReadOnly=isOpsSupervisorReadOnlySession();
-  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="openOpsSiteConfigModal()">➕ Nouveau site</button>`}</div>
+  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1><span class="text-sm text-slate-500">Sites transmis par le Commercial</span></div>
   ${opsSupervisorReadOnlyNoticeHTML()}
   ${sitesSocieteSelectorHTML(sites)}
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
@@ -936,18 +936,7 @@ async function siteAjouterEffectifValider(siteId){
 }
 
 async function openOpsSiteConfigModal(){
-  const siteConfigHash=location.hash,siteConfigGeneration=sgdiViewRenderGeneration;
-  if(sgdiAuthToken()&&SGDI?.commercial?.clients&&!(db.clients||[]).length){
-    try{const clients=await SGDI.commercial.clients();if(Array.isArray(clients)&&clients.length)db.clients=clients.map(clientFromApi)}catch(e){console.warn("openOpsSiteConfigModal: clients preload failed",e)}
-  }
-  if(location.hash!==siteConfigHash||sgdiViewRenderGeneration!==siteConfigGeneration)return;
-  opsSiteConfigGroupSeed={};
-  openModal(opsSiteConfigModalHTML());
-  sitesModuleTimeout(()=>{
-    document.getElementById("opsSiteRotationStartDate").value=today();
-    addOpsSitePositionRow();
-    renderOpsSiteRotationPreview();
-  },0);
+  toast("Création des sites dans Commercial : dc.irongs.com", "info");
 }
 
 function opsSiteConfigModalHTML(){
@@ -1052,42 +1041,7 @@ function renderOpsSiteRotationPreview(){
 }
 
 async function submitOpsSiteConfig(){
-  const errorEl=document.getElementById("opsSiteConfigError");errorEl.style.display="none";
-  const name=document.getElementById("opsSiteName").value.trim();
-  if(name.length<2){errorEl.textContent="Le nom du site est requis.";errorEl.style.display="block";return}
-  const positions=currentOpsSitePositions();
-  const invalidPosition=[...document.querySelectorAll("#opsSitePositionsList .site-position-name")].some(input=>input.value.trim()&&input.value.trim().length<2);
-  if(invalidPosition){errorEl.textContent="Chaque poste doit avoir un nom valide.";errorEl.style.display="block";return}
-  if(positions.length&&!validateOpsSiteDistribution()){errorEl.textContent="La ventilation par groupe doit correspondre exactement aux besoins par poste/fonction.";errorEl.style.display="block";return}
-  const positionQuotas=Object.fromEntries(positions.map(p=>[p.name,p.required]));
-  const groupPositions=collectOpsSiteGroupPositions();
-  const groupQuotas=Object.fromEntries(Object.entries(groupPositions).map(([code,values])=>[code,Object.values(values).reduce((sum,value)=>sum+Number(value||0),0)]));
-  const requiredStaff=parseInt(document.getElementById("opsSiteRequiredStaff").value,10)||0;
-  const societe=document.getElementById("opsSiteSociete").value;
-  const clientBackendId=document.getElementById("opsSiteClient").value;
-  const client=(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(clientBackendId));
-  const btn=document.getElementById("opsSiteSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
-  try{
-    await SGDI.sites.create({
-      name,
-      client_id:clientBackendId?parseInt(clientBackendId,10):null,
-      client_name:client?.nom||client?.raisonSociale||null,
-      address:document.getElementById("opsSiteAddress").value.trim()||null,
-      commune:document.getElementById("opsSiteCommune").value.trim()||null,
-      wilaya:document.getElementById("opsSiteWilaya").value||null,
-      site_type:document.getElementById("opsSiteType").value.trim()||null,
-      contractual_staff:requiredStaff,
-      active:1,
-      equipment_plan:{societe,positionQuotas,groupQuotas,groupPositionQuotas:groupPositions,clientPortalRotation:opsSiteRotationConfiguration()},
-    });
-    closeModal();
-    toast("Site créé.","success");
-    if(typeof renderView==="function")renderView();
-  }catch(e){
-    errorEl.textContent=e?.message||"Impossible de créer ce site.";errorEl.style.display="block";
-  }finally{
-    btn.disabled=false;btn.textContent="Créer le site";
-  }
+  toast("Création des sites dans Commercial : dc.irongs.com", "info");
 }
 
 function siteCoverageBarHTML(actual,required){

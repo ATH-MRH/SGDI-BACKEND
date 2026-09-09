@@ -197,7 +197,7 @@ def update_dc_client_contract(
             row.client_id = client.id
             row.client_name = client.name
             row.address = item.address
-            row.rotation_system = "3x8"
+            row.rotation_system = row.rotation_system or "3x8"
             row.contractual_staff = per_shift * 4
             row.groups_count = 4
             row.active = 1
@@ -207,7 +207,7 @@ def update_dc_client_contract(
                 "positionQuotas": {name: count * 4 for name, count in item.requirements.items()},
                 "groupQuotas": {code: per_shift for code in "ABCD"},
                 "groupPositionQuotas": group_positions,
-                "clientPortalRotation": {
+                "clientPortalRotation": existing_plan.get("clientPortalRotation") or {
                     "system": "3x8", "first_shift_time": item.first_shift_time,
                     "start_date": item.rotation_start_date.isoformat(), "horizon_weeks": 52,
                 },

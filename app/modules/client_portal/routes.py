@@ -207,7 +207,7 @@ def create_site(
     user: ClientPortalUser = Depends(current_client_user),
 ):
     _require_client_permission(db, user, "create_sites")
-    return service.create_site_for_client(db, user.client_id, payload)
+    raise HTTPException(status_code=403, detail="Création de site réservée au Commercial : contactez votre interlocuteur commercial")
 
 
 @router.put("/sites/{site_id}", response_model=SiteVisibleOut)

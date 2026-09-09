@@ -129,9 +129,8 @@ def test_create_site(client, auth_headers):
             "actif": True,
         }
     })
-    assert resp.status_code in (200, 201)
-    data = resp.json()
-    assert data.get("nom") == "Site Test Alpha" or data.get("name") == "Site Test Alpha"
+    assert resp.status_code == 403
+    assert "Commercial" in resp.json()["detail"]
 
 
 # ─────────────────────────────────────────────

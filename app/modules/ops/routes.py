@@ -233,7 +233,7 @@ def sites(active: int | None = None, society: str | None = None, db: Session = D
 def create_site(payload: SiteCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     plan = payload.equipment_plan if isinstance(payload.equipment_plan, dict) else {}
     _ensure_society_allowed(user, plan.get("societe") or plan.get("society"))
-    return service.create_row(db, Site, payload)
+    raise HTTPException(status_code=403, detail="Création de site réservée au Commercial : validez le contrat dans dc.irongs.com")
 
 
 def _recompute_situation_totals(rows: list) -> dict:
@@ -274,6 +274,8 @@ def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db)
     plan = payload.equipment_plan if isinstance(payload.equipment_plan, dict) else None
     current_plan = existing.equipment_plan if existing and isinstance(existing.equipment_plan, dict) else {}
     if current_plan.get("contractualReadOnly"):
+        if "client_id" in payload.model_fields_set and payload.client_id != existing.client_id:
+            raise HTTPException(status_code=409, detail="Client du site géré par le Commercial")
         contract_fields_changed = any(
             value is not None and value != getattr(existing, field)
             for field, value in {
@@ -283,12 +285,14 @@ def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db)
                 "groups_count": payload.groups_count,
             }.items()
         )
-        protected_keys = {"positionQuotas", "groupQuotas", "groupPositionQuotas", "clientPortalRotation"}
+        protected_keys = {"positionQuotas", "groupQuotas", "groupPositionQuotas", "dcContractClientId", "dcContractSiteKey", "contractualSource", "contractualReadOnly", "dcContractVersion"}
         plan_changed = bool(plan and any(key in plan and plan.get(key) != current_plan.get(key) for key in protected_keys))
         if contract_fields_changed or plan_changed:
             raise HTTPException(status_code=409, detail="Données contractuelles verrouillées : modifiez le contrat depuis dc.irongs.com")
     if plan is not None:
         _ensure_society_allowed(user, plan.get("societe") or plan.get("society"))
+    if plan is not None:
+        payload = payload.model_copy(update={"equipment_plan": {**current_plan, **plan}})
     return service.update_row(db, Site, site_id, payload)
 
 

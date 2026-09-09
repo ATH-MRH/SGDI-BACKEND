@@ -164,15 +164,43 @@ def _staffing_stats(db: Session, society: str | list[str] | None = None) -> dict
     query = db.query(Client)
     if values is not None:
         query = query.filter(Client.society.in_(values))
-    clients = [c for c in query.all()
-               if _status_key(c.status) in {"actif", "active"}
-               and c.contract_start and c.contract_start <= today
-               and (c.contract_end is None or c.contract_end >= today)]
+    clients = []
+    contract_keys: dict[int, set[str] | None] = {}
+    contractual = 0
+    for c in query.all():
+        if _status_key(c.status) not in {"actif", "active"}:
+            continue
+        if (c.contract_start and c.contract_start > today) or (c.contract_end and c.contract_end < today):
+            continue
+        data = c.data if isinstance(c.data, dict) else {}
+        if "dc_contract_status" in data:
+            if data.get("dc_contract_status") != "valide":
+                continue
+            # Le contrat DC est la référence ; sa projection OPS n'est pas sommée.
+            keys = set()
+            for item in data.get("dc_contract_sites") or []:
+                try:
+                    start = date.fromisoformat(str(item.get("rotation_start_date") or ""))
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                if start > today:
+                    continue
+                if str(item.get("key")) in keys:
+                    continue
+                keys.add(str(item.get("key")))
+                contractual += 4 * sum(max(0, int(n)) for n in (item.get("requirements") or {}).values())
+            contract_keys[c.id] = keys
+        else:
+            # Contrats historiques Commercial, avant le référentiel DC structuré.
+            if not c.contract_start:
+                continue
+            contractual += max(0, _client_effectif_count(data))
+            contract_keys[c.id] = None
+        clients.append(c)
     client_ids = {c.id for c in clients}
-    contractual = sum(max(0, _client_effectif_count(c.data or {})) for c in clients)
     actual_ids: set[int] = set()
     if client_ids:
-        rows = (db.query(Employee.id, Employee.status, Employee.society, Site.equipment_plan, Client.society)
+        rows = (db.query(Employee.id, Employee.status, Employee.society, Site.equipment_plan, Client.society, Client.id)
                 .select_from(Employee)
                 .join(Assignment, Assignment.employee_id == Employee.id)
                 .join(Site, Site.id == Assignment.site_id)
@@ -180,11 +208,14 @@ def _staffing_stats(db: Session, society: str | list[str] | None = None) -> dict
                 .filter(Client.id.in_(client_ids), Site.active == 1, Assignment.active == 1,
                         Assignment.start_date <= today,
                         or_(Assignment.end_date.is_(None), Assignment.end_date >= today)))
-        for employee_id, employee_status, employee_society, equipment_plan, client_society in rows.all():
+        for employee_id, employee_status, employee_society, equipment_plan, client_society, client_id in rows.all():
             # Both ends of the assignment must belong to the same society.
             if society_key(employee_society) != society_key(client_society):
                 continue
             plan = equipment_plan if isinstance(equipment_plan, dict) else {}
+            keys = contract_keys[client_id]
+            if keys is not None and str(plan.get("dcContractSiteKey")) not in keys:
+                continue
             legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
             site_society = plan.get("societe") or plan.get("society") or legacy.get("societe") or legacy.get("society")
             if site_society and society_key(site_society) != society_key(client_society):

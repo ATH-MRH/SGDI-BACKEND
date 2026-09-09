@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 """Portail Client : comptes externes nominatifs, visibilité dérivée des sites, signalements.
 
 Vérifie en particulier les points sensibles identifiés en conception :
@@ -29,7 +30,7 @@ def _commercial_client(client, h, name, portal_slug=None, portal_enabled=True):
 
 
 def _site(client, h, name, client_id=None):
-    r = client.post("/api/ops/sites", headers=h, json={
+    r = historical_site(client, headers=h, json={
         "name": name, "indicatif": name[:3].upper(), "rotation_system": "24/48",
         "active": 1, "client_id": client_id, "equipment_plan": {"societe": SOCIETY},
     })
@@ -204,12 +205,13 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert site["employees"][0]["group_code"] is None
 
 
-def test_client_can_create_site_with_positions_and_group_staffing(client, auth_headers):
+def test_client_can_manage_existing_site_with_positions_and_group_staffing(client, auth_headers):
     cid = _commercial_client(client, auth_headers, "Client Config Site", portal_slug="client-config-site")
     account = _portal_account(client, auth_headers, cid, username="client.config.site")
     portal_headers = _login(client, account["username"], account["temporary_password"])
 
-    response = client.post("/api/client-portal/sites", headers=portal_headers, json={
+    from tests.site_fixtures import historical_portal_site
+    response = historical_portal_site(client, cid, {
         "name": "Nouveau site configuré",
         "site_type": "Entrepôt",
         "address": "Zone industrielle",
@@ -242,8 +244,8 @@ def test_client_can_create_site_with_positions_and_group_staffing(client, auth_h
         "positions": [{"name": "Cariste", "required": 5}],
         "group_positions": {"A": {"Cariste": 2}, "B": {"Cariste": 2}},
     })
-    assert incoherent.status_code == 422, incoherent.text
-    assert "Répartition incohérente" in incoherent.json()["detail"]
+    assert incoherent.status_code == 403, incoherent.text
+    assert "Commercial" in incoherent.json()["detail"]
 
     updated = client.put(f"/api/client-portal/sites/{site['id']}", headers=portal_headers, json={
         "name": "Site configuré modifié", "required_staff": 6,
@@ -494,7 +496,7 @@ def test_ops_triage_scoped_by_authorized_society(client, auth_headers, restricte
     cid = _commercial_client(client, auth_headers, "Client Ops Scope", portal_slug="clientopsscope")
     account = _portal_account(client, auth_headers, cid, username="clientopsscope_user")
     headers = _login(client, "clientopsscope_user", account["temporary_password"])
-    site = client.post("/api/ops/sites", headers=auth_headers, json={
+    site = historical_site(client, headers=auth_headers, json={
         "name": "Site Ops Scope Foreign", "indicatif": "SOS", "rotation_system": "24/48",
         "active": 1, "client_id": cid, "equipment_plan": {"societe": "Sword Corporation"},
     }).json()

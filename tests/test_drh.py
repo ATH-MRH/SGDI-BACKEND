@@ -1,3 +1,4 @@
+from tests.site_fixtures import historical_site
 """Couverture COMPLÈTE du module DRH (backend) — vrais endpoints, vraie base, sans mock.
 
 Palier 1 : DRH. Employés, candidats + workflow recrutement, contrats, congés,
@@ -291,7 +292,7 @@ def test_employees_page_search(client, auth_headers):
 
 
 def _site(client, h, name, society="Iron Global Securite"):
-    r = client.post("/api/ops/sites", headers=h, json={
+    r = historical_site(client, headers=h, json={
         "name": name, "indicatif": name[:3].upper(), "active": 1,
         "equipment_plan": {"societe": society},
     })
