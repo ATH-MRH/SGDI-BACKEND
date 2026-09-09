@@ -30,6 +30,13 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .field-invalid{border-color:#dc2626!important;background:#fff1f2!important;box-shadow:0 0 0 3px rgba(220,38,38,.14)!important}
 label.field-label-invalid{color:#b91c1c!important}
 .primary{border:0;border-radius:14px;background:var(--navy);color:#fff;padding:13px 18px;font-weight:900;cursor:pointer}
+.login-password{position:relative}
+.login-password input{padding-right:46px}
+.password-toggle{position:absolute;right:2px;top:2px;width:40px;height:32px;display:grid;place-items:center;border:0;border-radius:7px;background:transparent;color:var(--navy);cursor:pointer}
+.password-toggle:hover{background:#dbeafe}
+.password-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.password-toggle svg{width:21px;height:21px;pointer-events:none}
+.password-toggle[aria-pressed="false"] .eye-slash{display:none}
 .login .primary{width:100%;margin-top:18px}
 .secondary{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:11px 16px;font-weight:850;cursor:pointer}
 .danger{border:0;border-radius:12px;background:var(--red);color:#fff;padding:11px 16px;font-weight:850;cursor:pointer}
@@ -179,7 +186,12 @@ tr:last-child td{border-bottom:0}
     <label for="username">Identifiant</label>
     <input id="username" autocomplete="username" autocapitalize="characters" required placeholder="REC01">
     <label for="password">Mot de passe</label>
-    <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+    <div class="login-password">
+      <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+      <button type="button" class="password-toggle" aria-label="Afficher le mot de passe" aria-controls="password" aria-pressed="false" onclick="toggleLoginPassword(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg>
+      </button>
+    </div>
     <button id="loginBtn" class="primary">SE CONNECTER</button>
     <div id="loginError" class="error"></div>
   </form>
@@ -321,6 +333,14 @@ tr:last-child td{border-bottom:0}
 
 <script src="/static/algeria-communes.js?v=20260625-communes"></script>
 <script>
+function toggleLoginPassword(button){
+  const input=document.getElementById("password");
+  const visible=input.type==="password";
+  input.type=visible?"text":"password";
+  button.setAttribute("aria-pressed",String(visible));
+  button.setAttribute("aria-label",visible?"Masquer le mot de passe":"Afficher le mot de passe");
+}
+
 const SESSION_KEY="atlas_recrute_session";
 let recruteSession=null;
 let activeTab="new";
