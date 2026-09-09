@@ -4650,6 +4650,7 @@ function renderFacStandaloneShell(){
   const user=session?.nom||session?.username||"Utilisateur";
   document.body.dataset.soc="";
   app.innerHTML=`<div class="fac-standalone-shell">
+    ${connectedAccountHeadingHTML()}
     <header class="fac-standalone-header no-print">
       <div class="fac-brand"><div class="fac-brand-mark">FAC</div><div><h1>FACTURATION</h1><small>Gestion autonome des ventes et règlements</small></div></div>
       <div class="fac-header-context"><strong>${escapeHTML(soc)}</strong><div class="fac-header-actions"><button type="button" onclick="changeSociete()" title="Changer de société"><span>⌂</span> Société</button><button type="button" onclick="logout()" title="Déconnexion"><span>⏻</span> Déconnexion</button></div></div>
@@ -4681,6 +4682,7 @@ function renderPaieStandaloneShell(){
   const user=session?.nom||session?.username||"Utilisateur";
   document.body.dataset.soc="";
   app.innerHTML=`<div class="paie-standalone-shell">
+    ${connectedAccountHeadingHTML()}
     <header class="paie-standalone-header no-print">
       <div class="paie-brand"><div class="paie-brand-mark">PAIE</div><div><h1>PAIE</h1><small>Salaires, déclarations et bulletins</small></div></div>
       <div class="paie-header-context"><strong>${escapeHTML(soc)}</strong><div class="paie-header-actions"><button type="button" onclick="changeSociete()" title="Changer de société"><span>⌂</span> Société</button><button type="button" onclick="logout()" title="Déconnexion"><span>⏻</span> Déconnexion</button></div></div>
@@ -4701,6 +4703,7 @@ function renderCongesStandaloneShell(){
   const user=session?.nom||session?.username||"Utilisateur";
   document.body.dataset.soc="";
   app.innerHTML=`<div class="conges-standalone-shell">
+    ${connectedAccountHeadingHTML()}
     <header class="conges-standalone-header no-print">
       <div class="conges-brand"><div class="conges-brand-mark">CG</div><div><h1>CONGÉS</h1><small>Droits, demandes et planification</small></div></div>
       <div class="conges-header-context"><strong>${escapeHTML(soc)}</strong><span>${escapeHTML(user)} · Synchronisé avec PostgreSQL</span><div class="conges-header-actions"><button type="button" onclick="changeSociete()">⌂ Société</button><button type="button" onclick="logout()">⏻ Déconnexion</button></div></div>
@@ -4754,6 +4757,10 @@ function enterModuleHostRoute(routeName){
   if(sgdiModuleHostRequiresSociete(cfg)&&!session.societe){renderModuleHostSocieteSelector(cfg);return}
   navigate(routeName||cfg.homeRoute);
 }
+function connectedAccountHeadingHTML(){
+  if(!session?.username)return "";
+  return `<div class="sgdi-account-heading no-print" data-no-lang="1" aria-label="Compte connecté">${escapeHTML(session.username)}</div>`;
+}
 function renderModuleHostAccessDenied(cfg){
   const userName=session?.nom||session?.username||"Utilisateur";
   document.getElementById("app").innerHTML=`<div class="company-portal module-host-portal">
@@ -4769,7 +4776,7 @@ function renderModuleHostAccessDenied(cfg){
       </section>
       <div class="company-portal-foot text-red-700">Connectez-vous avec un compte autorisé ou contactez l'administrateur système.</div>
     </main>
-    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
+    ${connectedAccountHeadingHTML()}
   </div>`;
 }
 function renderModuleHostSocieteSelector(cfg){
@@ -4791,7 +4798,7 @@ function renderModuleHostSocieteSelector(cfg){
       </div>
       ${societes.length?``:`<div class="company-portal-foot text-red-700">Aucune société autorisée pour ce compte.</div>`}
     </main>
-    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
+    ${connectedAccountHeadingHTML()}
   </div>`;
 }
 function renderModuleHostPortal(cfg,options={}){
@@ -4815,7 +4822,7 @@ function renderModuleHostPortal(cfg,options={}){
       </div>
       ${sections.length?``:`<div class="company-portal-foot text-red-700">Aucune rubrique configurée pour ce module.</div>`}
     </main>
-    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
+    ${connectedAccountHeadingHTML()}
   </div>`;
   if(options.announceStructure!==false)sgdiSpeakStructure();
 }
@@ -4849,7 +4856,7 @@ function renderSocietePortal(options={}){
       </div>
       ${modules.length?``:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
     </main>
-    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
+    ${connectedAccountHeadingHTML()}
   </div>`;
   if(options.announceStructure!==false)sgdiSpeakStructure();
 }
@@ -5993,6 +6000,7 @@ function renderInternal(options={}){
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}">
+    ${connectedAccountHeadingHTML()}
     <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:#011b3f;border-bottom:1px solid #062b5f;gap:12px">
       <div class="sgdi-topbar-left ${isTrans?"sgdi-topbar-left-module":""} flex items-center gap-3 shrink-0">
         <button type="button" class="sgdi-sidebar-toggle ${sgdiSidebarCollapsed()?"is-collapsed":""}" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button>
@@ -6196,6 +6204,7 @@ function renderSocieteSelector(){
       <em>Accéder au périmètre</em>
     </button>`).join("");
   document.getElementById("app").innerHTML=`<div class="company-portal module-host-portal">
+    ${connectedAccountHeadingHTML()}
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     ${isAdminGeneralSession()?`<button type="button" class="company-portal-change" onclick="openSelectSocieteToEditModal()">Modifier société</button>`:""}
     <main class="company-portal-main module-host-main">

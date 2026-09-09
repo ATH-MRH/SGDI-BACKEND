@@ -306,3 +306,16 @@ test('fiche employé : champs incomplets signalés dès ouverture et actualisés
     assert.ok(field('nom').classList.contains('rh-field-incomplete'));
   } finally { window.close(); }
 });
+
+test('identifiant connecté : utilise le login exact et échappe le contenu', () => {
+  const ctx = require('./load-app').loadSgdiApp(['connectedAccountHeadingHTML']);
+  assert.ifError(ctx.loadError);
+  try {
+    ctx.T().setSession({username:'SARA <test>',nom:'Nom complet différent'});
+    const markup=ctx.T().connectedAccountHeadingHTML();
+    assert.match(markup,/SARA &lt;test&gt;/);
+    assert.doesNotMatch(markup,/Nom complet différent/);
+    ctx.T().setSession(null);
+    assert.strictEqual(ctx.T().connectedAccountHeadingHTML(),'');
+  } finally {ctx.window.close();}
+});
