@@ -8292,6 +8292,8 @@ function renderLogin(){
       <section class="sgdi-login-visual" aria-label="Présentation ${hostCfg?.key==="ops"?"ATLAS OPS":"ATLAS"}">
         <div class="sgdi-login-brand">${hostCfg?.key==="facmod"?`<span>FAC</span><i>.</i>`:`<span>ATLA</span><i>S</i>`}</div>
         <p class="sgdi-login-kicker">${escapeHTML(dedicatedKicker)}</p>
+        ${hostCfg?.key==="commercial"?`<div class="commercial-login-story"><span class="commercial-login-eyebrow">ESPACE COMMERCIAL</span><h2>Vos relations clients.<br>Une vision claire.</h2><div class="commercial-login-flow"><div><b>01</b><strong>Clients</strong><small>Construisez la relation</small></div><div><b>02</b><strong>Devis</strong><small>Préparez vos offres</small></div><div><b>03</b><strong>Contrats</strong><small>Pilotez vos engagements</small></div></div><p>Votre activité commerciale, réunie dans un seul espace.</p></div>`:""}
+
       </section>
       <section class="sgdi-login-panel">
         <div class="sgdi-login-panel-head">
