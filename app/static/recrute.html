@@ -585,7 +585,7 @@ async function renderRecruitDashboard(refresh=false){
   const convocations=candidates.filter(item=>candidateConvocation(item));
   const interviews=candidates.filter(item=>candidateInterview(item));
   const favorable=candidates.filter(item=>item.data?.avisDecision==="Favorable");
-  const contractPending=tabState.recruited.items.filter(candidateIsContractPending);
+  const contractPending=[...tabState.recruited.items,...tabState.archive.items].filter(candidateIsContractPending);
   const toConvoke=candidates.filter(item=>!candidateConvocation(item)&&!candidateInterview(item)&&!candidateIsContractPending(item));
   const upcoming=convocations.filter(item=>String(candidateConvocation(item)?.date||"")>=today()).sort((a,b)=>String(candidateConvocation(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||""))).slice(0,4);
   const recent=candidates.filter(item=>!candidateIsContractPending(item)).slice(0,5);
@@ -885,6 +885,7 @@ function statusPill(item){
   const avis=(item.data&&item.data.avisDecision)||"";
   const convoque=!!(item.data&&item.data.derniereConvocation);
   if(activeTab==="archive"){
+    if(status==="a_contractualiser")return '<span class="pill pill-indigo">Transmis à la DRH</span>';
     if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
     if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
     return '<span class="pill pill-gray">Archivé</span>';
@@ -1081,7 +1082,7 @@ async function changeAvis(id,value){
 async function markReadyForContract(id){
   try{
     await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
-    showBanner('Candidat prêt pour contractualisation, archivé dans « Candidats recrutés ». Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
+    showBanner('Candidat prêt pour contractualisation, archivé dans « Archives ». Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
 }
@@ -1106,7 +1107,7 @@ async function transmitCandidateToDrh(form){
   try{
     await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({society,data:{...(item.data||{}),societeRecrutement:society}})});
     await apiFetch(`/api/drh/candidates/${item.id}/marquer-contractualisation`,{method:"POST"});
-    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transmis à ${esc(society)}. Il est visible dans « Contrats à établir » et archivé dans « Candidats recrutés ».`,"success");
+    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transmis à ${esc(society)}. Il est visible dans « Contrats à établir » et archivé dans « Archives ».`,"success");
     await loadTab(activeTab);
   }catch(error){const output=document.getElementById("recruitmentError");if(output){output.textContent=error.message||"Transmission à la DRH impossible";output.classList.add("show")}button.disabled=false;button.textContent="Confirmer et transmettre";}
 }

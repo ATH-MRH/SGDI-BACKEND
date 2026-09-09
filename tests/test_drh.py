@@ -431,6 +431,12 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     assert mark.status_code == 200, mark.text
     assert mark.json()["data"]["status"] == "a_contractualiser"
 
+    # Recruitment archives are a presentation category, not the DRH business status.
+    for mode, present in (("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
+        page = client.get(f"/api/drh/candidates/page?mode={mode}&page_size=100", headers=auth_headers)
+        assert page.status_code == 200, page.text
+        assert (cid in [row["id"] for row in page.json()["items"]]) is present
+
     # Étape recrutement : le candidat devient un employé actif + un contrat
     r = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
     assert r.status_code == 200, r.text

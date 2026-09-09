@@ -320,11 +320,11 @@ def list_candidates_page(
     rows = db.execute(stmt.order_by(Candidate.id.desc())).scalars().all()
     selected_mode = (mode or "").strip().lower()
     if selected_mode in {"archive", "archived", "archives"}:
-        rows = [row for row in rows if _candidate_is_archived(row)]
+        rows = [row for row in rows if _candidate_is_archived(row) or bool((row.data or {}).get("recruitmentArchivedAt"))]
     elif selected_mode in {"reserve", "reserves"}:
         rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row) and not _candidate_is_transmitted(row)]
     elif selected_mode in {"recruited", "recrutes", "recrutés", "candidats_recrutes"}:
-        rows = [row for row in rows if _candidate_is_transmitted(row) or _candidate_is_recruited(row)]
+        rows = [row for row in rows if (_candidate_is_transmitted(row) or _candidate_is_recruited(row)) and not bool((row.data or {}).get("recruitmentArchivedAt"))]
     elif selected_mode in {"new", "nouveau", "nouvelle", "recrutement"}:
         rows = [
             row for row in rows
@@ -758,6 +758,8 @@ def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | No
         "statut": "a_contractualiser",
         "contractualisationAt": datetime.utcnow().isoformat(),
         "contractualisationBy": username or "system",
+        "recruitmentArchivedAt": data.get("recruitmentArchivedAt") or datetime.utcnow().isoformat(),
+        "removedFromRecruitmentAt": data.get("removedFromRecruitmentAt") or datetime.utcnow().isoformat(),
     }
     db.commit()
     db.refresh(row)
