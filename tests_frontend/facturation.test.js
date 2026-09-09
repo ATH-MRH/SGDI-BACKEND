@@ -350,3 +350,31 @@ test('Commercial retains the editable client form outside Facturation', async ()
   assert.equal(form.querySelector('[name=nom]').disabled,false);
   app.dom.window.close();
 });
+
+test('Facturation affiche le même TTC contractuel que Commercial depuis les clients serveur', async()=>{
+  const app=loadSgdiApp(['renderFactClients','clientMontantTTC','formatDZD']);
+  assert.strictEqual(app.loadError,null);
+  const w=app.window,t=app.T();
+  t.setSession({username:'TEST',societe:'IRON GLOBAL SOLUTION',transverse:'facmod'});
+  const client={id:'shared-client',nom:'Client partagé',societe:'IRON GLOBAL SOLUTION',
+    lignesFacturation:[{designation:'APS',prixUnitaire:1000},{designation:'Chef',prixUnitaire:2000}],
+    tech_sites:[{lignesFacturation:[{designation:'APS',qte:10},{designation:'Chef',qte:2}]},
+                {lignesFacturation:[{designation:'APS',qte:5}]}]};
+  let requestedScope;
+  w.SGDI.commercial.clientsPage=async params=>{
+    requestedScope=params.society;
+    return {items:[{id:45,name:client.nom,society:client.societe,data:client}],total:1,page:1,page_size:25};
+  };
+  const view=w.document.createElement('div');w.document.body.appendChild(view);
+  await t.renderFactClients(view);
+  assert.strictEqual(requestedScope,client.societe);
+  assert.strictEqual(t.clientMontantTTC(client),19000*1.19);
+  const cells=view.querySelectorAll('tbody tr td');
+  assert.strictEqual(cells[7].textContent,t.formatDZD(19000*1.19));
+  assert.notStrictEqual(cells[7].textContent,t.formatDZD(3000*1.19));
+  // Ancien contrat : les quantités globales restent prises en compte par le calcul partagé.
+  client.lignesFacturation=[{prixUnitaire:500,qte:3}];client.tech_sites=[];
+  await t.renderFactClients(view);
+  assert.strictEqual(view.querySelectorAll('tbody tr td')[7].textContent,t.formatDZD(1500*1.19));
+  w.close();
+});

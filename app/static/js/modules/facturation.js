@@ -63,8 +63,8 @@ async function renderFactClients(view){
   }
   try{
     const rows=list.map(c=>{
-      const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(Number(l.prixUnitaire)||0)*(Number(l.qte)||1),0);
-      const ttc=ht*1.19;
+      // Même référence contractuelle que la liste Commercial (tarifs et quantités par site).
+      const ttc=clientMontantTTC(c);
       const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);
       const nbrSite=clientNbrSites(c);
       return '<tr data-searchable style="cursor:pointer" onclick="openClientModal(\''+c.id+'\')">'+
