@@ -16373,6 +16373,7 @@ function techLockDonneesTechniques(){
   if(btnSave)btnSave.style.display="none";
 }
 function techUnlockDonneesTechniques(){
+  if(clientEditorIsReadOnly())return;
   const panel=document.getElementById("tech-panel-content");
   if(!panel)return;
   panel.querySelectorAll("input:not([type=hidden]):not([type=checkbox]),textarea").forEach(el=>{
@@ -16826,6 +16827,7 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
   </div>`;
 }
 async function saveClientInPlace(options={}){
+  if(clientEditorIsReadOnly()){toast("Fiche client en lecture seule dans cet espace","info");return false}
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
   if(!form)return false;
   const id=form.dataset.clientId||form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
@@ -16920,6 +16922,7 @@ function clientLockContrat(){
   if(btnV)btnV.style.display="";if(btnM)btnM.style.display="none";
 }
 function clientUnlockContrat(){
+  if(clientEditorIsReadOnly())return;
   const section=document.getElementById("client-contrat-fields");
   if(!section)return;
   section.querySelectorAll("input:not([type=hidden]):not(#contrat-valide-chk),textarea").forEach(el=>{el.removeAttribute("readonly");el.style.background="";el.style.color="";el.style.cursor="";});
@@ -17010,8 +17013,10 @@ function sgdiTabsHTML(tabs,activeIdx=0){
 }
 function sgdiTabSwitch(id,idx){
   const currentPanel=[...document.querySelectorAll(`[id^="${id}-panel-"]`)].find(panel=>panel.style.display!=="none");
-  if(currentPanel?.querySelector("#cts-sites-container"))clientSitesMirror("cts");
-  else if(currentPanel?.querySelector("#tech-sites-container"))clientSitesMirror("ts");
+  if(!clientEditorIsReadOnly()){
+    if(currentPanel?.querySelector("#cts-sites-container"))clientSitesMirror("cts");
+    else if(currentPanel?.querySelector("#tech-sites-container"))clientSitesMirror("ts");
+  }
   document.querySelectorAll(`[id^="${id}-tab-"]`).forEach((btn,i)=>{
     const a=i===idx;
     btn.setAttribute("aria-selected",a);
@@ -17109,6 +17114,7 @@ function dcMissionHistoryHTML(clientId){
   return `<div style="overflow:auto"><table><thead><tr><th>N°</th><th>Objet</th><th>Période</th><th>Statut</th><th>Prix HT</th><th>Marge</th></tr></thead><tbody>${rows.map(m=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(m.numero||"")}</td><td>${escapeHTML(m.objet||"")}</td><td class="text-xs">${formatDate(m.dateDebut)} → ${formatDate(m.dateFin)}</td><td><span class="pill pill-blue">${escapeHTML(dcMissionStatusLabel(m))}</span></td><td class="font-bold">${money(m.financial?.salePriceHT||0)} DA</td><td class="font-bold" style="color:${Number(m.financial?.margin||0)>=0?"#047857":"#dc2626"}">${money(m.financial?.margin||0)} DA</td></tr>`).join("")}</tbody></table></div>`;
 }
 async function validateDcMission(clientId){
+  if(clientEditorIsReadOnly()){toast("Fiche client en lecture seule dans cet espace","info");return false}
   const form=document.querySelector("#view form[data-client-editor='1']");if(!form)return false;
   const client=(db.clients||[]).find(c=>String(c.id)===String(clientId)||String(c.backendId||"")===String(clientId));
   if(!client){toast("Enregistrez d'abord le client avant de créer une mission","error");return false}
@@ -17144,7 +17150,14 @@ function previewClientPortalLogo(input){
   };
   reader.readAsDataURL(file);
 }
+function isFacturationClientContext(){
+  return window.__FAC_AUTONOMOUS_APP__===true||location.hostname==="fac.irongs.com"||session?.transverse==="facmod";
+}
+function clientEditorIsReadOnly(){
+  return isFacturationClientContext()||document.querySelector("form[data-client-editor='1']")?.dataset.clientReadonly==="1";
+}
 function openClientModal(id,readOnly=false){
+  readOnly=readOnly||isFacturationClientContext();
   // Cette vue est un véritable formulaire d'édition. La liste des clients est affichée en
   // mode consultation global ; sans cette sortie explicite, tous les champs nouvellement
   // injectés héritent du verrouillage CSS et deviennent impossibles à saisir.
@@ -17376,7 +17389,7 @@ function openClientModal(id,readOnly=false){
       <h2 style="font-size:18px;font-weight:800;color:#0f2d5a;margin:0">${isEdit?"CLIENT : "+escapeHTML((c?.nom||"").toUpperCase()):"Nouveau client"}</h2>
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Client</label>
-        <select onchange="if(this.value)openClientModal(this.value)" style="font-size:13px;font-weight:600;color:#0f2d5a;border:1px solid #cbd5e1;border-radius:8px;padding:6px 32px 6px 10px;background:#f8fafc;cursor:pointer;min-width:220px;max-width:340px">
+        <select data-client-navigation="1" data-no-lock="1" onchange="if(this.value)openClientModal(this.value,${readOnly?'true':'false'})" style="font-size:13px;font-weight:600;color:#0f2d5a;border:1px solid #cbd5e1;border-radius:8px;padding:6px 32px 6px 10px;background:#f8fafc;cursor:pointer;min-width:220px;max-width:340px">
           ${(db.clients||[])
             .filter(x=>x.id&&normalizeSocieteName(x.societe||x.society||"")===normalizeSocieteName(mySoc()||selectedSoc))
             .sort((a,b)=>String(a.nom||a.raisonSociale||"").localeCompare(String(b.nom||b.raisonSociale||""),"fr"))
@@ -17411,33 +17424,34 @@ function openClientModal(id,readOnly=false){
       el.setAttribute("readonly","");el.style.cursor="not-allowed";
     });
   });
-  if(readOnly)requestAnimationFrame(()=>lockClientReadOnly());
+  if(readOnly)lockClientReadOnly();
 }
 function lockClientReadOnly(){
-  const view=document.getElementById("view");if(!view)return;
-  // Bannière lecture seule
-  const form=view.querySelector("form");
-  if(form&&!form.querySelector(".client-ro-banner")){
-    const banner=document.createElement("div");
-    banner.className="client-ro-banner";
-    banner.style.cssText="background:#fef3c7;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px";
-    banner.innerHTML='<span style="font-size:12px;font-weight:700;color:#92400e">🔒 Mode consultation — Lecture seule · Aucune modification possible</span>'
-      +'<button type="button" class="btn btn-ghost" style="font-size:12px;font-weight:700;padding:5px 14px" onclick="navigate(\'facturation/clients\')">← Retour clients</button>';
+  const form=document.querySelector("#view form[data-client-editor='1'][data-client-readonly='1']");
+  if(!form)return;
+  form.removeAttribute("oninput");form.removeAttribute("onchange");
+  form.setAttribute("onsubmit","event.preventDefault()");
+  delete form.dataset.dirty;
+  if(!form.querySelector(".client-ro-banner")){
+    const banner=document.createElement("div");banner.className="client-ro-banner";
+    banner.style.cssText="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px;margin-bottom:14px;color:#1e40af;font-size:12px;font-weight:700";
+    banner.textContent="Lecture seule — Informations, facturation, contrat, mission et historique du client.";
     form.insertBefore(banner,form.firstChild);
   }
-  // Verrouiller tous les champs
-  view.querySelectorAll("input:not([type=hidden]),textarea").forEach(el=>{el.setAttribute("readonly","");el.style.background="#f8fafc";el.style.color="#475569";el.style.cursor="not-allowed";});
-  view.querySelectorAll("select").forEach(el=>{el.style.pointerEvents="none";el.style.background="#f8fafc";el.style.color="#475569";});
-  // Masquer tous les boutons d'action sauf onglets, tabs, et bouton retour
-  view.querySelectorAll("button[type=button]:not(.client-ro-banner button)").forEach(el=>{
-    const txt=(el.textContent||"").trim();
-    const keep=el.closest("[role='tablist']")||el.closest(".ts-tabs")||el.closest(".cts-tabs")||el.getAttribute("role")==="tab"||el.getAttribute("onclick")?.includes("sgdiTabSwitch")||el.getAttribute("onclick")?.includes("techSiteTab")||el.getAttribute("onclick")?.includes("ctsSiteTab");
-    if(!keep)el.style.display="none";
+  form.querySelectorAll("input,textarea,select").forEach(el=>{
+    if(el.matches('[data-client-navigation]'))return;
+    delete el.dataset.sgdiLockedByView;
+    el.disabled=true;el.readOnly=true;el.style.opacity="1";el.style.background="#f8fafc";el.style.color="#475569";
+    for(const attr of ["oninput","onchange","onclick","onfocus","onblur"])el.removeAttribute(attr);
   });
-  // Masquer liens de navigation client (select navigateur)
-  view.querySelectorAll("select[onchange*='openClientModal']").forEach(el=>{el.style.pointerEvents="none";});
+  form.querySelectorAll("button,a[onclick]").forEach(el=>{
+    const action=el.getAttribute("onclick")||"";
+    const keep=el.getAttribute("role")==="tab"||/^(sgdiTabSwitch|techSiteTab|ctsSiteTab)\(/.test(action);
+    if(!keep){el.hidden=true;el.style.display="none";el.disabled=true;el.removeAttribute("onclick")}
+  });
 }
 async function confirmClient(id,options={}){
+  if(clientEditorIsReadOnly()){toast("Fiche client en lecture seule dans cet espace","info");return false}
   prospSyncHidden("prosp");
   prospSyncHidden("negos");
   techSitesSyncHidden();

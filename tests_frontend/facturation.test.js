@@ -301,3 +301,52 @@ test('factureClientPaymentDefaults : reprend les conditions client et calcule le
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });
+
+test('Facturation client: all five tabs are read-only, navigation remains available and writes are blocked', async () => {
+  const app=loadSgdiApp(['openClientModal','sgdiTabSwitch','saveClientInPlace','confirmClient','validateDcMission','sgdiExitViewMode','techUnlockDonneesTechniques','clientUnlockContrat']);
+  assert.ifError(app.loadError);
+  app.window.__FAC_AUTONOMOUS_APP__=true;
+  const clients=[{id:'c1',nom:'CLIENT A',societe:'A',nif:'00123'},{id:'c2',nom:'CLIENT B',societe:'A'}];
+  app.T().setDb(new Proxy({clients,settings:{}},{get:(obj,key)=>obj[key]||(obj[key]=[])}));
+  app.T().setSession({username:'FAC',transverse:'facmod',societe:'A'});
+  app.T().openClientModal('c1');
+  await new Promise(r=>setTimeout(r,10));
+  const form=app.window.document.querySelector('[data-client-editor]');
+  assert.equal(form.dataset.clientReadonly,'1');
+  const tabs=Array.from(form.querySelectorAll('[role=tab]'));
+  assert.deepEqual(tabs.map(b=>b.textContent),['Information','Facturation','Contrat','Mission','Historique']);
+  const nav=form.querySelector('[data-client-navigation]');
+  assert.equal(nav.disabled,false);assert.match(nav.getAttribute('onchange'),/true/);
+  const tabId=tabs[0].id.replace(/-tab-0$/,'');
+  for(let i=0;i<5;i++){
+    app.T().sgdiTabSwitch(tabId,i);
+    app.T().sgdiExitViewMode();app.T().techUnlockDonneesTechniques();app.T().clientUnlockContrat();
+    const panel=form.querySelector('#'+tabId+'-panel-'+i);
+    assert.equal(panel.style.display,'block');
+    for(const control of panel.querySelectorAll('input,select,textarea'))assert.equal(control.disabled,true,control.name);
+    for(const button of panel.querySelectorAll('button')){
+      const action=button.getAttribute('onclick')||'';
+      if(!/^(techSiteTab|ctsSiteTab)\(/.test(action))assert.equal(button.hidden,true,button.textContent);
+    }
+  }
+  const before=JSON.stringify(clients);
+  assert.equal(await app.T().saveClientInPlace(),false);
+  assert.equal(await app.T().confirmClient('c1'),false);
+  assert.equal(await app.T().validateDcMission('c1'),false);
+  assert.equal(JSON.stringify(clients),before);
+  app.T().openClientModal('c2');
+  assert.equal(app.window.document.querySelector('[data-client-editor]').dataset.clientReadonly,'1');
+  app.dom.window.close();
+});
+
+test('Commercial retains the editable client form outside Facturation', async () => {
+  const app=loadSgdiApp(['openClientModal']);
+  app.T().setDb(new Proxy({clients:[{id:'c1',nom:'CLIENT',societe:'A'}],settings:{}},{get:(obj,key)=>obj[key]||(obj[key]=[])}));
+  app.T().setSession({username:'DC',transverse:'dc',societe:'A'});
+  app.T().openClientModal('c1');
+  await new Promise(r=>setTimeout(r,10));
+  const form=app.window.document.querySelector('[data-client-editor]');
+  assert.equal(form.dataset.clientReadonly,'0');
+  assert.equal(form.querySelector('[name=nom]').disabled,false);
+  app.dom.window.close();
+});
