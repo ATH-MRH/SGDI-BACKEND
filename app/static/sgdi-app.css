@@ -10411,3 +10411,20 @@ body:has(.dhl-login-page),html:has(.dhl-login-page),body:has(.dhl-login-page) #a
 
 /* Réserver la largeur de défilement lors des chargements et rafraîchissements. */
 html,#view,#sidebar-nav{scrollbar-gutter:stable}
+
+/* Fiche candidat DRH : mêmes rubriques que Recrutement, valeurs non éditables. */
+.drh-candidate-readonly{font-family:Arial,sans-serif;color:#18304f}
+.drh-candidate-readonly header{margin-bottom:16px}
+.drh-candidate-readonly h2{font-size:20px;font-weight:700}
+.drh-candidate-readonly header p{font-size:12px;color:#64748b;margin-top:5px}
+.drh-candidate-readonly section{padding:14px;border:1px solid #d4e2f3;border-radius:12px;background:#fbfdff;margin-top:10px}
+.drh-candidate-readonly h3{font-size:12px;font-weight:700;text-transform:uppercase;color:#073d77}
+.drh-candidate-readonly section>p{font-size:11px;color:#64748b;margin:2px 0 8px}
+.drh-candidate-readonly dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.drh-candidate-readonly .full{grid-column:1/-1}
+.drh-candidate-readonly dt{font-size:11px;font-weight:700;text-transform:uppercase;margin:4px 0;color:#435c7b}
+.drh-candidate-readonly dd{margin:0;min-height:32px;border:1px solid #d4e2f3;border-radius:7px;padding:7px 9px;background:white;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.drh-candidate-photo{display:flex;align-items:center;gap:12px;font-size:11px;text-transform:uppercase;font-weight:700}
+.drh-candidate-photo img,.drh-candidate-photo>span{width:76px;height:88px;object-fit:cover;border-radius:10px;background:#e8eef6;display:grid;place-items:center}
+.drh-candidate-readonly footer{position:sticky;bottom:0;background:white;padding:12px 0 0;display:flex;justify-content:flex-end}
+@media(max-width:640px){.drh-candidate-readonly dl{grid-template-columns:1fr}}

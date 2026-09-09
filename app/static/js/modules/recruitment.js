@@ -550,6 +550,35 @@ function recrutementStatsCardsHTML(mode,socFilter,items,total,pageCount,loading)
   </div>`;
 }
 
+let drhReadOnlyCandidates=new Map();
+let drhReadOnlyCandidateScope="";
+function drhCandidateScope(){return [session?.username,drhActiveSocieteFilter()].join("|")}
+function openDrhCandidateReadOnly(id){
+  if(!isDrhModuleContext()||drhReadOnlyCandidateScope!==drhCandidateScope())return;
+  const c=drhReadOnlyCandidates.get(String(id));
+  if(!c||normalizeSocieteName(c.society)!==normalizeSocieteName(drhActiveSocieteFilter()))return;
+  const d=c.data||{};
+  const value=v=>escapeHTML(v===null||v===undefined||v===""?"—":Array.isArray(v)?v.join(", "):String(v));
+  const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||""))?String(v).split("-").reverse().join("/"):v;
+  const field=(label,v,full=false)=>`<div class="drh-candidate-field${full?" full":""}"><dt>${escapeHTML(label)}</dt><dd>${value(v)}</dd></div>`;
+  const section=(title,subtitle,html)=>`<section><h3>${title}</h3>${subtitle?`<p>${subtitle}</p>`:""}<dl>${html}</dl></section>`;
+  const photo=d.photo||d.photoData||"";
+  const safePhoto=/^(?:data:image\/(?:png|jpeg|webp|gif);base64,|https?:\/\/|\/(?!\/))/i.test(photo);
+  const experiences=Array.isArray(d.experience)?d.experience:[];
+  const experience=experiences.length?`<div class="full"><dt>Expérience professionnelle</dt><div class="overflow-auto"><table><thead><tr>${["Société","Du","Au","Poste","Motif de départ"].map(x=>`<th>${x}</th>`).join("")}</tr></thead><tbody>${experiences.map(e=>`<tr>${[e.societe,date(e.du),date(e.au),e.poste,e.motif].map(v=>`<td>${value(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`:field("Expérience professionnelle",d.experienceTexte,true);
+  openModal(`<div class="drh-candidate-readonly" data-readonly="true"><header><h2>Fiche de renseignement candidat</h2><p>Lecture seule · ${value(c.society)} · ${value([c.last_name,c.first_name].filter(Boolean).join(" "))}</p></header>
+    ${section("1. Identification du candidat","État civil et informations personnelles",
+      `<div class="full drh-candidate-photo">${safePhoto?`<img src="${escapeHTML(photo)}" alt="Photo d’identité">`:'<span>PHOTO</span>'}<div>Photo d’identité</div></div>`+
+      field("Nom",c.last_name)+field("Prénom",c.first_name)+field("Date de naissance",date(d.dateNaissance||c.birth_date))+field("Lieu de naissance",d.lieuNaissance||c.birth_place)+field("Sexe",({M:"Masculin",F:"Féminin"})[d.sexe]||d.sexe)+field("Situation familiale",d.situation)+field("Nombre d’enfants",d.nombreEnfants)+field("Groupe sanguin",d.groupeSanguin)+field("Nom du père",d.nomPere)+field("Nom de la mère",d.nomMere)+field("NIN",d.nin)+field("N° CNAS",d.numeroCnas))}
+    ${section("2. Coordonnées","Adresse et personne à contacter en cas d’urgence",
+      field("Téléphone",c.phone)+field("Email",c.email)+field("Adresse",d.adresse||c.address,true)+field("Commune",d.commune)+field("Wilaya",d.wilaya)+field("Contact d’urgence",d.contactUrgenceNom)+field("Lien avec le candidat",d.contactUrgenceLien)+field("Téléphone d’urgence",d.contactUrgenceTel))}
+    ${section("3. Candidature et profil","Poste souhaité, expérience et informations opérationnelles",
+      field("Poste souhaité",c.desired_position)+field("Salaire demandé (DA/mois)",c.expected_salary)+field("Disponibilité",d.disponibilite)+field("Source de candidature",d.source)+field("Service militaire",d.serviceMilitaire)+field("Taille (cm)",d.taille)+field("Pointure",d.pointure)+field("Taille chemise",d.tailleChemise)+field("Langues parlées",d.langues)+experience+field("Notes du recruteur",d.notes,true))}
+    ${section("4. Avis du recruteur","",field("Décision",d.avisDecision)+field("Date de l’avis",date(d.avisDate))+field("Recruteur",d.avisRecruteur)+field("Commentaire / motivation",d.avisCommentaire,true))}
+    <footer><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></footer></div>`);
+}
+window.openDrhCandidateReadOnly=openDrhCandidateReadOnly;
+
 async function renderDrhRecruitmentReadOnly(view,mode="new"){
   const requestSeq=++sgdiRecruitmentRequestSeq;
   const hash=location.hash;
@@ -564,11 +593,9 @@ async function renderDrhRecruitmentReadOnly(view,mode="new"){
     // Filter on the server before pagination; counters use the same active scope.
     const result=await SGDI.rh.candidatesPage({society,mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
     if(!current())return;
-    const rows=(result.items||[]).map(c=>{
-      const info=[["Email",c.email],["Téléphone",c.phone],["Adresse",c.address||c.data?.adresse],["Date de naissance",c.birth_date||c.data?.dateNaissance],["Lieu de naissance",c.birth_place||c.data?.lieuNaissance],["Expérience",c.data?.experience],["Commentaire",c.data?.commentaire]];
-      const details=info.filter(([,v])=>v!==null&&v!==undefined&&v!=="").map(([label,v])=>`<dt class="font-semibold">${escapeHTML(label)}</dt><dd class="mb-2">${escapeHTML(typeof v==="object"?JSON.stringify(v):String(v))}</dd>`).join("");
-      return `<tr><td>${escapeHTML([c.last_name,c.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(c.desired_position||"—")}</td><td>${escapeHTML(c.society||"Non affecté")}</td><td>${escapeHTML(c.phone||"—")}</td><td>${escapeHTML(c.status||"—")}</td><td><details><summary class="cursor-pointer">Consulter</summary><dl class="p-3">${details||"Aucune information complémentaire."}</dl></details></td></tr>`;
-    }).join("");
+    drhReadOnlyCandidates=new Map((result.items||[]).map(c=>[String(c.id),c]));
+    drhReadOnlyCandidateScope=drhCandidateScope();
+    const rows=(result.items||[]).map(c=>`<tr><td>${escapeHTML([c.last_name,c.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(c.desired_position||"—")}</td><td>${escapeHTML(c.society||"—")}</td><td>${escapeHTML(c.phone||"—")}</td><td>${escapeHTML(c.status||"—")}</td><td><button type="button" class="btn btn-ghost" data-candidate-id="${escapeHTML(String(c.id))}" onclick="openDrhCandidateReadOnly(this.dataset.candidateId)">Consulter</button></td></tr>`).join("");
     const page=result.page||1,pages=result.pages||1;
     view.innerHTML=`<div data-drh-recruitment-readonly="1"><h1 class="text-2xl font-bold">Candidatures — lecture seule</h1><p class="text-slate-500 mb-4">Dossiers partagés avec le module Recrutement. Leur traitement s’effectue dans recrute.irongs.com.</p><div class="card overflow-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Dossier</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Aucune candidature.</td></tr>'}</tbody></table><div class="p-3 flex justify-between"><span>${result.total||0} candidature(s) · page ${page}/${pages}</span><div><button class="btn btn-ghost" ${page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${page-1})">Précédent</button><button class="btn btn-ghost" ${page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${page+1})">Suivant</button></div></div></div></div>`;
   }catch(error){

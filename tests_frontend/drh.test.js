@@ -369,3 +369,28 @@ test('automatic refresh does not replace a dirty form or an active select', () =
   assert.equal(view.firstElementChild,select);
   app.dom.window.close();
 });
+
+test('Consulter opens the complete candidate dossier as non-editable values', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly','openDrhCandidateReadOnly','sgdiApplyViewModeLocks','closeModal']);
+  const t=app.T(),view=app.window.document.getElementById('view');
+  t.setSession({username:'RH',transverse:'drh',societe:'A'});
+  app.window.SGDI={rh:{candidatesPage:async()=>({items:[{id:42,last_name:'TEST',first_name:'CANDIDAT',society:'A',phone:'0770 112 034',expected_salary:0,data:{dateNaissance:'1980-01-09',nombreEnfants:0,nin:'001234',contactUrgenceTel:'0661555555',langues:['Arabe','Français'],avisDecision:'Favorable',notes:'<img src=x onerror=alert(1)>',experience:[{societe:'Ancien employeur',du:'2020-02-01',au:'2022-03-31',poste:'Agent',motif:'Fin de contrat'}]}}],total:1})}};
+  await t.renderDrhRecruitmentReadOnly(view);
+  const consult=view.querySelector('[data-candidate-id]');
+  assert.equal(consult.getAttribute('onclick'),'openDrhCandidateReadOnly(this.dataset.candidateId)');
+  app.window.openDrhCandidateReadOnly(consult.dataset.candidateId);
+  const modal=app.window.document.querySelector('.drh-candidate-readonly');
+  assert.ok(modal);
+  for(const label of ['Identification du candidat','Coordonnées','Candidature et profil','Avis du recruteur','09/01/1980','001234','0661555555','Arabe, Français','Ancien employeur','01/02/2020','Favorable'])assert.ok(modal.textContent.includes(label),label);
+  assert.equal(modal.querySelectorAll('input,select,textarea,form,[contenteditable],img').length,0);
+  assert.match(modal.textContent,/<img src=x onerror=alert\(1\)>/);
+  t.setViewMode(false);t.sgdiApplyViewModeLocks(modal);
+  assert.equal(modal.querySelectorAll('input,select,textarea,[contenteditable]').length,0);
+  assert.deepEqual(Array.from(modal.querySelectorAll('button'),b=>b.textContent),['Fermer']);
+  t.closeModal();
+  assert.equal(app.window.document.querySelector('.drh-candidate-readonly'),null);
+  t.setSession({username:'RH',transverse:'drh',societe:'B'});
+  t.openDrhCandidateReadOnly(42);
+  assert.equal(app.window.document.querySelector('.drh-candidate-readonly'),null);
+  app.dom.window.close();
+});
