@@ -142,7 +142,7 @@ def _commercial_stats(db: Session, society: str | list[str] | None = None) -> di
         "clients_total": len(clients),
         "sites_total": sites,
         "employees_total": employees,
-        "opportunities_open": _count_legacy_items(db, "opportunites", society),
+        "opportunities_open": sum(1 for row in _legacy_rows(db, "opportunites") if _matches_society(row, society) and _norm(row.get("etape")) not in {"gagnee", "gagnée", "perdue"}),
         "visits_total": _count_legacy_items(db, "visites", society),
         "contracts_30d": contracts_30j,
         "tarifs_total": _count_legacy_items(db, "catalogue", society),
@@ -327,7 +327,7 @@ def _sidebar_stats_signature() -> str:
 def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
     scope = effective_society_values(user, society)
     scope_key = "*" if scope is None else "|".join(sorted(society_key(value) for value in scope))
-    cache_key = f"{user.username}|{scope_key}"
+    cache_key = f"{user.username}|{scope_key}|{user.role}|{user.authorized_modules!r}|{user.authorized_structures!r}"
     signature = _sidebar_stats_signature()
     now = time.monotonic()
     with _SIDEBAR_STATS_CACHE_LOCK:
@@ -360,6 +360,21 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     commercial = _commercial_stats(db, effective_scope)
     finance = _finance_stats(db, effective_scope)
     secretariat = _secretariat_stats(db, effective_scope)
+    from app.modules.drh.models import Candidate
+    from app.modules.drh.service import _candidate_is_recruited, _candidate_is_transmitted
+    from app.modules.drh.routes import _ensure_recruitment_access
+    from fastapi import HTTPException
+    recruitment_pending = None
+    try:
+        _ensure_recruitment_access(user)
+        recruitment_pending = sum(not _candidate_is_recruited(row) for row in db.query(Candidate).all())
+    except HTTPException:
+        pass
+    candidate_query = db.query(Candidate)
+    if effective_scope is not None:
+        candidate_query = candidate_query.filter(Candidate.society.in_(effective_scope))
+    contracts_pending = sum(_candidate_is_transmitted(row) and not _candidate_is_recruited(row) for row in candidate_query.all())
+
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -373,6 +388,8 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
         "drh": {
             "recrutement": {
                 "total": erp["drh"]["candidates_total"],
+                "shared_pending": recruitment_pending,
+                "contracts_pending": contracts_pending,
                 "reserve": erp["drh"].get("candidates_reserve", 0),
                 # `legacy` contient les totaux globaux. Pour une société active,
                 # le total DRH déjà filtré est la seule valeur sûre à exposer ici.

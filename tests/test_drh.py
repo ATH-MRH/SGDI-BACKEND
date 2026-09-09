@@ -451,6 +451,11 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
         assert page.status_code == 200, page.text
         assert (cid in [row["id"] for row in page.json()["items"]]) is present
 
+    sidebar = client.get("/api/ui/sidebar-stats", headers=auth_headers)
+    pool = client.get("/api/drh/candidates/page?mode=drh_pending", headers=auth_headers)
+    assert sidebar.status_code == 200, sidebar.text
+    assert sidebar.json()["drh"]["recrutement"]["shared_pending"] == pool.json()["total"]
+
     # Étape recrutement : le candidat devient un employé actif + un contrat
     r = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
     assert r.status_code == 200, r.text

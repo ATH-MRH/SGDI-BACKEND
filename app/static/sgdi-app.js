@@ -1747,16 +1747,20 @@ window.addEventListener("sgdi:drh-stats",()=>{
 });
 function sgdiActiveStatsSociety(){
   try{
-    return (typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter())||session?.societe||(typeof mySoc==="function"&&mySoc())||"";
+    return (isDrhModuleContext()&&drhActiveSocieteFilter())||(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter())||session?.societe||(typeof mySoc==="function"&&mySoc())||"";
   }catch(e){return session?.societe||""}
 }
+let sgdiSidebarStatsRequest=0;
 async function sgdiRefreshSidebarStats(society){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
   try{
     // La barre latérale décrit exclusivement la société active. Sans ce paramètre,
     // le backend additionne les données de toutes les sociétés autorisées.
     const activeSociety=String(society||sgdiActiveStatsSociety()||"").trim();
+    const request=++sgdiSidebarStatsRequest;
+    const account=session?.username;
     const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
+    if(request!==sgdiSidebarStatsRequest||session?.username!==account||normalizeSocieteName(activeSociety)!==normalizeSocieteName(sgdiActiveStatsSociety()))return null;
     window.SGDI_SIDEBAR_STATS=stats;
     sgdiEnsureEmployeesForDisplay({society:activeSociety});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
@@ -1837,6 +1841,7 @@ async function sgdiRefreshSessionFromServer(){
     supervisorReadOnly:user.supervisor_read_only!==false,adminSystem:previous.adminSystem===true&&user.module_access_global===true};
   if((!previous.permissionsFromServer)||JSON.stringify([previous.role,previous.niveau,previous.societesAutorisees,previous.structuresAutorisees,previous.effectiveModules,previous.globalSocietyAccess,previous.sitesAutorises,previous.actionsAutorisees,previous.moduleAccessGlobal,previous.recruitmentAccess])!==JSON.stringify([session.role,session.niveau,session.societesAutorisees,session.structuresAutorisees,session.effectiveModules,session.globalSocietyAccess,session.sitesAutorises,session.actionsAutorisees,session.moduleAccessGlobal,session.recruitmentAccess])){
     db=emptyDB();sgdiPostgresReady=false;_bootCacheClear();
+    window.SGDI_SIDEBAR_STATS=null;window.SGDI_DRH_STATS_BY_SOCIETY={};sgdiSidebarStatsRequest+=1;
     sgdiViewRenderGeneration+=1;
     const view=document.getElementById("view");
     if(view)view.innerHTML='<div class="card p-6">Actualisation des droits et des données…</div>';
@@ -5145,7 +5150,7 @@ function moduleCounterItemHTML(item,total){
   const route=item.route||"#";
   const href=route.startsWith("#")?route:"#/"+route.replace(/^\/+/,"");
   const label=String(item.label||"");
-  const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
+  const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(item.pct!==undefined||item.pctBase!==undefined?pct+"%":""));
   const iconBg=hexToIconBg(item.color||"#043970");
   const click=item.showAllPeriods?` onclick="sessionStorage.setItem('stkPeriode','all');if(location.hash===this.hash){event.preventDefault();renderView()}"`:"";
   return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};--counter-soft:${iconBg}" title="${escapeHTML(item.label)}">
@@ -5194,7 +5199,9 @@ function moduleCountersRibbon(items){
 function sgdiBackendStatsForScope(scopeSoc){
   const scope=String(scopeSoc||"").trim();
   const scoped=window.SGDI_DRH_STATS_BY_SOCIETY?.[scope||"__all"];
-  const stats=scoped||window.SGDI_SIDEBAR_STATS;
+  const latest=window.SGDI_SIDEBAR_STATS;
+  const matches=x=>x&&normalizeSocieteName(x.scope?.active_society||"")===normalizeSocieteName(scope);
+  const stats=[scoped,latest].filter(matches).sort((a,b)=>Date.parse(b.generated_at||0)-Date.parse(a.generated_at||0))[0];
   if(!stats||typeof stats!=="object")return null;
   const active=String(stats.scope?.active_society||"").trim();
   if(scope&&active&&active!==scope)return null;
@@ -6497,7 +6504,7 @@ function renderSidebar(){
     restoreSidebarScroll();
     return;
   }
-  const positiveCount=n=>Number(n||0)>0?Number(n||0):null;
+  const positiveCount=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))&&Number(n)>=0?Number(n):null;
   const navIcon=item=>{
     const r=String(item.route||"");
     const l=String(item.label||"").toLowerCase();
@@ -6568,7 +6575,7 @@ function renderSidebar(){
   };
   const itemHTML=item=>{
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
-    const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
+    const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)!==null?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
     const gapClass=item.gapBefore?" nav-gap-before":"";
     return `<div class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
@@ -6600,7 +6607,7 @@ function renderSidebar(){
     const dotationCount=typeof materialPendingDotationCountForSoc==="function"?materialPendingDotationCountForSoc(soc):(typeof agentsEnInstanceDotationForSoc==="function"?agentsEnInstanceDotationForSoc(soc).length:0);
     const siteDotationCount=typeof sitesEnAttenteDotation==="function"?sitesEnAttenteDotation().length:0;
     const reversementCount=typeof agentsEnInstanceReversement==="function"?agentsEnInstanceReversement().length:0;
-    const drhSoc=drhActiveSocieteFilter()||soc||"";
+    const drhSoc=(mod==="drh"?drhActiveSocieteFilter():soc)||soc||"";
     const drhMatchesActiveSociete=item=>!drhSoc||dataMatchesSociete(item,drhSoc);
     const drhAgents=(db.agents||[]).filter(drhMatchesActiveSociete);
     const drhCandidates=(db.candidats||[]).filter(c=>candidatIsActive(c)&&drhMatchesActiveSociete(c));
@@ -6643,12 +6650,12 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard",group:"PILOTAGE"},
-        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:(srvDrh?.recrutement?.total??drhCandidates.length)||null},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:drhContractsToEstablish.length||null},
-        {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
-        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
-        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const agIds=new Set(drhAgents.filter(a=>!employeeIsFormer(a)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
-        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
+        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:(srvDrh?.recrutement?.shared_pending??srvDrh?.recrutement?.total??drhCandidates.length)},
+        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:srvDrh?.recrutement?.contracts_pending??drhContractsToEstablish.length},
+        {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhTotalAgents},
+        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhTotalAgents},
+        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const agIds=new Set(drhAgents.filter(a=>!employeeIsFormer(a)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length})()},
+        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"SUIVI TERRAIN",count:(()=>{
           const now=new Date();
           if([5,6].includes(now.getDay()))return null;
@@ -6660,29 +6667,29 @@ function renderSidebar(){
             if(String(x?.date||"")!==dateStr)return;
             [x.agentId,x.agentBackendId,x.employee_id,x.matricule].forEach(ref=>{if(ref!==undefined&&ref!==null&&ref!=="")pointes.add(String(ref))});
           });
-          return eligible.filter(a=>![a.id,a.backendId,a.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&pointes.has(String(ref)))).length||null;
+          return eligible.filter(a=>![a.id,a.backendId,a.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&pointes.has(String(ref)))).length;
         })()},
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"SUIVI TERRAIN",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length||null})()},
-        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length||null})()}
+        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)})()},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length})()},
+        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length})()}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
         {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif"],group:"PERSONNEL"},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches","agents"],group:"PERSONNEL"},
         {label:"CONGÉS",route:"conges",aliases:["conges"],group:"PERSONNEL"},
-        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],group:"PERSONNEL",count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
-        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="suspendu").length||null},
-        {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],group:"PERSONNEL",count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="sortant").length||null},
+        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],group:"PERSONNEL",count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length})()},
+        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="suspendu").length},
+        {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],group:"PERSONNEL",count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="sortant").length},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"TERRAIN"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"TERRAIN"},
         {label:"MISSIONS",route:"ops/missions",group:"TERRAIN"},
         {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"],group:"TERRAIN"},
         {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"],group:"TERRAIN"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length},
-        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null}
+        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length}
       ],
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"],group:"PILOTAGE"},
@@ -6697,7 +6704,7 @@ function renderSidebar(){
         {label:"ARTICLES",route:"materiel/articles",group:"STOCK",count:matArticles},
         {label:"MAGASINS",route:"materiel/magasins",group:"STOCK",count:matMagasins},
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",group:"STOCK",count:matFournisseurs},
-        {label:"ALERTES",route:"materiel/alertes",group:"STOCK",count:matAlertes||null},
+        {label:"ALERTES",route:"materiel/alertes",group:"STOCK",count:matAlertes},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"TERRAIN"},
         {label:"FICHES DE POSITION",route:"materiel/fiches",group:"TERRAIN"},
         {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",group:"DOTATIONS",count:siteDotationCount},
@@ -6729,7 +6736,7 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD",route:"secretariat/dashboard",group:"PILOTAGE"},
         {label:"COURRIER",route:"secretariat/courriers",group:"GESTION DOCUMENTAIRE"},
         {label:"PARAPHEUR",route:"secretariat/parapheur",group:"GESTION DOCUMENTAIRE"},
-        {label:"ORDRES DE MISSION",route:"secretariat/missions",group:"GESTION DOCUMENTAIRE",count:(db.missions||[]).filter(m=>m.workflowStatus==="transmise_sg").length||null},
+        {label:"ORDRES DE MISSION",route:"secretariat/missions",group:"GESTION DOCUMENTAIRE",count:(db.missions||[]).filter(m=>m.workflowStatus==="transmise_sg").length},
         {label:"DOCUMENTS OFFICIELS",route:"secretariat/documents",group:"GESTION DOCUMENTAIRE"},
         {label:"AGENDA",route:"secretariat/agenda",group:"COORDINATION"},
         {label:"RÉUNIONS ET PV",route:"secretariat/reunions",group:"COORDINATION"},
@@ -6742,7 +6749,7 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD",route:"agenda/dashboard",group:"PILOTAGE"},
         {label:"LISTE",route:"agenda/liste",group:"PLANNING"},
         {label:"SEMAINE",route:"agenda/semaine",group:"PLANNING"},
-        {label:"RAPPELS",route:"agenda/rappels",group:"PLANNING",count:(db.agendaEvents||[]).filter(agendaEventIsReminderDue).length||null},
+        {label:"RAPPELS",route:"agenda/rappels",group:"PLANNING",count:(db.agendaEvents||[]).filter(agendaEventIsReminderDue).length},
         {label:"DEMANDES STRUCTURE",route:"demandes_structure/dashboard",aliases:["demandes_structure"],group:"AUTRES"},
         {label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES"}
       ],
@@ -6776,7 +6783,7 @@ function renderSidebar(){
         {label:"CONTRATS",route:"contrats/situation",aliases:["contrats"],group:"VUE CONSOLIDÉE"},
         {label:"FICHE DE POSITION",route:"fiches",group:"VUE CONSOLIDÉE"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"VUE CONSOLIDÉE"},
-        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"VUE CONSOLIDÉE",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
+        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"VUE CONSOLIDÉE",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"DRH",route:"drh/dashboard",aliases:["drh"],group:"MODULES"},
         {label:"OPS",route:"ops/dashboard",aliases:["ops"],group:"MODULES"},
         {label:"MATÉRIEL",route:"materiel/dashboard",aliases:["materiel"],group:"MODULES"},
@@ -6791,20 +6798,20 @@ function renderSidebar(){
       ],
       admin:isAdminSystemSession()?[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard",group:"PILOTAGE"},
-        {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length||null},
-        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length||null},
-        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length||null},
-        {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",count:(db.pointages||[]).length||null},
-        {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",count:POSTES.length||null},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"SITES & STOCK",count:adminSitesActifs||null},
-        {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",count:adminMagasinsCount||null},
-        {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",count:adminArticlesCount||null},
-        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
+        {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
+        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length},
+        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length},
+        {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",count:(db.pointages||[]).length},
+        {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",count:POSTES.length},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"SITES & STOCK",count:adminSitesActifs},
+        {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",count:adminMagasinsCount},
+        {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",count:adminArticlesCount},
+        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length},
         {label:"CONTRAT",route:"admin/contrats",group:"DOCUMENTS"},
-        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",group:"ACCÈS & SÉCURITÉ",count:(db.users||[]).length||null},
-        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"ACCÈS & SÉCURITÉ",count:(adminClientPortalUsersCache||[]).length||null},
-        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length||null},
-        {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length||null},
+        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",group:"ACCÈS & SÉCURITÉ",count:(db.users||[]).length},
+        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"ACCÈS & SÉCURITÉ",count:(adminClientPortalUsersCache||[]).length},
+        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length},
+        {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length},
         {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ"},
         {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ"},
         {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"ACCÈS & SÉCURITÉ",count:(db.niveauxAcces||[]).length},
@@ -6817,17 +6824,32 @@ function renderSidebar(){
         {label:"COCKPIT DG",route:"admin/dashboard",group:"PILOTAGE"},
         {label:"VUE SOCIÉTÉS",route:"admin/dashboard",group:"PILOTAGE"},
         {label:"ALERTES CRITIQUES",route:"contrats/situation",group:"PILOTAGE"},
-        {label:"SYNTHÈSE RH",route:"effectif/recap",group:"SYNTHÈSES",count:drhAgents.length||null},
-        {label:"SYNTHÈSE OPS",route:"ops/dashboard",group:"SYNTHÈSES",count:opsIncidents.length||null},
-        {label:"SYNTHÈSE MATÉRIEL",route:"materiel/dashboard",group:"SYNTHÈSES",count:(db.stockArticles||[]).length||null},
-        {label:"SYNTHÈSE FINANCE",route:"facturation/dashboard",group:"SYNTHÈSES",count:(db.factures||[]).length||null},
-        {label:"SYNTHÈSE COMMERCIALE",route:"commercial/dashboard",group:"SYNTHÈSES",count:comOpportunites||null},
-        {label:"DÉCISIONS / PROPOSITIONS",route:"admin/feed",group:"SYNTHÈSES",count:(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length||null}
+        {label:"SYNTHÈSE RH",route:"effectif/recap",group:"SYNTHÈSES",count:drhAgents.length},
+        {label:"SYNTHÈSE OPS",route:"ops/dashboard",group:"SYNTHÈSES",count:opsIncidents.length},
+        {label:"SYNTHÈSE MATÉRIEL",route:"materiel/dashboard",group:"SYNTHÈSES",count:(db.stockArticles||[]).length},
+        {label:"SYNTHÈSE FINANCE",route:"facturation/dashboard",group:"SYNTHÈSES",count:(db.factures||[]).length},
+        {label:"SYNTHÈSE COMMERCIALE",route:"commercial/dashboard",group:"SYNTHÈSES",count:comOpportunites},
+        {label:"DÉCISIONS / PROPOSITIONS",route:"admin/feed",group:"SYNTHÈSES",count:(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length}
       ]
     };
     if(mod==="ops")refreshOpsClientObservationsCount();
-    const baseItems=sidebarByModule[mod]||[];
-    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()||null};
+    const countsByRoute={
+      "fiches":srvEmp?.non_archived,"effectif/recap":srvEmp?.non_archived,
+      "effectif/actifs":srvEmp?.active,"effectif/suspension":srvEmp?.suspended,
+      "sites/actifs":srvOps?.sites_active,"ops/missions":srvOps?.missions_current,
+      "incidents/dashboard":srvOps?.events_open,
+      "materiel/articles":srvMat?.articles_active,"materiel/magasins":srvMat?.stores_total,
+      "materiel/fournisseurs":srvMat?.suppliers_total,"materiel/alertes":srvMat?.stock_alerts_total,
+      "facturation/clients":srv?.commercial?.clients_total,"commercial/clients":srv?.commercial?.clients_total,
+      "commercial/prospects":srv?.commercial?.prospects,"commercial/opportunites":srv?.commercial?.opportunities_open,
+      "commercial/visites":srv?.commercial?.visits_total,"commercial/devis":srv?.facturation?.quotes_total,
+      "facturation/factures":srv?.facturation?.invoices_total,"facturation/paiements":srv?.facturation?.payments_total,
+      "facturation/avances":srv?.facturation?.advances_total,"facturation/avoirs":srv?.facturation?.credit_notes_total,
+      "facturation/caisse":srv?.facturation?.cash_entries_total,
+      "secretariat/courriers":srv?.secretariat?.courriers_total,"secretariat/archives":srv?.secretariat?.archives_total
+    };
+    const baseItems=(sidebarByModule[mod]||[]).map(item=>countsByRoute[item.route]!==undefined?{...item,count:countsByRoute[item.route]}:item);
+    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
     const items=sidebarItemsWithStructureRequests(mod,sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems)));
     const orderedItems=applySidebarOrder(mod,items);

@@ -278,3 +278,39 @@ test('document save persists metadata and leaves original data intact when serve
   assert.equal(app.window.document.querySelector('#contract-documents-form [type="submit"]').disabled,false);
   app.dom.window.close();
 });
+
+test('sidebar uses server totals and displays zero counts for supported module routes', () => {
+  const app=loadSgdiApp(['renderSidebar','emptyDB']);
+  app.T().setDb(app.T().emptyDB());
+  app.window.SGDI_SIDEBAR_STATS={scope:{active_society:''},erp:{employees:{non_archived:165},ops:{},materiel:{}},drh:{recrutement:{shared_pending:7,contracts_pending:2}},commercial:{clients_total:4},facturation:{payments_total:0}};
+  app.T().setSession({username:'admin',role:'admin',transverse:'drh'});
+  app.T().renderSidebar();
+  const badge=route=>app.window.document.querySelector(`[data-route="${route}"] .nav-count`)?.textContent;
+  assert.equal(badge('recrutement/candidats'),'7');
+  assert.equal(badge('fiches'),'165');
+  assert.equal(badge('effectif/recap'),'165');
+  app.T().setSession({username:'admin',role:'admin',transverse:'facmod'});
+  app.T().renderSidebar();
+  assert.equal(badge('facturation/paiements'),'0');
+  assert.equal(badge('facturation/clients'),'4');
+  app.dom.window.close();
+});
+
+test('counter responses from a previous account are discarded', async () => {
+  const app=loadSgdiApp(['sgdiRefreshSidebarStats','emptyDB']);
+  app.T().setDb(app.T().emptyDB());app.T().setSession({username:'A',role:'admin'});
+  let resolve;app.window.SGDI_API={ui:{sidebarStats:()=>new Promise(r=>resolve=r)}};
+  const pending=app.T().sgdiRefreshSidebarStats();
+  app.T().setSession({username:'B',role:'admin'});
+  resolve({scope:{active_society:''},erp:{employees:{total:999}}});
+  assert.equal(await pending,null);
+  assert.notEqual(app.window.SGDI_SIDEBAR_STATS?.erp?.employees?.total,999);
+  app.dom.window.close();
+});
+
+test('ribbon percentages require an explicit meaningful denominator', () => {
+  const app=loadSgdiApp(['moduleCounterItemHTML']);
+  assert.doesNotMatch(app.T().moduleCounterItemHTML({label:'FACTURES',value:4},12),/33%/);
+  assert.match(app.T().moduleCounterItemHTML({label:'ACTIFS',value:4,pctBase:8},99),/50%/);
+  app.dom.window.close();
+});
