@@ -503,6 +503,8 @@ test('période de facturation : enregistrement, réouverture, aperçu et dates i
     w.__factureEditId=invoice.id;
     w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
     t.renderFactureEditor(d.getElementById('view'));
+    d.getElementById('fact-periode-debut').value='';
+    d.getElementById('fact-periode-fin').value='';
     t.factureVoirApercu(invoice.id);
     assert.equal(d.querySelector('#fact-print-area'),null,'aperçu refusé tant que la période manque');
     d.getElementById('fact-periode-debut').value='2026-09-01';
@@ -641,5 +643,22 @@ test('aperçu : valider et imprimer attend le succès serveur et bloque les doub
     assert.deepEqual(calls,['validate','preview:issued','print']);assert.equal(d.getElementById('fact-numero').value,'FAC-001');
     calls.length=0;w.__savePromise=Promise.resolve(null);await t.factureValidateAndPrint(button);
     assert.deepEqual(calls,['validate','close']);assert.equal(button.disabled,false);
+  }finally{env.window.close();}
+});
+
+
+test('période par défaut : mois courant, février et dates enregistrées conservées',()=>{
+  const env=loadSgdiApp(['factureDefaultBillingPeriod','renderFactureEditor']);
+  try{
+    const t=env.T(),w=env.window,d=w.document;
+    for(const [date,end] of [['2026-09-10','2026-09-30'],['2026-01-31','2026-01-30'],['2026-02-10','2026-02-28'],['2024-02-10','2024-02-29']]){
+      const period=t.factureDefaultBillingPeriod(date);assert.equal(period.periodeDebut,date.slice(0,7)+'-01');assert.equal(period.periodeFin,end);
+    }
+    w.eval('today=function(){return "2026-09-10"}');
+    const f={id:'defaults',statut:'brouillon',lignes:[]};t.setDb({factures:[f],clients:[],paiements:[],avoirs:[]});w.__factureEditId=f.id;
+    t.renderFactureEditor(d.getElementById('view'));
+    assert.equal(d.getElementById('fact-periode-debut').value,'2026-09-01');assert.equal(d.getElementById('fact-periode-fin').value,'2026-09-30');assert.equal(d.getElementById('fact-periode-fin').readOnly,false);
+    f.periodeDebut='2026-08-03';f.periodeFin='2026-08-21';t.renderFactureEditor(d.getElementById('view'));
+    assert.equal(d.getElementById('fact-periode-debut').value,'2026-08-03');assert.equal(d.getElementById('fact-periode-fin').value,'2026-08-21');
   }finally{env.window.close();}
 });

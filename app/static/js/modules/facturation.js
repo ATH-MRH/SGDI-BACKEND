@@ -1076,6 +1076,12 @@ async function factureTelechargerPDF(){
   }
 }
 
+function factureDefaultBillingPeriod(date){
+  const month=date.slice(0,7),year=Number(date.slice(0,4)),monthNumber=Number(date.slice(5,7));
+  const lastDay=Math.min(30,new Date(Date.UTC(year,monthNumber,0)).getUTCDate());
+  return {periodeDebut:month+"-01",periodeFin:month+"-"+String(lastDay).padStart(2,"0")};
+}
+
 function renderFactureEditor(view){
   facturationLeaveEditor();
   // Ne jamais hériter du verrou global ATLAS dans fac.irongs.com. Le statut de la
@@ -1100,6 +1106,7 @@ function renderFactureEditor(view){
   const INP="border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box;outline:none;background:#fff";
   const sd=factStatutDisplay(f);
   const isDraft=!f.statut||String(f.statut).toLowerCase()==="brouillon";
+  const billingPeriod=isDraft&&!f.periodeDebut&&!f.periodeFin?factureDefaultBillingPeriod(today()):f;
   const FL='display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;align-items:center;margin-bottom:7px';
   const FS='font-size:11px;color:#334155;font-weight:900;line-height:1.15';
   const FI='height:25px;min-height:25px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;width:100%;box-sizing:border-box;outline:none;background:#fff;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)';
@@ -1206,8 +1213,8 @@ function renderFactureEditor(view){
     fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
     fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
     '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="padding:0 4px;font-size:11px;font-weight:800;color:#334155">Période de facturation</legend>'+
-    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(f.periodeDebut||"")+'">')+
-    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(f.periodeFin||"")+'">')+'</fieldset>'+
+    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeDebut||"")+'">')+
+    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeFin||"")+'">')+'</fieldset>'+
     fl('Délai paiement',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
       ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+
