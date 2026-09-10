@@ -208,6 +208,68 @@ def _site_matches_query(site: Site, q: str | None) -> bool:
     return any(query in str(value or "").lower() for value in values)
 
 
+def _ops_employee_rows(db: Session, user: User, society: str | None):
+    from app.core.scope_policy import effective_society_values, society_key, SocietyScopeError
+    from app.modules.irongs.sql_bridge import _live_assignment_map
+    try:
+        allowed = effective_society_values(user, society)
+    except SocietyScopeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    wanted = None if allowed is None else {society_key(value) for value in allowed}
+    # Only operational fields are returned; never serialize the full RH record/extra.
+    rows = [row for row in db.execute(select(Employee).order_by(Employee.last_name, Employee.id)).scalars()
+            if wanted is None or society_key(row.society) in wanted]
+    site_ids = _authorized_site_ids(user)
+    if site_ids:
+        today = date.today()
+        ids = set(db.scalars(select(Assignment.employee_id).where(
+            Assignment.site_id.in_(site_ids), Assignment.active == 1,
+            Assignment.start_date <= today,
+            (Assignment.end_date.is_(None)) | (Assignment.end_date >= today))))
+        rows = [row for row in rows if row.id in ids]
+    live = _live_assignment_map(db, employee_ids=[row.id for row in rows]) if rows else {}
+    fields = ("id", "code", "first_name", "last_name", "phone", "position", "society", "status",
+              "contract_type", "recruit_date", "contract_end_date", "trial_end_date")
+    result = []
+    for row in rows:
+        data = {key: getattr(row, key) for key in fields}
+        extra = row.extra if isinstance(row.extra, dict) else {}
+        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+        # Preserve the frontend reference, without copying private profile fields.
+        assignment = live.get(row.id) or {}
+        if site_ids and assignment.get("siteBackendId") not in site_ids:
+            assignment = {}
+        data["extra"] = {"_legacy": {"id": legacy.get("id") or str(row.id), "affectationCourante": assignment}}
+        result.append(data)
+    return result
+
+
+@router.get("/employees")
+def ops_employees(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return _ops_employee_rows(db, user, society)
+
+
+@router.get("/employees/page")
+def ops_employees_page(society: str | None = None, page: int = 1, page_size: int = 25,
+                       q: str | None = None, mode: str | None = None,
+                       db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = _ops_employee_rows(db, user, society)
+    if q:
+        needle = q.casefold().strip()
+        rows = [row for row in rows if needle in " ".join(str(row.get(k) or "") for k in ("code", "first_name", "last_name", "position")).casefold()]
+    selected_mode = (mode or "actifs").strip().casefold()
+    modes = {
+        **dict.fromkeys(("actifs", "active", "actif"), {"actif", "active"}),
+        **dict.fromkeys(("absents", "absence", "absent"), {"absent"}),
+        **dict.fromkeys(("suspension", "suspendu", "suspendus"), {"suspendu"}),
+        **dict.fromkeys(("sortant", "sortants"), {"sortant", "demissionne", "licencie"}),
+    }
+    if selected_mode not in {"all", "tous", "recap"}:
+        statuses = modes.get(selected_mode, {selected_mode})
+        rows = [row for row in rows if str(row["status"]).casefold() in statuses]
+    return paginate_list(rows, page=page, page_size=page_size)
+
+
 @router.get("/dashboard")
 def ops_dashboard(db: Session = Depends(get_db)):
     return service.dashboard(db)

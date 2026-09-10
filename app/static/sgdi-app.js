@@ -1411,6 +1411,10 @@ function employeeApiPayload(a){
     extra
   };
 }
+function sgdiEmployeeReadPath(){
+  const host=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
+  return host?.key==="ops"||session?.transverse==="ops"?"/ops/employees":"/drh/employees";
+}
 async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
@@ -1552,7 +1556,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:(params)=>sgdiApi("/drh/employees"+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),flattenExtra:()=>sgdiApi("/drh/employees/flatten-extra",{method:"POST",legacy:false})},
+  employees:{list:(params)=>sgdiApi(sgdiEmployeeReadPath()+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi(sgdiEmployeeReadPath()+"/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),flattenExtra:()=>sgdiApi("/drh/employees/flatten-extra",{method:"POST",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),

@@ -34,6 +34,7 @@ window.setInterval = () => 0;
 // Suffixe : exposer les fonctions à tester + des setters pour db/session (let internes)
 const exposeSuffix = `
 ;window.__sgdiTest = {
+  sgdiEmployeeReadPath,
   employeeIsFormer: (typeof employeeIsFormer !== 'undefined') ? employeeIsFormer : null,
   employeeIsActive: (typeof employeeIsActive !== 'undefined') ? employeeIsActive : null,
   agentHasLiveAffectation: (typeof agentHasLiveAffectation !== 'undefined') ? agentHasLiveAffectation : null,
@@ -437,4 +438,13 @@ test('fenêtres : sélectionner un champ et relâcher hors de la fenêtre ne fer
   assert.equal(w.document.querySelector('.modal-bg'),null,'un vrai clic sur le fond ferme');
   t.openModal('<input>');t.closeModal();assert.equal(w.document.querySelector('.modal-bg'),null);
   w.close();
+});
+
+
+test('OPS employee loading uses its own read API without granting DRH access', () => {
+  window.__sgdiTest.setSession({transverse: 'ops'});
+  assert.strictEqual(window.__sgdiTest.sgdiEmployeeReadPath(), '/ops/employees');
+  window.__sgdiTest.setSession({transverse: 'drh'});
+  assert.strictEqual(window.__sgdiTest.sgdiEmployeeReadPath(), '/drh/employees');
+  window.__sgdiTest.setSession(null);
 });

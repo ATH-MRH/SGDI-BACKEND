@@ -142,3 +142,55 @@ def test_explicit_unrelated_module_does_not_inherit_legacy_recruitment_grant(cli
     headers = _headers(user)
     assert client.get("/api/drh/candidates", headers=headers).status_code == 403
     assert client.get("/api/auth/me", headers=headers).json()["recruitment_access"] is False
+
+
+def test_ops_employee_read_is_scoped_and_excludes_private_hr_data(client, db):
+    from app.modules.drh.models import Employee
+    user = _user(db, "OPS_READ", ["ops"])
+    own = Employee(code="OPS_READ_OWN", first_name="Agent", last_name="Test",
+                   society="IRON GLOBAL SÉCURITÉ", salary_net=123456, nin="OPS_PRIVATE_NIN",
+                   extra={"bank": "PRIVATE_BANK", "_legacy": {"id": "legacy_ops", "rib": "PRIVATE_RIB"}})
+    other = Employee(code="OPS_READ_OTHER", first_name="Other", last_name="Test", society="Sword Corporation")
+    db.add_all([own, other]); db.commit()
+    headers = _headers(user)
+    response = client.get("/api/ops/employees", headers=headers)
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    assert own.id in {row["id"] for row in rows}
+    assert other.id not in {row["id"] for row in rows}
+    row = next(row for row in rows if row["id"] == own.id)
+    assert row["extra"]["_legacy"]["id"] == "legacy_ops"
+    assert "salary_net" not in row and "nin" not in row
+    assert "PRIVATE" not in response.text
+    page = client.get("/api/ops/employees/page?q=OPS_READ_OWN&mode=all", headers=headers)
+    assert page.status_code == 200, page.text
+    assert page.json()["total"] == 1
+    assert page.json()["items"][0] == row
+    assert client.get("/api/ops/employees?society=Sword%20Corporation", headers=headers).status_code == 403
+    for path in ("/api/drh/employees", "/api/drh/employees/page", "/api/drh/dashboard", "/api/drh/candidates"):
+        assert client.get(path, headers=headers).status_code == 403
+    assert client.put(f"/api/drh/employees/{own.id}", json={"salary_net": 1}, headers=headers).status_code == 403
+    db.refresh(user)
+    assert user.authorized_modules == ["ops"]
+
+
+def test_ops_employee_read_respects_assigned_site_and_module(client, db):
+    from datetime import date, timedelta
+    from app.modules.drh.models import Employee
+    from app.modules.ops.models import Site, Assignment
+    user = _user(db, "OPS_READ_SITE", ["ops"])
+    site = Site(name="OPS read allowed", equipment_plan={"societe": "Iron Global Securite"})
+    db.add(site); db.flush()
+    employees = [Employee(code=f"OPS_SITE_{i}", first_name="Agent", last_name=str(i), society="Iron Global Securite") for i in range(3)]
+    db.add_all(employees); db.flush()
+    db.add_all([Assignment(employee_id=employees[0].id, site_id=site.id, start_date=date.today(), active=1),
+                Assignment(employee_id=employees[1].id, site_id=site.id, start_date=date.today()+timedelta(days=1), active=1)])
+    user.authorized_sites = [site.id]
+    db.commit()
+    result = client.get("/api/ops/employees", headers=_headers(user))
+    assert result.status_code == 200, result.text
+    assert [row["id"] for row in result.json()] == [employees[0].id]
+    assert result.json()[0]["extra"]["_legacy"]["affectationCourante"]["siteBackendId"] == site.id
+    user.authorized_modules = ["commercial"]
+    db.commit()
+    assert client.get("/api/ops/employees", headers=_headers(user)).status_code == 403
