@@ -524,3 +524,19 @@ test('période de facturation : enregistrement, réouverture, aperçu et dates i
     assert.ok(d.getElementById('fact-periode-fin').disabled);
   } finally {env.window.close();}
 });
+
+
+test('total TTC de l’en-tête : mêmes montants que le récapitulatif après chaque saisie', () => {
+  const env=loadSgdiApp(['factureEditorLigneHTML','factureEditorCalcTotals']);
+  try {
+    assert.strictEqual(env.loadError,null);
+    const t=env.T(),d=env.window.document;
+    d.getElementById('view').innerHTML='<output id="fact-header-ttc"></output><span id="fact-r-ttc"></span><input id="fact-tva-global" value="19"><table><tbody id="fact-lignes-body">'+t.factureEditorLigneHTML({designation:'Service',qte:2,prixUnitHT:100})+'</tbody></table>';
+    const check=(expected)=>{t.factureEditorCalcTotals();assert.equal(d.getElementById('fact-header-ttc').textContent,d.getElementById('fact-r-ttc').textContent);assert.equal(d.getElementById('fact-header-ttc').textContent.replace(/[\s\u00a0\u202f]/g,''),expected);};
+    check('238,00DZD');
+    d.querySelector('.fact-ligne-prix').value='100,50';check('239,19DZD');
+    d.querySelector('.fact-ligne-qte').value='4';check('478,38DZD');
+    d.getElementById('fact-tva-global').value='9';check('438,18DZD');
+    d.querySelector('.fact-ligne-row').remove();check('0,00DZD');
+  } finally { env.window.close(); }
+});

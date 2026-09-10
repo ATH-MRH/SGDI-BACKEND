@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20260910-invoice-compact-preview";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20260910-invoice-live-ttc";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.

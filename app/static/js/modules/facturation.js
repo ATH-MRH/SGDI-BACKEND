@@ -370,7 +370,7 @@ function factureEditorCalcTotals(){
   const totalTVA=totalHT*tvaPct/100;
   const ttc=totalHT+totalTVA;
   const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=formatDZD(v);};
-  s("fact-r-ht",totalHT);s("fact-r-tva",totalTVA);s("fact-r-ttc",ttc);
+  s("fact-r-ht",totalHT);s("fact-r-tva",totalTVA);s("fact-r-ttc",ttc);s("fact-header-ttc",ttc);
 }
 
 function factureComputeLinesTotals(lignes,tvaPct){
@@ -837,15 +837,15 @@ function factureVoirApercu(fId){
     '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
     '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:22px 30px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
     // Issuer details belong to the active company, separately from the recipient.
-    '<header style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:22px;align-items:start;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:12px;break-inside:avoid">'+
-    '<div class="fact-issuer-identity"><div style="display:flex;gap:10px;align-items:center;padding-top:0;min-width:0">'+
-    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:48px;height:48px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
-    '<div style="font-weight:900;font-size:15px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div></div>'+
+    '<header style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:22px;align-items:center;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:12px;break-inside:avoid">'+
+    '<div class="fact-issuer-identity" style="display:flex;gap:12px;align-items:center;min-width:0">'+
+    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:96px;height:96px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
+    '<div style="flex:1;min-width:0"><div style="font-weight:900;font-size:15px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div>'+
     '<section class="fact-issuer-details" aria-label="Société émettrice" style="margin-top:6px;font-size:10px;line-height:1.4;overflow-wrap:anywhere">'+
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 12px">'+
     '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div>'+
     [["RC",companyRC],["AI",companyAI],["NIF",companyNIF],["NIS",companyNIS]].map(([label,value])=>'<div><b style="color:#64748b">'+label+' :</b> '+escapeHTML(String(value||"À renseigner"))+'</div>').join("")+
-    '</div></section></div>'+
+    '</div></section></div></div>'+
     '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0"><div><div style="font-size:24px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
     '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
     '</div></header>'+
@@ -981,10 +981,11 @@ function renderFactureEditor(view){
   view.innerHTML=
     // BREADCRUMB + TABS (sticky)
     '<div style="position:sticky;top:0;z-index:50;background:#f1f5f9;padding-bottom:2px;margin-bottom:10px">'+
-    '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;padding:8px 0 4px">'+
+    '<div class="fact-editor-summary"><div class="fact-editor-breadcrumb">'+
     '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;text-decoration:none">Factures</a>'+
     '<span>/</span><span style="color:#111827;font-weight:700">'+(isDraft?"Brouillon":escapeHTML(f.numero||"Facture"))+'</span>'+
     (!isDraft?' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>':"")+
+    '</div><div class="fact-editor-live-total"><span>Total TTC</span><output id="fact-header-ttc" aria-live="polite" aria-atomic="true">'+formatDZD(0)+'</output></div>'+
     '<button type="button" onclick="factureEditorOpen()" style="margin-left:auto;background:#043970;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(4,57,112,.2)">+ Nouvelle facture</button>'+
     '</div>'+
     factTabs("factures")+
@@ -1104,6 +1105,7 @@ function renderFactureEditor(view){
     '</fieldset>'+
     '</div>'+
     '</div>';
+  factureEditorCalcTotals();
   if(isDraft){
     facturationBindEditor(view);
   }else{

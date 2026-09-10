@@ -10414,3 +10414,11 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .fact-editor-lines .fact-ligne-qte,.fact-editor-lines .fact-ligne-unite{text-align:center!important}
 .fact-editor-lines .fact-ligne-prix{text-align:right!important}
 .fact-editor-lines th:nth-child(2),.fact-editor-lines th:nth-child(4){text-align:center!important}
+
+/* Live invoice total stays centered without shifting the breadcrumb. */
+.fact-editor-summary{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;font-size:13px;color:#6b7280;padding:8px 0 4px}
+.fact-editor-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}
+.fact-editor-live-total{display:flex;align-items:baseline;justify-content:center;gap:10px;padding:6px 14px;border:1px solid #cce5e2;border-radius:7px;background:#edf8f6;color:#043970}
+.fact-editor-live-total span{font-size:11px;font-weight:700;text-transform:uppercase;white-space:nowrap}
+.fact-editor-live-total output{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-width:680px){.fact-editor-summary{grid-template-columns:minmax(0,1fr) auto}.fact-editor-live-total{grid-column:1/-1;grid-row:2}.fact-editor-summary>button{grid-column:2;grid-row:1}}
