@@ -344,7 +344,8 @@ function factureEditorUnitChange(select){
   const form=document.getElementById("fact-days-form"),from=form.querySelector("#fact-days-start"),to=form.querySelector("#fact-days-end");
   const update=()=>{
     const count=factureEditorDayCount(from.value,to.value);
-    to.min=from.value;
+    // Do not mutate native date constraints during typing: browsers may reset the active date segment.
+    // The range is checked above and again on submit, once both dates are complete.
     form.querySelector("#fact-days-count").textContent=count?count+" jour"+(count>1?"s":""):"Sélectionnez une période valide.";
     form.querySelector("#fact-days-validate").disabled=!count;
     return count;

@@ -553,7 +553,14 @@ test('période en jours : calendrier inclusif, validation et ligne ciblée', asy
     select.value='Jour';t.factureEditorUnitChange(select);
     assert.equal(select.value,'Mois','aucune modification avant validation');
     const from=d.getElementById('fact-days-start'),to=d.getElementById('fact-days-end');
-    from.value='2026-09-10';to.value='2026-09-12';to.dispatchEvent(new w.Event('input'));
+    from.value='2026-09-10';from.dispatchEvent(new w.Event('input'));
+    assert.equal(to.hasAttribute('min'),false,'aucune contrainte native réécrite pendant la saisie');
+    to.value='';to.dispatchEvent(new w.Event('input'));
+    assert.equal(d.getElementById('fact-days-validate').disabled,true,'saisie partielle autorisée sans validation');
+    to.value='2026-09-09';to.dispatchEvent(new w.Event('input'));
+    assert.equal(d.getElementById('fact-days-validate').disabled,true,'date inversée refusée');
+    to.value='2026-09-12';to.dispatchEvent(new w.Event('input'));
+    assert.equal(to.value,'2026-09-12','saisie conservée');
     assert.equal(d.getElementById('fact-days-count').textContent,'3 jours');
     d.getElementById('fact-days-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
     assert.equal(row.querySelector('.fact-ligne-qte').value,'3');assert.equal(select.value,'Jour');
