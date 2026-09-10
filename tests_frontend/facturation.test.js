@@ -412,3 +412,41 @@ test('catalogue Commercial : sélection explicite, quantité par site, anti-doub
   row.remove();t.factureEditorCatalogAdd(0);assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,1);
   t.facturationLeaveEditor();w.close();
 });
+
+test('aperçu facture : identité fiscale de la société active sous FACTURE, distincte du client', () => {
+  const env = loadSgdiApp(['factureVoirApercu']);
+  try {
+    assert.strictEqual(env.loadError, null);
+    const t = env.T();
+    t.setDb({
+      parametres: [
+        { societe: 'IRON GLOBAL SOLUTION', rc: 'RC-SOLUTION', ai: 'AI-SOLUTION', nif: 'NIF-SOLUTION', nis: 'NIS-SOLUTION', adresse: 'Adresse <émetteur>' },
+        { societe: 'IRON GLOBAL SÉCURITÉ', rc: 'RC-SECURITE' },
+      ],
+      factures: [{ id: 'preview', numero: 'F-001', statut: 'brouillon', client: 'Client exemple', rc: 'RC-CLIENT', nif: 'NIF-CLIENT', lignes: [{ designation: 'Service', quantite: 2, prixUnitaire: 100, totalHT: 200 }] }],
+      paiements: [], avoirs: [],
+    });
+    t.setSession({ societe: 'IRON GLOBAL SOLUTION' });
+    t.factureVoirApercu('preview');
+    const doc = env.window.document;
+    const issuer = doc.querySelector('#fact-print-area .fact-issuer-details');
+    for (const value of ['IRON GLOBAL SOLUTION', 'RC-SOLUTION', 'AI-SOLUTION', 'NIF-SOLUTION', 'NIS-SOLUTION', 'Adresse <émetteur>']) {
+      assert.ok(issuer.textContent.includes(value), value);
+    }
+    assert.ok(!issuer.textContent.includes('RC-CLIENT'));
+    assert.ok(!issuer.textContent.includes('RC-SECURITE'));
+    assert.strictEqual(issuer.querySelector('émetteur'), null, 'les valeurs doivent être échappées');
+    assert.ok(issuer.parentElement.textContent.indexOf('FACTURE') < issuer.parentElement.textContent.indexOf('RC-SOLUTION'));
+    assert.ok(doc.querySelector('#fact-verification-qr'));
+    assert.ok(doc.querySelector('#fact-print-area').textContent.includes('RC-CLIENT'));
+    assert.match(doc.querySelector('tfoot').textContent, /238,00 DZD/);
+    t.setSession({ societe: 'IRON GLOBAL SÉCURITÉ' });
+    t.factureVoirApercu('preview');
+    const other = doc.querySelector('.fact-issuer-details');
+    assert.ok(other.textContent.includes('RC-SECURITE'));
+    assert.ok(!other.textContent.includes('RC-SOLUTION'));
+    assert.strictEqual((other.textContent.match(/À renseigner/g) || []).length, 4);
+  } finally {
+    env.window.close();
+  }
+});

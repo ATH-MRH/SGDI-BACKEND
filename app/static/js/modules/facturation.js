@@ -803,17 +803,18 @@ function factureVoirApercu(fId){
     '</div></div>'+
     '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
     '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:32px 36px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
-    '<div style="position:absolute;right:36px;top:105px;transform:rotate(-8deg);border:3px solid '+statusColor+';color:'+statusColor+';border-radius:6px;padding:7px 15px;font-size:15px;font-weight:900;letter-spacing:1.5px;opacity:.82">'+statusLabel+'</div>'+
-    // Company header
-    '<div style="display:grid;grid-template-columns:92px 1fr 205px;gap:16px;align-items:center;border-bottom:3px solid #043970;padding-bottom:14px;margin-bottom:18px">'+
-    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:82px;height:82px;object-fit:contain" alt="Logo '+escapeHTML(companyName)+'"/>':'<div></div>')+
-    '<div style="font-size:10px;color:#475569;line-height:1.55">'+
-    (companyName?'<div style="font-weight:900;font-size:17px;color:#043970;margin-bottom:5px;text-transform:uppercase">'+escapeHTML(companyName)+'</div>':"")+
-    (companyAddr?'<div>'+escapeHTML(companyAddr)+'</div>':"")+
-    '<div style="margin-top:3px">'+[companyRC&&("RC : "+companyRC),companyNIF&&("NIF : "+companyNIF),companyAI&&("AI : "+companyAI),companyNIS&&("NIS : "+companyNIS)].filter(Boolean).map(escapeHTML).join(" · ")+'</div>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 58px;gap:9px;align-items:center;text-align:right"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:800;margin-top:5px">'+escapeHTML(numero)+'</div><div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#64748b;margin-top:4px">Émise le '+fmtD(date)+'</div>'+(dateEcheance?'<div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#64748b">Échéance : '+fmtD(dateEcheance)+'</div>':"")+'</div><div><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
-    '</div>'+
+    // Issuer details belong to the active company, separately from the recipient.
+    '<header style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start;border-bottom:3px solid #043970;padding-bottom:18px;margin-bottom:18px;break-inside:avoid">'+
+    '<div style="display:flex;gap:14px;align-items:center;padding-top:8px;min-width:0">'+
+    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:72px;height:72px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
+    '<div style="font-weight:900;font-size:17px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div></div>'+
+    '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
+    '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
+    '<section class="fact-issuer-details" aria-label="Société émettrice" style="font-size:10px;line-height:1.6;overflow-wrap:anywhere">'+
+    '<div style="font-weight:800;color:#043970;margin-bottom:6px">'+escapeHTML(companyName)+'</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 12px">'+
+    [["RC",companyRC],["AI",companyAI],["NIF",companyNIF],["NIS",companyNIS]].map(([label,value])=>'<div><b style="color:#64748b">'+label+' :</b> '+escapeHTML(String(value||"À renseigner"))+'</div>').join("")+
+    '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div></div></section></div></header>'+
     // Destinataire + info
     '<div style="display:grid;grid-template-columns:1fr 240px;gap:18px;margin-bottom:18px">'+
     '<div style="font-size:11px;color:#374151;line-height:1.65;border-left:4px solid #f2c500;background:#f8fafc;padding:11px 14px;border-radius:0 6px 6px 0">'+
