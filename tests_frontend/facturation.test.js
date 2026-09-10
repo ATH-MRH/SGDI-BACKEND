@@ -662,3 +662,24 @@ test('période par défaut : mois courant, février et dates enregistrées conse
     assert.equal(d.getElementById('fact-periode-debut').value,'2026-08-03');assert.equal(d.getElementById('fact-periode-fin').value,'2026-08-21');
   }finally{env.window.close();}
 });
+
+test('objet : sélection multiple des activités Commercial, sauvegarde et aperçu',async()=>{
+  const env=loadSgdiApp(['factureClientActivities','factureSubjectHTML','factureSubjectChange','factureEditorSave','factureVoirApercu']);
+  try{
+    const t=env.T(),w=env.window,d=w.document;
+    const client={prestationsServices:'LOGISTIQUE. LOCATION DE VÉHICULES;GARDIENNAGE\nLOGISTIQUE'};
+    assert.deepEqual(Array.from(t.factureClientActivities(client)),['LOGISTIQUE','LOCATION DE VÉHICULES','GARDIENNAGE']);
+    const f={id:'subject-services',statut:'brouillon',lignes:[]};t.setDb({factures:[f],paiements:[],avoirs:[]});w.__factureEditId=f.id;
+    d.getElementById('view').innerHTML='<input id="fact-clientNom" value="Client"><input id="fact-remarque" value="Note privée"><div id="fact-subject-picker">'+t.factureSubjectHTML(client,f,true)+'</div>';
+    const checks=d.querySelectorAll('.fact-subject-choice');checks[0].checked=true;checks[2].checked=true;t.factureSubjectChange();
+    assert.equal(d.getElementById('fact-objet').value,'LOGISTIQUE ; GARDIENNAGE');
+    w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
+    await t.factureEditorSave({draft:true,silent:true});
+    assert.deepEqual(Array.from(w.__savedInvoice.objetServices),['LOGISTIQUE','GARDIENNAGE']);
+    t.factureVoirApercu(f.id);const output=d.getElementById('fact-print-area').textContent;
+    assert.ok(output.includes('LOGISTIQUE ; GARDIENNAGE'));assert.ok(!output.includes('LOCATION DE VÉHICULES'));assert.ok(!output.includes('Note privée'));
+    const restored=d.createElement('div');restored.innerHTML=t.factureSubjectHTML(client,w.__savedInvoice,false);assert.equal(restored.querySelectorAll('input[type=checkbox]:checked').length,2);assert.ok(restored.querySelector('input[type=checkbox]').disabled);
+    checks[0].checked=false;checks[2].checked=false;t.factureSubjectChange();await t.factureEditorSave({draft:true,silent:true});assert.equal(w.__savedInvoice.objet,'');assert.equal(w.__savedInvoice.objetServices.length,0);
+    const other=d.createElement('div');other.innerHTML=t.factureSubjectHTML({prestationsServices:'AUTRE ACTIVITÉ'},{},true);assert.ok(!other.textContent.includes('LOGISTIQUE'));
+  }finally{env.window.close();}
+});

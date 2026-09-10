@@ -622,6 +622,24 @@ function factureEditorCatalogAdd(index){
   factureEditorCatalogSites();factureEditorCalcTotals();factureEditorCatalogRender();factureEditorScheduleDraft();
 }
 
+function factureClientActivities(client){
+  const raw=client?.prestationsServices||"";
+  return [...new Set((Array.isArray(raw)?raw:String(raw).split(/[\n\r;.]+/)).map(x=>String(x).trim()).filter(Boolean))];
+}
+function factureSubjectHTML(client,invoice,editable){
+  const options=factureClientActivities(client);
+  const selected=Array.isArray(invoice.objetServices)?invoice.objetServices:(invoice.objet?[invoice.objet]:[]);
+  const value=selected.join(" ; ");
+  return '<input id="fact-objet" type="hidden" value="'+escapeHTML(value)+'"><details style="border:1px solid #cbd5e1;border-radius:6px;background:#fff"><summary id="fact-subject-summary" style="padding:10px;cursor:pointer;font-size:12px">'+escapeHTML(value||"Choisir les services à facturer")+'</summary><div style="padding:6px 10px;max-height:220px;overflow:auto">'+(options.length?options.map(activity=>'<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;font-size:12px"><input type="checkbox" class="fact-subject-choice" value="'+escapeHTML(activity)+'" '+(selected.includes(activity)?'checked ':'')+(!editable?'disabled ':'')+'onchange="factureSubjectChange()">'+escapeHTML(activity)+'</label>').join(""):'<p style="font-size:12px;color:#64748b">'+(client?'Aucune activité renseignée pour ce client dans Commercial.':'Sélectionnez un client pour afficher ses activités.')+'</p>')+'</div></details>';
+}
+function factureSubjectChange(){
+  const host=document.getElementById("fact-subject-picker");if(!host)return;
+  const selected=Array.from(host.querySelectorAll(".fact-subject-choice:checked"),el=>el.value);
+  host.querySelector("#fact-objet").value=selected.join(" ; ");
+  host.querySelector("summary").textContent=selected.join(" ; ")||"Choisir les services à facturer";
+  factureEditorUpdateWorkflow();factureEditorScheduleDraft();
+}
+
 function factureEditorClientChange(sel){
   const c=(db.clients||[]).find(x=>x.id===sel.value);if(!c)return;
   const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.value=v||"";};
@@ -633,8 +651,8 @@ function factureEditorClientChange(sel){
   sv("fact-dateDepot",defaults.dateDepot);sv("fact-echDate",defaults.dateEcheance);
   sv("fact-remarque",defaults.remarque);
   // Objet ← Prestations et Services Fournis
-  const objetEl=document.getElementById("fact-objet");
-  if(objetEl){const prest=(c.prestationsServices||"").trim();if(prest)objetEl.value=prest;}
+  const picker=document.getElementById("fact-subject-picker");
+  if(picker)picker.innerHTML=factureSubjectHTML(c,{},true);
   // Le contrat alimente le catalogue ; seules les prestations choisies entrent en facture.
   factureEditorCatalogRender();
   factureEditorRenderClientInfo(c);
@@ -733,7 +751,7 @@ function factureEditorValidate(){
   const clientSearch=document.getElementById("fact-client-search");
   const objet=document.getElementById("fact-objet");
   if(!client?.value){errors.push("Recherchez puis sélectionnez un client.");factureEditorMarkInvalid(clientSearch);}
-  if(!(objet?.value||"").trim()){errors.push("Renseignez l’objet de la facture.");factureEditorMarkInvalid(objet);}
+  if(!(objet?.value||"").trim()){errors.push("Renseignez l’objet de la facture.");factureEditorMarkInvalid(document.getElementById("fact-subject-summary")||objet);}
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
   if(!rows.length)errors.push("Ajoutez au moins un article.");
   rows.forEach((tr,i)=>{
@@ -787,7 +805,7 @@ async function factureEditorSave(options){
   const statut=existing?.statut||"brouillon";
   const numero=existing?.numero||gv("fact-numero")||"BROUILLON";
   const remarque=(gv("fact-remarque")||gv("fact-objet")||"").trim();
-  const objet=(gv("fact-objet")||gv("fact-remarque")||"").trim();
+  const objet=gv("fact-objet").trim();
   const modeReglement=gv("fact-mode")||"A terme";
   const texteSupp=gv("fact-texteSupp");
   const clientId=gv("fact-clientId");
@@ -824,6 +842,8 @@ async function factureEditorSave(options){
   const echeance=gv("fact-echeance")||"";
   const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,periodeDebut,periodeFin,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
   ["cachet","signature"].forEach(kind=>{data[kind+"Image"]=factureImageValue(document.getElementById("fact-"+kind+"-image")?.value??existing?.[kind+"Image"]??"")});
+  if(document.getElementById("fact-subject-picker"))data.objetServices=objet?objet.split(" ; "):[];
+  else if(Array.isArray(existing?.objetServices))data.objetServices=existing.objetServices;
   const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
@@ -889,7 +909,7 @@ function factureVoirApercu(fId){
   const internalRemark=document.getElementById("fact-remarque")?.value??f?.remarque??"";
   const invoiceSubject=document.getElementById("fact-objet")?.value??f?.objet??"";
   // Older drafts may have copied the internal remark into the subject.
-  const publicSubject=invoiceSubject.trim()===internalRemark.trim()?"":invoiceSubject;
+  const publicSubject=(document.getElementById("fact-subject-picker")||f?.objetServices?.length)?invoiceSubject:(invoiceSubject.trim()===internalRemark.trim()?"":invoiceSubject);
   const clientNom=gv("fact-clientNom")||f?.client||f?.clientNom||"";
   const adresse=gv("fact-adresse")||f?.adresseClient||"";
   const nif=gv("fact-nif")||f?.nif||"";
@@ -1149,7 +1169,7 @@ function renderFactureEditor(view){
     // Objet fieldset
     '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
     '<legend>Objet de la facture</legend>'+
-    '<input id="fact-objet" class="input" style="width:100%" value="'+escapeHTML(f.objet||f.remarque||"")+'" placeholder="Ex: Prestation de gardiennage — Période : Mars 2026">'+
+    '<div id="fact-subject-picker">'+factureSubjectHTML(selClient,f,isDraft)+'</div>'+
     '</fieldset>'+
     '<section id="fact-commercial-catalog" class="fact-commercial-catalog"'+(isDraft?'':' hidden')+'></section>'+
     // Articles fieldset
