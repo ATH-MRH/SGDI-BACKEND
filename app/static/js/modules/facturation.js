@@ -627,6 +627,11 @@ function factureEditorMarkInvalid(el){
 
 function factureEditorValidate(){
   const errors=[];
+  const periodStart=document.getElementById("fact-periode-debut"),periodEnd=document.getElementById("fact-periode-fin");
+  if(!!periodStart?.value!==!!periodEnd?.value||(periodStart?.value&&periodEnd?.value&&periodStart.value>periodEnd.value)){
+    errors.push("Renseignez une période de facturation complète, avec une fin après le début.");
+    factureEditorMarkInvalid(periodStart);factureEditorMarkInvalid(periodEnd);
+  }
   const client=document.getElementById("fact-clientId");
   const clientSearch=document.getElementById("fact-client-search");
   const objet=document.getElementById("fact-objet");
@@ -673,6 +678,8 @@ async function factureEditorSave(options){
   const id=window.__factureEditId;
   db.factures=db.factures||[];
   let existing=db.factures.find(x=>x.id===id);
+  const periodeDebut=document.getElementById("fact-periode-debut")?.value??existing?.periodeDebut??"";
+  const periodeFin=document.getElementById("fact-periode-fin")?.value??existing?.periodeFin??"";
   const wasValidated=existing&&existing.statut!=="brouillon";
   if(options.draft&&wasValidated){const state=saveState;if(state)state.textContent="Facture validée";return existing;}
   // Le numéro définitif et le passage à "émise" ne sont JAMAIS décidés ici : calculé côté
@@ -717,7 +724,7 @@ async function factureEditorSave(options){
   const tvaAmt=totals.totalTVA;
   const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
-  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
+  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,periodeDebut,periodeFin,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
   const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
@@ -758,6 +765,8 @@ function factureVoirApercu(fId){
   const numero=gv("fact-numero")||(f?.numero||"APERÇU");
   const date=gv("fact-date")||f?.date||today();
   const dateEcheance=gv("fact-echDate")||f?.dateEcheance||"";
+  const periodeDebut=document.getElementById("fact-periode-debut")?.value??f?.periodeDebut??"";
+  const periodeFin=document.getElementById("fact-periode-fin")?.value??f?.periodeFin??"";
   const remarque=gv("fact-remarque")||f?.remarque||f?.objet||"";
   const clientNom=gv("fact-clientNom")||f?.client||f?.clientNom||"";
   const adresse=gv("fact-adresse")||f?.adresseClient||"";
@@ -829,16 +838,16 @@ function factureVoirApercu(fId){
     '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:32px 36px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
     // Issuer details belong to the active company, separately from the recipient.
     '<header style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start;border-bottom:3px solid #043970;padding-bottom:18px;margin-bottom:18px;break-inside:avoid">'+
-    '<div style="display:flex;gap:14px;align-items:center;padding-top:8px;min-width:0">'+
+    '<div class="fact-issuer-identity"><div style="display:flex;gap:14px;align-items:center;padding-top:8px;min-width:0">'+
     (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:72px;height:72px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
     '<div style="font-weight:900;font-size:17px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div></div>'+
-    '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
-    '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
-    '<section class="fact-issuer-details" aria-label="Société émettrice" style="font-size:10px;line-height:1.6;overflow-wrap:anywhere">'+
-    '<div style="font-weight:800;color:#043970;margin-bottom:6px">'+escapeHTML(companyName)+'</div>'+
+    '<section class="fact-issuer-details" aria-label="Société émettrice" style="margin-top:12px;font-size:10px;line-height:1.6;overflow-wrap:anywhere">'+
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 12px">'+
     [["RC",companyRC],["AI",companyAI],["NIF",companyNIF],["NIS",companyNIS]].map(([label,value])=>'<div><b style="color:#64748b">'+label+' :</b> '+escapeHTML(String(value||"À renseigner"))+'</div>').join("")+
-    '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div></div></section></div></header>'+
+    '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div></div></section></div>'+
+    '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
+    '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
+    '</div></header>'+
     // Destinataire + info
     '<div style="display:grid;grid-template-columns:1fr 240px;gap:18px;margin-bottom:18px">'+
     '<div style="font-size:11px;color:#374151;line-height:1.65;border-left:4px solid #f2c500;background:#f8fafc;padding:11px 14px;border-radius:0 6px 6px 0">'+
@@ -854,6 +863,7 @@ function factureVoirApercu(fId){
     (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Échéance :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(dateEcheance)+'</td></tr>':"")+
     (remarque?'<tr><td style="padding:5px 10px;color:#6b7280;font:10px Arial,Helvetica,sans-serif" colspan="2">Objet :<br><span style="font:700 10px Arial,Helvetica,sans-serif;color:#111827">'+escapeHTML(remarque)+'</span></td></tr>':"")+
     '</table></div>'+
+    ((periodeDebut||periodeFin)?'<div class="fact-billing-period" style="margin-bottom:14px;padding:9px 12px;border:1px solid #dbe3ef;border-radius:5px;background:#f8fafc;font-size:11px"><b>Période de facturation :</b> du '+escapeHTML(fmtD(periodeDebut)||"—")+' au '+escapeHTML(fmtD(periodeFin)||"—")+'</div>':"")+
     // Articles table
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #dbe3ef">'+
     '<thead><tr>'+
@@ -1065,6 +1075,9 @@ function renderFactureEditor(view){
     '<legend>Informations</legend>'+
     fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
     fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
+    '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="padding:0 4px;font-size:11px;font-weight:800;color:#334155">Période de facturation</legend>'+
+    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(f.periodeDebut||"")+'">')+
+    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(f.periodeFin||"")+'">')+'</fieldset>'+
     fl('Délai paiement',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
       ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+

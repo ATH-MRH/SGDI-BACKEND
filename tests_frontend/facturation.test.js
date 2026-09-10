@@ -413,7 +413,7 @@ test('catalogue Commercial : sélection explicite, quantité par site, anti-doub
   t.facturationLeaveEditor();w.close();
 });
 
-test('aperçu facture : identité fiscale de la société active sous FACTURE, distincte du client', () => {
+test('aperçu facture : identité fiscale de la société active sous le logo et le nom, distincte du client', () => {
   const env = loadSgdiApp(['factureVoirApercu']);
   try {
     assert.strictEqual(env.loadError, null);
@@ -430,13 +430,17 @@ test('aperçu facture : identité fiscale de la société active sous FACTURE, d
     t.factureVoirApercu('preview');
     const doc = env.window.document;
     const issuer = doc.querySelector('#fact-print-area .fact-issuer-details');
-    for (const value of ['IRON GLOBAL SOLUTION', 'RC-SOLUTION', 'AI-SOLUTION', 'NIF-SOLUTION', 'NIS-SOLUTION', 'Adresse <émetteur>']) {
+    for (const value of ['RC-SOLUTION', 'AI-SOLUTION', 'NIF-SOLUTION', 'NIS-SOLUTION', 'Adresse <émetteur>']) {
       assert.ok(issuer.textContent.includes(value), value);
     }
     assert.ok(!issuer.textContent.includes('RC-CLIENT'));
     assert.ok(!issuer.textContent.includes('RC-SECURITE'));
     assert.strictEqual(issuer.querySelector('émetteur'), null, 'les valeurs doivent être échappées');
-    assert.ok(issuer.parentElement.textContent.indexOf('FACTURE') < issuer.parentElement.textContent.indexOf('RC-SOLUTION'));
+    const identity=issuer.closest('.fact-issuer-identity');
+    assert.ok(identity.querySelector('img'));
+    assert.ok(identity.textContent.indexOf('IRON GLOBAL SOLUTION') < identity.textContent.indexOf('RC-SOLUTION'));
+    assert.ok(!identity.textContent.includes('FACTURE'));
+    assert.ok(!identity.contains(doc.querySelector('#fact-verification-qr')));
     assert.ok(doc.querySelector('#fact-verification-qr'));
     assert.ok(doc.querySelector('#fact-print-area').textContent.includes('RC-CLIENT'));
     assert.match(doc.querySelector('tfoot').textContent, /238,00 DZD/);
@@ -485,5 +489,38 @@ test('déplacement des lignes : saisies, catalogue, ordre enregistré et aperçu
     invoice.statut='emise';
     t.factureEditorLigneMove(a.querySelector('[data-move="-1"]'),-1);
     assert.strictEqual(body.children[1],a,'facture validée non réordonnable');
+  } finally {env.window.close();}
+});
+
+test('période de facturation : enregistrement, réouverture, aperçu et dates invalides', async () => {
+  const env=loadSgdiApp(['renderFactureEditor','factureEditorSave','factureEditorValidate','factureVoirApercu']);
+  try {
+    assert.strictEqual(env.loadError,null);
+    const t=env.T(),w=env.window,d=w.document;
+    const invoice={id:'period-test',statut:'brouillon',clientId:'c',client:'Client',objet:'Prestation',lignes:[]};
+    t.setSession({societe:'IRON GLOBAL SOLUTION'});
+    t.setDb({factures:[invoice],clients:[],paiements:[],avoirs:[]});
+    w.__factureEditId=invoice.id;
+    w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
+    t.renderFactureEditor(d.getElementById('view'));
+    d.getElementById('fact-periode-debut').value='2026-09-01';
+    d.getElementById('fact-periode-fin').value='2026-09-30';
+    await t.factureEditorSave({draft:true,silent:true});
+    assert.strictEqual(w.__savedInvoice.periodeDebut,'2026-09-01');
+    assert.strictEqual(w.__savedInvoice.periodeFin,'2026-09-30');
+    t.renderFactureEditor(d.getElementById('view'));
+    assert.strictEqual(d.getElementById('fact-periode-debut').value,'2026-09-01');
+    assert.strictEqual(d.getElementById('fact-periode-fin').value,'2026-09-30');
+    t.factureVoirApercu(invoice.id);
+    assert.match(d.querySelector('.fact-billing-period').textContent,/du 01\/09\/2026 au 30\/09\/2026/);
+    d.getElementById('fact-periode-fin').value='2026-08-30';
+    assert.strictEqual(t.factureEditorValidate(),false);
+    assert.strictEqual(d.getElementById('fact-periode-fin').style.borderColor,'rgb(239, 68, 68)');
+    d.getElementById('fact-periode-fin').value='';
+    assert.strictEqual(t.factureEditorValidate(),false);
+    invoice.statut='emise';
+    t.renderFactureEditor(d.getElementById('view'));
+    assert.ok(d.getElementById('fact-periode-debut').disabled);
+    assert.ok(d.getElementById('fact-periode-fin').disabled);
   } finally {env.window.close();}
 });
