@@ -308,14 +308,13 @@ test('fiche employé : champs incomplets signalés dès ouverture et actualisés
   } finally { window.close(); }
 });
 
-test('identifiant connecté : utilise le login exact et échappe le contenu', () => {
+test('identifiant connecté : aucun bandeau supérieur supplémentaire', () => {
   const ctx = require('./load-app').loadSgdiApp(['connectedAccountHeadingHTML']);
   assert.ifError(ctx.loadError);
   try {
     ctx.T().setSession({username:'SARA <test>',nom:'Nom complet différent'});
     const markup=ctx.T().connectedAccountHeadingHTML();
-    assert.match(markup,/SARA &lt;test&gt;/);
-    assert.doesNotMatch(markup,/Nom complet différent/);
+    assert.strictEqual(markup,'');
     ctx.T().setSession(null);
     assert.strictEqual(ctx.T().connectedAccountHeadingHTML(),'');
   } finally {ctx.window.close();}
@@ -409,8 +408,8 @@ test('sélecteur société : les synchronisations conservent les nœuds et les c
     assert.strictEqual(c.window.document.activeElement,button);
     c.T().setSession({username:'AUTRE',role:'admin',niveau:'H5'});
     c.T().renderModuleHostSocieteSelector(cfg);
-    assert.notStrictEqual(app.firstElementChild,root);
-    assert.ok(app.textContent.includes('AUTRE'));
+    assert.strictEqual(app.firstElementChild,root,'changer le login sans changer le périmètre ne recrée pas la page');
+    assert.strictEqual(app.querySelector('.sgdi-account-heading'),null);
     c.T().setSession({username:'AUTRE',permissionsFromServer:true,globalSocietyAccess:false,societesAutorisees:[]});
     c.T().renderModuleHostSocieteSelector(cfg);
     assert.strictEqual(app.querySelectorAll('.module-host-soc-card').length,0);

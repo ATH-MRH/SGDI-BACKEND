@@ -4770,8 +4770,8 @@ function enterModuleHostRoute(routeName){
   navigate(routeName||cfg.homeRoute);
 }
 function connectedAccountHeadingHTML(){
-  if(!session?.username)return "";
-  return `<div class="sgdi-account-heading no-print" data-no-lang="1" aria-label="Compte connecté">${escapeHTML(session.username)}</div>`;
+  // Account identity remains available in navigation; no extra top banner.
+  return "";
 }
 function renderModuleHostAccessDenied(cfg){
   const userName=session?.nom||session?.username||"Utilisateur";
