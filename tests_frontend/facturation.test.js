@@ -450,3 +450,40 @@ test('aperçu facture : identité fiscale de la société active sous FACTURE, d
     env.window.close();
   }
 });
+
+test('déplacement des lignes : saisies, catalogue, ordre enregistré et aperçu conservés', async () => {
+  const env=loadSgdiApp(['factureEditorLigneHTML','factureEditorLigneMove','factureEditorCalcTotals','factureEditorSave','factureVoirApercu']);
+  try {
+    assert.strictEqual(env.loadError,null);
+    const t=env.T(),w=env.window,d=w.document;
+    t.setSession({societe:'IRON GLOBAL SOLUTION'});
+    const invoice={id:'move-test',statut:'brouillon',lignes:[]};
+    t.setDb({factures:[invoice],paiements:[],avoirs:[]});w.__factureEditId=invoice.id;
+    d.getElementById('view').innerHTML='<input id="fact-clientNom" value="Client"><input id="fact-siteNom"><table><tbody id="fact-lignes-body">'+
+      [{designation:'A',qte:2,prixUnitHT:100,catalogKey:'key-a',siteNom:'Site A'}, {designation:'B',qte:3,prixUnitHT:200}].map(t.factureEditorLigneHTML).join('')+'</tbody></table>';
+    const body=d.getElementById('fact-lignes-body'),a=body.children[0],b=body.children[1];
+    a.querySelector('.fact-ligne-desig').value='A modifié';
+    t.factureEditorCalcTotals();
+    assert.ok(a.querySelector('[data-move="-1"]').disabled);
+    assert.ok(b.querySelector('[data-move="1"]').disabled);
+    t.factureEditorLigneMove(a.querySelector('[data-move="1"]'),1);
+    assert.strictEqual(body.children[1],a,'même nœud, aucune saisie perdue');
+    assert.strictEqual(a.querySelector('.fact-ligne-desig').value,'A modifié');
+    assert.strictEqual(a.dataset.catalogKey,'key-a');
+    t.factureEditorLigneMove(a.querySelector('[data-move="-1"]'),-1);
+    assert.strictEqual(body.children[0],a);
+    t.factureEditorLigneMove(a.querySelector('[data-move="-1"]'),-1);
+    assert.strictEqual(body.children[0],a,'aucun déplacement au-delà de la première ligne');
+    t.factureEditorLigneMove(a.querySelector('[data-move="1"]'),1);
+    w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
+    await t.factureEditorSave({draft:true,silent:true});
+    assert.deepStrictEqual(Array.from(w.__savedInvoice.lignes,l=>l.designation),['B','A modifié']);
+    assert.strictEqual(w.__savedInvoice.montantTTC,952);
+    t.factureVoirApercu(invoice.id);
+    const text=d.querySelector('#fact-print-area table:has(tfoot) tbody').textContent;
+    assert.ok(text.indexOf('B')<text.indexOf('A modifié'));
+    invoice.statut='emise';
+    t.factureEditorLigneMove(a.querySelector('[data-move="-1"]'),-1);
+    assert.strictEqual(body.children[1],a,'facture validée non réordonnable');
+  } finally {env.window.close();}
+});

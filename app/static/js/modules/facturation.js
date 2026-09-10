@@ -267,7 +267,12 @@ function formatPrixHT(n){n=parseFloat(n)||0;return n.toLocaleString("fr-FR",{min
 function factureEditorLigneHTML(l){
   l=l||{};
   const type=l.type||"article";
-  const DEL='<td style="padding:4px 6px;text-align:center;vertical-align:middle;width:70px;white-space:nowrap"><button type="button" onclick="factureEditorLigneRemove(this)" style="background:#fee2e2;border:none;color:#ef4444;cursor:pointer;font-size:14px;font-weight:700;width:24px;height:24px;border-radius:50%;line-height:1;display:inline-flex;align-items:center;justify-content:center" title="Supprimer">×</button></td>';
+  const DEL='<td class="fact-line-actions"><div class="fact-line-buttons">'+
+    '<button type="button" data-move="-1" onclick="factureEditorLigneMove(this,-1)" title="Monter la ligne" aria-label="Monter la ligne">↑</button>'+
+    '<button type="button" data-move="1" onclick="factureEditorLigneMove(this,1)" title="Descendre la ligne" aria-label="Descendre la ligne">↓</button>'+
+    (type==="article"?'<button type="button" class="fact-line-validate" onclick="factureEditorLigneValider(this)" title="Valider" aria-label="Valider la ligne">✓</button>':"")+
+    '<button type="button" class="fact-line-delete" onclick="factureEditorLigneRemove(this)" title="Supprimer" aria-label="Supprimer la ligne">×</button></div></td>';
+
   if(type==="commentaire"){
     const TA="width:100%;border:none;padding:6px 10px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:32px;line-height:1.5;box-sizing:border-box;display:block;outline:none;font-style:italic;color:#64748b";
     return '<tr class="fact-ligne-row" data-type="commentaire" style="border-bottom:1px solid #f1f5f9;background:#f8fafc">'+
@@ -303,16 +308,29 @@ function factureEditorLigneHTML(l){
   const SEL="border:1px solid #e5e7eb;border-radius:4px;padding:5px 6px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
   const total2=qte*prix;
   return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+Number(l.contractQuantity??l.qte??1)+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
-    '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="2" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
+    '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" style="'+SEL+'">'+uniteOpts+'</select></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+qte+'" '+on+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
-    '<td style="padding:4px 6px;text-align:center;vertical-align:middle;width:70px;white-space:nowrap">'+
-    '<button type="button" onclick="factureEditorLigneValider(this)" style="background:#dcfce7;border:none;color:#16a34a;cursor:pointer;font-size:10px;font-weight:700;padding:3px 7px;border-radius:4px;margin-right:4px" title="Valider">✔</button>'+
-    '<button type="button" onclick="factureEditorLigneRemove(this)" style="background:#fee2e2;border:none;color:#ef4444;cursor:pointer;font-size:14px;font-weight:700;width:24px;height:24px;border-radius:50%;line-height:1;display:inline-flex;align-items:center;justify-content:center" title="Supprimer">×</button>'+
-    '</td>'+
+    DEL+
     '</tr>';
+}
+
+function factureEditorLigneMove(button,direction){
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(invoice?.statut&&invoice.statut!=="brouillon")return;
+  const row=button.closest(".fact-ligne-row"),body=document.getElementById("fact-lignes-body");
+  if(!row||row.parentElement!==body||![-1,1].includes(direction))return;
+  const neighbour=direction===-1?row.previousElementSibling:row.nextElementSibling;
+  if(!neighbour?.classList.contains("fact-ligne-row"))return;
+  if(direction===-1)body.insertBefore(row,neighbour);else body.insertBefore(neighbour,row);
+  factureEditorCatalogSites();
+  factureEditorCalcTotals();
+  factureEditorUpdateWorkflow();
+  factureEditorScheduleDraft();
+  const focusButton=button.disabled?row.querySelector('button[data-move]:not(:disabled)'):button;
+  focusButton?.focus({preventScroll:true});
 }
 
 function factureEditorCalcRow(tr){
@@ -324,6 +342,12 @@ function factureEditorCalcRow(tr){
 }
 
 function factureEditorCalcTotals(){
+  const body=document.getElementById("fact-lignes-body");
+  if(body)body.querySelectorAll(".fact-ligne-row").forEach(row=>{
+    const up=row.querySelector('[data-move="-1"]'),down=row.querySelector('[data-move="1"]');
+    if(up)up.disabled=!row.previousElementSibling?.classList.contains("fact-ligne-row");
+    if(down)down.disabled=!row.nextElementSibling?.classList.contains("fact-ligne-row");
+  });
   let totalHT=0;let sectionHT=0;
   document.querySelectorAll(".fact-ligne-row").forEach(tr=>{
     const type=tr.dataset.type||"article";
@@ -984,14 +1008,14 @@ function renderFactureEditor(view){
     // Articles fieldset
     '<fieldset class="rh-op-box" style="margin-bottom:10px;padding:0;overflow:hidden">'+
     '<legend style="margin-left:12px;padding-top:2px">Articles</legend>'+
-    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:500px">'+
+    '<div style="overflow-x:auto"><table class="fact-editor-lines '+(isDraft?'':'fact-lines-readonly')+'" style="width:100%;border-collapse:collapse;min-width:900px">'+
     '<thead><tr>'+
     '<th style="'+thL+';min-width:180px">Désignation</th>'+
     '<th style="'+thL+';width:90px">Unité</th>'+
     '<th style="'+thL+';text-align:right;width:140px">Prix unitaire</th>'+
     '<th style="'+thL+';text-align:center;width:90px">Quantité</th>'+
     '<th style="'+thL+';text-align:right;width:140px">Total</th>'+
-    '<th style="border-bottom:2px solid #e5e7eb;background:#f9fafb;width:36px"></th>'+
+    '<th style="'+thL+';width:140px;text-align:center">Actions</th>'+
     '</tr></thead>'+
     '<tbody id="fact-lignes-body">'+
     (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+

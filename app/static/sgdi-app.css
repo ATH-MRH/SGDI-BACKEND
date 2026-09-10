@@ -10387,3 +10387,21 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .fact-catalog-card button{margin-top:auto;padding:7px 10px;background:#0f766e;color:white;border:0;border-radius:6px;font-weight:700;cursor:pointer}
 .fact-catalog-card button:disabled{background:#e2e8f0;color:#526875;cursor:default}
 @media(max-width:650px){.fact-commercial-catalog header{flex-direction:column}.fact-catalog-grid{grid-template-columns:1fr}}
+
+/* Invoice editor: scoped layout, readable controls and stable row ordering. */
+.fact-editor-lines{table-layout:fixed}
+.fact-editor-lines th:first-child{width:auto}
+.fact-editor-lines tbody tr:hover{background:#f5f9ff!important}
+.fact-editor-lines tbody td{padding:8px!important;vertical-align:middle!important;border-right:0!important;border-bottom:1px solid #dce5ef!important}
+.fact-editor-lines input,.fact-editor-lines select{height:34px!important;min-height:34px!important;padding:5px 8px!important;font-size:12px!important;border-radius:6px!important;box-shadow:none!important}
+.fact-editor-lines textarea{min-height:34px!important;padding:7px 8px!important;font-size:12px!important;line-height:20px!important;border:1px solid #d5dfeb!important;border-radius:6px!important;background:white!important;box-shadow:none!important}
+.fact-editor-lines input[readonly]{background:#f1f5f9!important;color:#475569}
+.fact-editor-lines .fact-ligne-total{font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}
+.fact-editor-lines td small{padding:4px 2px 0!important;font-size:10px;line-height:1.3}
+.fact-editor-lines .fact-line-buttons{display:flex;gap:4px;justify-content:center;align-items:center}
+.fact-editor-lines .fact-line-buttons button{display:inline-flex!important;align-items:center;justify-content:center;width:28px!important;min-width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #cbd5e1!important;border-radius:6px!important;background:#fff;color:#164474;font:700 16px Arial!important;box-shadow:none!important;cursor:pointer;letter-spacing:0}
+.fact-editor-lines .fact-line-buttons button:disabled{opacity:.3;cursor:default}
+.fact-editor-lines .fact-line-buttons button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.fact-editor-lines .fact-line-buttons .fact-line-delete{background:#fff1f2;color:#be123c;border-color:#fecdd3!important}
+.fact-editor-lines .fact-line-buttons .fact-line-validate{background:#ecfdf5;color:#047857;border-color:#a7f3d0!important}
+.fact-lines-readonly .fact-line-buttons{display:none}
