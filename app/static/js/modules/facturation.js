@@ -943,7 +943,7 @@ function factureVoirApercu(fId){
       '<span style="font:italic 700 10px Arial,Helvetica,sans-serif;color:#111827;line-height:1.55">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
       '</div>':"")+
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
-    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">Cachet et signature</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale</div></div>'+
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
     '</section></div></div>';
   openModal(html);
