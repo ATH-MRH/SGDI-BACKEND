@@ -599,3 +599,45 @@ test('remarque interne absente de la facture imprimable, objet distinct préserv
     assert.equal(f.remarque,'NOTE INTERNE CONFIDENTIELLE');
   } finally {env.window.close();}
 });
+
+test('cachet et signature : import, sauvegarde, aperçu et suppression propres à la facture',async()=>{
+  const env=loadSgdiApp(['factureImageValue','factureImageField','factureImageImport','factureImageRemove','factureEditorSave','factureVoirApercu']);
+  try{
+    const t=env.T(),w=env.window,d=w.document;
+    const f={id:'images',statut:'brouillon',client:'Client',lignes:[]};
+    t.setDb({factures:[f],paiements:[],avoirs:[]});t.setSession({societe:'IRON GLOBAL SOLUTION'});w.__factureEditId=f.id;
+    assert.equal(t.factureImageValue('javascript:alert(1)'),'');assert.equal(t.factureImageValue('data:image/svg+xml;base64,AAAA'),'');
+    d.getElementById('view').innerHTML='<input id="fact-clientNom" value="Client">'+t.factureImageField('cachet','Cachet',f,true)+t.factureImageField('signature','Signature',f,true);
+    w.Image=class{set src(value){this.onload()}};
+    const file=new w.File(['image-content'],'cachet.png',{type:'image/png'});
+    const input=d.getElementById('fact-cachet-file');Object.defineProperty(input,'files',{value:[file],configurable:true});
+    await t.factureImageImport(input,'cachet');
+    const value=d.getElementById('fact-cachet-image').value;
+    assert.match(value,/^data:image\/png;base64,/);assert.equal(d.getElementById('fact-cachet-preview').hidden,false);
+    d.getElementById('fact-signature-image').value=value;
+    w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
+    await t.factureEditorSave({draft:true,silent:true});assert.equal(w.__savedInvoice.cachetImage,value);assert.equal(w.__savedInvoice.signatureImage,value);
+    t.factureVoirApercu(f.id);assert.equal(d.querySelectorAll('.fact-invoice-signatures img').length,2);
+    t.factureImageRemove('cachet');await t.factureEditorSave({draft:true,silent:true});assert.equal(w.__savedInvoice.cachetImage,'');assert.equal(w.__savedInvoice.signatureImage,value);
+    f.statut='emise';t.factureImageRemove('signature');assert.equal(d.getElementById('fact-signature-image').value,value);
+    const readonly=d.createElement('div');readonly.innerHTML=t.factureImageField('signature','Signature',f,false);assert.equal(readonly.querySelector('input[type=file]'),null);assert.equal(readonly.querySelector('button'),null);
+    t.factureVoirApercu(f.id);assert.equal(d.querySelectorAll('.fact-invoice-signatures img').length,1);
+  }finally{env.window.close();}
+});
+
+test('aperçu : valider et imprimer attend le succès serveur et bloque les doubles clics',async()=>{
+  const env=loadSgdiApp(['factureValidateAndPrint']);
+  try{
+    const t=env.T(),w=env.window,d=w.document;
+    d.getElementById('view').innerHTML='<input id="fact-numero" value="BROUILLON"><button id="confirm-print">Valider et imprimer</button>';
+    const button=d.getElementById('confirm-print');let resolveSave;const calls=[];
+    const popup={document:{write(){}},close(){calls.push('close')}};w.open=()=>popup;
+    w.__savePromise=new Promise(resolve=>resolveSave=resolve);w.__calls=calls;w.__popup=popup;
+    w.eval('factureEditorSave=async function(options){window.__calls.push(options.validate?"validate":"wrong");return window.__savePromise};factureVoirApercu=function(id){window.__calls.push("preview:"+id)};facturePrintApercu=function(p){window.__calls.push(p===window.__popup?"print":"wrong-window")}');
+    const pending=t.factureValidateAndPrint(button);await t.factureValidateAndPrint(button);
+    assert.deepEqual(calls,['validate']);resolveSave({id:'issued',numero:'FAC-001'});await pending;
+    assert.deepEqual(calls,['validate','preview:issued','print']);assert.equal(d.getElementById('fact-numero').value,'FAC-001');
+    calls.length=0;w.__savePromise=Promise.resolve(null);await t.factureValidateAndPrint(button);
+    assert.deepEqual(calls,['validate','close']);assert.equal(button.disabled,false);
+  }finally{env.window.close();}
+});

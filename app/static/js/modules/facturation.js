@@ -317,6 +317,46 @@ function factureEditorLigneHTML(l){
     '</tr>';
 }
 
+function factureImageValue(value){
+  return typeof value==="string"&&/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)?value:"";
+}
+function factureImageField(kind,label,invoice,editable){
+  const value=factureImageValue(invoice[kind+"Image"]);
+  return '<div style="min-width:0"><label for="fact-'+kind+'-file" style="display:block;font-size:11px;font-weight:700;margin-bottom:5px">'+label+'</label><input type="hidden" id="fact-'+kind+'-image" value="'+escapeHTML(value)+'"><img id="fact-'+kind+'-preview" alt="'+label+'" '+(value?'src="'+value+'"':'hidden')+' style="width:100%;height:72px;object-fit:contain;background:#fff;border:1px solid #e2e8f0;border-radius:5px;margin-bottom:5px">'+(editable?'<input type="file" id="fact-'+kind+'-file" accept="image/png,image/jpeg,image/webp" aria-label="Importer '+label+'" onchange="factureImageImport(this,\''+kind+'\')" style="width:100%;font-size:10px"><button type="button" id="fact-'+kind+'-remove" class="btn btn-ghost" onclick="factureImageRemove(\''+kind+'\')" '+(!value?'hidden':'')+' style="font-size:11px;margin-top:4px">Supprimer</button>':(!value?'<span style="font-size:11px;color:#64748b">Aucune image</span>':""))+'</div>';
+}
+function factureImageRemove(kind){
+  if(!["cachet","signature"].includes(kind))return;
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(invoice?.statut&&invoice.statut!=="brouillon")return;
+  const field=document.getElementById("fact-"+kind+"-image");if(!field)return;
+  field.value="";
+  const preview=document.getElementById("fact-"+kind+"-preview");preview.removeAttribute("src");preview.hidden=true;
+  document.getElementById("fact-"+kind+"-remove").hidden=true;
+  const input=document.getElementById("fact-"+kind+"-file");if(input)input.value="";
+  factureEditorScheduleDraft();
+}
+async function factureImageImport(input,kind){
+  if(!["cachet","signature"].includes(kind)||input.disabled)return;
+  const id=window.__factureEditId,soc=mySoc();
+  const invoice=(db.factures||[]).find(f=>f.id===id);
+  if(invoice?.statut&&invoice.statut!=="brouillon")return;
+  const file=input.files?.[0];if(!file)return;
+  if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>1024*1024){toast("Choisissez une image PNG, JPEG ou WebP de 1 Mo maximum.","error");input.value="";return;}
+  input.disabled=true;
+  try{
+    const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Lecture du fichier impossible"));reader.readAsDataURL(file)});
+    if(!factureImageValue(value))throw new Error("Format d’image invalide");
+    await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve();img.onerror=()=>reject(new Error("Image illisible"));img.src=value});
+    const current=(db.factures||[]).find(f=>f.id===id);
+    if(!input.isConnected||window.__factureEditId!==id||mySoc()!==soc||(current?.statut&&current.statut!=="brouillon"))return;
+    document.getElementById("fact-"+kind+"-image").value=value;
+    const preview=document.getElementById("fact-"+kind+"-preview");preview.src=value;preview.hidden=false;
+    document.getElementById("fact-"+kind+"-remove").hidden=false;
+    factureEditorScheduleDraft();
+  }catch(e){toast(e.message||"Import de l’image impossible","error")}
+  finally{if(input.isConnected){const latest=(db.factures||[]).find(f=>f.id===id);input.disabled=!!(latest?.statut&&latest.statut!=="brouillon");input.value="";}}
+}
+
 function factureEditorDayCount(start,end){
   const parse=value=>{
     if(!/^\d{4}-\d{2}-\d{2}$/.test(value||""))return NaN;
@@ -778,6 +818,7 @@ async function factureEditorSave(options){
   const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
   const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,periodeDebut,periodeFin,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
+  ["cachet","signature"].forEach(kind=>{data[kind+"Image"]=factureImageValue(document.getElementById("fact-"+kind+"-image")?.value??existing?.[kind+"Image"]??"")});
   const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
@@ -809,6 +850,24 @@ async function factureEditorSave(options){
     if(!options.silent)toast("Erreur : "+(e.message||e),"error");
     return null;
   }
+}
+
+async function factureValidateAndPrint(button){
+  if(button.disabled)return;
+  button.disabled=true;button.textContent="Validation en cours…";
+  // Open synchronously with the click so the browser can keep the print window.
+  const popup=window.open("","_blank","width=980,height=900");
+  if(!popup){button.disabled=false;button.textContent="Valider et imprimer";toast("Autorisez la fenêtre d’impression puis réessayez.","error");return;}
+  popup.document.write('<p>Validation de la facture en cours…</p>');
+  try{
+    if(factureDraftTimer!==null){clearTimeout(factureDraftTimer);factureDraftTimer=null;}
+    const saved=await factureEditorSave({validate:true});
+    if(!saved){popup.close();return;}
+    const number=document.getElementById("fact-numero");if(number)number.value=saved.numero;
+    factureVoirApercu(saved.id);
+    facturePrintApercu(popup);
+  }catch(e){popup.close();toast("Impression impossible : "+(e.message||e),"error")}
+  finally{if(button.isConnected){button.disabled=false;button.textContent="Valider et imprimer";}}
 }
 
 function factureVoirApercu(fId){
@@ -880,13 +939,17 @@ function factureVoirApercu(fId){
   const montantEnLettres=typeof moneyToFrenchWords==="function"?moneyToFrenchWords(totalTTC):"";
   const statusLabel=String(f?.statut||"brouillon").toLowerCase()==="brouillon"?"BROUILLON":(isPaid?"PAYÉE":(isLate?"EN RETARD":"À PAYER"));
   const statusColor=statusLabel==="PAYÉE"?"#15803d":statusLabel==="EN RETARD"?"#dc2626":statusLabel==="BROUILLON"?"#d97706":"#d97706";
+  const invoiceImages=["cachet","signature"].map(kind=>{
+    const value=factureImageValue(document.getElementById("fact-"+kind+"-image")?.value??f?.[kind+"Image"]??"");
+    return value?'<img src="'+value+'" alt="'+(kind==="cachet"?"Cachet de la société":"Signature")+'" style="max-width:100%;width:86px;height:68px;object-fit:contain">':"";
+  }).join("");
   const qrPayload=["IRON GROUP — FACTURE","Société: "+companyName,"N°: "+numero,"Date: "+fmtD(date),"Client: "+clientNom,"Total TTC: "+DZD(totalTTC),"Statut: "+statusLabel,"Identifiant: "+(f?.id||"APERÇU")].join("\n");
   const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
     '<style>@media print{@page{size:A4 portrait;margin:9mm}body *{visibility:hidden!important}#fact-print-area,#fact-print-area *{visibility:visible!important}#fact-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}.modal-bg{position:static!important;background:#fff!important}.fact-pdf-sheet{box-shadow:none!important;border:0!important;min-height:277mm!important}.no-print{display:none!important}}</style>'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
     '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
     '<div style="display:flex;gap:8px">'+
-    '<button onclick="facturePrintApercu()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer</button>'+
+    '<button onclick="'+(statusLabel==="BROUILLON"?"factureValidateAndPrint(this)":"facturePrintApercu()")+'" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">'+(statusLabel==="BROUILLON"?"Valider et imprimer":"Imprimer")+'</button>'+
     '<button onclick="factureTelechargerPDF()" style="background:#047857;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">📥 Télécharger PDF</button>'+
     '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
     '</div></div>'+
@@ -943,7 +1006,7 @@ function factureVoirApercu(fId){
       '<span style="font:italic 700 10px Arial,Helvetica,sans-serif;color:#111827;line-height:1.55">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
       '</div>':"")+
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
-    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="min-height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale<div class="fact-invoice-signatures" style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:6px">'+invoiceImages+'</div></div></div>'+
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
     '</section></div></div>';
   openModal(html);
@@ -953,12 +1016,12 @@ function factureVoirApercu(fId){
   }).catch(e=>console.warn("QR facture indisponible",e));
 }
 
-function facturePrintApercu(){
+function facturePrintApercu(printWindow){
   const source=document.getElementById("fact-print-area");if(!source){toast("Aperçu introuvable","error");return}
   const printable=source.cloneNode(true);
   const sourceCanvases=source.querySelectorAll("canvas"),printCanvases=printable.querySelectorAll("canvas");
   printCanvases.forEach((canvas,i)=>{try{const img=document.createElement("img");img.src=sourceCanvases[i].toDataURL("image/png");img.width=sourceCanvases[i].width;img.height=sourceCanvases[i].height;canvas.replaceWith(img)}catch(e){}});
-  const popup=window.open("","_blank","width=980,height=900");if(!popup){toast("Autorisez les fenêtres contextuelles pour imprimer","error");return}
+  const popup=printWindow||window.open("","_blank","width=980,height=900");if(!popup){toast("Autorisez les fenêtres contextuelles pour imprimer","error");return}
   popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><base href="'+escapeHTML(location.origin)+'/"><title>Facture — IRON GROUP</title><style>@page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fact-pdf-sheet{width:192mm!important;min-height:279mm!important;margin:0 auto!important;padding:6mm 8mm 7mm!important;box-shadow:none!important;border:0!important}img,canvas{max-width:100%}button{display:none!important}</style></head><body>'+printable.innerHTML+'</body></html>');popup.document.close();
   const printWhenReady=()=>{const images=Array.from(popup.document.images);Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=img.onerror=resolve}))).then(()=>setTimeout(()=>{popup.focus();popup.print()},250))};
   if(popup.document.readyState==="complete")printWhenReady();else popup.onload=printWhenReady;
@@ -1146,6 +1209,7 @@ function renderFactureEditor(view){
     fl('Dépôt client','<input id="fact-dateDepot" type="date" style="'+FI+'" value="'+escapeHTML(f.dateDepot||"")+'">') +
     fl('Date échéance','<input id="fact-echDate" type="date" style="'+FI+';background:#f9fafb;color:#6b7280" value="'+escapeHTML(f.dateEcheance||"")+'" readonly>') +
     '<div style="margin-top:6px"><span style="'+FS+'">Remarque</span><textarea id="fact-remarque" class="input" style="width:100%;resize:vertical;min-height:60px;font-size:11px;line-height:1.5;height:auto!important;margin-top:4px" placeholder="SERVICE DE GARDIENNAGE - Période: Mars 2026">'+escapeHTML(f.remarque||f.objet||"")+'</textarea></div>'+
+    '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="font-size:11px;font-weight:700">Cachet et signature</legend><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+factureImageField("cachet","Cachet de la société",f,isDraft)+factureImageField("signature","Signature",f,isDraft)+'</div>'+(isDraft?'<p style="margin:6px 0 0;font-size:10px;color:#64748b">PNG, JPEG ou WebP · 1 Mo par image · Enregistrés avec cette facture</p>':"")+'</fieldset>'+
     (!isDraft?
     '<div style="border-top:1px solid #bfdbfe;margin-top:10px;padding-top:8px">'+
     '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#6b7280;font-weight:700">Montant TTC</span><span style="font-weight:700;font-family:monospace">'+money(f.ttc||f.montantTTC||0)+'</span></div>'+
