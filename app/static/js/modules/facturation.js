@@ -811,7 +811,7 @@ function factureVoirApercu(fId){
   const stampLabel=isLate?"EN RETARD":(!isPaid&&totalTTC>0?"NON PAYÉE":"");
   const stampColor=isLate?"#f97316":"#ef4444";
   const tdC="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:10px";
-  const thC="padding:8px 10px;background:#4b5563;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;text-align:left";
+  const thC="padding:8px 10px;background:#edf3f8;color:#425b78;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;text-align:left";
   const lignesRows=useLines.filter(l=>(l.type||"article")!=="soustotal").map((l,i)=>
     '<tr style="background:'+(i%2===0?"#fff":"#f9fafb")+';border-bottom:1px solid #e5e7eb">'+
     '<td style="'+tdC+'">'+escapeHTML(l.designation||"")+(l.type==="remise"?' ('+escapeHTML(String(l.remisePct||0))+' %)':'')+'</td>'+
@@ -823,7 +823,7 @@ function factureVoirApercu(fId){
   ).join("");
   const montantEnLettres=typeof moneyToFrenchWords==="function"?moneyToFrenchWords(totalTTC):"";
   const statusLabel=String(f?.statut||"brouillon").toLowerCase()==="brouillon"?"BROUILLON":(isPaid?"PAYÉE":(isLate?"EN RETARD":"À PAYER"));
-  const statusColor=statusLabel==="PAYÉE"?"#15803d":statusLabel==="EN RETARD"?"#dc2626":statusLabel==="BROUILLON"?"#64748b":"#d97706";
+  const statusColor=statusLabel==="PAYÉE"?"#15803d":statusLabel==="EN RETARD"?"#dc2626":statusLabel==="BROUILLON"?"#d97706":"#d97706";
   const qrPayload=["IRON GROUP — FACTURE","Société: "+companyName,"N°: "+numero,"Date: "+fmtD(date),"Client: "+clientNom,"Total TTC: "+DZD(totalTTC),"Statut: "+statusLabel,"Identifiant: "+(f?.id||"APERÇU")].join("\n");
   const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
     '<style>@media print{@page{size:A4 portrait;margin:9mm}body *{visibility:hidden!important}#fact-print-area,#fact-print-area *{visibility:visible!important}#fact-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}.modal-bg{position:static!important;background:#fff!important}.fact-pdf-sheet{box-shadow:none!important;border:0!important;min-height:277mm!important}.no-print{display:none!important}}</style>'+
@@ -835,35 +835,38 @@ function factureVoirApercu(fId){
     '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
     '</div></div>'+
     '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
-    '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:32px 36px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
+    '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:22px 30px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
     // Issuer details belong to the active company, separately from the recipient.
-    '<header style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start;border-bottom:3px solid #043970;padding-bottom:18px;margin-bottom:18px;break-inside:avoid">'+
-    '<div class="fact-issuer-identity"><div style="display:flex;gap:14px;align-items:center;padding-top:8px;min-width:0">'+
-    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:72px;height:72px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
-    '<div style="font-weight:900;font-size:17px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div></div>'+
-    '<section class="fact-issuer-details" aria-label="Société émettrice" style="margin-top:12px;font-size:10px;line-height:1.6;overflow-wrap:anywhere">'+
-    '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 12px">'+
+    '<header style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:22px;align-items:start;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:12px;break-inside:avoid">'+
+    '<div class="fact-issuer-identity"><div style="display:flex;gap:10px;align-items:center;padding-top:0;min-width:0">'+
+    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:48px;height:48px;object-fit:contain;flex-shrink:0" alt="Logo '+escapeHTML(companyName)+'"/>':"")+
+    '<div style="font-weight:900;font-size:15px;color:#043970;text-transform:uppercase;overflow-wrap:anywhere">'+escapeHTML(companyName)+'</div></div>'+
+    '<section class="fact-issuer-details" aria-label="Société émettrice" style="margin-top:6px;font-size:10px;line-height:1.4;overflow-wrap:anywhere">'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 12px">'+
+    '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div>'+
     [["RC",companyRC],["AI",companyAI],["NIF",companyNIF],["NIS",companyNIS]].map(([label,value])=>'<div><b style="color:#64748b">'+label+' :</b> '+escapeHTML(String(value||"À renseigner"))+'</div>').join("")+
-    '<div style="grid-column:1/-1"><b style="color:#64748b">Adresse :</b> '+escapeHTML(companyAddr||"À renseigner")+'</div></div></section></div>'+
-    '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
+    '</div></section></div>'+
+    '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0"><div><div style="font-size:24px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
     '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
     '</div></header>'+
     // Destinataire + info
-    '<div style="display:grid;grid-template-columns:1fr 240px;gap:18px;margin-bottom:18px">'+
-    '<div style="font-size:11px;color:#374151;line-height:1.65;border-left:4px solid #f2c500;background:#f8fafc;padding:11px 14px;border-radius:0 6px 6px 0">'+
-    '<div style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Facturé à</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;margin-bottom:10px;break-inside:avoid">'+
+    '<div style="font-size:11px;color:#374151;line-height:1.45;border-left:3px solid #089eac;background:#f3f8fa;padding:8px 10px;border-radius:0 6px 6px 0">'+
+    '<div style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Facturé à</div>'+
     (clientNom?'<div style="font-weight:900;font-size:13px;color:#111827">'+escapeHTML(clientNom)+'</div>':"")+
     (adresse?'<div>'+escapeHTML(adresse)+'</div>':"")+
-    (rc?'<div>RC# '+escapeHTML(rc)+'</div>':"")+
-    (nif?'<div>NIF# '+escapeHTML(nif)+'</div>':"")+
+    '<div style="display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:3px">'+
+    (rc?'<span>RC# '+escapeHTML(rc)+'</span>':"")+
+    (nif?'<span>NIF# '+escapeHTML(nif)+'</span>':"")+'</div>'+
     '</div>'+
     '<table style="border-collapse:collapse;font-size:11px;align-self:start;border:1px solid #dbe3ef;border-radius:6px;overflow:hidden">'+
     (afficherDate?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Date :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(date)+'</td></tr>':"")+
     '<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Numéro :</td><td style="padding:5px 10px;font:700 10px Arial,Helvetica,sans-serif;border-bottom:1px solid #e5e7eb">'+escapeHTML(numero)+'</td></tr>'+
     (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Échéance :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(dateEcheance)+'</td></tr>':"")+
-    (remarque?'<tr><td style="padding:5px 10px;color:#6b7280;font:10px Arial,Helvetica,sans-serif" colspan="2">Objet :<br><span style="font:700 10px Arial,Helvetica,sans-serif;color:#111827">'+escapeHTML(remarque)+'</span></td></tr>':"")+
     '</table></div>'+
-    ((periodeDebut||periodeFin)?'<div class="fact-billing-period" style="margin-bottom:14px;padding:9px 12px;border:1px solid #dbe3ef;border-radius:5px;background:#f8fafc;font-size:11px"><b>Période de facturation :</b> du '+escapeHTML(fmtD(periodeDebut)||"—")+' au '+escapeHTML(fmtD(periodeFin)||"—")+'</div>':"")+
+    ((periodeDebut||periodeFin||remarque)?'<div class="fact-invoice-context" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:10px;padding:8px 10px;border-radius:4px;background:#eef7f8;font-size:10px;line-height:1.4;break-inside:avoid">'+
+    ((periodeDebut||periodeFin)?'<div class="fact-billing-period" style="flex:1 1 260px"><b style="color:#425b78">Période de facturation :</b> du '+escapeHTML(fmtD(periodeDebut)||"—")+' au '+escapeHTML(fmtD(periodeFin)||"—")+'</div>':"")+
+    (remarque?'<div class="fact-invoice-subject" style="flex:1 1 220px;overflow-wrap:anywhere"><b style="color:#425b78">Objet :</b> '+escapeHTML(remarque)+'</div>':"")+'</div>':"")+
     // Articles table
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #dbe3ef">'+
     '<thead><tr>'+
@@ -900,7 +903,7 @@ function facturePrintApercu(){
   const sourceCanvases=source.querySelectorAll("canvas"),printCanvases=printable.querySelectorAll("canvas");
   printCanvases.forEach((canvas,i)=>{try{const img=document.createElement("img");img.src=sourceCanvases[i].toDataURL("image/png");img.width=sourceCanvases[i].width;img.height=sourceCanvases[i].height;canvas.replaceWith(img)}catch(e){}});
   const popup=window.open("","_blank","width=980,height=900");if(!popup){toast("Autorisez les fenêtres contextuelles pour imprimer","error");return}
-  popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><base href="'+escapeHTML(location.origin)+'/"><title>Facture — IRON GROUP</title><style>@page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fact-pdf-sheet{width:192mm!important;min-height:279mm!important;margin:0 auto!important;padding:8mm 9mm 7mm!important;box-shadow:none!important;border:0!important}img,canvas{max-width:100%}button{display:none!important}</style></head><body>'+printable.innerHTML+'</body></html>');popup.document.close();
+  popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><base href="'+escapeHTML(location.origin)+'/"><title>Facture — IRON GROUP</title><style>@page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fact-pdf-sheet{width:192mm!important;min-height:279mm!important;margin:0 auto!important;padding:6mm 8mm 7mm!important;box-shadow:none!important;border:0!important}img,canvas{max-width:100%}button{display:none!important}</style></head><body>'+printable.innerHTML+'</body></html>');popup.document.close();
   const printWhenReady=()=>{const images=Array.from(popup.document.images);Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=img.onerror=resolve}))).then(()=>setTimeout(()=>{popup.focus();popup.print()},250))};
   if(popup.document.readyState==="complete")printWhenReady();else popup.onload=printWhenReady;
 }
