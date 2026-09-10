@@ -540,3 +540,36 @@ test('total TTC de l’en-tête : mêmes montants que le récapitulatif après c
     d.querySelector('.fact-ligne-row').remove();check('0,00DZD');
   } finally { env.window.close(); }
 });
+
+test('période en jours : calendrier inclusif, validation et ligne ciblée', async () => {
+  const env=loadSgdiApp(['factureEditorDayCount','factureEditorUnitChange','factureEditorLigneHTML','factureEditorSave']);
+  try {
+    assert.strictEqual(env.loadError,null);
+    const t=env.T(),w=env.window,d=w.document;
+    for(const [a,b,n] of [['2026-09-10','2026-09-12',3],['2026-09-10','2026-09-10',1],['2024-02-28','2024-03-01',3],['2026-03-28','2026-03-30',3],['2026-09-12','2026-09-10',0],['','',0],['2026-02-30','2026-03-02',0]])assert.equal(t.factureEditorDayCount(a,b),n);
+    t.setDb({factures:[{id:'days',statut:'brouillon'}]});w.__factureEditId='days';
+    d.getElementById('view').innerHTML='<table><tbody id="fact-lignes-body">'+t.factureEditorLigneHTML({designation:'Location',qte:1,prixUnitHT:25000})+t.factureEditorLigneHTML({designation:'Autre',qte:2,prixUnitHT:10})+'</tbody></table><output id="fact-header-ttc"></output>';
+    const row=d.querySelector('.fact-ligne-row'),select=row.querySelector('select');
+    select.value='Jour';t.factureEditorUnitChange(select);
+    assert.equal(select.value,'Mois','aucune modification avant validation');
+    const from=d.getElementById('fact-days-start'),to=d.getElementById('fact-days-end');
+    from.value='2026-09-10';to.value='2026-09-12';to.dispatchEvent(new w.Event('input'));
+    assert.equal(d.getElementById('fact-days-count').textContent,'3 jours');
+    d.getElementById('fact-days-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+    assert.equal(row.querySelector('.fact-ligne-qte').value,'3');assert.equal(select.value,'Jour');
+    assert.equal(row.querySelector('textarea').value,'Location\nPériode du 10/09/2026 au 12/09/2026');
+    assert.equal(row.nextElementSibling.querySelector('.fact-ligne-qte').value,'2');
+    t.factureEditorUnitChange(select);
+    assert.equal(d.getElementById('fact-days-start').value,'2026-09-10');
+    d.getElementById('fact-days-end').value='2026-09-11';
+    d.getElementById('fact-days-form').dispatchEvent(new w.Event('submit',{cancelable:true}));
+    assert.equal(row.querySelector('.fact-ligne-qte').value,'2');assert.equal((row.querySelector('textarea').value.match(/Période du/g)||[]).length,1);
+    d.getElementById('view').insertAdjacentHTML('beforeend','<input id="fact-clientNom" value="Client">');
+    w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
+    await t.factureEditorSave({draft:true,silent:true});
+    assert.equal(w.__savedInvoice.lignes[0].unite,'Jour');
+    assert.equal(w.__savedInvoice.lignes[0].quantite,2);
+    assert.match(w.__savedInvoice.lignes[0].designation,/Période du 10\/09\/2026 au 11\/09\/2026/);
+    select.disabled=true;t.factureEditorUnitChange(select);assert.equal(d.getElementById('fact-days-form'),null);
+  } finally {env.window.close();}
+});

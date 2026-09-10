@@ -309,12 +309,58 @@ function factureEditorLigneHTML(l){
   const total2=qte*prix;
   return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+Number(l.contractQuantity??l.qte??1)+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
     '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
-    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" style="'+SEL+'">'+uniteOpts+'</select></td>'+
+    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" data-previous-unit="'+escapeHTML(unite)+'" onchange="factureEditorUnitChange(this)" style="'+SEL+'">'+uniteOpts+'</select></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+qte+'" '+on+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
     DEL+
     '</tr>';
+}
+
+function factureEditorDayCount(start,end){
+  const parse=value=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value||""))return NaN;
+    const ms=Date.parse(value+"T00:00:00Z");
+    return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===value?ms:NaN;
+  };
+  const a=parse(start),b=parse(end);
+  return Number.isFinite(a)&&Number.isFinite(b)&&b>=a?(b-a)/86400000+1:0;
+}
+
+function factureEditorUnitChange(select){
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(select.disabled||(invoice?.statut&&invoice.statut!=="brouillon"))return;
+  if(select.value!=="Jour"){select.dataset.previousUnit=select.value;return;}
+  const row=select.closest(".fact-ligne-row");
+  if(!row||row.parentElement!==document.getElementById("fact-lignes-body"))return;
+  // Keep the previous unit until confirmation, including when the dialog is dismissed.
+  select.value=select.dataset.previousUnit||"Mois";
+  const designation=row.querySelector(".fact-ligne-desig");
+  const suffix=/\nPériode du (\d{2})\/(\d{2})\/(\d{4}) au (\d{2})\/(\d{2})\/(\d{4})$/;
+  const previous=designation.value.match(suffix);
+  const start=previous?previous[3]+"-"+previous[2]+"-"+previous[1]:"";
+  const end=previous?previous[6]+"-"+previous[5]+"-"+previous[4]:"";
+  openModal('<form id="fact-days-form" style="max-width:480px;margin:auto"><h3 style="margin:0 0 16px">Période à facturer en jours</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label>Du<input id="fact-days-start" class="input" type="date" required value="'+start+'"></label><label>Au<input id="fact-days-end" class="input" type="date" required value="'+end+'"></label></div><p id="fact-days-count" aria-live="polite" style="font-weight:700;margin:16px 0"></p><p style="font-size:12px;color:#64748b">Jours calendaires, dates de début et de fin incluses.</p><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="fact-days-validate" class="btn btn-primary" type="submit">Valider</button></div></form>');
+  const form=document.getElementById("fact-days-form"),from=form.querySelector("#fact-days-start"),to=form.querySelector("#fact-days-end");
+  const update=()=>{
+    const count=factureEditorDayCount(from.value,to.value);
+    to.min=from.value;
+    form.querySelector("#fact-days-count").textContent=count?count+" jour"+(count>1?"s":""):"Sélectionnez une période valide.";
+    form.querySelector("#fact-days-validate").disabled=!count;
+    return count;
+  };
+  from.addEventListener("input",update);to.addEventListener("input",update);update();
+  form.addEventListener("submit",event=>{
+    event.preventDefault();const count=update();
+    const current=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+    if(!count||!row.isConnected||select.disabled||(current?.statut&&current.statut!=="brouillon"))return;
+    const fmt=value=>value.split("-").reverse().join("/");
+    designation.value=designation.value.replace(suffix,"").trimEnd()+"\nPériode du "+fmt(from.value)+" au "+fmt(to.value);
+    row.querySelector(".fact-ligne-qte").value=count;
+    select.value="Jour";select.dataset.previousUnit="Jour";
+    devisEditorAutoResize(designation);factureEditorCalcTotals();factureEditorUpdateWorkflow();factureEditorScheduleDraft();closeModal();
+  });
+  from.focus();
 }
 
 function factureEditorLigneMove(button,direction){
