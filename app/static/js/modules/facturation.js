@@ -820,7 +820,10 @@ function factureVoirApercu(fId){
   const dateEcheance=gv("fact-echDate")||f?.dateEcheance||"";
   const periodeDebut=document.getElementById("fact-periode-debut")?.value??f?.periodeDebut??"";
   const periodeFin=document.getElementById("fact-periode-fin")?.value??f?.periodeFin??"";
-  const remarque=gv("fact-remarque")||f?.remarque||f?.objet||"";
+  const internalRemark=document.getElementById("fact-remarque")?.value??f?.remarque??"";
+  const invoiceSubject=document.getElementById("fact-objet")?.value??f?.objet??"";
+  // Older drafts may have copied the internal remark into the subject.
+  const publicSubject=invoiceSubject.trim()===internalRemark.trim()?"":invoiceSubject;
   const clientNom=gv("fact-clientNom")||f?.client||f?.clientNom||"";
   const adresse=gv("fact-adresse")||f?.adresseClient||"";
   const nif=gv("fact-nif")||f?.nif||"";
@@ -917,9 +920,9 @@ function factureVoirApercu(fId){
     '<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Numéro :</td><td style="padding:5px 10px;font:700 10px Arial,Helvetica,sans-serif;border-bottom:1px solid #e5e7eb">'+escapeHTML(numero)+'</td></tr>'+
     (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Échéance :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(dateEcheance)+'</td></tr>':"")+
     '</table></div>'+
-    ((periodeDebut||periodeFin||remarque)?'<div class="fact-invoice-context" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:10px;padding:8px 10px;border-radius:4px;background:#eef7f8;font-size:10px;line-height:1.4;break-inside:avoid">'+
+    ((periodeDebut||periodeFin||publicSubject)?'<div class="fact-invoice-context" style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:10px;padding:8px 10px;border-radius:4px;background:#eef7f8;font-size:10px;line-height:1.4;break-inside:avoid">'+
     ((periodeDebut||periodeFin)?'<div class="fact-billing-period" style="flex:1 1 260px"><b style="color:#425b78">Période de facturation :</b> du '+escapeHTML(fmtD(periodeDebut)||"—")+' au '+escapeHTML(fmtD(periodeFin)||"—")+'</div>':"")+
-    (remarque?'<div class="fact-invoice-subject" style="flex:1 1 220px;overflow-wrap:anywhere"><b style="color:#425b78">Objet :</b> '+escapeHTML(remarque)+'</div>':"")+'</div>':"")+
+    (publicSubject?'<div class="fact-invoice-subject" style="flex:1 1 220px;overflow-wrap:anywhere"><b style="color:#425b78">Objet :</b> '+escapeHTML(publicSubject)+'</div>':"")+'</div>':"")+
     // Articles table
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #dbe3ef">'+
     '<thead><tr>'+

@@ -583,3 +583,19 @@ test('période en jours : calendrier inclusif, validation et ligne ciblée', asy
     select.disabled=true;t.factureEditorUnitChange(select);assert.equal(d.getElementById('fact-days-form'),null);
   } finally {env.window.close();}
 });
+
+
+test('remarque interne absente de la facture imprimable, objet distinct préservé',()=>{
+  const env=loadSgdiApp(['factureVoirApercu']);
+  try {
+    const t=env.T(),d=env.window.document;
+    const f={id:'private-note',statut:'brouillon',remarque:'NOTE INTERNE CONFIDENTIELLE',objet:'Prestation publique',lignes:[]};
+    t.setDb({factures:[f],paiements:[],avoirs:[]});
+    t.factureVoirApercu(f.id);
+    assert.ok(!d.getElementById('fact-print-area').textContent.includes(f.remarque));
+    assert.ok(d.getElementById('fact-print-area').textContent.includes(f.objet));
+    f.objet=f.remarque;t.factureVoirApercu(f.id);
+    assert.ok(!d.getElementById('fact-print-area').textContent.includes(f.remarque));
+    assert.equal(f.remarque,'NOTE INTERNE CONFIDENTIELLE');
+  } finally {env.window.close();}
+});
