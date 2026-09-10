@@ -340,21 +340,27 @@ function factureEditorUnitChange(select){
   const previous=designation.value.match(suffix);
   const start=previous?previous[3]+"-"+previous[2]+"-"+previous[1]:"";
   const end=previous?previous[6]+"-"+previous[5]+"-"+previous[4]:"";
-  openModal('<form id="fact-days-form" style="max-width:480px;margin:auto"><h3 style="margin:0 0 16px">Période à facturer en jours</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label>Du<input id="fact-days-start" class="input" type="date" required value="'+start+'"></label><label>Au<input id="fact-days-end" class="input" type="date" required value="'+end+'"></label></div><p id="fact-days-count" aria-live="polite" style="font-weight:700;margin:16px 0"></p><p style="font-size:12px;color:#64748b">Jours calendaires, dates de début et de fin incluses.</p><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="fact-days-validate" class="btn btn-primary" type="submit">Valider</button></div></form>');
+  openModal('<form id="fact-days-form" novalidate style="max-width:480px;margin:auto"><h3 style="margin:0 0 16px">Période à facturer en jours</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label>Du<input id="fact-days-start" class="input" type="date" required value="'+start+'"></label><label>Au<input id="fact-days-end" class="input" type="date" required value="'+end+'"></label></div><p id="fact-days-count" aria-live="polite" style="font-weight:700;margin:16px 0"></p><p id="fact-days-error" role="alert" style="color:#b91c1c;font-size:12px;margin:0"></p><p style="font-size:12px;color:#64748b">Jours calendaires, dates de début et de fin incluses.</p><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="fact-days-validate" class="btn btn-primary" type="submit">Valider</button></div></form>');
   const form=document.getElementById("fact-days-form"),from=form.querySelector("#fact-days-start"),to=form.querySelector("#fact-days-end");
   const update=()=>{
     const count=factureEditorDayCount(from.value,to.value);
     // Do not mutate native date constraints during typing: browsers may reset the active date segment.
     // The range is checked above and again on submit, once both dates are complete.
     form.querySelector("#fact-days-count").textContent=count?count+" jour"+(count>1?"s":""):"Sélectionnez une période valide.";
-    form.querySelector("#fact-days-validate").disabled=!count;
+    form.querySelector("#fact-days-error").textContent="";
     return count;
   };
-  from.addEventListener("input",update);to.addEventListener("input",update);update();
+  [from,to].forEach(field=>{field.addEventListener("input",update);field.addEventListener("change",update)});update();
   form.addEventListener("submit",event=>{
     event.preventDefault();const count=update();
     const current=(db.factures||[]).find(f=>f.id===window.__factureEditId);
-    if(!count||!row.isConnected||select.disabled||(current?.statut&&current.statut!=="brouillon"))return;
+    if(!count){
+      form.querySelector("#fact-days-error").textContent=!from.value||!to.value?"Complétez les deux dates (jour, mois et année).":"La date Au doit être égale ou postérieure à la date Du.";
+      (!from.value?from:to).focus();return;
+    }
+    if(!row.isConnected||select.disabled||(current?.statut&&current.statut!=="brouillon")){
+      form.querySelector("#fact-days-error").textContent="Cette ligne n’est plus modifiable. Fermez cette fenêtre et rouvrez le brouillon.";return;
+    }
     const fmt=value=>value.split("-").reverse().join("/");
     designation.value=designation.value.replace(suffix,"").trimEnd()+"\nPériode du "+fmt(from.value)+" au "+fmt(to.value);
     row.querySelector(".fact-ligne-qte").value=count;
