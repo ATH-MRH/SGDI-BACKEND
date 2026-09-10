@@ -721,10 +721,14 @@ function factureEditorMarkInvalid(el){
 function factureEditorValidate(){
   const errors=[];
   const periodStart=document.getElementById("fact-periode-debut"),periodEnd=document.getElementById("fact-periode-fin");
-  if(!!periodStart?.value!==!!periodEnd?.value||(periodStart?.value&&periodEnd?.value&&periodStart.value>periodEnd.value)){
+  if(!periodStart?.value||!periodEnd?.value||periodStart.value>periodEnd.value){
     errors.push("Renseignez une période de facturation complète, avec une fin après le début.");
     factureEditorMarkInvalid(periodStart);factureEditorMarkInvalid(periodEnd);
   }
+  [ ["fact-date","la date de facture"], ["fact-mode","le mode de paiement"] ].forEach(([id,label])=>{
+    const field=document.getElementById(id);
+    if(field&&!field.value){errors.push("Renseignez "+label+".");factureEditorMarkInvalid(field);}
+  });
   const client=document.getElementById("fact-clientId");
   const clientSearch=document.getElementById("fact-client-search");
   const objet=document.getElementById("fact-objet");
@@ -753,8 +757,9 @@ function factureEditorUpdateWorkflow(){
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
   const linesOk=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0);
   const objectOk=!!(document.getElementById("fact-objet")?.value||"").trim();
-  [["fact-step-client",clientOk],["fact-step-lines",linesOk],["fact-step-validation",clientOk&&linesOk&&objectOk]].forEach(([id,ok])=>{const e=document.getElementById(id);if(e){e.style.background=ok?"#ecfdf5":"#eff6ff";e.style.color=ok?"#047857":"#1d4ed8";e.style.borderColor=ok?"#a7f3d0":"#bfdbfe"}});
-  const b=document.getElementById("fact-validate-btn");if(b){b.disabled=!(clientOk&&linesOk&&objectOk);b.style.opacity=b.disabled?".45":"1";b.title=b.disabled?"Sélectionnez un client, renseignez l’objet et au moins un article complet":""}
+  [["fact-step-client",clientOk],["fact-step-lines",linesOk],["fact-step-validation",clientOk&&linesOk&&objectOk&&factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0]].forEach(([id,ok])=>{const e=document.getElementById(id);if(e){e.style.background=ok?"#ecfdf5":"#eff6ff";e.style.color=ok?"#047857":"#1d4ed8";e.style.borderColor=ok?"#a7f3d0":"#bfdbfe"}});
+  const periodOk=factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0;
+  const b=document.getElementById("fact-validate-btn");if(b){b.disabled=!(clientOk&&linesOk&&objectOk&&periodOk);b.style.opacity=b.disabled?".45":"1";b.title=b.disabled?"Sélectionnez un client, renseignez l’objet, la période de facturation et au moins un article complet":""}
 }
 
 async function factureEditorSave(options){
@@ -873,6 +878,8 @@ async function factureValidateAndPrint(button){
 function factureVoirApercu(fId){
   const id=fId||window.__factureEditId;
   let f=id&&id!=="new"?(db.factures||[]).find(x=>x.id===id):null;
+  if(document.getElementById("fact-clientId")&&(!f?.statut||f.statut==="brouillon")&&!factureEditorValidate())return;
+
   const gv=eid=>document.getElementById(eid)?.value||"";
   const numero=gv("fact-numero")||(f?.numero||"APERÇU");
   const date=gv("fact-date")||f?.date||today();

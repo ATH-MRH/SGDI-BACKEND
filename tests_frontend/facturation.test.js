@@ -497,12 +497,14 @@ test('période de facturation : enregistrement, réouverture, aperçu et dates i
   try {
     assert.strictEqual(env.loadError,null);
     const t=env.T(),w=env.window,d=w.document;
-    const invoice={id:'period-test',statut:'brouillon',clientId:'c',client:'Client',objet:'Prestation',lignes:[]};
+    const invoice={id:'period-test',statut:'brouillon',clientId:'c',client:'Client',objet:'Prestation',lignes:[{designation:'Service',qte:1,prixUnitHT:100,totalHT:100}]};
     t.setSession({societe:'IRON GLOBAL SOLUTION'});
     t.setDb({factures:[invoice],clients:[],paiements:[],avoirs:[]});
     w.__factureEditId=invoice.id;
     w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
     t.renderFactureEditor(d.getElementById('view'));
+    t.factureVoirApercu(invoice.id);
+    assert.equal(d.querySelector('#fact-print-area'),null,'aperçu refusé tant que la période manque');
     d.getElementById('fact-periode-debut').value='2026-09-01';
     d.getElementById('fact-periode-fin').value='2026-09-30';
     await t.factureEditorSave({draft:true,silent:true});
