@@ -484,7 +484,13 @@ def get_database(
     cached = _snapshot_cache_get(cache_key)
     if cached is not None:
         return cached
-    rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
+    # Ces collections sont déjà ignorées ci-dessous, même dans le snapshot complet.
+    # Les exclure en SQL évite de décoder et matérialiser leurs anciennes lignes JSON.
+    rows = db.execute(
+        select(SgdiRecord)
+        .where(SgdiRecord.collection.not_in(sorted(sql_bridge.SQL_COLLECTIONS | SERVER_ONLY_COLLECTIONS)))
+        .order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())
+    ).scalars().all()
     grouped: dict[str, list[SgdiRecord]] = {}
     for row in rows:
         if row.collection in sql_bridge.SQL_COLLECTIONS:
