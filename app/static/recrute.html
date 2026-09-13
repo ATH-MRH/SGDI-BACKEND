@@ -176,13 +176,15 @@ tr:last-child td{border-bottom:0}
 @media(max-width:640px){.dashboard-kpis{grid-template-columns:1fr 1fr}.announcement-card{grid-template-columns:1fr}.announcement-actions{justify-content:flex-start}}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
+<link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 </head>
 <body>
 <section id="loginView" class="login">
+  <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE RECRUTEMENT</span><h2>Vos candidatures.<br>Un suivi clair.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Candidats</strong><small>Retrouvez les profils</small></div><div><b>02</b><strong>Entretiens</strong><small>Organisez les échanges</small></div><div><b>03</b><strong>Recrutement</strong><small>Suivez les candidatures</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
-    <div class="logo">REC</div>
-    <h1>RECRUTEMENT ATLAS</h1>
-    <p class="login-sub">Gestion des candidatures</p>
+    <span class="atlas-login-chip">Accès sécurisé</span>
+    <h1>Connexion</h1>
+    <p class="login-sub">Connectez-vous à votre espace Recrutement.</p>
     <label for="username">Identifiant</label>
     <input id="username" autocomplete="username" autocapitalize="characters" required placeholder="REC01">
     <label for="password">Mot de passe</label>
@@ -195,6 +197,7 @@ tr:last-child td{border-bottom:0}
     <button id="loginBtn" class="primary">SE CONNECTER</button>
     <div id="loginError" class="error"></div>
   </form>
+  </div>
 </section>
 
 <section id="appView" class="app hidden">

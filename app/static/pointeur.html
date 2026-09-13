@@ -171,13 +171,15 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 }
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
+<link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 </head>
 <body>
 <section id="loginView" class="login">
+  <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE POINTAGE</span><h2>Vos présences.<br>Un suivi terrain.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Pointage</strong><small>Enregistrez les présences</small></div><div><b>02</b><strong>Sites</strong><small>Retrouvez vos affectations</small></div><div><b>03</b><strong>Planning</strong><small>Consultez votre organisation</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
-    <div class="logo">QR</div>
-    <h1>POINTEUR ATLAS</h1>
-    <p class="login-sub">Pointage mobile des employés</p>
+    <span class="atlas-login-chip">Accès sécurisé</span>
+    <h1>Connexion</h1>
+    <p class="login-sub">Connectez-vous à votre espace Pointage.</p>
     <label for="username">Identifiant pointeur</label>
     <input id="username" autocomplete="username" autocapitalize="characters" required placeholder="PTG01 / OPS01 / SUP01">
     <label for="password">Mot de passe</label>
@@ -185,6 +187,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <button id="loginBtn" class="primary">SE CONNECTER</button>
     <div id="loginError" class="error"></div>
   </form>
+  </div>
 </section>
 
 <section id="appView" class="app hidden">

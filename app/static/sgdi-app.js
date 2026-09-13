@@ -8310,19 +8310,37 @@ function renderDhlLogin(){
     dhlLogo.classList.add("is-ready");
   },{once:true});
 }
+function sgdiLoginStoryHTML(key){
+  const stories={
+    commercial:["COMMERCIAL","Vos relations clients.","Une vision claire.",[["Clients","Construisez la relation"],["Devis","Préparez vos offres"],["Contrats","Pilotez vos engagements"]],"Votre activité commerciale, réunie dans un seul espace."],
+    facmod:["FACTURATION","Votre facturation.","Une vision claire.",[["Factures","Préparez vos documents"],["Règlements","Suivez les paiements"],["Clients","Consultez les situations"]]],
+    facturation:["FINANCES & COMPTABILITÉ","Vos finances.","Une vision claire.",[["Factures","Consultez les pièces"],["Paiements","Suivez les règlements"],["Trésorerie","Pilotez votre activité"]]],
+    drh:["RESSOURCES HUMAINES","Vos équipes.","Un suivi centralisé.",[["Personnel","Retrouvez les dossiers"],["Contrats","Suivez les engagements"],["Congés","Organisez les absences"]]],
+    ops:["OPÉRATIONS","Vos opérations.","Une vision terrain.",[["Sites","Organisez les équipes"],["Affectations","Suivez les mouvements"],["Pointage","Consultez les présences"]]],
+    superviseur:["SUPERVISION","Vos sites.","Un suivi de proximité.",[["Équipes","Retrouvez vos effectifs"],["Pointage","Suivez les présences"],["Incidents","Consignez les événements"]]],
+    materiel:["MATÉRIEL & ÉQUIPEMENT","Vos équipements.","Un suivi précis.",[["Articles","Consultez le catalogue"],["Stocks","Suivez les disponibilités"],["Dotations","Retrouvez les affectations"]]],
+    secretariat:["SECRÉTARIAT GÉNÉRAL","Vos documents.","Une organisation claire.",[["Courriers","Suivez les échanges"],["Notes","Retrouvez les informations"],["Archives","Conservez vos documents"]]],
+    paie:["PAIE","Votre paie.","Un suivi maîtrisé.",[["Salaires","Préparez les éléments"],["Bulletins","Éditez les documents"],["Grilles","Consultez les barèmes"]]],
+    conges:["CONGÉS","Vos congés.","Une organisation simple.",[["Demandes","Préparez vos demandes"],["Suivi","Consultez les décisions"],["Planning","Organisez les absences"]]],
+    agenda:["AGENDA","Vos rendez-vous.","Une vision d’ensemble.",[["Planning","Organisez votre journée"],["Rappels","Retrouvez vos priorités"],["Échéances","Suivez vos engagements"]]],
+    admin:["ADMINISTRATION","Votre organisation.","Un pilotage centralisé.",[["Comptes","Gérez les utilisateurs"],["Sociétés","Retrouvez les périmètres"],["Modules","Organisez les accès"]]],
+    atlas:["PORTAIL ATLAS","Votre activité.","Une vision d’ensemble.",[["Sociétés","Retrouvez vos périmètres"],["Équipes","Suivez votre organisation"],["Modules","Accédez à vos outils"]]]
+  };
+  const [label,line1,line2,cards,footer]=stories[key]||stories.atlas;
+  return `<div class="sgdi-login-story"><span class="sgdi-login-eyebrow">ESPACE ${escapeHTML(label)}</span><h2>${escapeHTML(line1)}<br>${escapeHTML(line2)}</h2><div class="sgdi-login-flow">${cards.map(([title,description],index)=>`<div><b>0${index+1}</b><strong>${escapeHTML(title)}</strong><small>${escapeHTML(description)}</small></div>`).join("")}</div><p>${escapeHTML(footer||"Votre activité, réunie dans un seul espace.")}</p></div>`;
+}
 function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
   if(isDhlHost()){renderDhlLogin();return}
-  if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":"Suite de gestion intégrée";
   sgdiApplyBrowserTitle();
-  document.getElementById("app").innerHTML=`<div class="sgdi-login-page${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
+  document.getElementById("app").innerHTML=`<div class="sgdi-login-page sgdi-login-page-unified${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
     <main class="sgdi-login-main">
       <section class="sgdi-login-visual" aria-label="Présentation ${hostCfg?.key==="ops"?"ATLAS OPS":"ATLAS"}">
-        <div class="sgdi-login-brand">${hostCfg?.key==="facmod"?`<span>FAC</span><i>.</i>`:`<span>ATLA</span><i>S</i>`}</div>
+        <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
         <p class="sgdi-login-kicker">${escapeHTML(dedicatedKicker)}</p>
-        ${hostCfg?.key==="commercial"?`<div class="commercial-login-story"><span class="commercial-login-eyebrow">ESPACE COMMERCIAL</span><h2>Vos relations clients.<br>Une vision claire.</h2><div class="commercial-login-flow"><div><b>01</b><strong>Clients</strong><small>Construisez la relation</small></div><div><b>02</b><strong>Devis</strong><small>Préparez vos offres</small></div><div><b>03</b><strong>Contrats</strong><small>Pilotez vos engagements</small></div></div><p>Votre activité commerciale, réunie dans un seul espace.</p></div>`:""}
+        ${sgdiLoginStoryHTML(hostCfg?.key)}
 
       </section>
       <section class="sgdi-login-panel">
@@ -8333,11 +8351,11 @@ function renderLogin(){
         </div>
         <form id="login-form" class="sgdi-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label class="sgdi-login-field">
-            <input name="username" autocomplete="username" placeholder=" " autofocus/>
+            <input name="username" ${hostCfg?.key==="paie"?"required":""} autocomplete="username" placeholder=" " autofocus/>
             <span>Identifiant</span>
           </label>
           <label class="sgdi-login-field sgdi-login-password-field">
-            <input type="password" name="password" autocomplete="current-password" placeholder=" "/>
+            <input type="password" name="password" ${hostCfg?.key==="paie"?"required":""} autocomplete="current-password" placeholder=" "/>
             <span>Mot de passe</span>
             <button type="button" class="sgdi-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button>
           </label>

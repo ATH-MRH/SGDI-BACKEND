@@ -1,0 +1,24 @@
+/* Connexion ATLAS — modules autonomes, sans modification de leur authentification. */
+#loginView.login{min-height:100svh;padding:0;background:radial-gradient(ellipse at 15% 10%,#155d72 0,transparent 55%),linear-gradient(125deg,#071e36,#0b454f);font-family:Arial,sans-serif}
+#loginView .atlas-login-layout{box-sizing:border-box;width:min(1220px,calc(100% - 80px));min-height:100svh;margin:auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(350px,.85fr);align-items:center;gap:clamp(36px,6vw,100px);padding:64px 0 90px}
+#loginView .atlas-login-brand{font:900 56px/1 Arial,sans-serif;letter-spacing:-3px;color:#fff}
+#loginView .atlas-login-brand span{color:#52d8c8}
+#loginView .atlas-login-story{margin-top:44px;color:#fff}
+#loginView .atlas-login-eyebrow{font-size:11px;font-weight:800;letter-spacing:.18em;color:#77dfd3}
+#loginView .atlas-login-story h2{font-size:clamp(30px,3.3vw,46px);font-weight:400;line-height:1.15;letter-spacing:-.035em;margin:14px 0 30px;color:#fff}
+#loginView .atlas-login-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#loginView .atlas-login-flow>div{padding:18px 14px;background:linear-gradient(140deg,#ffffff14,#ffffff05);border:1px solid #ffffff25;border-radius:14px}
+#loginView .atlas-login-flow b{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#4ed6c324;color:#8ceddf;font-size:12px;margin-bottom:22px}
+#loginView .atlas-login-flow strong{display:block;font-size:16px;color:#fff}
+#loginView .atlas-login-flow small{display:block;margin-top:8px;color:#b2cbd4;font-size:11px;line-height:1.4}
+#loginView .atlas-login-story>p{color:#aac8d3;font-size:13px;margin:24px 0 0;line-height:1.6}
+#loginView .login-card{box-sizing:border-box;width:100%;max-width:none;min-width:0;text-align:left;background:#fff;border:1px solid #dce9ee;border-radius:24px;box-shadow:0 24px 65px #00172555;padding:36px}
+#loginView .atlas-login-chip{display:inline-flex;align-items:center;min-height:26px;padding:0 12px;border-radius:999px;color:#087e74;background:#e9f8f4;font-size:10px;font-weight:800;letter-spacing:.06em}
+#loginView .login-card h1{font-size:32px;line-height:1.2;margin:16px 0 8px;letter-spacing:-.03em;color:#10182c;text-align:left}
+#loginView .login-sub{font-size:13px;font-weight:400;color:#64748b;margin:0 0 24px;text-align:left}
+#loginView .login-card label{font-size:12px;color:#334155;font-weight:700;text-transform:none;margin:16px 0 8px}
+#loginView .login-card input{box-sizing:border-box;width:100%;height:52px;border:1px solid #cddce5;border-radius:10px;background:#f7fafc;padding:12px 14px;font-size:16px;color:#12233c;margin:0}
+#loginView .login-card input:focus{border-color:#0b8c80;box-shadow:0 0 0 3px #0b8c801b;outline:0;background:#fff}
+#loginView .login-password input{padding-right:56px}
+#loginView .login-card .primary{width:100%;height:52px;margin:22px 0 0;background:linear-gradient(105deg,#087e76,#096888);border:0;border-radius:10px;box-shadow:0 7px 18px #087e7625;font-size:13px;letter-spacing:.06em;color:#fff}
+@media(max-width:860px){#loginView .atlas-login-layout{width:min(540px,calc(100% - 32px));grid-template-columns:minmax(0,1fr);align-content:center;gap:28px;padding:32px 0 48px}#loginView .atlas-login-brand{font-size:40px}#loginView .atlas-login-story{margin-top:18px}#loginView .atlas-login-story h2{font-size:28px;margin-bottom:0}#loginView .atlas-login-flow,#loginView .atlas-login-story>p{display:none}#loginView .login-card{padding:26px}}

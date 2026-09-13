@@ -35,6 +35,7 @@ window.setInterval = () => 0;
 const exposeSuffix = `
 ;window.__sgdiTest = {
   sgdiEmployeeReadPath,
+  renderLogin,
   employeeIsFormer: (typeof employeeIsFormer !== 'undefined') ? employeeIsFormer : null,
   employeeIsActive: (typeof employeeIsActive !== 'undefined') ? employeeIsActive : null,
   agentHasLiveAffectation: (typeof agentHasLiveAffectation !== 'undefined') ? agentHasLiveAffectation : null,
@@ -446,4 +447,52 @@ test('OPS employee loading uses its own read API without granting DRH access', (
   window.__sgdiTest.setSession({transverse: 'drh'});
   assert.strictEqual(window.__sgdiTest.sgdiEmployeeReadPath(), '/drh/employees');
   window.__sgdiTest.setSession(null);
+});
+
+test('connexion : thème commun et formulaire fonctionnel pour chaque module', () => {
+  const hosts=['dc','fac','finances','drh','ops','sup','materiel','sg','paie','conges','agenda','administrateur','atlas'];
+  const previous=dom.window.location.href;
+  try {
+    for(const host of hosts){
+      dom.reconfigure({url:`https://${host}.irongs.com/`});
+      T().renderLogin();
+      const root=window.document.querySelector('.sgdi-login-page-unified');
+      assert.ok(root,host);
+      assert.equal(root.querySelector('.sgdi-login-brand').textContent,'ATLAS',host);
+      assert.equal(root.querySelectorAll('.sgdi-login-flow>div').length,3,host);
+      const form=root.querySelector('#login-form');
+      let submitted;
+      const login=window.login;
+      window.login=(username,password)=>{submitted=[username,password]};
+      try{
+        form.querySelector('[name=username]').value='TEST';
+        form.querySelector('[name=password]').value='test-password';
+        // jsdom does not expose named form controls as browser form properties.
+        Object.defineProperty(form,'username',{value:form.querySelector('[name=username]')});
+        Object.defineProperty(form,'password',{value:form.querySelector('[name=password]')});
+        window.Function('event',form.getAttribute('onsubmit')).call(form,{preventDefault(){}});
+        assert.deepEqual(submitted,['TEST','test-password'],host);
+        const toggle=root.querySelector('.sgdi-login-password-toggle');
+        window.Function(toggle.getAttribute('onclick')).call(toggle);
+        assert.equal(form.password.type,'text',host);
+        assert.equal(root.querySelector('.sgdi-login-submit').getAttribute('form'),'login-form',host);
+        if(host==='paie')assert.ok(form.username.required&&form.password.required);
+      }finally{window.login=login}
+    }
+  }finally{dom.reconfigure({url:previous})}
+});
+
+test('connexions autonomes : présentation commune et contrôles conservés',()=>{
+  for(const filename of ['recrute.html','pointeur.html']){
+    const html=fs.readFileSync(path.join(__dirname,'../app/static',filename),'utf8');
+    const page=new JSDOM(html);
+    const document=page.window.document;
+    assert.ok(document.querySelector('link[href^="/static/login-standalone.css"]'),filename);
+    assert.equal(document.querySelectorAll('#loginView .atlas-login-flow>div').length,3,filename);
+    assert.equal(document.querySelector('#loginView form').getAttribute('onsubmit'),'event.preventDefault();login()',filename);
+    assert.ok(document.querySelector('#username').required,filename);
+    assert.ok(document.querySelector('#password').required,filename);
+    assert.ok(document.querySelector('#loginBtn')&&document.querySelector('#loginError'),filename);
+    page.window.close();
+  }
 });
