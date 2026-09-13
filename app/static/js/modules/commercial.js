@@ -709,8 +709,9 @@ function renderDevisEditor(view){
     // Header card
     '<div class="card" style="margin-bottom:10px;padding:14px">'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'+
-    '<label style="display:block"><span style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase">Client</span>'+
-    '<select class="select" id="dev-clientId" style="margin-top:4px;width:100%">'+clientOpts+'</select></label>'+
+    '<div><label for="dev-clientId" style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase">Client</label>'+
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap"><select class="select" id="dev-clientId" style="flex:1;min-width:180px">'+clientOpts+'</select>'+
+    (isFacturationClientContext()?'':'<button type="button" class="btn btn-primary" onclick="devisNewClientOpen()" style="white-space:nowrap">+ Nouveau client</button>')+'</div></div>'+
     '<label style="display:block"><span style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase">Objet de la prestation</span>'+
     '<input class="input" id="dev-objet" value="'+escapeHTML(d.objet)+'" placeholder="Ex : Prestations de gardiennage – site industriel" style="margin-top:4px"/></label>'+
     '</div>'+
@@ -1294,4 +1295,51 @@ function commercialModuleDestroy(){
   window.removeEventListener("sgdi:sidebar-stats",refreshCommercialFinancePanel);
   commercialModuleTimeouts.forEach(clearTimeout);commercialModuleTimeouts.clear();
   document.removeEventListener("click",commercialDismissMenu);commercialDismissMenu();
+}
+
+
+// Create a client without rerendering (or saving) the quote being edited.
+function devisNewClientOpen(){
+  const select=document.getElementById("dev-clientId");
+  const societe=mySoc();
+  if(!select||isFacturationClientContext())return;
+  if(!societe){toast("Sélectionnez une société avant de créer un client","error");return;}
+  const fields=[["nom","Nom du client",true],["raisonSociale","Raison sociale",true],["adresse","Adresse",true],["rc","RC",true],["nif","NIF",true],["ai","AI",true],["nis","NIS",false],["contact","Contact",false],["tel","Téléphone",false],["email","E-mail",false]];
+  openModal('<form id="dev-new-client" onsubmit="event.preventDefault();devisNewClientSave(this)">'+
+    '<h3 style="font-size:22px;font-weight:800;margin-bottom:8px">Nouveau client</h3>'+
+    '<p style="color:#64748b;margin-bottom:16px">'+escapeHTML(societe)+' · Les champs marqués * sont obligatoires.</p>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">'+
+    fields.map(([name,label,required])=>'<label style="display:grid;gap:4px">'+label+(required?' *':'')+'<input class="input" name="'+name+'" type="'+(name==='email'?'email':'text')+'"'+(required?' required':'')+'></label>').join('')+'</div>'+
+    '<p role="alert" data-client-error style="color:#b91c1c;margin-top:12px"></p>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-primary">Enregistrer et sélectionner</button></div></form>');
+  const form=document.getElementById("dev-new-client");
+  form._quoteClientSelect=select;
+  form._societe=societe;
+}
+
+async function devisNewClientSave(form){
+  if(form._saving||!form.reportValidity())return;
+  const error=form.querySelector('[data-client-error]');
+  if(isFacturationClientContext()||mySoc()!==form._societe){error.textContent="La société ou l’espace actif a changé. Rouvrez la création du client.";return;}
+  const values=Object.fromEntries(new FormData(form));
+  for(const input of form.querySelectorAll('[required]')){
+    if(!String(values[input.name]||'').trim()){input.focus();error.textContent="Renseignez les champs obligatoires.";return;}
+  }
+  const client={...Object.fromEntries(Object.entries(values).map(([k,v])=>[k,String(v).trim()])),id:uid('cl'),societe:form._societe,statut:'actif',createdBy:session.username,createdAt:new Date().toISOString()};
+  const buttons=form.querySelectorAll('button');
+  form._saving=true;buttons.forEach(b=>b.disabled=true);error.textContent='';
+  try{
+    await persistClientToPostgres(client);
+    db.clients=db.clients||[];
+    db.clients.push(client);
+    const select=form._quoteClientSelect;
+    if(select.isConnected&&mySoc()===form._societe){
+      const option=document.createElement('option');option.value=client.id;option.textContent=client.nom;
+      select.appendChild(option);select.value=client.id;select.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    if(form.isConnected)closeModal();
+    toast("Client créé et enregistré","success");
+    return true;
+  }catch(e){error.textContent="Client non enregistré : "+(e.message||e);return false;}
+  finally{form._saving=false;buttons.forEach(b=>b.disabled=false);}
 }
