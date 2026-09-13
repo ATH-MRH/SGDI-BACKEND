@@ -1,0 +1,105 @@
+[
+  {
+    "phase": "avant",
+    "frontend": {
+      "tests": 230.0,
+      "pass": 230.0,
+      "fail": 0.0,
+      "duration_ms": 68245.578958
+    },
+    "backend": {
+      "passed": 550,
+      "skipped": 14,
+      "seconds": 63.65
+    },
+    "focused": null,
+    "js_syntax_files": null,
+    "git_diff_check": "initial clean worktree",
+    "logs": {
+      "frontend": "/private/tmp/drh-frontend-baseline.log",
+      "backend": "/private/tmp/drh-backend-baseline.log",
+      "focused": null
+    }
+  },
+  {
+    "phase": "correction1",
+    "frontend": {
+      "tests": 237.0,
+      "pass": 237.0,
+      "fail": 0.0,
+      "duration_ms": 67839.86325
+    },
+    "backend": {
+      "passed": 550,
+      "skipped": 14,
+      "seconds": 50.92
+    },
+    "focused": {
+      "tests": 72.0,
+      "pass": 72.0,
+      "fail": 0.0,
+      "duration_ms": 67093.280166
+    },
+    "js_syntax_files": 74,
+    "git_diff_check": "passed",
+    "logs": {
+      "frontend": "/private/tmp/drh-c1-frontend-full.log",
+      "backend": "/private/tmp/drh-c1-backend-full.log",
+      "focused": "/private/tmp/drh-c1-focused.log"
+    }
+  },
+  {
+    "phase": "correction2",
+    "frontend": {
+      "tests": 262.0,
+      "pass": 262.0,
+      "fail": 0.0,
+      "duration_ms": 67920.29225
+    },
+    "backend": {
+      "passed": 550,
+      "skipped": 14,
+      "seconds": 49.58
+    },
+    "focused": {
+      "tests": 97.0,
+      "pass": 97.0,
+      "fail": 0.0,
+      "duration_ms": 68054.408333
+    },
+    "js_syntax_files": 75,
+    "git_diff_check": "passed",
+    "logs": {
+      "frontend": "/private/tmp/drh-c2-final-frontend-full.log",
+      "backend": "/private/tmp/drh-c2-backend-full.log",
+      "focused": "/private/tmp/drh-c2-final-focused.log"
+    }
+  },
+  {
+    "phase": "correction3",
+    "frontend": {
+      "tests": 262.0,
+      "pass": 262.0,
+      "fail": 0.0,
+      "duration_ms": 67832.644291
+    },
+    "backend": {
+      "passed": 557,
+      "skipped": 14,
+      "seconds": 53.44
+    },
+    "focused": {
+      "tests": 97.0,
+      "pass": 97.0,
+      "fail": 0.0,
+      "duration_ms": 67711.393791
+    },
+    "js_syntax_files": 75,
+    "git_diff_check": "passed",
+    "logs": {
+      "frontend": "/private/tmp/drh-c3-frontend-full.log",
+      "backend": "/private/tmp/drh-c3-backend-full.log",
+      "focused": "/private/tmp/drh-c3-focused.log"
+    }
+  }
+]

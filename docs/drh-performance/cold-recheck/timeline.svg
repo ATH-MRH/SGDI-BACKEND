@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1250" height="1240" viewBox="0 0 1250 1240"><rect width="1250" height="1240" fill="white"/><g font-family="Arial,sans-serif" fill="#172b4d"><text x="24" y="30" font-size="22">DRH : chronologie réelle des trois passages médians</text><text x="24" y="55" font-size="13">Temps depuis la navigation, en ms. Les pistes se chevauchent : ne pas additionner leurs durées.</text>
+<text x="24" y="90" font-size="17" font-weight="bold">Ancienne base — passage médian : 1234.2 ms</text>
+<line x1="230.0" x2="230.0" y1="106" y2="415" stroke="#e1e7ef"/><text x="230.0" y="435" text-anchor="middle" font-size="11">0</text>
+<line x1="318.8888888888889" x2="318.8888888888889" y1="106" y2="415" stroke="#e1e7ef"/><text x="318.8888888888889" y="435" text-anchor="middle" font-size="11">250</text>
+<line x1="407.77777777777777" x2="407.77777777777777" y1="106" y2="415" stroke="#e1e7ef"/><text x="407.77777777777777" y="435" text-anchor="middle" font-size="11">500</text>
+<line x1="496.6666666666667" x2="496.6666666666667" y1="106" y2="415" stroke="#e1e7ef"/><text x="496.6666666666667" y="435" text-anchor="middle" font-size="11">750</text>
+<line x1="585.5555555555555" x2="585.5555555555555" y1="106" y2="415" stroke="#e1e7ef"/><text x="585.5555555555555" y="435" text-anchor="middle" font-size="11">1000</text>
+<line x1="674.4444444444445" x2="674.4444444444445" y1="106" y2="415" stroke="#e1e7ef"/><text x="674.4444444444445" y="435" text-anchor="middle" font-size="11">1250</text>
+<line x1="763.3333333333334" x2="763.3333333333334" y1="106" y2="415" stroke="#e1e7ef"/><text x="763.3333333333334" y="435" text-anchor="middle" font-size="11">1500</text>
+<line x1="852.2222222222222" x2="852.2222222222222" y1="106" y2="415" stroke="#e1e7ef"/><text x="852.2222222222222" y="435" text-anchor="middle" font-size="11">1750</text>
+<line x1="941.1111111111111" x2="941.1111111111111" y1="106" y2="415" stroke="#e1e7ef"/><text x="941.1111111111111" y="435" text-anchor="middle" font-size="11">2000</text>
+<line x1="1030.0" x2="1030.0" y1="106" y2="415" stroke="#e1e7ef"/><text x="1030.0" y="435" text-anchor="middle" font-size="11">2250</text>
+<line x1="1118.888888888889" x2="1118.888888888889" y1="106" y2="415" stroke="#e1e7ef"/><text x="1118.888888888889" y="435" text-anchor="middle" font-size="11">2500</text>
+<text x="220" y="126" text-anchor="end" font-size="12">HTML</text>
+<rect x="230.00" y="114" width="32.71" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="151" text-anchor="end" font-size="12">Snapshot léger</text>
+<rect x="300.86" y="139" width="91.98" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="176" text-anchor="end" font-size="12">Utilisateurs</text>
+<rect x="399.07" y="164" width="4.80" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="201" text-anchor="end" font-size="12">Droits</text>
+<rect x="404.01" y="189" width="5.37" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="226" text-anchor="end" font-size="12">Employés, tous appels</text>
+<rect x="429.93" y="214" width="46.61" height="16" rx="2" fill="#4169a1"/>
+<rect x="634.76" y="214" width="63.22" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="251" text-anchor="end" font-size="12">Candidats</text>
+<rect x="430.00" y="239" width="24.39" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="276" text-anchor="end" font-size="12">Sidebar, tous appels</text>
+<rect x="412.54" y="264" width="184.11" height="16" rx="2" fill="#4169a1"/>
+<rect x="634.87" y="264" width="34.31" height="16" rx="2" fill="#4169a1"/>
+<rect x="720.13" y="264" width="12.84" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="301" text-anchor="end" font-size="12">Sync SQL, attente incluse</text>
+<rect x="429.82" y="289" width="108.23" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="326" text-anchor="end" font-size="12">Transformations JS</text>
+<rect x="300.90" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="394.48" y="314" width="1.56" height="16" rx="2" fill="#4169a1"/>
+<rect x="396.04" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="396.04" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="396.04" y="314" width="1.74" height="16" rx="2" fill="#4169a1"/>
+<rect x="410.73" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="455.88" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="483.72" y="314" width="1.17" height="16" rx="2" fill="#4169a1"/>
+<rect x="580.33" y="314" width="1.10" height="16" rx="2" fill="#4169a1"/>
+<rect x="633.38" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="669.32" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="701.11" y="314" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="351" text-anchor="end" font-size="12">Téléchargements modules</text>
+<rect x="582.28" y="339" width="4.20" height="16" rx="2" fill="#4169a1"/>
+<rect x="621.64" y="339" width="4.80" height="16" rx="2" fill="#4169a1"/>
+<rect x="621.72" y="339" width="3.73" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="376" text-anchor="end" font-size="12">Rendu dashboard</text>
+<rect x="634.84" y="364" width="13.62" height="16" rx="2" fill="#4169a1"/>
+<text x="220" y="401" text-anchor="end" font-size="12">Écritures DOM</text>
+<rect x="302.21" y="389" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="410.84" y="389" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="484.97" y="389" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="581.47" y="389" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<rect x="647.92" y="389" width="1.00" height="16" rx="2" fill="#4169a1"/>
+<line x1="668.8266666666667" x2="668.8266666666667" y1="104" y2="417" stroke="#bc2744" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="24" y="470" font-size="17" font-weight="bold">Ancienne branche — passage médian : 2411.8 ms</text>
+<line x1="230.0" x2="230.0" y1="486" y2="795" stroke="#e1e7ef"/><text x="230.0" y="815" text-anchor="middle" font-size="11">0</text>
+<line x1="318.8888888888889" x2="318.8888888888889" y1="486" y2="795" stroke="#e1e7ef"/><text x="318.8888888888889" y="815" text-anchor="middle" font-size="11">250</text>
+<line x1="407.77777777777777" x2="407.77777777777777" y1="486" y2="795" stroke="#e1e7ef"/><text x="407.77777777777777" y="815" text-anchor="middle" font-size="11">500</text>
+<line x1="496.6666666666667" x2="496.6666666666667" y1="486" y2="795" stroke="#e1e7ef"/><text x="496.6666666666667" y="815" text-anchor="middle" font-size="11">750</text>
+<line x1="585.5555555555555" x2="585.5555555555555" y1="486" y2="795" stroke="#e1e7ef"/><text x="585.5555555555555" y="815" text-anchor="middle" font-size="11">1000</text>
+<line x1="674.4444444444445" x2="674.4444444444445" y1="486" y2="795" stroke="#e1e7ef"/><text x="674.4444444444445" y="815" text-anchor="middle" font-size="11">1250</text>
+<line x1="763.3333333333334" x2="763.3333333333334" y1="486" y2="795" stroke="#e1e7ef"/><text x="763.3333333333334" y="815" text-anchor="middle" font-size="11">1500</text>
+<line x1="852.2222222222222" x2="852.2222222222222" y1="486" y2="795" stroke="#e1e7ef"/><text x="852.2222222222222" y="815" text-anchor="middle" font-size="11">1750</text>
+<line x1="941.1111111111111" x2="941.1111111111111" y1="486" y2="795" stroke="#e1e7ef"/><text x="941.1111111111111" y="815" text-anchor="middle" font-size="11">2000</text>
+<line x1="1030.0" x2="1030.0" y1="486" y2="795" stroke="#e1e7ef"/><text x="1030.0" y="815" text-anchor="middle" font-size="11">2250</text>
+<line x1="1118.888888888889" x2="1118.888888888889" y1="486" y2="795" stroke="#e1e7ef"/><text x="1118.888888888889" y="815" text-anchor="middle" font-size="11">2500</text>
+<text x="220" y="506" text-anchor="end" font-size="12">HTML</text>
+<rect x="230.00" y="494" width="49.60" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="531" text-anchor="end" font-size="12">Snapshot léger</text>
+<rect x="333.15" y="519" width="334.40" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="556" text-anchor="end" font-size="12">Utilisateurs</text>
+<rect x="674.62" y="544" width="13.90" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="581" text-anchor="end" font-size="12">Droits</text>
+<rect x="688.77" y="569" width="11.16" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="606" text-anchor="end" font-size="12">Employés, tous appels</text>
+<rect x="732.51" y="594" width="101.26" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="631" text-anchor="end" font-size="12">Candidats</text>
+<rect x="732.68" y="619" width="73.00" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="656" text-anchor="end" font-size="12">Sidebar, tous appels</text>
+<rect x="662.82" y="644" width="74.24" height="16" rx="2" fill="#a65422"/>
+<rect x="827.48" y="644" width="114.92" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="681" text-anchor="end" font-size="12">Sync SQL, attente incluse</text>
+<rect x="731.90" y="669" width="147.70" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="706" text-anchor="end" font-size="12">Transformations JS</text>
+<rect x="333.32" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="669.96" y="694" width="2.84" height="16" rx="2" fill="#a65422"/>
+<rect x="672.74" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="672.81" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="672.81" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="707.80" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="806.85" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="838.11" y="694" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="923.97" y="694" width="1.56" height="16" rx="2" fill="#a65422"/>
+<rect x="1015.32" y="694" width="1.88" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="731" text-anchor="end" font-size="12">Téléchargements modules</text>
+<rect x="928.24" y="719" width="2.42" height="16" rx="2" fill="#a65422"/>
+<rect x="941.86" y="719" width="2.49" height="16" rx="2" fill="#a65422"/>
+<rect x="941.89" y="719" width="2.95" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="756" text-anchor="end" font-size="12">Rendu dashboard</text>
+<rect x="1018.73" y="744" width="19.88" height="16" rx="2" fill="#a65422"/>
+<text x="220" y="781" text-anchor="end" font-size="12">Écritures DOM</text>
+<rect x="372.72" y="769" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="707.97" y="769" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="838.85" y="769" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="925.68" y="769" width="1.00" height="16" rx="2" fill="#a65422"/>
+<rect x="1038.07" y="769" width="1.00" height="16" rx="2" fill="#a65422"/>
+<line x1="1087.528888888889" x2="1087.528888888889" y1="484" y2="797" stroke="#bc2744" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="24" y="850" font-size="17" font-weight="bold">Branche — nouvelle médiane : 1096.9 ms</text>
+<line x1="230.0" x2="230.0" y1="866" y2="1175" stroke="#e1e7ef"/><text x="230.0" y="1195" text-anchor="middle" font-size="11">0</text>
+<line x1="318.8888888888889" x2="318.8888888888889" y1="866" y2="1175" stroke="#e1e7ef"/><text x="318.8888888888889" y="1195" text-anchor="middle" font-size="11">250</text>
+<line x1="407.77777777777777" x2="407.77777777777777" y1="866" y2="1175" stroke="#e1e7ef"/><text x="407.77777777777777" y="1195" text-anchor="middle" font-size="11">500</text>
+<line x1="496.6666666666667" x2="496.6666666666667" y1="866" y2="1175" stroke="#e1e7ef"/><text x="496.6666666666667" y="1195" text-anchor="middle" font-size="11">750</text>
+<line x1="585.5555555555555" x2="585.5555555555555" y1="866" y2="1175" stroke="#e1e7ef"/><text x="585.5555555555555" y="1195" text-anchor="middle" font-size="11">1000</text>
+<line x1="674.4444444444445" x2="674.4444444444445" y1="866" y2="1175" stroke="#e1e7ef"/><text x="674.4444444444445" y="1195" text-anchor="middle" font-size="11">1250</text>
+<line x1="763.3333333333334" x2="763.3333333333334" y1="866" y2="1175" stroke="#e1e7ef"/><text x="763.3333333333334" y="1195" text-anchor="middle" font-size="11">1500</text>
+<line x1="852.2222222222222" x2="852.2222222222222" y1="866" y2="1175" stroke="#e1e7ef"/><text x="852.2222222222222" y="1195" text-anchor="middle" font-size="11">1750</text>
+<line x1="941.1111111111111" x2="941.1111111111111" y1="866" y2="1175" stroke="#e1e7ef"/><text x="941.1111111111111" y="1195" text-anchor="middle" font-size="11">2000</text>
+<line x1="1030.0" x2="1030.0" y1="866" y2="1175" stroke="#e1e7ef"/><text x="1030.0" y="1195" text-anchor="middle" font-size="11">2250</text>
+<line x1="1118.888888888889" x2="1118.888888888889" y1="866" y2="1175" stroke="#e1e7ef"/><text x="1118.888888888889" y="1195" text-anchor="middle" font-size="11">2500</text>
+<text x="220" y="886" text-anchor="end" font-size="12">HTML</text>
+<rect x="230.00" y="874" width="29.83" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="911" text-anchor="end" font-size="12">Snapshot léger</text>
+<rect x="328.63" y="899" width="65.71" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="936" text-anchor="end" font-size="12">Utilisateurs</text>
+<rect x="401.02" y="924" width="3.31" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="961" text-anchor="end" font-size="12">Droits</text>
+<rect x="404.36" y="949" width="2.70" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="986" text-anchor="end" font-size="12">Employés, tous appels</text>
+<rect x="427.26" y="974" width="44.02" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1011" text-anchor="end" font-size="12">Candidats</text>
+<rect x="427.37" y="999" width="18.84" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1036" text-anchor="end" font-size="12">Sidebar, tous appels</text>
+<rect x="409.63" y="1024" width="160.53" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1061" text-anchor="end" font-size="12">Sync SQL, attente incluse</text>
+<rect x="427.12" y="1049" width="90.10" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1086" text-anchor="end" font-size="12">Transformations JS</text>
+<rect x="328.67" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="396.83" y="1074" width="1.81" height="16" rx="2" fill="#087e77"/>
+<rect x="398.64" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="398.64" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="398.64" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="408.13" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="447.46" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="476.90" y="1074" width="1.14" height="16" rx="2" fill="#087e77"/>
+<rect x="557.61" y="1074" width="1.14" height="16" rx="2" fill="#087e77"/>
+<rect x="597.93" y="1074" width="1.00" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1111" text-anchor="end" font-size="12">Téléchargements modules</text>
+<rect x="559.32" y="1099" width="3.70" height="16" rx="2" fill="#087e77"/>
+<rect x="590.39" y="1099" width="5.37" height="16" rx="2" fill="#087e77"/>
+<rect x="590.43" y="1099" width="3.88" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1136" text-anchor="end" font-size="12">Rendu dashboard</text>
+<rect x="599.49" y="1124" width="9.67" height="16" rx="2" fill="#087e77"/>
+<text x="220" y="1161" text-anchor="end" font-size="12">Écritures DOM</text>
+<rect x="329.73" y="1149" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="408.24" y="1149" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="478.11" y="1149" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="558.82" y="1149" width="1.00" height="16" rx="2" fill="#087e77"/>
+<rect x="608.70" y="1149" width="1.00" height="16" rx="2" fill="#087e77"/>
+<line x1="620.0088888888889" x2="620.0088888888889" y1="864" y2="1177" stroke="#bc2744" stroke-width="2" stroke-dasharray="4 3"/>
+</g></svg>

@@ -373,6 +373,28 @@ function sgdiAuthHeaders(headers){
   return h;
 }
 function sgdiAuthToken(){return sessionStorage.getItem(SGDI_API_TOKEN_KEY)||""}
+// Lectures DRH en mémoire uniquement : une écriture ou un signal distant rend
+// les requêtes précédentes obsolètes, même si leur réponse arrive plus tard.
+let sgdiDrhReadRevision=0,sgdiDrhReadToken="";
+const sgdiEmployeeReads=new Map(),sgdiSidebarReads=new Map();
+function sgdiInvalidateDrhReads(){
+  sgdiDrhReadRevision++;
+  sgdiEmployeeReads.clear();
+  sgdiSidebarReads.clear();
+  window.__sgdiEnsuredAt={};
+  window.SGDI_DRH_STATS_BY_SOCIETY={};
+}
+function sgdiDrhReadContext(society){
+  const token=sgdiAuthToken();
+  if(token!==sgdiDrhReadToken){
+    sgdiDrhReadToken=token;
+    sgdiInvalidateDrhReads();
+    window.SGDI_SIDEBAR_STATS=null;
+  }
+  const scope=String(society||"").trim();
+  return{token,scope,revision:sgdiDrhReadRevision,key:JSON.stringify([token,scope,sgdiDrhReadRevision])};
+}
+function sgdiDrhReadIsCurrent(context){return context.token===sgdiAuthToken()&&context.revision===sgdiDrhReadRevision}
 const SGDI_REALTIME_CHANNEL = "sgdi:data-change";
 const SGDI_REALTIME_STORAGE_KEY = "sgdi:data-change";
 const SGDI_REALTIME_CLIENT_ID = (()=>{try{let id=sessionStorage.getItem("sgdiRealtimeClientId");if(!id){id="rt_"+Date.now()+"_"+Math.random().toString(36).slice(2);sessionStorage.setItem("sgdiRealtimeClientId",id)}return id}catch(e){return"rt_"+Math.random().toString(36).slice(2)}})();
@@ -434,6 +456,7 @@ function sgdiRefreshNoticeHTML(){
   return "";
 }
 function sgdiPublishDataChange(reason){
+  sgdiInvalidateDrhReads();
   const event={source:SGDI_REALTIME_CLIENT_ID,reason:reason||"change",module:sgdiCurrentModuleKey(),at:Date.now()};
   try{
     if(!sgdiRealtimeChannel&&typeof BroadcastChannel!=="undefined")sgdiRealtimeChannel=new BroadcastChannel(SGDI_REALTIME_CHANNEL);
@@ -444,6 +467,7 @@ function sgdiPublishDataChange(reason){
 }
 function sgdiScheduleRealtimePull(event){
   if(!event||event.source===SGDI_REALTIME_CLIENT_ID)return;
+  sgdiInvalidateDrhReads();
   if(sgdiRealtimePullTimer)clearTimeout(sgdiRealtimePullTimer);
   sgdiRealtimePullTimer=setTimeout(()=>sgdiRunRealtimePull(event),250);
 }
@@ -600,6 +624,7 @@ async function sgdiApi(path,options){
   const body=isForm?opts.body:(opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body);
   const url=sgdiApiUrl(path,legacy);
   const headers=sgdiAuthHeaders(opts.headers);
+  const requestToken=sgdiAuthToken();
   if(isForm)delete headers["content-type"];
   // Sans délai d'expiration, une connexion lente/instable (terrain, mobile) pouvait
   // laisser fetch() bloqué indéfiniment — écran figé sur "Chargement..." pour toujours,
@@ -622,10 +647,10 @@ async function sgdiApi(path,options){
   if(!res.ok||out.ok===false){
     const message=sgdiApiErrorMessage(res.status,raw,out,"Erreur API "+res.status);
     console.error("Erreur API",res.status,url,out);
-    if(sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
+    if(requestToken===sgdiAuthToken()&&sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
     throw new Error(message);
   }
-  if(sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
+  if(requestToken===sgdiAuthToken()&&sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
   if(out.data!==undefined&&Object.keys(out).every(k=>k==='data'||k==='ok'))return out.data;
   return out;
 }
@@ -636,6 +661,7 @@ async function sgdiActionApi(path,options){
   const body=isForm?opts.body:(opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body);
   const url=sgdiApiUrl(path,legacy);
   const headers=sgdiAuthHeaders(opts.headers);
+  const requestToken=sgdiAuthToken();
   if(isForm)delete headers["content-type"];
   const _ctrl=opts.signal?null:new AbortController();
   const _timer=_ctrl?setTimeout(()=>_ctrl.abort(),30000):null;
@@ -654,10 +680,10 @@ async function sgdiActionApi(path,options){
   if(!res.ok||out.status!=="success"){
     const message=sgdiApiErrorMessage(res.status,raw,out,"Action refusée par le backend "+res.status);
     console.error("Action API refusée",res.status,url,out);
-    if(sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
+    if(requestToken===sgdiAuthToken()&&sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
     throw new Error(message);
   }
-  if(sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
+  if(requestToken===sgdiAuthToken()&&sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
   return out;
 }
 async function sgdiDownload(path,filename){
@@ -971,7 +997,10 @@ async function sgdiCheckRemoteChanges(){
     const signature=sgdiStatsSignature(stats);
     const current=sgdiStatsSignature(window.SGDI_SIDEBAR_STATS);
     if(signature&&!sgdiLastRemoteStatsSignature)sgdiLastRemoteStatsSignature=current||signature;
-    if(signature&&current&&signature!==current)await sgdiAutoSync("Nouvelles données disponibles");
+    if(signature&&current&&signature!==current){
+      sgdiInvalidateDrhReads();
+      await sgdiAutoSync("Nouvelles données disponibles");
+    }
     await sgdiCheckAppVersion();
     return stats;
   }catch(e){
@@ -1001,6 +1030,7 @@ async function sgdiStartEventStream(){
     sgdiEventsSource=new EventSource(url);
     sgdiEventsSource.addEventListener("sgdi-change",async()=>{
       if(!session||!sgdiAuthToken())return;
+      sgdiInvalidateDrhReads();
       const now=Date.now();
       if(now-sgdiEventsLastPull<2000)return;
       sgdiEventsLastPull=now;
@@ -1289,7 +1319,9 @@ async function findEmployeeByNin(nin){
   const local=findEmployeeByNinLocal(nin);
   if(local)return local;
   if(sgdiBackendShouldUse()&&sgdiAuthToken()){
-    await sgdiPullEmployees({silent:true}).catch(()=>null);
+    const token=sgdiAuthToken();
+    await sgdiPullCurrentEmployees({silent:true}).catch(()=>null);
+    if(token!==sgdiAuthToken())return null;
     return findEmployeeByNinLocal(nin);
   }
   return null;
@@ -1415,34 +1447,83 @@ function sgdiEmployeeReadPath(){
   const host=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
   return host?.key==="ops"||session?.transverse==="ops"?"/ops/employees":"/drh/employees";
 }
-async function sgdiPullEmployees(options){
+function sgdiPullEmployees(options){
   const opt=options||{};
-  if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
+  if(!sgdiBackendShouldUse()||!sgdiAuthToken())return Promise.resolve(null);
+  const context=sgdiDrhReadContext(opt.society);
+  const fullKey=JSON.stringify([context.token,"",context.revision]);
+  let pending=sgdiEmployeeReads.get(context.key)||(context.scope&&sgdiEmployeeReads.get(fullKey));
+  if(!pending){
+    pending=sgdiFetchEmployees(opt,context).finally(()=>{
+      if(sgdiEmployeeReads.get(context.key)===pending)sgdiEmployeeReads.delete(context.key);
+    });
+    sgdiEmployeeReads.set(context.key,pending);
+  }
+  return pending.then(result=>{
+    if(!sgdiDrhReadIsCurrent(context))return null;
+    if(result.applied){
+      if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
+      if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
+    }
+    return result.rows;
+  });
+}
+async function sgdiPullCurrentEmployees(options){
+  const token=sgdiAuthToken();
+  if(!sgdiBackendShouldUse()||!token)return null;
+  // Les synchronisations qui doivent fournir un référentiel complet attendent
+  // la lecture suivante si un événement a invalidé celle en vol. Les tentatives
+  // sont bornées : un flux continu de mutations reste une erreur visible.
+  for(let attempt=0;attempt<3&&token&&token===sgdiAuthToken();attempt++){
+    const context=sgdiDrhReadContext(options?.society);
+    let rows;
+    try{rows=await sgdiPullEmployees(options)}catch(error){
+      if(attempt>0||token!==sgdiAuthToken())error.code="SGDI_EMPLOYEE_READ_CANCELLED";
+      throw error;
+    }
+    if(rows!==null&&sgdiDrhReadIsCurrent(context))return rows;
+  }
+  const error=new Error("Chargement employés interrompu par un changement de session ou de données. Veuillez actualiser.");
+  error.code="SGDI_EMPLOYEE_READ_CANCELLED";
+  throw error;
+}
+async function sgdiFetchEmployees(options,context){
+  const opt=options||{};
   const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
   const previousAgents=Array.isArray(db?.agents)?db.agents:[];
   try{
-    let employees;
+    let employees,complete=true;
     try{
       employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
       if(!Array.isArray(employees))throw new Error("Réponse employés invalide");
     }catch(primaryError){
+      if(!sgdiDrhReadIsCurrent(context))return{rows:null,applied:false};
       // Le flux complet peut être volumineux. Si celui-ci échoue, le endpoint paginé
       // permet de récupérer les mêmes fiches par lots sans laisser DRH vide.
       console.warn("Chargement employés complet indisponible, repli paginé",primaryError);
       const params={mode:"all",society:opt.society||undefined,page:1,page_size:100};
       const first=await window.SGDI_API.employees.page(params);
+      complete=Array.isArray(first?.items);
       const firstItems=Array.isArray(first?.items)?first.items:[];
       const pages=Math.max(1,Number(first?.pages)||1);
       employees=[...firstItems];
       for(let page=2;page<=pages;page++){
+        if(!sgdiDrhReadIsCurrent(context))return{rows:null,applied:false};
         const batch=await window.SGDI_API.employees.page({...params,page});
         if(Array.isArray(batch?.items))employees.push(...batch.items);
+        else complete=false;
       }
+      if(Number(first?.total)>employees.length)complete=false;
       if(!Array.isArray(employees))throw primaryError;
     }
+    if(!sgdiDrhReadIsCurrent(context))return{rows:null,applied:false};
+    // PostgreSQL fait autorité (dca9aa6) : une réponse vide n'est plus ignorée, elle
+    // remplace le référentiel — seule une erreur réseau conserve le dernier état valide.
     const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
+    let canMarkFresh=complete;
     if(scopeNorm){
-      const previous=previousAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
+      const currentAgents=Array.isArray(db?.agents)?db.agents:[];
+      const previous=currentAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
       const scoped=backendAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
       db.agents=dedupeEmployeesByBackendId([...previous,...scoped]);
     }else{
@@ -1455,14 +1536,17 @@ async function sgdiPullEmployees(options){
     // leur site par un rechargement "propre" mais sans site/poste, alors même que db.assignments
     // contenait déjà la bonne info (chargée par un autre écran plus tôt, ex. Tableau de bord).
     if(Array.isArray(db.assignments)&&db.assignments.length&&typeof applyAssignmentsToEmployees==="function")applyAssignmentsToEmployees(db.assignments);
-    if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
-    if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
-    return db.agents;
+    if(canMarkFresh){
+      window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
+      window.__sgdiEnsuredAt[scopeNorm||"__all"]=Date.now();
+    }
+    return{rows:db.agents,applied:true};
   }catch(e){
+    if(!sgdiDrhReadIsCurrent(context))return{rows:null,applied:false};
     console.error("Impossible de charger les employés backend",e);
     if(previousAgents.length){
       if(typeof toast==="function")toast("Serveur DRH momentanément indisponible : dernières données valides conservées.","warning");
-      return previousAgents;
+      return{rows:db.agents,applied:false};
     }
     if(!opt.silent&&typeof toast==="function")toast("Impossible de charger les employés backend : "+(e.message||e),"error");
     throw e;
@@ -1602,7 +1686,7 @@ window.SGDI_API={
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
-let sgdiEmployeesDisplayLoading=false;
+const sgdiEmployeesDisplayLoading=new Map();
 function sgdiBackendEmployeeTotalForDisplay(scopeSoc){
   const erpEmp=typeof sgdiErpEmployeeCounters==="function"?sgdiErpEmployeeCounters(scopeSoc):null;
   return Number(erpEmp?.total||erpEmp?.active||erpEmp?.non_archived||erpEmp?.by_status?.actif||erpEmp?.by_status?.active||0)||0;
@@ -1620,8 +1704,10 @@ function sgdiDisplayActiveEmployees(erpEmp,fallback){
 }
 function sgdiEnsureEmployeesForDisplay(options){
   const opt=options||{};
-  if(sgdiEmployeesDisplayLoading||!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
+  if(!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
   const scopeSoc=opt.society||"";
+  const context=sgdiDrhReadContext(scopeSoc);
+  if(sgdiEmployeesDisplayLoading.has(context.key))return sgdiEmployeesDisplayLoading.get(context.key);
   const scopeNorm=scopeSoc?normalizeSocieteName(scopeSoc):"";
   const localRows=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
   const localCount=localRows.length;
@@ -1634,10 +1720,11 @@ function sgdiEnsureEmployeesForDisplay(options){
   // Sans force -> court-circuit habituel si des données locales existent déjà.
   const _ensureKey=scopeNorm||"__all";
   window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
+  const fetchedAt=Math.max(window.__sgdiEnsuredAt[_ensureKey]||0,scopeNorm?window.__sgdiEnsuredAt.__all||0:0);
   const backendShowsMissing=backendCount>0&&localCount<backendCount;
   if(opt.force){
-    if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<10000)return null;
-  }else if(!backendShowsMissing&&Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<60000){
+    if(Date.now()-fetchedAt<10000)return null;
+  }else if(!backendShowsMissing&&Date.now()-fetchedAt<60000){
     return null;
   }else if(!backendShowsMissing&&localCount>0&&(localEligible>0||backendCount<=0)){
     return null;
@@ -1646,9 +1733,8 @@ function sgdiEnsureEmployeesForDisplay(options){
   // n'a RIEN localement (localCount===0), il faut quand même tenter le chargement, sinon la
   // page reste vide indéfiniment (aucune autre logique ne relance jamais l'essai).
   if(!opt.force&&backendCount<=0&&localCount>0)return null;
-  sgdiEmployeesDisplayLoading=true;
-  return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
-    window.__sgdiEnsuredAt[_ensureKey]=Date.now();
+  const pending=sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
+    if(!rows||!sgdiDrhReadIsCurrent(context))return null;
     const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
       if(normalizeSocieteName(sgdiActiveStatsSociety())===scopeNorm)sgdiRefreshViewSafely();
@@ -1657,7 +1743,9 @@ function sgdiEnsureEmployeesForDisplay(options){
   }).catch(e=>{
     console.warn("Chargement employés backend pour affichage indisponible",e);
     return null;
-  }).finally(()=>{sgdiEmployeesDisplayLoading=false});
+  }).finally(()=>{if(sgdiEmployeesDisplayLoading.get(context.key)===pending)sgdiEmployeesDisplayLoading.delete(context.key)});
+  sgdiEmployeesDisplayLoading.set(context.key,pending);
+  return pending;
 }
 async function sgdiRunLegacyAction(action,payload){
   if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
@@ -1722,29 +1810,47 @@ function sgdiRememberSidebarStats(stats){
 }
 window.SGDI_SIDEBAR_STATS=sgdiLoadCachedSidebarStats();
 window.SGDI_DRH_STATS_BY_SOCIETY=window.SGDI_DRH_STATS_BY_SOCIETY||{};
+function sgdiReadSidebarStats(society){
+  const context=sgdiDrhReadContext(society);
+  if(sgdiSidebarReads.has(context.key))return sgdiSidebarReads.get(context.key);
+  const pending=Promise.resolve().then(()=>window.SGDI_API.ui.sidebarStats(context.scope?{society:context.scope}:{})).then(stats=>{
+    if(!sgdiDrhReadIsCurrent(context))return null;
+    if(!stats||typeof stats!=="object"||Array.isArray(stats))throw new Error("Réponse statistiques invalide");
+    // Ne pas ajouter de métadonnée au payload sidebar : sa signature sert au
+    // contrôle distant. Le cache DRH conserve sa fenêtre existante de 15 secondes.
+    window.SGDI_DRH_STATS_BY_SOCIETY[context.scope||"__all"]={...stats,_fetchedAt:Date.now()};
+    return stats;
+  }).finally(()=>{
+    if(sgdiSidebarReads.get(context.key)===pending)sgdiSidebarReads.delete(context.key);
+  });
+  sgdiSidebarReads.set(context.key,pending);
+  return pending;
+}
 let sgdiDrhStatsLoading={};
 async function sgdiRefreshDrhStats(society,options){
   const soc=String(society||"").trim();
+  const context=sgdiDrhReadContext(soc);
   const key=soc||"__all";
   const opt=options||{};
   const cached=window.SGDI_DRH_STATS_BY_SOCIETY[key];
   if(!opt.force&&cached&&Date.now()-Number(cached._fetchedAt||0)<15000)return cached;
-  if(sgdiDrhStatsLoading[key])return sgdiDrhStatsLoading[key];
-  sgdiDrhStatsLoading[key]=(async()=>{
+  if(sgdiDrhStatsLoading[context.key])return sgdiDrhStatsLoading[context.key];
+  const pending=(async()=>{
     try{
-      const stats=await window.SGDI_API.ui.sidebarStats(soc?{society:soc}:{});
-      stats._fetchedAt=Date.now();
-      window.SGDI_DRH_STATS_BY_SOCIETY[key]=stats;
+      const stats=await sgdiReadSidebarStats(soc);
+      if(!stats||!sgdiDrhReadIsCurrent(context))return null;
       sgdiSetSyncStatus("ok");
       window.dispatchEvent(new CustomEvent("sgdi:drh-stats",{detail:{society:soc,stats}}));
       return stats;
     }catch(error){
+      if(!sgdiDrhReadIsCurrent(context))return null;
       sgdiSetSyncStatus("error",error.message||error);
       console.warn("Statistiques DRH indisponibles",error);
       return cached||null;
-    }finally{delete sgdiDrhStatsLoading[key]}
+    }finally{if(sgdiDrhStatsLoading[context.key]===pending)delete sgdiDrhStatsLoading[context.key]}
   })();
-  return sgdiDrhStatsLoading[key];
+  sgdiDrhStatsLoading[context.key]=pending;
+  return pending;
 }
 window.sgdiRefreshDrhStats=sgdiRefreshDrhStats;
 window.addEventListener("sgdi:drh-stats",()=>{
@@ -1761,14 +1867,17 @@ function sgdiActiveStatsSociety(){
 let sgdiSidebarStatsRequest=0;
 async function sgdiRefreshSidebarStats(society){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
+  const activeSociety=String(society||sgdiActiveStatsSociety()||"").trim();
+  const context=sgdiDrhReadContext(activeSociety);
   try{
     // La barre latérale décrit exclusivement la société active. Sans ce paramètre,
     // le backend additionne les données de toutes les sociétés autorisées.
-    const activeSociety=String(society||sgdiActiveStatsSociety()||"").trim();
-    const request=++sgdiSidebarStatsRequest;
-    const account=session?.username;
-    const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
-    if(request!==sgdiSidebarStatsRequest||session?.username!==account||normalizeSocieteName(activeSociety)!==normalizeSocieteName(sgdiActiveStatsSociety()))return null;
+    const stats=await sgdiReadSidebarStats(activeSociety);
+    // sgdiDrhReadContext() a capturé le jeton de session courant à l'appel : si le
+    // jeton a changé entre-temps (nouvelle connexion), sgdiDrhReadIsCurrent()
+    // redevient faux et la réponse — même tardive — est écartée sans exception.
+    if(!stats||!sgdiDrhReadIsCurrent(context))return null;
+    if(activeSociety!==String(sgdiActiveStatsSociety()||"").trim())return stats;
     window.SGDI_SIDEBAR_STATS=stats;
     sgdiEnsureEmployeesForDisplay({society:activeSociety});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
@@ -1779,28 +1888,38 @@ async function sgdiRefreshSidebarStats(society){
   }
 }
 window.sgdiRefreshSidebarStats=sgdiRefreshSidebarStats;
-let sgdiCountersRefreshRunning=false;
+let sgdiCountersRefreshRunning=null;
 let sgdiCountersRefreshQueued=false;
 let sgdiSidebarStatsTimer=null;
 let sgdiSidebarLastStatsAt=0;
-async function sgdiRefreshCountersNow(options){
-  if(!session||!sgdiAuthToken())return null;
-  if(sgdiCountersRefreshRunning){sgdiCountersRefreshQueued=true;return null}
-  sgdiCountersRefreshRunning=true;
-  try{
-    const stats=await sgdiRefreshSidebarStats();
-    try{refreshModuleCountersRibbon()}catch(e){}
-    return stats;
-  }catch(e){
-    console.warn("Rafraîchissement compteurs SGDI échoué",e);
-    return null;
-  }finally{
-    sgdiCountersRefreshRunning=false;
-    if(sgdiCountersRefreshQueued){
-      sgdiCountersRefreshQueued=false;
-      setTimeout(()=>sgdiRefreshCountersNow(options),250);
-    }
+function sgdiRefreshCountersNow(options){
+  if(!session||!sgdiAuthToken())return Promise.resolve(null);
+  const context=sgdiDrhReadContext(sgdiActiveStatsSociety());
+  if(sgdiCountersRefreshRunning){
+    if(sgdiCountersRefreshRunning.key!==context.key)sgdiCountersRefreshQueued=true;
+    return sgdiCountersRefreshRunning.promise;
   }
+  const running={key:context.key,promise:null};
+  sgdiCountersRefreshRunning=running;
+  running.promise=(async()=>{
+    try{
+      const stats=await sgdiRefreshSidebarStats(context.scope);
+      if(!sgdiDrhReadIsCurrent(context)||context.scope!==String(sgdiActiveStatsSociety()||"").trim())return null;
+      try{refreshModuleCountersRibbon()}catch(e){}
+      return stats;
+    }catch(e){
+      console.warn("Rafraîchissement compteurs SGDI échoué",e);
+      return null;
+    }finally{
+      if(sgdiCountersRefreshRunning===running)sgdiCountersRefreshRunning=null;
+      const changed=!sgdiDrhReadIsCurrent(context)||context.scope!==String(sgdiActiveStatsSociety()||"").trim();
+      if(sgdiCountersRefreshQueued||changed){
+        sgdiCountersRefreshQueued=false;
+        if(session&&sgdiAuthToken())setTimeout(()=>sgdiRefreshCountersNow(options),250);
+      }
+    }
+  })();
+  return running.promise;
 }
 window.sgdiRefreshCountersNow=sgdiRefreshCountersNow;
 function scheduleSidebarStatsRefresh(){
@@ -2403,7 +2522,7 @@ function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const bid=c.backendId&&Number.isInteger(Number(c.backendId))&&Number(c.backendId)>0?Number(c.backendId):null;const saved=bid?await SGDI.commercial.updateClient(bid,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
-let sgdiSqlSyncInProgress=null;
+let sgdiSqlSyncInProgress=null,sgdiSqlSyncAuthToken="";
 function sgdiCurrentRouteRoot(){
   return String(location.hash||"").replace(/^#\/?/,"").split("/")[0]||"";
 }
@@ -2437,9 +2556,18 @@ function sgdiSqlSyncScope(options){
 async function sgdiBackgroundSqlSync(options){
   const opt=options||{};
   if(!sgdiAuthToken()||!db)return null;
-  if(sgdiSqlSyncInProgress)return sgdiSqlSyncInProgress;
-  sgdiSqlSyncInProgress=(async()=>{
+  const token=sgdiAuthToken();
+  if(sgdiSqlSyncInProgress){
+    if(!sgdiSqlSyncAuthToken||sgdiSqlSyncAuthToken===token)return sgdiSqlSyncInProgress;
+    await sgdiSqlSyncInProgress.catch(()=>null);
+    return token===sgdiAuthToken()?sgdiBackgroundSqlSync(opt):null;
+  }
+  let cancelled=false;
+  sgdiSqlSyncAuthToken=token;
+  const pending=(async()=>{
     const syncResults=await Promise.allSettled(sgdiSqlSyncTasks(opt));
+    cancelled=syncResults.some(r=>r.status==="rejected"&&r.reason?.code==="SGDI_EMPLOYEE_READ_CANCELLED");
+    if(token!==sgdiAuthToken())return false;
     const syncErrors=syncResults.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
     if(syncErrors.length){
       console.warn("Synchronisation PostgreSQL partielle",syncErrors);
@@ -2456,16 +2584,19 @@ async function sgdiBackgroundSqlSync(options){
     if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
     return !syncErrors.length;
   })().finally(()=>{
-    sgdiSqlSyncInProgress=null;
+    if(sgdiSqlSyncInProgress===pending){sgdiSqlSyncInProgress=null;sgdiSqlSyncAuthToken="";}
+    if(cancelled||token!==sgdiAuthToken())return;
     // Données complètes chargées : on lève l'écran de chargement et on affiche les vrais chiffres.
     sgdiFullDataReady=true;
     requestAnimationFrame(()=>{
+      if(token!==sgdiAuthToken())return;
       try{renderSidebar()}catch(_e){}
       try{refreshModuleCountersRibbon()}catch(_e){}
       try{if(typeof renderView==="function")renderView()}catch(_e){}
     });
   });
-  return sgdiSqlSyncInProgress;
+  sgdiSqlSyncInProgress=pending;
+  return pending;
 }
 function sgdiShouldSyncCandidates(){
   if(session?.permissionsFromServer)return session.recruitmentAccess===true&&(session.moduleAccessGlobal||session.effectiveModules.some(k=>["drh","recrute"].includes(k)));
@@ -2480,7 +2611,7 @@ function sgdiSqlSyncTasks(options){
   const tasks=[];
   let employeesTask=null;
   const ensureEmployees=()=>{
-    if(!employeesTask)employeesTask=sgdiPullEmployees({silent:true});
+    if(!employeesTask)employeesTask=sgdiPullCurrentEmployees({silent:true});
     return employeesTask;
   };
   if(scope.drh)tasks.push((async()=>{await Promise.all([ensureEmployees(),...(sgdiShouldSyncCandidates()?[syncCandidatesFromPostgres()]:[])])})());
@@ -2508,7 +2639,7 @@ function sgdiSqlSyncTasks(options){
     // sur des endpoints sans rapport). Affectations ensuite, une fois ce lot terminé.
     tasks.push((async()=>{
       const soc=session?.societe||"";
-      await Promise.all([sgdiPullEmployees({silent:true,society:soc}),syncSitesFromPostgres()]);
+      await Promise.all([sgdiPullCurrentEmployees({silent:true,society:soc}),syncSitesFromPostgres()]);
       if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres();
     })());
   }
@@ -2593,6 +2724,9 @@ function sgdiAutoRepairDB(options){
 // explicite reste autoritaire et remplace toujours les données précédentes.
 const SGDI_SERVER_SQL_COLLECTIONS=new Set(["candidats","employees","assignments","affectations","contrats","agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence","factures","paiements","avances","avoirs","caisse"]);
 function hydrateDB(source,options={}){
+  // Invalide les lectures DRH coalescées (employés, stats sidebar…) : un hydrate
+  // complet remplace l'état qu'elles auraient pu marquer "à jour".
+  sgdiInvalidateDrhReads();
   const base=emptyDB();
   const incoming=(source&&typeof source==="object"&&!Array.isArray(source))?source:{};
   const previous=(db&&typeof db==="object")?db:null;
@@ -5852,22 +5986,27 @@ function sgdiLangMode(){try{const m=localStorage.getItem('sgdiLangMode')||'fr';r
 function sgdiSetLangMode(mode){try{localStorage.setItem('sgdiLangMode',mode==='ar'?'ar':'fr')}catch(e){}applyLanguagePreference();}
 function sgdiLangText(fr,ar){return sgdiLangMode()==='ar'?ar:fr}
 function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<button type="button" data-no-lang="1" class="btn ${m===v?'btn-primary':'btn-secondary'} text-[10px] px-2 py-1" onclick="sgdiSetLangMode('${v}')">${l}</button>`;return `<div data-no-lang="1" class="sgdi-lang-choice flex items-center gap-1 mb-2"><span class="text-[10px] text-slate-400">Langue</span>${btn('fr','FR')}${btn('ar','AR')}</div>`}
-function sgdiTranslateText(raw){
+function sgdiTranslateText(raw,context){
   if(!raw||!raw.trim())return raw;
-  const mode=sgdiLangMode();
+  if(context&&context.cache.has(raw))return context.cache.get(raw);
+  const mode=context?context.mode:sgdiLangMode();
   let out=raw.replace(/[ÉéEe]conomiser/gi,"Enregistrer");
-  [...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length).forEach(([fr,ar])=>{
+  const pairs=context?context.pairs:[...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length);
+  pairs.forEach(([fr,ar])=>{
     const both=fr+' / '+ar;
     const target=mode==='ar'?ar:fr;
     out=out.split(both).join(target).split(fr).join(target);
     out=out.split(ar).join(target);
   });
+  if(context)context.cache.set(raw,out);
   return out;
 }
 function applyLanguagePreference(root){
   const mode=sgdiLangMode();
   const scope=root||document.getElementById('app');
   if(!scope)return;
+  // Contexte limité à ce parcours : le mode et le dictionnaire peuvent changer au suivant.
+  const translations={mode,pairs:[...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length),cache:new Map()};
   document.documentElement.lang=mode==='ar'?'ar':'fr';
   document.documentElement.dir=mode==='ar'?'rtl':'ltr';
   const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode(node){
@@ -5877,9 +6016,9 @@ function applyLanguagePreference(root){
     return NodeFilter.FILTER_ACCEPT;
   }});
   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-  nodes.forEach(n=>{const v=sgdiTranslateText(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  nodes.forEach(n=>{const v=sgdiTranslateText(n.nodeValue,translations);if(v!==n.nodeValue)n.nodeValue=v});
   scope.querySelectorAll('input[placeholder],textarea[placeholder],button[title],select[title]').forEach(el=>{
-    ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
+    ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v,translations);if(t!==v)el.setAttribute(a,t)}});
   });
   scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
@@ -7889,7 +8028,7 @@ function normalizeCentralPage(view){
     h.textContent=sgdiTitleCaseText(h.textContent||"");
   });
   view.querySelectorAll("h2,h3").forEach(h=>{h.textContent=(h.textContent||"").replace(/\s+/g," ").trim()});
-  view.querySelectorAll(".btn").forEach(btn=>{btn.innerHTML=(btn.innerHTML||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trim()});
+  view.querySelectorAll(".btn").forEach(btn=>{const html=btn.innerHTML||"";const cleaned=html.replace(iconPattern,"").replace(/\s{2,}/g," ").trim();if(cleaned!==html)btn.innerHTML=cleaned});
   view.querySelectorAll(".text-6xl,.text-5xl,.text-4xl,[data-icon-only]").forEach(el=>{
     if(!(el.textContent||"").trim()&&!el.querySelector("img,svg,input,select,button,a"))el.remove();
   });
