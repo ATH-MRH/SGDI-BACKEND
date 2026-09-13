@@ -10443,3 +10443,60 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 #dev-cost-form label{justify-content:flex-end}
 #dev-cost-column-label{width:230px!important;max-width:100%}
 #dev-cost-column-type{width:270px!important;max-width:100%}
+
+/* Maquette validée : chiffrage simple, options repliées et trois résultats. */
+.modal-bg:has(#dev-cost-form){background:rgba(231,240,251,.94)!important;backdrop-filter:blur(6px);padding:32px 20px!important}
+.modal:has(#dev-cost-form){width:1088px!important;max-width:calc(100vw - 40px)!important;max-height:calc(100svh - 64px)!important;padding:40px!important;border:0!important;border-radius:11px!important;box-shadow:0 18px 70px #173e6812!important}
+#dev-cost-form{position:relative;font-size:16px;color:#102a4d}
+#dev-cost-form h2{font-size:36px;line-height:1.2;font-weight:750;letter-spacing:-1px;margin:16px 0 6px}
+#dev-cost-form .cost-close{position:absolute;right:-14px;top:-19px;border:0;background:none;color:#0b203e;font:30px/1 Arial;cursor:pointer;padding:8px}
+#dev-cost-form .cost-subtitle{font-size:20px;color:#536f95;line-height:1.5;margin:0 0 25px}
+#dev-cost-form .cost-table-wrap{border:1px solid #d9e3f0;border-radius:5px;overflow:auto}
+#dev-cost-form table{width:100%;table-layout:fixed;border-collapse:collapse}
+#dev-cost-form th{height:54px;padding:12px 16px;background:#f2f5fa;border-right:1px solid #e1e7f0;text-transform:none;letter-spacing:0;font-size:16px;font-weight:600;color:#173558}
+#dev-cost-form th:first-child{width:36%}#dev-cost-form th:nth-child(2){width:20%}#dev-cost-form th:nth-child(3){width:20%}#dev-cost-form th:nth-last-child(2){width:18%;text-align:right}#dev-cost-form th:last-child{width:7%;border-right:0}
+#dev-cost-form td{height:64px;padding:8px 14px;border-right:1px solid #e1e7f0;border-bottom:1px solid #e1e7f0}
+#dev-cost-form tr:last-child td{border-bottom:0}#dev-cost-form td:last-child{border-right:0;text-align:center;padding:6px}
+#dev-cost-form td:first-child{min-width:0}
+#dev-cost-form input,#dev-cost-form select{height:44px;border:1px solid #cbd9eb;border-radius:4px;background:#fff;font-size:16px;color:#122a48;box-shadow:none;padding:8px 14px;min-width:0!important}
+#dev-cost-form input[type=number]{appearance:textfield;-moz-appearance:textfield}#dev-cost-form input::-webkit-inner-spin-button{appearance:none}
+#dev-cost-form .dev-cost-row-total{text-align:right;font-size:17px;font-weight:700;color:#0b203d}
+#dev-cost-form td button{border:0;background:none;color:#6c82a1;padding:4px}
+#dev-cost-form td button svg{display:block}
+#dev-cost-form .cost-extra{display:none!important}
+#dev-cost-form.cost-expanded .cost-extra{display:table-cell!important}
+#dev-cost-form.cost-expanded button.cost-extra{display:inline-block!important}
+#dev-cost-form.cost-expanded table{table-layout:auto;min-width:800px}
+#dev-cost-form .cost-add{display:flex;align-items:center;gap:10px;height:47px;padding:0 16px;border:1px solid #a7bad3;border-radius:4px;background:white;color:#153659;margin:17px 0 24px;box-shadow:none;font-size:16px;font-weight:400;cursor:pointer}
+#dev-cost-form .cost-add span{font-size:26px;font-weight:300;line-height:1}
+#dev-cost-form .cost-options{border:1px solid #d8e3f0;border-radius:5px;margin:0 0 25px}
+#dev-cost-form .cost-options summary{display:flex;align-items:center;gap:14px;padding:12px 15px;min-height:68px;cursor:pointer;list-style:none;font-size:16px;color:#122d50}
+#dev-cost-form summary::-webkit-details-marker{display:none}
+#dev-cost-form .cost-options small{display:block;color:#617d9f;font-size:14px;margin-top:2px}
+#dev-cost-form .cost-chevron{display:grid;place-items:center;width:30px;height:34px;border-radius:5px;background:#f6f9fd;font:30px/1 Arial}
+#dev-cost-form details[open] .cost-chevron{transform:rotate(90deg)}
+#dev-cost-form .cost-options-content{padding:20px;border-top:1px solid #e1e8f2;font-size:13px}
+#dev-cost-form .cost-options-content label{font-size:12px}
+#dev-cost-form .cost-options-content p{margin:12px 0}
+#dev-cost-form .cost-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+#dev-cost-form .cost-metric{min-height:138px;padding:19px 16px 15px;border:1px solid #d8e3f0;border-radius:5px;background:#fff}
+#dev-cost-form .cost-metric>span,#dev-cost-form .cost-metric>label{display:block;font-size:14px;font-weight:650;color:#7089a9;margin:0 0 16px;line-height:1.3}
+#dev-cost-form .cost-metric strong{display:block;font-size:32px;font-weight:750;line-height:1.2;letter-spacing:-.8px;color:#0b203d;white-space:nowrap}
+#dev-cost-form .cost-profit strong{color:#079ca4;font-size:30px}
+#dev-cost-form .cost-profit strong.is-loss{color:#c13737}
+#dev-cost-form .cost-profit small{display:block;font-size:14px;color:#536d91;margin-top:8px}
+#dev-cost-form .cost-sale-wrap{position:relative}
+#dev-cost-form .cost-sale-wrap input{height:54px;border-color:#9cb2d0;font-size:24px;font-weight:650;padding:10px 35px 10px 12px;letter-spacing:-.4px}
+#dev-cost-form .cost-sale-wrap svg{position:absolute;right:10px;top:17px;color:#627fa5;pointer-events:none}
+#dev-cost-form .dev-cost-actions{position:static!important;margin-top:40px;padding:0!important;border:0;gap:16px!important;align-items:center}
+#dev-cost-form .cost-private-note{margin-right:auto;font-size:13px;color:#617c9f}
+#dev-cost-form .dev-cost-actions button{height:54px;border-radius:4px;background:#fff;color:#17365b;border:1px solid #a8bdd8;padding:0 23px;font-size:16px;font-weight:400;box-shadow:none;text-transform:none;letter-spacing:0}
+#dev-cost-form .dev-cost-actions button[type=submit]{background:#009aa5;border:1px solid #009aa5;color:#fff;font-weight:600}
+#dev-cost-message:empty{display:none}#dev-cost-message{color:#b42318;margin:12px 0}
+@media(max-width:700px){.modal:has(#dev-cost-form){padding:24px!important;max-width:calc(100vw - 20px)!important}#dev-cost-form h2{font-size:28px}#dev-cost-form .cost-subtitle{font-size:17px}#dev-cost-form table{min-width:670px}#dev-cost-form .cost-summary{grid-template-columns:1fr}#dev-cost-form .cost-metric{min-height:115px}#dev-cost-form .dev-cost-actions{flex-wrap:wrap;margin-top:24px}#dev-cost-form .cost-private-note{flex-basis:100%}#dev-cost-form .cost-close{right:-10px;top:-10px}}
+
+#dev-cost-form h2{color:#0b203d!important}
+#dev-cost-form .cost-metric strong{font-size:36px}
+#dev-cost-form .cost-profit strong{font-size:32px}
+#dev-cost-form .dev-cost-actions button{height:54px!important;border-radius:4px!important;background:#fff!important;color:#17365b!important;border:1px solid #a8bdd8!important;padding:0 23px!important;font-size:16px!important;font-weight:400!important;box-shadow:none!important;text-transform:none!important;letter-spacing:0!important}
+#dev-cost-form .dev-cost-actions button[type=submit]{background:#009aa5!important;border:1px solid #009aa5!important;color:#fff!important;font-weight:600!important}
