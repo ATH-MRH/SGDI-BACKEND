@@ -19,6 +19,7 @@ from app.modules.assistant.routes import router as assistant_router
 from app.modules.ronde.routes import router as ronde_router
 from app.modules.public_candidates import router as public_candidates_router
 from app.modules.loans.routes import router as loans_router
+from app.modules.alerts.routes import router as alerts_router
 
 
 api_router = APIRouter()
@@ -41,3 +42,4 @@ api_router.include_router(assistant_router, prefix="/assistant", tags=["Assistan
 api_router.include_router(ronde_router, prefix="/ronde", tags=["Contrôleur de Ronde"])
 api_router.include_router(public_candidates_router, prefix="/public", tags=["Candidatures publiques"])
 api_router.include_router(loans_router, prefix="/loans", tags=["Prêts et avances"])
+api_router.include_router(alerts_router, prefix="/alerts", tags=["Alertes"])
