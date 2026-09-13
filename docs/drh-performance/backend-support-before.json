@@ -1,0 +1,1908 @@
+{
+  "revision": "3b16a2abdcfb11bf10fc3ca259c8ca545de23c8a",
+  "fixture": {
+    "synthetic": true,
+    "seed_version": 2,
+    "agents": 1000,
+    "signature_schema": "ORM tables plus empty synthetic prospects (nominal UNION path)",
+    "fixture_date": "2026-09-13",
+    "societies": [
+      "PERF ALPHA",
+      "PERF BETA"
+    ],
+    "rows_by_table": {
+      "access_rules": 0,
+      "advances": 0,
+      "audit_events": 0,
+      "bons_commande_achat": 0,
+      "bons_livraison": 0,
+      "candidates": 500,
+      "cash_entries": 0,
+      "clients": 50,
+      "commandes_client": 0,
+      "commercial_dc_settings": 0,
+      "comptes_comptables": 0,
+      "contract_email_alert_logs": 0,
+      "contract_templates": 0,
+      "credit_notes": 0,
+      "devis": 0,
+      "documents": 0,
+      "ecritures_comptables": 0,
+      "employees": 1000,
+      "factures_fournisseur": 0,
+      "fournisseurs": 0,
+      "invoices": 0,
+      "lignes_bon_commande_achat": 0,
+      "lignes_bon_livraison": 0,
+      "lignes_commande_client": 0,
+      "lignes_devis": 0,
+      "lignes_ecriture": 0,
+      "lignes_reception": 0,
+      "loan_module_settings": 0,
+      "payments": 0,
+      "portal_password_reset_tokens": 0,
+      "positions": 2,
+      "receptions_marchandise": 0,
+      "ronde_circuits": 0,
+      "rotation_templates": 0,
+      "sgdi_records": 7500,
+      "stores": 2,
+      "suppliers": 0,
+      "users": 1,
+      "client_portal_users": 0,
+      "contract_conditional_clauses": 0,
+      "contracts": 1000,
+      "employee_loan_requests": 0,
+      "leaves": 100,
+      "ronde_checkpoints": 0,
+      "ronde_executions": 0,
+      "sites": 50,
+      "stock_articles": 2,
+      "user_feature_permissions": 0,
+      "user_module_permissions": 0,
+      "assignments": 2000,
+      "client_observations": 0,
+      "daily_presence": 7000,
+      "employee_loan_repayments": 0,
+      "events": 0,
+      "generated_contracts": 1000,
+      "incidents": 0,
+      "loan_workflow_notifications": 0,
+      "ops_movements": 0,
+      "ronde_scans": 0,
+      "sanctions": 0,
+      "site_posts": 0,
+      "site_rotations": 0,
+      "stock_movements": 0,
+      "employee_equipment": 1000,
+      "material_assignments": 0
+    }
+  },
+  "repeats": 5,
+  "results": [
+    {
+      "endpoint": "/api/version",
+      "cache": "cold",
+      "median": {
+        "client_total_ms": 3.0907920154277235,
+        "app_total_ms": 2.484084019670263,
+        "response_start_ms": 2.3854169994592667,
+        "sql_count": 0,
+        "sql_execute_ms": 0,
+        "raw_bytes": 26,
+        "gzip_bytes": 46,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.008624978363513947,
+        "json_response_render_ms": 0.008874980267137289,
+        "orm_fetch_materialize_ms": 0.0,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 2,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.010207993909716606,
+          "json_response_render_ms": 0.006541988113895059,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 3.2387909886892885,
+          "app_total_ms": 3.338374983286485,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 4.012707999208942,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 3,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.011000025551766157,
+          "json_response_render_ms": 0.014666991773992777,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.335375000257045,
+          "app_total_ms": 2.434041991364211,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 2.999832999194041,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 4,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.008542003342881799,
+          "json_response_render_ms": 0.008584000170230865,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.352208975935355,
+          "app_total_ms": 2.448958985041827,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 3.0907920154277235,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 5,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.008624978363513947,
+          "json_response_render_ms": 0.00908400397747755,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.3854169994592667,
+          "app_total_ms": 2.484084019670263,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 3.0860420083627105,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 6,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.007833994459360838,
+          "json_response_render_ms": 0.008874980267137289,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.5507090031169355,
+          "app_total_ms": 2.812999999150634,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 3.6327499838080257,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/version",
+      "cache": "warm",
+      "median": {
+        "client_total_ms": 2.8247919981367886,
+        "app_total_ms": 2.3319580068346113,
+        "response_start_ms": 2.250249992357567,
+        "sql_count": 0,
+        "sql_execute_ms": 0,
+        "raw_bytes": 26,
+        "gzip_bytes": 46,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.005291018169373274,
+        "json_response_render_ms": 0.005500012775883079,
+        "orm_fetch_materialize_ms": 0.0,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 8,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.008666975190863013,
+          "json_response_render_ms": 0.008041999535635114,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.4187920207623392,
+          "app_total_ms": 2.5079580082092434,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 3.190250019542873,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 9,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.006125017534941435,
+          "json_response_render_ms": 0.006459013093262911,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.271875011501834,
+          "app_total_ms": 2.353459014557302,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 2.9111670155543834,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 10,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.004750007065013051,
+          "json_response_render_ms": 0.004583998816087842,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.2409169760067016,
+          "app_total_ms": 2.319207997061312,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 2.817541011609137,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 11,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.004125002305954695,
+          "json_response_render_ms": 0.004083005478605628,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.1993329864926636,
+          "app_total_ms": 2.275207982165739,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 2.7372920012567192,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        },
+        {
+          "id": 12,
+          "path": "/api/version",
+          "sql": [],
+          "orm_instances_loaded": {},
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.005291018169373274,
+          "json_response_render_ms": 0.005500012775883079,
+          "wire_bytes": 26,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 2.250249992357567,
+          "app_total_ms": 2.3319580068346113,
+          "sql_count": 0,
+          "sql_execute_ms": 0,
+          "client_total_ms": 2.8247919981367886,
+          "raw_bytes": 26,
+          "gzip_bytes": 46
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/auth/users",
+      "cache": "cold",
+      "median": {
+        "client_total_ms": 1.5840829873923212,
+        "app_total_ms": 1.0994580225087702,
+        "response_start_ms": 1.0183750127907842,
+        "sql_count": 2,
+        "sql_execute_ms": 0.03466702764853835,
+        "raw_bytes": 424,
+        "gzip_bytes": 248,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.0923750048968941,
+        "json_response_render_ms": 0.008792005246505141,
+        "orm_fetch_materialize_ms": 0.019041995983570814,
+        "orm_result_rows": 1
+      },
+      "samples": [
+        {
+          "id": 13,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.07583299884572625,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.04862499190494418,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.11325001833029091,
+          "json_response_render_ms": 0.008540984708815813,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.024792010663077235,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 2.7815839857794344,
+          "app_total_ms": 2.880916988942772,
+          "sql_count": 2,
+          "sql_execute_ms": 0.12445799075067043,
+          "client_total_ms": 3.451583004789427,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 14,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.022541993530467153,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.014499993994832039,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0923750048968941,
+          "json_response_render_ms": 0.008916016668081284,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.019333005184307694,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 1.0297090047970414,
+          "app_total_ms": 1.112250000005588,
+          "sql_count": 2,
+          "sql_execute_ms": 0.03704198752529919,
+          "client_total_ms": 1.6033750143833458,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 15,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01462499494664371,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.016125006368383765,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.09783401037566364,
+          "json_response_render_ms": 0.009124982170760632,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.019041995983570814,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 1.0183750127907842,
+          "app_total_ms": 1.0994580225087702,
+          "sql_count": 2,
+          "sql_execute_ms": 0.030750001315027475,
+          "client_total_ms": 1.5840829873923212,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 16,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.020042003598064184,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.014625024050474167,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08420899393968284,
+          "json_response_render_ms": 0.007124996045604348,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.01754099503159523,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.9477499988861382,
+          "app_total_ms": 1.0349590156693012,
+          "sql_count": 2,
+          "sql_execute_ms": 0.03466702764853835,
+          "client_total_ms": 1.5353749913629144,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 17,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014499993994832039,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.012499978765845299,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08962501306086779,
+          "json_response_render_ms": 0.008792005246505141,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.01562500256113708,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.8985000022221357,
+          "app_total_ms": 0.9769590105861425,
+          "sql_count": 2,
+          "sql_execute_ms": 0.026999972760677338,
+          "client_total_ms": 1.464041997678578,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/auth/users",
+      "cache": "warm",
+      "median": {
+        "client_total_ms": 1.4169579953886569,
+        "app_total_ms": 0.9346669830847532,
+        "response_start_ms": 0.8559579728171229,
+        "sql_count": 2,
+        "sql_execute_ms": 0.024833978386595845,
+        "raw_bytes": 424,
+        "gzip_bytes": 248,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.08008300210349262,
+        "json_response_render_ms": 0.005916983354836702,
+        "orm_fetch_materialize_ms": 0.013415992725640535,
+        "orm_result_rows": 1
+      },
+      "samples": [
+        {
+          "id": 19,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.013125012628734112,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.0109999964479357,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08183400495909154,
+          "json_response_render_ms": 0.005499983672052622,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.012584001524373889,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.8098749967757612,
+          "app_total_ms": 0.8873330079950392,
+          "sql_count": 2,
+          "sql_execute_ms": 0.024125009076669812,
+          "client_total_ms": 1.3481670175679028,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 20,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.018749997252598405,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.012917007552459836,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07466701208613813,
+          "json_response_render_ms": 0.009458017302677035,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.015041005099192262,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.9057919960469007,
+          "app_total_ms": 0.9862089937087148,
+          "sql_count": 2,
+          "sql_execute_ms": 0.03166700480505824,
+          "client_total_ms": 1.4169579953886569,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 21,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.012333999620750546,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.012499978765845299,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07537499186582863,
+          "json_response_render_ms": 0.005916983354836702,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.015375000657513738,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.8559579728171229,
+          "app_total_ms": 0.9346669830847532,
+          "sql_count": 2,
+          "sql_execute_ms": 0.024833978386595845,
+          "client_total_ms": 1.377915992634371,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 22,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011916999937966466,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.011625001206994057,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08008300210349262,
+          "json_response_render_ms": 0.005582987796515226,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.013415992725640535,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.8253330015577376,
+          "app_total_ms": 0.9102910116780549,
+          "sql_count": 2,
+          "sql_execute_ms": 0.023542001144960523,
+          "client_total_ms": 1.4190830115694553,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        },
+        {
+          "id": 23,
+          "path": "/api/auth/users",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.017250014934688807,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users ORDER BY users.username",
+              "execute_ms": 0.01129199517890811,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08274998981505632,
+          "json_response_render_ms": 0.0075830030255019665,
+          "wire_bytes": 424,
+          "orm_fetch_materialize_ms": 0.012125005014240742,
+          "orm_result_rows": 1,
+          "status": 200,
+          "response_start_ms": 0.9068750077858567,
+          "app_total_ms": 0.9885830222629011,
+          "sql_count": 2,
+          "sql_execute_ms": 0.028542010113596916,
+          "client_total_ms": 1.4990839990787208,
+          "raw_bytes": 424,
+          "gzip_bytes": 248
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/auth/access-rules",
+      "cache": "cold",
+      "median": {
+        "client_total_ms": 1.4415420009754598,
+        "app_total_ms": 0.9469589858781546,
+        "response_start_ms": 0.8666249923408031,
+        "sql_count": 2,
+        "sql_execute_ms": 0.025707995519042015,
+        "raw_bytes": 2,
+        "gzip_bytes": 22,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.07258399273268878,
+        "json_response_render_ms": 0.003583001671358943,
+        "orm_fetch_materialize_ms": 0.00462500611320138,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 24,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.016958016203716397,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.04054099554196,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07995899068191648,
+          "json_response_render_ms": 0.003958004526793957,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.005249981768429279,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 1.2841249990742654,
+          "app_total_ms": 1.368916011415422,
+          "sql_count": 2,
+          "sql_execute_ms": 0.0574990117456764,
+          "client_total_ms": 1.8700830114539713,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 25,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01420799526385963,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.011500000255182385,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0720410025678575,
+          "json_response_render_ms": 0.003249995643272996,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.004999979864805937,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8666249923408031,
+          "app_total_ms": 0.9469589858781546,
+          "sql_count": 2,
+          "sql_execute_ms": 0.025707995519042015,
+          "client_total_ms": 1.4415420009754598,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 26,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.015249999705702066,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.010541989468038082,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07258399273268878,
+          "json_response_render_ms": 0.003583001671358943,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.004458997864276171,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8228749793488532,
+          "app_total_ms": 0.9036669798661023,
+          "sql_count": 2,
+          "sql_execute_ms": 0.02579198917374015,
+          "client_total_ms": 1.3877919991500676,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 27,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014041026588529348,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.009707990102469921,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.06945800851099193,
+          "json_response_render_ms": 0.002874992787837982,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.004125002305954695,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8003749826457351,
+          "app_total_ms": 0.8885409915819764,
+          "sql_count": 2,
+          "sql_execute_ms": 0.02374901669099927,
+          "client_total_ms": 1.359124988084659,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 28,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011958007235080004,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.010082992957904935,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08608301868662238,
+          "json_response_render_ms": 0.003790977643802762,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.00462500611320138,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 1.0699169943109155,
+          "app_total_ms": 1.1555420060176402,
+          "sql_count": 2,
+          "sql_execute_ms": 0.02204100019298494,
+          "client_total_ms": 1.641791983274743,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/auth/access-rules",
+      "cache": "warm",
+      "median": {
+        "client_total_ms": 1.4290839899331331,
+        "app_total_ms": 0.9717080101836473,
+        "response_start_ms": 0.8916250080801547,
+        "sql_count": 2,
+        "sql_execute_ms": 0.023125001462176442,
+        "raw_bytes": 2,
+        "gzip_bytes": 22,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.07654199725948274,
+        "json_response_render_ms": 0.003249995643272996,
+        "orm_fetch_materialize_ms": 0.00462500611320138,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 30,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.012417003745213151,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.010707997716963291,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07654199725948274,
+          "json_response_render_ms": 0.003208988346159458,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.00462500611320138,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8500410185661167,
+          "app_total_ms": 0.9328750020358711,
+          "sql_count": 2,
+          "sql_execute_ms": 0.023125001462176442,
+          "client_total_ms": 1.397957996232435,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 31,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01575000351294875,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.011249998351559043,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07279199780896306,
+          "json_response_render_ms": 0.003249995643272996,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.0048330111894756556,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8939580002333969,
+          "app_total_ms": 0.9717080101836473,
+          "sql_count": 2,
+          "sql_execute_ms": 0.027000001864507794,
+          "client_total_ms": 1.4355420134961605,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 32,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01300001167692244,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.00937501317821443,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08745800005272031,
+          "json_response_render_ms": 0.002875021891668439,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.003749999450519681,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.868667004397139,
+          "app_total_ms": 0.9572080161888152,
+          "sql_count": 2,
+          "sql_execute_ms": 0.02237502485513687,
+          "client_total_ms": 1.4290839899331331,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 33,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014291988918557763,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.012041011359542608,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07783298497088253,
+          "json_response_render_ms": 0.004708999767899513,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.0048330111894756556,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8967089815996587,
+          "app_total_ms": 0.9779589890968055,
+          "sql_count": 2,
+          "sql_execute_ms": 0.02633300027810037,
+          "client_total_ms": 1.403625006787479,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        },
+        {
+          "id": 34,
+          "path": "/api/auth/access-rules",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01304197940044105,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT access_rules.id AS access_rules_id, access_rules.module_key AS access_rules_module_key, access_rules.role AS access_rules_role, access_rules.allowed AS access_rules_allowed, access_rules.created_at AS access_rules_created_at, access_rules.updated_at AS access_rules_updated_at FROM access_rules ORDER BY access_rules.module_key, access_rules.role",
+              "execute_ms": 0.010000017937272787,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07654199725948274,
+          "json_response_render_ms": 0.0037910067476332188,
+          "wire_bytes": 2,
+          "orm_fetch_materialize_ms": 0.004334026016294956,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.8916250080801547,
+          "app_total_ms": 0.9768329910002649,
+          "sql_count": 2,
+          "sql_execute_ms": 0.023041997337713838,
+          "client_total_ms": 1.4396250189747661,
+          "raw_bytes": 2,
+          "gzip_bytes": 22
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/irongs/events/ticket",
+      "cache": "cold",
+      "median": {
+        "client_total_ms": 0.9578750177752227,
+        "app_total_ms": 0.49720899551175535,
+        "response_start_ms": 0.4154999915044755,
+        "sql_count": 1,
+        "sql_execute_ms": 0.014166987966746092,
+        "raw_bytes": 156,
+        "gzip_bytes": 164,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.0040000013541430235,
+        "json_response_render_ms": 0.002749991836026311,
+        "orm_fetch_materialize_ms": 0.0,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 35,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01500002690590918,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.006332993507385254,
+          "json_response_render_ms": 0.003708992153406143,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4517089982982725,
+          "app_total_ms": 0.5297500174492598,
+          "sql_count": 1,
+          "sql_execute_ms": 0.01500002690590918,
+          "client_total_ms": 0.9961670148186386,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 36,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01391599653288722,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.004750007065013051,
+          "json_response_render_ms": 0.002749991836026311,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4154999915044755,
+          "app_total_ms": 0.49720899551175535,
+          "sql_count": 1,
+          "sql_execute_ms": 0.01391599653288722,
+          "client_total_ms": 0.9544169879518449,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 37,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014166987966746092,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0040000013541430235,
+          "json_response_render_ms": 0.0024999899324029684,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.40550000267103314,
+          "app_total_ms": 0.4945830150973052,
+          "sql_count": 1,
+          "sql_execute_ms": 0.014166987966746092,
+          "client_total_ms": 0.9578750177752227,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 38,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01420799526385963,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0034580007195472717,
+          "json_response_render_ms": 0.0024579931050539017,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.42283302173018456,
+          "app_total_ms": 0.5025830178055912,
+          "sql_count": 1,
+          "sql_execute_ms": 0.01420799526385963,
+          "client_total_ms": 0.957333977567032,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 39,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.013334007235243917,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0034999975468963385,
+          "json_response_render_ms": 0.0028339854907244444,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4028750117868185,
+          "app_total_ms": 0.48254200373776257,
+          "sql_count": 1,
+          "sql_execute_ms": 0.013334007235243917,
+          "client_total_ms": 0.9586249943822622,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/irongs/events/ticket",
+      "cache": "warm",
+      "median": {
+        "client_total_ms": 0.9203749941661954,
+        "app_total_ms": 0.4892919969279319,
+        "response_start_ms": 0.4081249935552478,
+        "sql_count": 1,
+        "sql_execute_ms": 0.011833995813503861,
+        "raw_bytes": 156,
+        "gzip_bytes": 164,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.0036249984987080097,
+        "json_response_render_ms": 0.0024170149117708206,
+        "orm_fetch_materialize_ms": 0.0,
+        "orm_result_rows": 0
+      },
+      "samples": [
+        {
+          "id": 41,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011833995813503861,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.005084002623334527,
+          "json_response_render_ms": 0.0029590155463665724,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4135000053793192,
+          "app_total_ms": 0.49858298734761775,
+          "sql_count": 1,
+          "sql_execute_ms": 0.011833995813503861,
+          "client_total_ms": 0.9507499926257879,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 42,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011999974958598614,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0036249984987080097,
+          "json_response_render_ms": 0.002582994056865573,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4245000018272549,
+          "app_total_ms": 0.508166995132342,
+          "sql_count": 1,
+          "sql_execute_ms": 0.011999974958598614,
+          "client_total_ms": 0.9401249990332872,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 43,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011791998986154795,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0036249984987080097,
+          "json_response_render_ms": 0.0024170149117708206,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.4081249935552478,
+          "app_total_ms": 0.4892919969279319,
+          "sql_count": 1,
+          "sql_execute_ms": 0.011791998986154795,
+          "client_total_ms": 0.9023329766932875,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 44,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.013750017387792468,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0032919924706220627,
+          "json_response_render_ms": 0.0023329921532422304,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.3946670040022582,
+          "app_total_ms": 0.47712502419017255,
+          "sql_count": 1,
+          "sql_execute_ms": 0.013750017387792468,
+          "client_total_ms": 0.9091669926419854,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        },
+        {
+          "id": 45,
+          "path": "/api/irongs/events/ticket",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011083000572398305,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0032910029403865337,
+          "json_response_render_ms": 0.0021669839043170214,
+          "wire_bytes": 156,
+          "orm_fetch_materialize_ms": 0.0,
+          "orm_result_rows": 0,
+          "status": 200,
+          "response_start_ms": 0.3993749851360917,
+          "app_total_ms": 0.479207985335961,
+          "sql_count": 1,
+          "sql_execute_ms": 0.011083000572398305,
+          "client_total_ms": 0.9203749941661954,
+          "raw_bytes": 156,
+          "gzip_bytes": 164
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/irongs/positions",
+      "cache": "cold",
+      "median": {
+        "client_total_ms": 1.638499990804121,
+        "app_total_ms": 1.1402920063119382,
+        "response_start_ms": 1.0574170155450702,
+        "sql_count": 3,
+        "sql_execute_ms": 0.0347500026691705,
+        "raw_bytes": 101,
+        "gzip_bytes": 93,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.07908299448899925,
+        "json_response_render_ms": 0.005291978595778346,
+        "orm_fetch_materialize_ms": 0.028542999643832445,
+        "orm_result_rows": 4
+      },
+      "samples": [
+        {
+          "id": 46,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.015958998119458556,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.03745799767784774,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.026249996153637767,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0886659836396575,
+          "json_response_render_ms": 0.005209003575146198,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.1938329660333693,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 1.787042012438178,
+          "app_total_ms": 1.8668750126380473,
+          "sql_count": 3,
+          "sql_execute_ms": 0.07966699195094407,
+          "client_total_ms": 2.3347079986706376,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 47,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.015541008906438947,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.010791991371661425,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.010332994861528277,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07824998465366662,
+          "json_response_render_ms": 0.00562501372769475,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.029833026928827167,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 1.0574170155450702,
+          "app_total_ms": 1.1402920063119382,
+          "sql_count": 3,
+          "sql_execute_ms": 0.03666599513962865,
+          "client_total_ms": 1.638499990804121,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 48,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.01291598891839385,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.011916999937966466,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.009917013812810183,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08033399353735149,
+          "json_response_render_ms": 0.009249983122572303,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.027166999643668532,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 1.0852499981410801,
+          "app_total_ms": 1.1654999980237335,
+          "sql_count": 3,
+          "sql_execute_ms": 0.0347500026691705,
+          "client_total_ms": 1.6752920055296272,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 49,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014749995898455381,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.009790994226932526,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.01016599708236754,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.0737910158932209,
+          "json_response_render_ms": 0.004542001988738775,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.028542999643832445,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 0.993583002127707,
+          "app_total_ms": 1.07254198519513,
+          "sql_count": 3,
+          "sql_execute_ms": 0.034706987207755446,
+          "client_total_ms": 1.514125004177913,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 50,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.012249976862221956,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.008625007467344403,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.009292009053751826,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07908299448899925,
+          "json_response_render_ms": 0.005291978595778346,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.026915979105979204,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 0.9788339957594872,
+          "app_total_ms": 1.061291986843571,
+          "sql_count": 3,
+          "sql_execute_ms": 0.030166993383318186,
+          "client_total_ms": 1.519457990070805,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        }
+      ]
+    },
+    {
+      "endpoint": "/api/irongs/positions",
+      "cache": "warm",
+      "median": {
+        "client_total_ms": 1.5262079832609743,
+        "app_total_ms": 1.0582499962765723,
+        "response_start_ms": 0.9778329986147583,
+        "sql_count": 3,
+        "sql_execute_ms": 0.034500000765547156,
+        "raw_bytes": 101,
+        "gzip_bytes": 93,
+        "orjson_ms": 0.0,
+        "fastapi_serialize_ms": 0.07833298877812922,
+        "json_response_render_ms": 0.0045000051613897085,
+        "orm_fetch_materialize_ms": 0.024874985683709383,
+        "orm_result_rows": 4
+      },
+      "samples": [
+        {
+          "id": 52,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014500023098662496,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.010207993909716606,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.009791983757168055,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07833298877812922,
+          "json_response_render_ms": 0.003749999450519681,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.026917026843875647,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 0.9607909887563437,
+          "app_total_ms": 1.0408329835627228,
+          "sql_count": 3,
+          "sql_execute_ms": 0.034500000765547156,
+          "client_total_ms": 1.4899579982738942,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 53,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.011500000255182385,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.00808399636298418,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.008749979315325618,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07870901026763022,
+          "json_response_render_ms": 0.0046670029405504465,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.023499975213781,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 0.9659580246079713,
+          "app_total_ms": 1.0491250141058117,
+          "sql_count": 3,
+          "sql_execute_ms": 0.028333975933492184,
+          "client_total_ms": 1.5055830008350313,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 54,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.018041988369077444,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.010500021744519472,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.010249990737065673,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.08262501796707511,
+          "json_response_render_ms": 0.0045000051613897085,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.028876005671918392,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 1.0817909787874669,
+          "app_total_ms": 1.1907079897355288,
+          "sql_count": 3,
+          "sql_execute_ms": 0.03879200085066259,
+          "client_total_ms": 1.6639170062262565,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 55,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.016417005099356174,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.009790994226932526,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.009874987881630659,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07237499812617898,
+          "json_response_render_ms": 0.0045000051613897085,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.02387500717304647,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 1.0169579763896763,
+          "app_total_ms": 1.0967080015689135,
+          "sql_count": 3,
+          "sql_execute_ms": 0.03608298720791936,
+          "client_total_ms": 1.5875420067459345,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        },
+        {
+          "id": 56,
+          "path": "/api/irongs/positions",
+          "sql": [
+            {
+              "statement": "SELECT users.id AS users_id, users.username AS users_username, users.email AS users_email, users.full_name AS users_full_name, users.role AS users_role, users.access_level AS users_access_level, users.authorized_societies AS users_authorized_societies, users.authorized_structures AS users_authorized_structures, users.authorized_sites AS users_authorized_sites, users.authorized_actions AS users_authorized_actions, users.authorized_modules AS users_authorized_modules, users.password_hash AS users_password_hash, users.validation_password_hash AS users_validation_password_hash, users.is_active AS users_is_active, users.supervisor_read_only AS users_supervisor_read_only, users.global_society_access AS users_global_society_access, users.created_at AS users_created_at, users.updated_at AS users_updated_at FROM users WHERE users.id = ?",
+              "execute_ms": 0.014374993043020368,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.name",
+              "execute_ms": 0.00837500556372106,
+              "cursor_rowcount": -1,
+              "error": null
+            },
+            {
+              "statement": "SELECT positions.id AS positions_id, positions.name AS positions_name, positions.society AS positions_society FROM positions ORDER BY positions.society NULLS FIRST, positions.name",
+              "execute_ms": 0.010791001841425896,
+              "cursor_rowcount": -1,
+              "error": null
+            }
+          ],
+          "orm_instances_loaded": {
+            "User": 1,
+            "Position": 4
+          },
+          "orjson_ms": 0.0,
+          "fastapi_serialize_ms": 0.07554100011475384,
+          "json_response_render_ms": 0.004542001988738775,
+          "wire_bytes": 101,
+          "orm_fetch_materialize_ms": 0.024874985683709383,
+          "orm_result_rows": 4,
+          "status": 200,
+          "response_start_ms": 0.9778329986147583,
+          "app_total_ms": 1.0582499962765723,
+          "sql_count": 3,
+          "sql_execute_ms": 0.033541000448167324,
+          "client_total_ms": 1.5262079832609743,
+          "raw_bytes": 101,
+          "gzip_bytes": 93
+        }
+      ]
+    }
+  ],
+  "method": {
+    "transport": "in-process ASGI TestClient; lifespan disabled",
+    "database": "SQLite file",
+    "compression": "raw identity response; gzip bytes recomputed at level 9 outside timer",
+    "cold": "application snapshot/sidebar/signature caches cleared, SQLite/OS page cache retained",
+    "warm": "one priming call; signature TTL can expire during a long sample",
+    "sql": "cursor execute time only, excludes fetch/materialization; SELECT rowcount may be -1",
+    "rows": "ORM loaded_as_persistent counts instances; identity-map reuse may undercount repeated SQL rows",
+    "orm_fetch": "ChunkedIteratorResult._fetchall_impl: DB cursor fetching + JSON decoding + ORM materialization; rows are result entries, including repeated reads",
+    "serialization": "separate orjson, FastAPI response validation/serialization and JSONResponse render spans",
+    "limitations": "No network/production PostgreSQL timings, EXPLAIN, browser layout or production-data claim. Instrumentation adds overhead."
+  },
+  "baseline_backend_revision": "7041c27f477b5e24d8bb5509ca8d6bbf45c8edab",
+  "note": "Supplement measured before any backend change; HEAD includes only correction 1 frontend."
+}

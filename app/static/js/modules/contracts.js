@@ -186,7 +186,7 @@ function ensureContratsEmployeesFresh(view){
   if(window.__sgdiContratsEmployeesFreshKey===key)return false;
   window.__sgdiContratsEmployeesFreshKey=key;
   sgdiShowDataLoadingBar("Chargement des employés...");
-  sgdiPullEmployees({silent:true}).then(()=>{
+  sgdiPullCurrentEmployees({silent:true}).then(()=>{
     if(String(location.hash||"")===key&&typeof renderView==="function")renderView();
   }).catch(e=>{
     console.warn("Rechargement employés contrats impossible",e);

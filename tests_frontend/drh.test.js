@@ -299,11 +299,19 @@ test('sidebar uses server totals and displays zero counts for supported module r
 test('counter responses from a previous account are discarded', async () => {
   const app=loadSgdiApp(['sgdiRefreshSidebarStats','emptyDB']);
   app.T().setDb(app.T().emptyDB());app.T().setSession({username:'A',role:'admin'});
+  app.window.sessionStorage.setItem('sgdi_api_token_v1','token-A');
   let resolve;app.window.SGDI_API={ui:{sidebarStats:()=>new Promise(r=>resolve=r)}};
   const pending=app.T().sgdiRefreshSidebarStats();
+  // sgdiReadSidebarStats() coalesces the read behind Promise.resolve().then(...): the actual
+  // sidebarStats() call happens on the next microtask, not synchronously — let it run first.
+  await new Promise(r=>setImmediate(r));
+  // A real account switch always issues a new auth token (login() writes it to
+  // sessionStorage) — that token change, not the session object alone, is what the
+  // coalesced sgdiDrhReadContext()/sgdiDrhReadIsCurrent() staleness guard keys on.
   app.T().setSession({username:'B',role:'admin'});
+  app.window.sessionStorage.setItem('sgdi_api_token_v1','token-B');
   resolve({scope:{active_society:''},erp:{employees:{total:999}}});
-  assert.equal(await pending,null);
+  assert.equal(await pending,null,"account A's in-flight response cannot resolve once account B is active");
   assert.notEqual(app.window.SGDI_SIDEBAR_STATS?.erp?.employees?.total,999);
   app.dom.window.close();
 });

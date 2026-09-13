@@ -337,7 +337,13 @@ for (const scenario of [
       window.sgdiModuleHostConfig=()=>null;
       window.history.replaceState(null,'',scenario.module?'#/'+scenario.module+'/dashboard':'#/societe-portal');
       const calls=[];
-      for(const [fn,key] of Object.entries({sgdiPullEmployees:'employees',syncCandidatesFromPostgres:'candidates',syncSitesFromPostgres:'sites',syncAssignmentsFromPostgres:'assignments',syncOpsMovementsFromPostgres:'movements',syncMaterielFromPostgres:'stock',syncClientsFromPostgres:'clients'}))window[fn]=async()=>{calls.push(key);};
+      // Employés reste dans le chemin bloquant (DRH/OPS/superviseur/matériel en ont besoin
+      // avant de rendre) : le lot Performance DRH ne le retire pas de sgdiSqlSyncTasks, il en
+      // sécurise juste la lecture — sgdiPullCurrentEmployees (coalescing + bornes de retry)
+      // au lieu de l'appel direct sgdiPullEmployees. sgdiEnsureEmployeesForDisplay (chemin
+      // spécialisé DRH, voir drh-performance-loading.test.js) court-circuite ensuite tout
+      // rechargement déjà couvert par cette même lecture coalescée.
+      for(const [fn,key] of Object.entries({sgdiPullCurrentEmployees:'employees',syncCandidatesFromPostgres:'candidates',syncSitesFromPostgres:'sites',syncAssignmentsFromPostgres:'assignments',syncOpsMovementsFromPostgres:'movements',syncMaterielFromPostgres:'stock',syncClientsFromPostgres:'clients'}))window[fn]=async()=>{calls.push(key);};
       await Promise.all(T().sgdiSqlSyncTasks({blocking:true,full:true}));
       assert.deepStrictEqual(calls,scenario.expected);
     } finally {window.close();}
