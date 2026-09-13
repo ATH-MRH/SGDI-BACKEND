@@ -10500,3 +10500,6 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 #dev-cost-form .cost-profit strong{font-size:32px}
 #dev-cost-form .dev-cost-actions button{height:54px!important;border-radius:4px!important;background:#fff!important;color:#17365b!important;border:1px solid #a8bdd8!important;padding:0 23px!important;font-size:16px!important;font-weight:400!important;box-shadow:none!important;text-transform:none!important;letter-spacing:0!important}
 #dev-cost-form .dev-cost-actions button[type=submit]{background:#009aa5!important;border:1px solid #009aa5!important;color:#fff!important;font-weight:600!important}
+
+#dev-cost-form .cost-subtitle-input{border:0!important;border-radius:0;background:transparent!important;padding:0!important;height:30px!important;font-size:20px!important;color:#536f95!important;box-shadow:none!important;font-weight:400}
+#dev-cost-form .cost-subtitle-input:focus{outline:none;border-bottom:1px solid #9cb2d0!important}

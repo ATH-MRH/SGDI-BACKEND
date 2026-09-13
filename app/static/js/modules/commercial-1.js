@@ -449,7 +449,7 @@ function devisCostSimpleRows(form){
 function devisCostSimpleLayout(form,s){
  const title=form.querySelector('h2');title.textContent='Calculer mon coût';
  const close=document.createElement('button');close.type='button';close.className='cost-close';close.setAttribute('aria-label','Fermer');close.textContent='×';close.onclick=closeModal;title.before(close);
- const subtitle=form.querySelector('p');subtitle.className='cost-subtitle';subtitle.textContent=s.designation||form._row.querySelector('.dev-ligne-designation').value||'Nouvelle prestation';
+ const subtitle=form.querySelector('p');subtitle.className='cost-subtitle';subtitle.innerHTML=`<input class="cost-subtitle-input" aria-label="Désignation de la prestation" placeholder="Nom de la prestation" value="${escapeHTML(s.designation||form._row.querySelector('.dev-ligne-designation').value||'')}" oninput="this.form.elements.designation.value=this.value">`;
  const grids=[...form.querySelectorAll(':scope > div')];
  const identity=grids[0],tableWrap=document.getElementById('dev-cost-rows').closest('table').parentElement;
  tableWrap.className='cost-table-wrap';tableWrap.querySelector('table').style.minWidth='';
@@ -477,7 +477,7 @@ function devisCostSimpleUpdate(result,netRevenue,netProfit){
  const profit=document.getElementById('dev-cost-profit');profit.textContent=money(netProfit);profit.classList.toggle('is-loss',netProfit<0);
  document.getElementById('dev-cost-margin').textContent='Marge sur vente : '+(netRevenue?netProfit/netRevenue*100:0).toLocaleString('fr-FR',{maximumFractionDigits:2})+' %';
  document.getElementById('dev-cost-message').textContent='';
- form.querySelector('.cost-subtitle').textContent=form.elements.designation.value||'Nouvelle prestation';
+ const subtitle=form.querySelector('.cost-subtitle-input');if(document.activeElement!==subtitle)subtitle.value=form.elements.designation.value;
 }
 function devisCostSetSale(input){
  const form=document.getElementById('dev-cost-form');
