@@ -82,25 +82,29 @@ test('different employee scopes merge against the latest reference without overw
   assert.deepEqual(Array.from(db().agents, row => row.backendId).sort(), [1, 2]);
 });
 
-test('failed and ignored empty employee reads do not mark freshness and may retry', async t => {
+test('failed reads remain retryable; an authoritative empty response replaces the referential', async t => {
   const { w, db } = await fixture(t);
   let calls = 0;
   w.SGDI_API.employees.list = async () => { calls++; throw new Error('temporary outage'); };
   w.SGDI_API.employees.page = async () => { throw new Error('temporary outage'); };
   await w.sgdiEnsureEmployeesForDisplay({ force: true });
-  assert.deepEqual(Object.keys(w.__sgdiEnsuredAt), []);
+  assert.deepEqual(Object.keys(w.__sgdiEnsuredAt), [], 'a network failure never marks freshness');
   await w.sgdiEnsureEmployeesForDisplay({ force: true });
-  assert.equal(calls, 2);
+  assert.equal(calls, 2, 'a network failure stays retryable, unlike an authoritative empty answer');
   w.SGDI_API.employees.list = async () => [];
   await w.sgdiEnsureEmployeesForDisplay({ force: true });
-  assert.equal(db().agents[0].backendId, 99);
-  assert.deepEqual(Object.keys(w.__sgdiEnsuredAt), []);
+  // PostgreSQL is authoritative (dca9aa6): an explicit empty list is a real answer, not a
+  // transient glitch to shrug off — it replaces the referential and is applied like any read.
+  assert.equal(db().agents.length, 0, 'the empty response is applied, not ignored — no fallback to the previous referential');
+  assert.ok(w.__sgdiEnsuredAt.__all > 0, 'an authoritative empty response marks freshness exactly like a non-empty one');
+  const now = w.Date.now();
+  w.Date.now = () => now + 10001;
   w.SGDI_API.employees.list = async () => [employee(1)];
   await w.sgdiEnsureEmployeesForDisplay({ force: true });
-  assert.ok(w.__sgdiEnsuredAt.__all > 0);
+  assert.equal(db().agents[0].backendId, 1, 'a later successful read still repopulates the referential');
 });
 
-test('scope response containing only employees assigned from another society does not mark an unchanged reference fresh', async t => {
+test('a scoped response with zero matching employees clears that scope and marks it fresh', async t => {
   const { w, db } = await fixture(t);
   const effects = [];
   db().assignments = [{ employee_id: 99 }];
@@ -108,10 +112,13 @@ test('scope response containing only employees assigned from another society doe
   w.applyAssignmentsToEmployees = () => effects.push('assignments');
   w.sgdiAutoRender = () => effects.push('render');
   w.toast = () => effects.push('toast');
+  // The server answers for the ALPHA scope with an employee that does not belong to it — once
+  // filtered by society, ALPHA legitimately has zero employees left; that must not be confused
+  // with a failed or partial read that should preserve the previous referential (agent 99).
   w.SGDI_API.employees.list = async () => [employee(2, 'BETA')];
   await w.sgdiPullEmployees({ society: 'ALPHA', render: true });
-  assert.equal(db().agents[0].backendId, 99);
-  assert.deepEqual(Object.keys(w.__sgdiEnsuredAt), []);
+  assert.equal(db().agents.length, 0, 'agent 99 (society ALPHA) is removed: the scope authoritatively has no employees');
+  assert.ok(w.__sgdiEnsuredAt[w.normalizeSocieteName('ALPHA')] > 0, 'the ALPHA scope is marked fresh — this was a complete, authoritative answer');
   assert.deepEqual(effects, ['normalize', 'assignments', 'render', 'toast'], 'existing post-read behavior is preserved');
 });
 
@@ -420,4 +427,26 @@ test('contract employee freshness waits through invalidation before its success 
   assert.equal(db().agents[0].backendId, 2);
   assert.equal(w.ensureContratsEmployeesFresh(w.document.getElementById('view')), false);
   assert.equal(calls, 2);
+});
+
+test('opening DRH with an empty local referential fetches employees through the specialized display path and refreshes the active view once populated', async t => {
+  const { w, db } = await fixture(t);
+  db().agents = []; // as on a first, fresh DRH screen open — nothing loaded locally yet
+  let calls = 0, renders = 0;
+  w.sgdiActiveStatsSociety = () => 'ALPHA';
+  w.sgdiRefreshViewSafely = () => { renders++; };
+  w.SGDI_API.employees.list = async params => {
+    calls++;
+    assert.equal(params.society, 'ALPHA', 'the DRH screen asks the specialized endpoint for its own scope');
+    return [employee(1), employee(3, 'ALPHA')];
+  };
+  const rows = await w.sgdiEnsureEmployeesForDisplay({ society: 'ALPHA' });
+  assert.equal(calls, 1, 'exactly one network read for the whole screen open');
+  assert.ok(rows && rows.length === 2, 'employees are available to the caller before the screen renders');
+  assert.equal(db().agents.length, 2);
+  assert.equal(renders, 1, 'the active DRH view refreshes once the employees have landed');
+  // A further ensure for the same scope, within the freshness window, must not re-fetch —
+  // the screen is already correctly populated.
+  await w.sgdiEnsureEmployeesForDisplay({ society: 'ALPHA' });
+  assert.equal(calls, 1);
 });
