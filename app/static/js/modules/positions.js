@@ -160,7 +160,7 @@ function renderFiches(view,sub,_skipEnsure){
       ${summaryCards.map(([label,note,desc,color,pct,route,icon])=>{const linked=route&&!opsFicheReadOnly;return`${linked?`<a href="#/${route}" class="fp-summary-card" style="--metric-color:${color};text-decoration:none;color:inherit">`:`<div class="fp-summary-card" style="--metric-color:${color}">`}<div class="fp-metric-icon">${metricIcon(icon)}</div><div class="fp-metric-copy"><span>${label}</span><strong>${note}</strong><small>${desc}</small></div><span class="fp-metric-trend">${pct}%</span>${linked?`</a>`:`</div>`}`}).join("")}
     </div>
     ${fpSocieteBandHTML(baseList,safeSocFilter)}
-    <section class="fp-filter-panel">
+    <section class="fp-filter-panel" data-nav-filter="1">
       <div class="fp-filter-main">
         <div class="fp-search-field"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="fp-q" value="${escapeHTML(fpFilter.q)}" placeholder="Rechercher par nom ou matricule…" oninput="filterFiches()"/></div>
         <div class="fp-quick-filter"><label>Site</label><select id="fp-site" onchange="setFpFilter('site',this.value)"><option value="">Tous les sites</option>${fpSites.map(s=>{const key=fpSiteFilterKeyForSite(s);return`<option value="${escapeHTML(key)}" ${fpFilter.site===key?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`}).join("")}</select></div>

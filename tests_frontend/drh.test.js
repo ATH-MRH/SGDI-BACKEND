@@ -513,3 +513,29 @@ test('dashboard RH: le normaliseur préserve les compteurs et la structure compa
   assert.strictEqual(view.querySelector('[data-staffing="gap"] strong').textContent,'—');
   app.window.close();
 });
+
+test('Fiche de position : changer un filtre (site/poste/statut/tri) ne bloque pas la navigation ensuite', () => {
+  const app=loadSgdiApp(['renderFiches','sgdiHasUnsavedUserWork','emptyDB']);
+  assert.equal(app.loadError,null);
+  const t=app.T();
+  t.setSession({username:'RH',role:'admin',niveau:'H5',transverse:'drh',societe:'IRON'});
+  t.setDb({...t.emptyDB(),agents:[{id:'a1',nom:'BENAMEUR',prenom:'SLEKNI',matricule:'M1',societe:'IRON',statut:'actif',fonction:'AGENT DE PREVENTION ET DE SECURITE (APS)'}]});
+  const view=app.window.document.getElementById('view');
+  // _skipEnsure=true : pas de rechargement réseau des effectifs, comme le fait déjà
+  // renderFiches() elle-même quand sgdiEnsureEmployeesForDisplay n'est pas exposée ici.
+  t.renderFiches(view,undefined,true);
+  assert.equal(t.sgdiHasUnsavedUserWork(),false,'aucune saisie encore : rien à bloquer');
+  const site=view.querySelector('#fp-site');
+  assert.ok(site,'le filtre Site doit être présent');
+  site.value=site.querySelectorAll('option')[1]?.value||'';
+  site.dispatchEvent(new app.window.Event('change',{bubbles:true}));
+  // C'est exactement le bug rapporté : changer un simple filtre d'affichage marquait la
+  // vue "modifiée" et bloquait ensuite navigate()/le retour navigateur avec le toast
+  // « Modifications non enregistrées — enregistrez avant de quitter cette fiche. ».
+  assert.equal(t.sgdiHasUnsavedUserWork(),false,'changer le filtre Site ne doit jamais être traité comme une saisie à enregistrer');
+  const sort=view.querySelector('#fp-sort');
+  sort.value='alpha_desc';
+  sort.dispatchEvent(new app.window.Event('change',{bubbles:true}));
+  assert.equal(t.sgdiHasUnsavedUserWork(),false,'changer le tri ne doit pas non plus bloquer la navigation');
+  app.window.close();
+});
