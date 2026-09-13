@@ -289,6 +289,114 @@ def test_stats_are_scoped(db):
     assert unscoped["total_open"] >= 1
 
 
+# ── Multi-site positif : Site A visible, Site B exclu, sans-site selon la politique retenue ──
+
+def _presence_finding(*, employee_id, site_id, elapsed_minutes=900):
+    return DetectorFinding(
+        rule_key=RULE_MISSING_CHECKOUT, source_type="presence", source_id=str(employee_id),
+        society=SOC_A, site_id=site_id, title=f"Présence {employee_id}", summary="s",
+        evidence={"presence_id": employee_id, "employee_id": employee_id, "employee_code": f"P{employee_id}",
+                  "presence_date": "2026-09-13", "arrival_time": "06:00", "departure_time": None, "closed_at": None,
+                  "site_id": site_id, "elapsed_minutes": elapsed_minutes, "threshold_minutes": 720, "society": SOC_A},
+        score_context={"elapsed_minutes": elapsed_minutes, "threshold_minutes": 720},
+        dedup_dimensions={"employee_id": employee_id, "presence_date": "2026-09-13", "site_id": site_id},
+    )
+
+
+def test_repository_multi_site_positive_list_detail_stats(db):
+    site_a = Site(name="Site A 06A")
+    site_b = Site(name="Site B 06A")
+    db.add_all([site_a, site_b])
+    db.flush()
+
+    alert_a, _ = service.apply_finding(db, _presence_finding(employee_id=30001, site_id=site_a.id), rule_version=1)
+    alert_none, _ = service.apply_finding(db, make_finding(employee_id=30002, contract_end_date="2026-09-22"), rule_version=1)  # site_id=None (contrat)
+
+    # -- Liste : Site A et l'alerte sans site visibles, rien de Site B pour l'instant.
+    rows, _ = repository.list_alerts(db, allowed_societies=None, allowed_site_ids=[site_a.id], limit=1000)
+    ids = {r.id for r in rows}
+    assert alert_a.id in ids
+    assert alert_none.id in ids
+
+    # -- Détail direct : accessible pour A et sans-site, scope respecté.
+    assert repository.get_alert(db, alert_a.id, allowed_societies=None, allowed_site_ids=[site_a.id]) is not None
+    assert repository.get_alert(db, alert_none.id, allowed_societies=None, allowed_site_ids=[site_a.id]) is not None
+
+    before_a_total = repository.stats(db, allowed_societies=None, allowed_site_ids=[site_a.id])["total_open"]
+    before_b_total = repository.stats(db, allowed_societies=None, allowed_site_ids=[site_b.id])["total_open"]
+
+    # -- Crée l'alerte Site B APRÈS la mesure "before" : si le scope fuit, le total
+    # scopé sur A bougerait alors qu'il ne le doit pas.
+    alert_b, _ = service.apply_finding(db, _presence_finding(employee_id=30003, site_id=site_b.id), rule_version=1)
+
+    rows_a, _ = repository.list_alerts(db, allowed_societies=None, allowed_site_ids=[site_a.id], limit=1000)
+    assert alert_b.id not in {r.id for r in rows_a}, "l'alerte Site B ne doit jamais apparaître dans une liste scopée à Site A"
+
+    # -- Détail direct par ID : AUCUN bypass possible pour l'alerte hors scope.
+    assert repository.get_alert(db, alert_b.id, allowed_societies=None, allowed_site_ids=[site_a.id]) is None
+
+    # -- Stats : le scope A n'a pas bougé, le scope B a strictement augmenté.
+    after_a_total = repository.stats(db, allowed_societies=None, allowed_site_ids=[site_a.id])["total_open"]
+    after_b_total = repository.stats(db, allowed_societies=None, allowed_site_ids=[site_b.id])["total_open"]
+    assert after_a_total == before_a_total, "les stats Site A ne doivent pas voir l'alerte Site B"
+    assert after_b_total == before_b_total + 1, "les stats Site B doivent refléter la nouvelle alerte Site B"
+
+    # -- Symétrique : depuis Site B, Site A est exclu, sans-site reste visible.
+    rows_b, _ = repository.list_alerts(db, allowed_societies=None, allowed_site_ids=[site_b.id], limit=1000)
+    ids_b = {r.id for r in rows_b}
+    assert alert_b.id in ids_b
+    assert alert_a.id not in ids_b
+    assert alert_none.id in ids_b
+    assert repository.get_alert(db, alert_a.id, allowed_societies=None, allowed_site_ids=[site_b.id]) is None
+
+
+def test_api_multi_site_positive_scope_no_bypass_by_id(client, db):
+    from app.core.security import hash_password
+
+    from app.modules.auth.models import User
+
+    site_a = Site(name="Site A API 06A")
+    site_b = Site(name="Site B API 06A")
+    db.add_all([site_a, site_b])
+    db.flush()
+    # authorized_societies non vide est requis : app.core.scope_policy.society_scope()
+    # traite un périmètre société vide (sans global_society_access) comme
+    # ScopeKind.NONE -> 403 "Aucun périmètre société explicite", exactement le même
+    # comportement que le garde-fou central de current_user() pour tout autre module
+    # scoped. Le site restreint est la restriction SUPPLÉMENTAIRE testée ici, pas un
+    # remplacement du périmètre société (aucun compte réel de ce type n'existerait
+    # sans société — voir la même règle dans app.modules.ops.routes).
+    site_user = User(
+        username="site_a_only_06a", email="sitea06a@test.com", full_name="Site A Only", role="ops",
+        access_level="H3", authorized_societies=[SOC_A], authorized_structures=[], authorized_sites=[site_a.id],
+        authorized_modules=["ops"], password_hash=hash_password("SiteAPass123"), is_active=True,
+    )
+    db.add(site_user)
+    db.flush()
+
+    alert_a, _ = service.apply_finding(db, _presence_finding(employee_id=30101, site_id=site_a.id), rule_version=1)
+    alert_b, _ = service.apply_finding(db, _presence_finding(employee_id=30102, site_id=site_b.id), rule_version=1)
+    db.flush()
+
+    login = client.post("/api/auth/login", json={"username": "site_a_only_06a", "password": "SiteAPass123"})
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    resp_list = client.get("/api/alerts", headers=headers, params={"page_size": 100})
+    assert resp_list.status_code == 200, resp_list.text
+    ids = {row["id"] for row in resp_list.json()["items"]}
+    assert alert_a.id in ids
+    assert alert_b.id not in ids, "aucune alerte Site B ne doit apparaître pour un utilisateur restreint à Site A"
+
+    resp_detail_a = client.get(f"/api/alerts/{alert_a.id}", headers=headers)
+    assert resp_detail_a.status_code == 200
+    resp_detail_b = client.get(f"/api/alerts/{alert_b.id}", headers=headers)
+    assert resp_detail_b.status_code == 404, "accès direct par ID à une alerte hors scope doit être refusé (pas de bypass)"
+
+    resp_stats = client.get("/api/alerts/stats", headers=headers)
+    assert resp_stats.status_code == 200
+
+
 # ── DetectionRun / orchestrateur ─────────────────────────────────────────────
 
 def test_run_detector_records_detection_run(db):
