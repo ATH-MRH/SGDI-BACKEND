@@ -346,7 +346,7 @@ def clear_caches(main):
     main._EVENTS_SIGNATURE_CACHE.update(value="", at=0.)
 
 
-def profile(main, app, recorder, metadata, out, repeats):
+def profile(main, app, recorder, metadata, out, repeats, support_only=False):
     from fastapi.testclient import TestClient
     # No context manager: TestClient does not enter the application's lifespan.
     client = TestClient(app)
@@ -361,6 +361,9 @@ def profile(main, app, recorder, metadata, out, repeats):
         "/api/drh/candidates/page?mode=recrutement&page_size=25", "/api/drh/candidates",
         "/api/drh/contracts", "/api/drh/generated-contracts", "/api/drh/leaves", "/api/drh/dashboard",
     ]
+    if support_only:
+        endpoints = ["/api/version", "/api/auth/users", "/api/auth/access-rules",
+                     "/api/irongs/events/ticket", "/api/irongs/positions"]
     results = []
     for endpoint in endpoints:
         for cache_state in ("cold", "warm"):
@@ -488,7 +491,7 @@ def sidebar_probe(main, metadata, out, repeats):
 
 def main_cli():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("seed", "profile", "serve", "probe", "sidebar-probe"))
+    parser.add_argument("mode", choices=("seed", "profile", "profile-support", "serve", "probe", "sidebar-probe"))
     parser.add_argument("--agents", type=int, choices=(100, 1000), default=1000)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--port", type=int, default=8765)
@@ -508,8 +511,8 @@ def main_cli():
         return
     recorder = Recorder(main)
     app = recorder.wrap(main.app)
-    if args.mode == "profile":
-        profile(main, app, recorder, metadata, out, args.repeats)
+    if args.mode in ("profile", "profile-support"):
+        profile(main, app, recorder, metadata, out, args.repeats, support_only=args.mode == "profile-support")
     else:
         import uvicorn
         print(f"Synthetic only: http://127.0.0.1:{args.port} login {USERNAME} / {PASSWORD}", flush=True)

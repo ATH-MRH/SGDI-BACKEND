@@ -8,6 +8,7 @@ date-dependent counters can change when rerun on a different day.
 ```sh
 python3 scripts/perf/drh_backend_bench.py profile --agents 100 --out /tmp/atlas-drh-100 --repeats 5
 python3 scripts/perf/drh_backend_bench.py profile --agents 1000 --out /tmp/atlas-drh-1000 --repeats 5
+python3 scripts/perf/drh_backend_bench.py profile-support --agents 1000 --out /tmp/atlas-drh-support --repeats 5
 python3 scripts/perf/drh_backend_bench.py probe --agents 1000 --out /tmp/atlas-drh-1000 --repeats 9
 python3 scripts/perf/drh_backend_bench.py sidebar-probe --agents 1000 --out /tmp/atlas-drh-1000 --repeats 9
 python3 scripts/perf/drh_backend_bench.py serve --agents 1000 --out /tmp/atlas-drh-server --port 8767
@@ -41,6 +42,8 @@ exercised the per-table fallback instead. This is a measurement fixture choice,
 not a product schema correction.
 
 `profile` records cold and warm application caches, with five requests by default.
+`profile-support` uses the same protocol for the five auxiliary endpoints observed
+at DRH startup (version, auth users/access rules, SSE ticket and positions).
 Cold means snapshot/sidebar/event-signature caches are cleared; SQLite and OS page
 caches remain warm. Warm means one priming request, and the signature's real TTL
 still applies. Payloads use `Accept-Encoding: identity`; gzip sizes are computed
