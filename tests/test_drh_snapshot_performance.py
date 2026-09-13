@@ -99,11 +99,11 @@ def test_snapshot_does_not_materialize_ignored_legacy_collections(snapshot_store
     assert not set(loaded) & (sql_bridge.SQL_COLLECTIONS | service.SERVER_ONLY_COLLECTIONS)
     assert [row["id"] for row in result["notifications"]] == ["first", "tie-first", "tie-second", "last"]
     assert "portalAccounts" not in result
-    assert sql_bridge.SQL_COLLECTIONS <= result.keys()
     if include_sql:
+        assert sql_bridge.SQL_COLLECTIONS <= result.keys()
         assert {row["matricule"] for row in result["agents"]} == {"PERF01", "PERF02"}
     else:
-        assert all(result[name] == [] for name in sql_bridge.SQL_COLLECTIONS)
+        assert sql_bridge.SQL_COLLECTIONS.isdisjoint(result)
 
 
 @pytest.mark.parametrize("include_sql", [False, True], ids=["light", "full"])
@@ -136,9 +136,9 @@ def test_snapshot_keeps_society_and_reference_scope(snapshot_store, include_sql)
     assert "secretariatNotes" not in result
     assert "settings" not in result
     assert {row["id"] for row in result["conges"]} == ({"allowed", "by-agent", "by-site"} if include_sql else {"allowed"})
-    assert all(row["societe"] == SOC for row in result["agents"])
-    assert all(row["societe"] == SOC for row in result["sites"])
     if include_sql:
+        assert all(row["societe"] == SOC for row in result["agents"])
+        assert all(row["societe"] == SOC for row in result["sites"])
         assert {row["matricule"] for row in result["agents"]} == {"PERF01"}
         assert {row["nom"] for row in result["sites"]} == {"Site SQL A"}
 
@@ -151,7 +151,7 @@ def test_full_snapshot_still_builds_every_sql_collection_after_light(snapshot_st
         # Le snapshot full restitue exactement les données des convertisseurs SQL existants.
         for name in sql_bridge.SQL_COLLECTIONS:
             assert full[name] == sql_bridge.list_collection(db, name), name
-            assert light[name] == [], name
+            assert name not in light, name
         for name in full.keys() - sql_bridge.SQL_COLLECTIONS:
             assert full[name] == light[name], name
         assert {row["matricule"] for row in full["agents"]} == {"PERF01", "PERF02"}
