@@ -20,6 +20,7 @@ def test_restart_never_changes_existing_admin_password(db, monkeypatch):
     import app.main as main_module
     monkeypatch.setattr(main_module, "start_contract_email_alert_scheduler", lambda: None)
     monkeypatch.setattr(main_module, "start_assistant_scheduler", lambda: None)
+    monkeypatch.setattr(main_module, "start_alerts_scheduler", lambda: None)
     admin = db.query(User).filter(User.username == "testadmin").one()
     admin.password_hash = hash_password("KeptPassword123")
     db.commit()

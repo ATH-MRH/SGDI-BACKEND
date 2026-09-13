@@ -45,6 +45,8 @@ from app.modules.achats import models as _achats_models  # noqa: F401
 from app.modules.ventes import models as _ventes_models  # noqa: F401
 from app.modules.ronde import models as _ronde_models  # noqa: F401
 from app.modules.loans import models as _loans_models  # noqa: F401
+from app.modules.alerts import models as _alerts_models  # noqa: F401
+from app.modules.alerts.scheduler import start_scheduler as start_alerts_scheduler, stop_scheduler as stop_alerts_scheduler
 
 
 logging.basicConfig(
@@ -359,12 +361,14 @@ def on_startup() -> None:
         _purge_oversized_collections()
     start_contract_email_alert_scheduler()
     start_assistant_scheduler()
+    start_alerts_scheduler()
 
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     stop_contract_email_alert_scheduler()
     stop_assistant_scheduler()
+    stop_alerts_scheduler()
 
 
 @app.get("/health")
