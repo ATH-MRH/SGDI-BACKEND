@@ -1,0 +1,1916 @@
+{
+  "states": {
+    "base": {
+      "provenance": {
+        "revision": "7041c27f477b5e24d8bb5509ca8d6bbf45c8edab",
+        "observerSha256": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497"
+      },
+      "runs": 5,
+      "phases": {
+        "cold": {
+          "firstReadyMs": {
+            "p50": 1168.9,
+            "min": 995.2,
+            "max": 2311.8,
+            "samples": [
+              2311.8,
+              995.2,
+              1023.7,
+              1168.9,
+              1299.5
+            ]
+          },
+          "settledMs": {
+            "p50": 1464.6,
+            "min": 1279.4,
+            "max": 2529.7,
+            "samples": [
+              2529.7,
+              1306.7,
+              1279.4,
+              1464.6,
+              1631.5
+            ]
+          },
+          "fetchCount": {
+            "p50": 13,
+            "min": 13,
+            "max": 13,
+            "samples": [
+              13,
+              13,
+              13,
+              13,
+              13
+            ]
+          },
+          "apiBytes": {
+            "p50": 5081011,
+            "min": 5081011,
+            "max": 5081011,
+            "samples": [
+              5081011,
+              5081011,
+              5081011,
+              5081011,
+              5081011
+            ]
+          },
+          "domWriteMs": {
+            "p50": 4.8,
+            "min": 4,
+            "max": 9.1,
+            "samples": [
+              9.1,
+              6.1,
+              4,
+              4.8,
+              4.2
+            ]
+          },
+          "domWrites": {
+            "p50": 7,
+            "min": 7,
+            "max": 8,
+            "samples": [
+              8,
+              7,
+              7,
+              7,
+              7
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 18.2,
+            "min": 11.9,
+            "max": 24.6,
+            "samples": [
+              18.2,
+              14.8,
+              11.9,
+              24.6,
+              18.5
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 953.3,
+            "min": 865.8,
+            "max": 1957.4,
+            "samples": [
+              1957.4,
+              865.8,
+              866.5,
+              953.3,
+              1084.1
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 21.6,
+            "min": 18,
+            "max": 29.7,
+            "samples": [
+              20.6,
+              21.6,
+              18,
+              29.7,
+              27.4
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 60.7,
+            "samples": [
+              60.7,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 5.3,
+            "min": 4.7,
+            "max": 159.4,
+            "samples": [
+              159.4,
+              4.7,
+              5.2,
+              5.3,
+              6.4
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "employees": {
+          "firstReadyMs": {
+            "p50": 1814.8,
+            "min": 1689.7,
+            "max": 1875,
+            "samples": [
+              1833.7,
+              1814.8,
+              1744.4,
+              1875,
+              1689.7
+            ]
+          },
+          "settledMs": {
+            "p50": 1904.2,
+            "min": 1815.5,
+            "max": 1969.5,
+            "samples": [
+              1936.8,
+              1904.2,
+              1844.4,
+              1969.5,
+              1815.5
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 32.9,
+            "min": 27.6,
+            "max": 39.9,
+            "samples": [
+              29.7,
+              34.6,
+              39.9,
+              32.9,
+              27.6
+            ]
+          },
+          "domWrites": {
+            "p50": 574,
+            "min": 574,
+            "max": 574,
+            "samples": [
+              574,
+              574,
+              574,
+              574,
+              574
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 13.8,
+            "min": 9.2,
+            "max": 28.1,
+            "samples": [
+              13.8,
+              16.2,
+              9.2,
+              9.6,
+              28.1
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 9.2,
+            "min": 5.5,
+            "max": 10.9,
+            "samples": [
+              10,
+              5.5,
+              10.9,
+              9.2,
+              6.7
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0.1,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0.1,
+              0,
+              0.1,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "warm": {
+          "firstReadyMs": {
+            "p50": 133.8,
+            "min": 131.5,
+            "max": 227.7,
+            "samples": [
+              132.4,
+              144.6,
+              133.8,
+              131.5,
+              227.7
+            ]
+          },
+          "settledMs": {
+            "p50": 262,
+            "min": 251.6,
+            "max": 328.9,
+            "samples": [
+              251.6,
+              273.3,
+              252,
+              262,
+              328.9
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 46.2,
+            "min": 42.6,
+            "max": 101.2,
+            "samples": [
+              42.6,
+              59.4,
+              43.1,
+              46.2,
+              101.2
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0,
+              0.1,
+              0,
+              0,
+              0.1
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    "c1": {
+      "provenance": {
+        "revision": "3b16a2abdcfb11bf10fc3ca259c8ca545de23c8a",
+        "observerSha256": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497"
+      },
+      "runs": 5,
+      "phases": {
+        "cold": {
+          "firstReadyMs": {
+            "p50": 1182.6,
+            "min": 1041.4,
+            "max": 1312.7,
+            "samples": [
+              1312.7,
+              1164.1,
+              1311.8,
+              1182.6,
+              1041.4
+            ]
+          },
+          "settledMs": {
+            "p50": 1499.4,
+            "min": 1335.2,
+            "max": 1631.8,
+            "samples": [
+              1623.2,
+              1492,
+              1631.8,
+              1499.4,
+              1335.2
+            ]
+          },
+          "fetchCount": {
+            "p50": 13,
+            "min": 13,
+            "max": 13,
+            "samples": [
+              13,
+              13,
+              13,
+              13,
+              13
+            ]
+          },
+          "apiBytes": {
+            "p50": 5081011,
+            "min": 5081011,
+            "max": 5081011,
+            "samples": [
+              5081011,
+              5081011,
+              5081011,
+              5081011,
+              5081011
+            ]
+          },
+          "domWriteMs": {
+            "p50": 6.3,
+            "min": 5.2,
+            "max": 9,
+            "samples": [
+              6.3,
+              9,
+              6.2,
+              7.1,
+              5.2
+            ]
+          },
+          "domWrites": {
+            "p50": 7,
+            "min": 7,
+            "max": 8,
+            "samples": [
+              7,
+              7,
+              8,
+              7,
+              7
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 18,
+            "min": 14,
+            "max": 27.2,
+            "samples": [
+              27.2,
+              14,
+              18,
+              24.5,
+              17.6
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 1017,
+            "min": 860.9,
+            "max": 1119,
+            "samples": [
+              1107.2,
+              957.8,
+              1119,
+              1017,
+              860.9
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 34.1,
+            "min": 17.1,
+            "max": 35.3,
+            "samples": [
+              35.3,
+              23.7,
+              17.1,
+              34.1,
+              34.6
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 49.6,
+            "samples": [
+              0.1,
+              0,
+              49.6,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 5.3,
+            "min": 4.8,
+            "max": 18,
+            "samples": [
+              18,
+              5.3,
+              5.7,
+              5.2,
+              4.8
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "employees": {
+          "firstReadyMs": {
+            "p50": 1077,
+            "min": 970.5,
+            "max": 1210.9,
+            "samples": [
+              1077,
+              1068.6,
+              1210.9,
+              1090.2,
+              970.5
+            ]
+          },
+          "settledMs": {
+            "p50": 1160.1,
+            "min": 1075.9,
+            "max": 1300.8,
+            "samples": [
+              1160.1,
+              1140,
+              1300.8,
+              1175,
+              1075.9
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 32.2,
+            "min": 29.7,
+            "max": 63.3,
+            "samples": [
+              36.1,
+              31.1,
+              63.3,
+              32.2,
+              29.7
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 8.7,
+            "min": 8.1,
+            "max": 10.2,
+            "samples": [
+              8.7,
+              10.2,
+              8.2,
+              9.7,
+              8.1
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 9.9,
+            "min": 6,
+            "max": 13.1,
+            "samples": [
+              6,
+              9.9,
+              8.7,
+              11.8,
+              13.1
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0.1,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0,
+              0.1,
+              0,
+              0.1
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "warm": {
+          "firstReadyMs": {
+            "p50": 139,
+            "min": 134.7,
+            "max": 185.1,
+            "samples": [
+              134.7,
+              185.1,
+              184.4,
+              135.6,
+              139
+            ]
+          },
+          "settledMs": {
+            "p50": 267.2,
+            "min": 264.6,
+            "max": 315.1,
+            "samples": [
+              266,
+              315.1,
+              287.1,
+              264.6,
+              267.2
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 55.5,
+            "min": 44.7,
+            "max": 69.6,
+            "samples": [
+              55.8,
+              69.6,
+              44.7,
+              55.5,
+              50.3
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0,
+              0,
+              0,
+              0.1,
+              0.1
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    "c2": {
+      "provenance": {
+        "revision": "a35aebcdbdcb3831276bc22edb10aa9950a49f92",
+        "observerSha256": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497"
+      },
+      "runs": 5,
+      "phases": {
+        "cold": {
+          "firstReadyMs": {
+            "p50": 1202.8,
+            "min": 1024.7,
+            "max": 1259.2,
+            "samples": [
+              1259.2,
+              1216,
+              1024.7,
+              1115.5,
+              1202.8
+            ]
+          },
+          "settledMs": {
+            "p50": 1313.2,
+            "min": 1155.6,
+            "max": 1393.4,
+            "samples": [
+              1393.4,
+              1338.5,
+              1155.6,
+              1245.8,
+              1313.2
+            ]
+          },
+          "fetchCount": {
+            "p50": 10,
+            "min": 10,
+            "max": 10,
+            "samples": [
+              10,
+              10,
+              10,
+              10,
+              10
+            ]
+          },
+          "apiBytes": {
+            "p50": 3270944,
+            "min": 3270944,
+            "max": 3270944,
+            "samples": [
+              3270944,
+              3270944,
+              3270944,
+              3270944,
+              3270944
+            ]
+          },
+          "domWriteMs": {
+            "p50": 1.7,
+            "min": 1.6,
+            "max": 2.5,
+            "samples": [
+              2.5,
+              1.7,
+              1.6,
+              1.7,
+              2.4
+            ]
+          },
+          "domWrites": {
+            "p50": 5,
+            "min": 5,
+            "max": 6,
+            "samples": [
+              5,
+              5,
+              5,
+              5,
+              6
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 17.5,
+            "min": 9.9,
+            "max": 40.2,
+            "samples": [
+              12.9,
+              40.2,
+              17.5,
+              9.9,
+              26.7
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 997.5,
+            "min": 850.2,
+            "max": 1078.9,
+            "samples": [
+              1078.9,
+              1021.3,
+              850.2,
+              928.7,
+              997.5
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 37.3,
+            "min": 17.6,
+            "max": 41.5,
+            "samples": [
+              35.1,
+              37.3,
+              41.2,
+              41.5,
+              17.6
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 6,
+            "min": 4.4,
+            "max": 21.4,
+            "samples": [
+              21.4,
+              6,
+              4.4,
+              5.6,
+              7.1
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "employees": {
+          "firstReadyMs": {
+            "p50": 1042.9,
+            "min": 925.3,
+            "max": 1139,
+            "samples": [
+              1012.9,
+              1139,
+              1042.9,
+              1052,
+              925.3
+            ]
+          },
+          "settledMs": {
+            "p50": 1121.3,
+            "min": 997.7,
+            "max": 1239.8,
+            "samples": [
+              1096.9,
+              1239.8,
+              1121.3,
+              1149.3,
+              997.7
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 30.3,
+            "min": 20.6,
+            "max": 35.3,
+            "samples": [
+              30.3,
+              32.1,
+              30,
+              35.3,
+              20.6
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 10.4,
+            "min": 8.6,
+            "max": 13.1,
+            "samples": [
+              10.4,
+              11.7,
+              9.5,
+              8.6,
+              13.1
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 8.7,
+            "min": 7.1,
+            "max": 12.5,
+            "samples": [
+              7.2,
+              10.8,
+              12.5,
+              7.1,
+              8.7
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0.1,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0.1,
+              0.1,
+              0,
+              0.1
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "warm": {
+          "firstReadyMs": {
+            "p50": 135.8,
+            "min": 127.3,
+            "max": 206.2,
+            "samples": [
+              131.3,
+              135.8,
+              154.2,
+              127.3,
+              206.2
+            ]
+          },
+          "settledMs": {
+            "p50": 259.2,
+            "min": 242.5,
+            "max": 285.5,
+            "samples": [
+              259.2,
+              269.4,
+              285.5,
+              255.3,
+              242.5
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 52.7,
+            "min": 42.5,
+            "max": 54.5,
+            "samples": [
+              54.5,
+              52.8,
+              52.7,
+              47.6,
+              42.5
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    "c3": {
+      "provenance": {
+        "revision": "a8aa982d8d6c89ddcfff62df315cf6e31244d9f5",
+        "observerSha256": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497"
+      },
+      "runs": 5,
+      "phases": {
+        "cold": {
+          "firstReadyMs": {
+            "p50": 1096.9,
+            "min": 1031.1,
+            "max": 1267,
+            "samples": [
+              1267,
+              1218.4,
+              1096.9,
+              1088.2,
+              1031.1
+            ]
+          },
+          "settledMs": {
+            "p50": 1229,
+            "min": 1164,
+            "max": 1398,
+            "samples": [
+              1398,
+              1351.8,
+              1229,
+              1218,
+              1164
+            ]
+          },
+          "fetchCount": {
+            "p50": 10,
+            "min": 10,
+            "max": 10,
+            "samples": [
+              10,
+              10,
+              10,
+              10,
+              10
+            ]
+          },
+          "apiBytes": {
+            "p50": 3270944,
+            "min": 3270944,
+            "max": 3270944,
+            "samples": [
+              3270944,
+              3270944,
+              3270944,
+              3270944,
+              3270944
+            ]
+          },
+          "domWriteMs": {
+            "p50": 1.5,
+            "min": 1.4,
+            "max": 2.1,
+            "samples": [
+              2.1,
+              1.6,
+              1.5,
+              1.5,
+              1.4
+            ]
+          },
+          "domWrites": {
+            "p50": 5,
+            "min": 5,
+            "max": 5,
+            "samples": [
+              5,
+              5,
+              5,
+              5,
+              5
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 11.8,
+            "min": 9.5,
+            "max": 21.9,
+            "samples": [
+              9.5,
+              21.9,
+              11.8,
+              12.6,
+              9.5
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 926.2,
+            "min": 868.7,
+            "max": 1079.8,
+            "samples": [
+              1079.8,
+              1043,
+              926.2,
+              908.7,
+              868.7
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 29.9,
+            "min": 23.5,
+            "max": 36.4,
+            "samples": [
+              29.9,
+              24.8,
+              36.4,
+              36.1,
+              23.5
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 5.9,
+            "min": 4.9,
+            "max": 19.4,
+            "samples": [
+              19.4,
+              6.1,
+              4.9,
+              5.9,
+              4.9
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "employees": {
+          "firstReadyMs": {
+            "p50": 1032.9,
+            "min": 961.7,
+            "max": 1326.3,
+            "samples": [
+              1326.3,
+              1071.3,
+              1013.5,
+              1032.9,
+              961.7
+            ]
+          },
+          "settledMs": {
+            "p50": 1132.9,
+            "min": 1041,
+            "max": 1412,
+            "samples": [
+              1412,
+              1150.2,
+              1093.1,
+              1132.9,
+              1041
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 28,
+            "min": 23.3,
+            "max": 42.9,
+            "samples": [
+              42.9,
+              28,
+              34.6,
+              26.4,
+              23.3
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleStartMs": {
+            "p50": 13.9,
+            "min": 8,
+            "max": 15.6,
+            "samples": [
+              9.6,
+              13.9,
+              8,
+              15.6,
+              14
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 9.8,
+            "min": 9.1,
+            "max": 11.5,
+            "samples": [
+              9.8,
+              11.5,
+              9.3,
+              10.2,
+              9.1
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0.1,
+            "samples": [
+              0.1,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "warm": {
+          "firstReadyMs": {
+            "p50": 128.5,
+            "min": 111.3,
+            "max": 147.4,
+            "samples": [
+              147.4,
+              111.3,
+              132.6,
+              128.5,
+              128.3
+            ]
+          },
+          "settledMs": {
+            "p50": 262,
+            "min": 243.5,
+            "max": 276.5,
+            "samples": [
+              276.5,
+              243.5,
+              263.1,
+              262,
+              259.8
+            ]
+          },
+          "fetchCount": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "apiBytes": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "domWriteMs": {
+            "p50": 52.8,
+            "min": 43.5,
+            "max": 61.7,
+            "samples": [
+              52.8,
+              43.5,
+              61.7,
+              51.6,
+              55.6
+            ]
+          },
+          "domWrites": {
+            "p50": 2,
+            "min": 2,
+            "max": 2,
+            "samples": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ]
+          },
+          "jsonParseMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleDownloadMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "moduleInitMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "scriptEvalMs": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "imageRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "documentRequests": {
+            "p50": 0,
+            "min": 0,
+            "max": 0,
+            "samples": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    }
+  },
+  "order": [
+    "base,c3,c1,c2",
+    "c3,c2,base,c1",
+    "c1,base,c2,c3",
+    "c2,c1,c3,base",
+    "base,c2,c3,c1"
+  ],
+  "paired_cold": {
+    "differences_ms": [
+      -1044.8000000000002,
+      223.20000000000005,
+      73.20000000000005,
+      -80.70000000000005,
+      -268.4000000000001
+    ],
+    "mean_ms": -219.50000000000006,
+    "one_sided_sign_flip_p_slower": 0.8125,
+    "caution": "Exploratory paired sign-flip test, only five rounds; non-significance does not prove equivalence or production performance."
+  },
+  "metadata": {
+    "runtime": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "schemaVersion": 2,
+    "observerVersion": "20260913-profile2",
+    "observerSha256": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497",
+    "backendCachePolicy": "reset memory caches before every cold navigation",
+    "methodology": "Real browser, real bootstrap/router/modules/API against synthetic local SQLite. Observer wrappers affect CPU slightly. External font providers and EventSource excluded; same policy before/after. All business mutations blocked."
+  },
+  "validation": "20 successful runs; identical metadata and expected populations; no discarded completed run"
+}

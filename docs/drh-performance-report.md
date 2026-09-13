@@ -1,5 +1,7 @@
 # DRH PERFORMANCE
 
+> Rapport historique. Le [contrôle cold start répété et la bissection](drh-cold-start-report.md), réalisés ensuite sur cinq parcours par état, ne reproduisent pas la régression et valident les trois cibles en médiane. Les chiffres ci-dessous restent conservés comme résultats de la première campagne.
+
 Les trois corrections sont implémentées et commitées localement. Le résultat reste **partiel** : Employés et les volumes progressent, mais la médiane d’ouverture froide augmente dans cette campagne et la pagination réelle reste reportée.
 
 Branche `perf/drh-loading`, worktree `/private/tmp/ATLAS-drh-performance`, base exacte `7041c27f477b5e24d8bb5509ca8d6bbf45c8edab`. Le worktree dédié était propre au départ. `origin/main` local et distant étaient alignés entre eux sur `bf9954e`, **60 commits après** la base demandée. Aucun déplacement de main ni rebase. Le répertoire utilisateur avec ses modifications préexistantes a été préservé.
