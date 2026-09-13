@@ -1,0 +1,1066 @@
+{
+  "reports": [
+    "docs/drh-performance/browser-after-1.json",
+    "docs/drh-performance/browser-after-2.json",
+    "docs/drh-performance/browser-after-3.json"
+  ],
+  "observerVersion": "efc806ea2a214e179a7b68eef03dbd4894b900eacc33643d0a6c869047252497",
+  "count": 3,
+  "methodology": "Real browser, real bootstrap/router/modules/API against synthetic local SQLite. Observer wrappers affect CPU slightly. External font providers and EventSource excluded; same policy before/after. All business mutations blocked.",
+  "phases": {
+    "cold": {
+      "apiBytes": {
+        "median": 3273431,
+        "min": 3270944,
+        "max": 3273587
+      },
+      "documentRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "domElementsCreated": {
+        "median": 266,
+        "min": 266,
+        "max": 520
+      },
+      "domRowsCreated": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "domWriteMs": {
+        "median": 1.8,
+        "min": 1.1,
+        "max": 21.4
+      },
+      "domWrites": {
+        "median": 5,
+        "min": 5,
+        "max": 6
+      },
+      "fetchCount": {
+        "median": 11,
+        "min": 10,
+        "max": 12
+      },
+      "firstReadyMs": {
+        "median": 2411.8,
+        "min": 1143.5,
+        "max": 2526.3
+      },
+      "imageElements": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "imageRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "jsonParseMs": {
+        "median": 10.2,
+        "min": 7,
+        "max": 10.4
+      },
+      "largestResponseBytes": {
+        "median": 1805093,
+        "min": 1805093,
+        "max": 1805093
+      },
+      "layoutReadMs": {
+        "median": 0.1,
+        "min": 0,
+        "max": 0.2
+      },
+      "moduleDownloadMs": {
+        "median": 22.1,
+        "min": 15.1,
+        "max": 37.8
+      },
+      "moduleInitMs": {
+        "median": 0.1,
+        "min": 0,
+        "max": 0.2
+      },
+      "moduleStartMs": {
+        "median": 1963.8,
+        "min": 944.9,
+        "max": 2129.2
+      },
+      "scriptDownloadBytes": {
+        "median": 1792027,
+        "min": 1792027,
+        "max": 1792027
+      },
+      "scriptEvalMs": {
+        "median": 127.7,
+        "min": 6,
+        "max": 189.3
+      },
+      "settledMs": {
+        "median": 2518.5,
+        "min": 1262.5,
+        "max": 2606.3
+      },
+      "startMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "timersStarted": {
+        "median": 50,
+        "min": 48,
+        "max": 54
+      },
+      "visibleElements": {
+        "median": 254,
+        "min": 254,
+        "max": 254
+      },
+      "visibleRows": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "xhrCount": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "state": [
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        }
+      ],
+      "duplicateEndpoints": [
+        {
+          "/api/irongs/events/ticket": 2,
+          "/api/version": 2,
+          "/api/ui/sidebar-stats": 2
+        },
+        {
+          "/api/version": 2,
+          "/api/ui/sidebar-stats": 2
+        },
+        {
+          "/api/version": 2
+        }
+      ]
+    },
+    "employees": {
+      "apiBytes": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "documentRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "domElementsCreated": {
+        "median": 9800,
+        "min": 9800,
+        "max": 9800
+      },
+      "domRowsCreated": {
+        "median": 572,
+        "min": 572,
+        "max": 572
+      },
+      "domWriteMs": {
+        "median": 30.6,
+        "min": 23.4,
+        "max": 61.1
+      },
+      "domWrites": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "fetchCount": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "firstReadyMs": {
+        "median": 1034.9,
+        "min": 1027.3,
+        "max": 1115.9
+      },
+      "imageElements": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "imageRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "jsonParseMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "largestResponseBytes": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "layoutReadMs": {
+        "median": 8,
+        "min": 7.4,
+        "max": 9.7
+      },
+      "moduleDownloadMs": {
+        "median": 11.5,
+        "min": 10.6,
+        "max": 12
+      },
+      "moduleInitMs": {
+        "median": 0.1,
+        "min": 0,
+        "max": 0.2
+      },
+      "moduleStartMs": {
+        "median": 11.3,
+        "min": 9.1,
+        "max": 21.1
+      },
+      "scriptDownloadBytes": {
+        "median": 49578,
+        "min": 49578,
+        "max": 49578
+      },
+      "scriptEvalMs": {
+        "median": 0.1,
+        "min": 0,
+        "max": 0.1
+      },
+      "settledMs": {
+        "median": 1127.8,
+        "min": 1105,
+        "max": 1183.5
+      },
+      "startMs": {
+        "median": 3286.7,
+        "min": 2028.5,
+        "max": 3382.7
+      },
+      "timersStarted": {
+        "median": 8,
+        "min": 8,
+        "max": 8
+      },
+      "visibleElements": {
+        "median": 9797,
+        "min": 9797,
+        "max": 9797
+      },
+      "visibleRows": {
+        "median": 572,
+        "min": 572,
+        "max": 572
+      },
+      "xhrCount": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "state": [
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        }
+      ],
+      "duplicateEndpoints": [
+        {},
+        {},
+        {}
+      ]
+    },
+    "warm": {
+      "apiBytes": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "documentRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "domElementsCreated": {
+        "median": 257,
+        "min": 257,
+        "max": 257
+      },
+      "domRowsCreated": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "domWriteMs": {
+        "median": 55.6,
+        "min": 40.3,
+        "max": 65.6
+      },
+      "domWrites": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "fetchCount": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "firstReadyMs": {
+        "median": 154.9,
+        "min": 150.2,
+        "max": 164.6
+      },
+      "imageElements": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "imageRequests": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "jsonParseMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "largestResponseBytes": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "layoutReadMs": {
+        "median": 1.1,
+        "min": 1,
+        "max": 1.3
+      },
+      "moduleDownloadMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "moduleInitMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0.1
+      },
+      "scriptDownloadBytes": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "scriptEvalMs": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "settledMs": {
+        "median": 279.8,
+        "min": 257.8,
+        "max": 287.8
+      },
+      "startMs": {
+        "median": 5161,
+        "min": 3911.3,
+        "max": 5329.1
+      },
+      "timersStarted": {
+        "median": 6,
+        "min": 6,
+        "max": 6
+      },
+      "visibleElements": {
+        "median": 254,
+        "min": 254,
+        "max": 254
+      },
+      "visibleRows": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "xhrCount": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "state": [
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        },
+        {
+          "employeeCount": 1000,
+          "candidateCount": 500,
+          "fullDataReady": true,
+          "hydrated": true
+        }
+      ],
+      "duplicateEndpoints": [
+        {},
+        {},
+        {}
+      ]
+    }
+  },
+  "endpoints": [
+    {
+      "phase": "cold",
+      "endpoint": "/api/irongs/db?light=1",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 940.5,
+      "bodyBytes": [
+        934436
+      ],
+      "medianParseMs": 5,
+      "blockingValues": [
+        true
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:899:35\n    at sgdiPullState (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:939:5)\n    at replacement (http://127.0.0.1:8773/:46:253)\n    at bootApp (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:19781:5)"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/irongs/events/ticket",
+      "calls": 4,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 488.85,
+      "bodyBytes": [
+        156
+      ],
+      "medianParseMs": 0.0,
+      "blockingValues": [
+        false
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at sgdiStartEventStream (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1022:28)\n    at sgdiScheduleAutoRefresh (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1095:3)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:19802:5",
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at sgdiStartEventStream (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1022:28)\n    at sgdiScheduleAutoRefresh (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1095:3)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:914:56"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/version",
+      "calls": 6,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 111.0,
+      "bodyBytes": [
+        26
+      ],
+      "medianParseMs": 0.0,
+      "blockingValues": [
+        false
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiCheckAppVersion (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:970:19)\n    at sgdiScheduleAutoRefresh (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1100:3)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:19802:5",
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiCheckAppVersion (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:970:19)\n    at sgdiScheduleAutoRefresh (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1100:3)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:914:56"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/ui/sidebar-stats",
+      "calls": 5,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 319.4,
+      "bodyBytes": [
+        2487
+      ],
+      "medianParseMs": 0.1,
+      "blockingValues": [
+        false
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at Object.sidebarStats (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1679:30)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1813:63\n    at async sgdiRefreshSidebarStats (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1871:17)"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/auth/users",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 39.1,
+      "bodyBytes": [
+        424
+      ],
+      "medianParseMs": 0.1,
+      "blockingValues": [
+        true
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at Object.listUsers (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1621:19)\n    at sgdiLoadAuthState (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1954:33)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:915:15"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/auth/access-rules",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 31.4,
+      "bodyBytes": [
+        2
+      ],
+      "medianParseMs": 0,
+      "blockingValues": [
+        true
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at Object.accessRules (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1630:21)\n    at sgdiLoadAuthState (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1989:33)\n    at async http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:915:9"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/drh/employees",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 166.5,
+      "bodyBytes": [
+        1805093
+      ],
+      "medianParseMs": 2.6,
+      "blockingValues": [
+        true
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at Object.list (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1639:29)\n    at sgdiFetchEmployees (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1489:49)\n    at sgdiPullEmployees (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1449:13)\n    at replacement (http://127.0.0.1:8773/:46:253)"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/drh/candidates",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 63.8,
+      "bodyBytes": [
+        528193
+      ],
+      "medianParseMs": 0.7,
+      "blockingValues": [
+        true
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at Object.candidates (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:1641:20)\n    at syncCandidatesFromPostgres (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:2096:30)\n    at http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:2602:75\n    at sgdiSqlSyncTasks (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:2602:107)"
+      ]
+    },
+    {
+      "phase": "cold",
+      "endpoint": "/api/irongs/positions",
+      "calls": 3,
+      "statuses": [
+        200
+      ],
+      "medianDurationMs": 54.4,
+      "bodyBytes": [
+        101
+      ],
+      "medianParseMs": 0,
+      "blockingValues": [
+        false
+      ],
+      "callers": [
+        "    at window.fetch (http://127.0.0.1:8773/:23:113)\n    at sgdiApi (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:633:15)\n    at refreshPositions (http://127.0.0.1:8773/static/sgdi-app.js?v=9b3456b0a2:923:61)\n    at http://127.0.0.1:8773/:17:322"
+      ]
+    }
+  ],
+  "functionCosts": [
+    {
+      "phase": "cold",
+      "name": "renderSidebar",
+      "medianCount": 5,
+      "medianSyncMs": 385.0
+    },
+    {
+      "phase": "cold",
+      "name": "refreshModuleCountersRibbon",
+      "medianCount": 5,
+      "medianSyncMs": 141.5
+    },
+    {
+      "phase": "cold",
+      "name": "bootApp",
+      "medianCount": 1,
+      "medianSyncMs": 112.7
+    },
+    {
+      "phase": "cold",
+      "name": "route",
+      "medianCount": 1,
+      "medianSyncMs": 111.3
+    },
+    {
+      "phase": "cold",
+      "name": "render",
+      "medianCount": 1,
+      "medianSyncMs": 111.2
+    },
+    {
+      "phase": "cold",
+      "name": "renderView",
+      "medianCount": 5,
+      "medianSyncMs": 80.5
+    },
+    {
+      "phase": "cold",
+      "name": "renderDRHDashboard",
+      "medianCount": 1,
+      "medianSyncMs": 55.9
+    },
+    {
+      "phase": "cold",
+      "name": "applyLanguagePreference",
+      "medianCount": 7,
+      "medianSyncMs": 36.5
+    },
+    {
+      "phase": "cold",
+      "name": "stripCryptogrammes",
+      "medianCount": 7,
+      "medianSyncMs": 13.1
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiEnsureEmployeesForDisplay",
+      "medianCount": 3,
+      "medianSyncMs": 9.1
+    },
+    {
+      "phase": "cold",
+      "name": "sanitizeCandidatesInDB",
+      "medianCount": 8,
+      "medianSyncMs": 7.9
+    },
+    {
+      "phase": "cold",
+      "name": "hydrateDB",
+      "medianCount": 1,
+      "medianSyncMs": 5.5
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiCaptureBaseline",
+      "medianCount": 1,
+      "medianSyncMs": 2.5
+    },
+    {
+      "phase": "cold",
+      "name": "normalizeCentralPage",
+      "medianCount": 1,
+      "medianSyncMs": 2.0
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiBackgroundSqlSync",
+      "medianCount": 1,
+      "medianSyncMs": 1.7
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiPullEmployees",
+      "medianCount": 1,
+      "medianSyncMs": 0.9
+    },
+    {
+      "phase": "cold",
+      "name": "SGDIModules._injectScript",
+      "medianCount": 3,
+      "medianSyncMs": 0.9
+    },
+    {
+      "phase": "cold",
+      "name": "uiEnhanceView",
+      "medianCount": 1,
+      "medianSyncMs": 0.9
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiPullState",
+      "medianCount": 1,
+      "medianSyncMs": 0.6
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiRefreshSidebarStats",
+      "medianCount": 2,
+      "medianSyncMs": 0.5
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiScrubInvalidCandidateFunctionArtifacts",
+      "medianCount": 2,
+      "medianSyncMs": 0.3
+    },
+    {
+      "phase": "cold",
+      "name": "normalizePageHeader",
+      "medianCount": 1,
+      "medianSyncMs": 0.2
+    },
+    {
+      "phase": "cold",
+      "name": "filterDomBySearch",
+      "medianCount": 1,
+      "medianSyncMs": 0.2
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiApplyViewModeLocks",
+      "medianCount": 2,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "SGDIModules.loadModule",
+      "medianCount": 3,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiRefreshDrhStats",
+      "medianCount": 1,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "uiBindInteractiveEvents",
+      "medianCount": 1,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "uiAnimateNumbers",
+      "medianCount": 1,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "sgdiApplyActiveEmployeeStyles",
+      "medianCount": 2,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "cold",
+      "name": "SGDIModules.initModule",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "cold",
+      "name": "uiFocusFirstInvalid",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "employees",
+      "name": "renderView",
+      "medianCount": 2,
+      "medianSyncMs": 383.5
+    },
+    {
+      "phase": "employees",
+      "name": "applyLanguagePreference",
+      "medianCount": 1,
+      "medianSyncMs": 109.4
+    },
+    {
+      "phase": "employees",
+      "name": "stripCryptogrammes",
+      "medianCount": 3,
+      "medianSyncMs": 69.8
+    },
+    {
+      "phase": "employees",
+      "name": "renderEffectif",
+      "medianCount": 1,
+      "medianSyncMs": 55
+    },
+    {
+      "phase": "employees",
+      "name": "sgdiApplyActiveEmployeeStyles",
+      "medianCount": 3,
+      "medianSyncMs": 29.4
+    },
+    {
+      "phase": "employees",
+      "name": "normalizeCentralPage",
+      "medianCount": 1,
+      "medianSyncMs": 17.9
+    },
+    {
+      "phase": "employees",
+      "name": "uiEnhanceView",
+      "medianCount": 1,
+      "medianSyncMs": 17.5
+    },
+    {
+      "phase": "employees",
+      "name": "effectifListHTML",
+      "medianCount": 1,
+      "medianSyncMs": 13.6
+    },
+    {
+      "phase": "employees",
+      "name": "sanitizeCandidatesInDB",
+      "medianCount": 2,
+      "medianSyncMs": 3.6
+    },
+    {
+      "phase": "employees",
+      "name": "normalizePageHeader",
+      "medianCount": 1,
+      "medianSyncMs": 2.2
+    },
+    {
+      "phase": "employees",
+      "name": "filterDomBySearch",
+      "medianCount": 1,
+      "medianSyncMs": 1.2
+    },
+    {
+      "phase": "employees",
+      "name": "sgdiApplyViewModeLocks",
+      "medianCount": 2,
+      "medianSyncMs": 1.1
+    },
+    {
+      "phase": "employees",
+      "name": "applyEffectifSearchInPlace",
+      "medianCount": 1,
+      "medianSyncMs": 1.1
+    },
+    {
+      "phase": "employees",
+      "name": "uiAnimateNumbers",
+      "medianCount": 1,
+      "medianSyncMs": 0.8
+    },
+    {
+      "phase": "employees",
+      "name": "uiFocusFirstInvalid",
+      "medianCount": 1,
+      "medianSyncMs": 0.6
+    },
+    {
+      "phase": "employees",
+      "name": "refreshModuleCountersRibbon",
+      "medianCount": 1,
+      "medianSyncMs": 0.4
+    },
+    {
+      "phase": "employees",
+      "name": "SGDIModules._injectScript",
+      "medianCount": 1,
+      "medianSyncMs": 0.3
+    },
+    {
+      "phase": "employees",
+      "name": "sgdiScrubInvalidCandidateFunctionArtifacts",
+      "medianCount": 2,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "employees",
+      "name": "SGDIModules.loadModule",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "employees",
+      "name": "SGDIModules.initModule",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "employees",
+      "name": "uiBindInteractiveEvents",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "renderView",
+      "medianCount": 2,
+      "medianSyncMs": 117.7
+    },
+    {
+      "phase": "warm",
+      "name": "renderDRHDashboard",
+      "medianCount": 1,
+      "medianSyncMs": 37.7
+    },
+    {
+      "phase": "warm",
+      "name": "applyLanguagePreference",
+      "medianCount": 1,
+      "medianSyncMs": 9.3
+    },
+    {
+      "phase": "warm",
+      "name": "sanitizeCandidatesInDB",
+      "medianCount": 2,
+      "medianSyncMs": 5.5
+    },
+    {
+      "phase": "warm",
+      "name": "sgdiEnsureEmployeesForDisplay",
+      "medianCount": 2,
+      "medianSyncMs": 4.3
+    },
+    {
+      "phase": "warm",
+      "name": "stripCryptogrammes",
+      "medianCount": 2,
+      "medianSyncMs": 2.2
+    },
+    {
+      "phase": "warm",
+      "name": "uiEnhanceView",
+      "medianCount": 1,
+      "medianSyncMs": 1.4
+    },
+    {
+      "phase": "warm",
+      "name": "sgdiApplyViewModeLocks",
+      "medianCount": 2,
+      "medianSyncMs": 1.3
+    },
+    {
+      "phase": "warm",
+      "name": "normalizeCentralPage",
+      "medianCount": 1,
+      "medianSyncMs": 0.8
+    },
+    {
+      "phase": "warm",
+      "name": "refreshModuleCountersRibbon",
+      "medianCount": 1,
+      "medianSyncMs": 0.7
+    },
+    {
+      "phase": "warm",
+      "name": "SGDIModules.loadModule",
+      "medianCount": 3,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "warm",
+      "name": "normalizePageHeader",
+      "medianCount": 1,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "warm",
+      "name": "filterDomBySearch",
+      "medianCount": 1,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "warm",
+      "name": "sgdiApplyActiveEmployeeStyles",
+      "medianCount": 2,
+      "medianSyncMs": 0.1
+    },
+    {
+      "phase": "warm",
+      "name": "SGDIModules.initModule",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "sgdiRefreshDrhStats",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "sgdiScrubInvalidCandidateFunctionArtifacts",
+      "medianCount": 2,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "uiBindInteractiveEvents",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "uiAnimateNumbers",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    },
+    {
+      "phase": "warm",
+      "name": "uiFocusFirstInvalid",
+      "medianCount": 1,
+      "medianSyncMs": 0
+    }
+  ]
+}
