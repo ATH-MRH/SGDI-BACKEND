@@ -968,7 +968,7 @@ function factureVoirApercu(fId){
   const statusColor=statusLabel==="PAYÉE"?"#15803d":statusLabel==="EN RETARD"?"#dc2626":statusLabel==="BROUILLON"?"#d97706":"#d97706";
   const invoiceImages=["cachet","signature"].map(kind=>{
     const value=factureImageValue(document.getElementById("fact-"+kind+"-image")?.value??f?.[kind+"Image"]??"");
-    return value?'<img src="'+value+'" alt="'+(kind==="cachet"?"Cachet de la société":"Signature")+'" style="max-width:100%;width:86px;height:68px;object-fit:contain">':"";
+    return value?'<img src="'+value+'" alt="'+(kind==="cachet"?"Cachet de la société":"Signature")+'" style="max-width:100%;flex:none;width:'+(kind==="cachet"?"172px;height:136px":"86px;height:68px")+';object-fit:contain">':"";
   }).join("");
   const qrPayload=["IRON GROUP — FACTURE","Société: "+companyName,"N°: "+numero,"Date: "+fmtD(date),"Client: "+clientNom,"Total TTC: "+DZD(totalTTC),"Statut: "+statusLabel,"Identifiant: "+(f?.id||"APERÇU")].join("\n");
   const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
@@ -1033,7 +1033,7 @@ function factureVoirApercu(fId){
       '<span style="font:italic 700 10px Arial,Helvetica,sans-serif;color:#111827;line-height:1.55">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
       '</div>':"")+
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
-    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="min-height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale<div class="fact-invoice-signatures" style="display:flex;justify-content:center;align-items:center;gap:6px;margin-top:6px">'+invoiceImages+'</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 280px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="min-height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale<div class="fact-invoice-signatures" style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin-top:6px">'+invoiceImages+'</div></div></div>'+
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
     '</section></div></div>';
   openModal(html);

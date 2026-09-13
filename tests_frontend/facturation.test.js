@@ -622,6 +622,9 @@ test('cachet et signature : import, sauvegarde, aperçu et suppression propres �
     w.eval('sgdiApi=async function(url,options){window.__savedInvoice=options.body.data;return options.body.data}');
     await t.factureEditorSave({draft:true,silent:true});assert.equal(w.__savedInvoice.cachetImage,value);assert.equal(w.__savedInvoice.signatureImage,value);
     t.factureVoirApercu(f.id);assert.equal(d.querySelectorAll('.fact-invoice-signatures img').length,2);
+    const stamp=d.querySelector('.fact-invoice-signatures img[alt="Cachet de la société"]');
+    assert.equal(stamp.style.width,'172px');assert.equal(stamp.style.height,'136px');
+    assert.equal(stamp.style.objectFit,'contain');assert.equal(stamp.style.flex,'0 0 auto');
     t.factureImageRemove('cachet');await t.factureEditorSave({draft:true,silent:true});assert.equal(w.__savedInvoice.cachetImage,'');assert.equal(w.__savedInvoice.signatureImage,value);
     f.statut='emise';t.factureImageRemove('signature');assert.equal(d.getElementById('fact-signature-image').value,value);
     const readonly=d.createElement('div');readonly.innerHTML=t.factureImageField('signature','Signature',f,false);assert.equal(readonly.querySelector('input[type=file]'),null);assert.equal(readonly.querySelector('button'),null);
