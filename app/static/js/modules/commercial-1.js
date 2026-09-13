@@ -328,3 +328,102 @@ function renderCommStats(view){
 }
 
 SGDIModules.registerModule({key: "commercial-1", routes: [], dependencies: [], init: function(){}, destroy: function(){}});
+
+/* Chiffrage libre : coûts internes et colonnes du devis, sans modifier le moteur Agent. */
+function devisCostNumber(value){
+  const n=Number(String(value??0).replace(/[\s\u00a0\u202f]/g,"").replace(",","."));
+  if(!Number.isFinite(n)||n<0)throw new Error("Saisissez des nombres positifs ou nuls.");
+  return n;
+}
+function devisCostCalculate(sheet){
+  const n=devisCostNumber,quantity=n(sheet.quantity);
+  if(!quantity)throw new Error("La quantité vendue doit être supérieure à zéro.");
+  const columns=sheet.columns||[];
+  const direct=(sheet.rows||[]).reduce((sum,row)=>sum+(n(row.unitCost)+columns.filter(c=>c.type==="cost").reduce((v,c)=>v+n(row.values?.[c.id]),0))*n(row.quantity)*n(row.factor),0);
+  const overhead=sheet.overheadMode==="amount"?n(sheet.overhead):direct*n(sheet.overhead)/100;
+  const contingency=(direct+overhead)*n(sheet.contingency)/100;
+  const cost=direct+overhead+contingency,rate=n(sheet.rate);
+  if(sheet.priceMode==="margin"&&rate>=100)throw new Error("La marge sur vente doit être inférieure à 100 %.");
+  const proposed=sheet.priceMode==="manual"?n(sheet.unitPrice)*quantity:sheet.priceMode==="margin"?cost/(1-rate/100):cost*(1+rate/100);
+  const unitPrice=Math.round(proposed/quantity*100)/100;
+  // Le devis facture un prix unitaire à deux décimales : le résultat utilise ce même prix.
+  const revenue=unitPrice*quantity,profit=revenue-cost;
+  const result={direct,overhead,contingency,cost,unitCost:cost/quantity,unitPrice,revenue,profit,margin:revenue?profit/revenue*100:0};
+  if(!Object.values(result).every(Number.isFinite))throw new Error("Ces valeurs dépassent la capacité du calculateur.");
+  return result;
+}
+function devisJSON(value,fallback){try{return JSON.parse(value||"")}catch{return fallback}}
+function devisColumns(){return devisJSON(document.getElementById("dev-lignes-body")?.dataset.columns,[])}
+function devisColumnsHead(columns,client=false){return columns.filter(c=>!client||c.visible).map(c=>`<th class="dev-custom-head" style="padding:8px;min-width:130px;color:${client?'#fff':'#64748b'}">${escapeHTML(c.label)}</th>`).join("")}
+function devisColumnsCells(line,columns,client=false){return columns.filter(c=>!client||c.visible).map(c=>client?`<td style="padding:8px">${escapeHTML(line.customValues?.[c.id]||"")}</td>`:`<td class="dev-custom-cell" style="padding:4px;vertical-align:top"><input class="input" data-column="${escapeHTML(c.id)}" aria-label="${escapeHTML(c.label)}" value="${escapeHTML(line.customValues?.[c.id]||"")}" oninput="sgdiFormHasUnsavedChanges=true"></td>`).join("")}
+function devisLineExtra(tr){return {costSheet:devisJSON(tr.dataset.costSheet,null),customValues:Object.fromEntries([...tr.querySelectorAll('[data-column]')].map(el=>[el.dataset.column,el.value]))}}
+function devisColumnsOpen(){
+  openModal(`<form onsubmit="event.preventDefault();devisColumnsApply(this)"><h2>Colonnes du devis</h2><p>Informations complémentaires, sans effet sur les calculs. Cochez les colonnes à communiquer au client.</p><div id="dev-columns-list">${devisColumns().map(c=>devisColumnConfigHTML(c)).join("")}</div><button type="button" class="btn" onclick="document.getElementById('dev-columns-list').insertAdjacentHTML('beforeend',devisColumnConfigHTML({id:uid('col'),label:'',visible:false}))">+ Ajouter une colonne</button><p><button type="submit" class="btn btn-primary">Appliquer</button> <button type="button" class="btn" onclick="closeModal()">Annuler</button></p></form>`);
+}
+function devisColumnConfigHTML(c){return `<div class="dev-column-config" data-id="${escapeHTML(c.id)}" style="display:flex;gap:8px;margin:8px 0"><input class="input" name="label" aria-label="Nom de colonne" required value="${escapeHTML(c.label)}"><label><input type="checkbox" name="visible" ${c.visible?"checked":""}> Visible client</label><button type="button" class="btn" title="Monter" onclick="const row=this.parentElement;if(row.previousElementSibling)row.previousElementSibling.before(row)">↑</button><button type="button" class="btn" title="Descendre" onclick="const row=this.parentElement;if(row.nextElementSibling)row.nextElementSibling.after(row)">↓</button><button type="button" class="btn" onclick="this.parentElement.remove()">Supprimer</button></div>`}
+function devisColumnsApply(form){
+ const body=document.getElementById('dev-lignes-body');if(!body)return;
+ const columns=[...form.querySelectorAll('.dev-column-config')].map(el=>({id:el.dataset.id,label:el.querySelector('[name=label]').value.trim(),visible:el.querySelector('[name=visible]').checked}));
+ if(columns.some(c=>!c.label)){toast('Nommez chaque colonne','error');return}
+ const header=body.closest('table').querySelector('thead tr');header.querySelectorAll('.dev-custom-head').forEach(el=>el.remove());header.lastElementChild.insertAdjacentHTML('beforebegin',devisColumnsHead(columns));
+ body.querySelectorAll('.dev-ligne-row').forEach(tr=>{const line=devisLineExtra(tr);tr.querySelectorAll('.dev-custom-cell').forEach(el=>el.remove());tr.lastElementChild.insertAdjacentHTML('beforebegin',devisColumnsCells(line,columns))});
+ body.dataset.columns=JSON.stringify(columns);sgdiFormHasUnsavedChanges=true;closeModal();
+}
+function devisCostDefault(tr){return {activity:'Activité libre',quantity:tr?tr.querySelectorAll('input[type=number]')[1]?.value||1:1,rows:[{label:'',quantity:1,unitCost:0,factor:1,values:{}}],columns:[],overheadMode:'percent',overhead:0,contingency:0,priceMode:'markup',rate:20,unitPrice:0,scenarios:[]}}
+function devisCostOpen(button){
+ const tr=button?.closest('.dev-ligne-row');
+ if(!tr){devisEditorLigneAdd();return devisCostOpen(document.querySelector('#dev-lignes-body .dev-ligne-row:last-child button[data-cost]'))}
+ const state={...(devisLineExtra(tr).costSheet||devisCostDefault(tr)),designation:tr.querySelector('.dev-ligne-designation').value,unit:tr.querySelector('.dev-ligne-unite').value,quantity:tr.querySelectorAll('input[type=number]')[1].value};
+ devisCostRender(state,tr);
+}
+function devisCostRender(s,tr){
+ const field=(name,label,value,type='text')=>`<label>${label}<input class="input" name="${name}" type="${type}" value="${escapeHTML(String(value??''))}" ${type==='number'?'min="0" step="any"':''}></label>`;
+ const select=(name,label,opts,value)=>`<label>${label}<select class="select" name="${name}">${opts.map(([v,l])=>`<option value="${v}" ${value===v?'selected':''}>${l}</option>`).join('')}</select></label>`;
+ openModal(`<form id="dev-cost-form" onsubmit="event.preventDefault();devisCostApply()" oninput="devisCostUpdate()" onchange="devisCostUpdate()" style="min-width:0"><h2>Fiche de coût de la prestation</h2><p>Calcul interne pour la quantité vendue ci-dessous. Tous les montants de coût sont hors TVA récupérable.</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${field('designation','Désignation',s.designation??tr.querySelector('.dev-ligne-designation').value)}${field('activity','Activité',s.activity)}${field('quantity','Quantité vendue',s.quantity,'number')}${select('unit','Unité vendue',DEVIS_UNITES.map(u=>[u,u]),s.unit??tr.querySelector('.dev-ligne-unite').value)}</div><p>Coût de chaque poste = (coût unitaire + colonnes de coût) × quantité × durée / coefficient.</p><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;min-width:760px"><thead><tr><th>Poste de coût</th><th>Quantité</th><th>Coût unitaire HT</th><th>Durée / coefficient</th>${s.columns.map(c=>`<th><input aria-label="Nom de colonne" value="${escapeHTML(c.label)}" onchange="devisCostRenameColumn('${escapeHTML(c.id)}',this.value)">${c.type==='cost'?'Coût unitaire':''}<button type="button" title="Supprimer la colonne" onclick="devisCostRemoveColumn('${escapeHTML(c.id)}')">×</button></th>`).join('')}<th>Total</th><th>Actions</th></tr></thead><tbody id="dev-cost-rows">${s.rows.map(row=>devisCostRowHTML(row,s.columns)).join('')}</tbody></table></div><p><button class="btn" type="button" onclick="devisCostAddRow()">+ Poste de coût</button> <span style="display:inline-flex;gap:6px;flex-wrap:wrap"><input class="input" id="dev-cost-column-label" placeholder="Nom de colonne" aria-label="Nouvelle colonne"><select class="select" id="dev-cost-column-type" aria-label="Type de colonne"><option value="cost">Coût unitaire supplémentaire</option><option value="text">Information interne</option></select><button class="btn" type="button" onclick="devisCostAddColumn()">+ Colonne</button></span></p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${select('overheadMode','Frais indirects : base', [['percent','% des coûts directs'],['amount','Montant fixe DZD']],s.overheadMode)}${field('overhead','Frais indirects',s.overhead,'number')}${field('contingency','Imprévus (% coûts directs + indirects)',s.contingency,'number')}${select('priceMode','Construction du prix',[['markup','Majoration du coût (%)'],['margin','Marge sur vente (%)'],['manual','Prix unitaire HT libre']],s.priceMode)}${field('rate','Objectif (%)',s.rate,'number')}${field('unitPrice','Prix unitaire HT libre',s.unitPrice,'number')}</div><div id="dev-cost-result" aria-live="polite" style="padding:16px;background:#eef7f8;margin-top:12px;border-radius:10px"></div><p><input class="input" id="dev-cost-save-name" placeholder="Nom du scénario ou du modèle" aria-label="Nom du scénario ou du modèle"><button type="button" class="btn" onclick="devisCostSnapshot()">Conserver ce scénario</button> <button type="button" class="btn" onclick="devisCostTemplateSave()">Enregistrer comme modèle</button> <select class="select" id="dev-cost-template" aria-label="Modèle enregistré"><option value="">Choisir un modèle de la société</option>${devisCostTemplates().map(t=>`<option value="${escapeHTML(t.id)}">${escapeHTML(t.name)}</option>`).join('')}</select><button type="button" class="btn" onclick="devisCostTemplateLoad()">Charger un modèle</button></p><div id="dev-cost-scenarios">${(s.scenarios||[]).map((v,i)=>`<p>${escapeHTML(v.name)} — Coût ${formatDZD(v.cost)} · Vente HT ${formatDZD(v.revenue)} · Bénéfice ${formatDZD(v.profit)} <button type="button" onclick="devisCostRestore(${i})">Reprendre</button></p>`).join('')}</div><p id="dev-cost-message" role="status"></p><div class="dev-cost-actions" style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" type="button" onclick="closeModal()">Annuler</button><button class="btn btn-primary" type="submit">Appliquer à la ligne du devis</button></div></form>`);
+ const form=document.getElementById('dev-cost-form');form._row=tr;form._sheet=s;
+ const box=form.closest('.modal');if(box)box.style.maxWidth='1200px';
+ devisCostUpdate();
+}
+function devisCostRowHTML(row,columns){
+ const input=(name,value,type='number')=>`<input class="input" name="cost-row-${name}" type="${type}" value="${escapeHTML(String(value??''))}" ${type==='number'?'min="0" step="any"':''} style="min-width:85px" aria-label="${name}">`;
+ return `<tr class="dev-cost-row"><td>${input('label',row.label,'text')}</td><td>${input('quantity',row.quantity)}</td><td>${input('unitCost',row.unitCost)}</td><td>${input('factor',row.factor)}</td>${columns.map(c=>`<td>${input(c.id,row.values?.[c.id]??(c.type==='cost'?0:''),c.type==='cost'?'number':'text')}</td>`).join('')}<td class="dev-cost-row-total" style="white-space:nowrap"></td><td style="white-space:nowrap"><button type="button" title="Monter" onclick="devisCostMove(this,-1)">↑</button><button type="button" title="Descendre" onclick="devisCostMove(this,1)">↓</button><button type="button" title="Supprimer" onclick="this.closest('tr').remove();devisCostUpdate()">×</button></td></tr>`;
+}
+function devisCostRead(){
+ const f=document.getElementById('dev-cost-form'),s={...f._sheet};
+ for(const key of ['designation','unit','activity','quantity','overheadMode','overhead','contingency','priceMode','rate','unitPrice'])s[key]=f.elements[key].value;
+ s.rows=[...f.querySelectorAll('.dev-cost-row')].map(tr=>{const val=k=>tr.querySelector(`[name="cost-row-${k}"]`).value;return {label:val('label'),quantity:val('quantity'),unitCost:val('unitCost'),factor:val('factor'),values:Object.fromEntries(s.columns.map(c=>[c.id,val(c.id)]))}});return s;
+}
+function devisCostUpdate(){
+ const f=document.getElementById('dev-cost-form');if(!f)return;
+ try{const s=devisCostRead(),r=devisCostCalculate(s);
+ const lineDiscount=Number(f._row.querySelectorAll('input[type=number]')[2]?.value)||0,globalDiscount=Number(document.getElementById('dev-remise')?.value)||0;
+ const netRevenue=r.revenue*(1-lineDiscount/100)*(1-globalDiscount/100),netProfit=netRevenue-r.cost;
+ f.elements.rate.disabled=s.priceMode==='manual';f.elements.unitPrice.disabled=s.priceMode!=='manual';
+ f.querySelectorAll('.dev-cost-row').forEach((tr,i)=>{const row=devisCostCalculate({...s,rows:[s.rows[i]],overhead:0,contingency:0});tr.querySelector('.dev-cost-row-total').textContent=formatDZD(row.direct)});
+ document.getElementById('dev-cost-result').innerHTML=`<div style="display:grid;grid-template-columns:1fr auto;gap:8px">${[['Coûts directs',r.direct],['Frais indirects',r.overhead],['Imprévus',r.contingency],['Coût de revient total',r.cost],['Coût par unité vendue',r.unitCost],['Prix unitaire HT proposé',r.unitPrice],['Vente totale HT avant remises',r.revenue],['Bénéfice avant remises et impôts',r.profit],['Vente HT après remises du devis',netRevenue],['Bénéfice après remises, avant impôts',netProfit]].map(([l,v])=>`<span>${l}</span><strong>${formatDZD(v)}</strong>`).join('')}<span>Marge sur vente HT</span><strong>${r.margin.toFixed(2)} %</strong></div>${netProfit<0?'<p style="color:#b91c1c">Attention : prix de vente inférieur au coût de revient.</p>':''}<small>Remises actuelles prises en compte : ligne ${lineDiscount} %, globale ${globalDiscount} %. TVA et TTC sont calculés par le devis après insertion.</small>`;
+ }catch(e){document.getElementById('dev-cost-result').textContent=e.message}
+}
+function devisCostAddRow(){const f=document.getElementById('dev-cost-form');document.getElementById('dev-cost-rows').insertAdjacentHTML('beforeend',devisCostRowHTML({label:'',quantity:1,unitCost:0,factor:1},f._sheet.columns));devisCostUpdate()}
+function devisCostMove(button,direction){const tr=button.closest('tr'),other=direction<0?tr.previousElementSibling:tr.nextElementSibling;if(other)direction<0?other.before(tr):other.after(tr);devisCostUpdate()}
+function devisCostAddColumn(){const label=document.getElementById('dev-cost-column-label').value.trim();if(!label){toast('Nommez la colonne','error');return}const f=document.getElementById('dev-cost-form'),s=devisCostRead();s.columns.push({id:uid('costcol'),label,type:document.getElementById('dev-cost-column-type').value});devisCostRender(s,f._row)}
+function devisCostRemoveColumn(id){if(!confirm('Supprimer cette colonne et ses valeurs ?'))return;const f=document.getElementById('dev-cost-form'),s=devisCostRead();s.columns=s.columns.filter(c=>c.id!==id);devisCostRender(s,f._row)}
+function devisCostApply(){
+ const f=document.getElementById('dev-cost-form'),tr=f._row;
+ try{const s=devisCostRead(),r=devisCostCalculate(s);if(!s.rows.length||s.rows.some(v=>!v.label.trim()))throw new Error('Nommez chaque poste de coût et conservez au moins un poste.');if(!f.elements.designation.value.trim())throw new Error('Renseignez la désignation de la prestation.');if(!tr.isConnected)throw new Error('La ligne du devis n’est plus ouverte.');
+ tr.dataset.costSheet=JSON.stringify(s);tr.querySelector('.dev-ligne-designation').value=f.elements.designation.value.trim();tr.querySelector('.dev-ligne-unite').value=f.elements.unit.value;
+ const nums=tr.querySelectorAll('input[type=number]');nums[0].value=r.unitPrice;nums[1].value=s.quantity;devisEditorCalcRow(tr);devisEditorCalcTotals();devisEditorAutoResize(tr.querySelector('.dev-ligne-designation'));sgdiFormHasUnsavedChanges=true;closeModal();toast('Chiffrage appliqué — enregistrez le devis pour le conserver','success');
+ }catch(e){document.getElementById('dev-cost-message').textContent=e.message}
+}
+function devisCostSnapshot(){try{const f=document.getElementById('dev-cost-form'),s=devisCostRead(),r=devisCostCalculate(s),name=document.getElementById('dev-cost-save-name').value;if(!name?.trim()){toast('Nommez le scénario','error');return}const snapshot={...s,scenarios:[]};s.scenarios=[...(s.scenarios||[]),{name:name.trim(),...r,sheet:snapshot}];devisCostRender(s,f._row)}catch(e){toast(e.message,'error')}}
+function devisCostRestore(index){const f=document.getElementById('dev-cost-form'),s=devisCostRead(),saved=s.scenarios[index];if(saved&&confirm('Remplacer le calcul courant par ce scénario ?'))devisCostRender({...saved.sheet,scenarios:s.scenarios},f._row)}
+function devisCostTemplates(){const body=document.getElementById('dev-lignes-body'),local=devisJSON(body?.dataset.costTemplates,[]);return [...(db.devis||[]).filter(d=>d.societe===mySoc()).flatMap(d=>d.costTemplates||[]),...local].filter((v,i,a)=>a.findIndex(x=>x.id===v.id)===i)}
+function devisCostTemplateSave(){const f=document.getElementById('dev-cost-form'),s=devisCostRead(),name=document.getElementById('dev-cost-save-name').value;if(!name?.trim()){toast('Nommez le modèle','error');return}const body=document.getElementById('dev-lignes-body'),templates=devisJSON(body.dataset.costTemplates,[]);templates.push({id:uid('ct'),name:name.trim(),sheet:{...s,scenarios:[]}});body.dataset.costTemplates=JSON.stringify(templates);document.getElementById('dev-cost-template').insertAdjacentHTML('beforeend',`<option value="${escapeHTML(templates.at(-1).id)}">${escapeHTML(name.trim())}</option>`);sgdiFormHasUnsavedChanges=true;document.getElementById('dev-cost-message').textContent='Modèle ajouté. Enregistrez le devis pour le conserver.'}
+function devisCostTemplateLoad(){const id=document.getElementById('dev-cost-template').value,template=devisCostTemplates().find(t=>t.id===id);if(template){const f=document.getElementById('dev-cost-form');if(confirm('Remplacer les postes courants par ce modèle ?'))devisCostRender(JSON.parse(JSON.stringify(template.sheet)),f._row)}else toast('Sélectionnez un modèle','info')}
+
+function devisClientPrint(){
+ const documentEl=document.getElementById('devis-client-document');if(!documentEl)return;
+ const popup=window.open('','_blank');if(!popup){toast('Autorisez la fenêtre d’impression dans le navigateur','info');return}
+ popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Devis</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#172b4d;font-size:12px}table{width:100%;border-collapse:collapse}th,td{min-width:0!important;white-space:normal!important;overflow-wrap:anywhere}thead{display:table-header-group}tr{break-inside:avoid}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{div{overflow:visible!important}}</style></head><body>'+documentEl.innerHTML+'</body></html>');popup.document.close();popup.focus();popup.print();
+}
+
+function devisCostRenameColumn(id,label){const f=document.getElementById('dev-cost-form'),col=f?._sheet.columns.find(c=>c.id===id);if(col&&label.trim())col.label=label.trim()}

@@ -688,7 +688,7 @@ function renderDevisEditor(view){
 
   const statOpts=Object.entries(DEVIS_STATUT_LABELS).map(([v,l])=>'<option value="'+v+'" '+(d.statut===v?"selected":"")+'>'+l+'</option>').join("");
   const clientOpts='<option value="">— Sélectionner un client —</option>'+clients.map(c=>'<option value="'+escapeHTML(c.id)+'" '+(d.clientId===c.id?"selected":"")+'>'+escapeHTML(c.nom||"")+'</option>').join("");
-  const lignesHTML=d.lignes.map(l=>devisEditorLigneHTML(l)).join("");
+  const lignesHTML=d.lignes.map(l=>devisEditorLigneHTML(l,d.columns||[])).join("");
 
   const thL="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0;text-transform:uppercase;white-space:nowrap";
 
@@ -730,10 +730,12 @@ function renderDevisEditor(view){
     '<div class="card" style="margin-bottom:10px;padding:0;overflow:hidden">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc">'+
     '<span style="font-size:12px;font-weight:800;color:#0f2d5a">LIGNES DE PRESTATION</span>'+
-    '<div style="display:flex;gap:8px">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+
     '<button class="btn btn-ghost" style="font-size:11px" onclick="devisEditorFromCatalogue()">Depuis catalogue</button>'+
     '<button class="btn btn-ghost" style="font-size:11px;background:#f0fdf4;color:#15803d;border:1px solid #86efac" onclick="openGrilleSalaire()">Grille salaire</button>'+
-    '<button class="btn btn-ghost" style="font-size:11px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d" onclick="devisCalcCout()">Calcul de coût</button>'+
+    '<button class="btn btn-ghost" style="font-size:11px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d" onclick="devisCalcCout()">Calcul Agent</button>'+
+    '<button class="btn btn-primary" onclick="devisCostOpen()">Chiffrage libre</button>'+
+    '<button class="btn btn-ghost" onclick="devisColumnsOpen()">Colonnes du devis</button>'+
     '<button class="btn btn-primary" style="font-size:11px" onclick="devisEditorLigneAdd()">+ Ajouter une ligne</button>'+
     '</div></div>'+
     '<div style="overflow-x:auto">'+
@@ -745,9 +747,10 @@ function renderDevisEditor(view){
     '<th style="'+thL+';width:70px;text-align:right">Qté</th>'+
     '<th style="'+thL+';width:70px;text-align:right">Rem.%</th>'+
     '<th style="'+thL+';width:150px;text-align:right">Total HT (DZD)</th>'+
-    '<th style="border-bottom:1px solid #e2e8f0;width:36px"></th>'+
+    devisColumnsHead(d.columns||[])+
+    '<th style="border-bottom:1px solid #e2e8f0;width:110px">Actions</th>'+
     '</tr></thead>'+
-    '<tbody id="dev-lignes-body">'+lignesHTML+'</tbody>'+
+    '<tbody id="dev-lignes-body" data-columns="'+escapeHTML(JSON.stringify(d.columns||[]))+'" data-cost-templates="'+escapeHTML(JSON.stringify(d.costTemplates||[]))+'">'+lignesHTML+'</tbody>'+
     '</table>'+
     (d.lignes.length===0?'<div id="dev-lignes-empty" style="padding:28px;text-align:center;color:#94a3b8;font-size:12px">Aucune ligne — ajoutez des prestations ou importez depuis le catalogue</div>':'')+
     '</div></div>'+
@@ -803,7 +806,7 @@ function renderDevisEditor(view){
   },0);
 }
 
-function devisEditorLigneHTML(l){
+function devisEditorLigneHTML(l,columns=devisColumns()){
   l=l||{};
   const uniteOpts=DEVIS_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(l.unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
   const qte=parseFloat(l.qte)||1;
@@ -814,14 +817,15 @@ function devisEditorLigneHTML(l){
   const TA="width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:4px 8px;font-size:12px;background:#fff;resize:none;overflow:hidden;min-height:30px;line-height:1.5;box-sizing:border-box;display:block";
   const on="oninput=\"devisEditorCalcRow(this.closest('tr'));devisEditorCalcTotals()\"";
   const vt="vertical-align:top";
-  return '<tr class="dev-ligne-row" style="border-bottom:1px solid #f1f5f9">'+
+  return '<tr class="dev-ligne-row" data-cost-sheet="'+escapeHTML(JSON.stringify(l.costSheet||null))+'" style="border-bottom:1px solid #f1f5f9">'+
     '<td style="padding:4px 8px;'+vt+'"><textarea class="input dev-ligne-designation" style="'+TA+'" rows="1" placeholder="Désignation..." oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea></td>'+
     '<td style="padding:4px 6px;'+vt+'"><select class="select dev-ligne-unite" style="font-size:11px;padding:4px 6px;width:100%">'+uniteOpts+'</select></td>'+
     '<td style="padding:4px 6px;'+vt+'"><input type="number" min="0" step="0.01" style="'+IS+';width:125px" value="'+escapeHTML(String(prix))+'" '+on+'/></td>'+
     '<td style="padding:4px 6px;'+vt+'"><input type="number" min="0" step="0.01" style="'+IS+';width:65px" value="'+escapeHTML(String(qte))+'" '+on+'/></td>'+
     '<td style="padding:4px 6px;'+vt+'"><input type="number" min="0" max="100" step="0.01" style="'+IS+';width:60px" value="'+escapeHTML(String(rem))+'" '+on+'/></td>'+
     '<td style="padding:4px 8px;text-align:right;font-weight:700;white-space:nowrap;color:#0f2d5a;'+vt+'" class="dev-ligne-total">'+escapeHTML(formatDZD(total))+'</td>'+
-    '<td style="padding:4px 6px;text-align:center;'+vt+'"><button type="button" onclick="devisEditorLigneRemove(this)" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px;padding:2px 6px;line-height:1">✕</button></td>'+
+    devisColumnsCells(l,columns)+
+    '<td style="padding:4px 6px;text-align:center;'+vt+'"><button type="button" class="btn" data-cost onclick="devisCostOpen(this)">Coût</button><button type="button" onclick="devisEditorLigneRemove(this)" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px;padding:2px 6px;line-height:1">✕</button></td>'+
     '</tr>';
 }
 
@@ -926,7 +930,7 @@ async function devisEditorSave(){
     const qte=parseFloat(nums[1]?.value)||0;
     const remise=parseFloat(nums[2]?.value)||0;
     const totalHT=qte*prixUnitHT*(1-remise/100);
-    if(designation||prixUnitHT)d.lignes.push({id:uid("l"),designation,unite,qte,prixUnitHT,remise,totalHT});
+    if(designation||prixUnitHT)d.lignes.push({id:uid("l"),designation,unite,qte,prixUnitHT,remise,totalHT,...devisLineExtra(tr)});
   });
   const remiseGlobale=parseFloat(document.getElementById("dev-remise")?.value)||0;
   const sousTotal=d.lignes.reduce((s,l)=>s+l.totalHT,0);
@@ -935,6 +939,7 @@ async function devisEditorSave(){
   const tva=montantHT*0.19;
   d.remiseGlobale=remiseGlobale;d.sousTotal=sousTotal;d.montantRemise=montantRemise;
   d.montantHT=montantHT;d.tva=tva;d.montantTTC=montantHT+tva;
+  d.columns=devisColumns();d.costTemplates=devisJSON(document.getElementById("dev-lignes-body")?.dataset.costTemplates,[]);
   d.numero=d.numero||nextDevisNumero();d.updatedAt=new Date().toISOString();
   try{await sgdiApi("/api/irongs/collections/devis",{method:"PUT",body:{data:db.devis},legacy:false});}catch(e){toast("Erreur : "+(e.message||e),"error");return;}
   toast(isNew?"Devis créé":"Devis enregistré","success");
@@ -966,27 +971,28 @@ function devisVoirApercu(){
     const qte=parseFloat(nums[1]?.value)||0;
     const remise=parseFloat(nums[2]?.value)||0;
     const totalHT=qte*prixUnitHT*(1-remise/100);
-    if(designation||prixUnitHT)lignes.push({designation,unite,qte,prixUnitHT,remise,totalHT});
+    if(designation||prixUnitHT)lignes.push({designation,unite,qte,prixUnitHT,remise,totalHT,...devisLineExtra(tr)});
   });
-  const useLines=lignes.length?lignes:d.lignes;
+  const useLines=document.getElementById("dev-lignes-body")?lignes:d.lignes;
+  const columns=document.getElementById("dev-lignes-body")?devisColumns():(d.columns||[]);
   const sousTotal=useLines.reduce((s,l)=>s+(l.totalHT||0),0);
   const remMont=sousTotal*remPct/100;
   const ht=sousTotal-remMont;
   const tva=ht*0.19;
   const ttc=ht+tva;
 
-  const fmtD=v=>(v||"").split("-").reverse().join("/");
+  const fmtD=v=>escapeHTML(String(v||"").split("-").reverse().join("/"));
   const DZD=v=>v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DZD";
   const thS="padding:8px 10px;font-size:11px;font-weight:700;color:#64748b;border-bottom:2px solid #0f2d5a;text-transform:uppercase;white-space:nowrap";
 
   const lignesRows=useLines.map((l,i)=>
     '<tr style="border-bottom:1px solid #f1f5f9;'+(i%2===0?"":"background:#f8fafc")+'">' +
-    '<td style="padding:8px 10px;font-size:12px">'+(l.designation||"")+'</td>'+
-    '<td style="padding:8px 10px;font-size:11px;text-align:center;color:#64748b">'+(l.unite||"")+'</td>'+
+    '<td style="padding:8px 10px;font-size:12px">'+escapeHTML(l.designation||"")+'</td>'+
+    '<td style="padding:8px 10px;font-size:11px;text-align:center;color:#64748b">'+escapeHTML(l.unite||"")+'</td>'+
     '<td style="padding:8px 10px;font-size:12px;text-align:right">'+DZD(l.prixUnitHT||0)+'</td>'+
     '<td style="padding:8px 10px;font-size:12px;text-align:center">'+(l.qte||0)+'</td>'+
     (l.remise>0?'<td style="padding:8px 10px;font-size:12px;text-align:center">'+l.remise+'%</td>':'<td style="padding:8px 10px;font-size:12px;text-align:center">—</td>')+
-    '<td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700">'+DZD(l.totalHT||0)+'</td>'+
+    '<td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700">'+DZD(l.totalHT||0)+'</td>'+devisColumnsCells(l,columns,true)+
     '</tr>'
   ).join("");
 
@@ -999,8 +1005,10 @@ function devisVoirApercu(){
     '<div class="modal-box" style="max-width:860px;width:96vw">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'+
       '<div style="font-weight:800;font-size:15px;color:#0f2d5a">Aperçu du devis</div>'+
+      '<button class="btn btn-primary" onclick="devisClientPrint()">Imprimer / PDF</button>'+
       '<button onclick="closeModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b">✕</button>'+
     '</div>'+
+    '<div id="devis-client-document">'+
     // Header
     '<div style="border:2px solid #0f2d5a;border-radius:8px;padding:16px 20px;margin-bottom:14px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">'+
       '<div>'+
@@ -1024,7 +1032,7 @@ function devisVoirApercu(){
       '<th style="'+thS+';color:#fff;text-align:right;width:130px">Prix unit. HT</th>'+
       '<th style="'+thS+';color:#fff;text-align:center;width:60px">Qté</th>'+
       '<th style="'+thS+';color:#fff;text-align:center;width:70px">Remise</th>'+
-      '<th style="'+thS+';color:#fff;text-align:right;width:130px">Total HT</th>'+
+      '<th style="'+thS+';color:#fff;text-align:right;width:130px">Total HT</th>'+devisColumnsHead(columns,true)+
     '</tr></thead>'+
     '<tbody>'+lignesRows+'</tbody>'+
     '</table></div>'+
@@ -1040,7 +1048,7 @@ function devisVoirApercu(){
     // Notes / Conditions
     (notes?'<div style="margin-top:14px;padding:10px;background:#f8fafc;border-radius:6px;font-size:11px;color:#475569"><strong>Notes :</strong> '+escapeHTML(notes)+'</div>':'')+
     (conditions?'<div style="margin-top:8px;padding:10px;background:#f8fafc;border-radius:6px;font-size:11px;color:#475569"><strong>Conditions :</strong><br>'+escapeHTML(conditions).replace(/\n/g,"<br>")+'</div>':'')+
-    '</div>';
+    '</div></div>';
 
   openModal(html);
 }
