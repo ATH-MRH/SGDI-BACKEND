@@ -1304,7 +1304,7 @@ function devisNewClientOpen(){
   const societe=mySoc();
   if(!select||isFacturationClientContext())return;
   if(!societe){toast("Sélectionnez une société avant de créer un client","error");return;}
-  const fields=[["nom","Nom du client",true],["raisonSociale","Raison sociale",true],["adresse","Adresse",true],["rc","RC",true],["nif","NIF",true],["ai","AI",true],["nis","NIS",false],["contact","Contact",false],["tel","Téléphone",false],["email","E-mail",false]];
+  const fields=[["nom","Nom du client",true],["raisonSociale","Raison sociale",true],["adresse","Adresse",true],["rc","RC",false],["nif","NIF",false],["ai","AI",false],["nis","NIS",false],["contact","Contact",false],["tel","Téléphone",false],["email","E-mail",false]];
   openModal('<form id="dev-new-client" onsubmit="event.preventDefault();devisNewClientSave(this)">'+
     '<h3 style="font-size:22px;font-weight:800;margin-bottom:8px">Nouveau client</h3>'+
     '<p style="color:#64748b;margin-bottom:16px">'+escapeHTML(societe)+' · Les champs marqués * sont obligatoires.</p>'+

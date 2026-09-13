@@ -5,3 +5,5 @@ Ajout du bouton « Nouveau client » à côté du sélecteur. Une fenêtre recue
 Le formulaire du devis reste monté : les lignes et les autres saisies sont conservées, y compris en cas d'annulation. La fenêtre conserve les valeurs en cas d'échec, empêche les soumissions concurrentes et refuse un changement de société avant sauvegarde. Le bouton est absent du contexte Facturation en lecture seule.
 
 Vérification : tests frontend dédiés (succès/conservation, erreur/double clic, société/contexte), suite frontend complète, node --check, git diff --check.
+
+Correction : RC, NIF, AI et NIS sont facultatifs pour créer un client depuis un devis. Le test de création vérifie la réussite avec ces quatre champs vides.

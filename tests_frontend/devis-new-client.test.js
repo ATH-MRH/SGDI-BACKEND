@@ -10,11 +10,13 @@ function fill(a){a.T().devisNewClientOpen();const f=a.window.document.getElement
 test('création depuis devis : sélection après succès, saisies conservées',async()=>{
  const a=setup(),w=a.window,d=w.document;try{
  d.getElementById('dev-objet').value='Transport en cours';const view=d.getElementById('view');const f=fill(a);
+ for(const name of ['rc','nif','ai','nis']){assert.equal(f.elements[name].required,false);assert.equal(f.elements[name].value,'');}
  w.eval('persistClientToPostgres=async c=>{window.clientPayload={...c};c.backendId=123;return c}');
  assert.equal(await a.T().devisNewClientSave(f),true);
  assert.equal(d.getElementById('view'),view);assert.equal(d.getElementById('dev-objet').value,'Transport en cours');
  assert.equal(d.getElementById('dev-clientId').selectedOptions[0].textContent,'Test');
- assert.equal(w.clientPayload.societe,'IRON GLOBAL SOLUTION');assert.equal(d.getElementById('dev-new-client'),null);
+ assert.equal(w.clientPayload.societe,'IRON GLOBAL SOLUTION');
+ for(const name of ['rc','nif','ai','nis'])assert.equal(w.clientPayload[name],'');assert.equal(d.getElementById('dev-new-client'),null);
  }finally{w.close()}
 });
 test('échec serveur et double clic : pas de faux client sélectionné, formulaire conservé',async()=>{
