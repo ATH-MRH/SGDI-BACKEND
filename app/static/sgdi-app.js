@@ -5825,22 +5825,27 @@ function sgdiLangMode(){try{const m=localStorage.getItem('sgdiLangMode')||'fr';r
 function sgdiSetLangMode(mode){try{localStorage.setItem('sgdiLangMode',mode==='ar'?'ar':'fr')}catch(e){}applyLanguagePreference();}
 function sgdiLangText(fr,ar){return sgdiLangMode()==='ar'?ar:fr}
 function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<button type="button" data-no-lang="1" class="btn ${m===v?'btn-primary':'btn-secondary'} text-[10px] px-2 py-1" onclick="sgdiSetLangMode('${v}')">${l}</button>`;return `<div data-no-lang="1" class="sgdi-lang-choice flex items-center gap-1 mb-2"><span class="text-[10px] text-slate-400">Langue</span>${btn('fr','FR')}${btn('ar','AR')}</div>`}
-function sgdiTranslateText(raw){
+function sgdiTranslateText(raw,context){
   if(!raw||!raw.trim())return raw;
-  const mode=sgdiLangMode();
+  if(context&&context.cache.has(raw))return context.cache.get(raw);
+  const mode=context?context.mode:sgdiLangMode();
   let out=raw.replace(/[ÉéEe]conomiser/gi,"Enregistrer");
-  [...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length).forEach(([fr,ar])=>{
+  const pairs=context?context.pairs:[...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length);
+  pairs.forEach(([fr,ar])=>{
     const both=fr+' / '+ar;
     const target=mode==='ar'?ar:fr;
     out=out.split(both).join(target).split(fr).join(target);
     out=out.split(ar).join(target);
   });
+  if(context)context.cache.set(raw,out);
   return out;
 }
 function applyLanguagePreference(root){
   const mode=sgdiLangMode();
   const scope=root||document.getElementById('app');
   if(!scope)return;
+  // Contexte limité à ce parcours : le mode et le dictionnaire peuvent changer au suivant.
+  const translations={mode,pairs:[...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length),cache:new Map()};
   document.documentElement.lang=mode==='ar'?'ar':'fr';
   document.documentElement.dir=mode==='ar'?'rtl':'ltr';
   const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode(node){
@@ -5850,9 +5855,9 @@ function applyLanguagePreference(root){
     return NodeFilter.FILTER_ACCEPT;
   }});
   const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
-  nodes.forEach(n=>{const v=sgdiTranslateText(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  nodes.forEach(n=>{const v=sgdiTranslateText(n.nodeValue,translations);if(v!==n.nodeValue)n.nodeValue=v});
   scope.querySelectorAll('input[placeholder],textarea[placeholder],button[title],select[title]').forEach(el=>{
-    ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
+    ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v,translations);if(t!==v)el.setAttribute(a,t)}});
   });
   scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
@@ -7843,7 +7848,7 @@ function normalizeCentralPage(view){
     h.textContent=sgdiTitleCaseText(h.textContent||"");
   });
   view.querySelectorAll("h2,h3").forEach(h=>{h.textContent=(h.textContent||"").replace(/\s+/g," ").trim()});
-  view.querySelectorAll(".btn").forEach(btn=>{btn.innerHTML=(btn.innerHTML||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trim()});
+  view.querySelectorAll(".btn").forEach(btn=>{const html=btn.innerHTML||"";const cleaned=html.replace(iconPattern,"").replace(/\s{2,}/g," ").trim();if(cleaned!==html)btn.innerHTML=cleaned});
   view.querySelectorAll(".text-6xl,.text-5xl,.text-4xl,[data-icon-only]").forEach(el=>{
     if(!(el.textContent||"").trim()&&!el.querySelector("img,svg,input,select,button,a"))el.remove();
   });
