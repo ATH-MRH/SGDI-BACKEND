@@ -38,7 +38,13 @@ async function renderAlerts(view, sub, arg) {
     view.innerHTML = '<div class="card p-6">🔐 Accès refusé</div>';
     return;
   }
-  if (sub && arg) return renderAlertDetail(view, arg);
+  // Route détail = "alerts/<id>" (2 segments — cf. href="#/alerts/${a.id}" dans
+  // alertsTableHTML, navigate('alerts/'+id) dans alertsAction). renderView()
+  // détruit [root,sub,arg] par split("/") : pour "alerts/1", arg est undefined.
+  // L'ancienne condition (sub && arg) exigeait à tort un 3e segment inexistant :
+  // le bouton "Ouvrir" et le clic sur une ligne ne déclenchaient donc jamais la
+  // fiche détail (retombée silencieuse sur la liste). Seul `sub` porte l'ID.
+  if (sub) return renderAlertDetail(view, sub);
   view.innerHTML = '<div class="card p-10 text-center text-slate-400">Chargement des alertes…</div>';
   let stats, page;
   try {

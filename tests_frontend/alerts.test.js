@@ -81,7 +81,7 @@ test('renderAlerts : erreur réseau affiche une carte d\'erreur, pas de page bla
   w.close();
 });
 
-test('renderAlerts : route de détail affiche score, facteurs, preuves et historique', async () => {
+test('renderAlerts : route de détail "alerts/<id>" (2 segments réels, cf. renderView -> [root,sub,arg]) affiche score, facteurs, preuves et historique', async () => {
   const app = loadSgdiApp(['renderAlerts']);
   const w = app.window;
   app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
@@ -97,11 +97,27 @@ test('renderAlerts : route de détail affiche score, facteurs, preuves et histor
     };
   };
   const view = w.document.getElementById('view');
-  await app.T().renderAlerts(view, '1', '1');
+  // Hash réel "#/alerts/1" -> path.split("/") = ["alerts","1"] -> sub="1", arg=undefined.
+  // C'est EXACTEMENT ce que produisent href="#/alerts/${a.id}" et navigate('alerts/'+id) :
+  // un seul argument après renderAlerts(view, sub). Appeler avec un 3e argument fictif,
+  // comme le faisait cet ancien test, masquait le bug réel du bouton "Ouvrir".
+  await app.T().renderAlerts(view, '1');
   assert.match(view.textContent, /90/);
   assert.match(view.textContent, /proximité de l'échéance/);
   assert.match(view.textContent, /E1/);
   assert.match(view.textContent, /detected/);
+  w.close();
+});
+
+test('renderAlerts : un 3e segment de route (arg) inexistant en pratique ne doit plus être requis pour ouvrir le détail', async () => {
+  const app = loadSgdiApp(['renderAlerts']);
+  const w = app.window;
+  app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
+  const calls = [];
+  w.sgdiApi = async (url) => { calls.push(url); return { id: 42, score_factors: [], evidence: [], history: [] }; };
+  const view = w.document.getElementById('view');
+  await app.T().renderAlerts(view, '42', undefined); // signature réelle passée par le routeur pour "#/alerts/42"
+  assert.deepEqual(calls, ['/alerts/42'], 'sub seul doit suffire à identifier l\'alerte à ouvrir');
   w.close();
 });
 
