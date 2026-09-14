@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.alerts.models import Alert, AlertEvidence, AlertHistory, AlertRule, DetectionRun
 from app.modules.alerts.rules import RULE_CATALOG
+from app.modules.ops.models import DailyPresence
 
 
 def ensure_rule_catalog(db: Session) -> None:
@@ -72,6 +73,7 @@ def list_alerts(
     society: str | None = None,
     site_id: int | None = None,
     assigned_user_id: int | None = None,
+    employee_id: int | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
     limit: int = 100,
@@ -93,6 +95,22 @@ def list_alerts(
         stmt = stmt.where(Alert.site_id == site_id)
     if assigned_user_id is not None:
         stmt = stmt.where(Alert.assigned_user_id == assigned_user_id)
+    if employee_id is not None:
+        # Deux conventions coexistent selon le détecteur (voir detectors/) :
+        # rule "employee_contract.expiring" identifie directement l'employé
+        # (source_type="employee"), "missing_checkout" identifie la présence
+        # (source_type="presence") — on résout ses ID de présence pour cet
+        # employé afin de ne rien inventer côté frontend (dossier employé 360°).
+        presence_ids = [
+            str(pid) for (pid,) in db.execute(
+                select(DailyPresence.id).where(DailyPresence.employee_id == employee_id)
+            ).all()
+        ]
+        employee_clause = (Alert.source_type == "employee") & (Alert.source_id == str(employee_id))
+        if presence_ids:
+            stmt = stmt.where(employee_clause | ((Alert.source_type == "presence") & (Alert.source_id.in_(presence_ids))))
+        else:
+            stmt = stmt.where(employee_clause)
     if since is not None:
         stmt = stmt.where(Alert.last_detected_at >= since)
     if until is not None:

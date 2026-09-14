@@ -514,3 +514,46 @@ def test_api_lifecycle_actions_and_invalid_transition(client, auth_headers, db):
     assert resp_treated.status_code == 200
     resp_assign = client.post(f"/api/alerts/{alert.id}/assign", json={"user_id": 5}, headers=auth_headers)
     assert resp_assign.status_code == 409
+
+
+def test_api_list_filters_by_employee_id_across_both_source_conventions(client, auth_headers, restricted_headers, db):
+    """LOT ERP — Dossier employé 360° : "Situation à traiter" consomme ce filtre
+    pour n'afficher QUE les alertes réelles de l'employé ouvert (aucune alerte
+    inventée côté frontend). Les deux détecteurs identifient l'employé
+    différemment (source_type="employee" vs "presence") : les deux chemins
+    doivent être résolus par employee_id, sans jamais élargir le scope existant.
+    """
+    # Employé A (SOC_A) : alerte contrat (source_type="employee").
+    alert_a, _ = service.apply_finding(db, make_finding(employee_id=40101, society=SOC_A, contract_end_date="2026-09-20"), rule_version=1)
+    db.flush()
+    # Employé B (SOC_A) : alerte présence sans sortie (source_type="presence").
+    emp_b = make_employee(db, code="E40102", society=SOC_A)
+    presence_b = make_presence(db, employee=emp_b, presence_date=date(2026, 9, 13), arrival_time="06:00")
+    ref = datetime(2026, 9, 13, 20, 0)
+    finding_b = missing_checkout.detect(db, allowed_societies=None, reference_datetime=ref)
+    finding_b = next(f for f in finding_b if f.source_id == str(presence_b.id))
+    alert_b, _ = service.apply_finding(db, finding_b, rule_version=1)
+    db.flush()
+    # Employé C, société hors scope de restricted_headers.
+    alert_c, _ = service.apply_finding(db, make_finding(employee_id=40103, society=SOC_B, contract_end_date="2026-09-20"), rule_version=1)
+    db.flush()
+
+    resp_a = client.get(f"/api/alerts?employee_id=40101", headers=auth_headers)
+    assert resp_a.status_code == 200, resp_a.text
+    ids_a = {row["id"] for row in resp_a.json()["items"]}
+    assert ids_a == {alert_a.id}, "seule l'alerte contrat de l'employé A attendue"
+
+    resp_b = client.get(f"/api/alerts?employee_id={emp_b.id}", headers=auth_headers)
+    assert resp_b.status_code == 200, resp_b.text
+    ids_b = {row["id"] for row in resp_b.json()["items"]}
+    assert ids_b == {alert_b.id}, "l'alerte présence de l'employé B doit être résolue via DailyPresence.employee_id"
+
+    # Périmètre : un compte restreint à SOC_A ne doit JAMAIS voir l'alerte de
+    # l'employé C (SOC_B), même en le ciblant explicitement par employee_id.
+    resp_c_restricted = client.get(f"/api/alerts?employee_id=40103", headers=restricted_headers)
+    assert resp_c_restricted.status_code == 200, resp_c_restricted.text
+    assert resp_c_restricted.json()["items"] == [], "le filtre employee_id ne doit jamais élargir le scope société existant"
+
+    resp_c_full = client.get(f"/api/alerts?employee_id=40103", headers=auth_headers)
+    assert resp_c_full.status_code == 200
+    assert {row["id"] for row in resp_c_full.json()["items"]} == {alert_c.id}
