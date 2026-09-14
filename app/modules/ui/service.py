@@ -202,7 +202,15 @@ def _staffing_stats(db: Session, society: str | list[str] | None = None) -> dict
                 if str(item.get("key")) in keys:
                     continue
                 keys.add(str(item.get("key")))
-                contractual += 4 * sum(max(0, int(n)) for n in (item.get("requirements") or {}).values())
+                requirements = item.get("requirements")
+                if isinstance(requirements, list):
+                    # Référentiel canonique (LOT ERP — bascule DC) : liste de
+                    # {position_id, position_label, quantity} — l'identité du poste
+                    # n'a aucune importance ici, seule la quantité totale compte.
+                    contractual += 4 * sum(max(0, int(req.get("quantity") or 0)) for req in requirements if isinstance(req, dict))
+                elif isinstance(requirements, dict):
+                    # Compatibilité ascendante : anciens contrats publiés avant la canonicalisation.
+                    contractual += 4 * sum(max(0, int(n)) for n in requirements.values())
             contract_keys[c.id] = keys
         else:
             # Contrats historiques Commercial, avant le référentiel DC structuré.

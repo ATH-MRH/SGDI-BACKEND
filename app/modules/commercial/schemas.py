@@ -66,21 +66,38 @@ class ClientOut(ClientBase):
     model_config = {"from_attributes": True}
 
 
+class DcRequirementIn(BaseModel):
+    """Une ligne de besoin contractuel DC : identité métier = position_id
+    (référentiel canonique Administration système → Postes/Fonctions), jamais
+    le libellé — voir LOT ERP : bascule contractuelle DC (finalisation)."""
+    position_id: int
+    quantity: int
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Quantité invalide : doit être strictement positive")
+        return value
+
+
 class DcContractSiteIn(BaseModel):
     key: str
     name: str
     address: str | None = None
     first_shift_time: str = "06:00"
     rotation_start_date: date
-    requirements: dict[str, int] = Field(default_factory=dict)
+    requirements: list[DcRequirementIn] = Field(default_factory=list)
 
     @field_validator("requirements")
     @classmethod
-    def validate_requirements(cls, value: dict[str, int]) -> dict[str, int]:
-        cleaned = {str(name).strip().upper(): int(count) for name, count in value.items() if str(name).strip() and int(count) > 0}
-        if not cleaned:
+    def validate_requirements(cls, value: list[DcRequirementIn]) -> list[DcRequirementIn]:
+        if not value:
             raise ValueError("Au moins une fonction avec un effectif positif est obligatoire")
-        return cleaned
+        ids = [item.position_id for item in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Doublon : un même poste ne peut apparaître qu'une seule fois par site")
+        return value
 
 
 class DcContractUpdate(BaseModel):
@@ -92,6 +109,14 @@ class DcContractUpdate(BaseModel):
     def validate_status(cls, value: str) -> str:
         if value not in {"brouillon", "valide"}:
             raise ValueError("Statut contractuel invalide")
+        return value
+
+    @field_validator("sites")
+    @classmethod
+    def validate_sites_unique_keys(cls, value: list["DcContractSiteIn"]) -> list["DcContractSiteIn"]:
+        keys = [item.key.strip() for item in value if item.key and item.key.strip()]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Mapping ambigu : plusieurs sites du contrat partagent la même clé de liaison")
         return value
 
 

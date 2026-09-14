@@ -22,6 +22,7 @@ from app.modules.auth.models import PortalPasswordResetToken, User
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs import service
+from app.modules.irongs.models import Position
 from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
 from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids, _site_society
@@ -1189,8 +1190,16 @@ def attendance_staffing(
 ) -> dict[str, Any]:
     """Effectif contractuel requis pour le shift actuellement en service, par fonction.
 
-    La source est la ventilation contractuelle OPS du site
-    (equipment_plan.groupPositionQuotas), limitée au périmètre du compte Pointeur.
+    Source canonique UNIQUE : le contrat DC validé et publié depuis dc.irongs.com
+    (Client.data.dc_contract_sites, lié via equipment_plan.dcContractSiteKey).
+
+    AUCUN FALLBACK : les anciennes quotas techniques OPS
+    (equipment_plan.groupPositionQuotas / positionQuotas) ne sont plus jamais
+    présentés comme un besoin contractuel, même en l'absence de contrat DC — ces
+    champs restent en base pour l'historique/l'audit (voir rapport de migration)
+    mais ne sont plus lus ici. Un site sans contrat DC validé et lié est retourné
+    explicitement "non configuré" (source="unconfigured", requirements={}),
+    jamais avec des quotas OPS substitués silencieusement.
     """
     allowed_site_ids = _attendance_selected_sites(db, user, site_id)
     query = select(Site).where(Site.active == 1).order_by(Site.name)
@@ -1198,8 +1207,13 @@ def attendance_staffing(
         query = query.where(Site.id.in_(allowed_site_ids))
     sites = db.execute(query).scalars().all()
     now = datetime.now(ZoneInfo("Africa/Algiers"))
-    payload_sites: list[dict[str, Any]] = []
-    totals: dict[str, int] = {}
+
+    # Résout d'abord chaque site vers son contrat DC (ou None), sans encore calculer
+    # les besoins par shift — permet de collecter en un seul aller-retour tous les
+    # position_id référencés, pour rafraîchir leurs libellés depuis le référentiel
+    # canonique (le label n'est qu'une représentation, jamais l'identité métier).
+    site_dc_pairs: list[tuple[Site, dict[str, Any] | None]] = []
+    referenced_position_ids: set[int] = set()
     for site in sites:
         plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
         dc_site: dict[str, Any] | None = None
@@ -1208,17 +1222,52 @@ def attendance_staffing(
         dc_key = plan.get("dcContractSiteKey")
         if dc_data.get("dc_contract_status") == "valide" and dc_key:
             dc_site = next((item for item in dc_data.get("dc_contract_sites", []) if isinstance(item, dict) and item.get("key") == dc_key), None)
+        site_dc_pairs.append((site, dc_site))
         if dc_site:
-            per_shift = dc_site.get("requirements") if isinstance(dc_site.get("requirements"), dict) else {}
-            group_positions = {code: per_shift for code in "ABCD"}
-            rotation = {
-                "system": "3x8",
-                "first_shift_time": dc_site.get("first_shift_time") or "06:00",
-                "start_date": dc_site.get("rotation_start_date"),
-            }
-        else:
-            group_positions = plan.get("groupPositionQuotas") if isinstance(plan.get("groupPositionQuotas"), dict) else {}
-            rotation = plan.get("clientPortalRotation") if isinstance(plan.get("clientPortalRotation"), dict) else {}
+            for req in (dc_site.get("requirements") or []):
+                if isinstance(req, dict) and isinstance(req.get("position_id"), int):
+                    referenced_position_ids.add(req["position_id"])
+    current_labels = {
+        p.id: p.name for p in db.execute(select(Position).where(Position.id.in_(referenced_position_ids))).scalars().all()
+    } if referenced_position_ids else {}
+
+    payload_sites: list[dict[str, Any]] = []
+    totals: dict[str, int] = {}
+    for site, dc_site in site_dc_pairs:
+        if not dc_site:
+            # Aucun contrat DC validé et lié pour ce site : état explicite, jamais de
+            # repli sur les quotas OPS historiques (equipment_plan.groupPositionQuotas /
+            # positionQuotas), quels qu'ils soient.
+            payload_sites.append({
+                "site_id": site.id, "site": site.name, "group": "", "shift": "",
+                "requirements": {}, "configured": False, "source": "unconfigured",
+            })
+            continue
+        # requirements = liste canonique [{position_id, position_label, quantity}, ...]
+        # (voir commercial.routes.update_dc_client_contract). Le libellé affiché est
+        # RÉSOLU ICI depuis le référentiel Administration courant (jamais l'instantané
+        # stocké) : un renommage de poste se reflète immédiatement, sans republier le
+        # contrat DC. Repli sur l'instantané uniquement si le poste a été supprimé.
+        raw_requirements = dc_site.get("requirements")
+        per_shift: dict[str, int] = {}
+        if isinstance(raw_requirements, list):
+            for req in raw_requirements:
+                if not isinstance(req, dict):
+                    continue
+                position_id = req.get("position_id")
+                label = current_labels.get(position_id) or req.get("position_label") or ""
+                if not label:
+                    continue
+                per_shift[label] = per_shift.get(label, 0) + max(0, int(req.get("quantity") or 0))
+        elif isinstance(raw_requirements, dict):
+            # Compatibilité ascendante : anciens contrats publiés avant la canonicalisation.
+            per_shift = {str(name): max(0, int(value or 0)) for name, value in raw_requirements.items()}
+        group_positions = {code: per_shift for code in "ABCD"}
+        rotation = {
+            "system": "3x8",
+            "first_shift_time": dc_site.get("first_shift_time") or "06:00",
+            "start_date": dc_site.get("rotation_start_date"),
+        }
         requirements: dict[str, int] = {}
         group = ""
         shift = ""
@@ -1241,17 +1290,31 @@ def attendance_staffing(
             except (TypeError, ValueError, StopIteration):
                 requirements = {}
         if not requirements:
-            configured = plan.get("positionQuotas") if isinstance(plan.get("positionQuotas"), dict) else {}
-            requirements = {str(name): max(0, int(value or 0)) for name, value in configured.items() if int(value or 0) > 0}
+            # Contrat DC validé mais sans rotation 3x8 exploitable : on retombe sur
+            # les besoins DC bruts (toujours DC, jamais OPS).
+            requirements = {str(name): max(0, int(value or 0)) for name, value in per_shift.items() if int(value or 0) > 0}
             shift = shift or "Configuration générale"
-        if not requirements:
-            continue
         for name, required in requirements.items():
             totals[name] = totals.get(name, 0) + required
-        payload_sites.append({"site_id": site.id, "site": site.name, "group": group, "shift": shift, "requirements": requirements, "source": "dc.irongs.com" if dc_site else "ops-transition"})
-    sources = {item["source"] for item in payload_sites}
-    source = "dc.irongs.com" if sources == {"dc.irongs.com"} else ("ops-transition" if sources == {"ops-transition"} else "mixed-transition")
-    return {"generated_at": now.isoformat(), "sites": payload_sites, "requirements": totals, "source": source}
+        payload_sites.append({
+            "site_id": site.id, "site": site.name, "group": group, "shift": shift,
+            "requirements": requirements, "configured": True, "source": "dc",
+        })
+    configured_count = sum(1 for item in payload_sites if item["configured"])
+    if not payload_sites or configured_count == 0:
+        source = "dc-unconfigured"
+    elif configured_count == len(payload_sites):
+        source = "dc"
+    else:
+        source = "partial"
+    contractual = {"source": source, "configured": source == "dc", "requirements": totals}
+    return {
+        "generated_at": now.isoformat(),
+        "sites": payload_sites,
+        "requirements": totals,
+        "source": source,
+        "contractual": contractual,
+    }
 
 
 @router.get("/attendance-statistics")

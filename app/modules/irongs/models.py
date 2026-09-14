@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -10,6 +10,10 @@ class Position(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(150), index=True)
     society: Mapped[str | None] = mapped_column(String(150), index=True)
+    # Référentiel canonique Poste/Fonction (LOT ERP — bascule DC) : un poste inactif
+    # reste visible pour l'historique mais ne peut plus être référencé par un
+    # nouveau contrat DC (voir commercial.routes.update_dc_client_contract).
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
 
 
 class SgdiRecord(Base, TimestampMixin):

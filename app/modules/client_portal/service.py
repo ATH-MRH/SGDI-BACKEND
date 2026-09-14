@@ -145,8 +145,12 @@ def _site_groups_payload(site: Site, site_employees: list[dict[str, Any]]) -> li
 
 
 def _site_position_requirements_payload(site: Site, site_employees: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # LOT ERP — bascule contractuelle DC : ce besoin est une vue de confort propre au
+    # portail client (clientPortalPositionQuotas), distincte des clés historiques
+    # positionQuotas/groupPositionQuotas — DC.IRONGS.COM reste l'unique autorité
+    # d'écriture des champs contractuels (voir portal.routes.attendance_staffing).
     plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
-    configured = plan.get("positionQuotas") if isinstance(plan.get("positionQuotas"), dict) else {}
+    configured = plan.get("clientPortalPositionQuotas") if isinstance(plan.get("clientPortalPositionQuotas"), dict) else {}
     positions: dict[str, dict[str, Any]] = {}
     for name, required in configured.items():
         label = str(name).strip()
@@ -212,7 +216,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "employees": site_employees,
             "groups": _site_groups_payload(site, site_employees),
             "position_requirements": _site_position_requirements_payload(site, site_employees),
-            "group_position_requirements": ((site.equipment_plan or {}).get("groupPositionQuotas", {}) if isinstance(site.equipment_plan, dict) else {}),
+            "group_position_requirements": ((site.equipment_plan or {}).get("clientPortalGroupPositionQuotas", {}) if isinstance(site.equipment_plan, dict) else {}),
             "rotation_config": rotation_config,
             "rotation_schedule": rotation_schedule,
             "rotation_alerts": rotation_alerts,
@@ -277,6 +281,11 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
 
 
 def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
+    # LOT ERP — bascule contractuelle DC : le portail client garde cette vue de
+    # confort (planification de ses propres groupes/postes), mais n'écrit plus
+    # jamais les clés contractuelles historiques (positionQuotas/groupPositionQuotas)
+    # — DC.IRONGS.COM reste l'unique autorité d'écriture du besoin contractuel réel
+    # (voir portal.routes.attendance_staffing, qui ne lit plus ces clés du tout).
     position_quotas = {position.name: position.required for position in payload.positions}
     required_staff = sum(position_quotas.values()) if position_quotas else payload.required_staff
     group_quotas = _validated_group_position_quotas(position_quotas, payload.group_positions) if payload.group_positions else payload.group_quotas
@@ -288,7 +297,7 @@ def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, An
         wilaya=payload.wilaya,
         site_type=payload.site_type,
         contractual_staff=required_staff,
-        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": group_quotas, "groupPositionQuotas": payload.group_positions, "clientPortalRotation": payload.rotation.model_dump(mode="json") if payload.rotation else {}},
+        equipment_plan={"clientPortalPositionQuotas": position_quotas, "groupQuotas": group_quotas, "clientPortalGroupPositionQuotas": payload.group_positions, "clientPortalRotation": payload.rotation.model_dump(mode="json") if payload.rotation else {}},
         active=1,
     )
     db.add(site)
