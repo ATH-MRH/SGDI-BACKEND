@@ -6125,7 +6125,7 @@ function renderInternal(options={}){
       secretariat:["secretariat","incidents","demandes_structure","documents","agenda"],
       agenda:["agenda","incidents","demandes_structure","documents"],
       materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents","agenda"],
-      admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
+      admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard","alerts"],
       pointage:["pointage","sites","incidents","demandes_structure","documents","agenda"],
       paie:["paie","effectif","agents","demandes_structure","documents","agenda"],
       conges:["drh","conges","effectif","agents","documents","agenda"],
@@ -6624,7 +6624,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["CONFIGURATION RECRUTEMENT","admin/sections_candidat"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["ALERTES","alerts"],["CONFIGURATION RECRUTEMENT","admin/sections_candidat"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -6709,7 +6709,7 @@ function renderSidebar(){
     if(r.includes("agenda"))return svg(`<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path>`);
     if(r.includes("magasins"))return svg(`<path d="M4 10V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V10"></path><path d="M3 6l1.5-3h15L21 6"></path><path d="M3 6a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path>`);
     if(r.includes("fournisseurs"))return svg(`<path d="M3 16V7a1 1 0 0 1 1-1h9v10"></path><path d="M13 10h4l3 3v3h-7"></path><circle cx="7.5" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle>`);
-    if(r.includes("alertes"))return svg(`<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path><path d="M10.5 20a1.7 1.7 0 0 0 3 0"></path>`);
+    if(r.includes("alert"))return svg(`<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path><path d="M10.5 20a1.7 1.7 0 0 0 3 0"></path>`);
     if(r.includes("dotation"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v3M10.5 14.5h3"></path>`);
     if(r.includes("reversement"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M9.5 15l2.5-2.5L14.5 15"></path>`);
     if(r.includes("clients"))return svg(`<path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path>`);
@@ -6971,6 +6971,7 @@ function renderSidebar(){
       ],
       admin:isAdminSystemSession()?[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"ALERTES",route:"alerts",group:"PILOTAGE"},
         {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length},
         {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length},
@@ -8310,6 +8311,7 @@ function renderView(){
       case"admin":renderAdmin(view,sub||"dashboard",arg);break;
       case"custom":renderCustomSidebarPage(view,sub,arg);break;
       case"pointage":renderPointage(view,sub||"dashboard",arg);break;
+      case"alerts":renderAlerts(view,sub,arg);break;
       case"ops":renderOPS(view,sub||"dashboard",arg);break;
       case"superviseur":renderSuperviseur(view,sub||"dashboard",arg);break;
       case"secretariat":renderSecretariat(view,sub||"dashboard",arg);break;

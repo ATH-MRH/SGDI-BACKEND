@@ -31,6 +31,13 @@ function alertsQuery(params) {
 }
 
 async function renderAlerts(view, sub, arg) {
+  // Même mécanisme de visibilité que les autres modules lazy (agenda.js, ops.js,
+  // pointage.js…) : canAccess() existant, aucun nouveau droit créé. L'accès réel
+  // reste de toute façon imposé côté backend (app/modules/alerts/routes.py).
+  if (typeof canAccess === "function" && !canAccess("alerts")) {
+    view.innerHTML = '<div class="card p-6">🔐 Accès refusé</div>';
+    return;
+  }
   if (sub && arg) return renderAlertDetail(view, arg);
   view.innerHTML = '<div class="card p-10 text-center text-slate-400">Chargement des alertes…</div>';
   let stats, page;
@@ -87,7 +94,8 @@ function alertsResetFilters() {
 }
 
 function alertsTableHTML(page) {
-  if (!page.items.length) {
+  const items = (page && page.items) || [];
+  if (!items.length) {
     return `<div class="card p-10 text-center text-slate-500">
       <div class="font-bold mb-1">Aucune alerte trouvée</div>
       <div class="text-sm mb-3">Aucune alerte ne correspond aux filtres actuels.</div>
@@ -96,7 +104,7 @@ function alertsTableHTML(page) {
   }
   return `<div class="card overflow-hidden"><table>
     <thead><tr><th>Criticité</th><th>Règle</th><th>Titre</th><th>Société / Site</th><th>Score</th><th>Statut</th><th>Dernière détection</th><th></th></tr></thead>
-    <tbody>${page.items.map(a => `<tr data-searchable style="cursor:pointer" onclick="navigate('alerts/${a.id}')">
+    <tbody>${items.map(a => `<tr data-searchable style="cursor:pointer" onclick="navigate('alerts/${a.id}')">
       <td><span class="${alertsSeverityBadgeClass(a.severity)}">${escapeHTML(alertsSeverityLabel(a.severity))}</span></td>
       <td class="text-xs font-mono">${escapeHTML(a.rule_key)}</td>
       <td>${escapeHTML(a.title)}</td>

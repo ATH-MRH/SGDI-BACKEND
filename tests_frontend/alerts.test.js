@@ -25,9 +25,23 @@ test('module alerts : enregistré et routé', () => {
   w.close();
 });
 
+test('renderAlerts : accès refusé sans le droit existant, sans le moindre appel réseau', async () => {
+  const app = loadSgdiApp(['renderAlerts']);
+  const w = app.window;
+  app.T().setSession({ username: 'agent1', transverse: 'drh', role: 'AG' }); // rôle non-admin, aucun droit "alerts" accordé
+  const calls = [];
+  w.sgdiApi = async (url) => { calls.push(url); return {}; };
+  const view = w.document.getElementById('view');
+  await app.T().renderAlerts(view);
+  assert.match(view.textContent, /Accès refusé/);
+  assert.deepEqual(calls, [], 'canAccess() doit bloquer AVANT tout appel réseau — même mécanisme que agenda.js/ops.js/pointage.js');
+  w.close();
+});
+
 test('renderAlerts : charge stats + liste une seule fois et affiche les KPI/le tableau', async () => {
   const app = loadSgdiApp(['renderAlerts']);
   const w = app.window;
+  app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
   const calls = [];
   w.sgdiApi = async (url) => {
     calls.push(url);
@@ -47,6 +61,7 @@ test('renderAlerts : charge stats + liste une seule fois et affiche les KPI/le t
 test('renderAlerts : état vide propose de réinitialiser les filtres', async () => {
   const app = loadSgdiApp(['renderAlerts']);
   const w = app.window;
+  app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
   w.sgdiApi = async (url) => (url.startsWith('/alerts/stats') ? sampleStats : samplePage({ items: [], total: 0, pages: 1 }));
   const view = w.document.getElementById('view');
   await app.T().renderAlerts(view);
@@ -58,6 +73,7 @@ test('renderAlerts : état vide propose de réinitialiser les filtres', async ()
 test('renderAlerts : erreur réseau affiche une carte d\'erreur, pas de page blanche', async () => {
   const app = loadSgdiApp(['renderAlerts']);
   const w = app.window;
+  app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
   w.sgdiApi = async () => { throw new Error('Serveur indisponible'); };
   const view = w.document.getElementById('view');
   await app.T().renderAlerts(view);
@@ -68,6 +84,7 @@ test('renderAlerts : erreur réseau affiche une carte d\'erreur, pas de page bla
 test('renderAlerts : route de détail affiche score, facteurs, preuves et historique', async () => {
   const app = loadSgdiApp(['renderAlerts']);
   const w = app.window;
+  app.T().setSession({ username: 'admin', transverse: 'admin', role: 'ADM' });
   w.sgdiApi = async (url) => {
     assert.equal(url, '/alerts/1');
     return {
