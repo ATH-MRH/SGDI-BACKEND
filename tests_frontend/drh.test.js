@@ -48,6 +48,26 @@ test('dashboard Contrats moderne: restitue les zones validées et des actions r�
   assert.ok(css.includes('.contract-modern-dashboard'), 'style du dashboard moderne absent');
 });
 
+test('barre d\'en-tête Contrats : sticky sous la topbar ERP, opaque, sans recouvrement', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  const rule = css.match(/#view \.contract-modern-header\{[^}]*\}/);
+  assert.ok(rule, 'règle #view .contract-modern-header introuvable');
+  const declaration = rule[0];
+  assert.match(declaration, /position:sticky/, 'la barre Contrats doit rester visible au défilement (position:sticky)');
+  assert.match(declaration, /top:0/, "top:0 place la barre juste sous la topbar ERP (.sgdi-shell > .sgdi-topbar est une ligne flex séparée, jamais recouverte par #view — pas besoin d'un offset arbitraire)");
+  // z-index sous la topbar ERP (1000) : ne doit jamais passer devant elle.
+  const zIndexMatch = declaration.match(/z-index:(\d+)/);
+  assert.ok(zIndexMatch, 'z-index manquant');
+  assert.ok(Number(zIndexMatch[1]) < 1000, 'la barre Contrats ne doit jamais recouvrir la topbar ERP (z-index:1000)');
+  assert.match(declaration, /background:#fff/, 'fond opaque requis pour empêcher le contenu défilé de transparaître');
+  assert.match(declaration, /box-shadow/, 'ombre légère attendue au défilement');
+  assert.match(declaration, /flex-wrap:wrap/, 'les actions doivent pouvoir passer à la ligne sans chevauchement sur écran étroit');
+  // La topbar ERP elle-même ne doit jamais être touchée par ce correctif.
+  const topbarRule = css.match(/\.sgdi-shell > \.sgdi-topbar\{[^}]*\}/);
+  assert.ok(topbarRule, 'règle topbar ERP introuvable');
+  assert.match(topbarRule[0], /min-height:40px/, 'hauteur de référence de la topbar ERP inchangée');
+});
+
 test('nouveau contrat: un identifiant explicite ne retombe jamais sur un autre employé', () => {
   const t = T();
   const achour = { id: 'achour', nom: 'ACHOUR', prenom: 'ABDELKADER', dateFinContrat: '2099-10-09', statut: 'actif' };
