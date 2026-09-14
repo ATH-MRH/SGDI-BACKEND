@@ -89,8 +89,16 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-search-match{outline:2px solid #c8102e;outline-offset:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
 .lang-toggle{display:flex;gap:4px}
-.lang-toggle button{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:8px 11px;font-weight:850;font-size:11px;cursor:pointer}
-.lang-toggle button.active{background:#ffcc00;color:#10243e;border-color:#ffcc00}
+/* État dérivé de la langue réellement active (voir applyPortalLanguage), jamais
+   d'un style statique attaché à EN : le bouton INACTIF reste toujours transparent,
+   sans encadrement — seul le bouton ACTIF (FR ou EN) porte un fond contrasté. Sur
+   .top par défaut (bleu), le fond actif est blanc plein ; voir aussi la variante
+   body.iron-portal ci-dessous pour le bandeau jaune (où un fond jaune ferait
+   disparaître visuellement le bouton actif — c'est exactement le bug corrigé ici). */
+.lang-toggle button{border:1px solid transparent;background:transparent;color:rgba(255,255,255,.78);border-radius:8px;padding:8px 11px;font-weight:850;font-size:11px;cursor:pointer}
+.lang-toggle button.active,.lang-toggle button[aria-pressed="true"]{background:#fff;color:#10243e;border-color:#fff}
+body.iron-portal .lang-toggle button{color:rgba(16,36,62,.68)}
+body.iron-portal .lang-toggle button.active,body.iron-portal .lang-toggle button[aria-pressed="true"]{background:#10243e;color:#fff;border-color:#10243e}
 .login-lang-toggle{position:absolute;z-index:3;top:16px;right:16px;display:flex;gap:4px}
 .login-lang-toggle button{border:1px solid var(--line);background:#fff;color:#42566f;border-radius:8px;padding:6px 10px;font-weight:850;font-size:11px;cursor:pointer}
 .login-lang-toggle button.active{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -240,7 +248,7 @@ tr:last-child td{border-bottom:0}
 <body>
 
 <section id="loginView" class="login">
-  <div class="login-lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
+  <div class="login-lang-toggle" data-no-lang="1"><button type="button" class="active" data-lang="fr" aria-pressed="true" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" aria-pressed="false" onclick="portalSetLangMode('en')">EN</button></div>
   <aside class="login-iron-showcase" aria-label="Espace client DHL">
     <div class="dfa-client-mark" aria-label="DHL">DHL</div>
   </aside>
@@ -269,7 +277,7 @@ tr:last-child td{border-bottom:0}
 </section>
 
 <section id="changePwView" class="login hidden">
-  <div class="login-lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
+  <div class="login-lang-toggle" data-no-lang="1"><button type="button" class="active" data-lang="fr" aria-pressed="true" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" aria-pressed="false" onclick="portalSetLangMode('en')">EN</button></div>
   <aside class="login-iron-showcase" aria-label="Espace client DHL">
     <div class="dfa-client-mark" aria-label="DHL">DHL</div>
   </aside>
@@ -309,7 +317,7 @@ tr:last-child td{border-bottom:0}
         <span class="portal-search-icon" aria-hidden="true">⌕</span>
         <div id="portalSearchResults" class="portal-search-results hidden"></div>
       </div>
-      <div class="lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
+      <div class="lang-toggle" data-no-lang="1"><button type="button" class="active" data-lang="fr" aria-pressed="true" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" aria-pressed="false" onclick="portalSetLangMode('en')">EN</button></div>
       <button class="logout" onclick="logout()">Déconnexion</button>
     </div>
   </header>
@@ -691,7 +699,9 @@ function applyPortalLanguage(root){
     ["placeholder","title","aria-label"].forEach(a=>{const v=el.getAttribute(a);if(v){const t=portalTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
   });
   document.querySelectorAll(".lang-toggle button,.login-lang-toggle button").forEach(b=>{
-    b.classList.toggle("active",b.dataset.lang===portalLangMode());
+    const isActive=b.dataset.lang===portalLangMode();
+    b.classList.toggle("active",isActive);
+    b.setAttribute("aria-pressed",isActive?"true":"false");
   });
 }
 
