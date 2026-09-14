@@ -7258,12 +7258,21 @@ function _sgdiDoNavigate(r){
 function sgdiNoteFormInput(e){
   const t=e&&e.target;
   if(!session||!t||typeof t.closest!=="function"||!t.closest("#view"))return;
-  // Filtres de navigation (mois/agent/société en haut d'un écran de consultation, ex.
-  // Pointage > Récap) : changer leur valeur ne modifie aucune donnée, ce n'est pas un
-  // formulaire à enregistrer. Sans cette exclusion, sélectionner un autre agent ou mois
-  // déclenchait à tort l'avertissement "Modifications non enregistrées" au moment même où
-  // le filtre appelle navigate() pour changer d'écran.
+  // CORRECTION GLOBALE — FAUX BLOCAGES DE NAVIGATION : seule une saisie à l'intérieur
+  // d'un vrai <form> (le formulaire persistable — fiche employé, éditeur client, etc.,
+  // partout dans le code : ~45 <form> répertoriés à travers tous les modules) compte
+  // comme "travail non enregistré". Un <input>/<select> de filtre, recherche, tri ou
+  // pagination qui ne vit PAS dans un <form> (cas de la quasi-totalité des écrans de
+  // consultation/listes/tableaux de bord) ne doit jamais pouvoir déclencher ce verrou —
+  // avant cette correction, l'absence de <form> faisait retomber le marquage "modifié"
+  // sur #view tout entier, un verrou qui ne s'efface qu'à l'enregistrement/annulation
+  // explicite d'UN formulaire, donc qui restait collé même après avoir quitté l'écran où
+  // il avait été posé par erreur (ex. Tableau de bord RH -> clic sur une carte KPI).
+  // [data-nav-filter] reste vérifié en plus, au cas où un filtre existant vivrait malgré
+  // tout à l'intérieur d'un <form> (ex. un <form> de recherche sans bouton "Enregistrer").
   if(t.closest("[data-nav-filter]"))return;
+  const form=t.closest("form");
+  if(!form)return;
   const tag=String(t.tagName||"").toUpperCase();
   const isField=tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||t.isContentEditable;
   if(!isField)return;
@@ -7271,11 +7280,10 @@ function sgdiNoteFormInput(e){
   sgdiLastFormInputAt=Date.now();
   sgdiFormHasUnsavedChanges=true;
   sgdiUpdateSaveButton();
-  // Verrou permanent (sans expiration, indépendant du mode vue) : dès la première frappe,
-  // le formulaire (ou toute la vue si pas de <form>) est marqué "modifié" et aucun
+  // Verrou permanent (sans expiration, indépendant du mode vue) : dès la première frappe
+  // dans un CHAMP DE FORMULAIRE réel, ce formulaire est marqué "modifié" et aucun
   // rafraîchissement automatique ne pourra plus l'écraser, où qu'on soit dans le module.
-  const dirtyHost=t.closest("form")||document.getElementById("view");
-  if(dirtyHost)dirtyHost.dataset.dirty="1";
+  form.dataset.dirty="1";
 }
 document.addEventListener("input",sgdiNoteFormInput,{passive:true});
 document.addEventListener("change",sgdiNoteFormInput,{passive:true});
