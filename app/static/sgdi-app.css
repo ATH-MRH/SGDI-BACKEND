@@ -3566,18 +3566,39 @@ table{width:100%;max-width:100%}
 }
 
 /* Statuts employés : code couleur unique dans toutes les vues */
-#view .employee-status-pill{
-  border:0!important;
-  color:#fff!important;
-  font-weight:950!important;
+/* Composant ERP réutilisable : badge de STATUT non cliquable (CORRECTION UX —
+   séparer statut et actions RH). La couleur ne représente que l'état, jamais une
+   action possible : pas d'ombre de bouton, curseur normal, aucun onclick porté par
+   ce composant. Variantes : success/warning/danger/info/neutral (item 6). */
+.erp-status-badge{
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  border:1px solid transparent!important;
+  border-radius:999px!important;
+  padding:4px 10px!important;
+  font-size:11px!important;
+  font-weight:800!important;
   text-transform:uppercase!important;
-  letter-spacing:.035em!important;
+  letter-spacing:.03em!important;
+  line-height:1.3!important;
+  cursor:default!important;
   box-shadow:none!important;
+  pointer-events:none;
 }
-#view .employee-status-actif{background:#16a34a!important;color:#fff!important}
-#view .employee-status-sortant{background:#dc2626!important;color:#fff!important}
-#view .employee-status-suspendu{background:#f97316!important;color:#fff!important}
-#view .employee-status-blacklist{background:#111827!important;color:#fff!important}
+.erp-status-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.erp-status-badge.success{background:#dcfce7!important;color:#15803d!important;border-color:#bbf7d0!important}
+.erp-status-badge.warning{background:#fff7ed!important;color:#c2410c!important;border-color:#fed7aa!important}
+.erp-status-badge.danger{background:#fef2f2!important;color:#b91c1c!important;border-color:#fecaca!important}
+.erp-status-badge.info{background:#eff6ff!important;color:#1d4ed8!important;border-color:#bfdbfe!important}
+.erp-status-badge.neutral{background:#f1f5f9!important;color:#475569!important;border-color:#e2e8f0!important}
+/* Alias historique conservé pour les 2 écrans existants (Gestion des effectifs,
+   Contrats) : mêmes couleurs par variante, le badge reste identifiable partout. */
+#view .employee-status-pill{border:0!important;font-weight:950!important;text-transform:uppercase!important;letter-spacing:.035em!important;box-shadow:none!important}
+#view .employee-status-actif{background:#dcfce7!important;color:#15803d!important}
+#view .employee-status-sortant{background:#f1f5f9!important;color:#475569!important}
+#view .employee-status-suspendu{background:#fff7ed!important;color:#c2410c!important}
+#view .employee-status-blacklist{background:#fef2f2!important;color:#b91c1c!important}
 #view .effectif-table .effectif-open-cell{
   text-align:center;
   white-space:nowrap;

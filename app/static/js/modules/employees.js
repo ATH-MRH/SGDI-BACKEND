@@ -176,12 +176,18 @@ function printEmployeeSuspensionDecisionFromForm(form){
   w.document.close();
 }
 
+// CORRECTION UX : le badge Statut (employeeStatusPillHTML) n'ouvre plus jamais ce
+// menu — c'est désormais l'unique bouton d'actions RH de la ligne (colonne Action,
+// à côté de "Ouvrir →"). Auparavant masqué en contexte DRH/OPS car le badge
+// Statut portait seul cette fonction dans ces contextes ; rien n'est perdu, le
+// même menu contextuel (openEmployeeStatusActions, défini dans le monolithe)
+// reste disponible partout.
 function employeeRowActionsButton(a){
-  if(isDrhModuleContext())return "";
-  if(isOpsEffectifContext())return "";
   if(!canUseEmployeeActionWorkflows())return "";
-  return `<button type="button" class="btn btn-ghost text-lg leading-none px-2" title="Actions" aria-label="Actions employé" onclick="openEmployeeRowActions(event,'${escapeHTML(a.id)}')">...</button>`;
+  const title=isOpsEffectifContext()?"Actions OPS":"Actions RH";
+  return `<button type="button" class="btn btn-ghost text-lg leading-none px-2" title="${title}" aria-label="${title}" onclick="openEmployeeStatusActions(event,'${escapeHTML(a.id)}','')">⋯</button>`;
 }
+
 
 function renderEffectifRecap(view){
   const current=sessionStorage.getItem("effectifStableFilter")||"actifs";
