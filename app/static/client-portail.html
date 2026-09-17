@@ -13,7 +13,7 @@
 <link rel="icon" href="/static/sgdi-icon-192.png">
 <link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
 <style>
-:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8}
+:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8;--header-height:92px}
 *{box-sizing:border-box}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
@@ -105,7 +105,7 @@ body.iron-portal .lang-toggle button.active,body.iron-portal .lang-toggle button
 .login-lang-toggle button{border:1px solid var(--line);background:#fff;color:#42566f;border-radius:8px;padding:6px 10px;font-weight:850;font-size:11px;cursor:pointer}
 .login-lang-toggle button.active{background:var(--navy);color:#fff;border-color:var(--navy)}
 .shell{width:100%;max-width:none;margin:0;padding:18px 0;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
-.portal-sidebar-stack{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px}.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
+.portal-sidebar-stack{position:sticky;top:calc(var(--header-height) + 14px);max-height:calc(100vh - var(--header-height) - 28px);overflow-y:auto;display:flex;flex-direction:column;gap:14px}.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 .portal-sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
 .portal-nav{display:flex;flex-direction:column;gap:6px}
 .portal-nav-btn{width:100%;border:0;background:transparent;color:#31465f;border-radius:12px;padding:12px 13px;display:flex;align-items:center;gap:11px;text-align:left;font-size:13px;font-weight:850;cursor:pointer}
@@ -212,6 +212,20 @@ tr:last-child td{border-bottom:0}
 .group-select{height:30px;font-size:11px;font-weight:800;padding:0 6px;width:auto}
 .hist-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .hist-toolbar select{height:40px;max-width:220px}
+.attendance-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.attendance-kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
+.attendance-kpi span{display:block;font-size:10px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.attendance-kpi b{display:block;margin-top:6px;font-size:24px;color:var(--ink)}
+.attendance-toolbar{align-items:center}
+.attendance-toolbar select,.attendance-toolbar input[type=date]{height:40px}
+.attendance-period-shortcuts{display:flex;gap:6px;flex-wrap:wrap}
+.attendance-period-shortcuts button{height:40px;padding:0 12px;font-size:12px}
+.attendance-date-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:750}
+.attendance-date-label input{border:1px solid var(--line);border-radius:10px;padding:0 8px}
+.attendance-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:14px;font-size:12px;color:var(--muted);font-weight:750}
+.attendance-pagination button{height:34px;padding:0 14px}
+.attendance-pagination button:disabled{opacity:.4;cursor:not-allowed}
+.attendance-status-badge{cursor:default}
 .hist-list{display:grid;gap:10px}
 .hist-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:14px;padding:14px 16px}
 .hist-card.urgente{border-left-color:var(--red)}
@@ -326,20 +340,17 @@ tr:last-child td{border-bottom:0}
   </header>
 
   <div class="shell">
-    <div class="portal-sidebar-stack"><aside class="portal-sidebar" aria-label="Navigation portail client">
+    <div class="portal-sidebar-stack"><aside class="portal-sidebar" id="employeeSearchCard" aria-label="Rechercher un employé"><div class="portal-sidebar-title">Recherche employé</div><div class="employee-sidebar-search"><input id="employeeSidebarSearch" type="search" autocomplete="off" placeholder="Code, nom, fonction…" oninput="runEmployeeSidebarSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';runEmployeeSidebarSearch('')}" aria-label="Rechercher un employé"><span class="employee-sidebar-search-icon" aria-hidden="true">⌕</span><div id="employeeSidebarResults" class="employee-sidebar-results hidden"></div></div></aside><aside class="portal-sidebar" aria-label="Navigation portail client">
       <div class="portal-sidebar-title">Espace client</div>
       <nav class="portal-nav">
         <button type="button" class="portal-nav-btn active" data-tab="employees" onclick="switchTab('employees')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Mon personnel</button>
         <button type="button" class="portal-nav-btn" data-tab="sites" onclick="switchTab('sites')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>Mes sites</button>
         <button type="button" class="portal-nav-btn" data-tab="equipment" onclick="switchTab('equipment')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="19" height="11" rx="2"/><path d="M8.5 8.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2.5M2.5 13.5h19"/></svg></span>Mes équipements</button>
         <button type="button" class="portal-nav-btn" data-tab="planning" onclick="switchTab('planning')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Planning de travail</button>
+        <button type="button" class="portal-nav-btn" data-tab="pointage" onclick="switchTab('pointage')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>Pointage</button>
         <button type="button" class="portal-nav-btn" data-tab="history" onclick="switchTab('history')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>Historique</button>
       </nav>
-    </aside><aside class="portal-sidebar" id="portalMessagingCard" aria-label="Messagerie client"><div class="portal-sidebar-title">Messagerie</div><nav class="portal-nav">
-      <button type="button" class="portal-nav-btn" data-tab="messages-sent" onclick="switchTab('messages-sent')"><span class="portal-nav-icon">↑</span>Messages envoyés</button>
-      <button type="button" class="portal-nav-btn" data-tab="messages-received" onclick="switchTab('messages-received')"><span class="portal-nav-icon">↓</span>Messages reçus</button>
-      <button type="button" class="portal-nav-btn" data-tab="messages-archived" onclick="switchTab('messages-archived')"><span class="portal-nav-icon">▣</span>Messages archivés</button>
-    </nav></aside><aside class="portal-sidebar" id="employeeSearchCard" aria-label="Rechercher un employé"><div class="portal-sidebar-title">Recherche employé</div><div class="employee-sidebar-search"><input id="employeeSidebarSearch" type="search" autocomplete="off" placeholder="Code, nom, fonction…" oninput="runEmployeeSidebarSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';runEmployeeSidebarSearch('')}" aria-label="Rechercher un employé"><span class="employee-sidebar-search-icon" aria-hidden="true">⌕</span><div id="employeeSidebarResults" class="employee-sidebar-results hidden"></div></div></aside></div>
+    </aside></div>
     <main class="portal-main">
       <div id="banner"></div>
       <div id="portalOperationalAlerts" class="portal-alert-center"></div>
@@ -369,6 +380,25 @@ tr:last-child td{border-bottom:0}
           <button type="button" class="secondary" id="addEquipmentBtn" onclick="openEquipmentModal()">+ Ajouter un équipement</button>
         </div>
         <div id="equipmentList"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div id="pointageTab" class="hidden">
+        <div class="section-head"><h1>POINTAGE DU PERSONNEL</h1><p>Suivi des présences de vos équipes.</p></div>
+        <div id="attendanceKpis" class="attendance-kpis"></div>
+        <div class="hist-toolbar attendance-toolbar">
+          <select id="attSiteFilter" onchange="onAttendanceFilterChange()"><option value="">Tous les sites</option></select>
+          <select id="attEmployeeFilter" onchange="onAttendanceFilterChange()"><option value="">Tous les employés</option></select>
+          <div class="attendance-period-shortcuts" role="group" aria-label="Période">
+            <button type="button" class="secondary" onclick="setAttendancePeriod('today')">Aujourd'hui</button>
+            <button type="button" class="secondary" onclick="setAttendancePeriod('yesterday')">Hier</button>
+            <button type="button" class="secondary" onclick="setAttendancePeriod('last7')">7 derniers jours</button>
+            <button type="button" class="secondary" onclick="setAttendancePeriod('month')">Mois en cours</button>
+          </div>
+          <label class="attendance-date-label">Du <input id="attDateFrom" type="date" onchange="onAttendanceFilterChange()"></label>
+          <label class="attendance-date-label">Au <input id="attDateTo" type="date" onchange="onAttendanceFilterChange()"></label>
+        </div>
+        <div id="attendanceList"><div class="empty">Chargement…</div></div>
+        <div id="attendancePagination" class="attendance-pagination hidden"></div>
       </div>
 
       <div id="historyTab" class="hidden">
@@ -504,6 +534,12 @@ let loginPasswordUsed="";
 let employees=[];
 let equipmentCache=[];
 let historyCache=[];
+// LOT — POINTAGE LECTURE SEULE (Espace Client). État purement local d'affichage :
+// aucune donnée de présence n'est jamais recopiée/persistée ici, seulement la
+// dernière page reçue de GET /api/client-portal/attendance.
+let attendanceFiltersLoaded=false;
+let attendancePage=1;
+const ATTENDANCE_PAGE_SIZE=25;
 let portalOperationalAlerts=[];
 let portalSearchResults=[];
 let portalSearchRequest=0;
@@ -934,9 +970,19 @@ function logout(){
   document.getElementById("password").value="";
 }
 
+// Sidebar gauche figée (sticky) : l'offset doit tenir compte de la hauteur RÉELLE
+// du header (variable selon la largeur d'écran/le contenu), jamais une valeur
+// fixe devinée — sinon la sidebar peut partiellement passer sous le header.
+function syncHeaderHeightVar(){
+  const header=document.querySelector("#appView > .top");
+  if(header)document.documentElement.style.setProperty("--header-height",header.offsetHeight+"px");
+}
+window.addEventListener("resize",syncHeaderHeightVar);
+
 async function enterApp(){
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
+  syncHeaderHeightVar();
   document.getElementById("clientNameLabel").textContent=session.clientName||"—";
   document.getElementById("fullNameLabel").textContent=session.fullName||"—";
   try{const me=await apiFetch("/me");session.permissions=me.permissions||{};persistSession()}catch(e){}
@@ -944,8 +990,11 @@ async function enterApp(){
   const canSites=session?.permissions?.view_sites!==false;
   const canEquipment=session?.permissions?.view_equipment!==false;
   const canEmployees=session?.permissions?.view_employees!==false;
+  // view_attendance est opt-in (défaut false) — inverse des autres droits ci-dessus,
+  // hérités "activés" : ne jamais afficher Pointage sans autorisation explicite.
+  const canAttendance=session?.permissions?.view_attendance===true;
   document.querySelector('.portal-nav-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
-  document.getElementById("portalMessagingCard")?.classList.toggle("hidden",!canHistory);
+  document.querySelector('.portal-nav-btn[data-tab="pointage"]')?.classList.toggle("hidden",!canAttendance);
   document.getElementById("employeeSearchCard")?.classList.toggle("hidden",!canEmployees);
   document.getElementById("newPlanningBtn")?.classList.toggle("hidden",session?.permissions?.create_sites===false);
   document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
@@ -953,6 +1002,7 @@ async function enterApp(){
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
   if(!canSites)document.getElementById("sitesTab").classList.add("hidden");
   if(!canEquipment)document.getElementById("equipmentTab").classList.add("hidden");
+  if(!canAttendance)document.getElementById("pointageTab").classList.add("hidden");
   if(branding?.logo_data_uri){
     document.getElementById("appLogoImg").src=branding.logo_data_uri;
     document.getElementById("appLogoBox").classList.remove("hidden");
@@ -1002,6 +1052,7 @@ async function switchTab(tab){
   document.getElementById("employeesTab").classList.toggle("hidden",tab!=="employees");
   document.getElementById("sitesTab").classList.toggle("hidden",tab!=="sites");
   document.getElementById("equipmentTab").classList.toggle("hidden",tab!=="equipment");
+  document.getElementById("pointageTab").classList.toggle("hidden",tab!=="pointage");
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
   document.getElementById("messagesTab").classList.toggle("hidden",!tab.startsWith("messages-"));
   if(tab==="sites")await loadSites();
@@ -1009,6 +1060,7 @@ async function switchTab(tab){
   if(allValue&&allLabel){const plannedCount=sitesCache.filter(site=>(site.rotation_schedule||[]).length).length;allValue.textContent=tab==="sites"?sitesCache.length:(tab==="planning"?plannedCount:employees.length);allLabel.textContent=tab==="sites"?"Tous les sites":(tab==="planning"?"Tous les plannings":"Tous les employés")}
   if(tab==="planning")await loadPlanning();
   if(tab==="equipment")await loadEquipment();
+  if(tab==="pointage"){attendancePage=1;await loadAttendance()}
   if(tab==="history")await loadHistory();
   if(tab.startsWith("messages-"))await loadPortalMessages(tab.slice(9));
   applyPortalLanguage(document.body);
@@ -1529,6 +1581,94 @@ function statusLabel(status){
 }
 function statusPillClass(status){
   return {nouveau:"pill-blue",en_cours:"pill-amber",traite:"pill-green"}[status]||"pill-gray";
+}
+
+// LOT — POINTAGE LECTURE SEULE (Espace Client). Lecture uniquement : aucun
+// bouton Ajouter/Modifier/Corriger/Supprimer/Valider nulle part dans cet onglet.
+const ATTENDANCE_STATUS_LABELS={present:"Présent",absent:"Absent",en_cours:"En cours",sortie_manquante:"Sortie manquante"};
+const ATTENDANCE_STATUS_PILL={present:"pill-green",absent:"pill-red",en_cours:"pill-blue",sortie_manquante:"pill-amber"};
+
+function attendancePeriodBounds(key){
+  const today=new Date();
+  // Toujours utiliser les composants LOCAUX de la date (jamais toISOString(), qui
+  // convertit en UTC et peut faire glisser d'un jour en arrière pour un fuseau en
+  // avance sur UTC, ex. Africa/Algiers UTC+1 : minuit local == 23h UTC la veille).
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  if(key==="today")return[iso(today),iso(today)];
+  if(key==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);return[iso(y),iso(y)]}
+  if(key==="last7"){const from=new Date(today);from.setDate(from.getDate()-6);return[iso(from),iso(today)]}
+  if(key==="month"){const from=new Date(today.getFullYear(),today.getMonth(),1);return[iso(from),iso(today)]}
+  return[null,null];
+}
+function setAttendancePeriod(key){
+  const[from,to]=attendancePeriodBounds(key);
+  document.getElementById("attDateFrom").value=from||"";
+  document.getElementById("attDateTo").value=to||"";
+  attendancePage=1;
+  loadAttendance();
+}
+function onAttendanceFilterChange(){attendancePage=1;loadAttendance()}
+function changeAttendancePage(delta){attendancePage=Math.max(1,attendancePage+delta);loadAttendance()}
+
+async function loadAttendanceFilters(){
+  if(attendanceFiltersLoaded)return;
+  try{
+    const data=await apiFetch("/attendance/filters");
+    const siteSelect=document.getElementById("attSiteFilter");
+    siteSelect.innerHTML='<option value="">Tous les sites</option>'+data.sites.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+    const empSelect=document.getElementById("attEmployeeFilter");
+    empSelect.innerHTML='<option value="">Tous les employés</option>'+data.employees.map(e=>`<option value="${e.id}">${esc(e.code)} — ${esc(e.name)}</option>`).join("");
+    attendanceFiltersLoaded=true;
+  }catch(e){}
+}
+
+function attendanceKpiHTML(items){
+  const counts={present:0,absent:0,en_cours:0,sortie_manquante:0};
+  items.forEach(row=>{if(counts[row.status]!==undefined)counts[row.status]++});
+  return `<div class="attendance-kpi"><span>Présents</span><b>${counts.present}</b></div><div class="attendance-kpi"><span>Absents</span><b>${counts.absent}</b></div><div class="attendance-kpi"><span>En cours</span><b>${counts.en_cours}</b></div><div class="attendance-kpi"><span>Sortie manquante</span><b>${counts.sortie_manquante}</b></div>`;
+}
+
+async function loadAttendance(){
+  const host=document.getElementById("attendanceList");
+  const pager=document.getElementById("attendancePagination");
+  if(session?.permissions?.view_attendance!==true){host.innerHTML='<div class="empty">Le pointage n’est pas activé pour votre compte.</div>';pager.classList.add("hidden");document.getElementById("attendanceKpis").innerHTML="";return}
+  await loadAttendanceFilters();
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams();
+    const siteId=document.getElementById("attSiteFilter").value;
+    const employeeId=document.getElementById("attEmployeeFilter").value;
+    const dateFrom=document.getElementById("attDateFrom").value;
+    const dateTo=document.getElementById("attDateTo").value;
+    if(siteId)params.set("site_id",siteId);
+    if(employeeId)params.set("employee_id",employeeId);
+    if(dateFrom)params.set("date_from",dateFrom);
+    if(dateTo)params.set("date_to",dateTo);
+    params.set("page",String(attendancePage));
+    params.set("page_size",String(ATTENDANCE_PAGE_SIZE));
+    const data=await apiFetch(`/attendance?${params.toString()}`);
+    document.getElementById("attendanceKpis").innerHTML=attendanceKpiHTML(data.items);
+    if(!data.items.length){host.innerHTML='<div class="empty">Aucun pointage pour cette période.</div>';pager.classList.add("hidden");return}
+    host.innerHTML=`<div class="table-card"><table><thead><tr><th>Employé</th><th>Matricule</th><th>Poste</th><th>Site</th><th>Date</th><th>Entrée</th><th>Sortie</th><th>Durée</th><th>Groupe</th><th>Statut</th></tr></thead><tbody>${data.items.map(row=>`
+      <tr>
+        <td>${esc(row.employee_name)}</td>
+        <td>${esc(row.employee_code)}</td>
+        <td>${esc(row.position||"—")}</td>
+        <td>${esc(row.site_name)}</td>
+        <td>${formatDateFr(row.presence_date)}</td>
+        <td>${esc(row.arrival_time||"—")}</td>
+        <td>${esc(row.departure_time||"—")}</td>
+        <td>${esc(row.duration_label||"—")}</td>
+        <td>${esc(row.group_code||"—")}</td>
+        <td><span class="pill attendance-status-badge ${ATTENDANCE_STATUS_PILL[row.status]||"pill-gray"}">${esc(ATTENDANCE_STATUS_LABELS[row.status]||row.status)}</span></td>
+      </tr>`).join("")}</tbody></table></div>`;
+    pager.classList.remove("hidden");
+    pager.innerHTML=`<button type="button" class="secondary" ${data.page<=1?"disabled":""} onclick="changeAttendancePage(-1)">← Précédent</button><span>Page ${data.page} / ${data.pages} · ${data.total} pointage${data.total>1?"s":""}</span><button type="button" class="secondary" ${data.page>=data.pages?"disabled":""} onclick="changeAttendancePage(1)">Suivant →</button>`;
+    applyPortalLanguage(document.body);
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+    pager.classList.add("hidden");
+  }
 }
 
 async function loadHistory(){
