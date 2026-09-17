@@ -381,6 +381,7 @@ let editingLivraisonId=null, livraisonLignes=[], livraisonExistingLignes=[];
 let debounceTimers={};
 let dcSettings=null;
 let dcContractSitesDraft=[];
+let positionsCatalog=[]; // référentiel canonique Administration → Postes/Fonctions (LOT ERP — bascule DC)
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function fmtMoney(value){const n=Number(value)||0;return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -526,7 +527,11 @@ async function loadClients(page){
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
 
-function openClientModal(clientId){
+async function loadPositionsCatalog(society){
+  try{positionsCatalog=await apiFetch("/api/irongs/positions"+(society?`?society=${encodeURIComponent(society)}`:""))}
+  catch(e){positionsCatalog=[]}
+}
+async function openClientModal(clientId){
   document.getElementById("clientModalTitle").textContent=clientId?"Modifier le client":"Nouveau client";
   document.getElementById("clientSubmitBtn").textContent=clientId?"Enregistrer les modifications":"Enregistrer le client";
   document.getElementById("clientModalBackdrop").dataset.id=clientId||"";
@@ -552,22 +557,51 @@ function openClientModal(clientId){
   document.getElementById("cPortalSlug").value=client?.portal_slug||"";
   document.getElementById("cNotes").value=client?.notes||"";
   document.getElementById("cDcContractStatus").value=client?.data?.dc_contract_status||"brouillon";
-  dcContractSitesDraft=Array.isArray(client?.data?.dc_contract_sites)?client.data.dc_contract_sites.map(site=>({...site,requirements:{...(site.requirements||{})}})):[];
+  // Identité métier = position_id (référentiel canonique), jamais un libellé libre :
+  // un site déjà en liste canonique (requirements = liste) est repris tel quel ;
+  // un ancien brouillon pré-canonicalisation (requirements = objet libellé→qté) ne
+  // peut pas être réassocié automatiquement (aucune correspondance approximative
+  // silencieuse) — il repart vide, l'utilisateur resélectionne les postes.
+  await loadPositionsCatalog(client?.society||activeSociety);
+  dcContractSitesDraft=Array.isArray(client?.data?.dc_contract_sites)?client.data.dc_contract_sites.map(site=>({...site,requirements:Array.isArray(site.requirements)?site.requirements.map(r=>({...r})):[]})):[];
   renderDcContractSites();
   document.getElementById("clientModalBackdrop").classList.remove("hidden");
 }
 function closeClientModal(){document.getElementById("clientModalBackdrop").classList.add("hidden")}
 function dcContractKey(){return globalThis.crypto?.randomUUID?.()||"dc-site-"+Date.now()+"-"+Math.random().toString(16).slice(2)}
-function addDcContractSite(){dcContractSitesDraft.push({key:dcContractKey(),name:"",address:"",first_shift_time:"06:00",rotation_start_date:document.getElementById("cContractStart").value||today(),requirements:{}});renderDcContractSites()}
+function addDcContractSite(){dcContractSitesDraft.push({key:dcContractKey(),name:"",address:"",first_shift_time:"06:00",rotation_start_date:document.getElementById("cContractStart").value||today(),requirements:[]});renderDcContractSites()}
 function removeDcContractSite(index){dcContractSitesDraft.splice(index,1);renderDcContractSites()}
-function requirementsText(requirements){return Object.entries(requirements||{}).map(([name,count])=>`${name}: ${count}`).join(", ")}
-function parseRequirements(value){
-  const result={};String(value||"").split(/[,;\n]+/).forEach(part=>{const match=part.trim().match(/^(.+?)\s*[:=]\s*(\d+)$/);if(match&&Number(match[2])>0)result[match[1].trim().toUpperCase()]=Number(match[2])});return result
+function updateDcContractSite(index,field,value){if(!dcContractSitesDraft[index])return;dcContractSitesDraft[index][field]=value}
+// Identité métier = position_id (référentiel canonique Administration → Postes/
+// Fonctions), jamais un libellé libre — voir LOT ERP : bascule contractuelle DC.
+function addDcRequirementRow(siteIndex){
+  const site=dcContractSitesDraft[siteIndex];if(!site)return;
+  if(!Array.isArray(site.requirements))site.requirements=[];
+  const firstAvailable=positionsCatalog.find(p=>!site.requirements.some(r=>r.position_id===p.id));
+  site.requirements.push({position_id:firstAvailable?firstAvailable.id:null,quantity:1});
+  renderDcContractSites();
 }
-function updateDcContractSite(index,field,value){if(!dcContractSitesDraft[index])return;dcContractSitesDraft[index][field]=field==="requirements"?parseRequirements(value):value}
+function removeDcRequirementRow(siteIndex,reqIndex){
+  const site=dcContractSitesDraft[siteIndex];if(!site)return;
+  site.requirements.splice(reqIndex,1);
+  renderDcContractSites();
+}
+function updateDcRequirementRow(siteIndex,reqIndex,field,value){
+  const site=dcContractSitesDraft[siteIndex];if(!site||!site.requirements[reqIndex])return;
+  site.requirements[reqIndex][field]=field==="position_id"?(value?Number(value):null):Math.max(0,Number(value)||0);
+}
+function dcPositionOptionsHtml(selectedId){
+  if(!positionsCatalog.length)return '<option value="">Aucun poste dans Administration → Postes/Fonctions</option>';
+  return '<option value="">— Sélectionner un poste —</option>'+positionsCatalog.map(p=>`<option value="${p.id}" ${Number(selectedId)===p.id?"selected":""}>${esc(p.name)}</option>`).join("");
+}
 function renderDcContractSites(){
   const host=document.getElementById("dcContractSites");if(!host)return;
-  host.innerHTML=dcContractSitesDraft.length?dcContractSitesDraft.map((site,index)=>`<div class="dc-contract-site"><div><label>Nom du site</label><input value="${esc(site.name||"")}" placeholder="Site client" oninput="updateDcContractSite(${index},'name',this.value)"></div><div><label>Début du cycle</label><input type="date" value="${esc(site.rotation_start_date||today())}" oninput="updateDcContractSite(${index},'rotation_start_date',this.value)"></div><div><label>1er shift</label><input type="time" value="${esc(site.first_shift_time||"06:00")}" oninput="updateDcContractSite(${index},'first_shift_time',this.value)"></div><div><label>Effectif nécessaire par shift et fonction</label><input value="${esc(requirementsText(site.requirements))}" placeholder="CARISTE: 2, AGENT POLYVALENT: 4" oninput="updateDcContractSite(${index},'requirements',this.value)"></div><button type="button" class="btn" onclick="removeDcContractSite(${index})">Supprimer</button></div>`).join(""):'<div class="empty" style="padding:18px">Aucun site contractuel. Cliquez sur « Ajouter un site ».</div>';
+  host.innerHTML=dcContractSitesDraft.length?dcContractSitesDraft.map((site,index)=>{
+    const requirements=Array.isArray(site.requirements)?site.requirements:[];
+    const rows=requirements.map((req,reqIndex)=>`<div class="dc-requirement-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><select style="flex:1" onchange="updateDcRequirementRow(${index},${reqIndex},'position_id',this.value)">${dcPositionOptionsHtml(req.position_id)}</select><input type="number" min="1" step="1" value="${req.quantity||1}" style="width:90px" placeholder="Qté" oninput="updateDcRequirementRow(${index},${reqIndex},'quantity',this.value)"><button type="button" class="btn" onclick="removeDcRequirementRow(${index},${reqIndex})">✕</button></div>`).join("")
+      ||'<div class="empty" style="padding:8px 0;font-size:12px">Aucun poste. Cliquez sur « + Poste ».</div>';
+    return `<div class="dc-contract-site"><div><label>Nom du site</label><input value="${esc(site.name||"")}" placeholder="Site client" oninput="updateDcContractSite(${index},'name',this.value)"></div><div><label>Début du cycle</label><input type="date" value="${esc(site.rotation_start_date||today())}" oninput="updateDcContractSite(${index},'rotation_start_date',this.value)"></div><div><label>1er shift</label><input type="time" value="${esc(site.first_shift_time||"06:00")}" oninput="updateDcContractSite(${index},'first_shift_time',this.value)"></div><div style="grid-column:1/-1"><label>Effectif nécessaire par shift et fonction (référentiel Administration → Postes/Fonctions)</label>${rows}<button type="button" class="btn" onclick="addDcRequirementRow(${index})">+ Poste</button></div><button type="button" class="btn" onclick="removeDcContractSite(${index})">Supprimer le site</button></div>`;
+  }).join(""):'<div class="empty" style="padding:18px">Aucun site contractuel. Cliquez sur « Ajouter un site ».</div>';
 }
 async function submitClient(){
   const errorEl=document.getElementById("clientError");errorEl.classList.remove("show");
@@ -599,8 +633,10 @@ async function submitClient(){
   };
   const btn=document.getElementById("clientSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
   try{
-    const invalidSite=dcContractSitesDraft.find(site=>String(site.name||"").trim().length<2||!Object.keys(site.requirements||{}).length);
-    if(invalidSite)throw new Error("Chaque site contractuel doit avoir un nom et au moins un effectif par fonction.");
+    const invalidSite=dcContractSitesDraft.find(site=>String(site.name||"").trim().length<2||!(site.requirements||[]).length);
+    if(invalidSite)throw new Error("Chaque site contractuel doit avoir un nom et au moins un poste (référentiel Administration → Postes/Fonctions).");
+    const invalidRequirement=dcContractSitesDraft.some(site=>(site.requirements||[]).some(r=>!r.position_id||!(Number(r.quantity)>0)));
+    if(invalidRequirement)throw new Error("Chaque ligne d'effectif doit avoir un poste sélectionné et une quantité positive.");
     const saved=clientId?await apiFetch(`/api/commercial/clients/${clientId}`,{method:"PUT",body:JSON.stringify(payload)}):await apiFetch("/api/commercial/clients",{method:"POST",body:JSON.stringify(payload)});
     await apiFetch(`/api/commercial/dc/clients/${saved.id}/contract`,{method:"PUT",body:JSON.stringify({status:document.getElementById("cDcContractStatus").value,sites:dcContractSitesDraft.map(site=>({...site,name:String(site.name).trim(),address:site.address||null,rotation_start_date:site.rotation_start_date||today()}))})});
     closeClientModal();showBanner("Client enregistré.","success");

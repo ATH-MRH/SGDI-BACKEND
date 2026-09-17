@@ -9,6 +9,7 @@ from app.modules.auth.models import User
 from app.modules.auth.routes import require_admin
 from app.modules.commercial import service
 from app.modules.commercial.models import Client
+from app.modules.irongs.models import Position
 from app.modules.ops.models import Site
 from app.modules.commercial.schemas import (
     ClientCreate,
@@ -171,27 +172,95 @@ def update_dc_client_contract(
     if not service.dc_access_allowed(db, user):
         raise HTTPException(status_code=403, detail="Accès au référentiel contractuel DC refusé")
     client = _ensure_client_allowed(db, user, client_id)
-    contract = payload.model_dump(mode="json")
     previous = client.data if isinstance(client.data, dict) else {}
     version = int(previous.get("dc_contract_version") or 0) + 1
+
+    # Résolution du référentiel canonique — toujours, brouillon inclus (un brouillon
+    # doit aussi référencer position_id, jamais un libellé libre ; voir écran DC).
+    # Seule la VALIDATION STRICTE (poste manquant/inactif/ambigu -> refus) est
+    # réservée à la publication (status == "valide") : un brouillon peut rester
+    # incomplet, mais jamais halluciner un poste par un identifiant qui n'existe pas.
+    all_position_ids = {req.position_id for item in payload.sites for req in item.requirements}
+    positions_by_id = {
+        p.id: p for p in db.execute(select(Position).where(Position.id.in_(all_position_ids))).scalars().all()
+    } if all_position_ids else {}
+
+    def _canonical_requirements(item) -> list[dict]:
+        return [
+            {
+                "position_id": req.position_id,
+                "position_code": None,  # le référentiel positions n'a pas encore de code distinct de l'ID
+                "position_label": positions_by_id[req.position_id].name if req.position_id in positions_by_id else None,
+                "quantity": req.quantity,
+            }
+            for req in item.requirements
+        ]
+
+    canonical_sites: list[dict] = [
+        {
+            "key": item.key, "name": item.name, "address": item.address,
+            "first_shift_time": item.first_shift_time,
+            "rotation_start_date": item.rotation_start_date.isoformat(),
+            "requirements": _canonical_requirements(item),
+        }
+        for item in payload.sites
+    ]
     client.data = {
         **previous,
         "dc_contract_status": payload.status,
         "dc_contract_version": version,
-        "dc_contract_sites": contract["sites"],
+        "dc_contract_sites": canonical_sites,
         "dc_contract_source": "dc.irongs.com",
         "dc_contract_updated_by": user.username,
     }
+
     published_sites: list[int] = []
     if payload.status == "valide":
+        if not payload.sites:
+            raise HTTPException(status_code=422, detail="Un contrat validé doit comporter au moins un site")
+        if not str(client.society or "").strip():
+            raise HTTPException(status_code=422, detail="Mapping client/site incomplet : société du client non renseignée")
+
+        # Validation stricte AVANT toute écriture de site : un contrat incomplet ne
+        # doit jamais devenir partiellement source contractuelle.
+        for item in payload.sites:
+            for req in item.requirements:
+                position = positions_by_id.get(req.position_id)
+                if not position:
+                    raise HTTPException(status_code=422, detail=f"Poste inconnu (position_id={req.position_id}) — sélectionnez un poste du référentiel Administration → Postes/Fonctions")
+                if not position.active:
+                    raise HTTPException(status_code=422, detail=f"Poste inactif : « {position.name} » ne peut plus être utilisé dans un nouveau contrat")
+                if position.society and client.society and position.society != client.society:
+                    raise HTTPException(status_code=422, detail=f"Mapping ambigu : le poste « {position.name} » appartient à une autre société ({position.society}) que le client ({client.society})")
+
         for item in payload.sites:
             client_sites = db.execute(select(Site).where(Site.client_id == client.id)).scalars().all()
             row = next((site for site in client_sites if isinstance(site.equipment_plan, dict) and site.equipment_plan.get("dcContractSiteKey") == item.key), None)
             if not row:
+                # Mapping ambigu : cette clé de liaison est déjà utilisée par un site
+                # d'un AUTRE client — refuser plutôt que de créer une correspondance
+                # incorrecte (le site requis ne pourrait alors pas être relié proprement).
+                foreign_sites = db.execute(select(Site).where(Site.client_id != client.id)).scalars().all()
+                collision = next(
+                    (site for site in foreign_sites if isinstance(site.equipment_plan, dict) and site.equipment_plan.get("dcContractSiteKey") == item.key),
+                    None,
+                )
+                if collision:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Mapping ambigu : la clé de site « {item.key} » est déjà rattachée au client #{collision.client_id} (site « {collision.name} »)",
+                    )
                 row = Site(name=item.name, client_id=client.id, active=1)
                 db.add(row)
-            per_shift = sum(item.requirements.values())
-            group_positions = {code: dict(item.requirements) for code in "ABCD"}
+
+            # Miroir OPS (historique/lecture seule uniquement, jamais relu comme
+            # contractuel — voir portal.routes.attendance_staffing) : construit à
+            # partir des libellés canoniques déjà résolus ci-dessus, jamais du texte
+            # saisi (identité métier = position_id, le libellé n'est qu'un instantané).
+            site_canonical = next(s for s in canonical_sites if s["key"] == item.key)
+            legacy_mirror = {r["position_label"]: r["quantity"] for r in site_canonical["requirements"]}
+            per_shift = sum(legacy_mirror.values())
+            group_positions = {code: dict(legacy_mirror) for code in "ABCD"}
             existing_plan = row.equipment_plan if isinstance(row.equipment_plan, dict) else {}
             row.name = item.name
             row.client_id = client.id
@@ -204,7 +273,7 @@ def update_dc_client_contract(
             row.equipment_plan = {
                 **existing_plan,
                 "societe": client.society,
-                "positionQuotas": {name: count * 4 for name, count in item.requirements.items()},
+                "positionQuotas": {name: count * 4 for name, count in legacy_mirror.items()},
                 "groupQuotas": {code: per_shift for code in "ABCD"},
                 "groupPositionQuotas": group_positions,
                 "clientPortalRotation": existing_plan.get("clientPortalRotation") or {

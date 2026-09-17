@@ -220,44 +220,40 @@ def test_attendance_feed_requires_auth(client):
     assert r.status_code == 401
 
 
-def test_attendance_staffing_returns_current_shift_requirements_for_authorized_site(client, auth_headers, db):
+def _pointer_headers_for_site(client, db, site_id, *, username="pointer-staffing"):
     from app.core.security import hash_password
     from app.modules.auth.models import User
 
-    created = historical_site(client, headers=auth_headers, json={
-        "name": "Site Quotas Shift", "active": 1, "contractual_staff": 12,
-        "equipment_plan": {
-            "societe": SOCIETY,
-            "positionQuotas": {"CARISTE": 8, "AGENT POLYVALENT": 4},
-            "groupPositionQuotas": {
-                code: {"CARISTE": 2, "AGENT POLYVALENT": 1} for code in "ABCD"
-            },
-            "clientPortalRotation": {
-                "system": "3x8", "first_shift_time": "06:00",
-                "start_date": "2026-01-01", "horizon_weeks": 12,
-            },
-        },
-    })
-    assert created.status_code in (200, 201), created.text
-    site_id = created.json()["id"]
     pointer = User(
-        username="pointer-staffing", full_name="Pointeur staffing", role="ops", access_level="H2",
+        username=username, full_name="Pointeur staffing", role="ops", access_level="H2",
         authorized_societies=[], authorized_sites=[site_id], authorized_structures=["pointage"],
         password_hash=hash_password("pointerpass"), is_active=True,
     )
     db.add(pointer); db.commit()
-    login = client.post("/api/auth/login", json={"username": "pointer-staffing", "password": "pointerpass"})
-    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-    response = client.get("/api/portal/attendance-staffing", headers=headers)
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["requirements"] == {"CARISTE": 2, "AGENT POLYVALENT": 1}
-    assert body["sites"][0]["site_id"] == site_id
-    assert body["sites"][0]["group"] in "ABCD"
-    assert "–" in body["sites"][0]["shift"]
+    login = client.post("/api/auth/login", json={"username": username, "password": "pointerpass"})
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
-def test_dc_contract_is_source_of_truth_for_ops_and_pointage(client, auth_headers):
+def _make_position(client, headers, name, society=SOCIETY):
+    """Crée un poste dans le référentiel canonique Administration → Postes/Fonctions
+    et renvoie son position_id — identité métier obligatoire pour tout requirement DC
+    depuis la finalisation de la bascule contractuelle."""
+    resp = client.post("/api/irongs/positions", headers=headers, json={"name": name, "society": society})
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
+
+
+# LOT ERP — BASCULE CONTRACTUELLE DC (FINALISATION) : DC.IRONGS.COM est la SEULE
+# source de l'effectif contractuel, et l'identité métier d'un poste contractuel est
+# EXCLUSIVEMENT son position_id canonique (Administration → Postes/Fonctions) — jamais
+# un libellé libre. Voir commercial/routes.py::update_dc_client_contract et
+# portal/routes.py::attendance_staffing.
+
+def test_scenario_a_dc_valide_et_site_lie_donne_source_dc(client, auth_headers, db):
+    """A. DC validé + site lié -> source DC, bonnes fonctions (référentiel canonique),
+    bonnes quantités."""
+    cariste_id = _make_position(client, auth_headers, "Cariste A")
+    polyvalent_id = _make_position(client, auth_headers, "Agent Polyvalent A")
     customer = client.post("/api/commercial/clients", headers=auth_headers, json={
         "name": "Client Contrat Central", "society": SOCIETY, "status": "actif",
     })
@@ -268,15 +264,13 @@ def test_dc_contract_is_source_of_truth_for_ops_and_pointage(client, auth_header
         "sites": [{
             "key": "central-site-1", "name": "Site Central DC", "address": "Alger",
             "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
-            "requirements": {"CARISTE": 3, "AGENT POLYVALENT": 2},
+            "requirements": [{"position_id": cariste_id, "quantity": 3}, {"position_id": polyvalent_id, "quantity": 2}],
         }],
     })
     assert contract.status_code == 200, contract.text
     body = contract.json()
-    assert body["source"] == "dc.irongs.com"
     assert body["sites_count"] == 1
     site_id = body["published_site_ids"][0]
-    # DC structuré prévaut sur les anciens besoins techniques et publie un seul site.
     from app.modules.ui.service import _staffing_stats
     from app.db.session import get_db
     provider = client.app.dependency_overrides[get_db]()
@@ -287,16 +281,365 @@ def test_dc_contract_is_source_of_truth_for_ops_and_pointage(client, auth_header
     finally:
         provider.close()
 
-
-    staffing = client.get("/api/portal/attendance-staffing", headers=auth_headers)
+    # Scopé sur ce site précis : le compte admin voit potentiellement d'autres sites
+    # (créés par d'autres tests dans la même base), ce qui rendrait l'agrégat global
+    # "partial" légitimement — non pertinent pour ce scénario A ciblé.
+    staffing = client.get(f"/api/portal/attendance-staffing?site_id={site_id}", headers=auth_headers)
     assert staffing.status_code == 200, staffing.text
-    dc_site = next(row for row in staffing.json()["sites"] if row["site_id"] == site_id)
-    assert dc_site["source"] == "dc.irongs.com"
-    assert dc_site["requirements"] == {"CARISTE": 3, "AGENT POLYVALENT": 2}
+    staffing_body = staffing.json()
+    dc_site = next(row for row in staffing_body["sites"] if row["site_id"] == site_id)
+    assert dc_site["source"] == "dc"
+    assert dc_site["configured"] is True
+    assert dc_site["requirements"] == {"Cariste A": 3, "Agent Polyvalent A": 2}
+    assert staffing_body["source"] == "dc"
+    assert staffing_body["contractual"]["configured"] is True
+    assert staffing_body["contractual"]["requirements"] == {"Cariste A": 3, "Agent Polyvalent A": 2}
 
+    # I. Consommation immédiate Pointage/Pointeur : le GET juste après le PUT reflète
+    # déjà le contrat validé, sans étape de synchronisation intermédiaire.
+
+    # Verrou déjà existant : OPS ne peut plus modifier les champs contractuels d'un
+    # site publié par DC.
     forbidden = client.put(f"/api/ops/sites/{site_id}", headers=auth_headers, json={"contractual_staff": 999})
     assert forbidden.status_code == 409
     assert "dc.irongs.com" in forbidden.json()["detail"]
+
+
+def test_scenario_b_et_f_dc_absent_aucun_fallback_ops(client, auth_headers, db):
+    """B. DC absent -> DC NON CONFIGURÉ, aucun fallback OPS.
+    F. Les anciennes quotas OPS (groupPositionQuotas/positionQuotas) ne deviennent
+       JAMAIS contractuelles, même très correctement renseignées.
+    """
+    created = historical_site(client, headers=auth_headers, json={
+        "name": "Site Quotas Legacy", "active": 1, "contractual_staff": 12,
+        "equipment_plan": {
+            "societe": SOCIETY,
+            "positionQuotas": {"CARISTE": 8, "AGENT POLYVALENT": 4},
+            "groupPositionQuotas": {code: {"CARISTE": 2, "AGENT POLYVALENT": 1} for code in "ABCD"},
+            "clientPortalRotation": {
+                "system": "3x8", "first_shift_time": "06:00",
+                "start_date": "2026-01-01", "horizon_weeks": 12,
+            },
+        },
+    })
+    assert created.status_code in (200, 201), created.text
+    site_id = created.json()["id"]
+    headers = _pointer_headers_for_site(client, db, site_id)
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # Aucun repli sur les quotas OPS : ni au niveau agrégé...
+    assert body["requirements"] == {}
+    assert body["source"] == "dc-unconfigured"
+    assert body["contractual"]["configured"] is False
+    assert body["contractual"]["requirements"] == {}
+    # ... ni au niveau du site lui-même.
+    site_row = next(row for row in body["sites"] if row["site_id"] == site_id)
+    assert site_row["configured"] is False
+    assert site_row["source"] == "unconfigured"
+    assert site_row["requirements"] == {}
+
+
+def test_scenario_c_dc_brouillon_non_contractuel(client, auth_headers, db):
+    """C. DC brouillon (non validé) -> non contractuel, aucun site publié/lié. Le
+    brouillon référence tout de même un position_id canonique (pas de texte libre)."""
+    cariste_id = _make_position(client, auth_headers, "Cariste C")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Brouillon", "society": SOCIETY, "status": "actif",
+    })
+    assert customer.status_code == 200, customer.text
+    client_id = customer.json()["id"]
+    contract = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "brouillon",
+        "sites": [{
+            "key": "draft-site-1", "name": "Site Brouillon", "address": "Oran",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": cariste_id, "quantity": 5}],
+        }],
+    })
+    assert contract.status_code == 200, contract.text
+    assert contract.json()["published_site_ids"] == []
+    # Un site OPS historique (jamais publié par ce brouillon) reste non configuré.
+    created = historical_site(client, headers=auth_headers, json={
+        "name": "Site sous brouillon", "active": 1, "contractual_staff": 5,
+        "equipment_plan": {"societe": SOCIETY},
+    })
+    site_id = created.json()["id"]
+    headers = _pointer_headers_for_site(client, db, site_id, username="pointer-draft")
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["source"] == "dc-unconfigured"
+
+
+def test_scenario_d_dc_valide_mais_site_non_lie_aucun_fallback(client, auth_headers, db):
+    """D. DC validé mais CE site n'est pas lié (clé absente/différente) -> pas de
+    fallback, état non configuré explicite malgré la présence d'anciennes quotas."""
+    cariste_id = _make_position(client, auth_headers, "Cariste D")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Partiel", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    contract = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "linked-site", "name": "Site Lié", "address": "Alger",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": cariste_id, "quantity": 4}],
+        }],
+    })
+    assert contract.status_code == 200, contract.text
+    linked_site_id = contract.json()["published_site_ids"][0]
+    # Site distinct, même client, jamais publié par ce contrat : ancienne quota OPS
+    # présente mais sans dcContractSiteKey correspondant à une entrée valide.
+    unlinked = historical_site(client, headers=auth_headers, json={
+        "name": "Site Non Lié", "active": 1, "client_id": client_id, "contractual_staff": 12,
+        "equipment_plan": {
+            "societe": SOCIETY,
+            "dcContractSiteKey": "clef-orpheline",  # ne correspond à aucune entrée dc_contract_sites
+            "groupPositionQuotas": {code: {"CARISTE": 2} for code in "ABCD"},
+        },
+    })
+    unlinked_site_id = unlinked.json()["id"]
+    headers = _pointer_headers_for_site(client, db, unlinked_site_id, username="pointer-unlinked")
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source"] == "dc-unconfigured"
+    assert body["sites"][0]["configured"] is False
+    assert body["sites"][0]["requirements"] == {}
+    # Le site RÉELLEMENT lié, lui, reste bien contractuel DC (non-régression, non testé
+    # ici via ce compte car hors de son périmètre — couvert par le scénario A).
+    assert linked_site_id != unlinked_site_id
+
+
+def test_scenario_e_requirements_dc_vides_etat_explicite(client, auth_headers, db):
+    """E. requirements DC absents pour le shift courant -> état explicite (pas de
+    fallback), même avec un contrat DC validé et un site correctement lié."""
+    cariste_id = _make_position(client, auth_headers, "Cariste E")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Requirements Vides", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    contract = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-vide", "name": "Site Requirements Vides", "address": "Blida",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": cariste_id, "quantity": 1}],
+        }],
+    })
+    site_id = contract.json()["published_site_ids"][0]
+    # Le contrat DC valide devient ensuite un shift sans aucun besoin exploitable —
+    # on simule ce cas limite en vidant directement les requirements en base pour ne
+    # pas dépendre du validateur Pydantic (qui refuse une liste totalement vide en amont).
+    from app.modules.commercial.models import Client
+    provider = client.app.dependency_overrides[__import__("app.db.session", fromlist=["get_db"]).get_db]()
+    db_session = next(provider)
+    try:
+        row = db_session.get(Client, client_id)
+        sites = list(row.data.get("dc_contract_sites", []))
+        sites[0] = {**sites[0], "requirements": []}
+        row.data = {**row.data, "dc_contract_sites": sites}
+        db_session.commit()
+    finally:
+        provider.close()
+    headers = _pointer_headers_for_site(client, db, site_id, username="pointer-empty-req")
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    site_row = body["sites"][0]
+    assert site_row["source"] == "dc"  # toujours DC : pas de repli OPS
+    assert site_row["configured"] is True
+    assert site_row["requirements"] == {}
+
+
+def test_scenario_g_poste_absent_du_referentiel_canonique_validation_refusee(client, auth_headers):
+    """G. Poste absent du référentiel canonique (position_id inexistant) -> validation
+    DC refusée."""
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Poste Inconnu", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    resp = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-poste-inconnu", "name": "Site Poste Inconnu", "address": "Annaba",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": 9_999_999, "quantity": 2}],  # jamais créé
+        }],
+    })
+    assert resp.status_code == 422, resp.text
+    assert "inconnu" in resp.json()["detail"].lower()
+
+
+def test_scenario_g_bis_poste_inactif_validation_refusee(client, auth_headers, db):
+    """G (complément) : poste existant mais inactif -> refus."""
+    from app.modules.irongs.models import Position
+    position = Position(name="Poste Retiré", society=SOCIETY, active=False)
+    db.add(position); db.commit()
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Poste Inactif", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    resp = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-poste-inactif", "name": "Site Poste Inactif", "address": "Tlemcen",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": position.id, "quantity": 2}],
+        }],
+    })
+    assert resp.status_code == 422, resp.text
+    assert "inactif" in resp.json()["detail"].lower()
+
+
+def test_deux_libelles_differents_meme_position_id_donnent_le_meme_poste(client, auth_headers, db):
+    """Le label n'est qu'une représentation : un renommage du poste canonique se
+    reflète immédiatement côté attendance-staffing, sans republier le contrat DC —
+    deux libellés successifs pour le même position_id ne créent jamais deux postes."""
+    position_id = _make_position(client, auth_headers, "Warehouse Keeper")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Renommage Poste", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    contract = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-renommage", "name": "Site Renommage", "address": "Béjaïa",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": position_id, "quantity": 2}],
+        }],
+    })
+    site_id = contract.json()["published_site_ids"][0]
+    before = client.get(f"/api/portal/attendance-staffing?site_id={site_id}", headers=auth_headers)
+    assert before.json()["sites"][0]["requirements"] == {"Warehouse Keeper": 2}
+
+    from app.modules.irongs.models import Position
+    from app.db.session import get_db
+    provider = client.app.dependency_overrides[get_db]()
+    db_session = next(provider)
+    try:
+        pos = db_session.get(Position, position_id)
+        pos.name = "WAREHOUSE KEEPER (corrigé)"
+        db_session.commit()
+    finally:
+        provider.close()
+
+    after = client.get(f"/api/portal/attendance-staffing?site_id={site_id}", headers=auth_headers)
+    assert after.status_code == 200, after.text
+    requirements = after.json()["sites"][0]["requirements"]
+    assert requirements == {"WAREHOUSE KEEPER (corrigé)": 2}
+    assert "Warehouse Keeper" not in requirements, "aucune trace de l'ancien libellé : un seul poste, identifié par son ID"
+
+
+def test_collision_meme_poste_deux_fois_dans_le_meme_site_refusee(client, auth_headers):
+    """Collision site/poste/shift : le même position_id apparaissant deux fois dans
+    les requirements d'un même site est un doublon incohérent -> refusé."""
+    position_id = _make_position(client, auth_headers, "Team Leader")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Doublon Poste", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    resp = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-doublon-poste", "name": "Site Doublon Poste", "address": "Skikda",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": position_id, "quantity": 2}, {"position_id": position_id, "quantity": 1}],
+        }],
+    })
+    assert resp.status_code == 422, resp.text
+
+
+def test_scenario_h_quantite_invalide_validation_refusee(client, auth_headers):
+    """H. Quantité invalide (0/négative) -> validation refusée dès la soumission du
+    contrat (rejetée par le schéma, pas de silence)."""
+    cariste_id = _make_position(client, auth_headers, "Cariste H")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Quantite Invalide", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    resp = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "site-qte-invalide", "name": "Site Qté Invalide", "address": "Sétif",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": [{"position_id": cariste_id, "quantity": 0}],
+        }],
+    })
+    assert resp.status_code == 422, resp.text
+
+
+def test_scenario_h_bis_mapping_ambigu_cle_dupliquee_refuse(client, auth_headers):
+    """H (complément) : deux sites du même contrat partageant la même clé de liaison
+    -> mapping ambigu, refusé."""
+    cariste_id = _make_position(client, auth_headers, "Cariste H2")
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Cle Dupliquee", "society": SOCIETY, "status": "actif",
+    })
+    client_id = customer.json()["id"]
+    resp = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [
+            {"key": "dup", "name": "Site A", "first_shift_time": "06:00", "rotation_start_date": "2026-01-01", "requirements": [{"position_id": cariste_id, "quantity": 1}]},
+            {"key": "dup", "name": "Site B", "first_shift_time": "06:00", "rotation_start_date": "2026-01-01", "requirements": [{"position_id": cariste_id, "quantity": 2}]},
+        ],
+    })
+    assert resp.status_code == 422, resp.text
+
+
+def test_scenario_h_ter_cle_deja_rattachee_a_un_autre_client_refuse(client, auth_headers):
+    """H (complément) : mapping ambigu entre CLIENTS -> refusé (site déjà rattaché
+    ailleurs par la même clé de liaison)."""
+    cariste_id = _make_position(client, auth_headers, "Cariste H3")
+    client_a = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client A Collision", "society": SOCIETY, "status": "actif",
+    }).json()["id"]
+    contract_a = client.put(f"/api/commercial/dc/clients/{client_a}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{"key": "cle-partagee", "name": "Site A", "first_shift_time": "06:00", "rotation_start_date": "2026-01-01", "requirements": [{"position_id": cariste_id, "quantity": 1}]}],
+    })
+    assert contract_a.status_code == 200, contract_a.text
+
+    client_b = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client B Collision", "society": SOCIETY, "status": "actif",
+    }).json()["id"]
+    contract_b = client.put(f"/api/commercial/dc/clients/{client_b}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{"key": "cle-partagee", "name": "Site B", "first_shift_time": "06:00", "rotation_start_date": "2026-01-01", "requirements": [{"position_id": cariste_id, "quantity": 1}]}],
+    })
+    assert contract_b.status_code == 409, contract_b.text
+    assert "Mapping ambigu" in contract_b.json()["detail"]
+
+
+def test_scenario_j_site_dhl_type_etat_actuel_donne_dc_unconfigured(client, auth_headers, db):
+    """J. Cas DHL (site_id=27 en production) simulé : dcContractSiteKey vide,
+    dc_contract_status vide, dc_contract_sites vide, groupPositionQuotas présents
+    -> "CONTRAT DC NON CONFIGURÉ" (dc-unconfigured), jamais "SOURCE OPS TRANSITOIRE"
+    (qui n'existe plus du tout dans le contrat API)."""
+    created = historical_site(client, headers=auth_headers, json={
+        "name": "DHL FORWARDING / HAMOUL 01 (40K)", "active": 1, "contractual_staff": 40,
+        "equipment_plan": {
+            "societe": SOCIETY,
+            "dcContractSiteKey": "",
+            "groupPositionQuotas": {code: {"STOCK CONTROLLER": 19, "TEAM LEADER IN & OUT": 1, "WAREHOUSE KEEPER": 2} for code in "ABCD"},
+            "positionQuotas": {"STOCK CONTROLLER": 76, "TEAM LEADER IN & OUT": 4, "WAREHOUSE KEEPER": 8},
+            "clientPortalRotation": {"system": "3x8", "first_shift_time": "22:00", "start_date": "2026-01-01", "horizon_weeks": 12},
+        },
+    })
+    assert created.status_code in (200, 201), created.text
+    site_id = created.json()["id"]
+    headers = _pointer_headers_for_site(client, db, site_id, username="pointer-dhl")
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source"] == "dc-unconfigured"
+    assert "ops-transition" not in str(body)
+    assert "mixed-transition" not in str(body)
+    assert "dc.irongs.com" not in [row.get("source") for row in body["sites"]]
+    assert body["sites"][0]["source"] == "unconfigured"
+    assert body["sites"][0]["configured"] is False
+    assert body["sites"][0]["requirements"] == {}
 
 
 def _scan_event(db, *, event_id, emp_id, matricule, name, action, hours_ago, site="", site_id=None):

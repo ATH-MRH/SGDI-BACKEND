@@ -79,10 +79,15 @@ def test_ops_and_legacy_creation_are_refused_even_to_admin(client, auth_headers)
 
 
 def test_commercial_republish_preserves_ops_rotation_and_map(client, auth_headers):
+    # LOT ERP — bascule contractuelle DC : requirements référence désormais un
+    # position_id canonique (Administration -> Postes/Fonctions), plus un libellé libre.
+    position=client.post('/api/irongs/positions',headers=auth_headers,json={'name':'APS','society':'Iron Global Securite'})
+    assert position.status_code == 201, position.text
+    position_id=position.json()['id']
     customer=client.post('/api/commercial/clients',headers=auth_headers,json={'name':'DC OPS responsibilities','society':'Iron Global Securite','status':'actif'})
     assert customer.status_code == 200
     cid=customer.json()['id']
-    payload={'status':'valide','sites':[{'key':'ops-owned','name':'Site DC OPS','rotation_start_date':'2020-01-01','requirements':{'APS':2}}]}
+    payload={'status':'valide','sites':[{'key':'ops-owned','name':'Site DC OPS','rotation_start_date':'2020-01-01','requirements':[{'position_id':position_id,'quantity':2}]}]}
     published=client.put(f'/api/commercial/dc/clients/{cid}/contract',headers=auth_headers,json=payload)
     assert published.status_code == 200
     sid=published.json()['published_site_ids'][0]
