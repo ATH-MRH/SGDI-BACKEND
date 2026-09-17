@@ -241,6 +241,15 @@ function refreshContractSituationRowNumbers(tbody){
   });
 }
 
+// CORRECTION UX : le badge Statut (employeeStatusPillHTML) n'ouvre plus jamais ce
+// menu — auparavant seul point d'accès aux actions contrat (NOUVEAU CONTRAT /
+// NOUVEL AVENANT) depuis cette ligne. Bouton dédié local (module contracts,
+// aucune dépendance cross-module) ouvrant le même openEmployeeStatusActions,
+// contexte "contracts" — rien n'est perdu.
+function contractRowActionsButton(a){
+  if(typeof canUseEmployeeActionWorkflows==="function"&&!canUseEmployeeActionWorkflows())return "";
+  return `<button type="button" class="btn btn-ghost text-lg leading-none px-2" title="Action contrat" aria-label="Action contrat" onclick="openEmployeeStatusActions(event,'${escapeHTML(a.id)}','contracts')">⋯</button>`;
+}
 function contractSituationRowsHTML(agents,today_){
   return agents.length===0?`<tr><td colspan="10" class="text-center text-slate-500 p-6">Aucun employé.</td></tr>`:agents.map((a,index)=>{
     const employeeCode=contractSituationEmployeeCode(a);
@@ -257,7 +266,7 @@ function contractSituationRowsHTML(agents,today_){
     const contractKind=cleanContractType(a.typeContrat)||"AUTRE";
     const tCl=documentType.startsWith("Avenant")?"pill-blue":documentType.endsWith("+")?"pill-amber":"pill-green";
     const fullName=((a.nom||"")+" "+(a.prenom||"")).trim();
-    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-contractkind="${escapeHTML(contractKind)}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td class="contract-row-number" data-contract-row-number data-sort="${index+1}">${index+1}</td><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}">${employeeStatusPillHTML(a,true,"contracts")}</td></tr>`;
+    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-contractkind="${escapeHTML(contractKind)}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td class="contract-row-number" data-contract-row-number data-sort="${index+1}">${index+1}</td><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}"><div class="flex items-center gap-1">${employeeStatusPillHTML(a)}${contractRowActionsButton(a)}</div></td></tr>`;
   }).join("");
 }
 

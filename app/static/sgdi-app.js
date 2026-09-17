@@ -11293,17 +11293,28 @@ function rhEffectifActionStyle(action){
   const c=colors[action]||["#043970","#eff6ff","#bfdbfe"];
   return `color:${c[0]};background:${c[1]};border:1px solid ${c[2]};font-weight:900`;
 }
-function employeeStatusPillHTML(a,forceActions,actionContext){
+// Badge ERP de STATUT — non cliquable par construction (CORRECTION UX : séparer
+// statut et actions RH). Le statut est la conséquence des workflows métier
+// existants (suspension, congé, fin de contrat…) ; il ne se change jamais en
+// cliquant dessus. Les actions RH restent accessibles via la barre "ACTIONS À
+// FAIRE" (fiche employé) et via le bouton dédié de la colonne Action des listes
+// (module employees, module contracts), qui ouvre le même menu
+// openEmployeeStatusActions — aucune fonctionnalité supprimée, seulement
+// déplacée hors du badge.
+function employeeStatusPillHTML(a){
   const blacklisted=!!(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked);
   const st=employeeStatusKey(a?.statut||a?.status);
   const key=blacklisted?"blacklist":st;
   const label=key==="blacklist"?"BLACKLIST":key==="sortant"?"SORTANT":String(key||"—").toUpperCase();
+  const variant=erpStatusBadgeVariant(key);
   const cls=["actif","sortant","suspendu","blacklist"].includes(key)?`employee-status-pill employee-status-${key}`:key==="absent"||key==="abandon"?"pill-red":"pill-gray";
-  if((forceActions||isDrhModuleContext()||isOpsEffectifContext())&&canUseEmployeeActionWorkflows()){
-    const title=isOpsEffectifContext()?"Actions OPS":"Changer le statut / action RH";
-    return `<button type="button" class="pill ${cls}" style="border:0;cursor:pointer" title="${title}" onclick="openEmployeeStatusActions(event,'${escapeHTML(a.id)}','${escapeHTML(actionContext||"")}')">${escapeHTML(label)}</button>`;
-  }
-  return `<span class="pill ${cls}">${escapeHTML(label)}</span>`;
+  return `<span class="erp-status-badge ${variant} ${cls}">${escapeHTML(label)}</span>`;
+}
+// Association statut -> variante du composant .erp-status-badge (item 6 : success/
+// warning/danger/info/neutral). La couleur ne représente que l'état, jamais une
+// action possible.
+function erpStatusBadgeVariant(key){
+  return {actif:"success",congé:"info",suspendu:"warning",maladie:"warning",sortant:"neutral",absent:"danger",abandon:"danger",blacklist:"danger"}[key]||"neutral";
 }
 function suspensionEmployeeOptions(selectedId){
   const list=rhEffectifActionTargets();
