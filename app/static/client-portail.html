@@ -88,6 +88,8 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-search-status.error{color:#991b1b;background:#fff1f2}
 .portal-search-match{outline:2px solid #c8102e;outline-offset:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
+.operator-badge{display:flex;align-items:center;justify-content:center;flex-shrink:0;height:40px;padding:5px 10px;border-radius:10px;background:rgba(255,255,255,.85)}
+.operator-badge img{max-height:100%;max-width:140px;object-fit:contain;display:block}
 .lang-toggle{display:flex;gap:4px}
 .lang-toggle button{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:8px 11px;font-weight:850;font-size:11px;cursor:pointer}
 .lang-toggle button.active{background:#ffcc00;color:#10243e;border-color:#ffcc00}
@@ -311,6 +313,7 @@ tr:last-child td{border-bottom:0}
       </div>
       <div class="lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
       <button class="logout" onclick="logout()">Déconnexion</button>
+      <div class="operator-badge" title="Portail opéré par IRON GLOBAL SOLUTION"><img src="/static/iron-solution-logo.png" alt="IRON GLOBAL SOLUTION"></div>
     </div>
   </header>
 
