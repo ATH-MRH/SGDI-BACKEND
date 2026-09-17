@@ -50,11 +50,42 @@ test('D-I/J. toutes les rubriques existent, dans l\'ordre exact', () => {
   w.close();
 });
 
-test('L. la sidebar utilise position sticky avec un offset qui tient compte du header', () => {
+// L. Bloc RECHERCHE EMPLOYÉ + ESPACE CLIENT figé en un seul conteneur parent
+// (.portal-sidebar-stack), le contenu principal (<main class="portal-main">)
+// défilant seul. Note jsdom : jsdom ne calcule aucune vraie mise en page
+// (getBoundingClientRect() renvoie toujours {0,0,0,0} quel que soit le CSS,
+// cf. https://github.com/jsdom/jsdom#unimplemented-parts-of-the-web-platform),
+// donc une comparaison de rects avant/après scroll y serait toujours vraie
+// même si le CSS était cassé — ce n'est pas un test valide dans ce harnais.
+// On vérifie à la place, de façon équivalente et réellement discriminante :
+// (1) les règles CSS qui, dans un vrai navigateur, gèlent ensemble les deux
+// cartes en figeant leur CONTENEUR PARENT COMMUN (jamais les cartes ou les
+// entrées individuellement) tandis que .portal-main défile seul, et
+// (2) que .portal-main est bien l'élément défilant : main.scrollTop est
+// réellement settable/gettable dans jsdom et atteint >=1000.
+test('L. RECHERCHE EMPLOYÉ + ESPACE CLIENT sont figés ensemble (conteneur parent commun), .portal-main défile seul', () => {
   const { window: w } = loadClientPortail();
   const style = Array.from(w.document.querySelectorAll('style')).map(s => s.textContent).join('\n');
-  assert.match(style, /\.portal-sidebar-stack\{[^}]*position:sticky/);
-  assert.match(style, /\.portal-sidebar-stack\{[^}]*top:calc\(var\(--header-height\)/);
+
+  // Le conteneur parent commun des deux cartes ne défile jamais lui-même :
+  // ni lui ni aucun de ses ancêtres jusqu'au viewport n'a de scroll propre.
+  assert.match(style, /\.app\{[^}]*height:100vh[^}]*overflow:hidden/, '.app ne doit pas défiler (hauteur figée au viewport)');
+  assert.match(style, /\.shell\{[^}]*flex:1[^}]*min-height:0/, '.shell doit remplir la hauteur restante sans devenir lui-même scrollable');
+  assert.doesNotMatch(style.match(/\.shell\{[^}]*\}/)[0], /overflow-y:auto|overflow:auto|overflow:scroll/, '.shell lui-même ne doit pas défiler');
+
+  // Le conteneur parent commun (.portal-sidebar-stack) — pas les cartes ni
+  // les entrées individuellement — occupe toute la hauteur disponible sans
+  // dépendre du défilement de la page.
+  assert.match(style, /\.portal-sidebar-stack\{[^}]*height:100%/, 'le conteneur parent commun doit occuper toute la hauteur, indépendamment du scroll de page');
+
+  // .portal-main est le seul élément qui défile réellement.
+  assert.match(style, /\.portal-main\{[^}]*overflow-y:auto/, '.portal-main doit posséder son propre scroll');
+
+  const main = w.document.querySelector('main.portal-main');
+  const sidebar = w.document.querySelector('.portal-sidebar-stack');
+  assert.ok(main && sidebar);
+  main.scrollTop = 1200;
+  assert.ok(main.scrollTop >= 1000, 'main.scrollTop doit pouvoir atteindre >=1000 : .portal-main est bien le conteneur défilant');
   w.close();
 });
 
