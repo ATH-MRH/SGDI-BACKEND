@@ -12197,13 +12197,25 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   const canIntegrer=String(a?.statut||"").toLowerCase()==="suspendu"||(isSortant&&canUserReactiverSortant());
   const isSuspended=String(a?.statut||"").toLowerCase()==="suspendu";
   const isBlacklisted=!!(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked);
-  const labels=isContractContext?[["nouveau_contrat","NOUVEAU CONTRAT"],["avenant","NOUVEAU AVENANT"]]:isOpsEffectifContext()?opsEmployeeActionLabels():[["detail","DETAIL"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],...(isSuspended?[["lever_suspension","LEVER SUSPENSION"]]:[]),["convoquer","CONVOQUER"],["mise_en_demeure","MISE EN DEMEURE"],["sanctionner","SANCTIONNER"],["blacklister","BLACKLISTER"],...(isBlacklisted?[["lever_blacklist","LEVER BLACKLIST"]]:[]),["avenant","AVENANT"],["nouveau_contrat","NOUVEAU CONTRAT"],["fin_contrat","FIN DE RELATION DE TRAVAIL"],["integrer","REINTEGRER"]];
+  // DOSSIER EMPLOYÉ 360° / REFONTE ACTIONS RH : les 3 actions contractuelles
+  // (NOUVEAU CONTRAT, AVENANT, FIN DE CONTRAT) ne sont plus des entrées
+  // indépendantes — elles sont regroupées sous un seul "CONTRAT ▾" (UX
+  // uniquement, mêmes handlers runRhEffectifAction, aucune fonctionnalité
+  // supprimée). Le contexte "contracts" (écran Contrats) garde son propre menu
+  // réduit, déjà 100% contractuel — rien à regrouper là.
+  const contractGroupKeys=["nouveau_contrat","avenant","fin_contrat"];
+  const labels=isContractContext?[["nouveau_contrat","NOUVEAU CONTRAT"],["avenant","NOUVEAU AVENANT"]]:isOpsEffectifContext()?opsEmployeeActionLabels():[["detail","DETAIL"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],...(isSuspended?[["lever_suspension","LEVER SUSPENSION"]]:[]),["convoquer","CONVOQUER"],["mise_en_demeure","MISE EN DEMEURE"],["sanctionner","SANCTIONNER"],["blacklister","BLACKLISTER"],...(isBlacklisted?[["lever_blacklist","LEVER BLACKLIST"]]:[]),...(isBlacklisted?[]:[["__contrat_group__","CONTRAT ▾"]]),["integrer","REINTEGRER"]];
   const btn=event.currentTarget;
   const rect=btn.getBoundingClientRect();
   const menu=document.createElement("div");
   menu.id="employee-row-actions-menu";
   menu.style.cssText="position:fixed;z-index:99999;width:min(310px,calc(100vw - 24px));min-width:0;max-width:310px;background:#fff;border:1px solid #dbe3ef;border-radius:12px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:8px;overflow-x:hidden";
   menu.innerHTML=`<div class="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">${isContractContext?"Action contrat":isOpsEffectifContext()?"Action OPS":"Action RH"}</div>`+labels.map(([k,l])=>{
+    if(k==="__contrat_group__"){
+      return `<div class="rh-contrat-group"><button type="button" class="btn btn-ghost text-xs justify-start" style="display:flex;width:100%;max-width:100%;text-align:left;margin:2px 0;${rhEffectifActionStyle("nouveau_contrat")}" onclick="event.stopPropagation();this.closest('.rh-contrat-group').classList.toggle('is-open')">CONTRAT ▾</button>
+        <div class="rh-contrat-submenu">${[["nouveau_contrat","+ Nouveau contrat"],["avenant","Avenant"],["fin_contrat","Fin de contrat"]].map(([sk,sl])=>`<button type="button" class="btn btn-ghost text-xs justify-start" style="display:flex;width:100%;max-width:100%;text-align:left;margin:2px 0;${rhEffectifActionStyle(sk)}" onclick="runRhEffectifAction('${sk}','${escapeHTML(agentId)}')">${sl}</button>`).join("")}</div>
+      </div>`;
+    }
     const disabled=k==="integrer"&&!canIntegrer;
     const extra=disabled?"opacity:.45;cursor:not-allowed;filter:grayscale(1);":"";
     const disabledMsg=k==="integrer"&&isSortant&&!canUserReactiverSortant()?"Réactivation SORTANT non autorisée — habilitation requise":"Intégration active uniquement pour un employé suspendu";
@@ -12423,6 +12435,98 @@ function agentModificationHistoryHTML(a){
   const rows=(a.modificationHistory||[]).slice(0,8);
   return`<details class="rh-change-history"><summary><span><b>Historique des modifications</b><small>${rows.length?`${rows.length} dernière(s) entrée(s)`:"Aucune modification enregistrée"}</small></span><span class="rh-history-chevron">⌄</span></summary>${rows.length?`<div class="rh-history-list">${rows.map(entry=>`<div class="rh-history-row"><div class="rh-history-dot"></div><div><strong>${escapeHTML(entry.user||"Utilisateur")}</strong><span>${escapeHTML((entry.fields||[]).join(", ")||"Mise à jour de la fiche")}</span></div><time>${entry.at?new Date(entry.at).toLocaleString("fr-FR"):"—"}</time></div>`).join("")}</div>`:`<div class="rh-history-empty">Les prochaines modifications apparaîtront ici.</div>`}</details>`;
 }
+// DOSSIER EMPLOYÉ 360° — REPRISE (item 2, restructuration Vue d'ensemble).
+// Sections B/D/E : lecture seule, dérivées exclusivement des données agent déjà
+// chargées en mémoire (aucun nouvel appel réseau, aucune nouvelle donnée métier).
+// Réutilisent les classes ERP déjà en production (erp-card/erp-kpi/erp-kpi-grid,
+// app/static/erp-frontend.js + tests_frontend/alerts.test.js) plutôt que d'inventer
+// un nouveau langage visuel.
+function employeeContractOverviewHTML(a){
+  const type=employeeContractDocumentType(a);
+  const duration=employeePositionContractDuration(a);
+  const endDate=employeePositionContractEndDate(a);
+  const days=endDate?daysBetween(today(),endDate):null;
+  const poste=a.fonction||a.position||a.posteContrat||"—";
+  const endTone=days!==null&&days<=30?"color:#dc2626;font-weight:800":"";
+  return `<div class="erp-card"><h3 class="erp-card-title">Informations contractuelles</h3><div class="rh-erp-fields">
+    <div class="rh-erp-field"><b>Type</b><span>${escapeHTML(type)}</span></div>
+    <div class="rh-erp-field"><b>Durée</b><span>${escapeHTML(duration)}</span></div>
+    <div class="rh-erp-field"><b>Poste contractuel</b><span>${escapeHTML(poste)}</span></div>
+    <div class="rh-erp-field"><b>Fin de contrat</b><span style="${endTone}">${endDate?escapeHTML(formatDate(endDate)):"—"}${days!==null?` (${days<0?`Expiré J+${Math.abs(days)}`:`J-${days}`})`:""}</span></div>
+  </div></div>`;
+}
+function employeeAffectationOverviewHTML(a){
+  const aff=opsEmployeeLiveAffectation(a);
+  return `<div class="erp-card"><h3 class="erp-card-title">Affectation actuelle</h3><div class="rh-erp-fields">
+    <div class="rh-erp-field"><b>Site</b><span>${escapeHTML(aff.siteName||"—")}</span></div>
+    <div class="rh-erp-field"><b>Client</b><span>${escapeHTML(aff.clientName||"—")}</span></div>
+    <div class="rh-erp-field"><b>Poste</b><span>${escapeHTML(aff.poste||"—")}</span></div>
+    <div class="rh-erp-field"><b>Groupe de rotation</b><span>${aff.groupe?"Groupe "+escapeHTML(aff.groupe):"—"}</span></div>
+    <div class="rh-erp-field"><b>Depuis le</b><span>${aff.dateDebut?escapeHTML(formatDate(aff.dateDebut)):"—"}</span></div>
+  </div></div>`;
+}
+function employeeObservationsHTML(a){
+  const events=(a.gestionEvents||[]).filter(e=>String(e?.motif||"").trim())
+    .slice().sort((x,y)=>String(y.createdAt||y.du||"").localeCompare(String(x.createdAt||x.du||"")))
+    .slice(0,3);
+  return `<div class="erp-card"><h3 class="erp-card-title">Observations</h3>${events.length?`<div class="rh-erp-observations-list">${events.map(e=>`<div class="rh-erp-observation-row"><b>${escapeHTML(e.type||"—")}</b><span>${escapeHTML(e.motif||"")}</span><time>${e.du||e.createdAt?escapeHTML(formatDate(e.du||e.createdAt)):"—"}</time></div>`).join("")}</div>`:`<div class="text-xs text-slate-500">Aucune observation enregistrée.</div>`}</div>`;
+}
+// DOSSIER EMPLOYÉ 360° — REPRISE (item « À FAIRE MAINTENANT », Timeline 360°).
+// Agrégateur strictement en lecture seule, construit exclusivement à partir de
+// sources déjà existantes (gestionEvents, sanctions, affectationsHistorique,
+// dates de contrat déjà affichées ailleurs sur la fiche, + le moteur d'alertes
+// Lot 0.6-A déjà consommé par "Situation à traiter"). Aucune nouvelle table
+// métier, aucune nouvelle donnée : uniquement une re-présentation chronologique.
+function collectEmployeeLocalTimelineEvents(a){
+  const events=[];
+  (a.gestionEvents||[]).forEach(e=>{
+    if(!e)return;
+    events.push({date:String(e.du||e.createdAt||"").slice(0,10),type:e.type||"Événement RH",detail:e.motif||"",source:"RH"});
+  });
+  (a.sanctions||[]).forEach(s=>{
+    if(!s)return;
+    events.push({date:String(s.dateInfraction||s.date||s.dateDebut||"").slice(0,10),type:s.type||"Sanction",detail:s.faute||"",source:"Discipline"});
+  });
+  (a.affectationsHistorique||[]).forEach(h=>{
+    if(!h)return;
+    events.push({date:String(h.dateDebut||h.date||"").slice(0,10),type:"Affectation",detail:[h.siteName||h.site,h.poste].filter(Boolean).join(" — "),source:"Affectation"});
+  });
+  if(a.dateRecrutement)events.push({date:String(a.dateRecrutement).slice(0,10),type:"Recrutement",detail:"Entrée en fonction",source:"Contrat"});
+  if(a.dateFinEssai)events.push({date:String(a.dateFinEssai).slice(0,10),type:"Fin de période d'essai",detail:"",source:"Contrat"});
+  return events.filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(e.date)).sort((x,y)=>y.date.localeCompare(x.date));
+}
+function employeeTimeline360RowHTML(e){
+  const sourceClass={RH:"rh-erp-tl-rh",Discipline:"rh-erp-tl-discipline",Affectation:"rh-erp-tl-affectation",Contrat:"rh-erp-tl-contrat",Alerte:"rh-erp-tl-alerte"}[e.source]||"rh-erp-tl-rh";
+  return `<div class="rh-erp-timeline-row"><time>${escapeHTML(formatDate(e.date))}</time><span class="rh-erp-tl-source ${sourceClass}">${escapeHTML(e.source)}</span><div class="rh-erp-tl-body"><b>${escapeHTML(e.type)}</b>${e.detail?`<span>${escapeHTML(e.detail)}</span>`:""}</div></div>`;
+}
+async function loadEmployeeTimeline360(a){
+  const host=document.getElementById("employee-timeline360-panel-"+a.id);
+  if(!host)return;
+  const body=host.querySelector(".rh-erp-timeline-body-list");
+  if(!body)return;
+  const localEvents=collectEmployeeLocalTimelineEvents(a);
+  const render=(events)=>{body.innerHTML=events.length?events.map(employeeTimeline360RowHTML).join(""):`<span class="text-xs text-slate-400 italic">Aucun événement enregistré.</span>`};
+  render(localEvents);
+  if(host.dataset.alertsLoaded==="1")return; // déjà fusionné une fois : pas de second appel réseau à chaque réouverture de l'onglet
+  if(typeof canAccess==="function"&&!canAccess("alerts"))return; // même droit que "Situation à traiter" (Lot 0.6-A) — aucun droit nouveau créé
+  const myGen=sgdiViewRenderGeneration;
+  const employeeRef=a.backendId||a.id;
+  const stillCurrent=()=>myGen===sgdiViewRenderGeneration&&document.getElementById("employee-timeline360-panel-"+a.id)===host;
+  try{
+    const page=await sgdiApi("/alerts"+alertsQueryString({employee_id:employeeRef,page_size:20}),{legacy:false});
+    if(!stillCurrent())return;
+    host.dataset.alertsLoaded="1";
+    const alertEvents=((page&&page.items)||[]).map(al=>({date:String(al.last_detected_at||"").slice(0,10),type:al.title||"Alerte",detail:al.summary||"",source:"Alerte"})).filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(e.date));
+    render([...localEvents,...alertEvents].sort((x,y)=>y.date.localeCompare(x.date)));
+  }catch(e){
+    if(!stillCurrent())return;
+    host.querySelector(".rh-erp-timeline-error")?.remove();
+    const err=document.createElement("div");
+    err.className="rh-erp-timeline-error text-xs text-red-600 mt-2";
+    err.textContent="Alertes indisponibles pour la timeline : "+(e.message||String(e));
+    host.appendChild(err);
+  }
+}
 function renderAgentForm(view,id){
   const a=findEmployeeByRef(id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
   if(supervisorModuleActive()&&!agentInSupervisorScope(a)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Cette fiche ne fait pas partie des sites autorisés pour ce superviseur.</p></div>`;return}
@@ -12491,6 +12595,7 @@ function renderAgentForm(view,id){
     ["conges","Congés"],
     ["absences","Absences"],
     ["carriere","Carrière"],
+    ["timeline360","Timeline 360°"],
     ...(showPointage?[["pointage","Situation Pointage"]]:[]),
     ...(showVerifications?[["verifications","Documents archivés"]]:[]),
     ["materiel","Matériel"],
@@ -12533,7 +12638,13 @@ function renderAgentForm(view,id){
     <div class="rh-erp-chips">
       ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${isSortantDotation72hAlert(a)?'<span class="pill" style="background:#dc2626;color:#fff;font-weight:900;padding:6px 16px;letter-spacing:.06em;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ALERTE — DOTATION NON REVERSÉE +72H</span>':''}${(isDrhFicheContext()||adminFicheContext)&&!agentHasPortailAccount(a)?'<span class="pill" style="background:#f59e0b;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.04em">⚠ SANS COMPTE PORTAIL</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
-    <div class="rh-insight-grid">${agentCompletenessHTML(a)}${agentModificationHistoryHTML(a)}</div>
+    <div id="employee-situation-panel-${escapeHTML(a.id)}" class="rh-erp-situation-panel" data-employee-situation-host="${escapeHTML(a.id)}" data-loading="1">
+      <div class="rh-erp-situation-title">SITUATION À TRAITER</div>
+      <div class="rh-erp-situation-body"><span class="text-xs text-slate-400 italic">Chargement…</span></div>
+    </div>
+    <div class="rh-insight-grid">${employeeContractOverviewHTML(a)}${agentCompletenessHTML(a)}</div>
+    <div class="rh-insight-grid">${employeeAffectationOverviewHTML(a)}${employeeObservationsHTML(a)}</div>
+    ${agentModificationHistoryHTML(a)}
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${isMaterielFicheContext()||opsFicheReadOnly?"":renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
@@ -12605,6 +12716,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="conges" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Congés</legend>${renderAgentCongesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="absences" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Absences</legend>${renderAgentAbsencesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="carriere" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Carrière</legend>${renderGestionHistorique(a)}</fieldset></div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="timeline360" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Timeline 360°</legend><p class="text-xs text-slate-500 mb-3">Vue chronologique en lecture seule : agrège les événements déjà existants (contrat, RH, discipline, affectations, alertes). Aucune saisie ici — les actions se font depuis leur onglet d'origine.</p><div id="employee-timeline360-panel-${escapeHTML(a.id)}" data-employee-id="${escapeHTML(a.id)}"><div class="rh-erp-timeline-body-list"><span class="text-xs text-slate-400 italic">Cliquez sur l'onglet pour charger.</span></div></div></fieldset></div>
       ${showPointage?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="pointage" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Situation Pointage</legend>${renderAgentPointageSituation(a)}</fieldset></div>`:""}
       ${showVerifications?(()=>{const docs=[["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat de résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]];const archived=docs.filter(([key])=>a.documents?.[key]?.url).length;const docIcon='<svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></svg>';return`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><fieldset class="rh-panel-fieldset rh-documents-fieldset"><legend>Documents archivés</legend><div class="rh-docs-summary"><div><strong>${archived}/${docs.length}</strong><span>documents archivés</span></div><div class="rh-docs-progress"><i style="width:${Math.round(archived/docs.length*100)}%"></i></div></div><div class="rh-docs-grid">${docs.map(([key,label])=>{const d=a.documents?.[key],available=!!d?.url,date=d?.uploadedAt||d?.createdAt||d?.date||"";return`<article class="rh-doc-card ${available?"is-available":"is-missing"}"><div class="rh-doc-icon">${docIcon}</div><div class="rh-doc-copy"><strong title="${escapeHTML(label)}">${escapeHTML(label)}</strong><span class="rh-doc-status">${available?"Archivé":"Manquant"}</span><small>${available?(date?`Ajouté le ${formatDate(date)}`:"Document disponible"):"Document à fournir"}</small></div>${available?`<button type="button" class="rh-doc-action rh-doc-view" onclick="viewAgentArchivedDoc('${a.id}','${key}','${escapeHTML(label)}')" title="Visualiser ${escapeHTML(label)}"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button>`:`<button type="button" class="rh-doc-action rh-doc-add" onclick="openAgentDocumentUpload('${a.id}','${key}','${escapeHTML(label)}')">＋ Ajouter</button>`}</article>`}).join("")}</div></fieldset></div>`})():""}
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="materiel" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Matériel & équipement</legend>
@@ -12617,6 +12729,51 @@ function renderAgentForm(view,id){
     </form>
   </div>`;
   setTimeout(()=>{bindAgentDuplicateFieldSync();bindAgentFormDirtyState()},0);
+  loadEmployeeSituationAlerts(a);
+}
+// DOSSIER EMPLOYÉ 360° — "Situation à traiter" : consomme EXCLUSIVEMENT le moteur
+// d'alertes déterministe existant (Lot 0.6-A, GET /api/alerts?employee_id=…).
+// Aucune alerte n'est inventée côté frontend. Chargement différé (après le rendu
+// synchrone de la fiche, jamais dans le chemin critique) — voir item Performance.
+// Garde de fraîcheur (génération de rendu + host DOM encore présent) : ouvrir
+// l'employé A puis basculer vers B avant la réponse de A ne doit jamais faire
+// apparaître les alertes de A dans la fiche de B.
+async function loadEmployeeSituationAlerts(a){
+  const host=document.getElementById("employee-situation-panel-"+a.id);
+  if(!host)return;
+  // Même droit que le cockpit Alertes (aucun droit nouveau créé) : un profil sans
+  // accès au module Alertes ne doit pas voir cette section sur la fiche non plus.
+  if(typeof canAccess==="function"&&!canAccess("alerts")){host.remove();return}
+  const body=host.querySelector(".rh-erp-situation-body");
+  const myGen=sgdiViewRenderGeneration;
+  const employeeRef=a.backendId||a.id;
+  const stillCurrent=()=>myGen===sgdiViewRenderGeneration&&document.getElementById("employee-situation-panel-"+a.id)===host;
+  try{
+    const page=await sgdiApi("/alerts"+alertsQueryString({employee_id:employeeRef,status:"open",page_size:10}),{legacy:false});
+    if(!stillCurrent())return;
+    host.dataset.loading="0";
+    const items=(page&&page.items)||[];
+    if(!items.length){body.innerHTML=`<span class="text-xs text-slate-400">Aucune situation à traiter pour cet employé.</span>`;return}
+    body.innerHTML=items.map(employeeSituationAlertCardHTML).join("");
+  }catch(e){
+    if(!stillCurrent())return;
+    host.dataset.loading="0";
+    body.innerHTML=`<span class="text-xs text-red-600">Alertes indisponibles : ${escapeHTML(e.message||String(e))}</span>`;
+  }
+}
+function alertsQueryString(params){
+  const clean=Object.fromEntries(Object.entries(params||{}).filter(([,v])=>v!==undefined&&v!==null&&v!==""));
+  const qs=new URLSearchParams(clean).toString();
+  return qs?"?"+qs:"";
+}
+function employeeSituationAlertCardHTML(alert){
+  const sevClass={critical:"pill-red",warning:"pill-amber",info:"pill-blue"}[alert.severity]||"pill-gray";
+  const sevLabel={critical:"Critique",warning:"Attention",info:"Info"}[alert.severity]||alert.severity;
+  return `<div class="rh-erp-situation-card"><span class="pill ${sevClass}">${escapeHTML(sevLabel)}</span>
+    <div class="rh-erp-situation-text"><b>${escapeHTML(alert.title||"")}</b><span>${escapeHTML(alert.summary||"")}</span></div>
+    <span class="rh-erp-situation-date">${escapeHTML(String(alert.last_detected_at||"").slice(0,10))}</span>
+    <button type="button" class="btn btn-ghost text-xs" onclick="navigate('alerts/${escapeHTML(String(alert.id))}')">Voir</button>
+  </div>`;
 }
 window.addFamilleRow=function(){
   const tbody=document.querySelector(".rh-op-family-table tbody");if(!tbody)return;
@@ -12737,6 +12894,12 @@ function fichePositionSwitchTab(key){
   if(key==="portail"){
     const panel=document.getElementById("portal-account-panel");
     if(panel&&panel.dataset.portalMatricule){loadPortalAccountSection(panel.dataset.portalMatricule)}
+  }
+  if(key==="timeline360"){
+    const host=document.querySelector('[data-fp-tab-panel="timeline360"] [data-employee-id]');
+    const ref=host?.dataset.employeeId;
+    const a=ref?findEmployeeByRef(ref):null;
+    if(a)loadEmployeeTimeline360(a);
   }
 }
 
