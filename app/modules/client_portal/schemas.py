@@ -427,3 +427,49 @@ class ClientPortalUserOut(BaseModel):
 
 class ClientPortalUserCreatedOut(ClientPortalUserOut):
     temporary_password: str
+
+
+class AttendanceRowOut(BaseModel):
+    """Une ligne de pointage en lecture seule pour l'Espace Client — dérivée
+    exclusivement de DailyPresence (aucune donnée fabriquée). Le statut
+    affiché (present/absent/en_cours/sortie_manquante) est calculé à partir
+    des seuls champs réellement enregistrés (status, arrival_time,
+    departure_time) ; aucun retard ni anomalie n'est inféré ici."""
+
+    id: int
+    employee_id: int
+    employee_code: str
+    employee_name: str
+    position: str | None = None
+    site_id: int
+    site_name: str
+    presence_date: date
+    arrival_time: str | None = None
+    departure_time: str | None = None
+    duration_label: str | None = None
+    group_code: str | None = None
+    status: str
+
+
+class AttendancePageOut(BaseModel):
+    items: list[AttendanceRowOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class AttendanceFilterSiteOut(BaseModel):
+    id: int
+    name: str
+
+
+class AttendanceFilterEmployeeOut(BaseModel):
+    id: int
+    code: str
+    name: str
+
+
+class AttendanceFiltersOut(BaseModel):
+    sites: list[AttendanceFilterSiteOut]
+    employees: list[AttendanceFilterEmployeeOut]

@@ -20,6 +20,8 @@ from app.modules.ops.models import RotationTemplate, Site
 from app.modules.client_portal.schemas import (
     OBSERVATION_CATEGORIES,
     GROUP_LETTERS,
+    AttendanceFiltersOut,
+    AttendancePageOut,
     ClientChangePasswordIn,
     ClientLoginRequest,
     ClientMeOut,
@@ -57,6 +59,12 @@ CLIENT_PORTAL_DEFAULT_PERMISSIONS = {
     "create_sites": True,
     "assign_employees": True,
     "create_equipment": True,
+    # LOT — POINTAGE LECTURE SEULE : défaut False à dessein. Contrairement aux
+    # autres droits (hérités "activés" pour les comptes déjà en place), celui-ci
+    # ne doit JAMAIS être accordé implicitement à un compte existant — l'admin
+    # doit l'activer explicitement pour chaque client (voir sgdi-app.js,
+    # openAdminClientPortalConfigModal).
+    "view_attendance": False,
 }
 
 
@@ -73,6 +81,7 @@ def _client_permissions(db: Session, user: ClientPortalUser) -> dict[str, bool]:
         "create_sites": "createSites",
         "assign_employees": "assignEmployees",
         "create_equipment": "createEquipment",
+        "view_attendance": "viewAttendance",
     }
     return {key: bool(configured.get(key, configured.get(camel_keys[key], default))) for key, default in CLIENT_PORTAL_DEFAULT_PERMISSIONS.items()}
 
@@ -262,6 +271,37 @@ def create_equipment(
 ):
     _require_client_permission(db, user, "create_equipment")
     return service.create_equipment_for_client(db, user.client_id, payload)
+
+
+# LOT — POINTAGE EN LECTURE SEULE. Deux routes GET uniquement (aucun POST/PUT/
+# PATCH/DELETE dans ce lot) : le périmètre vient exclusivement de
+# user.client_id (dérivé du token authentifié, jamais d'un paramètre fourni
+# par le frontend — voir service.list_attendance_for_client). Gardées par le
+# droit explicite "view_attendance", opt-in par client (jamais accordé par
+# défaut, voir CLIENT_PORTAL_DEFAULT_PERMISSIONS).
+@router.get("/attendance/filters", response_model=AttendanceFiltersOut)
+def attendance_filters(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "view_attendance")
+    return service.attendance_filters_for_client(db, user.client_id)
+
+
+@router.get("/attendance", response_model=AttendancePageOut)
+def attendance(
+    site_id: int | None = None,
+    employee_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "view_attendance")
+    return service.list_attendance_for_client(
+        db, user.client_id,
+        site_id=site_id, employee_id=employee_id, date_from=date_from, date_to=date_to,
+        page=page, page_size=page_size,
+    )
 
 
 @router.get("/observations", response_model=list[ObservationOut])

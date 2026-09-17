@@ -43,6 +43,134 @@ def _client_site_ids(db: Session, client_id: int) -> list[int]:
     return list(db.execute(select(Site.id).where(Site.client_id == client_id)).scalars().all())
 
 
+# LOT — POINTAGE EN LECTURE SEULE DANS L'ESPACE CLIENT. Lit exclusivement la table
+# canonique DailyPresence (aucune table de présence dupliquée, aucune copie de
+# données) ; le périmètre client_id vient toujours du token authentifié
+# (Depends(current_client_user), jamais d'un client_id fourni par le frontend) —
+# voir routes.py. Ces fonctions ne modifient jamais rien (aucun POST/PUT/PATCH/DELETE).
+def _attendance_duration_label(arrival: str | None, departure: str | None) -> str | None:
+    if not arrival or not departure:
+        return None
+    try:
+        h1, m1 = (int(p) for p in arrival.split(":")[:2])
+        h2, m2 = (int(p) for p in departure.split(":")[:2])
+    except (TypeError, ValueError):
+        return None
+    minutes = (h2 * 60 + m2) - (h1 * 60 + m1)
+    if minutes < 0:
+        minutes += 24 * 60  # service traversant minuit
+    return f"{minutes // 60}h{minutes % 60:02d}"
+
+
+def _attendance_status_label(row: DailyPresence, today: date) -> str:
+    """Dérivé uniquement des champs réellement enregistrés (status, arrival_time,
+    departure_time) — aucun retard ni anomalie n'est inféré ici (nécessiterait un
+    planning de référence non fiable à recalculer dans ce lot en lecture seule)."""
+    raw_status = str(row.status or "").strip().lower()
+    if raw_status == "absent":
+        return "absent"
+    if row.arrival_time and not row.departure_time:
+        return "en_cours" if row.presence_date >= today else "sortie_manquante"
+    if row.arrival_time and row.departure_time:
+        return "present"
+    return raw_status or "present"
+
+
+def attendance_filters_for_client(db: Session, client_id: int) -> dict[str, Any]:
+    site_ids = _client_site_ids(db, client_id)
+    if not site_ids:
+        return {"sites": [], "employees": []}
+    sites = db.execute(
+        select(Site).where(Site.id.in_(site_ids), Site.active == 1).order_by(Site.name)
+    ).scalars().all()
+    employee_ids = set(
+        db.execute(select(Assignment.employee_id).where(Assignment.site_id.in_(site_ids))).scalars().all()
+    )
+    employees = db.execute(
+        select(Employee).where(Employee.id.in_(employee_ids)).order_by(Employee.last_name, Employee.first_name)
+    ).scalars().all() if employee_ids else []
+    return {
+        "sites": [{"id": s.id, "name": s.name} for s in sites],
+        "employees": [{"id": e.id, "code": e.code, "name": f"{e.last_name} {e.first_name}".strip()} for e in employees],
+    }
+
+
+def list_attendance_for_client(
+    db: Session,
+    client_id: int,
+    *,
+    site_id: int | None = None,
+    employee_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    site_ids = set(_client_site_ids(db, client_id))
+    if not site_ids:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size, "pages": 1}
+
+    if site_id is not None:
+        if site_id not in site_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site non autorisé pour ce compte client")
+        scoped_site_ids = {site_id}
+    else:
+        scoped_site_ids = site_ids
+
+    stmt = select(DailyPresence).where(DailyPresence.site_id.in_(scoped_site_ids))
+    if date_from is not None:
+        stmt = stmt.where(DailyPresence.presence_date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(DailyPresence.presence_date <= date_to)
+    if employee_id is not None:
+        # L'employé doit être affecté (actuellement ou historiquement) à un site de
+        # ce client — jamais accepté tel quel depuis le frontend. Même si ce contrôle
+        # était contourné, le filtre site_id.in_(scoped_site_ids) ci-dessus reste la
+        # vraie limite de sécurité : aucune ligne hors périmètre ne peut être lue.
+        owned = db.execute(
+            select(func.count(Assignment.id)).where(
+                Assignment.employee_id == employee_id, Assignment.site_id.in_(site_ids)
+            )
+        ).scalar_one()
+        if not owned:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employé non autorisé pour ce compte client")
+        stmt = stmt.where(DailyPresence.employee_id == employee_id)
+
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    stmt = stmt.order_by(DailyPresence.presence_date.desc(), DailyPresence.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    rows = db.execute(stmt).scalars().all()
+
+    employee_ids = {row.employee_id for row in rows}
+    employees_by_id = {
+        e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars().all()
+    } if employee_ids else {}
+    site_names = {s.id: s.name for s in db.execute(select(Site).where(Site.id.in_(scoped_site_ids))).scalars().all()}
+    today = date.today()
+
+    items = []
+    for row in rows:
+        employee = employees_by_id.get(row.employee_id)
+        items.append({
+            "id": row.id,
+            "employee_id": row.employee_id,
+            "employee_code": employee.code if employee else "",
+            "employee_name": f"{employee.last_name} {employee.first_name}".strip() if employee else "Employé inconnu",
+            "position": employee.position if employee else None,
+            "site_id": row.site_id,
+            "site_name": site_names.get(row.site_id, ""),
+            "presence_date": row.presence_date,
+            "arrival_time": row.arrival_time,
+            "departure_time": row.departure_time,
+            "duration_label": _attendance_duration_label(row.arrival_time, row.departure_time),
+            "group_code": row.group_code or row.rotation_group,
+            "status": _attendance_status_label(row, today),
+        })
+    pages = max((total + page_size - 1) // page_size, 1)
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages}
+
+
 def _employee_photo(employee: Employee) -> str | None:
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
