@@ -97,9 +97,14 @@ test('le menu ouvert par le bouton actions contient toutes les ACTIONS À FAIRE 
   const menu = w.document.getElementById('employee-row-actions-menu');
   assert.ok(menu, 'le menu doit être créé');
   const text = menu.textContent;
-  for (const label of ['CONGÉ', 'SUSPENDRE', 'CONVOQUER', 'BLACKLISTER', 'MISE EN DEMEURE', 'SANCTIONNER', 'AVENANT', 'NOUVEAU CONTRAT']) {
+  for (const label of ['CONGÉ', 'SUSPENDRE', 'CONVOQUER', 'BLACKLISTER', 'MISE EN DEMEURE', 'SANCTIONNER']) {
     assert.match(text, new RegExp(label), `action manquante dans le menu : ${label}`);
   }
+  // AVENANT / NOUVEAU CONTRAT sont désormais regroupées sous "CONTRAT ▾" (Dossier
+  // employé 360°, REFONTE ACTIONS RH) : même fonctionnalité, présentation groupée.
+  assert.match(text, /CONTRAT ▾/, 'le regroupement contractuel doit être présent');
+  assert.match(menu.innerHTML, /runRhEffectifAction\('avenant'/, 'l\'action avenant doit rester joignable depuis le sous-menu');
+  assert.match(menu.innerHTML, /runRhEffectifAction\('nouveau_contrat'/, 'l\'action nouveau contrat doit rester joignable depuis le sous-menu');
   w.close();
 });
 
