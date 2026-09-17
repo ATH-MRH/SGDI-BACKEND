@@ -169,6 +169,17 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   .result{position:fixed;left:0;right:0;bottom:0;z-index:70;display:block;margin:0;border-radius:22px 22px 0 0;max-height:74vh;overflow:auto;transform:translateY(106%);transition:transform .32s cubic-bezier(.22,1,.36,1);box-shadow:0 -20px 50px rgba(0,0,0,.28);pointer-events:none}
   .result.show{transform:translateY(0);pointer-events:auto}
 }
+/* LOT SÉCURITÉ — auto-déconnexion 30s d'inactivité (pointage.irongs.com /
+   pointeur.irongs.com uniquement). Pas de popup navigateur natif. */
+.idle-warning{display:none;position:fixed;inset:0;z-index:5000;align-items:center;justify-content:center;padding:20px;background:rgba(4,15,30,.5);backdrop-filter:blur(2px)}
+.idle-warning.show{display:flex}
+.idle-warning-box{width:100%;max-width:360px;background:#fff;border-radius:20px;padding:26px 24px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.35);border:1px solid var(--line)}
+.idle-warning-title{font-size:12px;font-weight:950;letter-spacing:.08em;color:var(--red);text-transform:uppercase}
+.idle-warning-desc{margin-top:10px;font-size:15px;font-weight:700;color:var(--ink)}
+.idle-warning-desc span{display:inline-block;min-width:1.4em;color:var(--red);font-weight:950}
+.idle-warning-btn{width:100%;border:0;border-radius:13px;background:var(--navy);color:#fff;padding:14px;font-weight:900;margin-top:18px;cursor:pointer;font-size:14px}
+.idle-warning-btn:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+.idle-locking{pointer-events:none}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
@@ -277,6 +288,107 @@ let headerClockTimer=null;
 let historyRefreshTimer=null;
 let planningEvents=[];
 let planningRefreshTimer=null;
+let isLoggingOut=false;
+
+// ==================== LOT SÉCURITÉ — AUTO-DÉCONNEXION 30S D'INACTIVITÉ ====================
+// Portée stricte : ce fichier sert UNIQUEMENT pointage.irongs.com et pointeur.irongs.com
+// (voir _is_pointer_host, app/main.py — les deux domaines servent ce même pointeur.html).
+// Aucune autre interface ERP n'inclut ce script : cette règle n'est donc active nulle part
+// ailleurs. Configuration centralisée : ne jamais disperser 30000/20000 dans un autre fichier.
+const INACTIVITY_TIMEOUT_MS=30000;
+const INACTIVITY_WARNING_MS=20000;
+// Gestes humains directs uniquement. Activité APPLICATIVE (polling, réponse fetch, horloge,
+// setInterval/setTimeout technique, caméra qui tourne sans lecture) != activité UTILISATEUR :
+// aucun de ces mécanismes automatiques n'appelle jamais noteUserActivity().
+const IDLE_ACTIVITY_EVENTS=["pointerdown","mousedown","touchstart","keydown","click","scroll"];
+const IDLE_THROTTLED_EVENTS=["mousemove","pointermove"];
+const IDLE_MOVE_THROTTLE_MS=500;
+let lastUserActivityAt=0;
+let idleWarningVisible=false;
+let idleCheckTimer=null;
+let idleLastMoveNoteAt=0;
+
+function idleWarningEl(){return document.getElementById("idleWarning")}
+function noteUserActivity(){
+  if(!pointerSession||isLoggingOut)return;
+  lastUserActivityAt=Date.now();
+  if(idleWarningVisible)hideIdleWarning();
+}
+function noteUserActivityThrottled(){
+  const now=Date.now();
+  if(now-idleLastMoveNoteAt<IDLE_MOVE_THROTTLE_MS)return;
+  idleLastMoveNoteAt=now;
+  noteUserActivity();
+}
+function showIdleWarning(remainingMs){
+  idleWarningVisible=true;
+  let el=idleWarningEl();
+  if(!el){
+    el=document.createElement("div");
+    el.id="idleWarning";
+    el.className="idle-warning";
+    el.setAttribute("role","alertdialog");
+    el.setAttribute("aria-modal","true");
+    el.setAttribute("aria-labelledby","idleWarningTitle");
+    el.setAttribute("aria-describedby","idleWarningDesc");
+    el.innerHTML='<div class="idle-warning-box">'
+      +'<div id="idleWarningTitle" class="idle-warning-title">SESSION INACTIVE</div>'
+      +'<div id="idleWarningDesc" class="idle-warning-desc">Déconnexion automatique dans <span id="idleCountdown">10</span> secondes.</div>'
+      +'<button type="button" id="idleStayBtn" class="idle-warning-btn" onclick="noteUserActivity()">RESTER CONNECTÉ</button>'
+      +'</div>';
+    document.body.appendChild(el);
+  }
+  el.classList.add("show");
+  const seconds=Math.max(0,Math.ceil(remainingMs/1000));
+  const countdown=document.getElementById("idleCountdown");
+  if(countdown)countdown.textContent=String(seconds);
+  // Le focus visible sur "Rester connecté" est l'action clavier/tactile attendue par
+  // l'utilisateur pour rester connecté (accessibilité — pas de contournement par Escape,
+  // qui n'a ici aucun handler dédié : une vraie frappe reste une activité comme une autre).
+  document.getElementById("idleStayBtn")?.focus({preventScroll:true});
+}
+function hideIdleWarning(){
+  idleWarningVisible=false;
+  idleWarningEl()?.classList.remove("show");
+}
+// Fonction unique de vérification, appelée à la fois par le tick périodique ET par le
+// retour d'onglet/machine (visibilitychange/focus/pageshow) : dans les deux cas on ne fait
+// que RELIRE le temps réel écoulé depuis lastUserActivityAt (jamais réinitialisé par ces
+// événements eux-mêmes) — robuste au throttling des timers en arrière-plan et à la veille
+// machine, puisque tout repose sur un horodatage absolu et non sur un setTimeout unique.
+function idleTick(){
+  if(!pointerSession||isLoggingOut)return;
+  const elapsed=Date.now()-lastUserActivityAt;
+  if(elapsed>=INACTIVITY_TIMEOUT_MS){performIdleLogout();return}
+  if(elapsed>=INACTIVITY_WARNING_MS)showIdleWarning(INACTIVITY_TIMEOUT_MS-elapsed);
+  else if(idleWarningVisible)hideIdleWarning();
+}
+async function performIdleLogout(){
+  if(isLoggingOut)return;
+  hideIdleWarning();
+  // Empêche toute nouvelle action utilisateur pendant le nettoyage de session.
+  document.getElementById("appView")?.classList.add("idle-locking");
+  await logout();
+}
+function startIdleWatch(){
+  stopIdleWatch();
+  lastUserActivityAt=Date.now();
+  IDLE_ACTIVITY_EVENTS.forEach(name=>document.addEventListener(name,noteUserActivity,{passive:true}));
+  IDLE_THROTTLED_EVENTS.forEach(name=>document.addEventListener(name,noteUserActivityThrottled,{passive:true}));
+  document.addEventListener("visibilitychange",idleTick);
+  window.addEventListener("focus",idleTick);
+  window.addEventListener("pageshow",idleTick);
+  idleCheckTimer=setInterval(idleTick,1000);
+}
+function stopIdleWatch(){
+  clearInterval(idleCheckTimer);idleCheckTimer=null;
+  IDLE_ACTIVITY_EVENTS.forEach(name=>document.removeEventListener(name,noteUserActivity));
+  IDLE_THROTTLED_EVENTS.forEach(name=>document.removeEventListener(name,noteUserActivityThrottled));
+  document.removeEventListener("visibilitychange",idleTick);
+  window.removeEventListener("focus",idleTick);
+  window.removeEventListener("pageshow",idleTick);
+  hideIdleWarning();
+}
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function isMobileDevice(){return matchMedia("(max-width:759px)").matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)}
@@ -362,6 +474,7 @@ async function enterApp(){
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"Pointeur")+" · "+(user.username||"");
   startHeaderClock();
   updateConnPill();
+  startIdleWatch();
   try{await loadAttendanceSites()}catch(error){showResult({message:error.message||"Sites indisponibles"},"error")}
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
@@ -408,15 +521,25 @@ function renderPlanning(date){
   document.getElementById("planningContent").innerHTML=`<div class="planning-hero"><div><small><b>MOTEUR DE PRÉSENCE</b></small><h2>Planning intelligent — apprentissage 7 jours</h2><span>Référence du ${sourceDate.split("-").reverse().join("/")} · Actualisation automatique toutes les 30 secondes</span><div class="progress"><i style="width:${learning/7*100}%"></i></div></div><div class="planning-progress">${learning}/7<small>${learning>=7?"PLANNING OPÉRATIONNEL":"APPRENTISSAGE"}</small></div></div><div class="planning-kpis"><div class="planning-card planning-kpi">Présents<b style="color:var(--green)">${counts.present}</b></div><div class="planning-card planning-kpi">Absents<b style="color:var(--red)">${counts.absent}</b></div><div class="planning-card planning-kpi">Anomalies<b style="color:var(--amber)">${counts.anomalie}</b></div><div class="planning-card planning-kpi">Permutations<b style="color:#7c3aed">${counts.permutation}</b></div></div><div class="planning-card"><div class="planning-toolbar"><div><label>Date analysée</label><input id="planningDate" type="date" value="${date}" onchange="renderPlanning(this.value)"></div><div><label>Site</label><select id="planningSite" onchange="renderPlanning(document.getElementById('planningDate').value)"><option value="">Tous les sites</option>${sites.map(v=>`<option ${v===site?"selected":""}>${esc(v)}</option>`).join("")}</select></div><div><label>Statut</label><select id="planningStatus" onchange="renderPlanning(document.getElementById('planningDate').value)"><option value="">Tous les statuts</option>${["present","absent","anomalie","permutation","attendu"].map(v=>`<option value="${v}" ${v===status?"selected":""}>${v[0].toUpperCase()+v.slice(1)}</option>`).join("")}</select></div><button class="secondary" style="width:auto;margin:0" onclick="loadPlanning()">↻ ACTUALISER</button></div><div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Nom prénom</th><th>Code</th><th>Site</th><th>Date</th><th>H arrivée</th><th>H départ</th><th>État</th><th>Observation / alerte</th></tr></thead><tbody>${visible.length?visible.map(r=>{const x=r.real||r.exp;return`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.code||"—")}</td><td>${esc(x.site)}</td><td>${date.split("-").reverse().join("/")}</td><td>${esc(r.real?.arrival||"—")}</td><td>${esc(r.real?.departure||"—")}</td><td><span class="state-pill state-${r.severity}">${esc(r.state)}</span></td><td>${esc(r.note)}</td></tr>`}).join(""):'<tr><td colspan="8" style="text-align:center;padding:34px;color:var(--muted)">Aucun planning appris pour cette date. Le système utilise la journée correspondante sept jours auparavant.</td></tr>'}</tbody></table></div></div>`;
 }
 async function logout(){
-  await stopScanner();
-  clearInterval(headerClockTimer);headerClockTimer=null;
-  clearInterval(historyRefreshTimer);historyRefreshTimer=null;
-  clearInterval(planningRefreshTimer);planningRefreshTimer=null;
-  localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
-  closeManualPanel();resetManualPanel();
-  document.getElementById("appView").classList.add("hidden");
-  document.getElementById("loginView").classList.remove("hidden");
-  document.getElementById("password").value="";
+  // Idempotent (LOT SÉCURITÉ, item 13) : un logout déclenché par l'inactivité peut se
+  // superposer à un logout manuel ou à un 401 d'une requête en vol — un seul s'exécute.
+  if(isLoggingOut)return;
+  isLoggingOut=true;
+  try{
+    stopIdleWatch();
+    await stopScanner();
+    clearInterval(headerClockTimer);headerClockTimer=null;
+    clearInterval(historyRefreshTimer);historyRefreshTimer=null;
+    clearInterval(planningRefreshTimer);planningRefreshTimer=null;
+    localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
+    closeManualPanel();resetManualPanel();
+    document.getElementById("appView").classList.add("hidden");
+    document.getElementById("appView").classList.remove("idle-locking");
+    document.getElementById("loginView").classList.remove("hidden");
+    document.getElementById("password").value="";
+  }finally{
+    isLoggingOut=false;
+  }
 }
 function setupScanMode(){
   cameraMode=isMobileDevice();
@@ -555,6 +678,10 @@ async function loadHistory(){
   }catch(error){console.warn("Historique pointeur 48 h indisponible",error)}
 }
 async function onQr(token){
+  // Un QR/badge réellement décodé et lu est une activité utilisateur (LOT SÉCURITÉ, item 5)
+  // — contrairement à la caméra qui tourne simplement sans jamais rien décoder, ou à la
+  // douchette USB simplement branchée : ceci ne s'exécute QUE sur une lecture réelle.
+  noteUserActivity();
   if(scanBusy)return;
   scanBusy=true;
   try{
