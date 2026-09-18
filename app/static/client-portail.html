@@ -152,8 +152,6 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
 td{padding:11px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 tr:last-child td{border-bottom:0}
-.equip-name{font-weight:850;font-size:13px}
-.equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;align-items:stretch}
 .group-counter{display:grid;grid-template-rows:30px 24px 20px 18px;align-content:center;row-gap:2px;min-height:100px;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
@@ -329,7 +327,7 @@ tr:last-child td{border-bottom:0}
       </div>
       <div class="portal-search">
         <label class="sr-only" for="portalGlobalSearch">Rechercher dans le portail</label>
-        <input id="portalGlobalSearch" type="search" autocomplete="off" placeholder="Rechercher un agent, un site, un matériel…" oninput="runPortalSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';resetPortalSearch()}">
+        <input id="portalGlobalSearch" type="search" autocomplete="off" placeholder="Rechercher un agent, un site…" oninput="runPortalSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';resetPortalSearch()}">
         <span class="portal-search-icon" aria-hidden="true">⌕</span>
         <div id="portalSearchResults" class="portal-search-results hidden"></div>
       </div>
@@ -345,7 +343,6 @@ tr:last-child td{border-bottom:0}
       <nav class="portal-nav">
         <button type="button" class="portal-nav-btn active" data-tab="employees" onclick="switchTab('employees')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Mon personnel</button>
         <button type="button" class="portal-nav-btn" data-tab="sites" onclick="switchTab('sites')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>Mes sites</button>
-        <button type="button" class="portal-nav-btn" data-tab="equipment" onclick="switchTab('equipment')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="19" height="11" rx="2"/><path d="M8.5 8.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2.5M2.5 13.5h19"/></svg></span>Mes équipements</button>
         <button type="button" class="portal-nav-btn" data-tab="planning" onclick="switchTab('planning')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Planning de travail</button>
         <button type="button" class="portal-nav-btn" data-tab="pointage" onclick="switchTab('pointage')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>Pointage</button>
         <button type="button" class="portal-nav-btn" data-tab="history" onclick="switchTab('history')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>Historique</button>
@@ -372,14 +369,6 @@ tr:last-child td{border-bottom:0}
           <button type="button" class="secondary" id="addSiteBtn" onclick="openSiteModal()">Détail sites</button>
         </div>
         <div id="sitesList"><div class="empty">Chargement…</div></div>
-      </div>
-
-      <div id="equipmentTab" class="hidden">
-        <div class="section-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <div><h1>Mes équipements / matériel</h1><p>Le matériel affecté à vos sites et à vos agents.</p></div>
-          <button type="button" class="secondary" id="addEquipmentBtn" onclick="openEquipmentModal()">+ Ajouter un équipement</button>
-        </div>
-        <div id="equipmentList"><div class="empty">Chargement…</div></div>
       </div>
 
       <div id="pointageTab" class="hidden">
@@ -503,36 +492,11 @@ tr:last-child td{border-bottom:0}
   </div>
 </div>
 
-<div id="equipmentModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEquipmentModal()">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-head"><h2>Ajouter un équipement</h2><button type="button" class="modal-close" onclick="closeEquipmentModal()">×</button></div>
-    <label for="equipArticle">Article</label>
-    <select id="equipArticle"><option value="">Chargement…</option></select>
-    <label for="equipSite">Site</label>
-    <select id="equipSite"><option value="">— Choisir —</option></select>
-    <label for="equipQuantity">Quantité</label>
-    <input id="equipQuantity" type="number" min="1" step="1" value="1">
-    <label for="equipState">État</label>
-    <select id="equipState">
-      <option value="neuf">Neuf</option>
-      <option value="rénové">Rénové</option>
-      <option value="usagé">Usagé</option>
-      <option value="réformé">Réformé</option>
-    </select>
-    <div id="equipmentError" class="error"></div>
-    <div class="modal-actions">
-      <button type="button" class="secondary" onclick="closeEquipmentModal()">Annuler</button>
-      <button type="button" class="primary" id="equipmentSubmitBtn" onclick="submitEquipment()">Enregistrer</button>
-    </div>
-  </div>
-</div>
-
 <script>
 const SESSION_KEY="atlas_client_portal_session";
 let session=null;
 let loginPasswordUsed="";
 let employees=[];
-let equipmentCache=[];
 let historyCache=[];
 // LOT — POINTAGE LECTURE SEULE (Espace Client). État purement local d'affichage :
 // aucune donnée de présence n'est jamais recopiée/persistée ici, seulement la
@@ -544,7 +508,7 @@ let portalOperationalAlerts=[];
 let portalSearchResults=[];
 let portalSearchRequest=0;
 let portalSearchLoading=null;
-const portalSearchLoaded={sites:false,equipment:false,history:false};
+const portalSearchLoaded={sites:false,history:false};
 let categories={};
 let observationKind="observation";
 let selectedCategories=new Set();
@@ -578,9 +542,8 @@ const PORTAL_LANG_PAIRS=[
   ["Impossible de changer le mot de passe","Unable to change password"],["Accédez à votre espace client","Access your client portal"],
 
   ["Rechercher dans le portail","Search the portal"],
-  ["Rechercher un agent, un site, un matériel…","Search an employee, a site, equipment…"],
+  ["Rechercher un agent, un site…","Search an employee, a site…"],
   ["Déconnexion","Log out"],["Espace client","Client area"],["Mon personnel","My staff"],["Mes sites","My sites"],
-  ["Mes équipements / matériel","My equipment / materiel"],["Mes équipements","My equipment"],
   ["Planning de travail","Work schedule"],["Historique","History"],["Messagerie","Messages"],
   ["Messages envoyés","Sent messages"],["Messages reçus","Received messages"],["Messages archivés","Archived messages"],
   ["Recherche employé","Employee search"],["Rechercher un employé","Search an employee"],
@@ -592,8 +555,6 @@ const PORTAL_LANG_PAIRS=[
   ["+ Nouveau planning","+ New schedule"],
   ["Vos emplacements sous surveillance, la couverture en effectif et les agents affectés à chaque groupe.","Your monitored sites, staffing coverage and the employees assigned to each group."],
   ["Détail sites","Sites detail"],
-  ["Le matériel affecté à vos sites et à vos agents.","Equipment assigned to your sites and employees."],
-  ["+ Ajouter un équipement","+ Add equipment"],
   ["Vos observations et signalements sur les agents affectés à vos sites.","Your observations and reports on employees assigned to your sites."],
   ["Vos signalements transmis à l’équipe OPS dans ATLAS.","Your reports sent to the OPS team in ATLAS."],
   ["Les réponses envoyées par l’équipe OPS vers votre espace client.","Replies sent by the OPS team to your client portal."],
@@ -670,13 +631,6 @@ const PORTAL_LANG_PAIRS=[
   ["Effectif non défini","Staffing not defined"],["Couverture complète","Full coverage"],
   ["Sous-effectif","Understaffed"],["Aucun agent affecté","No employee assigned"],["Besoin","Need"],["Écart +/-","Difference +/-"],
 
-  ["Ajouter un équipement","Add equipment"],["Article","Item"],["Quantité","Quantity"],["État","Condition"],
-  ["Équipement ajouté.","Equipment added."],["Choisissez un article.","Choose an item."],["Choisissez un site.","Choose a site."],
-  ["Impossible d’ajouter cet équipement.","Unable to add this equipment."],["Catalogue indisponible","Catalog unavailable"],
-  ["Aucun article disponible","No items available"],["Aucun site","No site"],
-  ["Neuf","New"],["Rénové","Refurbished"],["Usagé","Used"],["Réformé","Decommissioned"],
-  ["Équipement","Equipment"],["Assigné à","Assigned to"],["Depuis le","Since"],
-
   ["← Semaine précédente","← Previous week"],["Semaine suivante →","Next week →"],
   ["Aucun site disponible pour créer un planning.","No site available to create a schedule."],
   ["Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Détail sites » pour créer le cycle 3×8.","No rotation schedule has been configured yet. Use “My sites → Sites detail” to create the 3×8 cycle."],
@@ -687,13 +641,11 @@ const PORTAL_LANG_PAIRS=[
   ["La consultation des agents n’est pas activée pour votre compte.","Employee access is not enabled for your account."],
   ["Aucun site actuellement rattaché à votre compte.","No sites currently linked to your account."],
   ["La consultation des sites n’est pas activée pour votre compte.","Site access is not enabled for your account."],
-  ["Aucun équipement actuellement recensé sur vos sites.","No equipment currently recorded on your sites."],
-  ["La consultation du matériel n’est pas activée pour votre compte.","Equipment access is not enabled for your account."],
   ["L’historique des signalements n’est pas activé pour votre compte.","Report history is not enabled for your account."],
   ["Aucun employé trouvé.","No employee found."],["Affectation non renseignée","Assignment not specified"],
   ["Aucun résultat dans votre périmètre.","No results in your scope."],
   ["Recherche dans les autres rubriques…","Searching other sections…"],
-  ["Personnel","Staff"],["Matériel","Equipment"],["Événement","Event"],
+  ["Personnel","Staff"],["Événement","Event"],
 ].sort((a,b)=>b[0].length-a[0].length);
 
 function portalRegexEscape(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
@@ -959,8 +911,8 @@ async function submitChangePassword(){
 
 function logout(){
   session=null;
-  employees=[];sitesCache=[];equipmentCache=[];historyCache=[];portalSearchResults=[];
-  portalSearchLoaded.sites=false;portalSearchLoaded.equipment=false;portalSearchLoaded.history=false;
+  employees=[];sitesCache=[];historyCache=[];portalSearchResults=[];
+  portalSearchLoaded.sites=false;portalSearchLoaded.history=false;
   localStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(SESSION_KEY);
   document.getElementById("appView").classList.add("hidden");
@@ -988,7 +940,6 @@ async function enterApp(){
   try{const me=await apiFetch("/me");session.permissions=me.permissions||{};persistSession()}catch(e){}
   const canHistory=session?.permissions?.view_observations!==false;
   const canSites=session?.permissions?.view_sites!==false;
-  const canEquipment=session?.permissions?.view_equipment!==false;
   const canEmployees=session?.permissions?.view_employees!==false;
   // view_attendance est opt-in (défaut false) — inverse des autres droits ci-dessus,
   // hérités "activés" : ne jamais afficher Pointage sans autorisation explicite.
@@ -998,10 +949,8 @@ async function enterApp(){
   document.getElementById("employeeSearchCard")?.classList.toggle("hidden",!canEmployees);
   document.getElementById("newPlanningBtn")?.classList.toggle("hidden",session?.permissions?.create_sites===false);
   document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
-  document.querySelector('.portal-nav-btn[data-tab="equipment"]')?.classList.toggle("hidden",!canEquipment);
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
   if(!canSites)document.getElementById("sitesTab").classList.add("hidden");
-  if(!canEquipment)document.getElementById("equipmentTab").classList.add("hidden");
   if(!canAttendance)document.getElementById("pointageTab").classList.add("hidden");
   if(branding?.logo_data_uri){
     document.getElementById("appLogoImg").src=branding.logo_data_uri;
@@ -1051,7 +1000,6 @@ async function switchTab(tab){
   document.getElementById("planningTab").classList.toggle("hidden",tab!=="planning");
   document.getElementById("employeesTab").classList.toggle("hidden",tab!=="employees");
   document.getElementById("sitesTab").classList.toggle("hidden",tab!=="sites");
-  document.getElementById("equipmentTab").classList.toggle("hidden",tab!=="equipment");
   document.getElementById("pointageTab").classList.toggle("hidden",tab!=="pointage");
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
   document.getElementById("messagesTab").classList.toggle("hidden",!tab.startsWith("messages-"));
@@ -1059,7 +1007,6 @@ async function switchTab(tab){
   const allValue=document.getElementById("allCounterValue"),allLabel=document.getElementById("allCounterLabel");
   if(allValue&&allLabel){const plannedCount=sitesCache.filter(site=>(site.rotation_schedule||[]).length).length;allValue.textContent=tab==="sites"?sitesCache.length:(tab==="planning"?plannedCount:employees.length);allLabel.textContent=tab==="sites"?"Tous les sites":(tab==="planning"?"Tous les plannings":"Tous les employés")}
   if(tab==="planning")await loadPlanning();
-  if(tab==="equipment")await loadEquipment();
   if(tab==="pointage"){attendancePage=1;await loadAttendance()}
   if(tab==="history")await loadHistory();
   if(tab.startsWith("messages-"))await loadPortalMessages(tab.slice(9));
@@ -1442,76 +1389,6 @@ async function submitSite(){
   }
 }
 
-async function loadEquipment(){
-  const host=document.getElementById("equipmentList");
-  const canAddEquipment=session?.permissions?.create_equipment!==false;
-  document.getElementById("addEquipmentBtn")?.classList.toggle("hidden",!canAddEquipment);
-  if(session?.permissions?.view_equipment===false){host.innerHTML='<div class="empty">La consultation du matériel n’est pas activée pour votre compte.</div>';return}
-  host.innerHTML='<div class="empty">Chargement…</div>';
-  try{
-    const rows=await apiFetch("/equipment");equipmentCache=rows;portalSearchLoaded.equipment=true;
-    if(!rows.length){host.innerHTML='<div class="empty">Aucun équipement actuellement recensé sur vos sites.</div>';return}
-    host.innerHTML=`<div class="table-card"><table><thead><tr><th>Équipement</th><th>Site</th><th>Assigné à</th><th>État</th><th>Depuis le</th></tr></thead><tbody>${rows.map(e=>`
-      <tr>
-        <td><div class="equip-name">${esc(e.designation)}</div>${(e.category||e.code)?`<div class="equip-ref">${esc([e.category,e.code].filter(Boolean).join(" · "))}</div>`:""}</td>
-        <td>${esc(e.site_name||"—")}</td>
-        <td>${esc(e.assignee)}</td>
-        <td><span class="pill ${esc(e.status_tone)}">${esc(e.status_label)}</span></td>
-        <td>${formatDateFr(e.dotation_date)}</td>
-      </tr>`).join("")}</tbody></table></div>`;
-    applyPortalLanguage(document.body);
-  }catch(error){
-    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
-  }
-}
-
-async function openEquipmentModal(){
-  document.getElementById("equipQuantity").value="1";
-  document.getElementById("equipState").value="neuf";
-  document.getElementById("equipmentError").classList.remove("show");
-  const siteSelect=document.getElementById("equipSite");
-  siteSelect.innerHTML=(sitesCache.length?sitesCache:await apiFetch("/sites").catch(()=>[])).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")||'<option value="">Aucun site</option>';
-  const articleSelect=document.getElementById("equipArticle");
-  articleSelect.innerHTML='<option value="">Chargement…</option>';
-  document.getElementById("equipmentModalBackdrop").classList.remove("hidden");
-  try{
-    const catalog=await apiFetch("/equipment/catalog");
-    articleSelect.innerHTML=catalog.length?catalog.map(a=>`<option value="${a.id}">${esc(a.designation)}${a.category?` — ${esc(a.category)}`:""}</option>`).join(""):'<option value="">Aucun article disponible</option>';
-  }catch(error){
-    articleSelect.innerHTML='<option value="">Catalogue indisponible</option>';
-  }
-  applyPortalLanguage(document.body);
-}
-function closeEquipmentModal(){
-  document.getElementById("equipmentModalBackdrop").classList.add("hidden");
-}
-async function submitEquipment(){
-  const errorEl=document.getElementById("equipmentError");
-  errorEl.classList.remove("show");
-  const articleId=document.getElementById("equipArticle").value;
-  const siteId=document.getElementById("equipSite").value;
-  if(!articleId){errorEl.textContent="Choisissez un article.";errorEl.classList.add("show");return}
-  if(!siteId){errorEl.textContent="Choisissez un site.";errorEl.classList.add("show");return}
-  const btn=document.getElementById("equipmentSubmitBtn");
-  btn.disabled=true;btn.textContent="Enregistrement…";
-  try{
-    await apiFetch("/equipment",{method:"POST",body:JSON.stringify({
-      article_id:parseInt(articleId,10),
-      site_id:parseInt(siteId,10),
-      quantity:parseFloat(document.getElementById("equipQuantity").value)||1,
-      item_state:document.getElementById("equipState").value,
-    })});
-    closeEquipmentModal();
-    showBanner("Équipement ajouté.","success");
-    loadEquipment();
-  }catch(error){
-    errorEl.textContent=error.message||"Impossible d’ajouter cet équipement.";
-    errorEl.classList.add("show");
-  }finally{
-    btn.disabled=false;btn.textContent="Enregistrer";
-  }
-}
-
 function openObservationModal(employeeId){
   modalEmployee=employees.find(e=>e.id===employeeId);
   if(!modalEmployee)return;
@@ -1749,7 +1626,6 @@ async function ensurePortalSearchData(){
   if(portalSearchLoading)return portalSearchLoading;
   const tasks=[];
   if(session?.permissions?.view_sites!==false&&!portalSearchLoaded.sites)tasks.push(apiFetch("/sites").then(rows=>{sitesCache=rows;portalSearchLoaded.sites=true}));
-  if(session?.permissions?.view_equipment!==false&&!portalSearchLoaded.equipment)tasks.push(apiFetch("/equipment").then(rows=>{equipmentCache=rows;portalSearchLoaded.equipment=true}));
   if(session?.permissions?.view_observations!==false&&!portalSearchLoaded.history)tasks.push(apiFetch("/observations").then(rows=>{historyCache=rows;portalSearchLoaded.history=true}));
   portalSearchLoading=Promise.allSettled(tasks).then(results=>results.filter(r=>r.status==="rejected").length).finally(()=>{portalSearchLoading=null});
   return portalSearchLoading;
@@ -1760,7 +1636,7 @@ function closePortalSearch(){
 function resetPortalSearch(){
   portalSearchRequest++;
   document.querySelectorAll(".portal-search-match").forEach(node=>node.classList.remove("portal-search-match"));
-  document.querySelectorAll("#employeesList .emp-card.hidden,#sitesList .site-card.hidden,#equipmentList tbody tr.hidden,#historyList .hist-card.hidden").forEach(node=>node.classList.remove("hidden"));
+  document.querySelectorAll("#employeesList .emp-card.hidden,#sitesList .site-card.hidden,#historyList .hist-card.hidden").forEach(node=>node.classList.remove("hidden"));
   closePortalSearch();
 }
 function collectPortalSearchResults(query){
@@ -1768,7 +1644,6 @@ function collectPortalSearchResults(query){
   const add=(type,tab,title,meta,haystack)=>{if(normalizePortalSearch(haystack).includes(query))results.push({type,tab,title,meta,term:title})};
   employees.forEach(e=>add("Personnel","employees",`${e.code?e.code+" — ":""}${e.last_name||""} ${e.first_name||""}`.trim(),[e.position,e.site_name].filter(Boolean).join(" · "),[e.last_name,e.first_name,e.position,e.site_name,e.code].join(" ")));
   sitesCache.forEach(s=>add("Site","sites",s.name||"Site",[s.commune,s.wilaya,s.site_type].filter(Boolean).join(" · "),[s.name,s.address,s.commune,s.wilaya,s.site_type].join(" ")));
-  equipmentCache.forEach(e=>add("Matériel","equipment",e.designation||"Équipement",[e.site_name,e.category,e.code,e.assignee].filter(Boolean).join(" · "),[e.designation,e.site_name,e.category,e.code,e.assignee,e.status_label].join(" ")));
   historyCache.forEach(o=>add("Événement","history",`${o.employee_code?o.employee_code+" — ":""}${o.employee_name||"Signalement"}`,[formatDateFr(o.incident_date),o.site_name,statusLabel(o.status)].filter(Boolean).join(" · "),[o.employee_code,o.employee_name,o.site_name,o.description,o.status,...(o.categories||[])].join(" ")));
   return results;
 }
@@ -1794,7 +1669,7 @@ async function runPortalSearch(value){
 async function openPortalSearchResult(index){
   const result=portalSearchResults[index];if(!result)return;
   await switchTab(result.tab);
-  const selectors={employees:"#employeesList .emp-card",sites:"#sitesList .site-card",equipment:"#equipmentList tbody tr",history:"#historyList .hist-card"};
+  const selectors={employees:"#employeesList .emp-card",sites:"#sitesList .site-card",history:"#historyList .hist-card"};
   const nodes=[...document.querySelectorAll(selectors[result.tab]||"")],term=normalizePortalSearch(result.term);
   document.querySelectorAll(".portal-search-match").forEach(node=>node.classList.remove("portal-search-match"));
   const match=nodes.find(node=>normalizePortalSearch(node.textContent).includes(term));

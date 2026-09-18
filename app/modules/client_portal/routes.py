@@ -32,9 +32,6 @@ from app.modules.client_portal.schemas import (
     ClientPortalUserUpdate,
     EmployeeGroupUpdateIn,
     EmployeeVisibleOut,
-    EquipmentCatalogOut,
-    EquipmentCreateIn,
-    EquipmentVisibleOut,
     ObservationCreate,
     ObservationOpsOut,
     ObservationOut,
@@ -55,10 +52,8 @@ CLIENT_PORTAL_DEFAULT_PERMISSIONS = {
     "view_observations": True,
     "create_observations": True,
     "view_sites": True,
-    "view_equipment": True,
     "create_sites": True,
     "assign_employees": True,
-    "create_equipment": True,
     # LOT — POINTAGE LECTURE SEULE : défaut False à dessein. Contrairement aux
     # autres droits (hérités "activés" pour les comptes déjà en place), celui-ci
     # ne doit JAMAIS être accordé implicitement à un compte existant — l'admin
@@ -77,10 +72,8 @@ def _client_permissions(db: Session, user: ClientPortalUser) -> dict[str, bool]:
         "view_observations": "viewObservations",
         "create_observations": "createObservations",
         "view_sites": "viewSites",
-        "view_equipment": "viewEquipment",
         "create_sites": "createSites",
         "assign_employees": "assignEmployees",
-        "create_equipment": "createEquipment",
         "view_attendance": "viewAttendance",
     }
     return {key: bool(configured.get(key, configured.get(camel_keys[key], default))) for key, default in CLIENT_PORTAL_DEFAULT_PERMISSIONS.items()}
@@ -249,28 +242,6 @@ def update_site_group_quotas(
 ):
     _require_client_permission(db, user, "assign_employees")
     return service.update_site_group_quotas_for_client(db, user.client_id, site_id, payload)
-
-
-@router.get("/equipment", response_model=list[EquipmentVisibleOut])
-def equipment(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
-    _require_client_permission(db, user, "view_equipment")
-    return service.visible_equipment_for_client(db, user.client_id)
-
-
-@router.get("/equipment/catalog", response_model=list[EquipmentCatalogOut])
-def equipment_catalog(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
-    _require_client_permission(db, user, "view_equipment")
-    return service.equipment_catalog(db)
-
-
-@router.post("/equipment", response_model=EquipmentVisibleOut, status_code=status.HTTP_201_CREATED)
-def create_equipment(
-    payload: EquipmentCreateIn,
-    db: Session = Depends(get_db),
-    user: ClientPortalUser = Depends(current_client_user),
-):
-    _require_client_permission(db, user, "create_equipment")
-    return service.create_equipment_for_client(db, user.client_id, payload)
 
 
 # LOT — POINTAGE EN LECTURE SEULE. Deux routes GET uniquement (aucun POST/PUT/

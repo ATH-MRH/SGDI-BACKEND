@@ -166,22 +166,6 @@ class SiteGroupQuotasIn(BaseModel):
         return cleaned
 
 
-class EquipmentVisibleOut(BaseModel):
-    id: str
-    designation: str
-    category: str | None = None
-    code: str | None = None
-    site_id: int | None = None
-    site_name: str | None = None
-    assignee: str
-    item_state: str
-    status_label: str
-    status_tone: str
-    dotation_date: date
-
-    model_config = {"from_attributes": True}
-
-
 class SitePositionRequirementIn(BaseModel):
     name: str
     required: int = 0
@@ -283,37 +267,6 @@ class SiteCreateIn(BaseModel):
                     if count < 0:
                         raise ValueError("Les effectifs ventilés doivent être positifs ou nuls")
                     cleaned[code][label] = int(count)
-        return cleaned
-
-
-class EquipmentCatalogOut(BaseModel):
-    id: int
-    designation: str
-    category: str | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class EquipmentCreateIn(BaseModel):
-    article_id: int
-    site_id: int
-    quantity: float = 1
-    item_state: str = "neuf"
-
-    @field_validator("quantity")
-    @classmethod
-    def _positive_quantity(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("La quantité doit être positive")
-        return value
-
-    @field_validator("item_state")
-    @classmethod
-    def _valid_state(cls, value: str) -> str:
-        allowed = {"neuf", "rénové", "usagé", "réformé"}
-        cleaned = (value or "neuf").strip()
-        if cleaned not in allowed:
-            raise ValueError("État invalide")
         return cleaned
 
 

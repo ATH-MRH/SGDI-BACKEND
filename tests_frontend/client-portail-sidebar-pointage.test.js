@@ -40,13 +40,19 @@ test('C. le bloc MESSAGERIE n\'est plus rendu dans la sidebar', () => {
   w.close();
 });
 
-test('D-I/J. toutes les rubriques existent, dans l\'ordre exact', () => {
+// "Mes équipements" a été retiré du Portail Client (pour tous les clients) : ce
+// n'est ni une source de données distincte ni un système "DFA" séparé, voir
+// l'audit — DFA n'est que le nom de sous-domaine sous lequel ce même Portail
+// Client est servi. Aucune trace de la rubrique ne doit plus subsister.
+test('D-I/J. toutes les rubriques existent, dans l\'ordre exact (Mes équipements retiré)', () => {
   const { window: w } = loadClientPortail();
   const nav = w.document.querySelector('.portal-sidebar[aria-label="Navigation portail client"] .portal-nav');
   const tabs = Array.from(nav.querySelectorAll('.portal-nav-btn')).map(b => b.dataset.tab);
-  assert.deepEqual(tabs, ['employees', 'sites', 'equipment', 'planning', 'pointage', 'history']);
+  assert.deepEqual(tabs, ['employees', 'sites', 'planning', 'pointage', 'history']);
   const labels = Array.from(nav.querySelectorAll('.portal-nav-btn')).map(b => b.textContent.trim());
-  assert.deepEqual(labels, ['Mon personnel', 'Mes sites', 'Mes équipements', 'Planning de travail', 'Pointage', 'Historique']);
+  assert.deepEqual(labels, ['Mon personnel', 'Mes sites', 'Planning de travail', 'Pointage', 'Historique']);
+  assert.equal(w.document.getElementById('equipmentTab'), null, 'le panneau Mes équipements ne doit plus exister dans le DOM');
+  assert.equal(w.document.getElementById('equipmentModalBackdrop'), null, 'la modale d\'ajout d\'équipement ne doit plus exister dans le DOM');
   w.close();
 });
 
