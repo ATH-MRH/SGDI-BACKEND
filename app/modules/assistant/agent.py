@@ -1,8 +1,14 @@
-"""Agent IA ATLAS — Phase 1 : lecture seule.
+"""Agent IA ATLAS.
 
 L'agent répond à des questions en langage naturel sur les données réelles de
-l'ERP. Il utilise des « outils » LECTURE SEULE (aucune écriture) qui interrogent
-la base en respectant toujours les sociétés autorisées de l'utilisateur connecté.
+l'ERP, toujours dans le périmètre société autorisé de l'utilisateur connecté.
+Il dispose aussi d'outils d'ACTION qui écrivent une donnée métier réelle
+(créer un candidat, changer un statut employé, poser un congé, affecter un
+agent, planifier une tâche) — voir _WRITE_TOOLS_REQUIRE_CONFIRMATION plus bas :
+ces outils n'écrivent JAMAIS au premier appel, uniquement après confirmation
+explicite de l'utilisateur (paramètre confirmed=true renvoyé sur un second
+appel identique). remember/add_knowledge (mémoire propre de l'assistant) et
+generate_report (export en lecture seule) ne sont pas concernés.
 """
 from __future__ import annotations
 
@@ -72,10 +78,22 @@ TU CONNAIS TOUT LE SYSTÈME. Voici les domaines couverts :
 CE QUE TU PEUX FAIRE :
 1. CONSULTER — répondre à toute question sur les données réelles via tes outils de lecture.
 2. AGIR — exécuter des ordres qui créent ou mettent à jour des données (créer un candidat,
-   enregistrer un événement/incident, changer le statut d'un employé). Quand l'utilisateur te
-   donne un ordre clair, exécute-le avec l'outil approprié puis confirme précisément ce que tu
-   as fait (avec les valeurs enregistrées). Si une information indispensable manque, demande-la
-   brièvement avant d'agir.
+   enregistrer un événement/incident, changer le statut d'un employé, poser un congé, affecter
+   un agent, planifier une tâche). CES ACTIONS EXIGENT UNE CONFIRMATION EXPLICITE AVANT
+   D'ÉCRIRE QUOI QUE CE SOIT — ne les exécute JAMAIS directement :
+     a) Appelle l'outil une première fois SANS le paramètre confirmed (ou confirmed=false).
+        Il ne va RIEN écrire ; il te renvoie l'action proposée pour vérification.
+     b) Résume à l'utilisateur, en une phrase claire, exactement ce qui va être fait (avec les
+        valeurs précises), et demande explicitement : « Confirmez-vous ? ». Ne dis JAMAIS que
+        c'est fait à ce stade — rien n'a encore été écrit.
+     c) Seulement si l'utilisateur confirme sans ambiguïté (« oui », « confirme », « vas-y »…)
+        dans un message suivant, rappelle le MÊME outil avec les MÊMES valeurs et
+        confirmed=true. C'est cet appel-là, et lui seul, qui écrit réellement la donnée.
+     d) Si l'utilisateur hésite, modifie sa demande ou dit non, ne mets confirmed=true sous
+        aucun prétexte — recommence l'étape (a) avec les valeurs corrigées si besoin.
+   Si une information indispensable manque dès le départ, demande-la avant même la proposition.
+   Cette règle ne s'applique PAS à « remember »/« add_knowledge » (ta propre mémoire, sans
+   impact sur les données métier) ni à la consultation/génération de rapports.
 3. MÉMORISER — tu disposes d'une mémoire durable. Dès que l'utilisateur te confie une information à
    retenir (préférence, consigne, nom, fait important), appelle l'outil « remember » pour la garder.
    Ta mémoire actuelle t'est fournie plus bas, tiens-en compte dans tes réponses.
@@ -862,19 +880,24 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "create_candidate",
-        "description": "ACTION : crée un nouveau candidat (recrutement). Exécute quand on te demande d'ajouter/enregistrer un candidat.",
+        "description": "ACTION (confirmation requise) : crée un nouveau candidat (recrutement). Premier appel SANS confirmed : "
+                       "résume le candidat proposé et demande confirmation. Rappelle l'outil avec confirmed=true "
+                       "UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "nom": {"type": "string"}, "prenom": {"type": "string"}, "societe": {"type": "string"},
                 "telephone": {"type": "string"}, "poste_souhaite": {"type": "string"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
             },
             "required": ["nom", "prenom"],
         },
     },
     {
         "name": "create_event",
-        "description": "ACTION : enregistre un événement / incident / note de main courante. Exécute quand on te demande de signaler ou consigner quelque chose.",
+        "description": "ACTION (confirmation requise) : enregistre un événement / incident / note de main courante. Premier "
+                       "appel SANS confirmed : résume l'événement proposé et demande confirmation. Rappelle l'outil avec "
+                       "confirmed=true UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -882,16 +905,22 @@ TOOLS: list[dict[str, Any]] = [
                 "type": {"type": "string", "description": "ex. incident, note, alerte"},
                 "niveau": {"type": "string", "description": "ex. normal, important, critique"},
                 "site": {"type": "string", "description": "nom ou indicatif du site concerné (optionnel)"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
             },
             "required": ["titre", "message"],
         },
     },
     {
         "name": "update_employee_status",
-        "description": "ACTION : change le statut d'un employé (actif, suspendu, conge, archive). Exécute quand on te demande de suspendre/réactiver/archiver un agent.",
+        "description": "ACTION (confirmation requise) : change le statut d'un employé (actif, suspendu, conge, archive). "
+                       "Premier appel SANS confirmed : indique l'ancien et le nouveau statut proposés, demande confirmation. "
+                       "Rappelle l'outil avec confirmed=true UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
-            "properties": {"reference": {"type": "string", "description": "code employé"}, "statut": {"type": "string"}},
+            "properties": {
+                "reference": {"type": "string", "description": "code employé"}, "statut": {"type": "string"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
+            },
             "required": ["reference", "statut"],
         },
     },
@@ -922,8 +951,9 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "create_leave",
-        "description": "ACTION : enregistre un congé/absence pour un employé (en attente de validation). "
-                       "Exécute quand on te demande de poser un congé.",
+        "description": "ACTION (confirmation requise) : enregistre un congé/absence pour un employé (en attente de "
+                       "validation). Premier appel SANS confirmed : résume le congé proposé et demande confirmation. "
+                       "Rappelle l'outil avec confirmed=true UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -932,20 +962,23 @@ TOOLS: list[dict[str, Any]] = [
                 "date_fin": {"type": "string", "description": "AAAA-MM-JJ ou JJ/MM/AAAA"},
                 "type_conge": {"type": "string", "description": "ex. conge, maladie, absence"},
                 "motif": {"type": "string"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
             },
             "required": ["reference", "date_debut", "date_fin"],
         },
     },
     {
         "name": "create_assignment",
-        "description": "ACTION : affecte un employé à un site (désactive son affectation active précédente). "
-                       "Exécute quand on te demande d'affecter/muter un agent sur un site.",
+        "description": "ACTION (confirmation requise) : affecte un employé à un site (désactive son affectation active "
+                       "précédente). Premier appel SANS confirmed : résume l'affectation proposée et demande confirmation. "
+                       "Rappelle l'outil avec confirmed=true UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "employee_reference": {"type": "string", "description": "code employé"},
                 "site": {"type": "string", "description": "nom ou indicatif du site"},
                 "group_code": {"type": "string", "description": "groupe/brigade (ex. A, B), optionnel"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
             },
             "required": ["employee_reference", "site"],
         },
@@ -967,8 +1000,10 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "schedule_task",
-        "description": "PLANIFIER : programme une tâche récurrente que tu exécuteras automatiquement au bon moment "
-                       "(ex. « chaque lundi 08:00, résume la semaine »). Déduis fréquence/heure/jour de la demande.",
+        "description": "PLANIFIER (confirmation requise) : programme une tâche récurrente que tu exécuteras automatiquement "
+                       "au bon moment (ex. « chaque lundi 08:00, résume la semaine »). Déduis fréquence/heure/jour de la "
+                       "demande. Premier appel SANS confirmed : résume la tâche proposée et demande confirmation. Rappelle "
+                       "l'outil avec confirmed=true UNIQUEMENT après une confirmation explicite de l'utilisateur.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -979,6 +1014,7 @@ TOOLS: list[dict[str, Any]] = [
                 "minute": {"type": "integer", "description": "0-59"},
                 "day_of_week": {"type": "integer", "description": "0=lundi … 6=dimanche (si weekly)"},
                 "recipient_email": {"type": "string", "description": "email destinataire du résultat (optionnel)"},
+                "confirmed": {"type": "boolean", "description": "true UNIQUEMENT si l'utilisateur vient de confirmer explicitement cette action précise."},
             },
             "required": ["instruction"],
         },
@@ -1015,14 +1051,41 @@ _DISPATCH = {
 }
 
 
+# Outils qui écrivent une donnée métier réelle de l'ERP (employé, congé, affectation,
+# candidat, événement) ou programment une action autonome future. Contrairement à
+# remember/add_knowledge (mémoire propre de l'assistant, sans impact métier) ou
+# generate_report (lecture seule, produit un export), ceux-ci exigent une confirmation
+# humaine EXPLICITE avant toute exécution — voir _dispatch ci-dessous. Aucune permission
+# d'écriture n'est ajoutée ici : ce sont les mêmes outils qu'avant, seule l'exécution est
+# maintenant conditionnée à une confirmation, jamais déduite d'une réponse ambiguë.
+_WRITE_TOOLS_REQUIRE_CONFIRMATION = {
+    "create_candidate", "create_event", "update_employee_status",
+    "create_leave", "create_assignment", "schedule_task",
+}
+
+
 def _dispatch(name: str, tool_input: dict[str, Any], db: Session, user: User) -> str:
     handler = _DISPATCH.get(name)
     if handler is None:
         return json.dumps({"error": f"Outil inconnu: {name}"}, ensure_ascii=False)
+    tool_input = dict(tool_input or {})
+    if name in _WRITE_TOOLS_REQUIRE_CONFIRMATION and tool_input.pop("confirmed", False) is not True:
+        # Ne JAMAIS appeler le handler ici : aucune écriture n'a lieu tant que
+        # l'utilisateur n'a pas confirmé explicitement dans un tour suivant.
+        logger.info("Action ATLAS proposée (non confirmée) user=%s outil=%s params=%s",
+                    getattr(user, "username", "?"), name, tool_input)
+        return json.dumps({
+            "ok": False,
+            "pending_confirmation": True,
+            "action": name,
+            "proposed_parameters": tool_input,
+            "message": "Action non exécutée : confirmation explicite de l'utilisateur requise avant "
+                       "d'écrire dans l'ERP. Résume clairement ce qui va être fait et demande de confirmer.",
+        }, ensure_ascii=False)
     try:
         if society_scope(user).kind is ScopeKind.NONE:
             raise SocietyScopeError("Aucun périmètre société explicite")
-        result = handler(db, user, **(tool_input or {}))
+        result = handler(db, user, **tool_input)
     except SocietyScopeError as exc:
         return json.dumps({"error": str(exc), "refused": True}, ensure_ascii=False)
     except TypeError as exc:
