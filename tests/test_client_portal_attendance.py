@@ -232,3 +232,56 @@ def test_attendance_filters_pagination_and_status(client, auth_headers, db):
         w = getattr(client, method)("/api/client-portal/attendance", headers=headers, json={})
         assert w.status_code in (404, 405), f"{method.upper()} ne doit exister sur aucune route de pointage client"
     assert client.delete("/api/client-portal/attendance", headers=headers).status_code in (404, 405)
+
+
+# ── RÈGLE ABSOLUE — POINTAGE ESPACE CLIENT = LECTURE SEULE ─────────────────────
+# Tests dédiés à la confirmation explicite de chaque point de la règle, même
+# quand ils recoupent des vérifications déjà faites ci-dessus.
+
+def test_no_per_record_attendance_endpoint_exists(client, auth_headers, db):
+    """Aucun endpoint Client Portal n'accepte un presence_id : il n'existe
+    littéralement aucune route pour cibler/manipuler un pointage précis (ni
+    lecture, ni écriture) — seule une liste filtrée par site/employé/date
+    existe. Un presence_id fourni en paramètre superflu n'a donc aucun effet :
+    il est simplement ignoré, le périmètre reste celui du site_id."""
+    ctx = _new_client_site_employee(client, auth_headers, "NoRec")
+    _grant_view_attendance(client, auth_headers, ctx["client_id"])
+    other = _new_client_site_employee(client, auth_headers, "NoRecOther")
+    account = _portal_account(client, auth_headers, ctx["client_id"], username="clientptgnorec")
+    headers = _login(client, account["username"], account["temporary_password"])
+
+    mine = _presence(db, ctx["employee_id"], ctx["site_id"], date(2026, 9, 10), arrival="08:00", departure="16:00")
+    foreign = _presence(db, other["employee_id"], other["site_id"], date(2026, 9, 10), arrival="08:00", departure="16:00")
+
+    # Aucune route /attendance/{id} n'existe pour aucun verbe HTTP.
+    for method in ("get", "post", "put", "patch"):
+        for target_id in (mine, foreign, 999999):
+            kwargs = {"headers": headers} if method == "get" else {"headers": headers, "json": {}}
+            w = getattr(client, method)(f"/api/client-portal/attendance/{target_id}", **kwargs)
+            assert w.status_code in (404, 405), f"{method.upper()} /attendance/{{id}} ne doit exister sous aucune forme"
+    assert client.delete(f"/api/client-portal/attendance/{foreign}", headers=headers).status_code in (404, 405)
+
+    # Passer presence_id comme paramètre superflu sur la liste ne fait fuiter
+    # aucune donnée hors périmètre : ignoré, le scope site_id reste le seul filtre actif.
+    r = client.get("/api/client-portal/attendance", headers=headers, params={"presence_id": foreign})
+    assert r.status_code == 200
+    ids = {row["id"] for row in r.json()["items"]}
+    assert foreign not in ids
+    assert mine in ids
+
+
+def test_internal_ops_pointage_write_endpoints_still_work(client, auth_headers, db):
+    """Cette restriction Client Portal ne doit jamais dégrader les droits des
+    interfaces internes Pointage/OPS : create/update restent pleinement
+    fonctionnels avec un compte ERP (current_user), en dehors du Client Portal."""
+    emp = _emp(client, auth_headers, "OPSWRITE")
+    site = _site(client, auth_headers, "Site OPS Write")
+    created = client.post("/api/ops/pointage/daily", headers=auth_headers, json={
+        "presence_date": "2026-09-10", "employee_id": emp, "site_id": site,
+        "arrival_time": "08:00", "departure_time": "16:00", "status": "present",
+    })
+    assert created.status_code in (200, 201), created.text
+    presence_id = created.json()["id"]
+    updated = client.patch(f"/api/ops/pointage/daily/{presence_id}", headers=auth_headers, json={"status": "absent"})
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["status"] == "absent"

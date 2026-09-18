@@ -164,6 +164,45 @@ test('aucun bouton d\'écriture (Ajouter/Modifier/Corriger/Supprimer/Valider) da
   w.close();
 });
 
+// RÈGLE ABSOLUE — POINTAGE ESPACE CLIENT = LECTURE SEULE. Test #9 : aucun
+// handler de modification (save/create/update/edit/correct/delete/valider/
+// unlock/saisie manuelle) n'est câblé nulle part dans la vue Pointage, même
+// une fois des lignes réellement rendues (pas seulement sur une liste vide).
+test('aucun handler de modification (save/correct/valider/delete/unlock/saisie) dans la vue Pointage, données réelles incluses', async () => {
+  const { window: w, T } = loadClientPortail();
+  w.fetch = (url) => {
+    if (String(url).includes('/me')) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ permissions: { view_attendance: true } }) });
+    if (String(url).includes('/attendance/filters')) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ sites: [{ id: 1, name: 'Site A' }], employees: [{ id: 1, code: 'E1', name: 'Doe John' }] }) });
+    if (String(url).includes('/attendance')) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({
+      items: [{ id: 1, employee_id: 1, employee_code: 'E1', employee_name: 'Doe John', position: 'Agent', site_name: 'Site A', presence_date: '2026-09-15', arrival_time: '08:00', departure_time: '16:00', duration_label: '8h00', group_code: 'A', status: 'present' }],
+      total: 1, page: 1, page_size: 25, pages: 1,
+    }) });
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+  };
+  T().setSession({ token: 'tok', clientName: 'C', fullName: 'F' });
+  await T().enterApp();
+  await T().switchTab('pointage');
+  const tab = w.document.getElementById('pointageTab');
+  assert.ok(tab.querySelector('table tbody tr'), 'au moins une ligne de pointage doit être rendue pour ce test');
+
+  const forbiddenHandler = /save|create|edit|update|correct|delete|remove|valider|validate|unlock|d[ée]verrouill|saisie|manuel/i;
+  const attrs = ['onclick', 'onchange', 'oninput', 'onsubmit'];
+  tab.querySelectorAll('*').forEach(el => {
+    attrs.forEach(attr => {
+      const value = el.getAttribute(attr);
+      if (value) assert.doesNotMatch(value, forbiddenHandler, `handler de modification inattendu (${attr}="${value}") dans la vue Pointage`);
+    });
+  });
+
+  // Aucune fonction de mutation du pointage ne doit même exister sur la page.
+  ['saveAttendance', 'createAttendance', 'updateAttendance', 'editAttendance', 'correctAttendance',
+   'deleteAttendance', 'removeAttendance', 'validateAttendance', 'unlockAttendance', 'openAttendanceModal',
+   'submitAttendance', 'manualAttendanceEntry'].forEach(name => {
+    assert.equal(typeof w[name], 'undefined', `${name} ne doit pas exister : Pointage Client Portal est strictement lecture seule`);
+  });
+  w.close();
+});
+
 test('raccourcis de période : Aujourd\'hui / Hier / 7 derniers jours / Mois en cours calculent les bonnes bornes', () => {
   const { window: w, T } = loadClientPortail();
   const realDate = w.Date;
