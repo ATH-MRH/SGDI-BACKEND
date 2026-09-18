@@ -167,12 +167,13 @@ tr:last-child td{border-bottom:0}
 .function-counters{grid-template-columns:repeat(auto-fill,118px);align-items:stretch;margin-bottom:8px}
 .function-counters .group-counter.function{width:118px}
 @media(max-width:600px){.function-counters{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}.function-counters .group-counter.function{width:100%}}
-.group-counter.headcount{display:grid;grid-template-rows:30px 26px;align-content:center;min-height:72px;background:#fff;border-color:#e5cbd0;width:118px}
+.group-counter.headcount{display:grid;grid-template-rows:30px 26px 22px;align-content:center;min-height:94px;background:#fff;border-color:#e5cbd0;width:118px}
 .group-counter.headcount .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
 .group-counter.headcount .gc-assigned{margin-top:0;align-self:center;font-size:22px;color:#050505}
 @media(max-width:600px){.group-counter.headcount{width:100%}}
 .gc-code{display:flex;align-items:center;justify-content:center;align-self:center;font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;line-height:1.15;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
 .gc-assigned{align-self:center;font-size:18px;font-weight:900;line-height:1}
+.gc-caption{align-self:start;font-size:9px;font-weight:700;color:var(--muted);line-height:1.15}
 .gc-quota-row{display:flex;align-items:center;justify-content:center;align-self:center;gap:4px;font-size:10px;color:var(--muted)}
 .gc-quota-input{width:42px;height:22px;padding:0 3px;font-size:11px;text-align:center}
 .gc-remaining{align-self:center;font-size:10px;color:var(--muted)}
@@ -359,6 +360,8 @@ tr:last-child td{border-bottom:0}
 
       <div id="employeesTab">
         <div class="section-head"><h1>LISTE DU PERSONNEL</h1><p>Liste des employés actuellement affectés à vos sites.</p></div>
+        <div class="site-employees-title">Effectif affecté par poste</div>
+        <p style="font-size:13px;color:var(--muted);margin:4px 0 8px">Répartition des employés actuellement affectés.</p>
         <div id="portalPositionCounters" class="group-counters function-counters"></div>
         <div id="employeesList"><div class="empty">Chargement…</div></div>
       </div>
@@ -1058,7 +1061,9 @@ function renderPortalPositionCounters(siteId){
     counts.set(label,(counts.get(label)||0)+1);
   });
   const rows=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
-  host.innerHTML=rows.map(([label,count])=>`<button type="button" class="group-counter headcount" aria-pressed="false" onclick="filterEmployeesByPosition(this,'${encodeURIComponent(label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(label)}</div><div class="gc-assigned">${count}</div></button>`).join("");
+  // "affecté(s)" — jamais "contractuel"/"requis"/"quota" : ces cartes comptent la
+  // population réellement affectée, distincte de l'effectif contractuel (DC.IRONGS.COM).
+  host.innerHTML=rows.map(([label,count])=>`<button type="button" class="group-counter headcount" aria-pressed="false" onclick="filterEmployeesByPosition(this,'${encodeURIComponent(label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(label)}</div><div class="gc-assigned">${count}</div><div class="gc-caption">${count} employé${count>1?"s":""} affecté${count>1?"s":""}</div></button>`).join("");
   applyPortalLanguage(document.body);
 }
 

@@ -13,8 +13,11 @@ function buildHtml() {
   const suffix = `
 ;window.__portalTest = {
   enterApp, switchTab, loadAttendance, setAttendancePeriod, attendancePeriodBounds,
+  renderPortalPositionCounters,
   getSession: () => session,
   setSession: (s) => { session = s; },
+  getEmployees: () => employees,
+  setEmployees: (e) => { employees = e; },
 };
 `;
   return RAW_HTML.replace(/(<script>)([\s\S]*?)(<\/script>)/, (match, open, body, close) => open + body + suffix + close);
