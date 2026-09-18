@@ -1,0 +1,5 @@
+mesure,drh_avant,drh_apres,ops_avant,ops_apres
+firstReady median (ms),889,756,963,963
+firstReady min (ms),733,691,896,777
+firstReady max (ms),972,894,994,1866
+requetes avant firstReady (median),32,29,38,34

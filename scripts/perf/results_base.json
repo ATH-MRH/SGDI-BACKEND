@@ -1,0 +1,4368 @@
+[
+  {
+    "target": "drh",
+    "mode": "cold",
+    "pass": 1,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 531,
+      "scriptsReceived": 588,
+      "authTerminee": 670,
+      "permissionsTerminees": 680,
+      "dashboardVisible": 889,
+      "firstReady": 889,
+      "heavyApiFired": true,
+      "settled": 20941
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 142.9000000357628,
+        "loadEventEnd": 143.20000004768372
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 152
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 168
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 35.10000002384186,
+          "responseStart": 53.60000002384186,
+          "responseEnd": 54.200000047683716,
+          "duration": 19.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 35.30000001192093,
+          "responseStart": 62.200000047683716,
+          "responseEnd": 62.5,
+          "duration": 27.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 35.30000001192093,
+          "responseStart": 68.70000004768372,
+          "responseEnd": 81.5,
+          "duration": 46.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 35.30000001192093,
+          "responseStart": 83.80000001192093,
+          "responseEnd": 85,
+          "duration": 49.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 35.30000001192093,
+          "responseStart": 86.80000001192093,
+          "responseEnd": 86.90000003576279,
+          "duration": 51.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 35.30000001192093,
+          "responseStart": 88.20000004768372,
+          "responseEnd": 88.5,
+          "duration": 53.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 35.30000001192093,
+          "responseStart": 89.70000004768372,
+          "responseEnd": 89.70000004768372,
+          "duration": 54.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 35.30000001192093,
+          "responseStart": 139.4000000357628,
+          "responseEnd": 139.4000000357628,
+          "duration": 104.10000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 35.40000003576279,
+          "responseStart": 92.20000004768372,
+          "responseEnd": 128.10000002384186,
+          "duration": 92.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 35.40000003576279,
+          "responseStart": 132.10000002384186,
+          "responseEnd": 132.20000004768372,
+          "duration": 96.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 35.5,
+          "responseStart": 134.70000004768372,
+          "responseEnd": 134.70000004768372,
+          "duration": 99.20000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 41.30000001192093,
+          "responseStart": 66.10000002384186,
+          "responseEnd": 66.30000001192093,
+          "duration": 25,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 142.60000002384186,
+          "responseStart": 146.70000004768372,
+          "responseEnd": 146.70000004768372,
+          "duration": 4.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 142.60000002384186,
+          "responseStart": 146.9000000357628,
+          "responseEnd": 147.10000002384186,
+          "duration": 4.5,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 144.70000004768372,
+          "responseStart": 145.30000001192093,
+          "responseEnd": 145.30000001192093,
+          "duration": 0.5999999642372131,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 144.9000000357628,
+          "responseStart": 145.30000001192093,
+          "responseEnd": 145.4000000357628,
+          "duration": 0.5,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 147.5,
+          "responseStart": 150.30000001192093,
+          "responseEnd": 150.30000001192093,
+          "duration": 2.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 156,
+          "responseStart": 166.80000001192093,
+          "responseEnd": 166.80000001192093,
+          "duration": 10.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 167.30000001192093,
+          "responseStart": 169.60000002384186,
+          "responseEnd": 169.60000002384186,
+          "duration": 2.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 167.30000001192093,
+          "responseStart": 171,
+          "responseEnd": 171.20000004768372,
+          "duration": 3.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 167.4000000357628,
+          "responseStart": 170.5,
+          "responseEnd": 170.5,
+          "duration": 3.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 170.70000004768372,
+          "responseStart": 173.10000002384186,
+          "responseEnd": 173.10000002384186,
+          "duration": 2.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 174.20000004768372,
+          "responseStart": 176.80000001192093,
+          "responseEnd": 176.80000001192093,
+          "duration": 2.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 177.20000004768372,
+          "responseStart": 186.10000002384186,
+          "responseEnd": 186.10000002384186,
+          "duration": 8.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/candidates",
+          "initiatorType": "fetch",
+          "startTime": 224.9000000357628,
+          "responseStart": 237.60000002384186,
+          "responseEnd": 237.60000002384186,
+          "duration": 12.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?",
+          "initiatorType": "fetch",
+          "startTime": 224.9000000357628,
+          "responseStart": 244.70000004768372,
+          "responseEnd": 244.9000000357628,
+          "duration": 20,
+          "transferSize": 0,
+          "encodedBodySize": 261732,
+          "decodedBodySize": 261732
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 252,
+          "responseStart": 255.9000000357628,
+          "responseEnd": 256.30000001192093,
+          "duration": 4.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 64337,
+          "decodedBodySize": 64337
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 256,
+          "responseStart": 263.10000002384186,
+          "responseEnd": 263.10000002384186,
+          "duration": 7.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh-dashboard.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 257,
+          "responseStart": 259.30000001192093,
+          "responseEnd": 259.9000000357628,
+          "duration": 2.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 48726,
+          "decodedBodySize": 48726
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/leaves.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 257,
+          "responseStart": 259.9000000357628,
+          "responseEnd": 260.4000000357628,
+          "duration": 3.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 43797,
+          "decodedBodySize": 43797
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 501.9000000357628,
+          "responseStart": 511.5,
+          "responseEnd": 511.60000002384186,
+          "duration": 9.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 512.5,
+          "responseStart": 525.2000000476837,
+          "responseEnd": 525.2000000476837,
+          "duration": 12.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        }
+      ]
+    }
+  },
+  {
+    "target": "ops",
+    "mode": "cold",
+    "pass": 1,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 568,
+      "scriptsReceived": 630,
+      "authTerminee": 695,
+      "permissionsTerminees": 702,
+      "dashboardVisible": 994,
+      "firstReady": 994,
+      "heavyApiFired": true,
+      "settled": 21012
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 149.60000002384186,
+        "loadEventEnd": 149.9000000357628
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 164
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 180
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 17.600000023841858,
+          "responseStart": 29.5,
+          "responseEnd": 29.5,
+          "duration": 11.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 17.69999998807907,
+          "responseStart": 26,
+          "responseEnd": 26.19999998807907,
+          "duration": 8.5,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 17.69999998807907,
+          "responseStart": 36.69999998807907,
+          "responseEnd": 54.30000001192093,
+          "duration": 36.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 17.69999998807907,
+          "responseStart": 145.69999998807907,
+          "responseEnd": 145.69999998807907,
+          "duration": 128,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 17.80000001192093,
+          "responseStart": 56.5,
+          "responseEnd": 57.60000002384186,
+          "duration": 39.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 17.80000001192093,
+          "responseStart": 59.5,
+          "responseEnd": 59.5,
+          "duration": 41.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 17.900000035762787,
+          "responseStart": 60.80000001192093,
+          "responseEnd": 61.19999998807907,
+          "duration": 43.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 17.900000035762787,
+          "responseStart": 63.30000001192093,
+          "responseEnd": 63.30000001192093,
+          "duration": 45.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 17.900000035762787,
+          "responseStart": 66.10000002384186,
+          "responseEnd": 102.90000003576279,
+          "duration": 85,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 17.900000035762787,
+          "responseStart": 106.80000001192093,
+          "responseEnd": 106.90000003576279,
+          "duration": 89,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 17.900000035762787,
+          "responseStart": 108.60000002384186,
+          "responseEnd": 108.60000002384186,
+          "duration": 90.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 23.69999998807907,
+          "responseStart": 39,
+          "responseEnd": 39.30000001192093,
+          "duration": 15.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 149.19999998807907,
+          "responseStart": 153.69999998807907,
+          "responseEnd": 153.69999998807907,
+          "duration": 4.5,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 149.30000001192093,
+          "responseStart": 153.69999998807907,
+          "responseEnd": 153.69999998807907,
+          "duration": 4.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 151.69999998807907,
+          "responseStart": 152.30000001192093,
+          "responseEnd": 152.30000001192093,
+          "duration": 0.6000000238418579,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 151.9000000357628,
+          "responseStart": 152.30000001192093,
+          "responseEnd": 152.30000001192093,
+          "duration": 0.3999999761581421,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 154.19999998807907,
+          "responseStart": 156.5,
+          "responseEnd": 156.5,
+          "duration": 2.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/client-portal/ops/observations",
+          "initiatorType": "fetch",
+          "startTime": 157,
+          "responseStart": 160.69999998807907,
+          "responseEnd": 160.69999998807907,
+          "duration": 3.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 164,
+          "responseStart": 173.5,
+          "responseEnd": 173.5,
+          "duration": 9.5,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 174.19999998807907,
+          "responseStart": 177,
+          "responseEnd": 177,
+          "duration": 2.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 174.30000001192093,
+          "responseStart": 179.9000000357628,
+          "responseEnd": 179.9000000357628,
+          "duration": 5.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 174.4000000357628,
+          "responseStart": 178.30000001192093,
+          "responseEnd": 178.30000001192093,
+          "duration": 3.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 179.30000001192093,
+          "responseStart": 182.60000002384186,
+          "responseEnd": 182.60000002384186,
+          "duration": 3.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 184,
+          "responseStart": 212.60000002384186,
+          "responseEnd": 212.60000002384186,
+          "duration": 28.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 213.19999998807907,
+          "responseStart": 223.80000001192093,
+          "responseEnd": 223.9000000357628,
+          "duration": 10.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?",
+          "initiatorType": "fetch",
+          "startTime": 233.30000001192093,
+          "responseStart": 252.9000000357628,
+          "responseEnd": 252.9000000357628,
+          "duration": 19.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 130012,
+          "decodedBodySize": 130012
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/sites",
+          "initiatorType": "fetch",
+          "startTime": 233.4000000357628,
+          "responseStart": 237.30000001192093,
+          "responseEnd": 237.30000001192093,
+          "duration": 3.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 3460,
+          "decodedBodySize": 3460
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=1&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 254.10000002384186,
+          "responseStart": 260.4000000357628,
+          "responseEnd": 260.60000002384186,
+          "duration": 6.5,
+          "transferSize": 0,
+          "encodedBodySize": 25137,
+          "decodedBodySize": 25137
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/movements?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 254.30000001192093,
+          "responseStart": 258.4000000357628,
+          "responseEnd": 258.4000000357628,
+          "duration": 4.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=2&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 261,
+          "responseStart": 272.80000001192093,
+          "responseEnd": 272.9000000357628,
+          "duration": 11.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 24983,
+          "decodedBodySize": 24983
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 263.69999998807907,
+          "responseStart": 272.9000000357628,
+          "responseEnd": 272.9000000357628,
+          "duration": 9.200000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 280.80000001192093,
+          "responseStart": 284.4000000357628,
+          "responseEnd": 286.10000002384186,
+          "duration": 5.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 126289,
+          "decodedBodySize": 126289
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops-1.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 286.9000000357628,
+          "responseStart": 288.10000002384186,
+          "responseEnd": 288.19999998807907,
+          "duration": 1.2999999523162842,
+          "transferSize": 0,
+          "encodedBodySize": 4952,
+          "decodedBodySize": 4952
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 289.19999998807907,
+          "responseStart": 302,
+          "responseEnd": 302,
+          "duration": 12.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 298,
+          "responseStart": 303,
+          "responseEnd": 303,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 510,
+          "responseStart": 521.6000000238419,
+          "responseEnd": 521.6999999880791,
+          "duration": 11.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 523.4000000357628,
+          "responseStart": 549,
+          "responseEnd": 549,
+          "duration": 25.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 555.9000000357628,
+          "responseStart": 564.1000000238419,
+          "responseEnd": 564.1999999880791,
+          "duration": 8.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 20162.30000001192,
+          "responseStart": 20206.19999998808,
+          "responseEnd": 20206.19999998808,
+          "duration": 43.89999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 20166.5,
+          "responseStart": 20208.400000035763,
+          "responseEnd": 20208.5,
+          "duration": 42,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?",
+          "initiatorType": "fetch",
+          "startTime": 20176.5,
+          "responseStart": 20219.69999998808,
+          "responseEnd": 20219.69999998808,
+          "duration": 43.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 2422,
+          "decodedBodySize": 2422
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 20220.30000001192,
+          "responseStart": 20223.5,
+          "responseEnd": 20223.5,
+          "duration": 3.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        }
+      ]
+    }
+  },
+  {
+    "target": "drh",
+    "mode": "cold",
+    "pass": 2,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 476,
+      "scriptsReceived": 536,
+      "authTerminee": 607,
+      "permissionsTerminees": 614,
+      "dashboardVisible": 838,
+      "firstReady": 838,
+      "heavyApiFired": true,
+      "settled": 20876
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 145.5,
+        "loadEventEnd": 145.79999995231628
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 148
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 164
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 19,
+          "responseStart": 25.19999998807907,
+          "responseEnd": 25.5,
+          "duration": 6.5,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 19,
+          "responseStart": 31.69999998807907,
+          "responseEnd": 32.299999952316284,
+          "duration": 13.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 19.099999964237213,
+          "responseStart": 33.59999996423721,
+          "responseEnd": 52.5,
+          "duration": 33.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 19.099999964237213,
+          "responseStart": 54.69999998807907,
+          "responseEnd": 55.89999997615814,
+          "duration": 36.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 19.099999964237213,
+          "responseStart": 58,
+          "responseEnd": 58.299999952316284,
+          "duration": 39.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 19.099999964237213,
+          "responseStart": 60,
+          "responseEnd": 61.5,
+          "duration": 42.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 19.099999964237213,
+          "responseStart": 63,
+          "responseEnd": 63.299999952316284,
+          "duration": 44.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 19.099999964237213,
+          "responseStart": 67,
+          "responseEnd": 105.79999995231628,
+          "duration": 86.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 19.099999964237213,
+          "responseStart": 134.0999999642372,
+          "responseEnd": 142.0999999642372,
+          "duration": 123,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 19.19999998807907,
+          "responseStart": 109.69999998807907,
+          "responseEnd": 109.89999997615814,
+          "duration": 90.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 19.19999998807907,
+          "responseStart": 111.79999995231628,
+          "responseEnd": 111.79999995231628,
+          "duration": 92.59999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 24.799999952316284,
+          "responseStart": 37.299999952316284,
+          "responseEnd": 37.299999952316284,
+          "duration": 12.5,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 145.0999999642372,
+          "responseStart": 150.19999998807907,
+          "responseEnd": 150.19999998807907,
+          "duration": 5.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 145.19999998807907,
+          "responseStart": 150.79999995231628,
+          "responseEnd": 150.89999997615814,
+          "duration": 5.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 148.5999999642372,
+          "responseStart": 149.39999997615814,
+          "responseEnd": 149.39999997615814,
+          "duration": 0.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 149.0999999642372,
+          "responseStart": 149.5,
+          "responseEnd": 149.5999999642372,
+          "duration": 0.5,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 150.69999998807907,
+          "responseStart": 153.5,
+          "responseEnd": 153.5,
+          "duration": 2.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 157.89999997615814,
+          "responseStart": 164.89999997615814,
+          "responseEnd": 164.89999997615814,
+          "duration": 7,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 165.69999998807907,
+          "responseStart": 169.39999997615814,
+          "responseEnd": 169.39999997615814,
+          "duration": 3.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 165.79999995231628,
+          "responseStart": 171.19999998807907,
+          "responseEnd": 171.19999998807907,
+          "duration": 5.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 165.89999997615814,
+          "responseStart": 171.29999995231628,
+          "responseEnd": 171.29999995231628,
+          "duration": 5.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 171.79999995231628,
+          "responseStart": 174.79999995231628,
+          "responseEnd": 174.79999995231628,
+          "duration": 3,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 176.0999999642372,
+          "responseStart": 178.89999997615814,
+          "responseEnd": 179,
+          "duration": 2.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 179.39999997615814,
+          "responseStart": 188.69999998807907,
+          "responseEnd": 188.69999998807907,
+          "duration": 9.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?",
+          "initiatorType": "fetch",
+          "startTime": 226.39999997615814,
+          "responseStart": 243.89999997615814,
+          "responseEnd": 244,
+          "duration": 17.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 261732,
+          "decodedBodySize": 261732
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/candidates",
+          "initiatorType": "fetch",
+          "startTime": 226.5,
+          "responseStart": 230.0999999642372,
+          "responseEnd": 230.0999999642372,
+          "duration": 3.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 250.69999998807907,
+          "responseStart": 254.29999995231628,
+          "responseEnd": 255.0999999642372,
+          "duration": 4.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 64337,
+          "decodedBodySize": 64337
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 255.39999997615814,
+          "responseStart": 260.89999997615814,
+          "responseEnd": 260.89999997615814,
+          "duration": 5.5,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/leaves.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 255.5999999642372,
+          "responseStart": 258.19999998807907,
+          "responseEnd": 258.2999999523163,
+          "duration": 2.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 43797,
+          "decodedBodySize": 43797
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh-dashboard.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 255.5999999642372,
+          "responseStart": 258,
+          "responseEnd": 258.69999998807907,
+          "duration": 3.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 48726,
+          "decodedBodySize": 48726
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 505.69999998807907,
+          "responseStart": 557.1999999880791,
+          "responseEnd": 557.2999999523163,
+          "duration": 51.59999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 558.7999999523163,
+          "responseStart": 569.8999999761581,
+          "responseEnd": 569.8999999761581,
+          "duration": 11.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        }
+      ]
+    }
+  },
+  {
+    "target": "ops",
+    "mode": "cold",
+    "pass": 2,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 507,
+      "scriptsReceived": 566,
+      "authTerminee": 629,
+      "permissionsTerminees": 638,
+      "dashboardVisible": 896,
+      "firstReady": 896,
+      "heavyApiFired": true,
+      "settled": 20947
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 142.20000004768372,
+        "loadEventEnd": 142.5
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 148
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 164
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 44.40000003576279,
+          "responseStart": 51.200000047683716,
+          "responseEnd": 51.5,
+          "duration": 7.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 44.5,
+          "responseStart": 53.80000001192093,
+          "responseEnd": 54.30000001192093,
+          "duration": 9.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 44.5,
+          "responseStart": 57.30000001192093,
+          "responseEnd": 71.90000003576279,
+          "duration": 27.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 44.5,
+          "responseStart": 138.4000000357628,
+          "responseEnd": 138.4000000357628,
+          "duration": 93.90000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 44.60000002384186,
+          "responseStart": 73.70000004768372,
+          "responseEnd": 74.90000003576279,
+          "duration": 30.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 44.60000002384186,
+          "responseStart": 76.30000001192093,
+          "responseEnd": 76.40000003576279,
+          "duration": 31.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 44.60000002384186,
+          "responseStart": 77.5,
+          "responseEnd": 77.80000001192093,
+          "duration": 33.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 44.60000002384186,
+          "responseStart": 79.30000001192093,
+          "responseEnd": 79.40000003576279,
+          "duration": 34.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 44.60000002384186,
+          "responseStart": 82.70000004768372,
+          "responseEnd": 118.20000004768372,
+          "duration": 73.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 44.700000047683716,
+          "responseStart": 121.90000003576279,
+          "responseEnd": 122.10000002384186,
+          "duration": 77.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 44.700000047683716,
+          "responseStart": 123.70000004768372,
+          "responseEnd": 123.80000001192093,
+          "duration": 79.09999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 51.80000001192093,
+          "responseStart": 63.10000002384186,
+          "responseEnd": 63.10000002384186,
+          "duration": 11.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 141.80000001192093,
+          "responseStart": 148.60000002384186,
+          "responseEnd": 148.60000002384186,
+          "duration": 6.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 141.9000000357628,
+          "responseStart": 149.10000002384186,
+          "responseEnd": 149.10000002384186,
+          "duration": 7.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 145,
+          "responseStart": 146,
+          "responseEnd": 146.30000001192093,
+          "duration": 1.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 145.60000002384186,
+          "responseStart": 146.20000004768372,
+          "responseEnd": 146.30000001192093,
+          "duration": 0.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 149.10000002384186,
+          "responseStart": 152.30000001192093,
+          "responseEnd": 152.30000001192093,
+          "duration": 3.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/client-portal/ops/observations",
+          "initiatorType": "fetch",
+          "startTime": 152.10000002384186,
+          "responseStart": 156.4000000357628,
+          "responseEnd": 156.4000000357628,
+          "duration": 4.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 157,
+          "responseStart": 162.60000002384186,
+          "responseEnd": 162.60000002384186,
+          "duration": 5.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 164.5,
+          "responseStart": 168.20000004768372,
+          "responseEnd": 168.20000004768372,
+          "duration": 3.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 164.70000004768372,
+          "responseStart": 168.70000004768372,
+          "responseEnd": 168.70000004768372,
+          "duration": 4,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 164.70000004768372,
+          "responseStart": 170.10000002384186,
+          "responseEnd": 170.10000002384186,
+          "duration": 5.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 170.5,
+          "responseStart": 174.10000002384186,
+          "responseEnd": 174.10000002384186,
+          "duration": 3.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 175,
+          "responseStart": 178.70000004768372,
+          "responseEnd": 178.70000004768372,
+          "duration": 3.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 180.60000002384186,
+          "responseStart": 191.80000001192093,
+          "responseEnd": 191.80000001192093,
+          "duration": 11.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?",
+          "initiatorType": "fetch",
+          "startTime": 225.60000002384186,
+          "responseStart": 243.60000002384186,
+          "responseEnd": 243.60000002384186,
+          "duration": 18,
+          "transferSize": 0,
+          "encodedBodySize": 130012,
+          "decodedBodySize": 130012
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/sites",
+          "initiatorType": "fetch",
+          "startTime": 225.70000004768372,
+          "responseStart": 229.80000001192093,
+          "responseEnd": 229.80000001192093,
+          "duration": 4.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 3460,
+          "decodedBodySize": 3460
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=1&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 244.5,
+          "responseStart": 251.5,
+          "responseEnd": 251.60000002384186,
+          "duration": 7.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 25137,
+          "decodedBodySize": 25137
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/movements?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 244.60000002384186,
+          "responseStart": 249.9000000357628,
+          "responseEnd": 249.9000000357628,
+          "duration": 5.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=2&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 251.80000001192093,
+          "responseStart": 256.7000000476837,
+          "responseEnd": 256.9000000357628,
+          "duration": 5.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 24983,
+          "decodedBodySize": 24983
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 255.5,
+          "responseStart": 259.7000000476837,
+          "responseEnd": 259.7000000476837,
+          "duration": 4.200000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 265.7000000476837,
+          "responseStart": 269,
+          "responseEnd": 270.60000002384186,
+          "duration": 4.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 126289,
+          "decodedBodySize": 126289
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops-1.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 271.5,
+          "responseStart": 272.9000000357628,
+          "responseEnd": 272.9000000357628,
+          "duration": 1.4000000357627869,
+          "transferSize": 0,
+          "encodedBodySize": 4952,
+          "decodedBodySize": 4952
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 274,
+          "responseStart": 279,
+          "responseEnd": 279,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 282.2000000476837,
+          "responseStart": 285.5,
+          "responseEnd": 285.5,
+          "duration": 3.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 504.30000001192093,
+          "responseStart": 515.6000000238419,
+          "responseEnd": 515.7000000476837,
+          "duration": 11.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 517.4000000357628,
+          "responseStart": 541.3000000119209,
+          "responseEnd": 541.3000000119209,
+          "duration": 23.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 547.9000000357628,
+          "responseStart": 553.1000000238419,
+          "responseEnd": 553.1000000238419,
+          "duration": 5.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 20156.5,
+          "responseStart": 20229.600000023842,
+          "responseEnd": 20229.700000047684,
+          "duration": 73.20000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 20160.900000035763,
+          "responseStart": 20223.600000023842,
+          "responseEnd": 20223.80000001192,
+          "duration": 62.89999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?",
+          "initiatorType": "fetch",
+          "startTime": 20171.600000023842,
+          "responseStart": 20228.100000023842,
+          "responseEnd": 20228.100000023842,
+          "duration": 56.5,
+          "transferSize": 0,
+          "encodedBodySize": 2422,
+          "decodedBodySize": 2422
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 20228.80000001192,
+          "responseStart": 20232.900000035763,
+          "responseEnd": 20232.900000035763,
+          "duration": 4.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        }
+      ]
+    }
+  },
+  {
+    "target": "drh",
+    "mode": "cold",
+    "pass": 3,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 513,
+      "scriptsReceived": 570,
+      "authTerminee": 649,
+      "permissionsTerminees": 657,
+      "dashboardVisible": 733,
+      "firstReady": 733,
+      "heavyApiFired": true,
+      "settled": 20981
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 137.10000002384186,
+        "loadEventEnd": 137.4000000357628
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 144
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 160
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 30.900000035762787,
+          "responseStart": 36.40000003576279,
+          "responseEnd": 36.60000002384186,
+          "duration": 5.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 31,
+          "responseStart": 36.19999998807907,
+          "responseEnd": 36.90000003576279,
+          "duration": 5.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 31,
+          "responseStart": 133.60000002384186,
+          "responseEnd": 133.60000002384186,
+          "duration": 102.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 31.100000023841858,
+          "responseStart": 42.19999998807907,
+          "responseEnd": 55.69999998807907,
+          "duration": 24.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 31.100000023841858,
+          "responseStart": 57.80000001192093,
+          "responseEnd": 59.19999998807907,
+          "duration": 28.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 31.100000023841858,
+          "responseStart": 61.19999998807907,
+          "responseEnd": 61.19999998807907,
+          "duration": 30.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 31.19999998807907,
+          "responseStart": 62.60000002384186,
+          "responseEnd": 62.90000003576279,
+          "duration": 31.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 31.19999998807907,
+          "responseStart": 64.19999998807907,
+          "responseEnd": 64.5,
+          "duration": 33.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 31.19999998807907,
+          "responseStart": 67.40000003576279,
+          "responseEnd": 104.40000003576279,
+          "duration": 73.20000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 31.19999998807907,
+          "responseStart": 108.60000002384186,
+          "responseEnd": 109,
+          "duration": 77.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 31.19999998807907,
+          "responseStart": 110.90000003576279,
+          "responseEnd": 110.90000003576279,
+          "duration": 79.70000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 35.69999998807907,
+          "responseStart": 39.40000003576279,
+          "responseEnd": 39.40000003576279,
+          "duration": 3.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 136.60000002384186,
+          "responseStart": 140.80000001192093,
+          "responseEnd": 140.80000001192093,
+          "duration": 4.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 136.69999998807907,
+          "responseStart": 141.10000002384186,
+          "responseEnd": 141.4000000357628,
+          "duration": 4.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 139,
+          "responseStart": 139.60000002384186,
+          "responseEnd": 139.69999998807907,
+          "duration": 0.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 139.19999998807907,
+          "responseStart": 139.69999998807907,
+          "responseEnd": 139.69999998807907,
+          "duration": 0.5,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 141.4000000357628,
+          "responseStart": 145.19999998807907,
+          "responseEnd": 145.19999998807907,
+          "duration": 3.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 150,
+          "responseStart": 172.30000001192093,
+          "responseEnd": 172.4000000357628,
+          "duration": 22.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 173,
+          "responseStart": 176.30000001192093,
+          "responseEnd": 176.30000001192093,
+          "duration": 3.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 173,
+          "responseStart": 179.10000002384186,
+          "responseEnd": 179.10000002384186,
+          "duration": 6.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 173,
+          "responseStart": 179.9000000357628,
+          "responseEnd": 179.9000000357628,
+          "duration": 6.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 180.10000002384186,
+          "responseStart": 183.4000000357628,
+          "responseEnd": 183.4000000357628,
+          "duration": 3.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 184.4000000357628,
+          "responseStart": 226.5,
+          "responseEnd": 226.5,
+          "duration": 42.09999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 227.10000002384186,
+          "responseStart": 233.80000001192093,
+          "responseEnd": 233.80000001192093,
+          "duration": 6.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/candidates",
+          "initiatorType": "fetch",
+          "startTime": 234.19999998807907,
+          "responseStart": 236.9000000357628,
+          "responseEnd": 236.9000000357628,
+          "duration": 2.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?",
+          "initiatorType": "fetch",
+          "startTime": 234.19999998807907,
+          "responseStart": 251.10000002384186,
+          "responseEnd": 251.10000002384186,
+          "duration": 16.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 261732,
+          "decodedBodySize": 261732
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 261.9000000357628,
+          "responseStart": 265.69999998807907,
+          "responseEnd": 266,
+          "duration": 4.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 64337,
+          "decodedBodySize": 64337
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 263.80000001192093,
+          "responseStart": 269,
+          "responseEnd": 269,
+          "duration": 5.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh-dashboard.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 266.80000001192093,
+          "responseStart": 269,
+          "responseEnd": 269.19999998807907,
+          "duration": 2.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 48726,
+          "decodedBodySize": 48726
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/leaves.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 266.80000001192093,
+          "responseStart": 270.30000001192093,
+          "responseEnd": 270.60000002384186,
+          "duration": 3.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 43797,
+          "decodedBodySize": 43797
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 496.19999998807907,
+          "responseStart": 504.5,
+          "responseEnd": 504.60000002384186,
+          "duration": 8.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 505.5,
+          "responseStart": 523.5,
+          "responseEnd": 523.5,
+          "duration": 18,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 20152.69999998808,
+          "responseStart": 20244.80000001192,
+          "responseEnd": 20244.80000001192,
+          "duration": 92.10000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        }
+      ]
+    }
+  },
+  {
+    "target": "ops",
+    "mode": "cold",
+    "pass": 3,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 605,
+      "scriptsReceived": 663,
+      "authTerminee": 734,
+      "permissionsTerminees": 741,
+      "dashboardVisible": 983,
+      "firstReady": 983,
+      "heavyApiFired": true,
+      "settled": 21033
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 132.5,
+        "loadEventEnd": 132.70000004768372
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 144
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 160
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 26.80000001192093,
+          "responseStart": 49.700000047683716,
+          "responseEnd": 49.90000003576279,
+          "duration": 23.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 26.900000035762787,
+          "responseStart": 52.60000002384186,
+          "responseEnd": 53.200000047683716,
+          "duration": 26.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 27,
+          "responseStart": 52,
+          "responseEnd": 66.90000003576279,
+          "duration": 39.90000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 27,
+          "responseStart": 68.60000002384186,
+          "responseEnd": 69.70000004768372,
+          "duration": 42.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 27,
+          "responseStart": 71.30000001192093,
+          "responseEnd": 71.5,
+          "duration": 44.5,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 27,
+          "responseStart": 72.60000002384186,
+          "responseEnd": 73,
+          "duration": 46,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 27,
+          "responseStart": 74.10000002384186,
+          "responseEnd": 74.40000003576279,
+          "duration": 47.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 27,
+          "responseStart": 76.90000003576279,
+          "responseEnd": 114.5,
+          "duration": 87.5,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 27,
+          "responseStart": 122.40000003576279,
+          "responseEnd": 129.20000004768372,
+          "duration": 102.20000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 27.100000023841858,
+          "responseStart": 118.5,
+          "responseEnd": 118.80000001192093,
+          "duration": 91.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 27.100000023841858,
+          "responseStart": 125.40000003576279,
+          "responseEnd": 125.40000003576279,
+          "duration": 98.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 33.200000047683716,
+          "responseStart": 51.60000002384186,
+          "responseEnd": 51.700000047683716,
+          "duration": 18.5,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 132,
+          "responseStart": 135.80000001192093,
+          "responseEnd": 135.80000001192093,
+          "duration": 3.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 132.20000004768372,
+          "responseStart": 136.9000000357628,
+          "responseEnd": 136.9000000357628,
+          "duration": 4.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 134.30000001192093,
+          "responseStart": 134.9000000357628,
+          "responseEnd": 135,
+          "duration": 0.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 134.5,
+          "responseStart": 134.9000000357628,
+          "responseEnd": 135,
+          "duration": 0.5,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 136.20000004768372,
+          "responseStart": 139,
+          "responseEnd": 139,
+          "duration": 2.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/client-portal/ops/observations",
+          "initiatorType": "fetch",
+          "startTime": 139,
+          "responseStart": 142.9000000357628,
+          "responseEnd": 142.9000000357628,
+          "duration": 3.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 145.80000001192093,
+          "responseStart": 150.70000004768372,
+          "responseEnd": 150.70000004768372,
+          "duration": 4.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 151.20000004768372,
+          "responseStart": 154,
+          "responseEnd": 154,
+          "duration": 2.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 151.30000001192093,
+          "responseStart": 154.70000004768372,
+          "responseEnd": 154.70000004768372,
+          "duration": 3.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 151.30000001192093,
+          "responseStart": 154.9000000357628,
+          "responseEnd": 155.10000002384186,
+          "duration": 3.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 155.20000004768372,
+          "responseStart": 157.80000001192093,
+          "responseEnd": 157.80000001192093,
+          "duration": 2.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 159.70000004768372,
+          "responseStart": 163.5,
+          "responseEnd": 163.5,
+          "duration": 3.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 164,
+          "responseStart": 172.4000000357628,
+          "responseEnd": 172.4000000357628,
+          "duration": 8.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?",
+          "initiatorType": "fetch",
+          "startTime": 209.9000000357628,
+          "responseStart": 228,
+          "responseEnd": 228,
+          "duration": 18.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 130012,
+          "decodedBodySize": 130012
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/sites",
+          "initiatorType": "fetch",
+          "startTime": 210.10000002384186,
+          "responseStart": 213.9000000357628,
+          "responseEnd": 213.9000000357628,
+          "duration": 3.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 3460,
+          "decodedBodySize": 3460
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=1&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 229.20000004768372,
+          "responseStart": 242.30000001192093,
+          "responseEnd": 242.30000001192093,
+          "duration": 13.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 25137,
+          "decodedBodySize": 25137
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/movements?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 229.30000001192093,
+          "responseStart": 243.10000002384186,
+          "responseEnd": 243.20000004768372,
+          "duration": 13.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 239.20000004768372,
+          "responseStart": 245.30000001192093,
+          "responseEnd": 245.30000001192093,
+          "duration": 6.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=2&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 242.5,
+          "responseStart": 249.4000000357628,
+          "responseEnd": 249.5,
+          "duration": 7,
+          "transferSize": 0,
+          "encodedBodySize": 24983,
+          "decodedBodySize": 24983
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 262.7000000476837,
+          "responseStart": 266.60000002384186,
+          "responseEnd": 271.7000000476837,
+          "duration": 9,
+          "transferSize": 0,
+          "encodedBodySize": 126289,
+          "decodedBodySize": 126289
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops-1.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 272.7000000476837,
+          "responseStart": 277.60000002384186,
+          "responseEnd": 277.7000000476837,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 4952,
+          "decodedBodySize": 4952
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 278.9000000357628,
+          "responseStart": 283.4000000357628,
+          "responseEnd": 283.4000000357628,
+          "duration": 4.5,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 288.80000001192093,
+          "responseStart": 292.5,
+          "responseEnd": 292.5,
+          "duration": 3.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 491.2000000476837,
+          "responseStart": 502,
+          "responseEnd": 502,
+          "duration": 10.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 503.5,
+          "responseStart": 525.2000000476837,
+          "responseEnd": 525.2000000476837,
+          "duration": 21.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 530.4000000357628,
+          "responseStart": 535.4000000357628,
+          "responseEnd": 535.4000000357628,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 20147.30000001192,
+          "responseStart": 20204.100000023842,
+          "responseEnd": 20204.100000023842,
+          "duration": 56.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 20159.600000023842,
+          "responseStart": 20208.30000001192,
+          "responseEnd": 20208.400000035763,
+          "duration": 48.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        }
+      ]
+    }
+  },
+  {
+    "target": "drh",
+    "mode": "cold",
+    "pass": 4,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 546,
+      "scriptsReceived": 607,
+      "authTerminee": 676,
+      "permissionsTerminees": 682,
+      "dashboardVisible": 908,
+      "firstReady": 908,
+      "heavyApiFired": true,
+      "settled": 20979
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 144.80000001192093,
+        "loadEventEnd": 145.0999999642372
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 148
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 164
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 19.399999976158142,
+          "responseStart": 37.89999997615814,
+          "responseEnd": 37.89999997615814,
+          "duration": 18.5,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 19.5,
+          "responseStart": 42.19999998807907,
+          "responseEnd": 56.69999998807907,
+          "duration": 37.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 19.5,
+          "responseStart": 68.69999998807907,
+          "responseEnd": 87.89999997615814,
+          "duration": 68.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 19.5,
+          "responseStart": 135.19999998807907,
+          "responseEnd": 135.19999998807907,
+          "duration": 115.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 19.599999964237213,
+          "responseStart": 90.80000001192093,
+          "responseEnd": 91.89999997615814,
+          "duration": 72.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 94.39999997615814,
+          "responseEnd": 94.39999997615814,
+          "duration": 74.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 96.30000001192093,
+          "responseEnd": 96.5,
+          "duration": 76.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 99.39999997615814,
+          "responseEnd": 99.5,
+          "duration": 79.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 138.0999999642372,
+          "responseEnd": 138.0999999642372,
+          "duration": 118.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 139,
+          "responseEnd": 139.19999998807907,
+          "duration": 119.5,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 19.69999998807907,
+          "responseStart": 103.09999996423721,
+          "responseEnd": 141.80000001192093,
+          "duration": 122.10000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 24.899999976158142,
+          "responseStart": 56.89999997615814,
+          "responseEnd": 57.19999998807907,
+          "duration": 32.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 144.39999997615814,
+          "responseStart": 149.0999999642372,
+          "responseEnd": 149.0999999642372,
+          "duration": 4.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 144.5,
+          "responseStart": 150.19999998807907,
+          "responseEnd": 150.30000001192093,
+          "duration": 5.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 146.89999997615814,
+          "responseStart": 147.5999999642372,
+          "responseEnd": 147.5999999642372,
+          "duration": 0.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 147.30000001192093,
+          "responseStart": 147.80000001192093,
+          "responseEnd": 147.89999997615814,
+          "duration": 0.5999999642372131,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 149.5999999642372,
+          "responseStart": 152.39999997615814,
+          "responseEnd": 152.39999997615814,
+          "duration": 2.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 156.5999999642372,
+          "responseStart": 162,
+          "responseEnd": 162,
+          "duration": 5.400000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 162.80000001192093,
+          "responseStart": 168.5999999642372,
+          "responseEnd": 168.5999999642372,
+          "duration": 5.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 162.89999997615814,
+          "responseStart": 170.19999998807907,
+          "responseEnd": 170.39999997615814,
+          "duration": 7.5,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 162.89999997615814,
+          "responseStart": 172.0999999642372,
+          "responseEnd": 172.0999999642372,
+          "duration": 9.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 172.39999997615814,
+          "responseStart": 176,
+          "responseEnd": 176,
+          "duration": 3.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 177.39999997615814,
+          "responseStart": 202.30000001192093,
+          "responseEnd": 202.30000001192093,
+          "duration": 24.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 202.89999997615814,
+          "responseStart": 213.89999997615814,
+          "responseEnd": 213.89999997615814,
+          "duration": 11,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/candidates",
+          "initiatorType": "fetch",
+          "startTime": 227.5999999642372,
+          "responseStart": 232.5,
+          "responseEnd": 234.89999997615814,
+          "duration": 7.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?",
+          "initiatorType": "fetch",
+          "startTime": 227.5999999642372,
+          "responseStart": 247.0999999642372,
+          "responseEnd": 247.19999998807907,
+          "duration": 19.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 261732,
+          "decodedBodySize": 261732
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 257.0999999642372,
+          "responseStart": 261.30000001192093,
+          "responseEnd": 261.39999997615814,
+          "duration": 4.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 265.80000001192093,
+          "responseStart": 269.19999998807907,
+          "responseEnd": 269.5,
+          "duration": 3.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 64337,
+          "decodedBodySize": 64337
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/leaves.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 270.30000001192093,
+          "responseStart": 272.80000001192093,
+          "responseEnd": 273,
+          "duration": 2.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 43797,
+          "decodedBodySize": 43797
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh-dashboard.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 270.30000001192093,
+          "responseStart": 273.80000001192093,
+          "responseEnd": 274.19999998807907,
+          "duration": 3.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 48726,
+          "decodedBodySize": 48726
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 504.39999997615814,
+          "responseStart": 514.3999999761581,
+          "responseEnd": 514.3999999761581,
+          "duration": 10,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 515.0999999642372,
+          "responseStart": 531,
+          "responseEnd": 531.0999999642372,
+          "duration": 16,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        }
+      ]
+    }
+  },
+  {
+    "target": "ops",
+    "mode": "cold",
+    "pass": 4,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 445,
+      "scriptsReceived": 506,
+      "authTerminee": 588,
+      "permissionsTerminees": 596,
+      "dashboardVisible": 920,
+      "firstReady": 920,
+      "heavyApiFired": true,
+      "settled": 20971
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 226.60000002384186,
+        "loadEventEnd": 226.9000000357628
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 236
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 252
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 26.200000047683716,
+          "responseStart": 37.700000047683716,
+          "responseEnd": 37.90000003576279,
+          "duration": 11.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 26.30000001192093,
+          "responseStart": 41.80000001192093,
+          "responseEnd": 42.30000001192093,
+          "duration": 16,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 26.400000035762787,
+          "responseStart": 143.9000000357628,
+          "responseEnd": 144,
+          "duration": 117.59999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 26.400000035762787,
+          "responseStart": 146.10000002384186,
+          "responseEnd": 147.20000004768372,
+          "duration": 120.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 26.400000035762787,
+          "responseStart": 149.4000000357628,
+          "responseEnd": 149.4000000357628,
+          "duration": 123,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 26.400000035762787,
+          "responseStart": 151.60000002384186,
+          "responseEnd": 151.80000001192093,
+          "duration": 125.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 26.400000035762787,
+          "responseStart": 45.60000002384186,
+          "responseEnd": 220.70000004768372,
+          "duration": 194.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 26.5,
+          "responseStart": 153.60000002384186,
+          "responseEnd": 153.70000004768372,
+          "duration": 127.20000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 26.5,
+          "responseStart": 156.9000000357628,
+          "responseEnd": 196,
+          "duration": 169.5,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 26.5,
+          "responseStart": 199.9000000357628,
+          "responseEnd": 200.10000002384186,
+          "duration": 173.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 26.5,
+          "responseStart": 202.20000004768372,
+          "responseEnd": 202.20000004768372,
+          "duration": 175.70000004768372,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 32.700000047683716,
+          "responseStart": 57,
+          "responseEnd": 57,
+          "duration": 24.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 226.20000004768372,
+          "responseStart": 230.70000004768372,
+          "responseEnd": 230.70000004768372,
+          "duration": 4.5,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 226.20000004768372,
+          "responseStart": 231.4000000357628,
+          "responseEnd": 231.5,
+          "duration": 5.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 228.4000000357628,
+          "responseStart": 228.9000000357628,
+          "responseEnd": 229,
+          "duration": 0.5999999642372131,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 228.5,
+          "responseStart": 229,
+          "responseEnd": 229.10000002384186,
+          "duration": 0.6000000238418579,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 231.10000002384186,
+          "responseStart": 234,
+          "responseEnd": 234.10000002384186,
+          "duration": 3,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/client-portal/ops/observations",
+          "initiatorType": "fetch",
+          "startTime": 234.10000002384186,
+          "responseStart": 237.9000000357628,
+          "responseEnd": 238,
+          "duration": 3.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 240.70000004768372,
+          "responseStart": 249.30000001192093,
+          "responseEnd": 249.4000000357628,
+          "duration": 8.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 251.30000001192093,
+          "responseStart": 254.30000001192093,
+          "responseEnd": 254.4000000357628,
+          "duration": 3.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 251.30000001192093,
+          "responseStart": 256,
+          "responseEnd": 256.2000000476837,
+          "duration": 4.900000035762787,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 251.4000000357628,
+          "responseStart": 255.5,
+          "responseEnd": 255.5,
+          "duration": 4.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 255.60000002384186,
+          "responseStart": 258.60000002384186,
+          "responseEnd": 258.60000002384186,
+          "duration": 3,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 259.5,
+          "responseStart": 261.80000001192093,
+          "responseEnd": 261.80000001192093,
+          "duration": 2.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 262.30000001192093,
+          "responseStart": 273.10000002384186,
+          "responseEnd": 273.10000002384186,
+          "duration": 10.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/sites",
+          "initiatorType": "fetch",
+          "startTime": 309.9000000357628,
+          "responseStart": 313.60000002384186,
+          "responseEnd": 313.60000002384186,
+          "duration": 3.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3460,
+          "decodedBodySize": 3460
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?",
+          "initiatorType": "fetch",
+          "startTime": 309.9000000357628,
+          "responseStart": 327.4000000357628,
+          "responseEnd": 327.4000000357628,
+          "duration": 17.5,
+          "transferSize": 0,
+          "encodedBodySize": 130012,
+          "decodedBodySize": 130012
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=1&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 328.80000001192093,
+          "responseStart": 335.4000000357628,
+          "responseEnd": 335.4000000357628,
+          "duration": 6.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 25137,
+          "decodedBodySize": 25137
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/movements?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 328.9000000357628,
+          "responseStart": 333.5,
+          "responseEnd": 333.5,
+          "duration": 4.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=2&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 335.7000000476837,
+          "responseStart": 340.60000002384186,
+          "responseEnd": 340.60000002384186,
+          "duration": 4.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 24983,
+          "decodedBodySize": 24983
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 339.4000000357628,
+          "responseStart": 342.4000000357628,
+          "responseEnd": 342.5,
+          "duration": 3.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 352,
+          "responseStart": 355.80000001192093,
+          "responseEnd": 357.5,
+          "duration": 5.5,
+          "transferSize": 0,
+          "encodedBodySize": 126289,
+          "decodedBodySize": 126289
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops-1.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 358.30000001192093,
+          "responseStart": 359.7000000476837,
+          "responseEnd": 359.7000000476837,
+          "duration": 1.4000000357627869,
+          "transferSize": 0,
+          "encodedBodySize": 4952,
+          "decodedBodySize": 4952
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 360.7000000476837,
+          "responseStart": 366.80000001192093,
+          "responseEnd": 366.80000001192093,
+          "duration": 6.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 370.80000001192093,
+          "responseStart": 381.9000000357628,
+          "responseEnd": 381.9000000357628,
+          "duration": 11.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 585.7000000476837,
+          "responseStart": 596.4000000357628,
+          "responseEnd": 596.4000000357628,
+          "duration": 10.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 597.4000000357628,
+          "responseStart": 617.2000000476837,
+          "responseEnd": 617.2000000476837,
+          "duration": 19.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 621.8000000119209,
+          "responseStart": 626.8000000119209,
+          "responseEnd": 626.8000000119209,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 20241.900000035763,
+          "responseStart": 20317.200000047684,
+          "responseEnd": 20317.200000047684,
+          "duration": 75.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        }
+      ]
+    }
+  },
+  {
+    "target": "drh",
+    "mode": "cold",
+    "pass": 5,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 624,
+      "scriptsReceived": 679,
+      "authTerminee": 756,
+      "permissionsTerminees": 764,
+      "dashboardVisible": 972,
+      "firstReady": 972,
+      "heavyApiFired": true,
+      "settled": 21024
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 144.39999997615814,
+        "loadEventEnd": 144.69999998807907
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 156
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 172
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 30.299999952316284,
+          "responseStart": 40.299999952316284,
+          "responseEnd": 40.799999952316284,
+          "duration": 10.5,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 30.399999976158142,
+          "responseStart": 45.09999996423721,
+          "responseEnd": 47.89999997615814,
+          "duration": 17.5,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 30.399999976158142,
+          "responseStart": 57.39999997615814,
+          "responseEnd": 71.69999998807907,
+          "duration": 41.30000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 30.399999976158142,
+          "responseStart": 73.5,
+          "responseEnd": 74.59999996423721,
+          "duration": 44.19999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 30.399999976158142,
+          "responseStart": 140.79999995231628,
+          "responseEnd": 140.79999995231628,
+          "duration": 110.39999997615814,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 30.5,
+          "responseStart": 76.09999996423721,
+          "responseEnd": 76.09999996423721,
+          "duration": 45.59999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 30.5,
+          "responseStart": 77.29999995231628,
+          "responseEnd": 77.59999996423721,
+          "duration": 47.09999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 30.5,
+          "responseStart": 78.79999995231628,
+          "responseEnd": 79,
+          "duration": 48.5,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 30.5,
+          "responseStart": 81.39999997615814,
+          "responseEnd": 117.59999996423721,
+          "duration": 87.09999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 30.599999964237213,
+          "responseStart": 121.5,
+          "responseEnd": 121.5,
+          "duration": 90.90000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 30.599999964237213,
+          "responseStart": 123.19999998807907,
+          "responseEnd": 123.29999995231628,
+          "duration": 92.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 35.59999996423721,
+          "responseStart": 55.59999996423721,
+          "responseEnd": 55.59999996423721,
+          "duration": 20,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 144,
+          "responseStart": 148.5999999642372,
+          "responseEnd": 148.5999999642372,
+          "duration": 4.599999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 144,
+          "responseStart": 148.79999995231628,
+          "responseEnd": 149,
+          "duration": 5,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 146.5,
+          "responseStart": 147.19999998807907,
+          "responseEnd": 147.19999998807907,
+          "duration": 0.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 146.69999998807907,
+          "responseStart": 147.19999998807907,
+          "responseEnd": 147.19999998807907,
+          "duration": 0.5,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 149.39999997615814,
+          "responseStart": 153.89999997615814,
+          "responseEnd": 154,
+          "duration": 4.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 158.5,
+          "responseStart": 175.5999999642372,
+          "responseEnd": 175.5999999642372,
+          "duration": 17.099999964237213,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 176.19999998807907,
+          "responseStart": 181.5,
+          "responseEnd": 181.5,
+          "duration": 5.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 176.29999995231628,
+          "responseStart": 182,
+          "responseEnd": 182.0999999642372,
+          "duration": 5.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 176.29999995231628,
+          "responseStart": 183.89999997615814,
+          "responseEnd": 183.89999997615814,
+          "duration": 7.600000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 184.19999998807907,
+          "responseStart": 189.5999999642372,
+          "responseEnd": 189.5999999642372,
+          "duration": 5.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 190.69999998807907,
+          "responseStart": 193.0999999642372,
+          "responseEnd": 193.19999998807907,
+          "duration": 2.5,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 193.5999999642372,
+          "responseStart": 200.69999998807907,
+          "responseEnd": 200.69999998807907,
+          "duration": 7.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?",
+          "initiatorType": "fetch",
+          "startTime": 241.29999995231628,
+          "responseStart": 259,
+          "responseEnd": 259,
+          "duration": 17.700000047683716,
+          "transferSize": 0,
+          "encodedBodySize": 261732,
+          "decodedBodySize": 261732
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/candidates",
+          "initiatorType": "fetch",
+          "startTime": 241.39999997615814,
+          "responseStart": 246.69999998807907,
+          "responseEnd": 246.79999995231628,
+          "duration": 5.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 271.7999999523163,
+          "responseStart": 275.5,
+          "responseEnd": 275.89999997615814,
+          "duration": 4.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 64337,
+          "decodedBodySize": 64337
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 273.7999999523163,
+          "responseStart": 280.5,
+          "responseEnd": 280.7999999523163,
+          "duration": 7,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/drh-dashboard.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 276.5999999642372,
+          "responseStart": 279,
+          "responseEnd": 279.2999999523163,
+          "duration": 2.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 48726,
+          "decodedBodySize": 48726
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/leaves.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 276.69999998807907,
+          "responseStart": 279.7999999523163,
+          "responseEnd": 280.0999999642372,
+          "duration": 3.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 43797,
+          "decodedBodySize": 43797
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 503.69999998807907,
+          "responseStart": 557.5,
+          "responseEnd": 557.5,
+          "duration": 53.80000001192093,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/drh/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 559,
+          "responseStart": 568.2999999523163,
+          "responseEnd": 568.2999999523163,
+          "duration": 9.299999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 35358,
+          "decodedBodySize": 35358
+        }
+      ]
+    }
+  },
+  {
+    "target": "ops",
+    "mode": "cold",
+    "pass": 5,
+    "marks": {
+      "navigationStart": 0,
+      "htmlReceived": 571,
+      "scriptsReceived": 632,
+      "authTerminee": 714,
+      "permissionsTerminees": 724,
+      "dashboardVisible": 963,
+      "firstReady": 963,
+      "heavyApiFired": true,
+      "settled": 21011
+    },
+    "perf": {
+      "navigation": {
+        "domContentLoadedEventEnd": 138.30000001192093,
+        "loadEventEnd": 138.60000002384186
+      },
+      "paints": [
+        {
+          "name": "first-paint",
+          "startTime": 152
+        },
+        {
+          "name": "first-contentful-paint",
+          "startTime": 168
+        }
+      ],
+      "resources": [
+        {
+          "name": "http://127.0.0.1:8001/static/responsive-baseline.css?v=20260906",
+          "initiatorType": "link",
+          "startTime": 24.100000023841858,
+          "responseStart": 37.40000003576279,
+          "responseEnd": 37.80000001192093,
+          "duration": 13.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3148,
+          "decodedBodySize": 3148
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/tailwind.min.css?v=2-purged",
+          "initiatorType": "link",
+          "startTime": 24.100000023841858,
+          "responseStart": 44,
+          "responseEnd": 44.5,
+          "duration": 20.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 22203,
+          "decodedBodySize": 22203
+        },
+        {
+          "name": "https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@1,500&display=swap",
+          "initiatorType": "link",
+          "startTime": 24.100000023841858,
+          "responseStart": 134.20000004768372,
+          "responseEnd": 134.20000004768372,
+          "duration": 110.10000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 0,
+          "decodedBodySize": 0
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.css?v=af94605ab9",
+          "initiatorType": "link",
+          "startTime": 24.200000047683716,
+          "responseStart": 54.700000047683716,
+          "responseEnd": 73.30000001192093,
+          "duration": 49.09999996423721,
+          "transferSize": 0,
+          "encodedBodySize": 577222,
+          "decodedBodySize": 577222
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/algeria-communes.js?v=20260625-communes",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 75.80000001192093,
+          "responseEnd": 77.40000003576279,
+          "duration": 53.10000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 18918,
+          "decodedBodySize": 18918
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/utils.js?v=20260908-modular",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 80,
+          "responseEnd": 83.30000001192093,
+          "duration": 59,
+          "transferSize": 0,
+          "encodedBodySize": 1248,
+          "decodedBodySize": 1248
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/module-registry.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 85.70000004768372,
+          "responseEnd": 85.90000003576279,
+          "duration": 61.60000002384186,
+          "transferSize": 0,
+          "encodedBodySize": 10760,
+          "decodedBodySize": 10760
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/core/files.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 88.20000004768372,
+          "responseEnd": 88.70000004768372,
+          "duration": 64.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 7954,
+          "decodedBodySize": 7954
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-app.js?v=2a7079f815",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 92.20000004768372,
+          "responseEnd": 129.30000001192093,
+          "duration": 105,
+          "transferSize": 0,
+          "encodedBodySize": 1581166,
+          "decodedBodySize": 1581166
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/erp-frontend.js?v=f5573fb3c6",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 134.20000004768372,
+          "responseEnd": 135,
+          "duration": 110.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 41502,
+          "decodedBodySize": 41502
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-inline-2.js?v=c4c1c0b768",
+          "initiatorType": "script",
+          "startTime": 24.30000001192093,
+          "responseStart": 137,
+          "responseEnd": 137,
+          "duration": 112.69999998807907,
+          "transferSize": 0,
+          "encodedBodySize": 1695,
+          "decodedBodySize": 1695
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/manifest.webmanifest",
+          "initiatorType": "link",
+          "startTime": 30,
+          "responseStart": 59.90000003576279,
+          "responseEnd": 60,
+          "duration": 30,
+          "transferSize": 0,
+          "encodedBodySize": 515,
+          "decodedBodySize": 515
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 137.70000004768372,
+          "responseStart": 142.80000001192093,
+          "responseEnd": 143.10000002384186,
+          "duration": 5.399999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 137.70000004768372,
+          "responseStart": 146.80000001192093,
+          "responseEnd": 146.9000000357628,
+          "duration": 9.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 140.4000000357628,
+          "responseStart": 141,
+          "responseEnd": 141,
+          "duration": 0.5999999642372131,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/sgdi-icon-192.png",
+          "initiatorType": "other",
+          "startTime": 140.60000002384186,
+          "responseStart": 141,
+          "responseEnd": 141,
+          "duration": 0.3999999761581421,
+          "transferSize": 0,
+          "encodedBodySize": 3563,
+          "decodedBodySize": 3563
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 143.4000000357628,
+          "responseStart": 146.9000000357628,
+          "responseEnd": 147.30000001192093,
+          "duration": 3.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/client-portal/ops/observations",
+          "initiatorType": "fetch",
+          "startTime": 146.4000000357628,
+          "responseStart": 152.30000001192093,
+          "responseEnd": 152.30000001192093,
+          "duration": 5.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/db?light=1",
+          "initiatorType": "fetch",
+          "startTime": 153.10000002384186,
+          "responseStart": 158.20000004768372,
+          "responseEnd": 158.20000004768372,
+          "duration": 5.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/events/ticket",
+          "initiatorType": "fetch",
+          "startTime": 158.70000004768372,
+          "responseStart": 161.70000004768372,
+          "responseEnd": 161.70000004768372,
+          "duration": 3,
+          "transferSize": 0,
+          "encodedBodySize": 156,
+          "decodedBodySize": 156
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/version",
+          "initiatorType": "fetch",
+          "startTime": 158.70000004768372,
+          "responseStart": 162.70000004768372,
+          "responseEnd": 162.70000004768372,
+          "duration": 4,
+          "transferSize": 0,
+          "encodedBodySize": 26,
+          "decodedBodySize": 26
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/users",
+          "initiatorType": "fetch",
+          "startTime": 158.70000004768372,
+          "responseStart": 163.4000000357628,
+          "responseEnd": 163.5,
+          "duration": 4.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 982,
+          "decodedBodySize": 982
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/access-rules",
+          "initiatorType": "fetch",
+          "startTime": 163.70000004768372,
+          "responseStart": 166.70000004768372,
+          "responseEnd": 166.70000004768372,
+          "duration": 3,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 168.9000000357628,
+          "responseStart": 177.10000002384186,
+          "responseEnd": 177.10000002384186,
+          "duration": 8.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 177.70000004768372,
+          "responseStart": 187.30000001192093,
+          "responseEnd": 187.4000000357628,
+          "duration": 9.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?",
+          "initiatorType": "fetch",
+          "startTime": 217.80000001192093,
+          "responseStart": 236.30000001192093,
+          "responseEnd": 236.30000001192093,
+          "duration": 18.5,
+          "transferSize": 0,
+          "encodedBodySize": 130012,
+          "decodedBodySize": 130012
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/sites",
+          "initiatorType": "fetch",
+          "startTime": 217.9000000357628,
+          "responseStart": 222.10000002384186,
+          "responseEnd": 222.10000002384186,
+          "duration": 4.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 3460,
+          "decodedBodySize": 3460
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=1&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 237.9000000357628,
+          "responseStart": 244.70000004768372,
+          "responseEnd": 244.70000004768372,
+          "duration": 6.800000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 25137,
+          "decodedBodySize": 25137
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/movements?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 238,
+          "responseStart": 242.5,
+          "responseEnd": 242.5,
+          "duration": 4.5,
+          "transferSize": 0,
+          "encodedBodySize": 2,
+          "decodedBodySize": 2
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/assignments/page?active=1&page=2&page_size=100",
+          "initiatorType": "fetch",
+          "startTime": 245.30000001192093,
+          "responseStart": 250.30000001192093,
+          "responseEnd": 250.5,
+          "duration": 5.199999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 24983,
+          "decodedBodySize": 24983
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/positions",
+          "initiatorType": "fetch",
+          "startTime": 247.9000000357628,
+          "responseStart": 255.5,
+          "responseEnd": 255.60000002384186,
+          "duration": 7.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 413,
+          "decodedBodySize": 413
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 258.60000002384186,
+          "responseStart": 262.2000000476837,
+          "responseEnd": 263.9000000357628,
+          "duration": 5.300000011920929,
+          "transferSize": 0,
+          "encodedBodySize": 126289,
+          "decodedBodySize": 126289
+        },
+        {
+          "name": "http://127.0.0.1:8001/static/js/modules/ops-1.js?v=20260914-alerts-menu-fix",
+          "initiatorType": "script",
+          "startTime": 264.80000001192093,
+          "responseStart": 266.10000002384186,
+          "responseEnd": 266.2000000476837,
+          "duration": 1.4000000357627869,
+          "transferSize": 0,
+          "encodedBodySize": 4952,
+          "decodedBodySize": 4952
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 267.10000002384186,
+          "responseStart": 273.2000000476837,
+          "responseEnd": 273.2000000476837,
+          "duration": 6.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 280.4000000357628,
+          "responseStart": 291.30000001192093,
+          "responseEnd": 291.30000001192093,
+          "duration": 10.899999976158142,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 499.2000000476837,
+          "responseStart": 508.9000000357628,
+          "responseEnd": 509,
+          "duration": 9.799999952316284,
+          "transferSize": 0,
+          "encodedBodySize": 2432,
+          "decodedBodySize": 2432
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ops/employees?society=Iron+Global+Securite",
+          "initiatorType": "fetch",
+          "startTime": 510.80000001192093,
+          "responseStart": 534.7000000476837,
+          "responseEnd": 534.9000000357628,
+          "duration": 24.100000023841858,
+          "transferSize": 0,
+          "encodedBodySize": 33421,
+          "decodedBodySize": 33421
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 542.3000000119209,
+          "responseStart": 550,
+          "responseEnd": 550,
+          "duration": 7.699999988079071,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/irongs/collections/feuillePresence",
+          "initiatorType": "fetch",
+          "startTime": 20152.700000047684,
+          "responseStart": 20209.700000047684,
+          "responseEnd": 20209.700000047684,
+          "duration": 57,
+          "transferSize": 0,
+          "encodedBodySize": 36,
+          "decodedBodySize": 36
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/portal/attendance-alerts",
+          "initiatorType": "fetch",
+          "startTime": 20159.30000001192,
+          "responseStart": 20221.600000023842,
+          "responseEnd": 20221.700000047684,
+          "duration": 62.40000003576279,
+          "transferSize": 0,
+          "encodedBodySize": 41,
+          "decodedBodySize": 41
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/ui/sidebar-stats?",
+          "initiatorType": "fetch",
+          "startTime": 20160.700000047684,
+          "responseStart": 20228.5,
+          "responseEnd": 20228.5,
+          "duration": 67.79999995231628,
+          "transferSize": 0,
+          "encodedBodySize": 2422,
+          "decodedBodySize": 2422
+        },
+        {
+          "name": "http://127.0.0.1:8001/api/auth/me",
+          "initiatorType": "fetch",
+          "startTime": 20229.100000023842,
+          "responseStart": 20232.600000023842,
+          "responseEnd": 20232.600000023842,
+          "duration": 3.5,
+          "transferSize": 0,
+          "encodedBodySize": 487,
+          "decodedBodySize": 487
+        }
+      ]
+    }
+  }
+]
