@@ -209,10 +209,10 @@ async function sectionLeaves(e) {
     <div style="margin-top:14px">
       <button type="button" class="dn-btn dn-btn-primary" id="dn-leave-new-toggle">+ Nouvelle demande</button>
       <form id="dn-leave-new-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" name="leave_type" required style="width:160px"></div>
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Début</label><input class="dn-input" type="date" name="start_date" required></div>
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Fin</label><input class="dn-input" type="date" name="end_date" required></div>
-        <div style="flex:1;min-width:180px"><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif</label><input class="dn-input" name="reason"></div>
+        <div><label for="dn-leave-type" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" id="dn-leave-type" name="leave_type" required style="width:160px"></div>
+        <div><label for="dn-leave-start" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Début</label><input class="dn-input" id="dn-leave-start" type="date" name="start_date" required></div>
+        <div><label for="dn-leave-end" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Fin</label><input class="dn-input" id="dn-leave-end" type="date" name="end_date" required></div>
+        <div style="flex:1;min-width:180px"><label for="dn-leave-reason" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif</label><input class="dn-input" id="dn-leave-reason" name="reason"></div>
         <button type="submit" class="dn-btn dn-btn-primary">Enregistrer</button>
         <span id="dn-leave-new-error" class="dn-error-state-text" style="margin:0"></span>
       </form>
@@ -287,10 +287,10 @@ async function sectionSanctions(e) {
     <div style="margin-top:14px">
       <button type="button" class="dn-btn dn-btn-primary" id="dn-sanction-new-toggle">+ Nouvelle sanction</button>
       <form id="dn-sanction-new-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Date infraction</label><input class="dn-input" type="date" name="infraction_date" required></div>
-        <div style="flex:1;min-width:180px"><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif</label><input class="dn-input" name="fault" required></div>
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" name="sanction_type" required style="width:160px"></div>
-        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Suspension (j)</label><input class="dn-input" type="number" min="0" name="suspension_days" style="width:110px"></div>
+        <div><label for="dn-sanction-date" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Date infraction</label><input class="dn-input" id="dn-sanction-date" type="date" name="infraction_date" required></div>
+        <div style="flex:1;min-width:180px"><label for="dn-sanction-fault" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif</label><input class="dn-input" id="dn-sanction-fault" name="fault" required></div>
+        <div><label for="dn-sanction-type" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" id="dn-sanction-type" name="sanction_type" required style="width:160px"></div>
+        <div><label for="dn-sanction-days" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Suspension (j)</label><input class="dn-input" id="dn-sanction-days" type="number" min="0" name="suspension_days" style="width:110px"></div>
         <button type="submit" class="dn-btn dn-btn-primary">Enregistrer</button>
         <span id="dn-sanction-new-error" class="dn-error-state-text" style="margin:0"></span>
       </form>
