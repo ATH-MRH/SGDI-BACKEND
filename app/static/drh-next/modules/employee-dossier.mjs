@@ -148,11 +148,25 @@ function affectationHTML(e) {
   return `<table class="dn-table">${rows.map(([label, value]) => `<tr><th style="width:220px">${escapeHTML(label)}</th><td>${escapeHTML(value ?? "—")}</td></tr>`).join("")}</table>`;
 }
 
+// LOT 4 : badge de statut contrat. contract.status est un texte libre côté backend
+// (aucune énumération contrainte) — le badge affiche la valeur backend TELLE QUELLE,
+// sauf un seul cas dérivé MÉCANIQUEMENT des données déjà présentes (end_date < date du
+// jour), jamais une règle métier inventée : pas de seuil "à échéance" (30/60/90 jours)
+// arbitraire côté frontend, ce choix appartient au backend s'il l'expose un jour.
+function contractStatusBadge(c) {
+  const status = String(c.status || "").toLowerCase();
+  if (status === "actif" && c.end_date && c.end_date < new Date().toISOString().slice(0, 10)) {
+    return `<span class="dn-badge dn-badge-danger">Expiré</span>`;
+  }
+  if (status === "actif") return `<span class="dn-badge dn-badge-success">Actif</span>`;
+  return `<span class="dn-badge">${escapeHTML(c.status || "—")}</span>`;
+}
+
 async function sectionContracts(e) {
   const rows = await loadData(`drh:employee:${e.id}:contracts`, (signal) => api.get(`/drh/contracts?employee_id=${encodeURIComponent(e.id)}`, { signal }), { ttlMs: 10000 });
   if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun contrat enregistré.");
   return `<table class="dn-table"><thead><tr><th>Type</th><th>Poste</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
-    ${rows.map(c => `<tr><td>${escapeHTML(c.contract_type || "—")}</td><td>${escapeHTML(c.position || "—")}</td><td>${escapeHTML(c.start_date || "—")}</td><td>${escapeHTML(c.end_date || "—")}</td><td><span class="dn-badge">${escapeHTML(c.status || "—")}</span></td></tr>`).join("")}
+    ${rows.map(c => `<tr><td>${escapeHTML(c.contract_type || "—")}</td><td>${escapeHTML(c.position || "—")}</td><td>${escapeHTML(c.start_date || "—")}</td><td>${escapeHTML(c.end_date || "—")}</td><td>${contractStatusBadge(c)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 

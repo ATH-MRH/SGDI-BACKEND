@@ -12,6 +12,7 @@ import { escapeHTML } from "./core/ui.mjs";
 import { renderDashboard } from "./modules/dashboard.mjs";
 import { renderEmployees } from "./modules/employees.mjs";
 import { renderEmployeeDossier } from "./modules/employee-dossier.mjs";
+import { renderContracts } from "./modules/contracts.mjs";
 
 const NAV_ITEMS = [
   { route: "dashboard", label: "Tableau de bord" },
@@ -25,16 +26,20 @@ const NAV_ITEMS = [
   { route: "alerts", label: "Alertes" },
 ];
 
-// LOT 2 : dashboard (LOT 1) et employees (liste paginée + fiche minimale, LOT 2) sont
-// désormais de vrais modules. Le reste est un squelette de route explicite ("arrive au
-// LOT n") — §24 (LOT 1) documente le calendrier réel, on ne fait jamais semblant qu'un
-// écran existe déjà.
-const COMING_SOON_LOT = { contracts: 4, attendance: 8, leaves: 5, discipline: 6, recruitment: 7, documents: 9, alerts: 10 };
+// dashboard (LOT 1), employees (LOT 2), employee-dossier (LOT 3) et contracts (LOT 4)
+// sont désormais de vrais modules. Le reste est un squelette de route explicite ("arrive
+// au LOT n") — jamais semblant qu'un écran existe déjà. Numérotation alignée sur le plan
+// LOT 3-10 en cours (mission autonome) : leaves=6, discipline=7, documents=8, dashboard=9.
+// "attendance" et "recruitment" ne font PAS partie du périmètre LOTS 3-10 de cette
+// mission — aucun numéro de lot fictif ne leur est attribué (pas de fausse promesse).
+const COMING_SOON_LOT = { attendance: null, leaves: 6, discipline: 7, recruitment: null, documents: 8, alerts: null };
 
 function renderComingSoon(route) {
   const item = NAV_ITEMS.find(n => n.route === route);
+  const lot = COMING_SOON_LOT[route];
+  const text = lot ? `Cet écran arrive au LOT ${lot}.` : "Cet écran n'est pas encore planifié.";
   document.querySelector("#dn-view").innerHTML = `<div class="dn-page-head"><h1>${escapeHTML(item?.label || route)}</h1></div>
-    <div class="dn-card dn-panel"><div class="dn-empty-state">Cet écran arrive au LOT ${COMING_SOON_LOT[route] || "?"}.</div></div>`;
+    <div class="dn-card dn-panel"><div class="dn-empty-state">${escapeHTML(text)}</div></div>`;
 }
 
 function shellHTML(user) {
@@ -84,6 +89,7 @@ function registerRoutes() {
   // LOT 3 : le Dossier 360° (employee-dossier.mjs) remplace la fiche minimale (LOT 2,
   // renderEmployeeDetail, conservée intacte dans employees.mjs mais plus câblée ici).
   registerRoute("employees/:id", async () => { highlightActiveNav("employees"); await renderEmployeeDossier(getCurrentParams()); });
+  registerRoute("contracts", async () => { highlightActiveNav("contracts"); await renderContracts(); });
   for (const route of Object.keys(COMING_SOON_LOT)) {
     registerRoute(route, async () => { highlightActiveNav(route); renderComingSoon(route); });
   }
