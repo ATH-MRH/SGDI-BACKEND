@@ -1,0 +1,40 @@
+/* DRH NEXT — design tokens. Palette sobre, neutre légèrement bleuté (cohérent
+   avec l'identité RH existante sans la copier), un seul accent. */
+:root {
+  --dn-bg: #f7f8fa;
+  --dn-surface: #ffffff;
+  --dn-border: #e2e5eb;
+  --dn-text: #1c2230;
+  --dn-text-muted: #667085;
+  --dn-accent: #2f5ce0;
+  --dn-accent-weak: #eaefff;
+  --dn-success: #16a34a;
+  --dn-warning: #d97706;
+  --dn-danger: #dc2626;
+  --dn-radius: 10px;
+  --dn-radius-sm: 6px;
+  --dn-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  --dn-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --dn-sidebar-w: 240px;
+  --dn-header-h: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --dn-bg: #12151c;
+    --dn-surface: #191d27;
+    --dn-border: #2a2f3b;
+    --dn-text: #e7e9ee;
+    --dn-text-muted: #9aa2b1;
+    --dn-accent: #6d8bf5;
+    --dn-accent-weak: #202a4a;
+  }
+}
+:root[data-theme="dark"] {
+  --dn-bg: #12151c;
+  --dn-surface: #191d27;
+  --dn-border: #2a2f3b;
+  --dn-text: #e7e9ee;
+  --dn-text-muted: #9aa2b1;
+  --dn-accent: #6d8bf5;
+  --dn-accent-weak: #202a4a;
+}

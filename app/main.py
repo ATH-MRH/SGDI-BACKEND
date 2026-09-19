@@ -73,6 +73,17 @@ def serve_sgdi_app_css():
 def serve_index_html_static():
     return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
 
+@app.get("/drh-next", include_in_schema=False)
+def serve_drh_next():
+    # PROJET DRH NEXT — LOT 1. Route de développement explicite, distincte de "/" (Legacy) :
+    # drh.irongs.com continue de servir index.html/sgdi-app.js sans aucune modification.
+    # Les assets (core/*.js, modules/*.js, styles/*.css) sont déjà servis par le mount
+    # /static existant (app/static/drh-next/...), aucun montage supplémentaire nécessaire.
+    # Pas de garde d'autorisation ICI : comme pour "/", le HTML/JS statique reste public —
+    # la vraie protection est côté API (chaque endpoint /api/drh/* exige déjà current_user +
+    # les mêmes règles de scope que l'ancien frontend, inchangées par ce lot).
+    return FileResponse(STATIC_DIR / "drh-next" / "index.html", headers=_NO_CACHE)
+
 @app.get("/api/version", include_in_schema=False)
 def app_version():
     js_file = STATIC_DIR / "sgdi-app.js"
@@ -228,6 +239,17 @@ class StaticCacheMiddleware:
             path.startswith("/static/")
             and path not in self._NO_CACHE_PATHS
             and not path.endswith(".html")
+            # DETTE DRH-NEXT-CACHE-LOT12 — PROJET DRH NEXT, LOT 1 §4/§6 (revue). Tant que ce
+            # chantier est en développement actif (LOT 1 à LOT 11, avant la bascule LOT 12),
+            # aucun cache-buster par fichier n'existe encore sur ces imports ES statiques
+            # ("./core/x.mjs", pas d'expression possible dans un spécificateur d'import
+            # littéral) — un cache immutable un an servirait alors indéfiniment une version
+            # périmée après chaque déploiement, sans jamais dépendre d'un rechargement forcé
+            # de l'utilisateur. Exclusion délibérée de tout le dossier, pas fichier par
+            # fichier (LOT 2+ en ajoutera d'autres). À REVOIR AU LOT 12, avant toute bascule
+            # production : soit un cache-buster par fichier façon R.MODULE_VERSION (Legacy),
+            # soit un hash de contenu injecté dynamiquement.
+            and not path.startswith("/static/drh-next/")
         )
 
         if not cacheable:

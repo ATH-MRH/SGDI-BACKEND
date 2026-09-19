@@ -1,0 +1,59 @@
+/* DRH NEXT — design system commun (§14) : card, kpi, button, badge, table,
+   input, modal/drawer, skeleton, empty/error state, pagination, tabs. */
+
+.dn-card {
+  background: var(--dn-surface);
+  border: 1px solid var(--dn-border);
+  border-radius: var(--dn-radius);
+  box-shadow: var(--dn-shadow);
+}
+
+.dn-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.dn-kpi { padding: 16px 18px; }
+.dn-kpi-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--dn-text-muted); }
+.dn-kpi-value { font-size: 28px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.dn-kpi-sub { font-size: 12px; color: var(--dn-text-muted); margin-top: 2px; }
+
+.dn-panel { padding: 16px 18px; }
+.dn-panel-head { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+
+.dn-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: var(--dn-radius-sm); border: 1px solid var(--dn-border);
+  background: var(--dn-surface); color: var(--dn-text); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.dn-btn-primary { background: var(--dn-accent); border-color: var(--dn-accent); color: #fff; }
+
+.dn-badge { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--dn-accent-weak); color: var(--dn-accent); }
+.dn-badge-success { background: #dcfce7; color: var(--dn-success); }
+.dn-badge-warning { background: #fef3c7; color: var(--dn-warning); }
+.dn-badge-danger { background: #fee2e2; color: var(--dn-danger); }
+
+.dn-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dn-table th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--dn-text-muted); padding: 8px 10px; border-bottom: 1px solid var(--dn-border); }
+.dn-table td { padding: 9px 10px; border-bottom: 1px solid var(--dn-border); }
+
+.dn-input, .dn-select {
+  width: 100%; padding: 8px 10px; border-radius: var(--dn-radius-sm); border: 1px solid var(--dn-border);
+  background: var(--dn-surface); color: var(--dn-text); font-size: 13px;
+}
+
+.dn-modal-backdrop { position: fixed; inset: 0; background: rgba(16, 24, 40, .45); display: flex; align-items: center; justify-content: center; z-index: 30; }
+.dn-modal { background: var(--dn-surface); border-radius: var(--dn-radius); padding: 20px; max-width: 520px; width: 92%; }
+.dn-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(420px, 92vw); background: var(--dn-surface); box-shadow: var(--dn-shadow); z-index: 30; }
+
+.dn-skeleton { background: linear-gradient(90deg, var(--dn-border) 25%, var(--dn-bg) 37%, var(--dn-border) 63%); background-size: 400% 100%; animation: dn-shimmer 1.4s ease infinite; border-radius: var(--dn-radius); }
+.dn-skeleton-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.dn-skeleton-card { height: 92px; }
+.dn-skeleton-block { height: 200px; }
+@keyframes dn-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .dn-skeleton { animation: none; } }
+
+.dn-empty-state, .dn-error-state { padding: 28px 16px; text-align: center; color: var(--dn-text-muted); }
+.dn-error-state-title { font-weight: 700; color: var(--dn-text); margin-bottom: 4px; }
+.dn-error-state-text { font-size: 13px; margin-bottom: 12px; }
+
+.dn-pagination { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 14px; }
+.dn-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--dn-border); margin-bottom: 16px; }
+.dn-tab { padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--dn-text-muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.dn-tab.active { color: var(--dn-accent); border-color: var(--dn-accent); }

@@ -1,0 +1,54 @@
+/* DRH NEXT — layout : sidebar fixe desktop, responsive tablette/mobile (§13). */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--dn-font);
+  background: var(--dn-bg);
+  color: var(--dn-text);
+}
+
+.dn-app { display: flex; min-height: 100vh; }
+
+.dn-sidebar {
+  width: var(--dn-sidebar-w);
+  flex-shrink: 0;
+  background: var(--dn-surface);
+  border-right: 1px solid var(--dn-border);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.dn-sidebar-brand { padding: 18px 20px; font-weight: 800; letter-spacing: .02em; border-bottom: 1px solid var(--dn-border); }
+.dn-sidebar-nav { flex: 1; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.dn-nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--dn-radius-sm);
+  color: var(--dn-text-muted); text-decoration: none; font-size: 14px; font-weight: 600;
+}
+.dn-nav-link:hover { background: var(--dn-bg); color: var(--dn-text); }
+.dn-nav-link.active { background: var(--dn-accent-weak); color: var(--dn-accent); }
+
+.dn-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dn-header {
+  height: var(--dn-header-h); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; border-bottom: 1px solid var(--dn-border); background: var(--dn-surface);
+  position: sticky; top: 0; z-index: 5;
+}
+.dn-header-user { font-size: 13px; color: var(--dn-text-muted); display: flex; align-items: center; gap: 10px; }
+.dn-content { padding: 24px; flex: 1; overflow-x: auto; }
+.dn-page-head h1 { font-size: 20px; margin: 0 0 18px; }
+
+.dn-sidebar-toggle { display: none; }
+
+@media (max-width: 860px) {
+  .dn-sidebar {
+    position: fixed; z-index: 20; left: 0; top: 0;
+    transform: translateX(-100%); transition: transform .18s ease;
+  }
+  .dn-app.dn-sidebar-open .dn-sidebar { transform: translateX(0); box-shadow: var(--dn-shadow); }
+  .dn-sidebar-toggle { display: inline-flex; }
+  .dn-content { padding: 16px; }
+}
