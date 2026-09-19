@@ -2622,10 +2622,25 @@ function sgdiSqlSyncTasks(options){
       // après l'autre économise un aller-retour réseau entier sur ce chargement complet — celui
       // qui bloque tout l'affichage (renderView) tant qu'il n'est pas terminé.
       await Promise.all([ensureEmployees(),syncSitesFromPostgres()]);
-      const opsTasks=[];
-      if(typeof syncAssignmentsFromPostgres==="function")opsTasks.push(syncAssignmentsFromPostgres());
-      if(typeof syncOpsMovementsFromPostgres==="function")opsTasks.push(syncOpsMovementsFromPostgres());
-      if(opsTasks.length)await Promise.all(opsTasks);
+      // LOT DATA-1 §3 : affectations conservées dans le lot bloquant — le tableau de bord OPS
+      // calcule plusieurs de ses propres compteurs (Affectés, Taux d'affectation, Sites sans
+      // effectif) directement depuis elles ; les découpler ferait apparaître de faux chiffres
+      // avant correction (voir LOT DATA-3 pour un traitement propre avec état de chargement dédié).
+      // Mouvements en revanche : jamais lus par le tableau de bord OPS par défaut (seul l'écran
+      // "Mouvements" les affiche, exactement comme déjà exclu du scope superviseur ci-dessous
+      // pour la même raison) — lancés ici SANS être attendus, pour ne plus retarder le premier
+      // rendu OPS. ensureOpsMovementSqlSync(), déjà appelé par cet écran, rattrape le résultat
+      // s'il n'est pas encore arrivé ; le .then() ci-dessous couvre le cas où l'utilisateur est
+      // déjà sur cet écran pendant que cette synchro d'arrière-plan se termine.
+      const assignmentsPromise=typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres():Promise.resolve();
+      if(typeof syncOpsMovementsFromPostgres==="function"){
+        window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+        syncOpsMovementsFromPostgres().then(()=>{
+          window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+          if(/^#\/ops\/mouvements/.test(location.hash)&&typeof renderView==="function")renderView();
+        }).catch(e=>console.warn("Mouvements OPS non synchronisés (arrière-plan)",e));
+      }
+      await assignmentsPromise;
     })());
   }
   if(scope.superviseur){

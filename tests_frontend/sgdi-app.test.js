@@ -327,6 +327,9 @@ for (const scenario of [
   {name:'structure RH autorisée',role:'dispatch',module:'drh',structures:['gestionnaire_rh'],expected:['employees','candidates']},
   {name:'portail avant sélection',role:'dispatch',module:null,expected:[]},
   {name:'commercial',role:'dispatch',module:'commercial',expected:['clients']},
+  // LOT DATA-1 §3 : mouvements toujours invoqués (comme avant), mais plus attendus avant le
+  // premier rendu — voir le test dédié ci-dessous qui vérifie précisément le non-blocage.
+  {name:'OPS',role:'dispatch',module:'ops',expected:['employees','sites','assignments','movements']},
 ]) {
   test(`synchronisation bloquante : ${scenario.name} ne charge que les données pertinentes`, async () => {
     const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
@@ -349,6 +352,47 @@ for (const scenario of [
     } finally {window.close();}
   });
 }
+
+test('LOT DATA-1 §3 : OPS n\'attend plus les mouvements avant le premier rendu, mais attend toujours les affectations', async()=>{
+  const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
+  assert.ifError(ctx.loadError);
+  const {window,T}=ctx;
+  try{
+    T().setSession({username:'TEST',role:'dispatch',societe:'IRON',transverse:'ops',structuresAutorisees:[]});
+    window.sgdiModuleHostConfig=()=>null;
+    window.history.replaceState(null,'','#/ops/dashboard');
+    window.sgdiPullCurrentEmployees=async()=>{};
+    window.syncSitesFromPostgres=async()=>{};
+    let assignmentsResolved=false;
+    window.syncAssignmentsFromPostgres=async()=>{assignmentsResolved=true;};
+    // Mouvements ne se termine JAMAIS : si sgdiSqlSyncTasks attendait encore cet appel avant de
+    // résoudre, ce test resterait bloqué (le harness node:test le ferait échouer par timeout).
+    window.syncOpsMovementsFromPostgres=()=>new Promise(()=>{});
+    await Promise.all(T().sgdiSqlSyncTasks({blocking:true,full:true}));
+    assert.equal(assignmentsResolved,true,'les affectations doivent rester dans le chemin bloquant (renderOPS en dépend)');
+  } finally {window.close();}
+});
+
+test('LOT DATA-1 §3 : un échec des mouvements OPS en arrière-plan ne fait pas planter la synchro ni ne la bloque', async()=>{
+  const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
+  assert.ifError(ctx.loadError);
+  const {window,T}=ctx;
+  try{
+    T().setSession({username:'TEST',role:'dispatch',societe:'IRON',transverse:'ops',structuresAutorisees:[]});
+    window.sgdiModuleHostConfig=()=>null;
+    window.history.replaceState(null,'','#/ops/dashboard');
+    window.sgdiPullCurrentEmployees=async()=>{};
+    window.syncSitesFromPostgres=async()=>{};
+    window.syncAssignmentsFromPostgres=async()=>{};
+    window.syncOpsMovementsFromPostgres=async()=>{throw new Error('Mouvements indisponibles');};
+    // Ne doit ni rejeter ni rester bloqué malgré l'échec des mouvements — le simple fait que
+    // cette ligne s'exécute jusqu'au bout (au lieu d'un timeout ou d'un rejet non catché
+    // remontant ici) est l'assertion.
+    await assert.doesNotReject(Promise.all(T().sgdiSqlSyncTasks({blocking:true,full:true})));
+    // Laisser le .catch() interne du fire-and-forget se dérouler avant la fin du test.
+    await new Promise(r=>setTimeout(r,0));
+  } finally {window.close();}
+});
 
 test('synchronisation ciblée : les erreurs réelles restent rejetées', async()=>{
   const ctx=require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
