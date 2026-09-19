@@ -328,11 +328,32 @@ function wireSanctionsSection(employee) {
 // statique /uploads/* (app/main.py) ne revérifie pas la session : dette pré-existante côté
 // backend, hors périmètre d'un lot frontend — documentée, non contournée ni aggravée.
 // Debt : DRH-NEXT-DOC-URL-AUTH.
+// LOT 8 : enrichissement des métadonnées affichées (type, déposé par, date) + aperçu
+// image inline. AUCUN ajout de formulaire de dépôt/création : audit précis (schemas.py
+// ::DocumentCreate) — aucune route d'upload (UploadFile) n'existe pour ce modèle
+// générique (seules les routes contract-templates, différentes, en ont une). POST
+// /drh/documents attend un file_path DÉJÀ existant : proposer un champ libre pour le
+// saisir inviterait à taper un chemin arbitraire pointant potentiellement n'importe où
+// sous /uploads/, sans aucune garantie qu'un fichier réel y corresponde — fonctionnalité
+// trompeuse, non construite. Dette documentée : DRH-NEXT-DOC-UPLOAD (nécessiterait une
+// vraie route d'upload backend, hors périmètre d'un lot frontend).
+// L'aperçu/le lien "Ouvrir" réutilisent le même file_path déjà retourné par l'endpoint
+// RBAC (/drh/documents), déjà visible dans le DOM via l'ancien lien — aucune exposition
+// nouvelle. Dette déjà connue (LOT 3) sur l'authentification de ce chemin : DRH-NEXT-DOC-URL-AUTH.
+function documentPreviewHTML(d) {
+  if (!d.file_path) return "—";
+  const mime = String(d.mime_type || "");
+  if (mime.startsWith("image/")) {
+    return `<a href="${escapeHTML(d.file_path)}" target="_blank" rel="noopener"><img src="${escapeHTML(d.file_path)}" alt="${escapeHTML(d.label || "Aperçu")}" style="max-width:64px;max-height:64px;border-radius:4px;display:block"></a>`;
+  }
+  return `<a class="dn-btn" href="${escapeHTML(d.file_path)}" target="_blank" rel="noopener">Ouvrir</a>`;
+}
+
 async function sectionDocuments(e) {
   const rows = await loadData(`drh:employee:${e.id}:documents`, (signal) => api.get(`/drh/documents?owner_type=employee&owner_id=${encodeURIComponent(e.id)}`, { signal }), { ttlMs: 10000 });
   if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun document enregistré.");
-  return `<table class="dn-table"><thead><tr><th>Libellé</th><th>Fichier</th><th></th></tr></thead><tbody>
-    ${rows.map(d => `<tr><td>${escapeHTML(d.label || "—")}</td><td>${escapeHTML(d.file_name || "—")}</td><td>${d.file_path ? `<a class="dn-btn" href="${escapeHTML(d.file_path)}" target="_blank" rel="noopener">Ouvrir</a>` : "—"}</td></tr>`).join("")}
+  return `<table class="dn-table"><thead><tr><th>Libellé</th><th>Fichier</th><th>Type</th><th>Déposé par</th><th>Date</th><th></th></tr></thead><tbody>
+    ${rows.map(d => `<tr><td>${escapeHTML(d.label || "—")}</td><td>${escapeHTML(d.file_name || "—")}</td><td>${escapeHTML(d.mime_type || "—")}</td><td>${escapeHTML(d.uploaded_by || "—")}</td><td>${escapeHTML((d.created_at || "").slice(0, 10) || "—")}</td><td>${documentPreviewHTML(d)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 

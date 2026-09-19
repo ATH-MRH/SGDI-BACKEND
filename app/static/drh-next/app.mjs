@@ -16,6 +16,7 @@ import { renderContracts } from "./modules/contracts.mjs";
 import { renderAssignments } from "./modules/assignments.mjs";
 import { renderLeaves } from "./modules/leaves.mjs";
 import { renderDiscipline } from "./modules/discipline.mjs";
+import { renderDocuments } from "./modules/documents.mjs";
 
 const NAV_ITEMS = [
   { route: "dashboard", label: "Tableau de bord" },
@@ -37,7 +38,7 @@ const NAV_ITEMS = [
 // discipline=7, documents=8, dashboard=9. "attendance" et "recruitment" ne font PAS
 // partie du périmètre LOTS 3-10 de cette mission — aucun numéro de lot fictif ne leur
 // est attribué (pas de fausse promesse).
-const COMING_SOON_LOT = { attendance: null, recruitment: null, documents: 8, alerts: null };
+const COMING_SOON_LOT = { attendance: null, recruitment: null, alerts: null };
 
 function renderComingSoon(route) {
   const item = NAV_ITEMS.find(n => n.route === route);
@@ -98,6 +99,7 @@ function registerRoutes() {
   registerRoute("assignments", async () => { highlightActiveNav("assignments"); await renderAssignments(); });
   registerRoute("leaves", async () => { highlightActiveNav("leaves"); await renderLeaves(); });
   registerRoute("discipline", async () => { highlightActiveNav("discipline"); await renderDiscipline(); });
+  registerRoute("documents", async () => { highlightActiveNav("documents"); await renderDocuments(); });
   for (const route of Object.keys(COMING_SOON_LOT)) {
     registerRoute(route, async () => { highlightActiveNav(route); renderComingSoon(route); });
   }
