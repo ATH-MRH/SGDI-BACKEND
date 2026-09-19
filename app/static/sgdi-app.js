@@ -383,7 +383,6 @@ function sgdiInvalidateDrhReads(){
   sgdiSidebarReads.clear();
   window.__sgdiEnsuredAt={};
   window.SGDI_DRH_STATS_BY_SOCIETY={};
-  if(typeof _sgdiClearGetCoalesceCache==="function")_sgdiClearGetCoalesceCache();
 }
 function sgdiDrhReadContext(society){
   const token=sgdiAuthToken();
@@ -618,54 +617,12 @@ function sgdiHandleAuthFailure(message){
   if(typeof toast==="function")toast(message||"Session expirée. Veuillez vous reconnecter.","error");
   setTimeout(()=>{location.hash="#/login";route()},0);
 }
-// LOT PERFORMANCE V3 — coalescing des lectures concurrentes identiques (§15).
-// Au bootstrap, plusieurs widgets indépendants (compteurs sidebar, dashboard,
-// listes) demandaient chacun le même GET en parallèle (ex. /api/ui/sidebar-stats
-// ou /api/drh/employees appelés 2-3× avant firstReady, mesuré dans le waterfall
-// cold start V3) — jamais par malveillance, juste parce qu'aucun composant ne
-// savait qu'un autre avait déjà la même requête en vol. Ne coalesce QUE les
-// lectures (jamais une méthode mutante, jamais un appel avec un signal propre
-// — un appelant qui fournit son AbortController veut un contrôle d'annulation
-// indépendant) : deux GET identiques lancés pendant que le premier est encore
-// en vol partagent la même réponse au lieu de déclencher un second aller-retour
-// réseau. Rien n'est mis en cache au-delà de la durée de vie de la requête en
-// cours — une fois réglée (succès ou échec), l'entrée est retirée : aucune
-// donnée périmée ne peut être servie.
-// 800ms : mesuré dans le cold start V3, les doublons observés (sidebar-stats,
-// auth/me...) sont des relectures SÉQUENTIELLES rapprochées de quelques centaines
-// de ms émises par des widgets indépendants qui s'ignorent, pas des requêtes
-// concurrentes — une simple déduplication "en vol" ne les aurait pas évitées, d'où
-// cette fenêtre courte après résolution. Volontairement très inférieur aux fenêtres
-// de fraîcheur déjà existantes ailleurs (10s/60s dans sgdiEnsureEmployeesForDisplay) :
-// ceci ne remplace aucune logique métier existante, ça évite seulement le double
-// aller-retour réseau immédiat. Toute écriture (sgdiPublishDataChange) vide le cache
-// via sgdiInvalidateDrhReads ci-dessous — jamais de donnée périmée au-delà de 800ms.
-const _SGDI_GET_COALESCE_TTL_MS=800;
-const _sgdiInFlightGET=new Map();
-function _sgdiClearGetCoalesceCache(){_sgdiInFlightGET.clear()}
 async function sgdiApi(path,options){
   const opts=options||{};
   const legacy=opts.legacy!==false;
   const isForm=typeof FormData!=="undefined"&&opts.body instanceof FormData;
   const body=isForm?opts.body:(opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body);
   const url=sgdiApiUrl(path,legacy);
-  const coalesceKey=(!sgdiIsMutatingMethod(opts.method)&&!opts.body&&!opts.signal)?(legacy?"legacy:":"api:")+url:null;
-  if(coalesceKey){
-    const cached=_sgdiInFlightGET.get(coalesceKey);
-    if(cached&&(cached.expiresAt===null||cached.expiresAt>Date.now()))return cached.promise;
-  }
-  const runner=_sgdiApiRun(path,opts,legacy,url,isForm,body);
-  if(coalesceKey){
-    const entry={promise:runner,expiresAt:null};
-    _sgdiInFlightGET.set(coalesceKey,entry);
-    runner.then(
-      ()=>{entry.expiresAt=Date.now()+_SGDI_GET_COALESCE_TTL_MS},
-      ()=>{if(_sgdiInFlightGET.get(coalesceKey)===entry)_sgdiInFlightGET.delete(coalesceKey)}
-    );
-  }
-  return runner;
-}
-async function _sgdiApiRun(path,opts,legacy,url,isForm,body){
   const headers=sgdiAuthHeaders(opts.headers);
   const requestToken=sgdiAuthToken();
   if(isForm)delete headers["content-type"];
