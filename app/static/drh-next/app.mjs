@@ -10,7 +10,8 @@ import { canAccessDrh } from "./core/permissions.mjs";
 import { registerRoute, registerNotFound, startRouter, navigate, getCurrentParams } from "./core/router.mjs";
 import { escapeHTML } from "./core/ui.mjs";
 import { renderDashboard } from "./modules/dashboard.mjs";
-import { renderEmployees, renderEmployeeDetail } from "./modules/employees.mjs";
+import { renderEmployees } from "./modules/employees.mjs";
+import { renderEmployeeDossier } from "./modules/employee-dossier.mjs";
 
 const NAV_ITEMS = [
   { route: "dashboard", label: "Tableau de bord" },
@@ -80,7 +81,9 @@ function mountShell() {
 function registerRoutes() {
   registerRoute("dashboard", async () => { highlightActiveNav("dashboard"); await renderDashboard(); });
   registerRoute("employees", async () => { highlightActiveNav("employees"); await renderEmployees(); });
-  registerRoute("employees/:id", async () => { highlightActiveNav("employees"); await renderEmployeeDetail(getCurrentParams()); });
+  // LOT 3 : le Dossier 360° (employee-dossier.mjs) remplace la fiche minimale (LOT 2,
+  // renderEmployeeDetail, conservée intacte dans employees.mjs mais plus câblée ici).
+  registerRoute("employees/:id", async () => { highlightActiveNav("employees"); await renderEmployeeDossier(getCurrentParams()); });
   for (const route of Object.keys(COMING_SOON_LOT)) {
     registerRoute(route, async () => { highlightActiveNav(route); renderComingSoon(route); });
   }

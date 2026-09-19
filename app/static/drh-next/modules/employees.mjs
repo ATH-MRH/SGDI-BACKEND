@@ -175,14 +175,24 @@ function rowHTML(e) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fiche minimale (LOT 2 §11) — PAS le Dossier 360° complet (LOT 3). Un seul appel :
-// GET /api/drh/employees/{id}, jamais la liste complète transportée depuis l'écran liste.
+// Chargement partagé d'un employé par ID (LOT 3 §8 : extrait ici pour que le Dossier
+// 360° et cette fiche minimale utilisent le MÊME unique point d'appel — jamais deux
+// implémentations qui dupliqueraient la clé de cache/TTL, avec le risque qu'elles
+// divergent silencieusement. Comportement inchangé pour renderEmployeeDetail, revérifié
+// par les tests LOT 2 existants sans modification.
+export async function loadEmployeeById(id) {
+  return loadData(`drh:employee:${id}`, (signal) => api.get(`/drh/employees/${encodeURIComponent(id)}`, { signal }), { ttlMs: 10000 });
+}
+
+// Fiche minimale (LOT 2 §11) — remplacée comme écran de détail par le Dossier 360°
+// (LOT 3, modules/employee-dossier.mjs) mais conservée ici : fonction pure, toujours
+// exportée et testée indépendamment, aucune raison de la supprimer.
 export async function renderEmployeeDetail(params) {
   const id = params?.id;
   mount(VIEW_SELECTOR, `<div class="dn-page-head"><h1>Employé</h1></div><div class="dn-card dn-panel">${skeletonHTML("block")}</div>`);
   const raceCtx = captureRaceContext();
   try {
-    const employee = await loadData(`drh:employee:${id}`, (signal) => api.get(`/drh/employees/${encodeURIComponent(id)}`, { signal }), { ttlMs: 10000 });
+    const employee = await loadEmployeeById(id);
     if (!raceContextStillValid(raceCtx)) return; // navigation vers un autre employé/écran, ou session changée, pendant l'attente
     mount(VIEW_SELECTOR, employeeDetailHTML(employee));
   } catch (err) {

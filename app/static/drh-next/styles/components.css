@@ -66,6 +66,9 @@
 .dn-error-state-text { font-size: 13px; margin-bottom: 12px; }
 
 .dn-pagination { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin-top: 14px; }
-.dn-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--dn-border); margin-bottom: 16px; }
-.dn-tab { padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--dn-text-muted); cursor: pointer; border-bottom: 2px solid transparent; }
-.dn-tab.active { color: var(--dn-accent); border-color: var(--dn-accent); }
+.dn-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--dn-border); margin-bottom: 16px; flex-wrap: wrap; }
+.dn-tab {
+  padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--dn-text-muted); cursor: pointer;
+  border: none; border-bottom: 2px solid transparent; background: none; font-family: inherit;
+}
+.dn-tab.active, .dn-tab[aria-selected="true"] { color: var(--dn-accent); border-color: var(--dn-accent); }
