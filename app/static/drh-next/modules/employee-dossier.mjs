@@ -121,6 +121,7 @@ async function loadSection(employee, tabKey, sectionFn) {
     // LOT 6 : seul l'onglet Congés a une interactivité propre (demande + validation) —
     // câblée après montage, comme le tableau de bord des onglets lui-même (renderShell).
     if (tabKey === "conges") wireLeavesSection(employee);
+    if (tabKey === "discipline") wireSanctionsSection(employee);
   } catch (err) {
     if (err?.aborted) return;
     if (mySeq !== tabRequestSeq || state.activeTab !== tabKey || !raceContextStillValid(raceCtx)) return;
@@ -261,12 +262,64 @@ async function decideLeave(employee, leaveId, action) {
   }
 }
 
+// LOT 7 : discipline — lecture (LOT 3) + création.
+// Audit backend (app/modules/drh/schemas.py::SanctionBase) : AUCUN champ "status", ni
+// modèle séparé pour incident/convocation/commission/décision — un SEUL enregistrement
+// plat (date d'infraction, motif, type, jours de suspension, site, date de reprise). La
+// mission décrit un processus plus riche (incident → convocation → commission → décision
+// → sanction) qui N'EXISTE PAS dans ce schéma : le construire serait fabriquer un
+// workflow métier que le backend ne modélise pas — interdit explicitement ("changement
+// métier ambigu"). Cet onglet reste donc fidèle aux seuls champs réels : liste + création
+// d'un enregistrement de sanction, rien de plus. Pas de bouton "approuver/décider" (il
+// n'y a pas de statut à faire évoluer, contrairement aux congés au LOT 6).
+// Sensibilité (mission §12) : déjà respectée structurellement — /drh/sanctions n'est
+// JAMAIS appelé par l'annuaire (LOT 2) ni par le chargement du dossier (LOT 3) ; ce
+// paresseux par onglet, inchangé ici, est la seule protection nécessaire.
 async function sectionSanctions(e) {
   const rows = await loadData(`drh:employee:${e.id}:sanctions`, (signal) => api.get(`/drh/sanctions?employee_id=${encodeURIComponent(e.id)}`, { signal }), { ttlMs: 10000 });
-  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucune sanction enregistrée.");
-  return `<table class="dn-table"><thead><tr><th>Date</th><th>Motif</th><th>Type</th><th>Suspension (j)</th></tr></thead><tbody>
-    ${rows.map(s => `<tr><td>${escapeHTML(s.infraction_date || "—")}</td><td>${escapeHTML(s.fault || "—")}</td><td>${escapeHTML(s.sanction_type || "—")}</td><td>${escapeHTML(s.suspension_days ?? "—")}</td></tr>`).join("")}
-  </tbody></table>`;
+  const list = Array.isArray(rows) ? rows : [];
+  const table = list.length
+    ? `<table class="dn-table"><thead><tr><th>Date</th><th>Motif</th><th>Type</th><th>Suspension (j)</th><th>Site</th></tr></thead><tbody>
+        ${list.map(s => `<tr><td>${escapeHTML(s.infraction_date || "—")}</td><td>${escapeHTML(s.fault || "—")}</td><td>${escapeHTML(s.sanction_type || "—")}</td><td>${escapeHTML(s.suspension_days ?? "—")}</td><td>${escapeHTML(s.site_name || "—")}</td></tr>`).join("")}
+      </tbody></table>`
+    : emptyStateHTML("Aucune sanction enregistrée.");
+  return `${table}
+    <div style="margin-top:14px">
+      <button type="button" class="dn-btn dn-btn-primary" id="dn-sanction-new-toggle">+ Nouvelle sanction</button>
+      <form id="dn-sanction-new-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Date infraction</label><input class="dn-input" type="date" name="infraction_date" required></div>
+        <div style="flex:1;min-width:180px"><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif</label><input class="dn-input" name="fault" required></div>
+        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" name="sanction_type" required style="width:160px"></div>
+        <div><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Suspension (j)</label><input class="dn-input" type="number" min="0" name="suspension_days" style="width:110px"></div>
+        <button type="submit" class="dn-btn dn-btn-primary">Enregistrer</button>
+        <span id="dn-sanction-new-error" class="dn-error-state-text" style="margin:0"></span>
+      </form>
+    </div>`;
+}
+
+function wireSanctionsSection(employee) {
+  const toggle = document.querySelector("#dn-sanction-new-toggle");
+  const form = document.querySelector("#dn-sanction-new-form");
+  toggle?.addEventListener("click", () => { form.hidden = !form.hidden; });
+  form?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const errEl = document.querySelector("#dn-sanction-new-error");
+    if (errEl) errEl.textContent = "";
+    try {
+      await api.post("/drh/sanctions", {
+        employee_id: employee.id,
+        infraction_date: fd.get("infraction_date"),
+        fault: fd.get("fault"),
+        sanction_type: fd.get("sanction_type"),
+        suspension_days: fd.get("suspension_days") ? Number(fd.get("suspension_days")) : 0,
+      });
+      invalidate(`drh:employee:${employee.id}:sanctions`);
+      if (state.activeTab === "discipline") loadSection(employee, "discipline", sectionSanctions);
+    } catch (err) {
+      if (errEl) errEl.textContent = err?.message || "Enregistrement impossible.";
+    }
+  });
 }
 
 // Documents (LOT 3, lecture seule) : métadonnées via /drh/documents (RBAC), lien de
