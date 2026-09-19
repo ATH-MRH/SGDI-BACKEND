@@ -8244,9 +8244,19 @@ function renderView(){
     const _stillCurrent=()=>_moduleGen===sgdiViewRenderGeneration&&_moduleHash===String(location.hash||"")&&document.getElementById("view");
     view.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement du module…</div><div class="text-sm">Préparation de l'espace demandé.</div></div>`;
     if(typeof uiProgressDone==="function")uiProgressDone();
+    // Dégradation progressive (LOT durcissement §5) : 30s reste le filet technique
+    // ultime, mais ce n'est jamais l'UX normale — passé 3s, on le dit clairement
+    // et on propose une reprise manuelle plutôt que de laisser le même écran figé
+    // en silence jusqu'au seuil technique.
+    const _slowNoticeTimer=setTimeout(()=>{
+      if(!_stillCurrent())return;
+      const v=document.getElementById("view");
+      if(v)v.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Le chargement prend plus de temps que prévu…</div><div class="text-sm mb-4">Le module met plus longtemps que d'habitude à répondre.</div><button type="button" class="btn btn-secondary" onclick="renderView()">Réessayer</button></div>`;
+    },3000);
     // On sépare CHARGEMENT et INIT : si la navigation devient obsolète pendant le
     // chargement, on n'initialise PAS et on ne rend PAS le module tardif.
     _sgdiMods.loadModule(_moduleKey).then(()=>{
+      clearTimeout(_slowNoticeTimer);
       if(!_stillCurrent())return;
       return _sgdiMods.initModule(_moduleKey).then(()=>{
         if(!_stillCurrent()){
@@ -8263,7 +8273,14 @@ function renderView(){
         renderView(); // init terminé et navigation toujours courante
       });
     }).catch((err)=>{
+      clearTimeout(_slowNoticeTimer);
       if(!_stillCurrent())return;
+      // Un rejet sans .code ne vient ni du chargement du script ni de l'init
+      // (tous deux déjà classés dans module-registry.js) : c'est donc le rendu
+      // lui-même qui a jeté — classé ici pour le diagnostic (LOT durcissement §10),
+      // le message affiché à l'utilisateur reste volontairement le même simple écran.
+      const code=(err&&err.code)||"MODULE_RENDER_ERROR";
+      if(typeof SGDIModules?._onModuleLoadEvent==="function")SGDIModules._onModuleLoadEvent({key:_moduleKey,phase:"render",code,ms:0});
       const v=document.getElementById("view");
       if(v)v.innerHTML=`<div class="card p-6"><h2 class="text-lg font-black text-red-700 mb-2">Module indisponible</h2><p class="text-sm text-slate-600 mb-3">${escapeHTML(String(err&&err.message||err))}</p><button type="button" class="btn btn-primary" onclick="renderView()">Réessayer</button></div>`;
     });
