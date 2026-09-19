@@ -13,11 +13,13 @@ import { renderDashboard } from "./modules/dashboard.mjs";
 import { renderEmployees } from "./modules/employees.mjs";
 import { renderEmployeeDossier } from "./modules/employee-dossier.mjs";
 import { renderContracts } from "./modules/contracts.mjs";
+import { renderAssignments } from "./modules/assignments.mjs";
 
 const NAV_ITEMS = [
   { route: "dashboard", label: "Tableau de bord" },
   { route: "employees", label: "Employés" },
   { route: "contracts", label: "Contrats" },
+  { route: "assignments", label: "Affectations" },
   { route: "attendance", label: "Pointage" },
   { route: "leaves", label: "Congés" },
   { route: "discipline", label: "Discipline" },
@@ -90,6 +92,7 @@ function registerRoutes() {
   // renderEmployeeDetail, conservée intacte dans employees.mjs mais plus câblée ici).
   registerRoute("employees/:id", async () => { highlightActiveNav("employees"); await renderEmployeeDossier(getCurrentParams()); });
   registerRoute("contracts", async () => { highlightActiveNav("contracts"); await renderContracts(); });
+  registerRoute("assignments", async () => { highlightActiveNav("assignments"); await renderAssignments(); });
   for (const route of Object.keys(COMING_SOON_LOT)) {
     registerRoute(route, async () => { highlightActiveNav(route); renderComingSoon(route); });
   }
