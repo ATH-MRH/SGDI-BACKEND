@@ -149,14 +149,40 @@
     if (R.isModuleInitialized(key)) R.activeModuleKey = key;
   };
 
+  // 30s : même convention que le délai d'expiration réseau de sgdiApi (voir
+  // sgdi-app.js) — un ordre de grandeur "manifestement bloqué", pas une limite
+  // fine. Sans ce filet, un <script> dont ni onload ni onerror ne se déclenche
+  // jamais (connexion qui reste ouverte sans jamais aboutir ni échouer — vu en
+  // conditions réelles sur « Fiche de position ») laissait l'écran "Chargement
+  // du module..." bloqué INDÉFINIMENT : aucun code de ce fichier n'avait de
+  // filet de temps pour ce chemin, contrairement à la couche API. loadModule()
+  // gère déjà le rejet (retire loading[key], permet une nouvelle tentative) et
+  // renderView() affiche déjà un écran d'erreur avec bouton "Réessayer" sur
+  // tout rejet — ce correctif branche seulement ce chemin d'échec déjà prévu.
+  R.MODULE_LOAD_TIMEOUT_MS = 30000;
+
   // Injection réelle d'un <script>. Surcharge­able par les tests.
   R._injectScript = function (key) {
     return new Promise(function (resolve, reject) {
       var el = document.createElement("script");
       el.src = R.MODULE_BASE + key + ".js?v=" + R.MODULE_VERSION;
       el.async = true;
-      el.onload = function () { resolve(); };
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        reject(new Error("Délai de chargement dépassé pour le module « " + key + " » — vérifiez votre connexion puis réessayez."));
+      }, R.MODULE_LOAD_TIMEOUT_MS);
+      el.onload = function () {
+        if (settled) return; // arrivé après l'expiration : le rejet est déjà parti, ne rien faire de plus
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
       el.onerror = function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         reject(new Error("Échec de chargement du module « " + key + " »"));
       };
       (document.head || document.documentElement).appendChild(el);
