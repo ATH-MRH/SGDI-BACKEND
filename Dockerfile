@@ -33,6 +33,17 @@ COPY alembic.ini .
 COPY gunicorn.conf.py .
 COPY start.sh .
 
+# Placé volontairement en fin de Dockerfile : change à chaque commit, donc
+# n'invalide le cache Docker que des couches suivantes (aucune couche
+# précédente — pip install, copie de app/, contrôle JS/Python — n'est
+# reconstruite juste parce que le commit a changé). Coolify définit
+# automatiquement SOURCE_COMMIT comme build-arg pour les déploiements basés
+# sur git ; en local (docker compose build sans le passer), reste "unknown"
+# plutôt que de faire échouer le build — voir /api/version, qui ne doit
+# jamais planter faute de cette seule information de traçabilité.
+ARG SOURCE_COMMIT=unknown
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+
 RUN useradd --create-home --shell /usr/sbin/nologin sgdi \
     && chown -R sgdi:sgdi /app \
     && chmod +x /app/start.sh
