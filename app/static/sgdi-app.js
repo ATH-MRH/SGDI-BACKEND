@@ -181,6 +181,13 @@ const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
 let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:1,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null, sgdiViewRenderGeneration=0, sgdiViewRenderHash="";
+// LOT REFACTOR V1 — R1 (session/navigation race foundation). Incrémenté à chaque changement
+// d'IDENTITÉ de session (login, login admin système, logout) — jamais pour un simple
+// rafraîchissement de permissions sur la MÊME identité (sgdiRefreshSessionFromServer gère déjà
+// ce cas séparément, avec sa propre remise à zéro de db). Distinct de sgdiViewRenderGeneration
+// (navigation) : les deux dimensions sont indépendantes, une tâche peut vouloir vérifier l'une,
+// l'autre, ou les deux avant d'écrire dans l'état global — voir sgdiCaptureRaceContext ci-dessous.
+let sgdiSessionGeneration=0;
 let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null, sgdiLastKnownHref="";
 // Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
 // d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
@@ -373,6 +380,20 @@ function sgdiAuthHeaders(headers){
   return h;
 }
 function sgdiAuthToken(){return sessionStorage.getItem(SGDI_API_TOKEN_KEY)||""}
+// LOT REFACTOR V1 — R1. Mécanisme central contre les réponses appartenant à une session ou une
+// navigation obsolètes (DATA-RACE-1) : capturer AVANT un fetch, revérifier AVANT toute écriture
+// dans l'état global (db, DOM). Ne jamais comparer des chaînes de token à la main dans chaque
+// fonction — un seul point de vérité, réutilisable partout. { navigation:false } omet le contrôle
+// de navigation pour un appelant dont le résultat n'est pas lié à la route affichée.
+function sgdiCaptureRaceContext(options){
+  const opt=options||{};
+  return {sessionGen:sgdiSessionGeneration,navGen:opt.navigation===false?null:sgdiViewRenderGeneration};
+}
+function sgdiRaceContextStillValid(ctx){
+  if(!ctx||ctx.sessionGen!==sgdiSessionGeneration)return false;
+  if(ctx.navGen!==null&&ctx.navGen!==sgdiViewRenderGeneration)return false;
+  return true;
+}
 // Lectures DRH en mémoire uniquement : une écriture ou un signal distant rend
 // les requêtes précédentes obsolètes, même si leur réponse arrive plus tard.
 let sgdiDrhReadRevision=0,sgdiDrhReadToken="";
@@ -610,6 +631,7 @@ function sgdiApiErrorMessage(status,raw,out,fallback){
   return out?.error||detail||out?.message||fallback||("Erreur API "+status);
 }
 function sgdiHandleAuthFailure(message){
+  sgdiSessionGeneration+=1; // R1 : token expiré/invalide = fin d'identité, comme logout()
   sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
   sgdiPostgresReady=false;
   session=null;
@@ -3725,6 +3747,7 @@ async function startAdminSystemSession(password,username){
   window.__SGDI_BACKEND_ENABLED__=true;
   const authUser=us?.user||us;
   session={username:authUser.username||"ADG01",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),actionsAutorisees:Array.isArray(authUser.authorized_actions)?authUser.authorized_actions:[],adminSystem:true};
+  sgdiSessionGeneration+=1; // R1 : nouvelle identité de session — toute réponse capturée avant ce point devient obsolète
   saveSession(session);
   const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
   if(!loaded){
@@ -3746,6 +3769,7 @@ async function login(u,p,opt={}){
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
       session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),actionsAutorisees:Array.isArray(authUser.authorized_actions)?authUser.authorized_actions:[],supervisorReadOnly:authUser.supervisor_read_only!==false};
+      sgdiSessionGeneration+=1; // R1 : nouvelle identité de session — toute réponse capturée avant ce point devient obsolète
       if(!opt.adminSystem&&(isAdminSystemUsernameCandidate(session.username)||authUserCanOpenAdminSystem(authUser))&&isAdmin()){
         try{
           await startAdminSystemSession(p,session.username);
@@ -3879,7 +3903,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   }
 }
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;sgdiFullDataReady=false;sgdiSavedBaseline={};saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){sgdiSessionGeneration+=1/* R1 : plus de session — toute réponse encore en vol devient obsolète */;_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;sgdiFullDataReady=false;sgdiSavedBaseline={};saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
@@ -7971,6 +7995,7 @@ async function retryPostgresLoad(){
   renderPostgresRequired("Rechargement depuis PostgreSQL...");
   const ok=await sgdiPullState({silent:true,render:false,force:true,deferSql:true}).catch(()=>null);
   if(ok){route();return}
+  sgdiSessionGeneration+=1; // R1 : session considérée expirée ici aussi — même traitement que logout()
   sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
   session=null;
   saveSession(null);
@@ -8254,9 +8279,9 @@ function renderView(){
   // Une route modulaire n'est PRÊTE que si son module est chargé ET initialisé.
   // Le portillon repasse donc aussi après un init() échoué (retry) ou un destroy.
   if(view&&_sgdiMods&&_moduleKey&&_sgdiMods.routeNeedsModuleLoad(root)){
-    const _moduleGen=sgdiViewRenderGeneration;
+    const _moduleRaceCtx=sgdiCaptureRaceContext(); // R1 : centralise generation nav (déjà présente ici) + session (nouveau)
     const _moduleHash=String(location.hash||"");
-    const _stillCurrent=()=>_moduleGen===sgdiViewRenderGeneration&&_moduleHash===String(location.hash||"")&&document.getElementById("view");
+    const _stillCurrent=()=>sgdiRaceContextStillValid(_moduleRaceCtx)&&_moduleHash===String(location.hash||"")&&document.getElementById("view");
     view.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement du module…</div><div class="text-sm">Préparation de l'espace demandé.</div></div>`;
     if(typeof uiProgressDone==="function")uiProgressDone();
     // On sépare CHARGEMENT et INIT : si la navigation devient obsolète pendant le
@@ -12524,9 +12549,9 @@ async function loadEmployeeTimeline360(a){
   render(localEvents);
   if(host.dataset.alertsLoaded==="1")return; // déjà fusionné une fois : pas de second appel réseau à chaque réouverture de l'onglet
   if(typeof canAccess==="function"&&!canAccess("alerts"))return; // même droit que "Situation à traiter" (Lot 0.6-A) — aucun droit nouveau créé
-  const myGen=sgdiViewRenderGeneration;
+  const _raceCtx=sgdiCaptureRaceContext(); // R1
   const employeeRef=a.backendId||a.id;
-  const stillCurrent=()=>myGen===sgdiViewRenderGeneration&&document.getElementById("employee-timeline360-panel-"+a.id)===host;
+  const stillCurrent=()=>sgdiRaceContextStillValid(_raceCtx)&&document.getElementById("employee-timeline360-panel-"+a.id)===host;
   try{
     const page=await sgdiApi("/alerts"+alertsQueryString({employee_id:employeeRef,page_size:20}),{legacy:false});
     if(!stillCurrent())return;
@@ -12760,9 +12785,9 @@ async function loadEmployeeSituationAlerts(a){
   // accès au module Alertes ne doit pas voir cette section sur la fiche non plus.
   if(typeof canAccess==="function"&&!canAccess("alerts")){host.remove();return}
   const body=host.querySelector(".rh-erp-situation-body");
-  const myGen=sgdiViewRenderGeneration;
+  const _raceCtx=sgdiCaptureRaceContext(); // R1
   const employeeRef=a.backendId||a.id;
-  const stillCurrent=()=>myGen===sgdiViewRenderGeneration&&document.getElementById("employee-situation-panel-"+a.id)===host;
+  const stillCurrent=()=>sgdiRaceContextStillValid(_raceCtx)&&document.getElementById("employee-situation-panel-"+a.id)===host;
   try{
     const page=await sgdiApi("/alerts"+alertsQueryString({employee_id:employeeRef,status:"open",page_size:10}),{legacy:false});
     if(!stillCurrent())return;
@@ -18843,9 +18868,16 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
 
 async function syncOpsMovementsFromPostgres(society){
   if(!sgdiAuthToken()||!window.SGDI_API?.movements?.list)return false;
+  // R1 (DATA-RACE-1) : capturé AVANT le fetch, revérifié APRÈS — si la session a changé pendant
+  // que cette requête était en vol (déconnexion, reconnexion sous une autre identité), la réponse
+  // ne doit jamais atterrir dans le db d'une session qui n'est plus la sienne. Pas de contrôle de
+  // navigation ici : ces mouvements restent valides même si l'utilisateur a changé d'écran entre-
+  // temps, seule l'identité de session compte pour cette écriture.
+  const _raceCtx=sgdiCaptureRaceContext({navigation:false});
   try{
     const soc=society||currentStructureSocieteFilter()||"";
     const rows=await SGDI.movements.list(soc?{society:soc}:undefined);
+    if(!sgdiRaceContextStillValid(_raceCtx))return false;
     if(!Array.isArray(rows)||!rows.length)return false;
     if(!Array.isArray(db.opsMouvements))db.opsMouvements=[];
     let changed=false;

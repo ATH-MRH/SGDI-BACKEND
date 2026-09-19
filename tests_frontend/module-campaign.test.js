@@ -556,3 +556,40 @@ test('parcours demandé : transitions directes entre domaines répétées trois 
   assert.equal(r.timers.size, 0);
   assert.deepEqual(r.errors, []);
 });
+
+// LOT REFACTOR V1 — R1 §7 : sgdiViewRenderGeneration (réutilisée telle quelle par
+// sgdiCaptureRaceContext) doit s'incrémenter exactement sur un changement RÉEL de hash, jamais
+// sur un rendu répété de la même route — vérifié ici en conditions réelles (vrai renderView()),
+// pas seulement raisonné sur le code.
+test('R1 §7 : la génération de navigation s\'incrémente sur chaque changement réel de route, jamais deux fois sur la même route', () => {
+  const r = boot();
+  const gen = () => r.T().getRenderGeneration();
+  r.go('#/dashboard');
+  const g0 = gen();
+  r.go('#/dashboard'); // même route rejouée (ex. clic répété) : ne doit PAS bouger
+  assert.equal(gen(), g0, 'rejouer la même route ne doit pas incrémenter la génération');
+  r.go('#/sites'); // A -> B
+  assert.equal(gen(), g0 + 1, 'A -> B doit incrémenter');
+  const gB = gen();
+  r.go('#/dashboard'); // "Back" simulé (retour à une route déjà vue)
+  assert.equal(gen(), gB + 1, 'revenir à une route déjà vue reste un changement réel, doit incrémenter');
+  const gBack = gen();
+  r.go('#/sites'); // "Forward" simulé
+  assert.equal(gen(), gBack + 1, 'avancer de nouveau doit incrémenter');
+});
+
+test('R1 §7 : même écran, ID différent dans le hash (ex. fiche employé) -> la génération change', () => {
+  const r = boot();
+  const gen = () => r.T().getRenderGeneration();
+  r.go('#/effectif/agent/emp-1');
+  const g1 = gen();
+  r.go('#/effectif/agent/emp-2'); // même route "effectif/agent", ID différent
+  assert.ok(gen() > g1, 'un hash différent (même route, ID différent) doit incrémenter la génération, pas seulement la racine de route');
+});
+
+test('R1 §7 : "deep link" (première navigation depuis un état initial) incrémente aussi', () => {
+  const r = boot();
+  const before = r.T().getRenderGeneration();
+  r.go('#/fiches'); // arrivée directe, pas de navigation préalable dans ce test
+  assert.ok(r.T().getRenderGeneration() > before, 'un premier accès direct à une route doit aussi compter comme un changement de navigation');
+});

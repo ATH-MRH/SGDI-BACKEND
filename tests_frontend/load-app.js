@@ -66,6 +66,9 @@ ${exposed}
   setFormUnsaved: (v) => { sgdiFormHasUnsavedChanges = v; },
   getRenderGeneration: () => sgdiViewRenderGeneration,
   getLastRenderedPath: () => sgdiLastRenderedPath,
+  getSessionGeneration: () => sgdiSessionGeneration,
+  bumpRenderGeneration: () => { sgdiViewRenderGeneration += 1; },
+  bumpSessionGeneration: () => { sgdiSessionGeneration += 1; },
 };
 `;
 
