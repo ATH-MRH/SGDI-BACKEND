@@ -16,6 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, inspect, select, text
+from starlette.datastructures import Headers
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -85,18 +86,57 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
 
 
-@app.middleware("http")
-async def log_slow_requests(request: Request, call_next):
-    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
-    if host == "facturation.irongs.com":
-        return HTMLResponse("Not Found", status_code=404, headers={"Cache-Control": "no-store"})
-    started = time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = int((time.perf_counter() - started) * 1000)
-    response.headers["X-Process-Time-ms"] = str(elapsed_ms)
-    if elapsed_ms >= 800 and not request.url.path.startswith("/static/"):
-        logger.warning("Requête lente: %s %s -> %sms", request.method, request.url.path, elapsed_ms)
-    return response
+class SlowRequestMiddleware:
+    """Mesure le temps de traitement et journalise les requêtes lentes — ASGI pur.
+
+    Remplace l'ancien @app.middleware("http") (BaseHTTPMiddleware). Preuve par
+    reproduction isolée (LOT hotfix ASGI slow request middleware) : BaseHTTPMiddleware
+    reconstruit TOUJOURS la réponse en flux interne (queue + générateur async) avant
+    de la rendre au dispatcher, même pour une Response non-streaming à l'origine —
+    GZipMiddleware (placé plus à l'extérieur, voir ordre documenté ci-dessous) tombe
+    alors dans sa branche "streaming", qui supprime Content-Length et impose du
+    chunked. Ce middleware ASGI pur ne touche JAMAIS au body : il intercepte
+    uniquement le message http.response.start pour y ajouter l'en-tête de timing,
+    et laisse passer tout http.response.body strictement inchangé — qu'il s'agisse
+    d'une Response standard ou d'un véritable StreamingResponse, sa nature est
+    préservée telle quelle.
+    """
+
+    _SLOW_THRESHOLD_MS = 800
+
+    def __init__(self, app):
+        self._app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self._app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        host = (headers.get("host") or "").split(":")[0].strip().lower()
+        if host == "facturation.irongs.com":
+            response = HTMLResponse("Not Found", status_code=404, headers={"Cache-Control": "no-store"})
+            await response(scope, receive, send)
+            return
+
+        started = time.perf_counter()
+        path: str = scope.get("path", "")
+        method: str = scope.get("method", "")
+
+        async def timed_send(message):
+            if message["type"] == "http.response.start":
+                elapsed_ms = int((time.perf_counter() - started) * 1000)
+                response_headers = list(message.get("headers", []))
+                response_headers.append((b"x-process-time-ms", str(elapsed_ms).encode("latin-1")))
+                message = {**message, "headers": response_headers}
+                if elapsed_ms >= self._SLOW_THRESHOLD_MS and not path.startswith("/static/"):
+                    logger.warning("Requête lente: %s %s -> %sms", method, path, elapsed_ms)
+            await send(message)
+
+        await self._app(scope, receive, timed_send)
+
+
+app.add_middleware(SlowRequestMiddleware)
 
 _COLLECTION_KEEP_LAST: dict[str, int] = {"activityLog": 200, "notificationLog": 200}
 
