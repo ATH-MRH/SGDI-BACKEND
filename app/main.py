@@ -4,6 +4,7 @@ import logging
 import asyncio
 import html
 import json
+import os
 import socket
 import time
 from pathlib import Path
@@ -74,12 +75,29 @@ def serve_index_html_static():
 
 @app.get("/api/version", include_in_schema=False)
 def app_version():
+    # LOT VALIDATION PRODUCTION §1 — avant ce lot, ce endpoint ne permettait
+    # d'identifier que l'empreinte du seul sgdi-app.js, jamais le commit
+    # backend réellement déployé ni la révision Alembic réellement appliquée
+    # à CETTE base (qui peut légitimement différer de HEAD si une migration a
+    # échoué ou n'a pas encore tourné) — aucun des deux n'était vérifiable en
+    # incident. Rien de sensible : uniquement des identifiants publics de
+    # version, jamais un secret.
     js_file = STATIC_DIR / "sgdi-app.js"
     try:
-        h = hashlib.md5(js_file.read_bytes()).hexdigest()[:12]
+        frontend_version = hashlib.md5(js_file.read_bytes()).hexdigest()[:12]
     except Exception:
-        h = "unknown"
-    return {"version": h}
+        frontend_version = "unknown"
+    try:
+        with SessionLocal() as db:
+            alembic_revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar() or "unknown"
+    except Exception:
+        alembic_revision = "unknown"
+    return {
+        "version": frontend_version,  # conservé : ancien nom de champ, ne pas casser un appelant existant
+        "frontend_version": frontend_version,
+        "commit": os.environ.get("SOURCE_COMMIT", "unknown"),
+        "alembic": alembic_revision,
+    }
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
@@ -195,7 +213,16 @@ class StaticCacheMiddleware:
             return
 
         async def patched_send(message):
-            if message["type"] == "http.response.start":
+            # LOT durcissement du loader §7 : trouvé en investiguant l'incident DRH —
+            # ce middleware imposait le cache 1 an "immutable" sur TOUTE réponse
+            # /static/*, y compris un 404/5xx (vérifié : curl sur un module
+            # inexistant renvoyait déjà ce même Cache-Control). Un 404 transitoire
+            # (ex. course de déploiement où le nouveau index.html référence un
+            # module dont le fichier n'est pas encore en place) resterait alors mis
+            # en cache "immutable" un an entier côté navigateur/proxy, même une
+            # fois le fichier réellement disponible. Seules les réponses 2xx
+            # doivent porter ce cache long — une erreur ne doit jamais être figée.
+            if message["type"] == "http.response.start" and 200 <= message.get("status", 0) < 300:
                 headers = [
                     (k, v) for k, v in message.get("headers", [])
                     if k.lower() != b"cache-control"

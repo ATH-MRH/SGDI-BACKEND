@@ -1,6 +1,13 @@
 services:
   sgdi:
-    build: .
+    build:
+      context: .
+      args:
+        # Coolify passe déjà ce build-arg automatiquement pour un déploiement
+        # git ; pour un `docker compose build` local/manuel, le définir avec
+        # `SOURCE_COMMIT=$(git rev-parse HEAD) docker compose build`, sinon
+        # /api/version affichera simplement "unknown" pour ce champ.
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-unknown}
     ports:
       - "8000:8000"
     environment:

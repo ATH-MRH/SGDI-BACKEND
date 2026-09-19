@@ -159,32 +159,94 @@
   // gère déjà le rejet (retire loading[key], permet une nouvelle tentative) et
   // renderView() affiche déjà un écran d'erreur avec bouton "Réessayer" sur
   // tout rejet — ce correctif branche seulement ce chemin d'échec déjà prévu.
+  // C'est un filet ULTIME, pas l'UX normale : voir sgdi-app.js pour la
+  // dégradation progressive affichée avant ce seuil (3s / 8s).
   R.MODULE_LOAD_TIMEOUT_MS = 30000;
+
+  // Instrumentation légère, DEV UNIQUEMENT — no-op par défaut, donc aucun bruit
+  // en production tant que rien ne l'active explicitement (à la console :
+  // SGDIModules.DEBUG_LOG = true). Jamais de donnée sensible : uniquement clé
+  // de module, URL publique, timestamps et code d'erreur.
+  R.DEBUG_LOG = false;
+  R._onModuleLoadEvent = function (event) {
+    if (!R.DEBUG_LOG) return;
+    try { console.debug("[SGDIModules]", event.key, event.phase, event.code || "", event.ms + "ms"); } catch (e) {}
+  };
+
+  // Codes d'erreur stables (section 10) — l'UI reste simple ("Module
+  // indisponible" + Réessayer), mais err.code permet de savoir, en log, LAQUELLE
+  // des étapes a échoué sans avoir à deviner depuis un message en français.
+  R.ERROR_CODES = {
+    SCRIPT_TIMEOUT: "MODULE_SCRIPT_TIMEOUT",
+    SCRIPT_404: "MODULE_SCRIPT_404",
+    SCRIPT_ERROR: "MODULE_SCRIPT_ERROR",
+    NOT_REGISTERED: "MODULE_NOT_REGISTERED",
+    INIT_ERROR: "MODULE_INIT_ERROR",
+  };
 
   // Injection réelle d'un <script>. Surcharge­able par les tests.
   R._injectScript = function (key) {
+    var url = R.MODULE_BASE + key + ".js?v=" + R.MODULE_VERSION;
+    var startedAt = Date.now();
     return new Promise(function (resolve, reject) {
       var el = document.createElement("script");
-      el.src = R.MODULE_BASE + key + ".js?v=" + R.MODULE_VERSION;
+      el.src = url;
       el.async = true;
       var settled = false;
+
+      function cleanupEl() {
+        // Retire le <script> en échec du DOM (§6) : un retry en injecte un NEUF,
+        // jamais deux scripts concurrents pour la même clé qui traînent en <head>.
+        try { if (el.parentNode) el.parentNode.removeChild(el); } catch (e) {}
+      }
+
       var timer = setTimeout(function () {
         if (settled) return;
-        settled = true;
-        reject(new Error("Délai de chargement dépassé pour le module « " + key + " » — vérifiez votre connexion puis réessayez."));
+        settled = true; // bloque un onerror/onload tardif AVANT toute étape async
+        cleanupEl();
+        var err = new Error("Délai de chargement dépassé pour le module « " + key + " » — vérifiez votre connexion puis réessayez.");
+        err.code = R.ERROR_CODES.SCRIPT_TIMEOUT;
+        R._onModuleLoadEvent({ key: key, url: url, phase: "script", code: err.code, ms: Date.now() - startedAt });
+        reject(err);
       }, R.MODULE_LOAD_TIMEOUT_MS);
+
       el.onload = function () {
         if (settled) return; // arrivé après l'expiration : le rejet est déjà parti, ne rien faire de plus
         settled = true;
         clearTimeout(timer);
+        R._onModuleLoadEvent({ key: key, url: url, phase: "script", code: "OK", ms: Date.now() - startedAt });
         resolve();
       };
+
       el.onerror = function () {
         if (settled) return;
-        settled = true;
+        settled = true; // verrouillé ICI, avant la sonde async, pour ne jamais courir avec le timer
         clearTimeout(timer);
-        reject(new Error("Échec de chargement du module « " + key + " »"));
+        cleanupEl();
+        // Un <script src> ne donne jamais le vrai code HTTP via onerror (limite du
+        // navigateur, pas de ce code) — une sonde HEAD légère et bornée (3s, best-
+        // effort) permet de distinguer un vrai 404 (build incohérent) d'un échec
+        // réseau générique, UNIQUEMENT sur ce chemin d'échec déjà en cours — aucun
+        // coût sur le chemin normal, qui ne passe jamais ici.
+        var probeCtrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+        var probeTimer = probeCtrl ? setTimeout(function () { probeCtrl.abort(); }, 3000) : null;
+        var probe = (typeof fetch === "function")
+          ? fetch(url, { method: "HEAD", cache: "no-store", signal: probeCtrl ? probeCtrl.signal : undefined })
+            .then(function (r) { return r.status; }).catch(function () { return null; })
+          : Promise.resolve(null);
+        probe.then(function (status) {
+          if (probeTimer) clearTimeout(probeTimer);
+          var is404 = status === 404;
+          var err = new Error(is404
+            ? "Module « " + key + " » introuvable (404) — build front/serveur probablement incohérent."
+            : "Échec de chargement du module « " + key + " ».");
+          err.code = is404 ? R.ERROR_CODES.SCRIPT_404 : R.ERROR_CODES.SCRIPT_ERROR;
+          err.httpStatus = status;
+          R._onModuleLoadEvent({ key: key, url: url, phase: "script", code: err.code, ms: Date.now() - startedAt });
+          reject(err);
+        });
       };
+
       (document.head || document.documentElement).appendChild(el);
     });
   };
@@ -201,16 +263,23 @@
     if (registry[key]) {
       return loadDependencies(registry[key]).then(function () { return registry[key]; });
     }
-    // Chargement concurrent : on renvoie la MÊME promesse.
+    // Chargement concurrent : on renvoie la MÊME promesse (jamais deux <script>
+    // pour la même clé en vol en même temps — couvre aussi le double-clic/double
+    // navigation pendant un chargement, voir tests_frontend/module-races.test.js).
     if (loading[key]) return loading[key];
 
+    var loadStartedAt = Date.now();
     var p = Promise.resolve()
       .then(function () { return R._injectScript(key); })
       .then(function () {
         var mod = registry[key];
         if (!mod) {
-          throw new Error("Le module « " + key + " » ne s'est pas enregistré après chargement");
+          var err = new Error("Le module « " + key + " » ne s'est pas enregistré après chargement");
+          err.code = R.ERROR_CODES.NOT_REGISTERED;
+          R._onModuleLoadEvent({ key: key, phase: "register", code: err.code, ms: Date.now() - loadStartedAt });
+          throw err;
         }
+        R._onModuleLoadEvent({ key: key, phase: "register", code: "OK", ms: Date.now() - loadStartedAt });
         return loadDependencies(mod).then(function () { return mod; });
       })
       .then(function (mod) {
@@ -234,15 +303,22 @@
     if (!mod) return Promise.reject(new Error("SGDIModules.initModule: module inconnu « " + key + " »"));
     if (mod.initialized) return Promise.resolve(mod);
     if (mod.initPromise) return mod.initPromise;
+    var initStartedAt = Date.now();
     mod.initPromise = Promise.resolve().then(function () {
       return mod.init();
     }).then(function () {
       mod.initialized = true;
       mod.initPromise = null;
+      R._onModuleLoadEvent({ key: key, phase: "init", code: "OK", ms: Date.now() - initStartedAt });
       return mod;
     }, function (err) {
       mod.initialized = false;
       mod.initPromise = null;
+      if (!err || !err.code) {
+        err = err instanceof Error ? err : new Error(String(err));
+        err.code = R.ERROR_CODES.INIT_ERROR;
+      }
+      R._onModuleLoadEvent({ key: key, phase: "init", code: err.code, ms: Date.now() - initStartedAt });
       throw err;
     });
     return mod.initPromise;
