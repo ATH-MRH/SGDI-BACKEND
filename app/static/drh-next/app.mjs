@@ -24,9 +24,10 @@ const NAV_ITEMS = [
   { route: "alerts", label: "Alertes" },
 ];
 
-// LOT 1 : seuls dashboard et employees sont de vrais modules. Le reste est un
-// squelette de route explicite ("arrive au LOT n") — §24 documente le
-// calendrier réel, on ne fait jamais semblant qu'un écran existe déjà.
+// LOT 2 : dashboard (LOT 1) et employees (liste paginée + fiche minimale, LOT 2) sont
+// désormais de vrais modules. Le reste est un squelette de route explicite ("arrive au
+// LOT n") — §24 (LOT 1) documente le calendrier réel, on ne fait jamais semblant qu'un
+// écran existe déjà.
 const COMING_SOON_LOT = { contracts: 4, attendance: 8, leaves: 5, discipline: 6, recruitment: 7, documents: 9, alerts: 10 };
 
 function renderComingSoon(route) {
@@ -68,6 +69,12 @@ function mountShell() {
   document.querySelector("#dn-sidebar-toggle")?.addEventListener("click", () => {
     document.querySelector("#dn-app")?.classList.toggle("dn-sidebar-open");
   });
+  // LOT 2 (trouvé en testant la navigation mobile réelle) : sans ça, choisir un écran dans
+  // le menu mobile laissait le menu ouvert par-dessus le contenu fraîchement affiché — le
+  // clic doit fermer le menu, pas seulement changer d'écran derrière lui.
+  document.querySelectorAll(".dn-nav-link").forEach(a => a.addEventListener("click", () => {
+    document.querySelector("#dn-app")?.classList.remove("dn-sidebar-open");
+  }));
 }
 
 function registerRoutes() {

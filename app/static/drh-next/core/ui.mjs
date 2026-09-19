@@ -13,7 +13,33 @@ export function skeletonHTML(kind = "cards") {
       ${Array.from({ length: 4 }).map(() => '<div class="dn-skeleton dn-skeleton-card"></div>').join("")}
     </div>`;
   }
+  if (kind === "table") {
+    return `<div aria-busy="true" aria-label="Chargement">
+      ${Array.from({ length: 8 }).map(() => '<div class="dn-skeleton" style="height:40px;margin-bottom:6px"></div>').join("")}
+    </div>`;
+  }
   return `<div class="dn-skeleton dn-skeleton-block" aria-busy="true" aria-label="Chargement"></div>`;
+}
+
+// LOT 2 — pagination réutilisable (Employés, puis tout écran paginé futur). Toujours
+// server-driven : ce composant ne fait qu'afficher page/pages et notifier via
+// onPageAttr, jamais de logique de découpage local d'une liste déjà en mémoire.
+export function paginationHTML(page, pages, total, onPageAttrPrefix) {
+  if (pages <= 1) return "";
+  const prevDisabled = page <= 1 ? "disabled" : "";
+  const nextDisabled = page >= pages ? "disabled" : "";
+  return `<div class="dn-pagination">
+    <span class="dn-error-state-text" style="margin:0 8px 0 0">${total} résultat(s) · page ${page}/${pages}</span>
+    <button type="button" class="dn-btn" ${prevDisabled} ${onPageAttrPrefix}="${page - 1}">← Précédent</button>
+    <button type="button" class="dn-btn" ${nextDisabled} ${onPageAttrPrefix}="${page + 1}">Suivant →</button>
+  </div>`;
+}
+
+// Pas de photo distante disponible dans le schéma employé actuel (audité LOT 2 §9) —
+// avatar par initiales uniquement, zéro requête supplémentaire par ligne.
+export function initialsAvatarHTML(firstName, lastName) {
+  const initials = ((firstName || "")[0] || "") + ((lastName || "")[0] || "");
+  return `<div class="dn-avatar" aria-hidden="true">${escapeHTML(initials.toUpperCase() || "?")}</div>`;
 }
 
 /**
