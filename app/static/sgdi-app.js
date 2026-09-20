@@ -8591,47 +8591,74 @@ function renderDashboard(view){
   const filter=mySoc()||sessionStorage.getItem("dashSociete")||"";
   const lockSoc=!!mySoc();
   const matchSoc=a=>!filter||a.societe===filter;
+  // PERF P1 (DRH) : cette fonction elle-même ne provoque plus AUCUN chargement de la
+  // collection complète employés (aucun appel à sgdiEnsureEmployeesForDisplay ni équivalent
+  // ci-dessous). Elle consomme en priorité l'agrégat déjà calculé côté serveur pour la
+  // sidebar (window.SGDI_SIDEBAR_STATS -> erp.employees, même source déjà utilisée ailleurs
+  // dans ce fichier) et ne lit db.agents qu'en repli local SI déjà présent (un autre écran
+  // l'a chargé pendant cette session) — jamais pour en forcer le chargement elle-même.
+  // Important — périmètre exact de ce correctif (voir rapport de mission) : le chargement
+  // bloquant employés déclenché ailleurs au bootstrap (décision délibérée et déjà testée,
+  // commit 3a1dc46 : "Employés reste dans le chemin bloquant") N'A PAS été retiré — ce
+  // serait risqué sans d'abord vérifier que chaque écran qui en dépend tolère une collection
+  // vide, comme cette fonction le fait désormais. Un GET /api/drh/employees complet PEUT donc
+  // toujours survenir avant l'affichage de ce tableau de bord, mais plus À CAUSE de cette
+  // fonction, et ses chiffres restent corrects même si ce chargement n'est pas encore arrivé.
+  const rawSrv=window.SGDI_SIDEBAR_STATS;
+  const srvSoc=String(rawSrv?.scope?.active_society||"").trim();
+  const srv=rawSrv&&(!filter||normalizeSocieteName(srvSoc)===normalizeSocieteName(filter))?rawSrv:null;
+  const srvEmp=srv?.erp?.employees||null;
+  const localAgentsKnown=Array.isArray(db.agents)&&db.agents.length>0;
   const agentsSoc=(db.agents||[]).filter(matchSoc);
-  const agentsActifs=agentsSoc.filter(a=>a.statut==="actif");
-  const enConge=db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)));
-  const enMaladie=db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)));
-  const absents=db.agents.filter(a=>a.statut==="absent"&&matchSoc(a));
-  const suspendus=db.agents.filter(a=>a.statut==="suspendu"&&matchSoc(a));
+  const agentsActifsCount=srvEmp?counterNumericValue(srvEmp.active):(localAgentsKnown?agentsSoc.filter(a=>a.statut==="actif").length:null);
+  const agentsTotalCount=srvEmp?counterNumericValue(srvEmp.total):(localAgentsKnown?agentsSoc.length:null);
+  const enCongeCount=srvEmp?counterNumericValue(srvEmp.leave_current):(localAgentsKnown?db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length:null);
+  const enMaladieCount=srvEmp?counterNumericValue(srvEmp.sick_leave_current):(localAgentsKnown?db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length:null);
+  const absentsCount=srvEmp?counterNumericValue(srvEmp.absent):(localAgentsKnown?db.agents.filter(a=>a.statut==="absent"&&matchSoc(a)).length:null);
+  // nbCongesPending/nbIncidentsOpen : ne dépendent jamais de db.agents (db.conges/db.incidents
+  // arrivent par le snapshot léger, pas par /api/drh/employees) — inchangés.
   const nbIncidentsOpen=(db.incidents||[]).filter(i=>i.statut==="en_cours").length;
   const nbCongesPending=(db.conges||[]).filter(c=>c.statut==="en_attente").length;
-  const nbFinEssai30=db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&daysBetween(today(),a.dateFinEssai)<=90).length;
-  const nbSansPortailEssai=db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&!agentHasPortailAccount(a)).length;
-  const finContrats30=agentsSoc.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90});
+  // Ci-dessous : aucun agrégat serveur équivalent aujourd'hui (dérivation multi-source pour
+  // les contrats — champ direct, calcul recrutement+durée, ou dernier db.contrats/
+  // contratsPersonnel — et panneau multi-société). Reproduire ces règles côté serveur sans
+  // erreur exige une étape dédiée (voir rapport de mission). En attendant : lecture
+  // opportuniste de db.agents SI déjà présent localement (jamais de fetch déclenché ici) ;
+  // sinon état "en attente" explicite (jamais un 0 qui laisserait croire "aucune alerte").
+  const nbFinEssai30=localAgentsKnown?db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&daysBetween(today(),a.dateFinEssai)<=90).length:null;
+  const nbSansPortailEssai=localAgentsKnown?db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&!agentHasPortailAccount(a)).length:null;
+  const finContrats30=localAgentsKnown?agentsSoc.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90}):null;
   const clientsAlerte=(db.clients||[]).filter(c=>(!filter||c.societe===filter)&&c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<=30);
   const stockKpi=typeof stockSummaryKPI==="function"?stockSummaryKPI():{enRupture:0,enAlerte:0,totalArticles:(db.stockArticles||[]).length,totalValeur:0};
   const fpToday=(db.feuillePresence||[]).filter(f=>f.date===today()&&(!filter||f.societe===filter));
   const fpPointes=fpToday.filter(f=>f.heureArrivee).length;
   const fpRate=fpToday.length?Math.round(fpPointes*100/fpToday.length):0;
-  const socRows=SOCIETES.map(s=>{
+  const socRows=localAgentsKnown?SOCIETES.map(s=>{
     const ag=(db.agents||[]).filter(a=>a.societe===s);
     const act=ag.filter(a=>a.statut==="actif").length;
     const cand=(db.candidats||[]).filter(c=>c.societe===s&&candidatIsActive(c)).length;
     const pct=ag.length?Math.round(act*100/ag.length):0;
     return{s,ag:ag.length,act,cand,pct};
-  });
+  }):null;
   const recent=[...(db.echanges||[]).map(x=>({date:x.date,title:x.sujet||"Fil d'actualité",text:x.message||"",route:""})),...(db.incidents||[]).map(x=>({date:x.date||x.createdAt,title:"Evènement",text:x.titre||x.description||"",route:"incidents"})),...(db.conges||[]).map(x=>({date:x.createdAt||x.du,title:"Congé",text:x.type||x.statut||"",route:"conges"}))].filter(x=>x.date).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,7);
   const alerts=[
     {n:nbIncidentsOpen,title:"Evènements en cours",text:"Main courante et incidents ouverts",route:"incidents",type:nbIncidentsOpen?"danger":"info"},
     {n:nbCongesPending,title:"Congés en attente",text:"Demandes à valider ou refuser",route:"conges",type:nbCongesPending?"warn":"info"},
     {n:nbFinEssai30,title:"Fin période d'essai",text:"Échéances dans les 90 jours",route:"drh/essai",type:nbFinEssai30?"warn":"info"},
     {n:nbSansPortailEssai,title:"Essai sans compte portail",text:"Employés en essai sans accès portail RH",route:"drh/essai",type:nbSansPortailEssai?"warn":"info"},
-    {n:finContrats30.length,title:"Fin contrats personnel",text:"Contrats à renouveler ou clôturer",route:"effectif/actifs",type:finContrats30.length?"danger":"info"},
+    {n:finContrats30?finContrats30.length:null,title:"Fin contrats personnel",text:"Contrats à renouveler ou clôturer",route:"effectif/actifs",type:finContrats30&&finContrats30.length?"danger":"info"},
     {n:clientsAlerte.length,title:"Fin contrats clients",text:"Alertes commerciales à 30 jours",route:"commercial/clients",type:clientsAlerte.length?"warn":"info"},
     {n:(stockKpi.enRupture||0)+(stockKpi.enAlerte||0),title:"Stock critique",text:"Rupture ou stock bas",route:"materiel/articles",type:((stockKpi.enRupture||0)+(stockKpi.enAlerte||0))?"danger":"info"}
   ];
+  const fmt=n=>n===null||n===undefined?"…":n;
   view.innerHTML=`<div class="dash-shell">
     <section class="dash-kpi-grid">
-      ${dashboardKpi("Effectif actif",agentsActifs.length,`${agentsSoc.length} total`,"effectif/actifs","ok")}
+      ${dashboardKpi("Effectif actif",fmt(agentsActifsCount),`${fmt(agentsTotalCount)} total`,"effectif/actifs","ok")}
       ${dashboardKpi("Pointage du jour",fpRate+"%",`${fpPointes}/${fpToday.length||0} lignes`,"pointage/feuille",fpRate<80&&fpToday.length?"warn":"ok")}
-      ${dashboardKpi("Absence / maladie",absents.length+enMaladie.length,`${absents.length} absence · ${enMaladie.length} maladie`,"effectif/absents",(absents.length+enMaladie.length)?"danger":"ok")}
-      ${dashboardKpi("Congés",enConge.length,`${nbCongesPending} en attente`,"conges",nbCongesPending?"warn":"ok")}
+      ${dashboardKpi("Absence / maladie",(absentsCount===null||enMaladieCount===null)?"…":absentsCount+enMaladieCount,`${fmt(absentsCount)} absence · ${fmt(enMaladieCount)} maladie`,"effectif/absents",(absentsCount||enMaladieCount)?"danger":"ok")}
+      ${dashboardKpi("Congés",fmt(enCongeCount),`${nbCongesPending} en attente`,"conges",nbCongesPending?"warn":"ok")}
       ${dashboardKpi("Stock critique",(stockKpi.enRupture||0)+(stockKpi.enAlerte||0),`${stockKpi.totalArticles||0} articles`,"materiel/articles",((stockKpi.enRupture||0)+(stockKpi.enAlerte||0))?"danger":"ok")}
-      ${dashboardKpi("Contrats à suivre",finContrats30.length+clientsAlerte.length,`${finContrats30.length} RH · ${clientsAlerte.length} clients`,"commercial/clients",(finContrats30.length+clientsAlerte.length)?"warn":"ok")}
+      ${dashboardKpi("Contrats à suivre",finContrats30===null?"…":finContrats30.length+clientsAlerte.length,`${fmt(finContrats30&&finContrats30.length)} RH · ${clientsAlerte.length} clients`,"commercial/clients",((finContrats30&&finContrats30.length)||clientsAlerte.length)?"warn":"ok")}
     </section>
 
     <section class="dash-panel">
@@ -8643,7 +8670,7 @@ function renderDashboard(view){
       <div class="dash-panel">
         <div class="dash-panel-head"><div class="dash-panel-title">Situation par société</div><span class="text-xs text-slate-500">${filter?"Filtré":"Vue globale"}</span></div>
         <div class="dash-panel-body">
-          <div class="dash-mini-list">${socRows.map(r=>`<button class="dash-mini-row text-left w-full" onclick="setDashSociete('${escapeHTML(r.s)}')" data-searchable>
+          <div class="dash-mini-list">${socRows===null?`<div class="p-4 text-sm text-slate-400">Répartition par société en attente (consultez l'Effectif pour la charger).</div>`:socRows.map(r=>`<button class="dash-mini-row text-left w-full" onclick="setDashSociete('${escapeHTML(r.s)}')" data-searchable>
             <div style="min-width:180px"><div class="font-bold text-sm">${escapeHTML(r.s)}</div><div class="text-[11px] text-slate-500">${r.act}/${r.ag} actifs · ${r.cand} candidats</div></div>
             <div class="flex-1"><div class="dash-bar"><span style="width:${r.pct}%"></span></div></div>
             <div class="font-black text-sm">${r.pct}%</div>
@@ -8651,11 +8678,11 @@ function renderDashboard(view){
         </div>
       </div>
       <div class="dash-panel">
-        <div class="dash-panel-head"><div class="dash-panel-title">Centre d'alertes</div><span class="pill ${alerts.some(a=>a.n)?"pill-red":"pill-green"}">${alerts.reduce((s,a)=>s+a.n,0)}</span></div>
+        <div class="dash-panel-head"><div class="dash-panel-title">Centre d'alertes</div><span class="pill ${alerts.some(a=>a.n)?"pill-red":"pill-green"}">${alerts.reduce((s,a)=>s+(a.n||0),0)}</span></div>
         <div class="dash-panel-body"><div class="dash-mini-list">
           ${alerts.map(a=>`<button class="dash-alert ${a.type}" onclick="navigate('${a.route}')" data-searchable>
             <div><div class="dash-alert-title">${escapeHTML(a.title)}</div><div class="dash-alert-text">${escapeHTML(a.text)}</div></div>
-            <span class="pill ${a.type==="danger"?"pill-red":a.type==="warn"?"pill-amber":"pill-blue"}">${a.n}</span>
+            <span class="pill ${a.type==="danger"?"pill-red":a.type==="warn"?"pill-amber":"pill-blue"}">${a.n===null?"…":a.n}</span>
           </button>`).join("")}
         </div></div>
       </div>
