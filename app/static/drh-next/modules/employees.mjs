@@ -33,6 +33,7 @@ import { loadData, invalidate } from "../core/data-loader.mjs";
 import { captureRaceContext, raceContextStillValid } from "../core/race-guard.mjs";
 import { skeletonHTML, errorStateHTML, emptyStateHTML, paginationHTML, initialsAvatarHTML, mount, escapeHTML } from "../core/ui.mjs";
 import { navigate } from "../core/router.mjs";
+import { getSessionGeneration } from "../core/session.mjs";
 
 const VIEW_SELECTOR = "#dn-view";
 const DEFAULT_PAGE_SIZE = 50;
@@ -40,8 +41,15 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 // État LOCAL à cet écran uniquement (pas un state global façon db={}) : la page/recherche/
 // mode courants, pour reconstruire la vue après une action (page suivante, changement de
-// filtre) sans perdre le contexte. Réinitialisé à chaque entrée sur l'écran.
-let state = { page: 1, pageSize: DEFAULT_PAGE_SIZE, q: "", mode: "actifs" };
+// filtre) sans perdre le contexte.
+// LOT 12 (finalisation, §18) — dette DRH-NEXT-LIST-STATE fermée : préservé (plus jamais
+// réinitialisé inconditionnellement à chaque entrée sur l'écran) pour que "ouvrir un
+// employé -> Retour" restaure page/recherche/mode. Solution volontairement minimale : pas
+// de nouveau store, juste ce même objet local qui survit déjà entre les appels tant que le
+// module reste chargé (aucun code supplémentaire nécessaire pour ça). Seule garde ajoutée :
+// un changement de SESSION (logout/login) réinitialise explicitement, pour ne jamais laisser
+// une recherche tapée par un compte apparaître comme état de départ pour un autre.
+let state = { page: 1, pageSize: DEFAULT_PAGE_SIZE, q: "", mode: "actifs", sessionGen: getSessionGeneration() };
 let searchDebounceTimer = null;
 // Protection course recherche/pagination (LOT 2 §13) : changer de page ou de recherche NE
 // change PAS la route (#/employees reste #/employees), donc navigationGeneration ne bouge
@@ -57,7 +65,9 @@ function employeesListKey() {
 export function invalidateEmployeesList() { invalidate(/^drh:employees:/); }
 
 export async function renderEmployees() {
-  state = { page: 1, pageSize: DEFAULT_PAGE_SIZE, q: "", mode: "actifs" };
+  if (state.sessionGen !== getSessionGeneration()) {
+    state = { page: 1, pageSize: DEFAULT_PAGE_SIZE, q: "", mode: "actifs", sessionGen: getSessionGeneration() };
+  }
   mount(VIEW_SELECTOR, employeesShellHTML());
   // Trouvé pendant la revue LOT 2 : câbler les contrôles APRÈS le premier chargement les
   // rendait inertes tant que celui-ci n'était pas terminé (recherche/filtre injoignables si
@@ -94,6 +104,7 @@ function wireStaticControls() {
     }, SEARCH_DEBOUNCE_MS);
   });
   const mode = document.querySelector("#dn-emp-mode");
+  if (mode) mode.value = state.mode; // reflète l'état préservé (LOT 12 §18), pas toujours "actifs"
   mode?.addEventListener("change", () => {
     state.mode = mode.value;
     state.page = 1;
@@ -223,3 +234,10 @@ function employeeDetailHTML(e) {
     <table class="dn-table">${rows.map(([label, value]) => `<tr><th style="width:220px">${escapeHTML(label)}</th><td>${escapeHTML(value || "—")}</td></tr>`).join("")}</table>
   </div>`;
 }
+
+// Réservé aux tests — même remarque que les autres modules (core/session.js) : ce module
+// est un singleton réel en exécution normale (state module-local, jamais réinitialisé
+// entre deux appels de renderEmployees() depuis le LOT 12 §18 — voir plus haut). En
+// environnement de test, freshEnv() (dom-env.mjs) l'appelle pour éviter qu'un test
+// contamine le suivant avec une recherche/page laissée par le test précédent.
+export function _resetForTests() { state = { page: 1, pageSize: DEFAULT_PAGE_SIZE, q: "", mode: "actifs", sessionGen: getSessionGeneration() }; listRequestSeq = 0; currentListPromise = null; }

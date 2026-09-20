@@ -291,3 +291,41 @@ test("changement de filtre (mode) revient en page 1", async () => {
   assert.equal(url.searchParams.get("page"), "1");
   assert.equal(url.searchParams.get("mode"), "reserve");
 });
+
+// ── LOT 12 §18 : préservation d'état Employés (page/recherche/mode) ──────────
+import { renderEmployees, renderEmployeeDetail, _resetForTests as resetEmployeesState2 } from "../../app/static/drh-next/modules/employees.mjs";
+
+test("Employés : page/recherche/mode sont préservés après ouverture d'un détail puis retour à la liste", async () => {
+  const { window } = setup();
+  resetEmployeesState2();
+  window.fetch = async () => jsonResp({ items: [{ id: 1, code: "E0001", first_name: "A", last_name: "B" }], page: 1, pages: 3, total: 120 });
+  await renderEmployees();
+  document.querySelector("#dn-emp-search").value = "dupont";
+  document.querySelector("#dn-emp-search").dispatchEvent(new window.Event("input"));
+  await new Promise(r => setTimeout(r, 350));
+  document.querySelector("#dn-emp-mode").value = "tous";
+  document.querySelector("#dn-emp-mode").dispatchEvent(new window.Event("change"));
+  await tick();
+  // "ouvrir le détail" : on quitte simplement l'écran liste sans jamais toucher au module
+  await renderEmployeeDetail({ id: "1" });
+  // "retour à la liste" : nouvel appel à renderEmployees(), comme le ferait un clic sur
+  // "Retour" ou le bouton précédent du navigateur (même route, même écran)
+  await renderEmployees();
+  assert.equal(document.querySelector("#dn-emp-search").value, "dupont", "recherche préservée");
+  assert.equal(document.querySelector("#dn-emp-mode").value, "tous", "filtre préservé");
+});
+
+test("Employés : le changement de session réinitialise l'état (pas de recherche d'un autre compte affichée)", async () => {
+  const { window } = setup();
+  resetEmployeesState2();
+  window.fetch = async () => jsonResp({ items: [], page: 1, pages: 1, total: 0 });
+  await renderEmployees();
+  document.querySelector("#dn-emp-search").value = "recherche-de-A";
+  document.querySelector("#dn-emp-search").dispatchEvent(new window.Event("input"));
+  await new Promise(r => setTimeout(r, 350));
+  const { clearSession, setUser: setUserB } = await import("../../app/static/drh-next/core/session.mjs");
+  clearSession();
+  setUserB({ username: "autre", authorizedSocieties: ["SOCIETE B"] });
+  await renderEmployees();
+  assert.equal(document.querySelector("#dn-emp-search").value, "", "aucune recherche de l'ancien compte visible pour le nouveau");
+});

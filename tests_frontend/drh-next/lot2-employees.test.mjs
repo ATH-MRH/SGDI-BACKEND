@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { freshEnv, tick } from "./dom-env.mjs";
 import { setUser, clearSession } from "../../app/static/drh-next/core/session.mjs";
 import * as router from "../../app/static/drh-next/core/router.mjs";
-import { renderEmployees, renderEmployeeDetail } from "../../app/static/drh-next/modules/employees.mjs";
+import { renderEmployees, renderEmployeeDetail, _resetForTests as resetEmployeesState } from "../../app/static/drh-next/modules/employees.mjs";
 import { loadData, _resetForTests as resetLoader } from "../../app/static/drh-next/core/data-loader.mjs";
 
 function employee(id, overrides = {}) {
@@ -24,6 +24,10 @@ function setup() {
   const { window } = freshEnv();
   setUser({ username: "rh", authorizedSocieties: ["SOCIETE A"] });
   document.body.innerHTML = '<div id="dn-view"></div>';
+  // LOT 12 §18 : employees.mjs ne réinitialise plus son état à chaque appel de
+  // renderEmployees() (préservation page/recherche/mode voulue) — isolation entre tests
+  // désormais explicite ici, comme pour les autres modules à état (dossier, etc.).
+  resetEmployeesState();
   return { window };
 }
 

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { freshEnv, tick } from "./dom-env.mjs";
 import { setUser } from "../../app/static/drh-next/core/session.mjs";
 import * as router from "../../app/static/drh-next/core/router.mjs";
-import { renderEmployees } from "../../app/static/drh-next/modules/employees.mjs";
+import { renderEmployees, _resetForTests as resetEmployeesState } from "../../app/static/drh-next/modules/employees.mjs";
 import { renderEmployeeDossier, _resetForTests as resetDossier } from "../../app/static/drh-next/modules/employee-dossier.mjs";
 import { renderContracts } from "../../app/static/drh-next/modules/contracts.mjs";
 import { renderAssignments } from "../../app/static/drh-next/modules/assignments.mjs";
@@ -24,6 +24,7 @@ function setup() {
   document.body.innerHTML = '<div id="dn-view"></div>';
   resetLoader();
   resetDossier();
+  resetEmployeesState();
   return { window };
 }
 
