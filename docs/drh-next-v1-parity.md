@@ -8,19 +8,19 @@ Légende statut : **PARITÉ** · **NEXT SUPÉRIEUR** · **MANQUANT** (à constru
 **BACKEND MANQUANT** (aucune source canonique typée) · **VOLONTAIREMENT ABANDONNÉ** ·
 **À CORRIGER**. Priorité : **P0** sécurité/données · **P1** métier indispensable · **P2** utile · **P3** confort.
 
-| # | Fonction | Legacy | Next (avant LOT 11B) | Backend canonique | Statut | Priorité |
+| # | Fonction | Legacy | Next | Backend canonique | Statut | Priorité |
 |---|---|---|---|---|---|---|
 | 1 | Dashboard | `renderGlobalDashboard`, `renderDashboard` | `dashboard.mjs` (LOT 1/9) | `GET /drh/dashboard` (agrégats serveur) | **NEXT SUPÉRIEUR** (Next affiche la répartition complète déjà reçue, jamais exploitée par Legacy sous cette forme ; charge ~200× moins de données, voir rapport LOT 1) | — |
 | 2 | Employés (liste) | rendu depuis `db.agents` complet en mémoire | `employees.mjs` (LOT 2), paginé serveur | `GET /drh/employees/page` | **NEXT SUPÉRIEUR** (Legacy télécharge toute la collection ; Next jamais) | — |
 | 3 | Dossier 360° | `renderDossiers` + panneaux (`renderAgentCongesPanel`, etc.) | `employee-dossier.mjs` (LOT 3), onglets paresseux | `GET /employees/{id}` + endpoints filtrés | **PARITÉ** (structure équivalente, chargement paresseux en plus) | — |
 | 4 | Identité | dans `renderDossiers` | onglet Identité (LOT 3) | `EmployeeOut` | **PARITÉ** | — |
 | 5 | Contrats (lecture) | `renderDossiers` | onglet Contrats (LOT 3/4) | `GET /drh/contracts?employee_id=` | **PARITÉ** | — |
-| 6 | Nouveau contrat | formulaire Legacy → `db.contratsPersonnel` (JSON, non typé DRH) | absent avant LOT 11B | `POST /drh/contracts` (typé, existe déjà) | **MANQUANT** → fermé LOT 11B | P1 |
+| 6 | Nouveau contrat | formulaire Legacy → `db.contratsPersonnel` (JSON, non typé DRH) | **PARITÉ** (LOT 11B, `POST /drh/contracts`) | `POST /drh/contracts` (typé, existait déjà) | **PARITÉ** | — |
 | 7 | Avenant | Legacy (`avenants`, JSON libre dans `db`) | absent | **aucun modèle typé** (`Contract`/`GeneratedContract` ne portent pas la notion d'avenant à un contrat existant) | **BACKEND MANQUANT** | P2 (déjà couvert fonctionnellement par "nouveau contrat" qui remplace/complète) |
-| 8 | Fin de contrat | formulaire Legacy | absent avant LOT 11B | `PUT /drh/contracts/{id}` (déjà existant, met à jour `end_date`/`status`) | **MANQUANT** → fermé LOT 11B | P1 |
+| 8 | Fin de contrat | formulaire Legacy | **PARITÉ** (LOT 11B, `PUT /drh/contracts/{id}`) | `PUT /drh/contracts/{id}` (déjà existant, met à jour `end_date`/`status`) | **PARITÉ** | — |
 | 9 | Affectations (actuelle) | `renderDossiers` | onglet Affectation (LOT 3/5) | `current_*` dans `EmployeeOut` | **PARITÉ** | — |
-| 10 | Historique affectations | `renderAffectationsHistorique` | absent, dette `DRH-NEXT-ASSIGNMENT-HISTORY` | `Assignment` (module `ops`, déjà utilisé en interne par `fiche_position()`) | **MANQUANT** (API composée nécessaire) → fermé LOT 11B | P1 |
-| 11 | Pointage (consultation RH) | `renderAgentPointageSituation`, `renderPointageSaisieAuto` | absent | `DailyPresence` (module `ops`) | **MANQUANT** (lecture seule, API composée) → fermé LOT 11B | P1 |
+| 10 | Historique affectations | `renderAffectationsHistorique` | **PARITÉ** (LOT 11B, onglet Historique, `GET .../assignments-history`) — dette `DRH-NEXT-ASSIGNMENT-HISTORY` fermée | `Assignment` (module `ops`), vue composée DRH-scopée | **PARITÉ** | — |
+| 11 | Pointage (consultation RH) | `renderAgentPointageSituation`, `renderPointageSaisieAuto` | **PARITÉ** (LOT 11B, onglet Pointage, lecture seule, `GET .../attendance`) | `DailyPresence` (module `ops`), vue composée DRH-scopée | **PARITÉ** (lecture seule, conforme à la mission : "Ne jamais recréer Pointeur dans DRH") | — |
 | 12 | Congés | `renderAgentCongesPanel`, `renderCongesStandaloneShell` | onglet Congés (LOT 3/6), demande+validation | `GET/POST /drh/leaves`, approve/refuse | **NEXT SUPÉRIEUR** (RBAC de validation renforcé LOT 11A, absent côté Legacy) | — |
 | 13 | Absences | `renderAgentAbsencesPanel` | *non distinct des congés côté backend* | aucun champ/`status` "absence" séparé dans `Leave` (`status` réel observé : `instance/approuve/refuse`) | **VOLONTAIREMENT ABANDONNÉ** : le backend ne distingue pas "absence" de "congé" comme deux entités — même table `Leave`. Créer une distinction fictive côté frontend serait une donnée inventée. | P3 |
 | 14 | Maladies | panneau dédié Legacy, `leave_type` libre côté Next | `leave_type` texte libre (LOT 6) couvre déjà le cas ("maladie" saisi comme type) | `Leave.leave_type` (texte libre) | **PARITÉ** (le champ libre couvre le besoin ; pas de sous-workflow distinct côté backend) | — |
@@ -31,15 +31,15 @@ Légende statut : **PARITÉ** · **NEXT SUPÉRIEUR** · **MANQUANT** (à constru
 | 19 | Mise en demeure | Legacy (JSON libre) | absent | **aucun modèle typé** | **BACKEND MANQUANT** | P2 |
 | 20 | Période E-N-C | Legacy (workflow `gestionEvents`, JSON libre) | absent | **aucun modèle typé** | **BACKEND MANQUANT** | P2 |
 | 21 | Blacklist | Legacy (`db.agents[].blacklist`, booléen + JSON libre) | absent | **aucun champ backend** (ni sur `Employee`, ni ailleurs) | **BACKEND MANQUANT** | P1 (impact métier réel : bloque une recontractualisation) mais **nécessite une décision de schéma** (voir §Décisions requises) |
-| 22 | Recrutement (liste/recherche) | `db.candidats` en mémoire | absent avant LOT 11B | `GET /drh/candidates/page` (**paginé serveur, q, mode, society, desired_position, recruiter_opinion, sort**) | **MANQUANT** → fermé LOT 11B | P1 |
-| 23 | Recrutement (détail/validation) | Legacy | absent avant LOT 11B | `POST /candidates/validate-section`, `/candidates/{id}/validate-final` | **MANQUANT** → fermé LOT 11B | P1 |
-| 24 | Recrutement (convocation) | Legacy | absent | `POST /candidates/{id}/convocation-email` (réel, envoi email) | **MANQUANT** → fermé LOT 11B (action déclenchée depuis la fiche candidat) | P1 |
-| 25 | Candidat → employé | Legacy (`marquer-contractualisation`) | absent avant LOT 11B | `POST /candidates/{id}/marquer-contractualisation`, `POST /candidates/{id}/recruit` | **MANQUANT** → fermé LOT 11B | P1 |
+| 22 | Recrutement (liste/recherche) | `db.candidats` en mémoire | **PARITÉ** (LOT 11B, `recruitment.mjs`, réellement paginé/recherché serveur) | `GET /drh/candidates/page` (**paginé serveur, q, mode, society, desired_position, recruiter_opinion, sort**) | **NEXT SUPÉRIEUR** (Legacy chargeait le vivier en mémoire ; Next jamais) | — |
+| 23 | Recrutement (détail/validation) | Legacy | **PARTIEL** (LOT 11B) : détail ✓ (depuis les données déjà reçues, aucun `GET /candidates/{id}` n'existe côté backend), validation finale ✓ (`validate-final`, mot de passe de validation). **`validate-section`** (validation section par section de la fiche 7 sections : identification/militaire/poste/avis/contact/habilitations/expérience) **non branché ce lot** — périmètre plus large qu'un simple formulaire, mérite son propre lot dédié plutôt qu'un ajout hâtif en fin de mission | `POST /candidates/validate-section` (existe, non consommé), `/candidates/{id}/validate-final` (consommé) | **PARITÉ PARTIELLE** | P2 (le résiduel, `validate-section`) |
+| 24 | Recrutement (convocation) | Legacy | **PARITÉ** (LOT 11B, `POST /candidates/{id}/convocation-email`) — **bug trouvé et corrigé en vérification live** : le backend répond 200 même si l'envoi échoue réellement (candidat sans email), le frontend affichait un faux succès avant correctif | `POST /candidates/{id}/convocation-email` (réel, envoi email) | **PARITÉ** | — |
+| 25 | Candidat → employé | Legacy (`marquer-contractualisation`) | **PARITÉ** (LOT 11B, `marquer-contractualisation` + `recruit`) — vérifié en direct : les contraintes métier réelles du backend (avis Favorable requis, séquence contractualisation → recrutement) sont relayées fidèlement, jamais contournées côté frontend | `POST /candidates/{id}/marquer-contractualisation`, `POST /candidates/{id}/recruit` | **PARITÉ** | — |
 | 26 | Période d'essai | Legacy | dashboard (LOT 9, libellé corrigé), `EmployeeOut.trial_end_date` | `trial_end_date` | **PARITÉ** | — |
 | 27 | Documents (métadonnées + aperçu) | Legacy (`renderDocumentsArchives`, autre module transverse) | onglet Documents (LOT 3/8) | `GET /drh/documents` | **PARITÉ** (métadonnées) | — |
 | 28 | Documents (dépôt) | Legacy | absent, dette `DRH-NEXT-DOC-UPLOAD` | aucune route d'upload pour le modèle `Document` générique | **BACKEND MANQUANT** — **lié à un P0 sécurité** (voir §Documents ci-dessous) | P0 (bloquant, non fermé) |
 | 29 | Habilitations | Legacy (`habilitations`, JSON libre : diplômes/enquêtes) | absent | **aucun champ/modèle backend**, même pas booléen | **BACKEND MANQUANT** | P2 |
-| 30 | Matériel (consultation) | `renderAgentMateriel` | absent | `EmployeeEquipment` (module `materiel`, déjà utilisé en interne par `fiche_position()`) | **MANQUANT** (API composée read-only) → fermé LOT 11B | P1 |
+| 30 | Matériel (consultation) | `renderAgentMateriel` | **PARITÉ** (LOT 11B, onglet Matériel, lecture seule, `GET .../equipment`) | `EmployeeEquipment` (module `materiel`), vue composée DRH-scopée | **PARITÉ** (lecture seule, conforme : "ne pas créer une deuxième vérité matériel") | — |
 | 31 | Portail RH | module `app/modules/portal/` : auto-inscription, reset mot de passe, pointage QR, statistiques présence — **application autonome mature et volumineuse** | absent, non prévu | `portal` (module séparé, permission dédiée) | **VOLONTAIREMENT ABANDONNÉ (V1)** — voir §Portail RH ci-dessous, décision A retenue | — |
 | 32 | Alertes | nav item "Alertes" (Legacy + Next stub) | stub LOT 1 ("non planifié") | aucun agrégat backend dédié | **BACKEND MANQUANT** | P3 |
 | 33 | Timeline / Observations / Actions RH | panneaux Legacy composites (assemblage de plusieurs entités JSON) | non répliqué en tant que tel — chaque entité réelle (contrats/congés/sanctions/documents) déjà consultable séparément dans le Dossier 360° | — | **VOLONTAIREMENT ABANDONNÉ** : une "timeline" unifiée mélangerait des entités typées (réelles) et des entités JSON libres (fictives) ; construire une frise à partir de données hétérogènes fabriquerait une donnée. Chaque onglet réel reste la source de vérité. | P3 |
@@ -82,7 +82,24 @@ l'exposition (plus de documents sensibles rendus accessibles par URL nue).
 **Conséquence directe (§25 de la mission)** : "documents sûrs" est une condition de GO pour la
 bascule finale — cette condition **n'est pas remplie**. Voir verdict final.
 
-## Prochaine mise à jour
-Ce document est mis à jour après LOT 11B (fermeture des P1 sûrs) et LOT 11C (revue finale,
-matrice sans P0 ni P1 non tranché autre que Blacklist, explicitement transférée à une
-décision produit).
+## LOT 11C — validation finale de la matrice
+
+État après fermeture LOT 11B (6 écarts P1 fermés : nouveau contrat, fin de contrat,
+historique affectations, pointage RH, matériel, recrutement) :
+
+```
+P0 ouverts   : 1 — DRH-NEXT-DOC-URL-AUTH (accès document non authentifié, confirmé
+                démontrable, transverse à tout l'ERP, hors périmètre sûr d'un lot frontend)
+P1 ouverts   : 1 — Blacklist (#21), transféré explicitement à une décision produit
+                (deux schémas plausibles et incompatibles, voir §Décision NON résolue)
+P1 partiels  : 1 — validate-section (#23), résiduel documenté, P2
+P2 reportés  : Avenant, Convocation disciplinaire, Mise en demeure, Période E-N-C,
+                Habilitations, validate-section résiduel — tous BACKEND MANQUANT ou
+                périmètre trop large pour une fermeture sûre en fin de mission
+P3 reportés  : Absences (distinction fictive refusée), Alertes, Timeline/Observations,
+                Exports, Impressions
+```
+
+**Aucun P0 ni P1 non tranché** hormis les deux ci-dessus, tous deux documentés avec leur
+raison de non-fermeture (décision de direction requise, ou changement d'architecture
+transverse hors périmètre sûr) — pas un oubli, une limite assumée et explicite.
