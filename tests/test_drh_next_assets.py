@@ -59,3 +59,6 @@ def test_api_version_exposes_drh_next_version(client):
     body = r.json()
     assert "drh_next_version" in body
     assert re.fullmatch(r"[0-9a-f]{12}", body["drh_next_version"])
+    # LOT 12A §16 (observabilité) : source_commit exposé (None si la plateforme de
+    # déploiement ne l'injecte pas -- jamais une valeur fabriquée).
+    assert "source_commit" in body

@@ -162,7 +162,7 @@ def app_version():
         h = hashlib.md5(js_file.read_bytes()).hexdigest()[:12]
     except Exception:
         h = "unknown"
-    return {"version": h, "drh_next_version": DRH_NEXT_VERSION}
+    return {"version": h, "drh_next_version": DRH_NEXT_VERSION, "source_commit": settings.source_commit}
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")

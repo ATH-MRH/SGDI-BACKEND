@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     portal_password_reset_ttl_minutes: int = 15
     # Compte module Facturation : créé UNIQUEMENT si un mot de passe fort est fourni ici.
     fac_initial_password: str | None = None
+    # LOT 12A (finalisation DRH Next, §16 observabilité) : hash du commit déployé, injecté
+    # par la plateforme de déploiement (convention Coolify : variable SOURCE_COMMIT). Aucune
+    # valeur fabriquée si absent — exposé tel quel (None) par /api/version, jamais une chaîne
+    # inventée qui ferait croire à une valeur réelle.
+    source_commit: str | None = None
 
     database_url: str
 
