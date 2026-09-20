@@ -96,3 +96,75 @@ test("aucun onglet lazy chargé avant clic, même avec 9 onglets désormais disp
   await renderEmployeeDossier({ id: "1" });
   assert.equal(calls.length, 1, "un seul appel (identité) au chargement du dossier, quel que soit le nombre d'onglets");
 });
+
+// ── LOT 11B : Nouveau contrat / Fin de contrat ─────────────────────────────────
+
+test("nouveau contrat : formulaire masqué par défaut, soumission POST /contracts avec employee_id correct", async () => {
+  const { window } = setup();
+  window.fetch = async (url) => {
+    if (String(url).includes("/contracts")) return jsonResp([]);
+    return jsonResp(employee(4));
+  };
+  await renderEmployeeDossier({ id: "4" });
+  document.querySelector('[data-dn-tab="contrats"]').click();
+  await tick(); await tick();
+  const form = document.querySelector("#dn-contract-new-form");
+  assert.equal(form.hidden, true);
+  document.querySelector("#dn-contract-new-toggle").click();
+  assert.equal(form.hidden, false);
+
+  let posted = null;
+  window.fetch = async (url, opts) => {
+    const u = String(url);
+    if (opts?.method === "POST" && u.includes("/drh/contracts")) { posted = JSON.parse(opts.body); return jsonResp({ id: 55, ...posted, status: "actif" }); }
+    if (u.includes("/contracts")) return jsonResp([{ id: 55, contract_type: "CDI", position: "Agent", start_date: "2025-01-01", status: "actif" }]);
+    return jsonResp(employee(4));
+  };
+  form.querySelector('[name="contract_type"]').value = "CDI";
+  form.querySelector('[name="position"]').value = "Agent";
+  form.querySelector('[name="start_date"]').value = "2025-01-01";
+  form.dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick(); await tick();
+  assert.equal(posted.employee_id, 4);
+  assert.equal(posted.contract_type, "CDI");
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /Actif/);
+});
+
+test("fin de contrat : PUT /contracts/{id} avec end_date=aujourd'hui et status=termine, bouton disparaît", async () => {
+  const { window } = setup();
+  window.fetch = async (url) => {
+    if (String(url).includes("/contracts")) return jsonResp([{ id: 7, contract_type: "CDD", start_date: "2024-01-01", status: "actif" }]);
+    return jsonResp(employee(4));
+  };
+  await renderEmployeeDossier({ id: "4" });
+  document.querySelector('[data-dn-tab="contrats"]').click();
+  await tick(); await tick();
+  assert.ok(document.querySelector('[data-dn-contract-end="7"]'), "un contrat actif doit avoir un bouton Terminer");
+
+  let putBody = null, putUrl = null;
+  window.fetch = async (url, opts) => {
+    const u = String(url);
+    if (opts?.method === "PUT") { putUrl = u; putBody = JSON.parse(opts.body); return jsonResp({ id: 7, status: "termine" }); }
+    if (u.includes("/contracts")) return jsonResp([{ id: 7, contract_type: "CDD", start_date: "2024-01-01", status: "termine", end_date: putBody?.end_date }]);
+    return jsonResp(employee(4));
+  };
+  document.querySelector('[data-dn-contract-end="7"]').click();
+  await tick(); await tick(); await tick();
+  assert.match(putUrl, /\/drh\/contracts\/7$/);
+  assert.equal(putBody.status, "termine");
+  assert.equal(putBody.end_date, new Date().toISOString().slice(0, 10));
+  assert.ok(!document.querySelector('[data-dn-contract-end="7"]'), "le bouton Terminer disparaît une fois le contrat terminé");
+});
+
+test("aucune logique contractuelle recalculée côté client (pas de préavis/reconduction inventés)", async () => {
+  const { window } = setup();
+  window.fetch = async (url) => {
+    if (String(url).includes("/contracts")) return jsonResp([]);
+    return jsonResp(employee(4));
+  };
+  await renderEmployeeDossier({ id: "4" });
+  document.querySelector('[data-dn-tab="contrats"]').click();
+  await tick(); await tick();
+  const text = document.querySelector("#dn-view").textContent.toLowerCase();
+  assert.doesNotMatch(text, /préavis|reconduction|renouvellement automatique/);
+});

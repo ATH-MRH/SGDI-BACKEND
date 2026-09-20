@@ -123,6 +123,7 @@ async function loadSection(employee, tabKey, sectionFn) {
     // câblée après montage, comme le tableau de bord des onglets lui-même (renderShell).
     if (tabKey === "conges") wireLeavesSection(employee);
     if (tabKey === "discipline") wireSanctionsSection(employee);
+    if (tabKey === "contrats") wireContractsSection(employee);
   } catch (err) {
     if (err?.aborted) return;
     if (mySeq !== tabRequestSeq || state.activeTab !== tabKey || !raceContextStillValid(raceCtx)) return;
@@ -167,12 +168,30 @@ function contractStatusBadge(c) {
   return `<span class="dn-badge">${escapeHTML(c.status || "—")}</span>`;
 }
 
+// LOT 11B : contrats — lecture (LOT 3/4) + "Nouveau contrat" (POST, déjà existant) +
+// "Fin de contrat" (PUT, déjà existant : met à jour end_date/status). Aucune logique
+// contractuelle recalculée côté client (préavis, reconduction...) — seules les deux
+// actions que le backend expose réellement.
 async function sectionContracts(e) {
   const rows = await loadData(`drh:employee:${e.id}:contracts`, (signal) => api.get(`/drh/contracts?employee_id=${encodeURIComponent(e.id)}`, { signal }), { ttlMs: 10000 });
-  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun contrat enregistré.");
-  return `<table class="dn-table"><thead><tr><th>Type</th><th>Poste</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
-    ${rows.map(c => `<tr><td>${escapeHTML(c.contract_type || "—")}</td><td>${escapeHTML(c.position || "—")}</td><td>${escapeHTML(c.start_date || "—")}</td><td>${escapeHTML(c.end_date || "—")}</td><td>${contractStatusBadge(c)}</td></tr>`).join("")}
-  </tbody></table>`;
+  const list = Array.isArray(rows) ? rows : [];
+  const table = list.length
+    ? `<table class="dn-table"><thead><tr><th>Type</th><th>Poste</th><th>Début</th><th>Fin</th><th>Statut</th><th></th></tr></thead><tbody>
+        ${list.map(c => `<tr data-dn-contract-row="${c.id}"><td>${escapeHTML(c.contract_type || "—")}</td><td>${escapeHTML(c.position || "—")}</td><td>${escapeHTML(c.start_date || "—")}</td><td>${escapeHTML(c.end_date || "—")}</td><td>${contractStatusBadge(c)}</td>
+          <td>${String(c.status || "").toLowerCase() === "actif" ? `<button type="button" class="dn-btn" data-dn-contract-end="${c.id}">Terminer</button> <span class="dn-error-state-text" data-dn-contract-error="${c.id}" style="margin:0"></span>` : ""}</td></tr>`).join("")}
+      </tbody></table>`
+    : emptyStateHTML("Aucun contrat enregistré.");
+  return `${table}
+    <div style="margin-top:14px">
+      <button type="button" class="dn-btn dn-btn-primary" id="dn-contract-new-toggle">+ Nouveau contrat</button>
+      <form id="dn-contract-new-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label for="dn-contract-type" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Type</label><input class="dn-input" id="dn-contract-type" name="contract_type" required style="width:140px"></div>
+        <div><label for="dn-contract-position" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Poste</label><input class="dn-input" id="dn-contract-position" name="position" style="width:160px"></div>
+        <div><label for="dn-contract-start" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Début</label><input class="dn-input" id="dn-contract-start" type="date" name="start_date" required></div>
+        <button type="submit" class="dn-btn dn-btn-primary">Enregistrer</button>
+        <span id="dn-contract-new-error" class="dn-error-state-text" style="margin:0"></span>
+      </form>
+    </div>`;
 }
 
 // LOT 6 : congés — lecture (déjà LOT 3) + demande + validation.
@@ -189,6 +208,51 @@ async function sectionContracts(e) {
 // - Aucun calcul métier (solde de congés, nombre de jours ouvrés...) n'est reconstruit ici
 //   — les dates sont affichées telles que renvoyées, la validation de cohérence reste
 //   backend (le formulaire n'impose que required/type=date, jamais une règle métier).
+function wireContractsSection(employee) {
+  const toggle = document.querySelector("#dn-contract-new-toggle");
+  const form = document.querySelector("#dn-contract-new-form");
+  toggle?.addEventListener("click", () => { form.hidden = !form.hidden; });
+  form?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(form);
+    const errEl = document.querySelector("#dn-contract-new-error");
+    if (errEl) errEl.textContent = "";
+    try {
+      await api.post("/drh/contracts", {
+        employee_id: employee.id,
+        contract_type: fd.get("contract_type"),
+        position: fd.get("position") || null,
+        start_date: fd.get("start_date"),
+      });
+      invalidate(`drh:employee:${employee.id}:contracts`);
+      if (state.activeTab === "contrats") loadSection(employee, "contrats", sectionContracts);
+    } catch (err) {
+      if (errEl) errEl.textContent = err?.message || "Enregistrement impossible.";
+    }
+  });
+  document.querySelectorAll("[data-dn-contract-end]").forEach(btn => {
+    btn.addEventListener("click", () => endContract(employee, btn.getAttribute("data-dn-contract-end")));
+  });
+}
+
+async function endContract(employee, contractId) {
+  const row = document.querySelector(`[data-dn-contract-row="${contractId}"]`);
+  const errEl = row?.querySelector(`[data-dn-contract-error="${contractId}"]`);
+  if (errEl) errEl.textContent = "";
+  row?.querySelectorAll("button").forEach(b => b.setAttribute("disabled", "disabled"));
+  try {
+    await api.put(`/drh/contracts/${encodeURIComponent(contractId)}`, {
+      end_date: new Date().toISOString().slice(0, 10),
+      status: "termine",
+    });
+    invalidate(`drh:employee:${employee.id}:contracts`);
+    if (state.activeTab === "contrats") loadSection(employee, "contrats", sectionContracts);
+  } catch (err) {
+    row?.querySelectorAll("button").forEach(b => b.removeAttribute("disabled"));
+    if (errEl) errEl.textContent = err?.code === "FORBIDDEN" ? "Permission requise." : (err?.message || "Action impossible.");
+  }
+}
+
 function leaveStatusBadge(status) {
   const s = String(status || "").toLowerCase();
   if (s === "approuve") return `<span class="dn-badge dn-badge-success">Approuvé</span>`;
