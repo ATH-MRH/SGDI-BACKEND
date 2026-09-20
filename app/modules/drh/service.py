@@ -14,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
-from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
+from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, EmployeeBlacklistEntry, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
 from app.modules.ops.models import Assignment, Site
 from app.core.photo_storage import externalize_employee_documents, normalize_photo_fields
@@ -1155,6 +1155,62 @@ def refuse_leave(db: Session, leave_id: int):
     db.commit()
     db.refresh(leave)
     return leave
+
+
+# P1 finalisation DRH Next — blacklist auditée et réversible (décision produit : voir
+# models.py::EmployeeBlacklistEntry pour l'audit qui justifie ce choix de schéma).
+def list_blacklist_entries(db: Session, employee_id: int):
+    return (
+        db.query(EmployeeBlacklistEntry)
+        .filter(EmployeeBlacklistEntry.employee_id == employee_id)
+        .order_by(EmployeeBlacklistEntry.created_at.desc())
+        .all()
+    )
+
+
+def create_blacklist_entry(db: Session, employee: Employee, reason: str, username: str | None):
+    existing_active = (
+        db.query(EmployeeBlacklistEntry)
+        .filter(EmployeeBlacklistEntry.employee_id == employee.id, EmployeeBlacklistEntry.status == "active")
+        .first()
+    )
+    if existing_active is not None:
+        raise HTTPException(status_code=409, detail="Cet employé a déjà une entrée de blacklist active")
+    entry = EmployeeBlacklistEntry(
+        employee_id=employee.id,
+        society=employee.society,
+        reason=reason,
+        status="active",
+        created_by=username,
+        previous_status=employee.status,
+    )
+    db.add(entry)
+    # Miroir sur Employee.status : les consommateurs existants (ui/service.py,
+    # erp/service.py, client_portal/service.py, loans/routes.py) lisent tous ce champ tel
+    # quel — comportement inchangé pour eux, la table d'audit devient la source de vérité
+    # pour DRH Next sans rien casser ailleurs.
+    employee.status = "blackliste"
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+def lift_blacklist_entry(db: Session, employee: Employee, lift_reason: str, username: str | None):
+    entry = (
+        db.query(EmployeeBlacklistEntry)
+        .filter(EmployeeBlacklistEntry.employee_id == employee.id, EmployeeBlacklistEntry.status == "active")
+        .first()
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Aucune entrée de blacklist active pour cet employé")
+    entry.status = "levee"
+    entry.lifted_at = datetime.utcnow()
+    entry.lifted_by = username
+    entry.lift_reason = lift_reason
+    employee.status = entry.previous_status or "actif"
+    db.commit()
+    db.refresh(entry)
+    return entry
 
 
 def fiche_position(db: Session, employee_id: int):

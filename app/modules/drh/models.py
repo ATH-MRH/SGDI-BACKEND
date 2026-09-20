@@ -162,3 +162,34 @@ class Document(Base, TimestampMixin):
     file_path: Mapped[str | None] = mapped_column(String(500))
     mime_type: Mapped[str | None] = mapped_column(String(120))
     uploaded_by: Mapped[str | None] = mapped_column(String(120))
+
+
+# P1 finalisation DRH Next — décision produit : "un enregistrement RH audité et réversible,
+# pas un simple booléen" (voir rapport de mission). Audit préalable : "blacklist" n'existait
+# jusqu'ici QUE comme une valeur libre de Employee.status ("blackliste"/"blacklisté"/...,
+# orthographes incohérentes selon les modules — ui/service.py, erp/service.py,
+# client_portal/service.py, loans/routes.py), sans motif, sans auteur, sans historique, sans
+# réversibilité tracée. Aucun modèle audité équivalent n'existe ailleurs dans le code ->
+# nouvelle table dédiée, conforme au schéma proposé. "society" reste une COPIE dénormalisée
+# en texte au moment du blacklistage (comme EmployeeLoanRequest.society) : Employee.society
+# lui-même est un simple champ texte, aucune table Society/société avec ID n'existe dans ce
+# backend — un society_id serait une FK vers rien.
+class EmployeeBlacklistEntry(Base, TimestampMixin):
+    __tablename__ = "employee_blacklist_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    society: Mapped[str | None] = mapped_column(String(150), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)  # "active" | "levee"
+    created_by: Mapped[str | None] = mapped_column(String(120))
+    lifted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    lifted_by: Mapped[str | None] = mapped_column(String(120))
+    lift_reason: Mapped[str | None] = mapped_column(Text)
+    # Non prévu dans le schéma proposé, ajouté pour que "réversible" soit réellement exact :
+    # Employee.status est mis en miroir sur "blackliste" à la création (consommateurs
+    # existants inchangés : ui/service.py, erp/service.py, client_portal/service.py,
+    # loans/routes.py continuent de le lire tel quel) — sans cette colonne, lever le
+    # blacklistage ne pourrait que DEVINER le statut antérieur (ex. toujours "actif"), ce qui
+    # serait faux pour un employé qui était "suspendu" avant d'être blacklisté.
+    previous_status: Mapped[str | None] = mapped_column(String(30))

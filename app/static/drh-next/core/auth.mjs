@@ -47,5 +47,13 @@ function normalizeUser(raw) {
     authorizedStructures: Array.isArray(raw.authorized_structures) ? raw.authorized_structures : [],
     authorizedSocieties: Array.isArray(raw.authorized_societies) ? raw.authorized_societies : [],
     authorizedSites: Array.isArray(raw.authorized_sites) ? raw.authorized_sites : [],
+    // P1 finalisation DRH Next (blacklist) : jusqu'ici jamais mappé — la seule action
+    // sensible protégée côté backend (congés, LOT 11A) utilisait volontairement un bouton
+    // toujours visible avec un message d'erreur honnête sur 403, sans distinction frontend.
+    // La mission demande explicitement pour le blacklist : "Action visible uniquement si
+    // permission frontend correspondante, mais backend reste autoritaire" — nécessite de
+    // connaître les actions du compte ici. Backend reste seul juge dans tous les cas
+    // (authorized_actions n'est qu'un affichage, jamais une garde de sécurité).
+    authorizedActions: Array.isArray(raw.authorized_actions) ? raw.authorized_actions : [],
   };
 }

@@ -329,3 +329,153 @@ test("Employés : le changement de session réinitialise l'état (pas de recherc
   await renderEmployees();
   assert.equal(document.querySelector("#dn-emp-search").value, "", "aucune recherche de l'ancien compte visible pour le nouveau");
 });
+
+// ── P1 finalisation : blacklist auditée et réversible ──────────────────────────
+import { setUser as setUserBlacklist } from "../../app/static/drh-next/core/session.mjs";
+
+function setupWithActions(actions) {
+  const { window } = setup();
+  setUserBlacklist({ username: "rh", authorizedSocieties: ["SOCIETE A"], authorizedActions: actions || [] });
+  return { window };
+}
+
+test("badge BLACKLISTÉ : visible si employee.status === 'blackliste', absent sinon (aucun appel supplémentaire)", async () => {
+  const { window } = setup();
+  const calls = [];
+  window.fetch = async (url) => { calls.push(String(url)); return jsonResp(employee(1, { status: "blackliste" })); };
+  await renderEmployeeDossier({ id: "1" });
+  assert.equal(calls.length, 1, "le badge vient du même appel que l'identité, aucun appel supplémentaire");
+  assert.match(document.querySelector("#dn-view").textContent, /BLACKLISTÉ/);
+});
+
+test("aucun badge pour un employé non blacklisté", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(employee(1, { status: "actif" }));
+  await renderEmployeeDossier({ id: "1" });
+  assert.doesNotMatch(document.querySelector("#dn-view").textContent, /BLACKLISTÉ/);
+});
+
+test("onglet Blacklist : sans permission 'validate', aucune action affichée (lecture seule)", async () => {
+  const { window } = setupWithActions(["read"]);
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  assert.ok(!document.querySelector("#dn-blacklist-new-toggle"), "aucun bouton d'action sans la permission frontend correspondante");
+});
+
+test("onglet Blacklist : avec permission 'validate', bouton Blacklister visible si aucune entrée active", async () => {
+  const { window } = setupWithActions(["read", "validate"]);
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  assert.ok(document.querySelector("#dn-blacklist-new-toggle"));
+  assert.ok(!document.querySelector("#dn-blacklist-lift-toggle"));
+});
+
+test("onglet Blacklist : avec permission, bouton Lever visible si une entrée active existe", async () => {
+  const { window } = setupWithActions(["validate"]);
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([{ id: 1, reason: "Vol", status: "active", created_by: "admin", created_at: "2024-01-01T10:00:00", lifted_at: null }]);
+    return jsonResp(employee(1, { status: "blackliste" }));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  assert.ok(document.querySelector("#dn-blacklist-lift-toggle"));
+  assert.ok(!document.querySelector("#dn-blacklist-new-toggle"));
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /Vol/);
+});
+
+test("blacklister : annulation de la confirmation n'envoie aucune requête", async () => {
+  const { window } = setupWithActions(["validate"]);
+  window.confirm = () => false;
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  document.querySelector("#dn-blacklist-new-toggle").click();
+  document.querySelector("#dn-blacklist-reason").value = "Motif test";
+  let posted = false;
+  window.fetch = async () => { posted = true; return jsonResp({}); };
+  document.querySelector("#dn-blacklist-new-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick();
+  assert.equal(posted, false, "aucune requête tant que la confirmation est refusée");
+});
+
+test("blacklister : confirmé -> POST avec le motif, badge apparaît immédiatement", async () => {
+  const { window } = setupWithActions(["validate"]);
+  window.confirm = () => true;
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([]);
+    return jsonResp(employee(1, { status: "actif" }));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  document.querySelector("#dn-blacklist-new-toggle").click();
+  document.querySelector("#dn-blacklist-reason").value = "Vol constaté";
+  let posted = null;
+  window.fetch = async (url, opts) => {
+    if (opts?.method === "POST") { posted = JSON.parse(opts.body); return jsonResp({ id: 1, status: "active" }); }
+    if (String(url).includes("/blacklist")) return jsonResp([{ id: 1, reason: "Vol constaté", status: "active", created_by: "rh" }]);
+    return jsonResp(employee(1, { status: "actif" }));
+  };
+  document.querySelector("#dn-blacklist-new-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick(); await tick();
+  assert.equal(posted.reason, "Vol constaté");
+  assert.match(document.querySelector("#dn-view").textContent, /BLACKLISTÉ/);
+});
+
+test("lever le blacklistage : confirmé -> POST /lift avec le motif de levée, statut restauré depuis le serveur (jamais deviné)", async () => {
+  const { window } = setupWithActions(["validate"]);
+  window.confirm = () => true;
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([{ id: 1, reason: "Vol", status: "active", created_by: "admin" }]);
+    return jsonResp(employee(1, { status: "blackliste" }));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  document.querySelector("#dn-blacklist-lift-toggle").click();
+  document.querySelector("#dn-blacklist-lift-reason").value = "Erreur corrigée";
+  let liftPosted = null;
+  window.fetch = async (url, opts) => {
+    if (opts?.method === "POST") { liftPosted = JSON.parse(opts.body); return jsonResp({ id: 1, status: "levee" }); }
+    if (String(url).endsWith("/employees/1")) return jsonResp(employee(1, { status: "suspendu" })); // statut antérieur réel, pas "actif" par défaut
+    if (String(url).includes("/blacklist")) return jsonResp([{ id: 1, reason: "Vol", status: "levee", lift_reason: "Erreur corrigée" }]);
+    return jsonResp(employee(1));
+  };
+  document.querySelector("#dn-blacklist-lift-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick(); await tick();
+  assert.equal(liftPosted.lift_reason, "Erreur corrigée");
+  assert.doesNotMatch(document.querySelector("#dn-view").textContent, /BLACKLISTÉ/, "le badge disparaît une fois le vrai statut (restauré côté serveur) rechargé");
+});
+
+test("blacklist : 403 backend affiche un message honnête, jamais un succès silencieux", async () => {
+  const { window } = setupWithActions(["validate"]);
+  window.confirm = () => true;
+  window.fetch = async (url) => {
+    if (String(url).includes("/blacklist")) return jsonResp([]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="blacklist"]').click();
+  await tick(); await tick();
+  document.querySelector("#dn-blacklist-new-toggle").click();
+  document.querySelector("#dn-blacklist-reason").value = "Motif";
+  window.fetch = async () => jsonResp({ detail: "Action 'validate' requise" }, 403);
+  document.querySelector("#dn-blacklist-new-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick();
+  assert.match(document.querySelector("#dn-blacklist-new-error").textContent, /validate|impossible/i);
+});

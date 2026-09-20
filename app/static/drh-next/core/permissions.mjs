@@ -36,3 +36,18 @@ export function currentSocietyScope() {
   const user = getUser();
   return user?.authorizedSocieties || [];
 }
+
+// P1 finalisation DRH Next (blacklist) : miroir d'affichage de _require_leave_validate_action
+// / _require_blacklist_action côté backend (routes.py) — même critère (rôle admin global, ou
+// action "validate"/"admin" explicite). N'AFFECTE QUE la visibilité d'un bouton : le backend
+// revérifie indépendamment à chaque appel, ce miroir peut se tromper sans jamais accorder un
+// accès réel — au pire un bouton visible qui échoue en 403 (déjà géré, message honnête).
+const ADMIN_ROLES = new Set(["admin", "adm", "adm1", "adm2"]);
+
+export function canValidateSensitiveActions() {
+  const user = getUser();
+  if (!user) return false;
+  if (ADMIN_ROLES.has(String(user.role || "").toLowerCase())) return true;
+  const actions = (user.authorizedActions || []).map(a => String(a).toLowerCase());
+  return actions.includes("validate") || actions.includes("admin");
+}

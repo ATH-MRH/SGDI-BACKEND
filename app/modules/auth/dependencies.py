@@ -131,6 +131,13 @@ def request_action(request: Request) -> str:
         return "export"
     if any(part in path for part in ("/validate", "/valider", "/approve", "/refuse", "/close", "/payer", "/recruit", "/convertir", "/annuler")):
         return "validate"
+    if "/blacklist" in path:
+        # GET .../blacklist (historique) reste "read" — seules les mutations (POST créer /
+        # POST .../lift lever) sont une décision "validate", au même titre qu'approve/refuse.
+        # Un mot-clé insensible à la méthode (comme les autres ci-dessus) classerait à tort
+        # la LECTURE de l'historique comme "validate" : cette route partage le même chemin
+        # entre GET et POST, contrairement aux autres routes validate qui ont un chemin dédié.
+        return "validate" if method != "GET" else "read"
     if any(part in path for part in ("/unlock", "/deverrou", "/déverrou")):
         return "unlock"
     if path.startswith("/api/auth/users") or path.startswith("/api/auth/access-rules"):

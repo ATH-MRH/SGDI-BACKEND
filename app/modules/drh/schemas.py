@@ -242,6 +242,31 @@ class SanctionOut(SanctionBase):
     model_config = {"from_attributes": True}
 
 
+# P1 finalisation DRH Next — blacklist auditée et réversible (voir models.py::
+# EmployeeBlacklistEntry pour l'audit qui justifie ce schéma).
+class BlacklistCreateIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class BlacklistLiftIn(BaseModel):
+    lift_reason: str = Field(min_length=3, max_length=2000)
+
+
+class BlacklistEntryOut(BaseModel):
+    id: int
+    employee_id: int
+    society: str | None = None
+    reason: str
+    status: str
+    created_by: str | None = None
+    created_at: datetime
+    lifted_at: datetime | None = None
+    lifted_by: str | None = None
+    lift_reason: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class DocumentCreate(BaseModel):
     owner_type: str
     owner_id: int

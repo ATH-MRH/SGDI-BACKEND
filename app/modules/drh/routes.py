@@ -23,6 +23,9 @@ from app.modules.drh.models import Candidate, Contract, ContractConditionalClaus
 from app.modules.drh.schemas import (
     AssignmentHistoryOut,
     AttendanceOut,
+    BlacklistCreateIn,
+    BlacklistEntryOut,
+    BlacklistLiftIn,
     EquipmentOut,
     CandidateCreate,
     CandidateConvocationEmailIn,
@@ -407,6 +410,41 @@ def get_employee_attendance(employee_id: int, limit: int = 30, db: Session = Dep
 def get_employee_equipment(employee_id: int, limit: int = 30, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, employee_id)
     return service.employee_equipment(db, employee_id, limit)
+
+
+# P1 finalisation DRH Next — blacklist auditée et réversible. Lecture : même garde que le
+# reste du dossier (scope société). Création/levée : action "validate" explicite requise en
+# plus, même patron que _require_leave_validate_action (LOT 11A) — un enregistrement qui
+# bloque une recontractualisation est une décision aussi sensible qu'une validation de congé,
+# jamais un simple CRUD ouvert à tout compte DRH du même périmètre.
+def _require_blacklist_action(user: User) -> None:
+    from app.modules.auth.routes import is_admin_role
+
+    if is_admin_role(user.role):
+        return
+    actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])}
+    if "validate" not in actions and "admin" not in actions:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action 'validate' requise pour blacklister ou lever un blacklistage")
+
+
+@router.get("/employees/{employee_id}/blacklist", response_model=list[BlacklistEntryOut])
+def get_employee_blacklist(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_employee_allowed(db, user, employee_id)
+    return service.list_blacklist_entries(db, employee_id)
+
+
+@router.post("/employees/{employee_id}/blacklist", response_model=BlacklistEntryOut)
+def create_employee_blacklist(employee_id: int, payload: BlacklistCreateIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    _require_blacklist_action(user)
+    return service.create_blacklist_entry(db, employee, payload.reason, getattr(user, "username", None))
+
+
+@router.post("/employees/{employee_id}/blacklist/lift", response_model=BlacklistEntryOut)
+def lift_employee_blacklist(employee_id: int, payload: BlacklistLiftIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    _require_blacklist_action(user)
+    return service.lift_blacklist_entry(db, employee, payload.lift_reason, getattr(user, "username", None))
 
 
 @router.get("/candidates/page", response_model=CandidatePage)

@@ -32,6 +32,7 @@ import { loadData, invalidate } from "../core/data-loader.mjs";
 import { captureRaceContext, raceContextStillValid } from "../core/race-guard.mjs";
 import { skeletonHTML, errorStateHTML, emptyStateHTML, initialsAvatarHTML, mount, escapeHTML } from "../core/ui.mjs";
 import { loadEmployeeById } from "./employees.mjs";
+import { canValidateSensitiveActions } from "../core/permissions.mjs";
 
 const VIEW_SELECTOR = "#dn-view";
 
@@ -45,6 +46,7 @@ const TABS = [
   { key: "historique", label: "Historique" },
   { key: "pointage", label: "Pointage" },
   { key: "materiel", label: "Matériel" },
+  { key: "blacklist", label: "Blacklist" },
 ];
 
 // État module-local (LOT 3) : quel employé/onglet est affiché, remis à zéro à chaque
@@ -77,7 +79,7 @@ function renderShell(employee) {
       <div style="display:flex;align-items:center;gap:14px">
         <div class="dn-avatar" style="width:56px;height:56px;font-size:18px">${escapeHTML((((employee.first_name||"")[0]||"")+((employee.last_name||"")[0]||"")).toUpperCase() || "?")}</div>
         <div>
-          <div style="font-weight:800;font-size:16px">${escapeHTML(name || "—")}</div>
+          <div style="font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px">${escapeHTML(name || "—")}${blacklistBadgeHTML(employee)}</div>
           <div class="dn-error-state-text" style="margin:0">${escapeHTML(employee.code || "")} · ${escapeHTML(employee.position || "—")}</div>
         </div>
       </div>
@@ -102,7 +104,7 @@ function selectTab(employee, tabKey) {
 function renderTab(employee, tabKey) {
   if (tabKey === "identite") return mount("#dn-dossier-panel", identiteHTML(employee));
   if (tabKey === "affectation") return mount("#dn-dossier-panel", affectationHTML(employee));
-  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments, historique: sectionAssignmentHistory, pointage: sectionAttendance, materiel: sectionEquipment }[tabKey];
+  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments, historique: sectionAssignmentHistory, pointage: sectionAttendance, materiel: sectionEquipment, blacklist: sectionBlacklist }[tabKey];
   if (section) loadSection(employee, tabKey, section);
 }
 
@@ -125,6 +127,7 @@ async function loadSection(employee, tabKey, sectionFn) {
     if (tabKey === "discipline") wireSanctionsSection(employee);
     if (tabKey === "contrats") wireContractsSection(employee);
     if (tabKey === "documents") wireDocumentsSection();
+    if (tabKey === "blacklist") wireBlacklistSection(employee);
   } catch (err) {
     if (err?.aborted) return;
     if (mySeq !== tabRequestSeq || state.activeTab !== tabKey || !raceContextStillValid(raceCtx)) return;
@@ -484,6 +487,107 @@ async function sectionEquipment(e) {
   return `<table class="dn-table"><thead><tr><th>Article</th><th>Qté</th><th>État</th><th>Attribué le</th><th>Restitué le</th><th>Statut</th></tr></thead><tbody>
     ${rows.map(eq => `<tr><td>${escapeHTML(eq.article_designation || "—")}</td><td>${escapeHTML(eq.quantity ?? "—")}</td><td>${escapeHTML(eq.item_state || "—")}</td><td>${escapeHTML(eq.dotation_date || "—")}</td><td>${escapeHTML(eq.return_date || "—")}</td><td><span class="dn-badge">${escapeHTML(eq.status || "—")}</span></td></tr>`).join("")}
   </tbody></table>`;
+}
+
+// P1 finalisation DRH Next — blacklist auditée et réversible (décision produit : un
+// enregistrement RH, pas un simple booléen — voir models.py::EmployeeBlacklistEntry).
+// Le badge d'en-tête réutilise employee.status (déjà chargé, LOT 3, AUCUN appel
+// supplémentaire) : le backend met ce champ en miroir sur "blackliste" à la création d'une
+// entrée active (service.py::create_blacklist_entry) — source de vérité identique, jamais
+// une seconde donnée qui pourrait diverger.
+function blacklistBadgeHTML(e) {
+  if (String(e.status || "").toLowerCase() !== "blackliste") return "";
+  return `<span class="dn-badge dn-badge-danger">BLACKLISTÉ</span>`;
+}
+
+function blacklistStatusBadge(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "active") return `<span class="dn-badge dn-badge-danger">Active</span>`;
+  if (s === "levee") return `<span class="dn-badge dn-badge-success">Levée</span>`;
+  return `<span class="dn-badge">${escapeHTML(status || "—")}</span>`;
+}
+
+async function sectionBlacklist(e) {
+  const rows = await loadData(`drh:employee:${e.id}:blacklist`, (signal) => api.get(`/drh/employees/${encodeURIComponent(e.id)}/blacklist`, { signal }), { ttlMs: 10000 });
+  const list = Array.isArray(rows) ? rows : [];
+  const activeEntry = list.find(entry => entry.status === "active") || null;
+  const table = list.length
+    ? `<table class="dn-table"><thead><tr><th>Date</th><th>Motif</th><th>Auteur</th><th>Statut</th><th>Date de levée</th><th>Motif de levée</th></tr></thead><tbody>
+        ${list.map(entry => `<tr><td>${escapeHTML((entry.created_at || "").slice(0, 10) || "—")}</td><td>${escapeHTML(entry.reason || "—")}</td><td>${escapeHTML(entry.created_by || "—")}</td><td>${blacklistStatusBadge(entry.status)}</td><td>${escapeHTML((entry.lifted_at || "").slice(0, 10) || "—")}</td><td>${escapeHTML(entry.lift_reason || "—")}</td></tr>`).join("")}
+      </tbody></table>`
+    : emptyStateHTML("Aucune entrée de blacklist enregistrée.");
+  // Action visible uniquement si permission frontend correspondante (mission §L) — le
+  // backend reste seul juge dans tous les cas (_require_blacklist_action, jamais contourné
+  // même si ce miroir d'affichage se trompait).
+  const canAct = canValidateSensitiveActions();
+  let actionsHTML = "";
+  if (canAct && !activeEntry) {
+    actionsHTML = `<div style="margin-top:14px">
+      <button type="button" class="dn-btn dn-btn-primary" id="dn-blacklist-new-toggle">Blacklister</button>
+      <form id="dn-blacklist-new-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:260px"><label for="dn-blacklist-reason" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif (obligatoire)</label><input class="dn-input" id="dn-blacklist-reason" name="reason" required></div>
+        <button type="submit" class="dn-btn dn-btn-primary">Confirmer le blacklistage</button>
+        <span id="dn-blacklist-new-error" class="dn-error-state-text" style="margin:0"></span>
+      </form>
+    </div>`;
+  } else if (canAct && activeEntry) {
+    actionsHTML = `<div style="margin-top:14px">
+      <button type="button" class="dn-btn" id="dn-blacklist-lift-toggle">Lever le blacklistage</button>
+      <form id="dn-blacklist-lift-form" hidden style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:260px"><label for="dn-blacklist-lift-reason" style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motif de levée (obligatoire)</label><input class="dn-input" id="dn-blacklist-lift-reason" name="lift_reason" required></div>
+        <button type="submit" class="dn-btn dn-btn-primary">Confirmer la levée</button>
+        <span id="dn-blacklist-lift-error" class="dn-error-state-text" style="margin:0"></span>
+      </form>
+    </div>`;
+  }
+  return `${table}${actionsHTML}`;
+}
+
+function wireBlacklistSection(employee) {
+  const newToggle = document.querySelector("#dn-blacklist-new-toggle");
+  const newForm = document.querySelector("#dn-blacklist-new-form");
+  newToggle?.addEventListener("click", () => { newForm.hidden = !newForm.hidden; });
+  newForm?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const reason = new FormData(newForm).get("reason");
+    if (!window.confirm(`Confirmer le blacklistage de ${employee.first_name || ""} ${employee.last_name || ""} ?\nMotif : ${reason}`)) return;
+    const errEl = document.querySelector("#dn-blacklist-new-error");
+    if (errEl) errEl.textContent = "";
+    try {
+      await api.post(`/drh/employees/${employee.id}/blacklist`, { reason });
+      invalidate(`drh:employee:${employee.id}:blacklist`);
+      employee.status = "blackliste"; // reflète immédiatement le badge d'en-tête, sans recharger tout le dossier
+      renderShell(employee);
+      selectTab(employee, "blacklist");
+    } catch (err) {
+      if (errEl) errEl.textContent = err?.message || "Action impossible.";
+    }
+  });
+
+  const liftToggle = document.querySelector("#dn-blacklist-lift-toggle");
+  const liftForm = document.querySelector("#dn-blacklist-lift-form");
+  liftToggle?.addEventListener("click", () => { liftForm.hidden = !liftForm.hidden; });
+  liftForm?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const liftReason = new FormData(liftForm).get("lift_reason");
+    if (!window.confirm(`Confirmer la levée du blacklistage de ${employee.first_name || ""} ${employee.last_name || ""} ?\nMotif de levée : ${liftReason}`)) return;
+    const errEl = document.querySelector("#dn-blacklist-lift-error");
+    if (errEl) errEl.textContent = "";
+    try {
+      await api.post(`/drh/employees/${employee.id}/blacklist/lift`, { lift_reason: liftReason });
+      invalidate(`drh:employee:${employee.id}:blacklist`);
+      // Le statut restauré par le backend n'est pas toujours "actif" (previous_status peut
+      // être "suspendu", etc. — voir service.py::lift_blacklist_entry) : jamais deviné côté
+      // client, on recharge l'employé réel plutôt que de supposer une valeur.
+      invalidate(`drh:employee:${employee.id}`);
+      const refreshed = await loadEmployeeById(employee.id);
+      Object.assign(employee, refreshed);
+      renderShell(employee);
+      selectTab(employee, "blacklist");
+    } catch (err) {
+      if (errEl) errEl.textContent = err?.message || "Action impossible.";
+    }
+  });
 }
 
 export function _resetForTests() { state = { employeeId: null, activeTab: "identite" }; tabRequestSeq = 0; }
