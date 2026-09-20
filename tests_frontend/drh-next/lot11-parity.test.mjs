@@ -168,3 +168,126 @@ test("aucune logique contractuelle recalculée côté client (pas de préavis/re
   const text = document.querySelector("#dn-view").textContent.toLowerCase();
   assert.doesNotMatch(text, /préavis|reconduction|renouvellement automatique/);
 });
+
+// ── LOT 11B : Recrutement ───────────────────────────────────────────────────
+import { renderRecruitment } from "../../app/static/drh-next/modules/recruitment.mjs";
+
+function candidate(id, overrides = {}) {
+  return { id, first_name: "Amine", last_name: "Kaci", phone: "0550000001", email: "a@x.com", desired_position: "Agent", society: "SOCIETE A", expected_salary: 45000, recruiter_opinion: null, status: "nouvelle", ...overrides };
+}
+function candPage(items, opts = {}) { return { items, page: opts.page || 1, pages: opts.pages || 1, total: opts.total ?? items.length, page_size: 25 }; }
+
+test("recrutement : premier chargement demande page=1, mode=new, jamais /candidates complet", async () => {
+  const { window } = setup();
+  const calls = [];
+  window.fetch = async (url) => { calls.push(String(url)); return jsonResp(candPage([candidate(1)])); };
+  await renderRecruitment();
+  assert.equal(calls.length, 1);
+  const url = new URL(calls[0], "http://x");
+  assert.equal(url.pathname, "/api/drh/candidates/page");
+  assert.equal(url.searchParams.get("mode"), "new");
+  assert.ok(!calls.some(c => c.endsWith("/candidates")), "jamais l'endpoint liste complète");
+});
+
+test("clic sur une ligne : détail affiché SANS appel réseau supplémentaire (données déjà en mémoire)", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(1, { first_name: "Amine", last_name: "Kaci" })]));
+  await renderRecruitment();
+  let calls = 0;
+  window.fetch = async () => { calls++; return jsonResp({}); };
+  document.querySelector('[data-dn-rec-open="1"]').click();
+  await tick();
+  assert.equal(calls, 0, "le détail vient des données déjà reçues par la liste, aucun GET /candidates/{id} (qui n'existe pas côté backend)");
+  assert.match(document.querySelector("#dn-view").textContent, /Kaci/);
+});
+
+test("convocation : POST /candidates/{id}/convocation-email avec les bons champs", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(2)]));
+  await renderRecruitment();
+  document.querySelector('[data-dn-rec-open="2"]').click();
+  await tick();
+  document.querySelector("#dn-rec-convoke-toggle").click();
+  let posted = null, postedUrl = null;
+  window.fetch = async (url, opts) => { postedUrl = String(url); posted = JSON.parse(opts.body); return jsonResp({ data: { email_sent: true } }); };
+  document.querySelector("#dn-rec-convoke-date").value = "2026-01-01";
+  document.querySelector("#dn-rec-convoke-heure").value = "09:00";
+  document.querySelector("#dn-rec-convoke-lieu").value = "Siège";
+  document.querySelector("#dn-rec-convoke-motif").value = "Entretien";
+  document.querySelector("#dn-rec-convoke-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick();
+  assert.match(postedUrl, /\/candidates\/2\/convocation-email$/);
+  assert.equal(posted.lieu, "Siège");
+  assert.match(document.querySelector("#dn-rec-action-success").textContent, /envoyée/i);
+});
+
+// Trouvé en vérification live (backend réel) : /convocation-email répond 200 MÊME quand
+// l'envoi échoue réellement (ex. candidat sans email) — le vrai résultat est dans
+// data.email_sent, jamais dans le seul code HTTP. Un 200 ne doit jamais être confondu avec
+// un succès métier.
+test("convocation : un 200 HTTP avec email_sent=false affiche une erreur, jamais un faux succès", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(2)]));
+  await renderRecruitment();
+  document.querySelector('[data-dn-rec-open="2"]').click();
+  await tick();
+  document.querySelector("#dn-rec-convoke-toggle").click();
+  window.fetch = async () => jsonResp({ data: { email_sent: false, delivery: { error: "Le candidat ne possède aucune adresse email" } } });
+  document.querySelector("#dn-rec-convoke-date").value = "2026-01-01";
+  document.querySelector("#dn-rec-convoke-heure").value = "09:00";
+  document.querySelector("#dn-rec-convoke-lieu").value = "Siège";
+  document.querySelector("#dn-rec-convoke-motif").value = "Entretien";
+  document.querySelector("#dn-rec-convoke-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick();
+  assert.equal(document.querySelector("#dn-rec-action-success").textContent, "", "aucun succès affiché");
+  assert.match(document.querySelector("#dn-rec-action-error").textContent, /adresse email/i);
+});
+
+test("recruter : POST /candidates/{id}/recruit, message de succès honnête", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(3)]));
+  await renderRecruitment();
+  document.querySelector('[data-dn-rec-open="3"]').click();
+  await tick();
+  let postedUrl = null;
+  window.fetch = async (url) => { postedUrl = String(url); return jsonResp({ data: { status: "recrute" } }); };
+  document.querySelector("#dn-rec-recruit").click();
+  await tick(); await tick();
+  assert.match(postedUrl, /\/candidates\/3\/recruit$/);
+  assert.match(document.querySelector("#dn-rec-action-success").textContent, /recruté/i);
+});
+
+test("validation finale : mot de passe requis, erreur affichée si refusé (401/403)", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(4)]));
+  await renderRecruitment();
+  document.querySelector('[data-dn-rec-open="4"]').click();
+  await tick();
+  document.querySelector("#dn-rec-validate-toggle").click();
+  window.fetch = async () => jsonResp({ detail: "Mot de passe de validation incorrect" }, 401);
+  document.querySelector("#dn-rec-validate-pwd").value = "mauvais-mdp";
+  document.querySelector("#dn-rec-validate-form").dispatchEvent(new window.Event("submit", { cancelable: true }));
+  await tick(); await tick();
+  assert.match(document.querySelector("#dn-rec-action-error").textContent, /incorrect|impossible/i);
+});
+
+test("RBAC recrutement : 403 (accès recrutement absent) -> état d'erreur, jamais un vide silencieux", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp({ detail: "Accès recrutement refusé" }, 403);
+  await renderRecruitment();
+  assert.match(document.querySelector("#dn-rec-results").innerHTML, /dn-error-state/);
+});
+
+test("changement de filtre (mode) revient en page 1", async () => {
+  const { window } = setup();
+  window.fetch = async () => jsonResp(candPage([candidate(1)], { page: 2, pages: 3, total: 60 }));
+  await renderRecruitment();
+  const calls = [];
+  window.fetch = async (url) => { calls.push(String(url)); return jsonResp(candPage([candidate(1)])); };
+  const mode = document.querySelector("#dn-rec-mode");
+  mode.value = "reserve"; mode.dispatchEvent(new window.Event("change"));
+  await tick();
+  const url = new URL(calls[0], "http://x");
+  assert.equal(url.searchParams.get("page"), "1");
+  assert.equal(url.searchParams.get("mode"), "reserve");
+});
