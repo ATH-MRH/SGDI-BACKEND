@@ -103,3 +103,42 @@ P3 reportés  : Absences (distinction fictive refusée), Alertes, Timeline/Obser
 **Aucun P0 ni P1 non tranché** hormis les deux ci-dessus, tous deux documentés avec leur
 raison de non-fermeture (décision de direction requise, ou changement d'architecture
 transverse hors périmètre sûr) — pas un oubli, une limite assumée et explicite.
+
+## LOT FINALISATION — fermeture P0/P1 (intégration finale)
+
+Les deux items ouverts ci-dessus sont désormais fermés, chacun avec sa propre correction,
+ses propres tests, son propre commit — jamais mélangés (voir §Git de l'intégration finale
+pour les hashes).
+
+- **`DRH-NEXT-DOC-URL-AUTH` (P0) — FERMÉ.** Nouvelle route authentifiée et scopée société
+  `GET /api/drh/documents/{document_id}/content` (résolution canonique anti path-traversal,
+  y compris symlink, sous `DOCS_DIR` ; contrats générés routés vers la logique déjà
+  sécurisée de `GeneratedContract`). Interception surgicale de l'ancien mount public
+  `/uploads/photos/docs/{filename}` : SEULS les fichiers rattachés à un `Document`
+  `owner_type="employee"` exigent désormais authentification + périmètre société — photos,
+  rapports IA, pièces jointes `client_portal` et fichiers orphelins restent servis à
+  l'identique (Legacy non cassé). Frontend DRH Next migré vers cette route exclusivement
+  (fetch authentifié → Blob → URL locale, jamais l'URL API exposée dans le DOM). Preuve
+  directe : accès anonyme à un document employé, `200` avant correction → `401` après,
+  vérifié à la fois par tests automatisés (`tests/test_drh_documents_content.py`, 16 tests)
+  et en direct (curl + Docker/Postgres réel).
+- **Blacklist (#21) (P1) — FERMÉ.** Décision produit tranchée : enregistrement RH audité
+  et réversible (jamais un booléen). Table dédiée `employee_blacklist_entries`
+  (migration additive `20260920_0037`) : motif obligatoire à la création et à la levée,
+  historique jamais supprimé physiquement, statut antérieur réellement restauré (pas
+  toujours "actif") à la levée. Permission dédiée (`_require_blacklist_action` : rôle admin
+  ou action `validate` explicite) au-dessus du périmètre société existant. `Employee.status`
+  maintenu en miroir pour ne pas casser les consommateurs préexistants
+  (`loans/routes.py`, `portal/routes.py`, etc.). 16 tests (`tests/test_drh_blacklist.py`).
+
+```
+P0 ouverts   : 0
+P1 ouverts   : 0
+P2 reportés  : inchangé (Avenant, Convocation disciplinaire, Mise en demeure,
+                Période E-N-C, Habilitations, validate-section résiduel)
+P3 reportés  : inchangé (Absences, Alertes, Timeline/Observations, Exports, Impressions)
+```
+
+P0 = 0 et P1 = 0 : plus aucune condition de sécurité ou de décision produit non tranchée ne
+bloque l'intégration. Les P2/P3 restent une dette documentée, non bloquante par nature
+(confort/périmètre, jamais sécurité ni perte de données).
