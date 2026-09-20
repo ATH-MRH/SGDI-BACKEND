@@ -105,6 +105,33 @@ def test_path_traversal_via_forged_file_path_is_refused(client, auth_headers):
     assert r.status_code == 404
 
 
+def test_symlink_escaping_docs_dir_is_refused(client, auth_headers, tmp_path):
+    # Un symlink PHYSIQUEMENT présent sous DOCS_DIR mais dont la cible réelle résout en
+    # dehors : Path.resolve() suit le lien, donc le même contrôle de confinement canonique
+    # que le path traversal (test ci-dessus) doit aussi refuser ce cas — vérifié empiriquement
+    # ici plutôt que supposé depuis la seule lecture du code (§5 intégration finale).
+    import os
+    outside_secret = tmp_path / "secret-hors-docs-dir.txt"
+    outside_secret.write_bytes(b"SECRET-HORS-DOCS-DIR")
+    link_name = "lien-symbolique-vers-exterieur.pdf"
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    link_path = DOCS_DIR / link_name
+    if link_path.exists() or link_path.is_symlink():
+        link_path.unlink()
+    os.symlink(outside_secret, link_path)
+    try:
+        emp_id = _emp(client, auth_headers, "DOCSYMLINK")
+        doc = client.post("/api/drh/documents", headers=auth_headers, json={
+            "owner_type": "employee", "owner_id": emp_id, "label": "Test",
+            "file_path": f"{PUBLIC_DOC_PREFIX}/{link_name}",
+        }).json()
+        r = client.get(f"/api/drh/documents/{doc['id']}/content", headers=auth_headers)
+        assert r.status_code == 404
+        assert b"SECRET-HORS-DOCS-DIR" not in r.content
+    finally:
+        link_path.unlink()
+
+
 def test_file_path_outside_docs_dir_is_refused(client, auth_headers):
     emp_id = _emp(client, auth_headers, "DOCOUT")
     # Un file_path pointant ailleurs sous /uploads (photos, rapports IA...) ne doit jamais
