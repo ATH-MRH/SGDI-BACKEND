@@ -4,6 +4,7 @@ import logging
 import asyncio
 import html
 import json
+import re
 import socket
 import time
 from pathlib import Path
@@ -13,7 +14,7 @@ import anyio.to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, inspect, select, text
 from starlette.datastructures import Headers
@@ -73,16 +74,86 @@ def serve_sgdi_app_css():
 def serve_index_html_static():
     return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
 
+# LOT 12A (finalisation DRH Next) — dette DRH-NEXT-CACHE-LOT12 fermée. ES modules natifs :
+# un spécificateur d'import ("./core/x.mjs") est un littéral statique, aucune expression
+# possible — donc pas de renommage de fichier par hash façon bundler classique sans réécrire
+# TOUS les fichiers qui l'importent. Solution retenue, sans introduire d'outil de build :
+# un hash de contenu global (DRH_NEXT_VERSION, recalculé une fois au démarrage du process —
+# donc à chaque déploiement) est injecté en paramètre ?v= sur CHAQUE spécificateur d'import
+# relatif, en réécrivant le texte du module à la volée avant de le servir (cascade : un
+# fichier importé par un fichier réécrit est lui-même demandé avec son propre ?v=, donc lui
+# aussi réécrit). Le cache long-terme n'est appliqué QUE si la requête porte ce paramètre —
+# jamais sur une requête "nue" (visite directe, bookmark) qui reste no-cache par prudence.
+# index.html reste toujours no-cache (_NO_CACHE) : chaque chargement de page obtient donc la
+# RÉFÉRENCE ?v= courante, garantissant qu'un déploiement n'est jamais masqué par un cache
+# navigateur — exactement le problème que la dette documentait.
+_DRH_NEXT_DIR = STATIC_DIR / "drh-next"
+_RELATIVE_IMPORT_RE = re.compile(r'''from\s+(["'])(\.[^"']+?)\1''')
+
+
+def _compute_drh_next_version() -> str:
+    h = hashlib.md5()
+    try:
+        for f in sorted(_DRH_NEXT_DIR.rglob("*")):
+            if f.is_file():
+                h.update(f.read_bytes())
+    except Exception:
+        return "unknown"
+    return h.hexdigest()[:12]
+
+
+DRH_NEXT_VERSION = _compute_drh_next_version()
+
+
+def _versioned_mjs_text(raw: str, version: str) -> str:
+    def repl(match: "re.Match[str]") -> str:
+        quote, spec = match.group(1), match.group(2)
+        sep = "&" if "?" in spec else "?"
+        return f"from {quote}{spec}{sep}v={version}{quote}"
+
+    return _RELATIVE_IMPORT_RE.sub(repl, raw)
+
+
 @app.get("/drh-next", include_in_schema=False)
 def serve_drh_next():
     # PROJET DRH NEXT — LOT 1. Route de développement explicite, distincte de "/" (Legacy) :
     # drh.irongs.com continue de servir index.html/sgdi-app.js sans aucune modification.
-    # Les assets (core/*.js, modules/*.js, styles/*.css) sont déjà servis par le mount
-    # /static existant (app/static/drh-next/...), aucun montage supplémentaire nécessaire.
     # Pas de garde d'autorisation ICI : comme pour "/", le HTML/JS statique reste public —
     # la vraie protection est côté API (chaque endpoint /api/drh/* exige déjà current_user +
     # les mêmes règles de scope que l'ancien frontend, inchangées par ce lot).
-    return FileResponse(STATIC_DIR / "drh-next" / "index.html", headers=_NO_CACHE)
+    html_content = (_DRH_NEXT_DIR / "index.html").read_text(encoding="utf-8")
+    html_content = html_content.replace(
+        'src="/static/drh-next/app.mjs"', f'src="/static/drh-next/app.mjs?v={DRH_NEXT_VERSION}"'
+    )
+    for css_name in ("tokens.css", "layout.css", "components.css"):
+        html_content = html_content.replace(
+            f'href="/static/drh-next/styles/{css_name}"',
+            f'href="/static/drh-next/styles/{css_name}?v={DRH_NEXT_VERSION}"',
+        )
+    return HTMLResponse(content=html_content, headers=_NO_CACHE)
+
+
+@app.get("/static/drh-next/{asset_path:path}", include_in_schema=False)
+def serve_drh_next_asset(asset_path: str, v: str | None = None):
+    # Route explicite, enregistrée AVANT app.mount("/static", ...) plus bas : elle intercepte
+    # tout /static/drh-next/* avant que le mount générique ne le fasse, pour appliquer la
+    # réécriture d'imports + le cache versionné décrits ci-dessus.
+    file_path = (_DRH_NEXT_DIR / asset_path).resolve()
+    try:
+        file_path.relative_to(_DRH_NEXT_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Introuvable")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Introuvable")
+
+    cache_header = "public, max-age=31536000, immutable" if v else "no-cache"
+    if file_path.suffix == ".mjs":
+        content = _versioned_mjs_text(file_path.read_text(encoding="utf-8"), DRH_NEXT_VERSION)
+        return Response(content=content, media_type="text/javascript", headers={"Cache-Control": cache_header})
+    if file_path.suffix == ".css":
+        return Response(content=file_path.read_text(encoding="utf-8"), media_type="text/css", headers={"Cache-Control": cache_header})
+    return FileResponse(file_path, headers={"Cache-Control": cache_header})
+
 
 @app.get("/api/version", include_in_schema=False)
 def app_version():
@@ -91,7 +162,7 @@ def app_version():
         h = hashlib.md5(js_file.read_bytes()).hexdigest()[:12]
     except Exception:
         h = "unknown"
-    return {"version": h}
+    return {"version": h, "drh_next_version": DRH_NEXT_VERSION}
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
@@ -239,16 +310,13 @@ class StaticCacheMiddleware:
             path.startswith("/static/")
             and path not in self._NO_CACHE_PATHS
             and not path.endswith(".html")
-            # DETTE DRH-NEXT-CACHE-LOT12 — PROJET DRH NEXT, LOT 1 §4/§6 (revue). Tant que ce
-            # chantier est en développement actif (LOT 1 à LOT 11, avant la bascule LOT 12),
-            # aucun cache-buster par fichier n'existe encore sur ces imports ES statiques
-            # ("./core/x.mjs", pas d'expression possible dans un spécificateur d'import
-            # littéral) — un cache immutable un an servirait alors indéfiniment une version
-            # périmée après chaque déploiement, sans jamais dépendre d'un rechargement forcé
-            # de l'utilisateur. Exclusion délibérée de tout le dossier, pas fichier par
-            # fichier (LOT 2+ en ajoutera d'autres). À REVOIR AU LOT 12, avant toute bascule
-            # production : soit un cache-buster par fichier façon R.MODULE_VERSION (Legacy),
-            # soit un hash de contenu injecté dynamiquement.
+            # DRH-NEXT-CACHE-LOT12 fermée (LOT 12A, finalisation). Exclusion TOUJOURS
+            # nécessaire ici, mais plus pour la même raison : /static/drh-next/* est
+            # désormais intercepté par sa propre route dédiée (serve_drh_next_asset,
+            # ci-dessus dans ce fichier) AVANT ce middleware, laquelle applique déjà un
+            # Cache-Control correct par requête (immutable seulement si ?v=<hash de
+            # contenu> est présent, jamais sur un accès direct). Ce middleware générique ne
+            # doit donc jamais réécrire cet en-tête pour ce préfixe.
             and not path.startswith("/static/drh-next/")
         )
 
