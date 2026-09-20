@@ -77,12 +77,17 @@ function dashboardHTML(data) {
   const actifs = data?.employees_by_status?.actif || 0;
   const total = data?.employees_total || 0;
   const candidatsTotal = Object.values(data?.candidates_by_status || {}).reduce((a, b) => a + b, 0);
-  const trialSoon = (data?.trial_periods || []).length;
+  // LOT 10 (revue d'intégration §14) : trial_periods (service.dashboard) liste TOUT employé
+  // actif ayant une trial_end_date renseignée, SANS filtre de date — ni "à venir", ni "en
+  // cours" au sens strict (une date déjà passée y figure aussi si jamais nettoyée côté
+  // donnée). Libellés corrigés en conséquence : aucun mot n'affirme une imminence que le
+  // backend ne garantit pas. Donnée inchangée, seul le texte l'était.
+  const trialCount = (data?.trial_periods || []).length;
   const kpis = [
     { label: "Effectif actif", value: actifs, sub: `${total} au total` },
     { label: "Congés en attente", value: data?.leaves_pending || 0, sub: "à valider ou refuser" },
     { label: "Candidats en cours", value: candidatsTotal, sub: "toutes phases confondues" },
-    { label: "Fins de période d'essai", value: trialSoon, sub: "employés actifs concernés" },
+    { label: "Fins de période d'essai enregistrées", value: trialCount, sub: "employés actifs concernés" },
   ];
   const trialList = (data?.trial_periods || []).slice(0, 8);
   return `<div class="dn-page-head"><h1>Tableau de bord RH</h1></div>
@@ -96,9 +101,9 @@ function dashboardHTML(data) {
   ${breakdownHTML("Répartition des employés par statut", data?.employees_by_status)}
   ${breakdownHTML("Répartition des candidats par statut", data?.candidates_by_status)}
   <div class="dn-card dn-panel">
-    <div class="dn-panel-head">Fins de période d'essai à venir</div>
+    <div class="dn-panel-head">Employés actifs avec une date de fin de période d'essai enregistrée</div>
     ${trialList.length ? `<table class="dn-table"><thead><tr><th>Code</th><th>Nom</th><th>Fin d'essai</th></tr></thead><tbody>
       ${trialList.map(e => `<tr><td>${escapeHTML(e.code)}</td><td>${escapeHTML(e.name)}</td><td>${escapeHTML(e.trial_end_date || "—")}</td></tr>`).join("")}
-    </tbody></table>` : `<div class="dn-empty-state">Aucune période d'essai en cours.</div>`}
+    </tbody></table>` : `<div class="dn-empty-state">Aucun employé actif n'a de date de fin de période d'essai enregistrée.</div>`}
   </div>`;
 }
