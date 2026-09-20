@@ -2,16 +2,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from datetime import datetime
+from pathlib import Path as FsPath
 import unicodedata
 from typing import Annotated
 
 import orjson
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.core.config import settings
+from app.core.photo_storage import DOCS_DIR, UPLOADS_ROOT
 from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import User
 from app.core.security import verify_password
@@ -672,6 +674,89 @@ def documents(owner_type: str | None = None, owner_id: int | None = None, db: Se
     _ensure_document_allowed(db, user, owner_type, owner_id)
     rows = service.list_rows(db, Document, {"owner_type": owner_type, "owner_id": owner_id})
     return _filter_documents(db, user, rows)
+
+
+# P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) — audit préalable (voir rapport) : DOCS_DIR
+# (app/core/photo_storage.py) est un répertoire PARTAGÉ, écrit à la fois par ce module (via
+# des Document.owner_type="employee" créés à la main avec un file_path libre, JAMAIS validé
+# côté serveur jusqu'ici) ET par le portail client (app/modules/client_portal/routes.py,
+# owner_type="client_observation", pièces jointes de demandes). Protéger aveuglément tout
+# /uploads/photos/docs casserait le portail client — hors périmètre de cette correction.
+# Cette route est donc scopée UNIQUEMENT aux documents employé (owner_type="employee"),
+# et gère les DEUX formats réels observés pour Document.file_path :
+#   1. "generated_contract:<reference>" — contrat généré automatiquement (service.py, voir
+#      generate_contract_from_form) : contenu stocké EN BASE (GeneratedContract.file_content,
+#      bytes), jamais sur disque — déjà protégé par _ensure_employee_allowed via la route
+#      existante /generated-contracts/{id}/download ; on délègue à la même logique ici plutôt
+#      que de la dupliquer.
+#   2. une URL "/uploads/photos/docs/..." — résolue en chemin filesystem RÉEL sous DOCS_DIR
+#      uniquement (jamais UPLOADS_ROOT en entier : les photos, rapports IA et pièces jointes
+#      du portail client restent hors de cette route), avec vérification de confinement
+#      canonique anti path-traversal stricte — file_path étant un champ texte libre non
+#      validé à la création, il ne doit JAMAIS être fait confiance sans cette résolution.
+# Tout autre format (None, texte non reconnu) → 404 : contenu réellement indisponible,
+# jamais une erreur 500 qui laisserait deviner la distinction.
+@router.get("/documents/{document_id}/content")
+def download_document_content(
+    document_id: int,
+    download: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    document = service.get_or_404(db, Document, document_id)
+    if document.owner_type != "employee":
+        # Cette route ne sert QUE les documents employé — les autres types (ex. pièces
+        # jointes portail client) restent hors périmètre, jamais servis ici même avec un
+        # ID valide (pas de fuite d'existence/type via un comportement différent).
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    _ensure_document_allowed(db, user, document.owner_type, document.owner_id)
+
+    file_path = document.file_path or ""
+    disposition = "attachment" if download else "inline"
+
+    if file_path.startswith("generated_contract:"):
+        reference = file_path.split(":", 1)[1]
+        generated = db.query(GeneratedContract).filter(GeneratedContract.reference == reference).first()
+        if not generated or generated.employee_id != document.owner_id:
+            raise HTTPException(status_code=404, detail="Document introuvable")
+        return StreamingResponse(
+            BytesIO(generated.file_content),
+            media_type=generated.mime_type,
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{generated.file_name}"',
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, no-store",
+            },
+        )
+
+    docs_root = DOCS_DIR.resolve()
+    if not file_path.startswith("/uploads/"):
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    relative = file_path[len("/uploads/"):]
+    candidate = (UPLOADS_ROOT / relative).resolve()
+    try:
+        candidate.relative_to(docs_root)
+    except ValueError:
+        # En dehors de DOCS_DIR (photos, rapports IA, pièces jointes portail client, ou
+        # tentative de path traversal via un file_path forgé) : jamais servi par cette route.
+        raise HTTPException(status_code=404, detail="Document introuvable")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Document introuvable")
+
+    media_type = document.mime_type or "application/octet-stream"
+    file_name = document.file_name or candidate.name
+    # filename= délibérément omis : Starlette générerait alors SON PROPRE Content-Disposition
+    # ("attachment" toujours), qui se superposerait au nôtre (inline/attachment selon
+    # ?download=). Notre en-tête explicite ci-dessous reste la seule source.
+    return FileResponse(
+        candidate,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{file_name}"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.post("/documents", response_model=DocumentOut)

@@ -31,6 +31,15 @@ export function freshEnv(url = "http://localhost/drh-next") {
   // toujours au window.fetch COURANT, pour que réassigner window.fetch dans un test
   // prenne effet immédiatement.
   globalThis.fetch = (...args) => window.fetch(...args);
+  // P0 sécurité (DRH-NEXT-DOC-URL-AUTH) : employee-dossier.mjs appelle URL.createObjectURL
+  // pour les aperçus/téléchargements de documents authentifiés — absent de JSDOM. Patché en
+  // complément sur le VRAI constructeur URL de Node (jamais remplacé entièrement : les tests
+  // utilisent aussi `new URL(...)` pour analyser des query strings, qui doit continuer à
+  // fonctionner normalement).
+  if (!globalThis.URL.createObjectURL) {
+    globalThis.URL.createObjectURL = () => "blob:test-" + Math.random().toString(36).slice(2);
+    globalThis.URL.revokeObjectURL = () => {};
+  }
 
   resetSession();
   resetRouter();

@@ -75,9 +75,34 @@ export async function apiFetch(path, options = {}) {
   return body;
 }
 
+// P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) : apiFetch() ci-dessus ne convient pas au
+// contenu binaire — il parse systématiquement la réponse comme JSON. Une balise <img>/<a>
+// statique pointant directement sur une route authentifiée ne fonctionnerait pas non plus
+// (le navigateur n'y joint jamais l'en-tête Authorization) : le seul moyen correct est un
+// fetch() explicite avec le token, puis une URL objet locale (URL.createObjectURL) — jamais
+// l'URL de l'API elle-même exposée dans le DOM en tant que src/href.
+export async function apiFetchBlob(path, options = {}) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers.Authorization = "Bearer " + token;
+  let res;
+  try {
+    res = await fetch(API_BASE + path, { method: "GET", headers, signal: options.signal, cache: "no-store" });
+  } catch (e) {
+    throw new ApiError(e?.message || "Erreur réseau", { code: "NETWORK_ERROR" });
+  }
+  if (!res.ok) {
+    let message = "Erreur API " + res.status;
+    try { const body = JSON.parse(await res.text()); message = body?.detail || body?.error || message; } catch (e) { /* pas de corps JSON, message par défaut conservé */ }
+    throw new ApiError(message, { status: res.status });
+  }
+  return res.blob();
+}
+
 export const api = {
   get: (path, options) => apiFetch(path, { ...options, method: "GET" }),
   post: (path, body, options) => apiFetch(path, { ...options, method: "POST", body }),
   put: (path, body, options) => apiFetch(path, { ...options, method: "PUT", body }),
   delete: (path, options) => apiFetch(path, { ...options, method: "DELETE" }),
+  getBlob: (path, options) => apiFetchBlob(path, options),
 };

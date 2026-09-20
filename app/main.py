@@ -26,9 +26,9 @@ from app.core.security import decode_token, hash_password
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
-from app.modules.auth.dependencies import current_user
+from app.modules.auth.dependencies import current_user, _legacy_module_keys, _normalized_module_keys
 from app.modules.irongs.models import SgdiRecord
-from app.core.photo_storage import UPLOADS_ROOT, ensure_upload_dirs
+from app.core.photo_storage import DOCS_DIR, PUBLIC_DOC_PREFIX, UPLOADS_ROOT, ensure_upload_dirs
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.drh import email_alerts as _drh_email_alerts  # noqa: F401
@@ -163,6 +163,65 @@ def app_version():
     except Exception:
         h = "unknown"
     return {"version": h, "drh_next_version": DRH_NEXT_VERSION, "source_commit": settings.source_commit}
+
+# P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) — audit préalable (voir rapport de mission) :
+# DOCS_DIR est PARTAGÉ entre des Document.owner_type="employee" (RH, ce que cette route
+# protège) et owner_type="client_observation" (pièces jointes du portail client,
+# app/modules/client_portal/routes.py) — protéger aveuglément tout DOCS_DIR casserait le
+# portail client, hors périmètre de cette correction (§B/§G de la mission). Route explicite
+# enregistrée AVANT app.mount("/uploads", ...) plus bas : elle intercepte chaque fichier de
+# DOCS_DIR, consulte la base pour savoir s'il correspond à un document EMPLOYÉ, et n'exige
+# une authentification + un scope société que dans ce cas précis — tout le reste (photos,
+# rapports IA, pièces jointes portail client, fichiers orphelins) continue d'être servi
+# exactement comme avant, comportement inchangé. DRH Next lui-même n'utilise plus jamais
+# cette URL brute (voir employee-dossier.mjs, passé sur /api/drh/documents/{id}/content) —
+# cette route ferme le trou pour les liens historiques/legacy qui la référenceraient encore.
+@app.get("/uploads/photos/docs/{filename}", include_in_schema=False)
+def serve_uploaded_document(filename: str, request: Request):
+    candidate = (DOCS_DIR / filename).resolve()
+    try:
+        candidate.relative_to(DOCS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Introuvable")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Introuvable")
+
+    from app.modules.drh.models import Document
+
+    db = SessionLocal()
+    try:
+        public_path = f"{PUBLIC_DOC_PREFIX}/{filename}"
+        doc = db.query(Document).filter(Document.file_path == public_path, Document.owner_type == "employee").first()
+        if doc is not None:
+            # Document RH identifié : authentification + scope désormais obligatoires,
+            # jamais servi anonymement — c'est précisément le P0 corrigé ici.
+            auth_header = request.headers.get("authorization", "")
+            if not auth_header.lower().startswith("bearer "):
+                raise HTTPException(status_code=401, detail="Token manquant")
+            try:
+                payload = decode_token(auth_header.split(" ", 1)[1].strip())
+            except ValueError:
+                raise HTTPException(status_code=401, detail="Token invalide")
+            user = get_user(db, int(payload["sub"]))
+            if not user or not user.is_active:
+                raise HTTPException(status_code=401, detail="Utilisateur inactif")
+            from app.modules.auth.routes import is_admin_role
+
+            if not is_admin_role(user.role):
+                configured = user.authorized_modules
+                allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
+                if allowed.isdisjoint({"drh"}):
+                    raise HTTPException(status_code=403, detail="Module non autorisé pour ce compte")
+            from app.modules.drh.routes import _ensure_document_allowed
+
+            _ensure_document_allowed(db, user, doc.owner_type, doc.owner_id)
+        # Sinon (pièce jointe portail client, photo, rapport IA, fichier orphelin) : servi
+        # publiquement, comportement strictement inchangé — hors périmètre de cette correction.
+    finally:
+        db.close()
+
+    return FileResponse(candidate, headers={"X-Content-Type-Options": "nosniff"})
+
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
