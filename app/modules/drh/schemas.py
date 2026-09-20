@@ -259,6 +259,49 @@ class DocumentOut(DocumentCreate):
     model_config = {"from_attributes": True}
 
 
+# LOT 11B (finalisation DRH Next) — vues composées read-only, employé-centrées, sources
+# canoniques ops/materiel (jamais dupliquées, jamais réécrites depuis DRH). Fermeture des
+# dettes DRH-NEXT-ASSIGNMENT-HISTORY (affectations), consultation pointage, consultation
+# matériel — voir docs/drh-next-v1-parity.md.
+class AssignmentHistoryOut(BaseModel):
+    id: int
+    site_id: int
+    site_name: str
+    group_code: str
+    position: str | None = None
+    start_date: date
+    end_date: date | None = None
+    active: int
+
+    model_config = {"from_attributes": True}
+
+
+class AttendanceOut(BaseModel):
+    id: int
+    presence_date: date
+    site_id: int | None = None
+    site_name: str | None = None
+    status: str
+    arrival_time: str | None = None
+    departure_time: str | None = None
+    notes: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class EquipmentOut(BaseModel):
+    id: int
+    article_id: int
+    article_designation: str
+    quantity: float
+    dotation_date: date
+    return_date: date | None = None
+    item_state: str | None = None
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
 
 class ContractTemplateOut(BaseModel):
     id: int

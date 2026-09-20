@@ -55,3 +55,44 @@ test("approbation réussie (200) : aucun message d'erreur résiduel", async () =
   await tick(); await tick(); await tick();
   assert.match(document.querySelector("#dn-dossier-panel").textContent, /Approuvé/);
 });
+
+// ── LOT 11B : onglets Pointage et Matériel (vues composées) ───────────────────
+
+test("onglet Pointage : 1 appel à /attendance, données réelles affichées", async () => {
+  const { window } = setup();
+  window.fetch = async (url) => {
+    if (String(url).includes("/attendance")) return jsonResp([{ id: 1, presence_date: "2025-01-01", site_name: "SITE Y", status: "present", arrival_time: "08:00", departure_time: "16:00" }]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  let calls = 0;
+  window.fetch = async () => { calls++; return jsonResp([{ id: 1, presence_date: "2025-01-01", site_name: "SITE Y", status: "present", arrival_time: "08:00", departure_time: "16:00" }]); };
+  document.querySelector('[data-dn-tab="pointage"]').click();
+  await tick(); await tick();
+  assert.equal(calls, 1);
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /SITE Y/);
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /08:00/);
+});
+
+test("onglet Matériel : 1 appel à /equipment, données réelles affichées", async () => {
+  const { window } = setup();
+  window.fetch = async (url) => {
+    if (String(url).includes("/equipment")) return jsonResp([{ id: 1, article_designation: "Gilet pare-balles", quantity: 1, dotation_date: "2024-01-01", status: "attribue" }]);
+    return jsonResp(employee(1));
+  };
+  await renderEmployeeDossier({ id: "1" });
+  let calls = 0;
+  window.fetch = async () => { calls++; return jsonResp([{ id: 1, article_designation: "Gilet pare-balles", quantity: 1, dotation_date: "2024-01-01", status: "attribue" }]); };
+  document.querySelector('[data-dn-tab="materiel"]').click();
+  await tick(); await tick();
+  assert.equal(calls, 1);
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /Gilet pare-balles/);
+});
+
+test("aucun onglet lazy chargé avant clic, même avec 9 onglets désormais disponibles", async () => {
+  const { window } = setup();
+  const calls = [];
+  window.fetch = async (url) => { calls.push(String(url)); return jsonResp(employee(1)); };
+  await renderEmployeeDossier({ id: "1" });
+  assert.equal(calls.length, 1, "un seul appel (identité) au chargement du dossier, quel que soit le nombre d'onglets");
+});

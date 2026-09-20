@@ -1098,3 +1098,64 @@ def test_archiving_contract_candidate_removes_drh_recruitment_and_counter(client
     assert stats.json()["drh"]["recrutement"]["shared_pending"] == after["total"]
     archives = client.get("/api/drh/candidates/page", headers=auth_headers, params={"mode": "archive", "page_size": 100}).json()
     assert cid in [row["id"] for row in archives["items"]]
+
+
+# ── LOT 11B (finalisation DRH Next) : vues composées read-only ────────────────
+# affectations-historique / pointage / matériel, sources canoniques ops/materiel,
+# jamais dupliquées côté DRH.
+
+def test_assignment_history_composed_view(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_ASSIGN1")
+    emp_id = emp.get("id") or emp.get("backendId")
+    site = historical_site(client, headers=auth_headers, json={"name": "Site Historique Test"})
+    assert site.status_code in (200, 201), site.text
+    site_id = site.json()["id"]
+    assign = client.post("/api/ops/assignments", headers=auth_headers, json={
+        "employee_id": int(emp_id), "site_id": int(site_id), "group_code": "A",
+        "start_date": str(date.today()), "active": 1,
+    })
+    assert assign.status_code in (200, 201), assign.text
+
+    r = client.get(f"/api/drh/employees/{emp_id}/assignments-history", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert len(rows) >= 1
+    assert rows[0]["site_name"] == "SITE HISTORIQUE TEST"  # _UpperMixin normalise le nom du site
+    assert rows[0]["group_code"] == "A"
+
+
+def test_assignment_history_cross_society_forbidden(client, auth_headers, restricted_headers):
+    emp = _emp(client, auth_headers, "DRH_ASSIGN2")
+    emp_id = emp.get("id") or emp.get("backendId")
+    r = client.get(f"/api/drh/employees/{emp_id}/assignments-history", headers=restricted_headers)
+    assert r.status_code == 403
+
+
+def test_employee_attendance_composed_view(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_ATT1")
+    emp_id = emp.get("id") or emp.get("backendId")
+    r = client.get(f"/api/drh/employees/{emp_id}/attendance", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert isinstance(r.json(), list)  # aucune présence enregistrée -> liste vide, pas d'erreur
+
+
+def test_employee_equipment_composed_view(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_EQ1")
+    emp_id = emp.get("id") or emp.get("backendId")
+    store = client.post("/api/materiel/stores", headers=auth_headers, json={"name": "Magasin Test DRH", "code": "MGDRH1"})
+    assert store.status_code in (200, 201), store.text
+    article = client.post("/api/materiel/articles", headers=auth_headers, json={
+        "code": "ARTDRH1", "designation": "Gilet pare-balles", "store_id": store.json()["id"],
+        "society": "Iron Global Securite", "quantity": 5, "unit_price": 20000,
+    })
+    assert article.status_code in (200, 201), article.text
+    equip = client.post("/api/materiel/dotations", headers=auth_headers, json={
+        "employee_id": int(emp_id), "article_id": article.json()["id"],
+        "quantity": 1, "dotation_date": str(date.today()),
+    })
+    assert equip.status_code in (200, 201), equip.text
+    r = client.get(f"/api/drh/employees/{emp_id}/equipment", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert len(rows) >= 1
+    assert rows[0]["article_designation"] == "Gilet pare-balles"

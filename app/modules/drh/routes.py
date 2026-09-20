@@ -19,6 +19,9 @@ from app.modules.drh import service
 from app.modules.drh.convocation_email import send_candidate_convocation_email
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
+    AssignmentHistoryOut,
+    AttendanceOut,
+    EquipmentOut,
     CandidateCreate,
     CandidateConvocationEmailIn,
     CandidateFinalValidationIn,
@@ -382,6 +385,26 @@ def delete_employee(
 def get_fiche_position(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, employee_id)
     return service.fiche_position(db, employee_id)
+
+
+# LOT 11B (finalisation DRH Next) — vues composées read-only, sources canoniques ops/materiel
+# (jamais dupliquées côté DRH). Même garde RBAC que le reste du dossier employé.
+@router.get("/employees/{employee_id}/assignments-history", response_model=list[AssignmentHistoryOut])
+def get_assignment_history(employee_id: int, limit: int = 30, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_employee_allowed(db, user, employee_id)
+    return service.assignment_history(db, employee_id, limit)
+
+
+@router.get("/employees/{employee_id}/attendance", response_model=list[AttendanceOut])
+def get_employee_attendance(employee_id: int, limit: int = 30, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_employee_allowed(db, user, employee_id)
+    return service.employee_attendance(db, employee_id, limit)
+
+
+@router.get("/employees/{employee_id}/equipment", response_model=list[EquipmentOut])
+def get_employee_equipment(employee_id: int, limit: int = 30, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_employee_allowed(db, user, employee_id)
+    return service.employee_equipment(db, employee_id, limit)
 
 
 @router.get("/candidates/page", response_model=CandidatePage)

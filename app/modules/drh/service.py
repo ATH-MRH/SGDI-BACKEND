@@ -1183,6 +1183,77 @@ def fiche_position(db: Session, employee_id: int):
     }
 
 
+# LOT 11B (finalisation DRH Next) — vues composées read-only employé-centrées, séparées de
+# fiche_position() (qui reste volontairement non utilisée par le frontend, voir LOT 3) : ici,
+# une route dédiée par domaine, chacune bornée (limit), jamais un téléchargement complet.
+# Sources canoniques ops/materiel interrogées directement, jamais dupliquées dans une table
+# DRH — cohérent avec l'audit LOT 11 (docs/drh-next-v1-parity.md, "Ne pas créer une deuxième
+# vérité").
+def assignment_history(db: Session, employee_id: int, limit: int = 30):
+    from app.modules.ops.models import Assignment, Site
+
+    get_or_404(db, Employee, employee_id)
+    rows = db.execute(
+        select(Assignment, Site.name)
+        .join(Site, Assignment.site_id == Site.id)
+        .where(Assignment.employee_id == employee_id)
+        .order_by(Assignment.start_date.desc(), Assignment.id.desc())
+        .limit(min(max(limit, 1), 100))
+    ).all()
+    result = []
+    for assignment, site_name in rows:
+        result.append({
+            "id": assignment.id, "site_id": assignment.site_id, "site_name": site_name,
+            "group_code": assignment.group_code, "position": assignment.position,
+            "start_date": assignment.start_date, "end_date": assignment.end_date,
+            "active": assignment.active,
+        })
+    return result
+
+
+def employee_attendance(db: Session, employee_id: int, limit: int = 30):
+    from app.modules.ops.models import DailyPresence, Site
+
+    get_or_404(db, Employee, employee_id)
+    rows = db.execute(
+        select(DailyPresence, Site.name)
+        .outerjoin(Site, DailyPresence.site_id == Site.id)
+        .where(DailyPresence.employee_id == employee_id)
+        .order_by(DailyPresence.presence_date.desc(), DailyPresence.id.desc())
+        .limit(min(max(limit, 1), 100))
+    ).all()
+    result = []
+    for presence, site_name in rows:
+        result.append({
+            "id": presence.id, "presence_date": presence.presence_date,
+            "site_id": presence.site_id, "site_name": site_name, "status": presence.status,
+            "arrival_time": presence.arrival_time, "departure_time": presence.departure_time,
+            "notes": presence.notes,
+        })
+    return result
+
+
+def employee_equipment(db: Session, employee_id: int, limit: int = 30):
+    from app.modules.materiel.models import EmployeeEquipment, StockArticle
+
+    get_or_404(db, Employee, employee_id)
+    rows = db.execute(
+        select(EmployeeEquipment, StockArticle.designation)
+        .join(StockArticle, EmployeeEquipment.article_id == StockArticle.id)
+        .where(EmployeeEquipment.employee_id == employee_id)
+        .order_by(EmployeeEquipment.dotation_date.desc(), EmployeeEquipment.id.desc())
+        .limit(min(max(limit, 1), 100))
+    ).all()
+    result = []
+    for eq, designation in rows:
+        result.append({
+            "id": eq.id, "article_id": eq.article_id, "article_designation": designation,
+            "quantity": eq.quantity, "dotation_date": eq.dotation_date,
+            "return_date": eq.return_date, "item_state": eq.item_state, "status": eq.status,
+        })
+    return result
+
+
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MIME = "application/pdf"

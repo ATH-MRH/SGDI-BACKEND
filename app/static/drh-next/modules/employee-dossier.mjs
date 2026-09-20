@@ -18,15 +18,15 @@
 //   ici : la mission LOT 3 interdit explicitement "une requête massive regroupant
 //   inutilement tout le dossier" et exige de "charger les sections lourdes qu'au besoin".
 //   Chaque onglet appelle donc son propre endpoint filtré, uniquement à l'ouverture.
-// - AUCUN endpoint DRH n'expose l'historique des affectations (seule l'affectation ACTIVE
-//   est dans EmployeeOut). Le seul historique d'affectations existant est sous
-//   /api/ops/assignments, un module DIFFÉRENT dont l'accès est gated séparément
-//   (enforce_module_access : prefix /api/ops → permission "ops", indépendante de "drh" —
-//   voir app/modules/auth/dependencies.py). L'appeler depuis DRH Next romprait la
-//   séparation de modules déjà actée (mission DATA-1) et échouerait en 403 pour tout RH
-//   sans permission OPS. L'onglet "Historique" affiche donc un état honnête d'indisponibilité
-//   plutôt que d'inventer une donnée ou de contourner cette frontière — dette documentée :
-//   DRH-NEXT-ASSIGNMENT-HISTORY.
+// - LOT 11B (finalisation) : dette DRH-NEXT-ASSIGNMENT-HISTORY fermée. Le modèle Assignment
+//   vit dans le module ops (/api/ops/assignments, gated par la permission "ops", indépendante
+//   de "drh" — toujours pas appelable directement depuis DRH Next), mais le backend expose
+//   désormais une vue composée DRH-scopée en lecture seule :
+//   GET /drh/employees/{id}/assignments-history (RBAC identique aux autres onglets, bornée
+//   à 30 résultats). Même patron pour le pointage (GET /drh/employees/{id}/attendance,
+//   source ops/DailyPresence) et le matériel (GET /drh/employees/{id}/equipment, source
+//   materiel/EmployeeEquipment) — trois sources canoniques interrogées côté serveur,
+//   jamais dupliquées, jamais réécrites depuis DRH (voir docs/drh-next-v1-parity.md).
 import { api } from "../core/api.mjs";
 import { loadData, invalidate } from "../core/data-loader.mjs";
 import { captureRaceContext, raceContextStillValid } from "../core/race-guard.mjs";
@@ -43,6 +43,8 @@ const TABS = [
   { key: "discipline", label: "Discipline" },
   { key: "documents", label: "Documents" },
   { key: "historique", label: "Historique" },
+  { key: "pointage", label: "Pointage" },
+  { key: "materiel", label: "Matériel" },
 ];
 
 // État module-local (LOT 3) : quel employé/onglet est affiché, remis à zéro à chaque
@@ -100,8 +102,7 @@ function selectTab(employee, tabKey) {
 function renderTab(employee, tabKey) {
   if (tabKey === "identite") return mount("#dn-dossier-panel", identiteHTML(employee));
   if (tabKey === "affectation") return mount("#dn-dossier-panel", affectationHTML(employee));
-  if (tabKey === "historique") return mount("#dn-dossier-panel", emptyStateHTML("Historique des affectations non disponible pour le moment."));
-  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments }[tabKey];
+  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments, historique: sectionAssignmentHistory, pointage: sectionAttendance, materiel: sectionEquipment }[tabKey];
   if (section) loadSection(employee, tabKey, section);
 }
 
@@ -361,6 +362,33 @@ async function sectionDocuments(e) {
   if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun document enregistré.");
   return `<table class="dn-table"><thead><tr><th>Libellé</th><th>Fichier</th><th>Type</th><th>Déposé par</th><th>Date</th><th></th></tr></thead><tbody>
     ${rows.map(d => `<tr><td>${escapeHTML(d.label || "—")}</td><td>${escapeHTML(d.file_name || "—")}</td><td>${escapeHTML(d.mime_type || "—")}</td><td>${escapeHTML(d.uploaded_by || "—")}</td><td>${escapeHTML((d.created_at || "").slice(0, 10) || "—")}</td><td>${documentPreviewHTML(d)}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+// LOT 11B : trois vues composées read-only (sources canoniques ops/materiel, jamais
+// dupliquées). Bornées côté serveur (30 dernières entrées) — pas de "voir plus" ce lot,
+// cohérent avec "consultation", pas archéologie complète.
+async function sectionAssignmentHistory(e) {
+  const rows = await loadData(`drh:employee:${e.id}:assignments-history`, (signal) => api.get(`/drh/employees/${encodeURIComponent(e.id)}/assignments-history`, { signal }), { ttlMs: 10000 });
+  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun historique d'affectation enregistré.");
+  return `<table class="dn-table"><thead><tr><th>Site</th><th>Groupe</th><th>Poste</th><th>Début</th><th>Fin</th><th>Statut</th></tr></thead><tbody>
+    ${rows.map(a => `<tr><td>${escapeHTML(a.site_name || "—")}</td><td>${escapeHTML(a.group_code || "—")}</td><td>${escapeHTML(a.position || "—")}</td><td>${escapeHTML(a.start_date || "—")}</td><td>${escapeHTML(a.end_date || "—")}</td><td>${a.active ? `<span class="dn-badge dn-badge-success">Active</span>` : `<span class="dn-badge">Terminée</span>`}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+async function sectionAttendance(e) {
+  const rows = await loadData(`drh:employee:${e.id}:attendance`, (signal) => api.get(`/drh/employees/${encodeURIComponent(e.id)}/attendance`, { signal }), { ttlMs: 10000 });
+  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun pointage enregistré.");
+  return `<table class="dn-table"><thead><tr><th>Date</th><th>Site</th><th>Statut</th><th>Arrivée</th><th>Départ</th></tr></thead><tbody>
+    ${rows.map(p => `<tr><td>${escapeHTML(p.presence_date || "—")}</td><td>${escapeHTML(p.site_name || "—")}</td><td><span class="dn-badge">${escapeHTML(p.status || "—")}</span></td><td>${escapeHTML(p.arrival_time || "—")}</td><td>${escapeHTML(p.departure_time || "—")}</td></tr>`).join("")}
+  </tbody></table>`;
+}
+
+async function sectionEquipment(e) {
+  const rows = await loadData(`drh:employee:${e.id}:equipment`, (signal) => api.get(`/drh/employees/${encodeURIComponent(e.id)}/equipment`, { signal }), { ttlMs: 10000 });
+  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun matériel attribué enregistré.");
+  return `<table class="dn-table"><thead><tr><th>Article</th><th>Qté</th><th>État</th><th>Attribué le</th><th>Restitué le</th><th>Statut</th></tr></thead><tbody>
+    ${rows.map(eq => `<tr><td>${escapeHTML(eq.article_designation || "—")}</td><td>${escapeHTML(eq.quantity ?? "—")}</td><td>${escapeHTML(eq.item_state || "—")}</td><td>${escapeHTML(eq.dotation_date || "—")}</td><td>${escapeHTML(eq.return_date || "—")}</td><td><span class="dn-badge">${escapeHTML(eq.status || "—")}</span></td></tr>`).join("")}
   </tbody></table>`;
 }
 

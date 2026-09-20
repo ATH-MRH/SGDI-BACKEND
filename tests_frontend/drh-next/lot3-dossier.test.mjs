@@ -77,16 +77,23 @@ test("onglet Congés : GET /leaves?employee_id=, onglet Discipline : GET /sancti
   assert.match(document.querySelector("#dn-dossier-panel").textContent, /Carte AGS/);
 });
 
-test("onglet Historique : aucun appel réseau, état honnête (non fabriqué)", async () => {
+// LOT 11B : l'historique d'affectations est désormais une vue composée réelle
+// (GET /drh/employees/{id}/assignments-history, voir employee-dossier.mjs) — ce test,
+// initialement écrit LOT 3 quand aucune API n'existait, est mis à jour pour refléter le
+// vrai comportement (dette DRH-NEXT-ASSIGNMENT-HISTORY fermée), pas supprimé.
+test("onglet Historique : 1 appel à la vue composée assignments-history, données réelles affichées", async () => {
   const { window } = setup();
-  window.fetch = async () => jsonResp(employee(1));
+  window.fetch = async (url) => {
+    if (String(url).includes("/assignments-history")) return jsonResp([{ id: 1, site_name: "SITE X", group_code: "A", start_date: "2024-01-01", end_date: null, active: 1 }]);
+    return jsonResp(employee(1));
+  };
   await renderEmployeeDossier({ id: "1" });
   let calls = 0;
-  window.fetch = async () => { calls++; return jsonResp([]); };
+  window.fetch = async () => { calls++; return jsonResp([{ id: 1, site_name: "SITE X", group_code: "A", start_date: "2024-01-01", end_date: null, active: 1 }]); };
   document.querySelector('[data-dn-tab="historique"]').click();
-  await tick();
-  assert.equal(calls, 0, "aucune requête pour un historique qu'aucune API ne fournit");
-  assert.match(document.querySelector("#dn-dossier-panel").textContent, /non disponible/i);
+  await tick(); await tick();
+  assert.equal(calls, 1, "exactement 1 requête vers la vue composée");
+  assert.match(document.querySelector("#dn-dossier-panel").textContent, /SITE X/);
 });
 
 test("cache par onglet (ttlMs) : revenir sur un onglet déjà chargé ne refait pas d'appel réseau", async () => {
