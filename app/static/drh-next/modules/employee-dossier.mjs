@@ -202,7 +202,7 @@ async function sectionLeaves(e) {
   const table = list.length
     ? `<table class="dn-table"><thead><tr><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th><th></th></tr></thead><tbody>
         ${list.map(l => `<tr data-dn-leave-row="${l.id}"><td>${escapeHTML(l.leave_type || "—")}</td><td>${escapeHTML(l.start_date || "—")}</td><td>${escapeHTML(l.end_date || "—")}</td><td>${leaveStatusBadge(l.status)}</td>
-          <td>${String(l.status || "").toLowerCase() === "instance" ? `<button type="button" class="dn-btn" data-dn-leave-approve="${l.id}">Approuver</button> <button type="button" class="dn-btn" data-dn-leave-refuse="${l.id}">Refuser</button>` : ""}</td></tr>`).join("")}
+          <td>${String(l.status || "").toLowerCase() === "instance" ? `<button type="button" class="dn-btn" data-dn-leave-approve="${l.id}">Approuver</button> <button type="button" class="dn-btn" data-dn-leave-refuse="${l.id}">Refuser</button> <span class="dn-error-state-text" data-dn-leave-error="${l.id}" style="margin:0"></span>` : ""}</td></tr>`).join("")}
       </tbody></table>`
     : emptyStateHTML("Aucun congé/absence enregistré.");
   return `${table}
@@ -252,6 +252,8 @@ function wireLeavesSection(employee) {
 
 async function decideLeave(employee, leaveId, action) {
   const row = document.querySelector(`[data-dn-leave-row="${leaveId}"]`);
+  const errEl = row?.querySelector(`[data-dn-leave-error="${leaveId}"]`);
+  if (errEl) errEl.textContent = "";
   row?.querySelectorAll("button").forEach(b => b.setAttribute("disabled", "disabled"));
   try {
     await api.post(`/drh/leaves/${encodeURIComponent(leaveId)}/${action}`);
@@ -259,6 +261,11 @@ async function decideLeave(employee, leaveId, action) {
     if (state.activeTab === "conges") loadSection(employee, "conges", sectionLeaves);
   } catch (err) {
     row?.querySelectorAll("button").forEach(b => b.removeAttribute("disabled"));
+    // LOT 11A : le bouton reste affiché à tout utilisateur pouvant voir cet onglet (le
+    // backend est la seule frontière de sécurité, voir _require_leave_validate_action côté
+    // API) — jamais masqué a priori côté frontend. En cas de 403 (action "validate" absente),
+    // le message reste honnête plutôt qu'un échec silencieux.
+    if (errEl) errEl.textContent = err?.code === "FORBIDDEN" ? "Permission de validation requise." : (err?.message || "Action impossible.");
   }
 }
 

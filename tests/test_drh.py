@@ -662,6 +662,78 @@ def test_leave_workflow_refuse(client, auth_headers):
     assert ref.status_code == 200 and ref.json()["status"] == "refuse"
 
 
+# ── LOT 11A (finalisation DRH Next) : DRH-NEXT-LEAVE-ACTION-RBAC ──────────────
+# L'approbation/le refus d'un congé exige désormais explicitement l'action "validate"
+# (ou le rôle admin global) en plus du scope société déjà vérifié.
+
+def _create_scoped_rh_user(client, auth_headers, username, *, actions=None, society="Iron Global Securite"):
+    r = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": username, "email": f"{username}@test.com", "password": "testpass123",
+        "validation_password": "validation123", "role": "rh",
+        "authorized_societies": [society], "authorized_modules": ["drh"],
+        "authorized_actions": actions or [],
+    })
+    assert r.status_code in (200, 201), r.text
+    login = client.post("/api/auth/login", json={"username": username, "password": "testpass123"})
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+def test_leave_approve_without_validate_action_is_forbidden(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_LV3")
+    emp_id = emp.get("id") or emp.get("backendId")
+    lv = client.post("/api/drh/leaves", headers=auth_headers, json={
+        "employee_id": emp_id, "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=1)),
+    }).json()
+    # Compte RH du même périmètre société, SANS action "validate" explicite.
+    scoped = _create_scoped_rh_user(client, auth_headers, "rh_sans_validate", actions=["read", "create"])
+    appr = client.post(f"/api/drh/leaves/{lv['id']}/approve", headers=scoped)
+    assert appr.status_code == 403, appr.text
+    ref = client.post(f"/api/drh/leaves/{lv['id']}/refuse", headers=scoped)
+    assert ref.status_code == 403, ref.text
+
+
+def test_leave_approve_with_validate_action_succeeds(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_LV4")
+    emp_id = emp.get("id") or emp.get("backendId")
+    lv = client.post("/api/drh/leaves", headers=auth_headers, json={
+        "employee_id": emp_id, "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=1)),
+    }).json()
+    scoped = _create_scoped_rh_user(client, auth_headers, "rh_avec_validate", actions=["read", "create", "validate"])
+    appr = client.post(f"/api/drh/leaves/{lv['id']}/approve", headers=scoped)
+    assert appr.status_code == 200, appr.text
+    assert appr.json()["status"] == "approuve"
+
+
+def test_leave_approve_cross_society_blocked_before_validate_check(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_LV5", society="Iron Global Securite")
+    emp_id = emp.get("id") or emp.get("backendId")
+    lv = client.post("/api/drh/leaves", headers=auth_headers, json={
+        "employee_id": emp_id, "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=1)),
+    }).json()
+    # Même avec "validate", une autre société reste bloquée : le scope prime.
+    other_society = _create_scoped_rh_user(client, auth_headers, "rh_autre_societe", actions=["validate"], society="Autre Société SARL")
+    appr = client.post(f"/api/drh/leaves/{lv['id']}/approve", headers=other_society)
+    assert appr.status_code == 403, appr.text
+
+
+def test_leave_approve_admin_global_bypasses_validate_requirement(client, auth_headers):
+    # auth_headers = testadmin, role="admin", authorized_actions=[] (aucune action explicite) :
+    # déjà couvert par test_leave_workflow_approve/refuse ci-dessus, revérifié ici explicitement
+    # comme preuve directe de la règle "admin global conforme aux règles existantes".
+    emp = _emp(client, auth_headers, "DRH_LV6")
+    emp_id = emp.get("id") or emp.get("backendId")
+    lv = client.post("/api/drh/leaves", headers=auth_headers, json={
+        "employee_id": emp_id, "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=1)),
+    }).json()
+    appr = client.post(f"/api/drh/leaves/{lv['id']}/approve", headers=auth_headers)
+    assert appr.status_code == 200, appr.text
+
+
 def test_leaves_list(client, auth_headers):
     r = client.get("/api/drh/leaves", headers=auth_headers)
     assert r.status_code == 200 and isinstance(r.json(), list)

@@ -141,6 +141,27 @@ def _ensure_employee_allowed(db: Session, user: User, employee_id: int) -> Emplo
     return employee
 
 
+# LOT 11A (revue de finalisation DRH Next) — dette DRH-NEXT-LEAVE-ACTION-RBAC corrigée.
+# Audit : current_user() (auth/dependencies.py) applique déjà un garde générique par action
+# (request_action() classe correctement /approve et /refuse comme l'action "validate"), MAIS
+# ce garde ne s'active que si authorized_actions est explicitement restreint pour le compte —
+# une liste vide (le cas par défaut de la quasi-totalité des comptes existants) désactive le
+# contrôle, GLOBALEMENT, pour TOUTE l'API. Élargir ce comportement par défaut serait un
+# changement de politique systémique (tous modules confondus), hors périmètre d'une correction
+# ciblée. Ce garde-ci est donc additionnel, appliqué UNIQUEMENT à ces deux routes précises :
+# l'approbation/le refus d'un congé exige désormais explicitement l'action "validate" (ou le
+# rôle admin global, conforme aux règles existantes — même exemption que le garde générique).
+# Le scope société (_ensure_employee_allowed) reste en plus, inchangé.
+def _require_leave_validate_action(user: User) -> None:
+    from app.modules.auth.routes import is_admin_role
+
+    if is_admin_role(user.role):
+        return
+    actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])}
+    if "validate" not in actions and "admin" not in actions:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Action 'validate' requise pour approuver ou refuser un congé")
+
+
 def _authorized_employee_ids(db: Session, user: User) -> set[int] | None:
     allowed = _allowed_societies(user)
     if not allowed:
@@ -597,6 +618,7 @@ def create_leave(payload: LeaveCreate, db: Session = Depends(get_db), user: User
 def approve_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     leave = service.get_or_404(db, Leave, leave_id)
     _ensure_employee_allowed(db, user, leave.employee_id)
+    _require_leave_validate_action(user)
     return service.approve_leave(db, leave_id)
 
 
@@ -604,6 +626,7 @@ def approve_leave(leave_id: int, db: Session = Depends(get_db), user: User = Dep
 def refuse_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     leave = service.get_or_404(db, Leave, leave_id)
     _ensure_employee_allowed(db, user, leave.employee_id)
+    _require_leave_validate_action(user)
     return service.refuse_leave(db, leave_id)
 
 
