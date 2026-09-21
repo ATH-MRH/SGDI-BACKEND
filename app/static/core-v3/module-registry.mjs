@@ -54,6 +54,12 @@ export function canEnterModule(key) {
   const def = registry.get(key);
   if (!def) return false;
   if (!def.permissions) return true;
+  // permissions peut être une clé de module (cas générique, canAccessModule) OU une
+  // fonction prédicat dédiée quand un domaine a besoin d'un critère plus riche que la seule
+  // clé de module (ex. DRH : rôles "rh"/"recruteur", préfixe d'identifiant historique —
+  // voir modules-v3/drh/index.mjs::canAccessDrhV3, qui reproduit à l'identique le critère
+  // déjà audité de drh-next/core/permissions.mjs::canAccessDrh, pas une nouvelle règle).
+  if (typeof def.permissions === "function") return def.permissions();
   return canAccessModule(def.permissions, def.permissionAliases || []);
 }
 

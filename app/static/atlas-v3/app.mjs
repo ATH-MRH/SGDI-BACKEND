@@ -6,24 +6,28 @@
 // permissions — aucune application métier parallèle, uniquement un runtime frontend
 // alternatif pointant sur la même API.
 //
-// Portée de cette phase : uniquement le module Dashboard (§ LOT V3.2). Les autres domaines
-// (DRH, OPS, Superviseur, Matériel...) ne sont PAS enregistrés ici tant qu'ils ne sont pas
-// migrés — un lien de sidebar vers un domaine non migré n'existe simplement pas encore,
-// plutôt que de pointer vers un module qui n'existerait pas réellement.
+// Portée de cette phase (Phase 3) : Dashboard (§ LOT V3.2) + domaine DRH complet (§ mission
+// "ATLAS V3 — PHASE 3", modules-v3/drh/index.mjs). OPS/Superviseur/Matériel/Finance restent
+// Legacy ce lot (§26 de la mission DRH) — un lien de sidebar vers un domaine non migré
+// n'existe simplement pas encore, plutôt que de pointer vers un module qui n'existerait pas.
 import { bootstrap, logoutAndReset } from "../core-v3/bootstrap.mjs";
 import { login } from "../core-v3/auth.mjs";
 import { getUser } from "../core-v3/session.mjs";
 import { registerRoute, registerNotFound } from "../core-v3/router.mjs";
 import { registerModule, getModule, deactivateIfChanged, markActive } from "../core-v3/module-registry.mjs";
 import { escapeHTML } from "../core-v3/ui.mjs";
+import { registerDrhRoutes, drhNavItems } from "../modules-v3/drh/index.mjs";
 
-const NAV_ITEMS = [{ route: "dashboard", label: "Tableau de bord" }];
+function navItems() {
+  return [{ route: "dashboard", label: "Tableau de bord" }, ...drhNavItems()];
+}
 
 function shellHTML(user) {
+  const items = navItems();
   return `<div class="sgdi-shell" style="display:flex;min-height:100vh">
     <aside class="sidebar" style="width:220px;flex:0 0 220px">
       <div style="padding:16px;font-weight:900;font-size:13px;letter-spacing:.04em">ATLAS V3 <span style="color:#64748b;font-weight:600">— expérimental</span></div>
-      <nav>${NAV_ITEMS.map(n => `<a href="#/${n.route}" data-route="${n.route}" class="v3-nav-link" style="display:block;padding:10px 16px;color:#0f172a;text-decoration:none">${escapeHTML(n.label)}</a>`).join("")}</nav>
+      <nav>${items.map(n => `<a href="#/${n.route}" data-route="${n.route}" class="v3-nav-link" style="display:block;padding:10px 16px;color:#0f172a;text-decoration:none">${escapeHTML(n.label)}</a>`).join("")}</nav>
     </aside>
     <div style="flex:1;display:flex;flex-direction:column">
       <header style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #e2e8f0">
@@ -112,6 +116,14 @@ function registerRoutes() {
     await def.mount(document.querySelector("#v3-module-root"));
     markActive("dashboard");
   });
+  // Domaine DRH (Phase 3) : enregistre ses propres modules/routes (drh, drh/employees,
+  // drh/employees/:id, drh/recrutement) — l'orchestration deactivateIfChanged/markActive
+  // est faite à l'identique DANS registerDrhRoutes (modules-v3/drh/index.mjs), même patron
+  // que ci-dessus, pour rester cohérente entre TOUS les domaines migrés. onEnter surligne
+  // le lien de sidebar exact ("drh" pour le tableau de bord, "drh/employees" pour
+  // l'annuaire...) ; le dossier employé ("drh/employees/:id") n'a pas de lien de sidebar
+  // propre, donc aucun surlignage ne correspond — comportement attendu, pas un bug.
+  registerDrhRoutes((routePattern) => highlightActiveNav(routePattern));
   registerNotFound(renderNotFound);
 }
 
