@@ -266,6 +266,13 @@ def employees_page(
 def employees(
     status: str | None = None,
     society: str | None = None,
+    # HOTFIX PERFORMANCE (payload employés) : mode léger pour les consommateurs bootstrap
+    # (DRH Legacy, OPS, superviseur, matériel, tableau de bord général — voir
+    # docs/drh-performance-v2-debt.md, ATLAS-EMPLOYEES-BOOTSTRAP) qui n'ont jamais besoin des
+    # documents ni d'un éventuel base64 résiduel pour afficher une liste/un cockpit. Contrat de
+    # l'endpoint COMPLET inchangé par défaut (light=False) : aucun champ retiré silencieusement,
+    # seul l'emboîtement _legacy dupliqué est aplati (opération sans perte, voir plus bas).
+    light: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -280,7 +287,7 @@ def employees(
     # Injecter l'affectation ACTIVE réelle (table SQL assignments) dans chaque employé, pour que
     # le front affiche la vérité sans dépendre d'un appariement local fragile. Un employé sans
     # affectation active repart sans site (cohérent avec la base).
-    from app.modules.irongs.sql_bridge import _live_assignment_map
+    from app.modules.irongs.sql_bridge import _live_assignment_map, flatten_employee_extra, _strip_embedded_base64
     live = _live_assignment_map(db, employee_ids=[row.id for row in rows])
     # Un seul passage de sérialisation : model_dump(mode="json") produit un dict JSON-safe,
     # qu'on renvoie tel quel via JSONResponse. On évite ainsi la re-validation intégrale que
@@ -289,16 +296,36 @@ def employees(
     payload: list[dict] = []
     for row in rows:
         data = EmployeeOut.model_validate(row).model_dump(mode="json")
-        extra = data.get("extra") if isinstance(data.get("extra"), dict) else {}
-        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+        raw_extra = data.get("extra") if isinstance(data.get("extra"), dict) else {}
+        # HOTFIX PERFORMANCE : aplatit l'emboîtement extra._legacy._legacy._legacy... AVANT de
+        # fusionner l'affectation, pour TOUTE requête (léger ou complet). flatten_employee_extra
+        # est la même fonction déjà testée que la migration one-shot
+        # (POST /drh/employees/flatten-extra) — fusion sans perte (le niveau le plus récent
+        # gagne, les documents sont unifiés) — elle élimine la duplication qui gonfle la réponse
+        # sur les lignes jamais reprises par cette migration (cause identifiée et mesurée en
+        # direct : extra représentait ~100% d'un payload de plusieurs Mo sur une ligne non
+        # migrée, contre quelques centaines d'octets une fois aplati).
+        legacy = flatten_employee_extra(raw_extra) if raw_extra else {}
         aff = live.get(row.id)
         if aff:
             cur = legacy.get("affectationCourante") if isinstance(legacy.get("affectationCourante"), dict) else {}
             legacy["affectationCourante"] = {**cur, **aff}
         elif isinstance(legacy.get("affectationCourante"), dict):
             legacy["affectationCourante"] = {}
-        extra["_legacy"] = legacy
-        data["extra"] = extra
+        if light:
+            # Les documents (potentiellement plusieurs par employé, chacun jusqu'à plusieurs
+            # centaines de Ko une fois externalisé en référence... mais RAW en base64 sur une
+            # ligne non migrée) ne sont jamais nécessaires pour une liste/un cockpit — consultés
+            # à la demande via les écrans dédiés (Documents, Dossier employé). _strip_embedded_base64
+            # est un filet défensif supplémentaire (déjà utilisé par employee_to_item pour
+            # /api/irongs/db) : si "photo" n'a jamais été normalisée (ligne non migrée), elle est
+            # vidée plutôt que transportée brute — jamais un 0 silencieux, la fiche complète
+            # (sans ?light=1) reste disponible pour afficher/réparer cette ligne.
+            legacy = dict(legacy)
+            legacy.pop("documents", None)
+            legacy = _strip_embedded_base64(legacy)
+        fonction = raw_extra.get("fonction") if raw_extra.get("fonction") is not None else legacy.get("fonction")
+        data["extra"] = {"fonction": fonction, "_legacy": legacy}
         payload.append(data)
     # orjson (C) : bien plus rapide que le json.dumps par défaut sur ~12 Mo. payload est déjà
     # JSON-safe (model_dump(mode="json") + valeurs str/int) ; default=str en filet de sécurité.
