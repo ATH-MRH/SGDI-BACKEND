@@ -41,23 +41,50 @@ premier rendu, sans état de chargement local propre) :
 - Superviseur : lecture employés filtrée société avant rendu.
 - Matériel : `syncMaterielFromPostgres` attend `ensureEmployees()` avant de démarrer.
 
-**Ce qui a été fait cette mission (et suffit pour l'instant) :** le Tableau de bord général
-(`renderDashboard`, distinct du dashboard DRH) a été rendu indépendant de `db.agents` — il ne
-déclenche plus lui-même ce chargement et reste correct même s'il n'est pas encore arrivé
-(agrégat serveur `sidebar-stats` en priorité, repli local uniquement si déjà présent, état
-explicite "…" sinon — jamais un 0 trompeur). Commit `b625ab2c82bd8c1665c044ffd1af0336ca00b622`.
+**Ce qui a été fait à l'étape P1 :** le Tableau de bord général (`renderDashboard`, distinct
+du dashboard DRH) a été rendu indépendant de `db.agents` — il ne déclenche plus lui-même ce
+chargement et reste correct même s'il n'est pas encore arrivé (agrégat serveur
+`sidebar-stats` en priorité, repli local uniquement si déjà présent, état explicite "…"
+sinon — jamais un 0 trompeur). Commit `b625ab2c82bd8c1665c044ffd1af0336ca00b622`.
 
-**Ce qui reste à faire (non engagé, refusé pour cette V1) :** pour retirer le chargement
-bloquant dans `sgdiSqlSyncTasks()` sans régression, **chacun** des quatre consommateurs
-ci-dessus doit d'abord être rendu tolérant à une collection employés vide au premier rendu —
-un audit + correctif + tests par écran, du même ordre que le travail déjà fait sur le tableau
-de bord général. Ordre suggéré pour un chantier futur : DRH (dashboard puis écrans
-secondaires) → OPS → Superviseur → Matériel, chacun se terminant par la migration vers une
-API paginée/agrégée/lazy déjà existante ou à créer, puis seulement alors suppression de
-l'appel bloquant correspondant dans `sgdiSqlSyncTasks()`.
+**Ce qui a été fait au HOTFIX PAYLOAD (commits `a2aaf4d` + suivant) :** le chargement reste
+dans le chemin bloquant (décision produit confirmée, non remise en cause), mais il demande
+désormais explicitement `GET /api/drh/employees?light=1` pour les quatre scopes
+(`ensureEmployees()` partagé DRH/OPS/matériel, et l'appel direct superviseur) — documents et
+base64 résiduel ne transitent plus au bootstrap. `db.agents` étant un cache PARTAGÉ, un
+drapeau de forme (`window.__sgdiAgentsShapeLight`) garantit qu'un écran qui a ensuite
+réellement besoin du détail complet (Fiche de position/badges notamment, qui impriment la
+vraie photo) déclenche un second chargement complet plutôt que de garder silencieusement la
+forme allégée — vérifié par test dédié (bootstrap OPS léger puis Fiche de position).
+
+**Ce qui reste à faire (non engagé, refusé pour cette V1) :** retirer complètement ce
+chargement bloquant (pas seulement l'alléger) demanderait toujours de rendre chacun des
+quatre consommateurs tolérant à une collection employés vide au premier rendu — un audit +
+correctif + tests par écran, du même ordre que le travail déjà fait sur le tableau de bord
+général. Le HOTFIX PAYLOAD réduit fortement le coût de ce chargement sans lever cette
+dette de fond.
 
 **Non bloquant pour la V1** — le comportement actuel est fonctionnel, juste plus lent au
 premier chargement qu'un design entièrement paginé/agrégé.
+
+## DRH-EMPLOYEES-PAGE-EXTRA-BLOAT
+
+**Constat** (découvert lors du HOTFIX PAYLOAD, non traité — hors périmètre de ce hotfix).
+`GET /drh/employees/page` (`EmployeePage`, utilisé par DRH Next et tout écran Legacy paginé)
+sérialise `Employee.extra` via le `response_model` Pydantic standard, **sans** l'aplatissement
+(`flatten_employee_extra`) appliqué à `GET /drh/employees` par le HOTFIX PAYLOAD
+(`app/modules/drh/routes.py`, fonction `employees_page`). Une seule ligne non migrée
+(emboîtement `_legacy._legacy...`) suffirait à alourdir même une page de 25-50 lignes.
+
+**Résolution future :** même correctif que `GET /drh/employees` — appliquer
+`flatten_employee_extra` (déjà testée, idempotente) à chaque item de `EmployeePage.items`
+avant sérialisation, avec un paramètre `light` équivalent pour les consommateurs qui n'ont pas
+besoin des documents. Un correctif du même ordre que celui déjà livré, pas une nouvelle
+conception.
+
+**Non bloquant pour la V1** — la pagination limite déjà mécaniquement le nombre de lignes
+concernées par page, contrairement à `/drh/employees` qui transportait les 242 employés d'un
+coup.
 
 ## ATLAS-LEAVES-DUAL-STORE
 
