@@ -72,17 +72,36 @@ function blacklistBadgeHTML(e) {
   return blacklist.blacklistBadgeHTML(e);
 }
 
+// Statut général (§6 : résumé employé) — même mapping que employees.mjs::statusBadgeClass,
+// dupliqué volontairement ici plutôt que d'ajouter une dépendance transverse entre deux
+// écrans pour un seul badge (chaque fichier de modules-v3/drh/ reste indépendant, comme le
+// reste du domaine — voir contracts.mjs/leaves.mjs qui font le même choix pour leurs badges).
+function employeeStatusBadgeHTML(status) {
+  const s = String(status || "").toLowerCase();
+  const cls = s === "actif" ? "dn-badge-success" : s === "suspendu" || s === "blackliste" ? "dn-badge-danger" : s === "absent" ? "dn-badge-warning" : "";
+  return `<span class="dn-badge ${cls}">${escapeHTML(status || "—")}</span>`;
+}
+
 function renderShell(employee) {
   if (!root) return;
   const name = `${employee.last_name || ""} ${employee.first_name || ""}`.trim();
+  // Résumé employé (§6 de la mission "Phase finale DRH") : identité + les repères utiles
+  // pour situer l'employé sans ouvrir d'onglet (société/site/contrat), tous déjà présents
+  // dans la réponse de GET /drh/employees/{id} (aucun appel réseau supplémentaire).
   root.innerHTML = `
     <div class="dn-page-head"><a class="dn-btn" href="#/drh/employees" style="margin-bottom:14px;display:inline-flex">← Retour aux employés</a></div>
     <div class="dn-card dn-panel" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div class="dn-avatar" style="width:56px;height:56px;font-size:18px">${escapeHTML((((employee.first_name||"")[0]||"")+((employee.last_name||"")[0]||"")).toUpperCase() || "?")}</div>
+      <div class="dn-summary">
+        <div class="dn-avatar dn-summary-avatar">${escapeHTML((((employee.first_name||"")[0]||"")+((employee.last_name||"")[0]||"")).toUpperCase() || "?")}</div>
         <div>
-          <div style="font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px">${escapeHTML(name || "—")}${blacklistBadgeHTML(employee)}</div>
-          <div class="dn-error-state-text" style="margin:0">${escapeHTML(employee.code || "")} · ${escapeHTML(employee.position || "—")}</div>
+          <div style="font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${escapeHTML(name || "—")}${employeeStatusBadgeHTML(employee.status)}${blacklistBadgeHTML(employee)}</div>
+          <div class="dn-summary-meta">
+            <span><b>${escapeHTML(employee.code || "—")}</b></span>
+            <span>${escapeHTML(employee.position || "—")}</span>
+            <span>${escapeHTML(employee.society || "—")}</span>
+            <span>${escapeHTML(employee.current_site_name || "Aucun site actuel")}</span>
+            <span>${escapeHTML(employee.contract_type || "Aucun contrat")}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -93,6 +112,19 @@ function renderShell(employee) {
   `;
   root.querySelectorAll("[data-dn-tab]").forEach(btn => {
     btn.addEventListener("click", () => selectTab(employee, btn.getAttribute("data-dn-tab")));
+  });
+  // Navigation clavier (§5) : ←/→ déplacent le focus entre onglets sans les activer (patron
+  // WAI-ARIA "tabs, automatic activation" simplifié) — Entrée/Espace sur un bouton focus
+  // l'active déjà nativement, aucun code supplémentaire nécessaire pour ça.
+  const tabButtons = () => Array.from(root.querySelectorAll("[data-dn-tab]"));
+  root.querySelector("#dn-dossier-tabs")?.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+    const buttons = tabButtons();
+    const idx = buttons.indexOf(document.activeElement);
+    if (idx === -1) return;
+    ev.preventDefault();
+    const next = buttons[(idx + (ev.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length];
+    next.focus();
   });
   renderTab(employee, state.activeTab);
 }
@@ -161,26 +193,45 @@ async function loadSection(employee, tabKey, mod) {
   }
 }
 
+// §7 de la mission "Phase finale DRH" : sections cohérentes plutôt qu'une seule grande table
+// brute — mêmes données réelles qu'avant (aucun champ ajouté, aucun inventé), juste
+// regroupées par thème. sectionHTML() est un simple regroupement visuel de <table class=
+// "dn-info-table">, pas un nouveau composant : la logique/les données restent identiques.
+function sectionHTML(title, rows) {
+  return `<div>
+    <h3 class="dn-info-section-title">${escapeHTML(title)}</h3>
+    <table class="dn-info-table">${rows.map(([label, value]) => `<tr><th>${escapeHTML(label)}</th><td>${escapeHTML(value ?? "—")}</td></tr>`).join("")}</table>
+  </div>`;
+}
+
 function identiteHTML(e) {
-  const rows = [
-    ["Matricule", e.code], ["Nom", e.last_name], ["Prénom", e.first_name],
-    ["Date de naissance", e.birth_date], ["Lieu de naissance", e.birth_place],
-    ["Situation familiale", e.family_status], ["Enfants", e.children_count],
-    ["Téléphone", e.phone], ["Email", e.email],
-    ["Adresse", e.address], ["Commune", e.commune], ["Wilaya", e.wilaya],
-  ];
-  return `<table class="dn-table">${rows.map(([label, value]) => `<tr><th style="width:220px">${escapeHTML(label)}</th><td>${escapeHTML(value ?? "—")}</td></tr>`).join("")}</table>`;
+  return `<div class="dn-info-grid">
+    ${sectionHTML("État civil", [
+      ["Matricule", e.code], ["Nom", e.last_name], ["Prénom", e.first_name],
+      ["Date de naissance", e.birth_date], ["Lieu de naissance", e.birth_place],
+    ])}
+    ${sectionHTML("Situation familiale", [
+      ["Situation familiale", e.family_status], ["Enfants", e.children_count],
+    ])}
+    ${sectionHTML("Coordonnées", [
+      ["Téléphone", e.phone], ["Email", e.email],
+      ["Adresse", e.address], ["Commune", e.commune], ["Wilaya", e.wilaya],
+    ])}
+  </div>`;
 }
 
 function affectationHTML(e) {
-  const rows = [
-    ["Société", e.society], ["Statut", e.status], ["Fonction", e.position],
-    ["Site actuel", e.current_site_name], ["Client", e.current_client_name],
-    ["Groupe", e.current_group_code], ["Poste (affectation)", e.current_position],
-    ["Type de contrat", e.contract_type], ["Date de recrutement", e.recruit_date],
-    ["Fin de période d'essai", e.trial_end_date],
-  ];
-  return `<table class="dn-table">${rows.map(([label, value]) => `<tr><th style="width:220px">${escapeHTML(label)}</th><td>${escapeHTML(value ?? "—")}</td></tr>`).join("")}</table>`;
+  return `<div class="dn-info-grid">
+    ${sectionHTML("Affectation actuelle", [
+      ["Société", e.society], ["Statut", e.status], ["Fonction", e.position],
+      ["Site actuel", e.current_site_name], ["Client", e.current_client_name],
+      ["Groupe", e.current_group_code], ["Poste (affectation)", e.current_position],
+    ])}
+    ${sectionHTML("Contrat", [
+      ["Type de contrat", e.contract_type], ["Date de recrutement", e.recruit_date],
+      ["Fin de période d'essai", e.trial_end_date],
+    ])}
+  </div>`;
 }
 
 export function _resetForTests() { root = null; state = { employeeId: null, activeTab: "identite", employee: null }; tabRequestSeq = 0; }

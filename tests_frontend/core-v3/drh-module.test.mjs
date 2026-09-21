@@ -12,6 +12,7 @@ import { canEnterModule } from "../../app/static/core-v3/module-registry.mjs";
 import { canAccessDrhV3, registerDrhRoutes } from "../../app/static/modules-v3/drh/index.mjs";
 import { mountEmployees, unmountEmployees, _resetForTests as resetEmployees } from "../../app/static/modules-v3/drh/employees.mjs";
 import { mountEmployeeDossier, unmountEmployeeDossier, _resetForTests as resetDossier } from "../../app/static/modules-v3/drh/employee-dossier.mjs";
+import { drhNavItems } from "../../app/static/modules-v3/drh/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DRH_DIR = path.join(__dirname, "../../app/static/modules-v3/drh");
@@ -288,4 +289,67 @@ test("Dossier employé V3 — multi-société (§18/§29) : une réponse tardive
   assert.ok(container.querySelector("[data-marker-suivant]"), "l'écran affiché après le changement de session ne doit jamais être remplacé par la réponse tardive");
   assert.doesNotMatch(container.textContent, /Obsolete/, "les données de l'ancienne session ne doivent jamais apparaître après un changement de session");
   unmountEmployeeDossier();
+});
+
+// ── Phase finale DRH — tests structuraux UX (§17 de la mission) ────────────────────────────
+
+test("UX structurel : les onglets du dossier sont 10 boutons distincts, jamais un seul bloc de texte concaténé, exactement un actif à la fois", async () => {
+  const { window } = freshEnv();
+  resetDossier();
+  setToken("t");
+  setUser({ username: "rh1", role: "rh" });
+  window.fetch = async (url) => {
+    const u = String(url);
+    if (/\/drh\/employees\/42$/.test(u)) return { ok: true, status: 200, text: async () => JSON.stringify(employeePayload()) };
+    return { ok: true, status: 200, text: async () => "[]" };
+  };
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  await mountEmployeeDossier(container, { id: "42" });
+  await tick();
+
+  const tabButtons = Array.from(container.querySelectorAll("[data-dn-tab]"));
+  assert.equal(tabButtons.length, 10, "10 onglets attendus (identité/affectation/contrats/congés/discipline/documents/historique/pointage/matériel/blacklist)");
+  assert.ok(tabButtons.every(b => b.tagName === "BUTTON"), "chaque onglet doit être un <button> réel (navigation clavier native), jamais un <div> cliquable");
+  const labels = tabButtons.map(b => b.textContent.trim());
+  assert.equal(new Set(labels).size, labels.length, "chaque onglet doit avoir un libellé distinct, jamais un texte vide ou dupliqué");
+  assert.ok(labels.every(l => l.length > 0), "aucun libellé d'onglet vide");
+
+  const selected = () => tabButtons.filter(b => b.getAttribute("aria-selected") === "true");
+  assert.equal(selected().length, 1, "exactement un onglet actif au montage");
+  assert.equal(selected()[0].getAttribute("data-dn-tab"), "identite", "identité active par défaut");
+
+  container.querySelector('[data-dn-tab="affectation"]').dispatchEvent(new window.Event("click", { bubbles: true }));
+  await tick();
+  assert.equal(selected().length, 1, "exactement un onglet actif après changement");
+  assert.equal(selected()[0].getAttribute("data-dn-tab"), "affectation");
+  unmountEmployeeDossier();
+});
+
+test("UX structurel : la navigation DRH ne pointe jamais vers une route morte (chaque lien de sidebar a un module/route réellement enregistré)", () => {
+  freshEnv();
+  registerDrhRoutes();
+  setToken("t");
+  setUser({ username: "rh1", role: "rh" });
+  const items = drhNavItems();
+  assert.ok(items.length > 0, "un compte DRH doit voir au moins un lien de navigation DRH");
+  const REGISTERED_DRH_ROUTES = new Set(["drh", "drh/employees", "drh/recrutement"]); // voir modules-v3/drh/index.mjs::registerDrhRoutes
+  for (const item of items) {
+    assert.ok(REGISTERED_DRH_ROUTES.has(item.route), `lien de sidebar "${item.route}" ne correspond à aucune route DRH réellement enregistrée`);
+    assert.ok(item.label && item.label.trim().length > 0, `lien de sidebar "${item.route}" doit avoir un libellé non vide`);
+  }
+});
+
+test("ARCHITECTURAL (§11) : aucun texte de type placeholder (\"pas encore planifié\", \"à venir\"...) dans le domaine DRH V3", () => {
+  // "placeholder" (attribut HTML de saisie, ex. input placeholder="...") est un usage
+  // légitime, volontairement exclu — seules les formulations décrivant une fonctionnalité
+  // non implémentée sont interdites.
+  const forbiddenPhrases = [/pas encore planifi/i, /non planifi/i, /\bà venir\b/i, /\bTODO\b/, /coming soon/i, /\bstub\b/i];
+  const filesToScan = [...drhSourceFiles(), path.join(__dirname, "../../app/static/atlas-v3/app.mjs")];
+  for (const file of filesToScan) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const phrase of forbiddenPhrases) {
+      assert.doesNotMatch(source, phrase, `${path.basename(file)} : texte de type placeholder détecté (${phrase})`);
+    }
+  }
 });
