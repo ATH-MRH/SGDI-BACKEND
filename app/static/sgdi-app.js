@@ -1473,13 +1473,21 @@ function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return Promise.resolve(null);
   const context=sgdiDrhReadContext(opt.society);
-  const fullKey=JSON.stringify([context.token,"",context.revision]);
-  let pending=sgdiEmployeeReads.get(context.key)||(context.scope&&sgdiEmployeeReads.get(fullKey));
+  // HOTFIX PERFORMANCE (payload employés) : léger et complet ont des FORMES différentes
+  // (documents/base64 présents ou non) — jamais interchangeables, même pour la même société/
+  // session. Un suffixe de forme évite qu'une lecture légère et une lecture complète
+  // concurrentes pour le même contexte ne se substituent l'une à l'autre (dédoublonnage déjà
+  // existant conservé intact PAR forme : une lecture société peut toujours réutiliser une
+  // lecture entreprise déjà en vol, mais uniquement de la même forme).
+  const shapeSuffix=opt.light?"|light":"|full";
+  const scopedKey=context.key+shapeSuffix;
+  const companyWideKey=JSON.stringify([context.token,"",context.revision])+shapeSuffix;
+  let pending=sgdiEmployeeReads.get(scopedKey)||(context.scope&&sgdiEmployeeReads.get(companyWideKey));
   if(!pending){
     pending=sgdiFetchEmployees(opt,context).finally(()=>{
-      if(sgdiEmployeeReads.get(context.key)===pending)sgdiEmployeeReads.delete(context.key);
+      if(sgdiEmployeeReads.get(scopedKey)===pending)sgdiEmployeeReads.delete(scopedKey);
     });
-    sgdiEmployeeReads.set(context.key,pending);
+    sgdiEmployeeReads.set(scopedKey,pending);
   }
   return pending.then(result=>{
     if(!sgdiDrhReadIsCurrent(context))return null;
@@ -1515,14 +1523,23 @@ async function sgdiFetchEmployees(options,context){
   const previousAgents=Array.isArray(db?.agents)?db.agents:[];
   try{
     let employees,complete=true;
+    // HOTFIX PERFORMANCE (payload employés) : la forme RÉELLEMENT écrite dans db.agents peut
+    // différer de ce qui a été demandé si le repli paginé (ci-dessous) est utilisé — /drh/
+    // employees/page ne connaît pas ?light=1 (dette ATLAS séparée, voir rapport de mission) et
+    // renvoie toujours la forme complète. shapeIsLight doit refléter ce qui a été obtenu, pas
+    // seulement ce qui a été demandé, sinon un écran qui a besoin du complet pourrait croire à
+    // tort que le cache est encore allégé après un repli.
+    let shapeIsLight=!!opt.light;
     try{
-      employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+      const listParams={...(opt.society?{society:opt.society}:{}),...(opt.light?{light:1}:{})};
+      employees=await window.SGDI_API.employees.list(listParams);
       if(!Array.isArray(employees))throw new Error("Réponse employés invalide");
     }catch(primaryError){
       if(!sgdiDrhReadIsCurrent(context))return{rows:null,applied:false};
       // Le flux complet peut être volumineux. Si celui-ci échoue, le endpoint paginé
       // permet de récupérer les mêmes fiches par lots sans laisser DRH vide.
       console.warn("Chargement employés complet indisponible, repli paginé",primaryError);
+      shapeIsLight=false;
       const params={mode:"all",society:opt.society||undefined,page:1,page_size:100};
       const first=await window.SGDI_API.employees.page(params);
       complete=Array.isArray(first?.items);
@@ -1551,6 +1568,12 @@ async function sgdiFetchEmployees(options,context){
     }else{
       db.agents=backendAgents;
     }
+    // HOTFIX PERFORMANCE (payload employés) : mémorise si db.agents peut désormais contenir
+    // des lignes allégées (documents/base64 retirés). Un remplacement complet ET NON SCOPÉ
+    // (toute l'entreprise) est le seul cas qui garantit que TOUT db.agents redevient complet ;
+    // un remplacement scopé à une société ne dit rien des autres sociétés déjà en cache — on
+    // reste donc prudent (le drapeau ne redescend pas) plutôt que de risquer un faux "complet".
+    window.__sgdiAgentsShapeLight=shapeIsLight||(!scopeNorm?false:!!window.__sgdiAgentsShapeLight);
     normalizeEmployeeCodesInDB();
     // employeeFromApi() reconstruit l'agent depuis /drh/employees, qui n'embarque PAS
     // l'affectation courante (site/poste) : sans ça, tout écran qui redemande les employés
@@ -1744,18 +1767,26 @@ function sgdiEnsureEmployeesForDisplay(options){
   window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
   const fetchedAt=Math.max(window.__sgdiEnsuredAt[_ensureKey]||0,scopeNorm?window.__sgdiEnsuredAt.__all||0:0);
   const backendShowsMissing=backendCount>0&&localCount<backendCount;
-  if(opt.force){
-    if(Date.now()-fetchedAt<10000)return null;
-  }else if(!backendShowsMissing&&Date.now()-fetchedAt<60000){
-    return null;
-  }else if(!backendShowsMissing&&localCount>0&&(localEligible>0||backendCount<=0)){
-    return null;
+  // HOTFIX PERFORMANCE (payload employés) : cet appelant-ci veut la forme complète (aucun
+  // appelant existant de cette fonction ne passe encore light:true) mais db.agents peut avoir
+  // été peuplé par la lecture ALLÉGÉE du bootstrap (sgdiSqlSyncTasks). Dans ce cas, AUCUN des
+  // court-circuits ci-dessous ne doit s'appliquer, quel que soit leur "âge" — sinon Effectifs/
+  // Dossier/etc. garderait silencieusement une forme sans documents.
+  const cacheMayBeLight=!opt.light&&!!window.__sgdiAgentsShapeLight;
+  if(!cacheMayBeLight){
+    if(opt.force){
+      if(Date.now()-fetchedAt<10000)return null;
+    }else if(!backendShowsMissing&&Date.now()-fetchedAt<60000){
+      return null;
+    }else if(!backendShowsMissing&&localCount>0&&(localEligible>0||backendCount<=0)){
+      return null;
+    }
+    // backendCount<=0 signifie "total serveur pas encore connu", pas "aucun employé" : si on
+    // n'a RIEN localement (localCount===0), il faut quand même tenter le chargement, sinon la
+    // page reste vide indéfiniment (aucune autre logique ne relance jamais l'essai).
+    if(!opt.force&&backendCount<=0&&localCount>0)return null;
   }
-  // backendCount<=0 signifie "total serveur pas encore connu", pas "aucun employé" : si on
-  // n'a RIEN localement (localCount===0), il faut quand même tenter le chargement, sinon la
-  // page reste vide indéfiniment (aucune autre logique ne relance jamais l'essai).
-  if(!opt.force&&backendCount<=0&&localCount>0)return null;
-  const pending=sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
+  const pending=sgdiPullEmployees({silent:true,society:scopeSoc,light:!!opt.light}).then(rows=>{
     if(!rows||!sgdiDrhReadIsCurrent(context))return null;
     const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
@@ -2632,8 +2663,14 @@ function sgdiSqlSyncTasks(options){
   const scope=sgdiSqlSyncScope(options);
   const tasks=[];
   let employeesTask=null;
+  // HOTFIX PERFORMANCE (payload employés) : le chargement bloquant du bootstrap n'a jamais
+  // besoin des documents ni d'un éventuel base64 résiduel (DRH/OPS/matériel n'en dépendent que
+  // pour l'identité/le statut/l'affectation — voir app/modules/drh/routes.py, GET /drh/employees
+  // ?light=1). Ne change QUE ce point d'entrée précis ; tout autre appelant de
+  // sgdiPullCurrentEmployees/sgdiPullEmployees/sgdiEnsureEmployeesForDisplay (fiche employé,
+  // formulaires, NIN, contrats…) continue de recevoir la représentation complète, inchangée.
   const ensureEmployees=()=>{
-    if(!employeesTask)employeesTask=sgdiPullCurrentEmployees({silent:true});
+    if(!employeesTask)employeesTask=sgdiPullCurrentEmployees({silent:true,light:true});
     return employeesTask;
   };
   if(scope.drh)tasks.push((async()=>{await Promise.all([ensureEmployees(),...(sgdiShouldSyncCandidates()?[syncCandidatesFromPostgres()]:[])])})());
@@ -2676,7 +2713,9 @@ function sgdiSqlSyncTasks(options){
     // sur des endpoints sans rapport). Affectations ensuite, une fois ce lot terminé.
     tasks.push((async()=>{
       const soc=session?.societe||"";
-      await Promise.all([sgdiPullCurrentEmployees({silent:true,society:soc}),syncSitesFromPostgres()]);
+      // HOTFIX PERFORMANCE (payload employés) : même raison que ensureEmployees() ci-dessus —
+      // ce scope superviseur a son propre appel direct (filtré société), pas via ensureEmployees.
+      await Promise.all([sgdiPullCurrentEmployees({silent:true,society:soc,light:true}),syncSitesFromPostgres()]);
       if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres();
     })());
   }

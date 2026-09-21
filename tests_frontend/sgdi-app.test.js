@@ -406,6 +406,92 @@ test('synchronisation ciblée : les erreurs réelles restent rejetées', async()
   } finally {ctx.window.close();}
 });
 
+// HOTFIX PERFORMANCE (payload employés) — revue finale §7 : le bootstrap DOIT appeler
+// /api/drh/employees?light=1, jamais l'endpoint complet, pour DRH/OPS/superviseur/matériel.
+// Contrairement aux scénarios "synchronisation bloquante" ci-dessus (qui stubbent
+// sgdiPullCurrentEmployees directement), on laisse ici tourner la VRAIE chaîne
+// sgdiSqlSyncTasks -> ensureEmployees/appel direct superviseur -> sgdiPullCurrentEmployees ->
+// sgdiPullEmployees -> sgdiFetchEmployees -> SGDI_API.employees.list, et on n'intercepte QUE
+// ce dernier maillon (le point de sortie réseau réel) pour observer les paramètres exacts.
+for (const scenario of [
+  {name:'DRH', role:'dispatch', module:'drh', structures:['gestionnaire_rh']},
+  {name:'OPS', role:'dispatch', module:'ops'},
+  {name:'Superviseur', role:'dispatch', module:'superviseur'},
+  {name:'Matériel', role:'dispatch', module:'materiel'},
+]) {
+  test(`HOTFIX payload employés : bootstrap ${scenario.name} appelle /api/drh/employees?light=1, jamais sans light`, async () => {
+    const ctx = require('./load-app').loadSgdiApp(['sgdiSqlSyncTasks']);
+    assert.ifError(ctx.loadError);
+    const { window, T } = ctx;
+    try {
+      T().setSession({ username: 'TEST', role: scenario.role, societe: 'IRON', transverse: scenario.module, structuresAutorisees: scenario.structures || [] });
+      window.sessionStorage.setItem('sgdi_api_token_v1', 'fake-test-token');
+      window.sgdiModuleHostConfig = () => null;
+      window.history.replaceState(null, '', '#/' + scenario.module + '/dashboard');
+      const calls = [];
+      window.SGDI_API.employees.list = async (params) => { calls.push(params || {}); return []; };
+      window.syncSitesFromPostgres = async () => {};
+      window.syncAssignmentsFromPostgres = async () => {};
+      window.syncMaterielFromPostgres = async () => {};
+      window.syncCandidatesFromPostgres = async () => {};
+      window.syncOpsMovementsFromPostgres = async () => {};
+      await Promise.all(T().sgdiSqlSyncTasks({ blocking: true, full: true }));
+      assert.ok(calls.length >= 1, `${scenario.name} doit bien déclencher un appel employés`);
+      for (const params of calls) {
+        assert.ok(params && (params.light === 1 || params.light === true), `${scenario.name} : appel employés SANS light=1 interdit au bootstrap — reçu ${JSON.stringify(params)}`);
+      }
+    } finally { window.close(); }
+  });
+}
+
+test('HOTFIX payload employés : un écran qui a explicitement besoin du détail complet (Effectifs) continue de recevoir la forme complète, sans light', async () => {
+  const ctx = require('./load-app').loadSgdiApp(['sgdiEnsureEmployeesForDisplay']);
+  assert.ifError(ctx.loadError);
+  const { window, T } = ctx;
+  try {
+    T().setSession({ username: 'TEST', role: 'rh', societe: 'IRON', transverse: 'drh' });
+    window.sessionStorage.setItem('sgdi_api_token_v1', 'fake-test-token');
+    const calls = [];
+    window.SGDI_API.employees.list = async (params) => { calls.push(params || {}); return []; };
+    // Simule l'écran Effectifs (employees.js) : appelle sgdiEnsureEmployeesForDisplay sans light.
+    await T().sgdiEnsureEmployeesForDisplay({ society: 'IRON' });
+    assert.ok(calls.length >= 1, 'la lecture doit réellement partir (cache vide au départ)');
+    for (const params of calls) {
+      assert.ok(!params.light, `un écran demandant le détail complet ne doit jamais recevoir light=1 — reçu ${JSON.stringify(params)}`);
+    }
+  } finally { window.close(); }
+});
+
+test('HOTFIX payload employés : après un bootstrap léger (ex. OPS), un écran qui a besoin du détail complet (badges/Fiche de position) recharge réellement le complet — jamais une photo tronquée définitivement figée', async () => {
+  // Scénario exact du risque identifié en revue (§6) : session.transverse="ops" -> le
+  // bootstrap sgdiSqlSyncTasks peuple db.agents en LÉGER (photo brute jamais normalisée
+  // vidée par le serveur). L'utilisateur navigue ensuite vers Fiche de position/badge
+  // (positions.js), qui appelle sgdiEnsureEmployeesForDisplay SANS light — doit forcer un
+  // vrai rechargement complet plutôt que de garder silencieusement la forme allégée.
+  const ctx = require('./load-app').loadSgdiApp(['sgdiEnsureEmployeesForDisplay']);
+  assert.ifError(ctx.loadError);
+  const { window, T } = ctx;
+  try {
+    T().setSession({ username: 'TEST', role: 'dispatch', societe: 'IRON', transverse: 'ops' });
+    window.sessionStorage.setItem('sgdi_api_token_v1', 'fake-test-token');
+    let callCount = 0;
+    window.SGDI_API.employees.list = async (params) => {
+      callCount++;
+      const isLight = !!(params && params.light);
+      // Simule le comportement réel du serveur : léger = photo brute jamais normalisée vidée.
+      return [{ id: 1, code: 'A01', first_name: 'K', last_name: 'B', society: 'IRON', status: 'actif',
+                extra: { fonction: 'Agent', _legacy: { photo: isLight ? '' : 'data:image/jpeg;base64,REALPHOTO' } } }];
+    };
+    // 1) Bootstrap OPS léger (simule sgdiSqlSyncTasks -> ensureEmployees avec light:true).
+    await T().sgdiEnsureEmployeesForDisplay({ society: 'IRON', light: true });
+    assert.equal(T().getDb().agents[0].photo, '', 'après le bootstrap léger, la photo brute non normalisée est bien absente (attendu)');
+    // 2) Fiche de position / badge (positions.js) : appel SANS light, comme le vrai code.
+    await T().sgdiEnsureEmployeesForDisplay({ society: 'IRON' });
+    assert.equal(callCount, 2, 'un second appel réseau réel doit partir : le cache léger ne doit jamais faire illusion de fraîcheur pour un besoin complet');
+    assert.equal(T().getDb().agents[0].photo, 'data:image/jpeg;base64,REALPHOTO', 'la photo réelle doit être récupérée avant d\'imprimer un badge — jamais rester tronquée');
+  } finally { window.close(); }
+});
+
 test('PostgreSQL : les listes vides remplacent le cache, les collections omises restent en mémoire',()=>{
   const c=require('./load-app').loadSgdiApp(['hydrateDB']);assert.ifError(c.loadError);
   try{c.T().setDb({agents:[{id:'old'}],clients:[{id:'client'}],settings:{}});const remote={agents:[]};const result=c.T().hydrateDB(remote,{partialSql:true});assert.equal(result.agents.length,0);assert.equal(result.clients[0].id,'client');assert.equal(remote.agents.length,0);}finally{c.window.close();}

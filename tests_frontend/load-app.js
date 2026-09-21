@@ -59,6 +59,7 @@ function loadSgdiApp(names = [], options = {}) {
 ;window.__sgdiTest = {
 ${exposed}
   setDb: (v) => { db = v; },
+  getDb: () => db,
   setSession: (v) => { session = v; },
   setViewMode: (v) => { sgdiViewModeActive = v; },
   setHydrated: (v) => { sgdiHydrated = v; },
