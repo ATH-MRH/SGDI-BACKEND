@@ -164,6 +164,83 @@ def app_version():
         h = "unknown"
     return {"version": h, "drh_next_version": DRH_NEXT_VERSION, "source_commit": settings.source_commit}
 
+# ATLAS V3 — LOT V3.1 (point d'entrée contrôlé). Même patron que /drh-next ci-dessus :
+# route de développement explicite, distincte de "/" (Legacy) et de "/drh-next" (DRH Next).
+# drh.irongs.com continue de servir sgdi-app.js sans aucune modification. MÊME backend, MÊME
+# auth, MÊME session, MÊMES permissions — aucune application métier parallèle. Trois
+# répertoires statiques partagent ce versionnement (core-v3/ le runtime, modules-v3/ les
+# domaines migrés, atlas-v3/ le point d'entrée lui-même) : un changement dans n'importe lequel
+# des trois recalcule la version pour l'ensemble, cohérent avec le fait qu'ils s'importent
+# mutuellement (imports relatifs ES modules).
+_ATLAS_V3_DIRS = [STATIC_DIR / "core-v3", STATIC_DIR / "modules-v3", STATIC_DIR / "atlas-v3"]
+
+
+def _compute_atlas_v3_version() -> str:
+    h = hashlib.md5()
+    try:
+        for directory in _ATLAS_V3_DIRS:
+            for f in sorted(directory.rglob("*")):
+                if f.is_file():
+                    h.update(f.read_bytes())
+    except Exception:
+        return "unknown"
+    return h.hexdigest()[:12]
+
+
+ATLAS_V3_VERSION = _compute_atlas_v3_version()
+
+
+@app.get("/atlas-v3", include_in_schema=False)
+def serve_atlas_v3():
+    html_content = (STATIC_DIR / "atlas-v3" / "index.html").read_text(encoding="utf-8")
+    html_content = html_content.replace(
+        'src="/static/atlas-v3/app.mjs"', f'src="/static/atlas-v3/app.mjs?v={ATLAS_V3_VERSION}"'
+    )
+    html_content = html_content.replace(
+        'href="/static/core-v3/atlas-v3.css"', f'href="/static/core-v3/atlas-v3.css?v={ATLAS_V3_VERSION}"'
+    )
+    return HTMLResponse(content=html_content, headers=_NO_CACHE)
+
+
+def _serve_atlas_v3_static(root_dir: str, asset_path: str, v: str | None):
+    file_path = (STATIC_DIR / root_dir / asset_path).resolve()
+    try:
+        file_path.relative_to(STATIC_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Introuvable")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Introuvable")
+
+    cache_header = "public, max-age=31536000, immutable" if v else "no-cache"
+    if file_path.suffix == ".mjs":
+        content = _versioned_mjs_text(file_path.read_text(encoding="utf-8"), ATLAS_V3_VERSION)
+        return Response(content=content, media_type="text/javascript", headers={"Cache-Control": cache_header})
+    if file_path.suffix == ".css":
+        return Response(content=file_path.read_text(encoding="utf-8"), media_type="text/css", headers={"Cache-Control": cache_header})
+    return FileResponse(file_path, headers={"Cache-Control": cache_header})
+
+
+# Trois routes à préfixe LITTÉRAL explicite (pas un segment générique) — même prudence que
+# /static/drh-next/{asset_path:path} ci-dessus : un motif générique de type
+# /static/{root_dir}/{asset_path:path} intercepterait AUSSI /static/js/modules/drh.js et
+# tout le reste de /static/*, avant que ces requêtes n'atteignent le mount générique plus bas
+# (Starlette exécute le PREMIER motif qui matche, jamais de secours automatique vers un mount
+# déclaré après — piège vérifié et corrigé pendant l'écriture de cette route).
+@app.get("/static/core-v3/{asset_path:path}", include_in_schema=False)
+def serve_atlas_v3_core_asset(asset_path: str, v: str | None = None):
+    return _serve_atlas_v3_static("core-v3", asset_path, v)
+
+
+@app.get("/static/modules-v3/{asset_path:path}", include_in_schema=False)
+def serve_atlas_v3_modules_asset(asset_path: str, v: str | None = None):
+    return _serve_atlas_v3_static("modules-v3", asset_path, v)
+
+
+@app.get("/static/atlas-v3/{asset_path:path}", include_in_schema=False)
+def serve_atlas_v3_entry_asset(asset_path: str, v: str | None = None):
+    return _serve_atlas_v3_static("atlas-v3", asset_path, v)
+
+
 # P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) — audit préalable (voir rapport de mission) :
 # DOCS_DIR est PARTAGÉ entre des Document.owner_type="employee" (RH, ce que cette route
 # protège) et owner_type="client_observation" (pièces jointes du portail client,

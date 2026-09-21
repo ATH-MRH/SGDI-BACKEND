@@ -21,7 +21,7 @@ import { captureRaceContext, isStillValid } from "../../core-v3/race-guard.mjs";
 import { currentSocietyScope } from "../../core-v3/permissions.mjs";
 import { time as recordTiming } from "../../core-v3/telemetry.mjs";
 
-const VIEW_SELECTOR = "#v3-view";
+const VIEW_SELECTOR = "#view";
 
 function counterValue(erpEmp, ...keys) {
   for (const key of keys) {
@@ -107,7 +107,7 @@ function onRetryClick(event) {
 export function mountDashboard(container) {
   // container est l'ÉLÉMENT DOM réel fourni par l'appelant (contrat de module V3, §5) —
   // distinct de ui.mjs::mount(selector, html), pensé pour un usage interne par sélecteur.
-  if (container) container.innerHTML = `<div id="v3-view"></div>`;
+  if (container) container.innerHTML = `<div id="view"></div>`;
   document.addEventListener("click", onRetryClick);
   return render();
 }

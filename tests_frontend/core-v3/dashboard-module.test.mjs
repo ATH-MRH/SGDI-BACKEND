@@ -50,7 +50,7 @@ test("Dashboard V3 : affiche les KPI à partir de l'agrégat serveur, aucun 0 tr
   document.body.appendChild(container);
   await mountDashboard(container);
   await tick();
-  const text = document.querySelector("#v3-view").textContent;
+  const text = document.querySelector("#view").textContent;
   assert.match(text, /140/, "effectif actif serveur attendu");
   assert.match(text, /164/, "total serveur attendu");
   unmountDashboard();
@@ -66,10 +66,10 @@ test("Dashboard V3 : erreur API -> état d'erreur explicite avec Réessayer fonc
   document.body.appendChild(container);
   await mountDashboard(container);
   await tick();
-  assert.match(document.querySelector("#v3-view").innerHTML, /v3-error-state/, "après épuisement du retry interne, l'erreur doit être visible");
+  assert.match(document.querySelector("#view").innerHTML, /v3-error-state/, "après épuisement du retry interne, l'erreur doit être visible");
   document.querySelector("[data-v3-retry='dashboard']").dispatchEvent(new window.Event("click", { bubbles: true }));
   await tick(); await tick();
-  assert.match(document.querySelector("#v3-view").textContent, /140/, "le clic Réessayer doit aboutir sur les vraies données");
+  assert.match(document.querySelector("#view").textContent, /140/, "le clic Réessayer doit aboutir sur les vraies données");
   unmountDashboard();
 });
 
@@ -87,11 +87,11 @@ test("Dashboard V3 — multi-société (§29) : une réponse tardive de la soci�
   clearSession();
   setToken("fake-token-b");
   setUser({ username: "v", authorizedSocieties: ["SOCIETE-B"] });
-  document.querySelector("#v3-view").innerHTML = '<div data-b-marker>Vue de B déjà affichée</div>';
+  document.querySelector("#view").innerHTML = '<div data-b-marker>Vue de B déjà affichée</div>';
   resolveA({ ok: true, status: 200, text: async () => JSON.stringify(statsPayload({ scope: { active_society: "SOCIETE-A" }, erp: { employees: { total: 999, active: 999 } } })) });
   await pending.catch(() => null);
   await tick();
   assert.ok(document.querySelector("[data-b-marker]"), "le DOM de B ne doit jamais être remplacé par la réponse tardive de A");
-  assert.doesNotMatch(document.querySelector("#v3-view").textContent, /999/, "les données de A ne doivent jamais apparaître après le changement de société");
+  assert.doesNotMatch(document.querySelector("#view").textContent, /999/, "les données de A ne doivent jamais apparaître après le changement de société");
   unmountDashboard();
 });
