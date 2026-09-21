@@ -87,6 +87,54 @@ def test_flatten_is_lossless_for_a_normal_not_bloated_employee(client, auth_head
     assert row["extra"]["fonction"] == "Chauffeur"
 
 
+def test_get_never_mutates_employee_extra_in_database(client, auth_headers, db):
+    # CRITIQUE (revue) : un GET ne doit JAMAIS écrire en base. flatten_employee_extra opère
+    # uniquement sur la représentation JSON déjà sérialisée (model_dump), jamais sur l'objet
+    # ORM ni via une session — vérifié ici en relisant la ligne directement depuis la DB après
+    # coup, avec une NOUVELLE session pour exclure tout effet de cache d'identité SQLAlchemy.
+    from app.modules.drh.models import Employee
+    from app.db.session import SessionLocal
+
+    emp = _create_deeply_nested_employee(db, "NOMUTATE1")
+    original_extra_json = orjson.dumps(emp.extra, option=orjson.OPT_SORT_KEYS)
+
+    for suffix in ("", "?light=1"):  # les deux modes doivent être non-mutants
+        r = client.get(f"/api/drh/employees{suffix}", headers=auth_headers)
+        assert r.status_code == 200
+
+    fresh_session = SessionLocal()
+    try:
+        reloaded = fresh_session.get(Employee, emp.id)
+        reloaded_extra_json = orjson.dumps(reloaded.extra, option=orjson.OPT_SORT_KEYS)
+        assert reloaded_extra_json == original_extra_json, (
+            "Employee.extra a changé en base après un simple GET — un GET ne doit jamais muter la donnée persistée"
+        )
+        # Preuve directe que la ligne EN BASE reste non aplatie (le GET ne l'a pas "réparée"
+        # silencieusement) : la migration persistante est une décision séparée (§10).
+        assert isinstance(reloaded.extra.get("_legacy"), dict) and isinstance(reloaded.extra["_legacy"].get("_legacy"), dict), (
+            "la ligne en base doit rester telle quelle : seule sa REPRÉSENTATION servie est aplatie"
+        )
+    finally:
+        fresh_session.close()
+
+
+def test_light_mode_keeps_bootstrap_identity_and_current_assignment_fields(client, auth_headers, db):
+    # §3/§6 de la revue : le mode léger doit conserver tout ce qui est réellement nécessaire
+    # au bootstrap (identité, statut, société, poste, jointure d'affectation typée) — retirer
+    # UNIQUEMENT documents/base64 lourd.
+    _create_deeply_nested_employee(db, "LIGHTKEEP1")
+    r = client.get("/api/drh/employees?light=1", headers=auth_headers)
+    assert r.status_code == 200
+    payload = orjson.loads(r.content)
+    row = next(e for e in payload if e["code"] == "LIGHTKEEP1")
+    for field in ("code", "first_name", "last_name", "status", "society", "position",
+                  "current_assignment_id", "current_site_id", "current_site_name",
+                  "current_client_name", "current_group_code", "current_position"):
+        assert field in row, f"champ bootstrap manquant en mode léger : {field}"
+    assert row["status"] == "actif"
+    assert row["society"] == "Iron Global Securite"
+
+
 def test_current_assignment_still_merges_into_extra_legacy_affectation_courante(client, auth_headers, db):
     # Non-régression explicite : la jointure d'affectation active (déjà en place avant ce
     # correctif) doit survivre à l'aplatissement, léger ou complet.
