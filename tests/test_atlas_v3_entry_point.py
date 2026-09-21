@@ -13,6 +13,17 @@ def test_atlas_v3_entry_serves_versioned_html(client):
     assert "text/html" in r.headers["content-type"]
     assert "app.mjs?v=" in r.text
     assert "atlas-v3.css?v=" in r.text
+    # Phase finale DRH : cause racine du bug "onglets collés" — le design system DRH V3
+    # (classes .dn-*, utilisées par tout modules-v3/drh/**.mjs) doit être chargé sur cette
+    # page, sinon les composants (onglets, tables, badges...) n'ont aucun style.
+    assert "drh-v3.css?v=" in r.text
+
+
+def test_atlas_v3_drh_stylesheet_served(client):
+    r = client.get("/static/modules-v3/drh/drh-v3.css")
+    assert r.status_code == 200
+    assert "text/css" in r.headers["content-type"]
+    assert ".dn-tab" in r.text and ".dn-table" in r.text
 
 
 def test_atlas_v3_core_asset_served(client):

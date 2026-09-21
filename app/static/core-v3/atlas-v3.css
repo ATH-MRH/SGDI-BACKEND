@@ -4,6 +4,20 @@
    redéfinit AUCUNE classe .dash-*/.card/.btn existante, il complète seulement ce qui manque
    pour les nouveaux états introduits par le runtime V3. sgdi-app.css reste chargé sur cette
    page et reste la seule source de vérité pour tout le reste de l'apparence. */
+/* .dash-pilot-staffing (comparaison effectif contrat/réel/écart, modules-v3/dashboard/
+   index.mjs ET modules-v3/drh/dashboard.mjs) : trouvé non stylé pendant la vérification
+   Chrome réelle de la "Phase finale DRH" — span/strong/small sont des éléments EN LIGNE
+   par défaut, donc "EFF CONTRAT150Contrats Commercial en vigueur" s'affichait collé sur une
+   seule ligne (même famille de bug que les "onglets collés" DRH : le markup était correct,
+   aucun CSS ne le mettait en page). Ajouté ici (générique aux deux dashboards) plutôt que
+   dans drh-v3.css, qui reste spécifique au domaine DRH. */
+.dash-pilot-staffing{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.dash-pilot-staffing article{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}
+.dash-pilot-staffing article span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+.dash-pilot-staffing article strong{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;color:#0f172a}
+.dash-pilot-staffing article small{font-size:11px;color:#64748b}
+.dash-pilot-staffing article[data-staffing="gap"] strong{color:#043970}
+
 .v3-skeleton{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 37%,#f1f5f9 63%);background-size:400% 100%;animation:v3-shimmer 1.4s ease infinite;border-radius:8px}
 @keyframes v3-shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
 .v3-skeleton-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -27,3 +41,52 @@
 .v3-btn:disabled{opacity:.5;cursor:not-allowed}
 .v3-btn-primary{background:#0b3d75;border-color:#0b3d75;color:#fff}
 .v3-btn-primary:hover{background:#043970}
+
+/* ── Coquille applicative (§3 de la mission "Phase finale DRH") ──────────────────────────
+   Structure sidebar/header/contenu au niveau de finition du Legacy, PARTAGÉE par tous les
+   domaines V3 (Dashboard général et DRH aujourd'hui) — pas un fichier par domaine, la
+   coquille est unique par définition. Jetons repris de sgdi-app.css déjà chargé sur cette
+   page (var(--primary), var(--border-strong)...), avec un repli local si jamais absent. */
+:root{
+  --v3-bg:var(--bg-soft,#f3f4f6);
+  --v3-surface:var(--surface,#ffffff);
+  --v3-border:var(--border-strong,#d3d9e3);
+  --v3-text:var(--text,#0f172a);
+  --v3-text-muted:var(--text-soft,#475569);
+  --v3-accent:var(--primary,#043970);
+  --v3-accent-strong:var(--primary-strong,#032f5d);
+  --v3-accent-weak:var(--primary-soft,#e8f0f8);
+  --v3-sidebar-w:240px;
+  --v3-header-h:56px;
+}
+#v3-root{background:var(--v3-bg);min-height:100vh}
+.v3-shell{display:flex;min-height:100vh}
+.v3-shell-sidebar{
+  width:var(--v3-sidebar-w);flex:0 0 var(--v3-sidebar-w);background:var(--v3-surface);
+  border-right:1px solid var(--v3-border);display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;z-index:10;
+}
+.v3-shell-brand{padding:18px 20px;font-weight:900;font-size:13px;letter-spacing:.04em;border-bottom:1px solid var(--v3-border);color:var(--v3-text);display:flex;align-items:center;gap:8px}
+.v3-shell-brand-tag{color:var(--v3-text-muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.v3-shell-nav{flex:1;padding:14px 10px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.v3-shell-nav-group-label{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--v3-text-muted);padding:0 12px;margin-bottom:2px}
+.v3-nav-link{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--v3-text-muted);text-decoration:none;font-size:13.5px;font-weight:700}
+.v3-nav-link:hover{background:var(--v3-bg);color:var(--v3-text)}
+.v3-nav-link.active{background:var(--v3-accent-weak);color:var(--v3-accent-strong)}
+.v3-shell-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.v3-shell-header{
+  height:var(--v3-header-h);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;border-bottom:1px solid var(--v3-border);background:var(--v3-surface);
+  position:sticky;top:0;z-index:5;gap:14px;
+}
+.v3-shell-header-user{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--v3-text-muted)}
+.v3-shell-header-society{font-weight:800;background:var(--v3-accent-weak);color:var(--v3-accent-strong);border-radius:999px;padding:3px 10px;font-size:11.5px}
+.v3-shell-content{padding:22px;flex:1;overflow-x:auto}
+.v3-sidebar-toggle{display:none;border:1px solid var(--v3-border);background:var(--v3-surface);border-radius:8px;width:34px;height:34px;align-items:center;justify-content:center;cursor:pointer}
+@media(max-width:860px){
+  .v3-shell-sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .18s ease;box-shadow:0 8px 24px rgba(15,23,42,.18)}
+  .v3-shell.v3-sidebar-open .v3-shell-sidebar{transform:translateX(0)}
+  .v3-sidebar-toggle{display:inline-flex}
+  .v3-shell-content{padding:14px}
+  .v3-shell-header{padding:0 12px}
+}

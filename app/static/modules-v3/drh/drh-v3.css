@@ -1,0 +1,134 @@
+/* ATLAS V3 — modules-v3/drh/drh-v3.css
+ *
+ * Design system DRH V3 (§12 de la mission "Phase finale DRH"). Adapté — pas simplement
+ * lié — depuis app/static/drh-next/styles/{tokens,layout,components}.css : ce fichier promeut
+ * (même patron que core-v3/*.mjs depuis drh-next/core/*.mjs) les composants génériques déjà
+ * matures de DRH Next (card/kpi/badge/table/tabs/input/select/modal/drawer/skeleton/empty/
+ * error/pagination — classes `.dn-*`, CONSERVÉES telles quelles car tout le HTML produit par
+ * modules-v3/drh/**.mjs les utilise déjà verbatim) vers un fichier V3 autonome, sans lien
+ * runtime vers drh-next.
+ *
+ * CAUSE RACINE du bug "onglets collés" (production, commit 5418c06) : ces classes .dn-*
+ * étaient utilisées par tout le HTML de modules-v3/drh/** mais AUCUN fichier CSS ne les
+ * définissait sur /atlas-v3 (drh-next/styles/*.css n'y a jamais été chargé) — un onglet actif
+ * ne se distinguait donc pas visuellement des autres et les libellés s'affichaient collés (le
+ * markup "correct" existait, seul le style manquait). Ce fichier ferme cet écart.
+ *
+ * Jetons : repris de sgdi-app.css déjà chargé sur cette page (var(--primary), etc., avec
+ * repli local) — "réutiliser les tokens Legacy pertinents" (§12), pas les redéfinir en
+ * doublon. --dn-success/--dn-warning restent des teintes dédiées (vert/ambre) : Legacy ne
+ * distingue pas ces états sémantiquement (voir --success/--warn dans sgdi-app.css, gris tous
+ * les deux) mais un badge de statut RH (congé approuvé/en attente/refusé) reste plus lisible
+ * avec une couleur par état — amélioration délibérée, pas une divergence de palette.
+ */
+:root{
+  --dn-bg:var(--bg-soft,#f3f4f6);
+  --dn-surface:var(--surface,#ffffff);
+  --dn-border:var(--border-strong,#d3d9e3);
+  --dn-text:var(--text,#0f172a);
+  --dn-text-muted:var(--text-soft,#475569);
+  --dn-accent:var(--primary,#043970);
+  --dn-accent-strong:var(--primary-strong,#032f5d);
+  --dn-accent-weak:var(--primary-soft,#e8f0f8);
+  --dn-success:#16a34a;
+  --dn-success-weak:#dcfce7;
+  --dn-warning:#d97706;
+  --dn-warning-weak:#fef3c7;
+  --dn-danger:var(--danger,#b91c1c);
+  --dn-danger-weak:var(--danger-soft,#fee2e2);
+  --dn-radius:10px;
+  --dn-radius-sm:7px;
+  --dn-shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+}
+
+/* Bug trouvé en vérification Chrome réelle (Phase finale DRH, capture d'écran "avant") :
+   plusieurs formulaires "+ Nouveau..." (contracts.mjs/leaves.mjs/discipline.mjs/
+   blacklist.mjs/recruitment.mjs) portent à la fois l'attribut `hidden` ET un style en ligne
+   `display:flex` — une valeur `display` en ligne bat TOUJOURS la règle UA `[hidden]{display:
+   none}` (même spécificité, mais l'inline gagne par construction), donc le formulaire
+   restait visible en permanence, avant même le clic sur le bouton "+ Nouveau...". Un seul
+   correctif CSS ici couvre les 7 occurrences sans toucher au markup de chaque fichier.*/
+[hidden]{display:none!important}
+
+.dn-card{background:var(--dn-surface);border:1px solid var(--dn-border);border-radius:var(--dn-radius);box-shadow:var(--dn-shadow)}
+
+.dn-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.dn-kpi{padding:16px 18px}
+.dn-kpi-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--dn-text-muted)}
+.dn-kpi-value{font-size:28px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;color:var(--dn-text)}
+.dn-kpi-sub{font-size:12px;color:var(--dn-text-muted);margin-top:2px}
+
+.dn-panel{padding:16px 18px}
+.dn-panel-head{font-size:14px;font-weight:800;margin-bottom:12px;color:var(--dn-text);display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+.dn-page-head{margin-bottom:16px}
+.dn-page-head h1{font-size:19px;margin:0 0 4px;color:var(--dn-text);font-weight:900}
+
+.dn-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--dn-radius-sm);border:1px solid var(--dn-border);background:var(--dn-surface);color:var(--dn-text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.dn-btn:hover{border-color:var(--dn-accent)}
+.dn-btn-primary{background:var(--dn-accent);border-color:var(--dn-accent);color:#fff}
+.dn-btn-primary:hover{background:var(--dn-accent-strong);border-color:var(--dn-accent-strong)}
+.dn-btn[disabled]{opacity:.45;cursor:not-allowed}
+
+.dn-avatar{width:34px;height:34px;border-radius:999px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;background:var(--dn-accent-weak);color:var(--dn-accent-strong);font-size:12px;font-weight:800}
+.dn-table-row-link{cursor:pointer}
+.dn-table-row-link:hover{background:var(--dn-bg)}
+.dn-search-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.dn-search-row .dn-input{max-width:320px}
+.dn-search-row .dn-select{max-width:200px}
+.dn-loading-inline{font-size:12px;color:var(--dn-text-muted)}
+
+.dn-badge{display:inline-flex;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:var(--dn-accent-weak);color:var(--dn-accent-strong);white-space:nowrap}
+.dn-badge-success{background:var(--dn-success-weak);color:var(--dn-success)}
+.dn-badge-warning{background:var(--dn-warning-weak);color:var(--dn-warning)}
+.dn-badge-danger{background:var(--dn-danger-weak);color:var(--dn-danger)}
+
+.dn-table{width:100%;border-collapse:collapse;font-size:13px}
+.dn-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--dn-text-muted);padding:9px 10px;border-bottom:1px solid var(--dn-border);white-space:nowrap}
+.dn-table td{padding:10px;border-bottom:1px solid var(--dn-border);color:var(--dn-text);vertical-align:middle}
+.dn-table tbody tr:last-child td{border-bottom:none}
+
+.dn-input,.dn-select{width:100%;padding:8px 10px;border-radius:var(--dn-radius-sm);border:1px solid var(--dn-border);background:var(--dn-surface);color:var(--dn-text);font-size:13px;font-family:inherit}
+.dn-input:focus,.dn-select:focus{outline:2px solid var(--dn-accent-weak);border-color:var(--dn-accent)}
+
+.dn-modal-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.45);display:flex;align-items:center;justify-content:center;z-index:30}
+.dn-modal{background:var(--dn-surface);border-radius:var(--dn-radius);padding:20px;max-width:520px;width:92%}
+.dn-drawer{position:fixed;top:0;right:0;height:100vh;width:min(420px,92vw);background:var(--dn-surface);box-shadow:var(--dn-shadow);z-index:30}
+
+.dn-skeleton{background:linear-gradient(90deg,var(--dn-border) 25%,var(--dn-bg) 37%,var(--dn-border) 63%);background-size:400% 100%;animation:dn-shimmer 1.4s ease infinite;border-radius:var(--dn-radius)}
+@keyframes dn-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+@media(prefers-reduced-motion:reduce){.dn-skeleton{animation:none}}
+
+.dn-empty-state,.dn-error-state{padding:28px 16px;text-align:center;color:var(--dn-text-muted)}
+.dn-error-state{background:var(--dn-danger-weak);border-radius:var(--dn-radius)}
+.dn-error-state-title{font-weight:800;color:var(--dn-text);margin-bottom:4px}
+.dn-error-state-text{font-size:13px;margin-bottom:12px;color:var(--dn-text-muted)}
+
+.dn-pagination{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:14px}
+
+/* Barre d'onglets (§5 de la mission "Phase finale DRH" — corrige les "onglets collés") :
+   séparation visuelle nette entre chaque onglet, état actif clairement distinct
+   (couleur + soulignement), navigation clavier native (des <button> réels, jamais de <div>
+   cliquable — le focus/Tab/Entrée fonctionnent sans JS supplémentaire). */
+.dn-tabs{display:flex;gap:2px;border-bottom:1px solid var(--dn-border);margin-bottom:16px;flex-wrap:wrap;overflow-x:auto}
+.dn-tab{padding:10px 16px;font-size:13px;font-weight:700;color:var(--dn-text-muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;white-space:nowrap}
+.dn-tab:hover{color:var(--dn-text)}
+.dn-tab:focus-visible{outline:2px solid var(--dn-accent-weak);outline-offset:-2px;border-radius:4px 4px 0 0}
+.dn-tab.active,.dn-tab[aria-selected="true"]{color:var(--dn-accent-strong);border-color:var(--dn-accent)}
+
+/* Résumé employé (dossier) et sections structurées (§6/§7). */
+.dn-summary{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.dn-summary-avatar{width:56px;height:56px;font-size:18px}
+.dn-summary-meta{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px;font-size:12.5px;color:var(--dn-text-muted)}
+.dn-summary-meta span b{color:var(--dn-text);font-weight:700}
+.dn-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dn-info-section-title{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--dn-text-muted);margin:0 0 8px}
+.dn-info-table{width:100%;border-collapse:collapse;font-size:13px}
+.dn-info-table th{text-align:left;width:44%;font-weight:600;color:var(--dn-text-muted);padding:5px 0;vertical-align:top}
+.dn-info-table td{padding:5px 0;color:var(--dn-text)}
+
+@media(max-width:720px){
+  .dn-summary{align-items:flex-start}
+  .dn-table{font-size:12.5px}
+  .dn-search-row .dn-input,.dn-search-row .dn-select{max-width:none;width:100%}
+}

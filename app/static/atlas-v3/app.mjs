@@ -15,26 +15,52 @@ import { login } from "../core-v3/auth.mjs";
 import { getUser } from "../core-v3/session.mjs";
 import { registerRoute, registerNotFound } from "../core-v3/router.mjs";
 import { registerModule, getModule, deactivateIfChanged, markActive } from "../core-v3/module-registry.mjs";
-import { escapeHTML } from "../core-v3/ui.mjs";
+import { escapeHTML, initialsAvatarHTML } from "../core-v3/ui.mjs";
+import { currentSocietyScope } from "../core-v3/permissions.mjs";
 import { registerDrhRoutes, drhNavItems } from "../modules-v3/drh/index.mjs";
 
-function navItems() {
-  return [{ route: "dashboard", label: "Tableau de bord" }, ...drhNavItems()];
+// Groupes de navigation (§3/§11 de la mission "Phase finale DRH") : uniquement des routes
+// RÉELLEMENT enregistrées plus bas — aucun placeholder, aucun lien "à venir". drhNavItems()
+// renvoie [] pour un compte sans accès DRH (§19 RBAC) : le groupe "Ressources humaines" ne
+// s'affiche alors simplement pas, plutôt qu'un lien visible mais qui échouerait en 403.
+function navGroups() {
+  const drh = drhNavItems();
+  const groups = [{ label: "Général", items: [{ route: "dashboard", label: "Tableau de bord" }] }];
+  if (drh.length) groups.push({ label: "Ressources humaines", items: drh });
+  return groups;
+}
+
+function activeSocietyLabel(user) {
+  if (user?.moduleAccessGlobal || user?.globalSocietyAccess) return "Toutes sociétés";
+  const societies = currentSocietyScope();
+  if (!societies.length) return "";
+  return societies.length === 1 ? societies[0] : `${societies[0]} +${societies.length - 1}`;
 }
 
 function shellHTML(user) {
-  const items = navItems();
-  return `<div class="sgdi-shell" style="display:flex;min-height:100vh">
-    <aside class="sidebar" style="width:220px;flex:0 0 220px">
-      <div style="padding:16px;font-weight:900;font-size:13px;letter-spacing:.04em">ATLAS V3 <span style="color:#64748b;font-weight:600">— expérimental</span></div>
-      <nav>${items.map(n => `<a href="#/${n.route}" data-route="${n.route}" class="v3-nav-link" style="display:block;padding:10px 16px;color:#0f172a;text-decoration:none">${escapeHTML(n.label)}</a>`).join("")}</nav>
+  const groups = navGroups();
+  const societyLabel = activeSocietyLabel(user);
+  return `<div class="v3-shell" id="v3-shell">
+    <aside class="v3-shell-sidebar" id="v3-shell-sidebar">
+      <div class="v3-shell-brand">ATLAS V3 <span class="v3-shell-brand-tag">expérimental</span></div>
+      <nav class="v3-shell-nav">
+        ${groups.map(g => `<div><div class="v3-shell-nav-group-label">${escapeHTML(g.label)}</div>
+          ${g.items.map(n => `<a href="#/${n.route}" data-route="${n.route}" class="v3-nav-link">${escapeHTML(n.label)}</a>`).join("")}
+        </div>`).join("")}
+      </nav>
     </aside>
-    <div style="flex:1;display:flex;flex-direction:column">
-      <header style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #e2e8f0">
-        <span style="font-size:12px;color:#64748b">${escapeHTML(user?.fullName || user?.username || "")}</span>
-        <button type="button" class="v3-btn" id="v3-logout-btn">Déconnexion</button>
+    <div class="v3-shell-main">
+      <header class="v3-shell-header">
+        <button type="button" class="v3-sidebar-toggle" id="v3-sidebar-toggle" aria-label="Ouvrir le menu" aria-controls="v3-shell-sidebar">☰</button>
+        <span></span>
+        <div class="v3-shell-header-user">
+          ${societyLabel ? `<span class="v3-shell-header-society">${escapeHTML(societyLabel)}</span>` : ""}
+          ${initialsAvatarHTML(user?.fullName?.split(" ")[0], user?.fullName?.split(" ").slice(-1)[0])}
+          <span>${escapeHTML(user?.fullName || user?.username || "")}</span>
+          <button type="button" class="v3-btn" id="v3-logout-btn">Déconnexion</button>
+        </div>
       </header>
-      <main style="flex:1;padding:16px"><div id="v3-module-root"></div></main>
+      <main class="v3-shell-content"><div id="v3-module-root"></div></main>
     </div>
   </div>`;
 }
@@ -87,6 +113,16 @@ function highlightActiveNav(route) {
 function renderShell() {
   document.querySelector("#v3-root").innerHTML = shellHTML(getUser());
   document.querySelector("#v3-logout-btn")?.addEventListener("click", () => logoutAndReset(() => renderLogin()));
+  // Bascule mobile (§14 : responsive 390/768px) : la sidebar reste hors écran en dessous de
+  // 860px (voir core-v3/atlas-v3.css) tant que .v3-sidebar-open n'est pas posé sur le shell.
+  document.querySelector("#v3-sidebar-toggle")?.addEventListener("click", () => {
+    document.querySelector("#v3-shell")?.classList.toggle("v3-sidebar-open");
+  });
+  // Un clic sur un lien de navigation referme la sidebar mobile — évite qu'elle reste
+  // ouverte par-dessus l'écran nouvellement affiché sur petit écran.
+  document.querySelectorAll(".v3-nav-link").forEach(a => a.addEventListener("click", () => {
+    document.querySelector("#v3-shell")?.classList.remove("v3-sidebar-open");
+  }));
 }
 
 function registerRoutes() {

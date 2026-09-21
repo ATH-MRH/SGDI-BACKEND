@@ -199,6 +199,9 @@ def serve_atlas_v3():
     html_content = html_content.replace(
         'href="/static/core-v3/atlas-v3.css"', f'href="/static/core-v3/atlas-v3.css?v={ATLAS_V3_VERSION}"'
     )
+    html_content = html_content.replace(
+        'href="/static/modules-v3/drh/drh-v3.css"', f'href="/static/modules-v3/drh/drh-v3.css?v={ATLAS_V3_VERSION}"'
+    )
     return HTMLResponse(content=html_content, headers=_NO_CACHE)
 
 
