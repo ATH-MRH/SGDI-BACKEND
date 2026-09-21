@@ -242,6 +242,26 @@ def test_drh_dashboard(client, auth_headers):
     assert isinstance(r.json(), dict)
 
 
+def test_drh_dashboard_employees_by_site(client, auth_headers):
+    """ATLAS V3 — Phase finale DRH (§4) : agrégat ciblé "répartition par site" ajouté au
+    cockpit. Doit refléter les affectations actives réelles sans coût réseau supplémentaire
+    côté V3 (aucune collection complète d'employés n'est jamais renvoyée au frontend — cet
+    agrégat est calculé et résumé entièrement côté serveur)."""
+    site_id = _site(client, auth_headers, "SiteDashboardV3")
+    emp = _emp(client, auth_headers, "DRH_DASH_SITE1")
+    emp_id = emp.get("id") or emp.get("backendId")
+    _assign(client, auth_headers, emp_id, site_id)
+
+    r = client.get("/api/drh/dashboard", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "employees_by_site" in body and isinstance(body["employees_by_site"], list)
+    assert "employees_without_site" in body and isinstance(body["employees_without_site"], int)
+    assert len(body["employees_by_site"]) <= 10
+    matching = [row for row in body["employees_by_site"] if row["site"].upper() == "SITEDASHBOARDV3"]
+    assert matching and matching[0]["count"] >= 1, body["employees_by_site"]
+
+
 # ── Employés (CRUD complet) ───────────────────────────────────────────────────
 
 def test_employee_full_crud(client, auth_headers):

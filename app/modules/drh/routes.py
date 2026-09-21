@@ -226,6 +226,26 @@ def dashboard(
     leaves_pending = db.scalar(
         select(func.count(Leave.id)).where(Leave.status == "instance", Leave.employee_id.in_(employee_ids))
     ) if employee_ids else 0
+    # ATLAS V3 — Phase finale DRH (§4) : "Répartition opérationnelle par site" du cockpit.
+    # Coût zéro requête supplémentaire : service.list_employees() a déjà joint l'affectation
+    # active de chaque employé (_attach_current_assignments, une seule requête pour tout le
+    # lot) pour produire trial_periods ci-dessus — current_site_name est donc déjà en mémoire.
+    # Limité aux 10 sites les plus peuplés (cockpit, pas un rapport exhaustif) ; les employés
+    # actifs sans affectation sont comptés à part plutôt qu'ignorés silencieusement.
+    site_counts: dict[str, int] = {}
+    without_site = 0
+    for row in employees_rows:
+        if row.status != "actif":
+            continue
+        site_name = getattr(row, "current_site_name", None)
+        if site_name:
+            site_counts[site_name] = site_counts.get(site_name, 0) + 1
+        else:
+            without_site += 1
+    employees_by_site = sorted(
+        ({"site": site, "count": count} for site, count in site_counts.items()),
+        key=lambda entry: entry["count"], reverse=True,
+    )[:10]
     return {
         "employees_total": len(employees_rows),
         "employees_by_status": {status_key or "non_defini": sum(1 for row in employees_rows if row.status == status_key) for status_key in {row.status for row in employees_rows}},
@@ -236,6 +256,8 @@ def dashboard(
             for e in employees_rows
             if e.trial_end_date is not None and e.status == "actif"
         ],
+        "employees_by_site": employees_by_site,
+        "employees_without_site": without_site,
     }
 
 
