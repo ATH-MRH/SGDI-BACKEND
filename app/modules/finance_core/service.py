@@ -65,27 +65,57 @@ def emit_event(
     return event
 
 
+MAX_OUTBOX_ATTEMPTS = 5
+
+
 def dispatch_pending_events(db: Session, *, handler, limit: int = 50) -> dict:
     """Traite les entrées outbox en attente (P0-F) : appelle `handler(financial_event)` pour
     chacune, marque "dispatched" en cas de succès, "failed" + last_error sinon — SANS jamais
     interrompre le traitement des autres entrées sur l'échec d'une seule. Conçu pour être
     appelé par une tâche planifiée (pas de dispatch temps réel synchrone dans ce lot), ce qui
     est le patron outbox standard : la transaction métier qui écrit l'événement ne dépend
-    jamais de la disponibilité du bridge comptable pour réussir."""
+    jamais de la disponibilité du bridge comptable pour réussir.
+
+    P0 (revue d'intégrité, item 6/7) — TROUVÉ PENDANT L'AUDIT, deux défauts distincts :
+
+    (a) Une entrée "failed" n'était JAMAIS reprise par un dispatch ultérieur (la requête ne
+    portait que sur status == "pending") — un échec transitoire (bridge comptable
+    momentanément indisponible) laissait l'écriture comptable définitivement manquante,
+    silencieusement, sans aucune nouvelle tentative. Corrigé : les entrées "failed" sous
+    MAX_OUTBOX_ATTEMPTS tentatives sont reprises comme les "pending" ; au-delà, elles restent
+    "failed" mais ne sont plus reprises automatiquement (intervention manuelle nécessaire,
+    tracée par last_error/attempts — jamais une boucle de nouvelles tentatives infinie).
+
+    (b) Si `handler(event)` échouait APRÈS avoir déjà écrit une partie de son effet (ex. un
+    AccountingEvent créé puis une erreur avant la fin de ecriture_settlement), rien
+    n'annulait cette écriture partielle avant le db.commit() final du lot entier — une
+    donnée comptable BRISÉE (déséquilibrée) aurait pu être committée. Corrigé par un
+    SAVEPOINT (transaction imbriquée) par entrée : un échec annule UNIQUEMENT l'effet
+    partiel de CETTE entrée, jamais celui des entrées déjà traitées avec succès dans le
+    même lot ni la mise à jour du statut/attempts de l'entrée elle-même (appliquée APRÈS le
+    rollback du savepoint, donc hors de sa portée)."""
     pending = db.scalars(
-        select(FinanceOutboxEvent).where(FinanceOutboxEvent.status == "pending").limit(limit)
+        select(FinanceOutboxEvent)
+        .where(
+            (FinanceOutboxEvent.status == "pending")
+            | ((FinanceOutboxEvent.status == "failed") & (FinanceOutboxEvent.attempts < MAX_OUTBOX_ATTEMPTS))
+        )
+        .limit(limit)
     ).all()
     dispatched, failed = 0, 0
     for entry in pending:
         event = db.get(FinancialEvent, entry.financial_event_id)
         entry.attempts += 1
+        savepoint = db.begin_nested()
         try:
             handler(event)
+            savepoint.commit()
             entry.status = "dispatched"
             from datetime import datetime
             entry.dispatched_at = datetime.utcnow()
             dispatched += 1
         except Exception as exc:  # noqa: BLE001 — isolation volontaire, voir docstring
+            savepoint.rollback()
             entry.status = "failed"
             entry.last_error = str(exc)[:2000]
             failed += 1
