@@ -247,6 +247,18 @@ def serve_atlas_v3_entry_asset(asset_path: str, v: str | None = None):
     return _serve_atlas_v3_static("atlas-v3", asset_path, v)
 
 
+# ATLAS Finance Platform (P1-I) — point d'entrée expérimental, MÊME patron que /atlas-v3 :
+# distinct de "/" (Legacy) et de "/atlas-v3", même backend/auth/session, aucune application
+# métier parallèle. Un seul fichier auto-porté (HTML+CSS+JS inline, pas de build) — le
+# périmètre fonctionnel (obligations/comptes bancaires/import CSV/rapprochement) ne justifie
+# pas la machinerie de versionnement ES modules réutilisée par /atlas-v3, route explicite en
+# no-cache suffisante pour ne jamais servir une version obsolète après un déploiement.
+@app.get("/finance-platform", include_in_schema=False)
+def serve_finance_platform():
+    html_content = (STATIC_DIR / "finance-platform" / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=html_content, headers=_NO_CACHE)
+
+
 # P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) — audit préalable (voir rapport de mission) :
 # DOCS_DIR est PARTAGÉ entre des Document.owner_type="employee" (RH, ce que cette route
 # protège) et owner_type="client_observation" (pièces jointes du portail client,

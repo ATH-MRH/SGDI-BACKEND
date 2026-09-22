@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATLAS Finance Platform — expérimental</title>
+<style>
+  :root{--bg:#f3f4f6;--surface:#fff;--border:#d3d9e3;--text:#0f172a;--muted:#475569;--primary:#043970;--primary-strong:#032f5d;--danger:#b91c1c;--success:#16a34a;--warn:#d97706}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
+  header b{font-size:14px}
+  header span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-left:8px}
+  nav{display:flex;gap:4px;padding:10px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+  nav button{border:none;background:none;padding:8px 14px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;border-radius:8px}
+  nav button.active{background:#e8f0f8;color:var(--primary-strong)}
+  main{padding:20px;max-width:1100px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:14px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;color:var(--muted);padding:8px;border-bottom:1px solid var(--border)}
+  td{padding:8px;border-bottom:1px solid var(--border)}
+  .btn{border:1px solid var(--border);background:var(--surface);border-radius:7px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-danger{background:#fee2e2;border-color:#fecaca;color:var(--danger)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#e8f0f8;color:var(--primary-strong)}
+  .badge.success{background:#dcfce7;color:var(--success)}
+  .badge.warn{background:#fef3c7;color:var(--warn)}
+  .badge.danger{background:#fee2e2;color:var(--danger)}
+  input,select{padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;width:100%}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row > div{flex:1;min-width:140px}
+  label{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}
+  .msg{font-size:12px;margin-top:8px}
+  .msg.error{color:var(--danger)}
+  .msg.ok{color:var(--success)}
+  .empty{color:var(--muted);font-size:13px;padding:16px;text-align:center}
+  #login-screen{max-width:340px;margin:80px auto}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const API = "/api";
+let TOKEN = localStorage.getItem("fp_token") || null;
+let USER = null;
+let ACTIVE_TAB = "obligations";
+
+function h(html) { return html; }
+function esc(v) { return String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+async function api(path, { method = "GET", body, formData } = {}) {
+  const headers = {};
+  if (TOKEN) headers.Authorization = "Bearer " + TOKEN;
+  let payload;
+  if (formData) { payload = formData; } else if (body) { headers["Content-Type"] = "application/json"; payload = JSON.stringify(body); }
+  const res = await fetch(API + path, { method, headers, body: payload });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) {}
+  if (!res.ok) throw new Error((data && (data.detail || data.error)) || ("Erreur " + res.status));
+  return data;
+}
+
+function renderLogin(error) {
+  document.querySelector("#root").innerHTML = `
+    <div id="login-screen" class="card">
+      <h2>ATLAS Finance Platform</h2>
+      <form id="login-form">
+        <div style="margin-bottom:10px"><label>Identifiant</label><input name="username" required></div>
+        <div style="margin-bottom:10px"><label>Mot de passe</label><input name="password" type="password" required></div>
+        ${error ? `<div class="msg error">${esc(error)}</div>` : ""}
+        <button class="btn btn-primary" style="width:100%;margin-top:8px" type="submit">Se connecter</button>
+      </form>
+    </div>`;
+  document.querySelector("#login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      const data = await api("/auth/login", { method: "POST", body: { username: fd.get("username"), password: fd.get("password") } });
+      TOKEN = data.access_token;
+      USER = data.user;
+      localStorage.setItem("fp_token", TOKEN);
+      renderShell();
+    } catch (err) { renderLogin(err.message); }
+  });
+}
+
+function renderShell() {
+  document.querySelector("#root").innerHTML = `
+    <header>
+      <div><b>ATLAS Finance Platform</b><span>expérimental</span></div>
+      <div><span id="user-label" style="font-size:12px;color:var(--muted);margin-right:10px"></span><button class="btn" id="logout-btn">Déconnexion</button></div>
+    </header>
+    <nav>
+      <button data-tab="obligations">Obligations</button>
+      <button data-tab="banking">Banques</button>
+      <button data-tab="reconciliation">Rapprochement</button>
+    </nav>
+    <main id="view"></main>`;
+  document.querySelector("#logout-btn").addEventListener("click", () => { localStorage.removeItem("fp_token"); TOKEN = null; renderLogin(); });
+  document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => { ACTIVE_TAB = b.dataset.tab; renderTab(); }));
+  renderTab();
+  api("/auth/me").then(u => { USER = u; const lbl = document.querySelector("#user-label"); if (lbl) lbl.textContent = u.full_name || u.username; }).catch(() => {});
+}
+
+function renderTab() {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === ACTIVE_TAB));
+  if (ACTIVE_TAB === "obligations") return renderObligations();
+  if (ACTIVE_TAB === "banking") return renderBanking();
+  if (ACTIVE_TAB === "reconciliation") return renderReconciliation();
+}
+
+function statusBadge(status) {
+  const cls = status === "settled" ? "success" : status === "cancelled" ? "danger" : status === "partially_settled" ? "warn" : "";
+  return `<span class="badge ${cls}">${esc(status)}</span>`;
+}
+
+// ── Obligations ──────────────────────────────────────────────────────────────────────────
+async function renderObligations() {
+  const view = document.querySelector("#view");
+  view.innerHTML = `<div class="card"><h2>Nouvelle obligation (manuelle)</h2>
+    <form id="obl-form" class="row">
+      <div><label>Société</label><input name="society" required></div>
+      <div><label>Sens</label><select name="direction"><option value="receivable">Créance (on nous doit)</option><option value="payable">Dette (on doit)</option></select></div>
+      <div><label>Montant</label><input name="amount_total" type="number" step="0.01" required></div>
+      <div><label>Contrepartie</label><input name="counterparty_name"></div>
+      <div><label>Référence source</label><input name="source_id" required placeholder="ex: FAC-001"></div>
+      <button class="btn btn-primary" type="submit">Créer</button>
+    </form>
+    <div id="obl-msg" class="msg"></div>
+  </div>
+  <div class="card"><h2>Obligations</h2><div id="obl-list">Chargement…</div></div>`;
+
+  document.querySelector("#obl-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = document.querySelector("#obl-msg");
+    msg.textContent = ""; msg.className = "msg";
+    try {
+      await api("/finance-core/obligations", { method: "POST", body: {
+        society: fd.get("society"), direction: fd.get("direction"), source_type: "manual",
+        source_id: fd.get("source_id"), amount_total: fd.get("amount_total"),
+        counterparty_name: fd.get("counterparty_name") || null,
+        idempotency_key: "ui:" + fd.get("source_id") + ":" + Date.now(),
+      }});
+      msg.textContent = "Obligation créée."; msg.className = "msg ok";
+      loadObligationsList();
+    } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+  });
+  loadObligationsList();
+}
+
+async function loadObligationsList() {
+  const el = document.querySelector("#obl-list");
+  try {
+    const data = await api("/finance-core/obligations?page_size=50");
+    if (!data.items.length) { el.innerHTML = `<div class="empty">Aucune obligation.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>Société</th><th>Sens</th><th>Contrepartie</th><th>Référence</th><th>Total</th><th>Réglé</th><th>Statut</th></tr></thead><tbody>
+      ${data.items.map(o => `<tr><td>${esc(o.society)}</td><td>${o.direction === "receivable" ? "Créance" : "Dette"}</td><td>${esc(o.counterparty_name || "—")}</td><td>${esc(o.source_id)}</td><td>${esc(o.amount_total)}</td><td>${esc(o.amount_settled)}</td><td>${statusBadge(o.status)}</td></tr>`).join("")}
+    </tbody></table>`;
+  } catch (err) { el.innerHTML = `<div class="msg error">${esc(err.message)}</div>`; }
+}
+
+// ── Banking ──────────────────────────────────────────────────────────────────────────────
+let SELECTED_ACCOUNT = null;
+
+async function renderBanking() {
+  const view = document.querySelector("#view");
+  view.innerHTML = `<div class="card"><h2>Nouveau compte bancaire</h2>
+    <form id="acc-form" class="row">
+      <div><label>Société</label><input name="society" required></div>
+      <div><label>Banque</label><input name="bank_name" required></div>
+      <div><label>N° de compte</label><input name="account_number" required></div>
+      <div><label>IBAN</label><input name="iban"></div>
+      <button class="btn btn-primary" type="submit">Créer</button>
+    </form>
+    <div id="acc-msg" class="msg"></div>
+  </div>
+  <div class="card"><h2>Comptes</h2><div id="acc-list">Chargement…</div></div>
+  <div class="card"><h2>Importer un relevé (CSV)</h2>
+    <form id="import-form" class="row">
+      <div><label>Compte bancaire (ID)</label><input name="bank_account_id" type="number" required></div>
+      <div><label>Fichier CSV</label><input name="file" type="file" accept=".csv" required></div>
+      <div><label>Solde ouverture (optionnel)</label><input name="opening_balance" type="number" step="0.01"></div>
+      <div><label>Solde clôture (optionnel)</label><input name="closing_balance" type="number" step="0.01"></div>
+      <button class="btn btn-primary" type="submit">Importer</button>
+    </form>
+    <div id="import-msg" class="msg"></div>
+  </div>
+  <div class="card"><h2>Transactions</h2>
+    <div class="row" style="margin-bottom:10px"><div><label>Filtrer par compte (ID)</label><input id="tx-filter" type="number" placeholder="tous"></div><button class="btn" id="tx-refresh">Actualiser</button></div>
+    <div id="tx-list">—</div>
+  </div>`;
+
+  document.querySelector("#acc-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = document.querySelector("#acc-msg");
+    try {
+      await api("/banking/accounts", { method: "POST", body: {
+        society: fd.get("society"), bank_name: fd.get("bank_name"), account_number: fd.get("account_number"),
+        iban: fd.get("iban") || null,
+      }});
+      msg.textContent = "Compte créé."; msg.className = "msg ok";
+      loadAccountsList();
+    } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+  });
+
+  document.querySelector("#import-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = document.querySelector("#import-msg");
+    const file = fd.get("file");
+    if (!file || !file.size) { msg.textContent = "Choisissez un fichier CSV."; msg.className = "msg error"; return; }
+    const body = new FormData();
+    body.append("society", USER?.authorized_societies?.[0] || document.querySelector("#acc-form [name=society]").value || "");
+    body.append("bank_account_id", fd.get("bank_account_id"));
+    body.append("import_format", "csv");
+    body.append("idempotency_key", "ui-import-" + Date.now());
+    if (fd.get("opening_balance")) body.append("opening_balance", fd.get("opening_balance"));
+    if (fd.get("closing_balance")) body.append("closing_balance", fd.get("closing_balance"));
+    body.append("file", file);
+    try {
+      const statement = await api("/banking/statements/import", { method: "POST", formData: body });
+      msg.textContent = `Import OK : ${statement.transaction_count} transaction(s), ${statement.duplicate_count} doublon(s), contrôle solde : ${statement.computed_balance_check}.`;
+      msg.className = "msg ok";
+      loadTransactionsList();
+    } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+  });
+
+  document.querySelector("#tx-refresh").addEventListener("click", loadTransactionsList);
+  loadAccountsList();
+  loadTransactionsList();
+}
+
+async function loadAccountsList() {
+  const el = document.querySelector("#acc-list");
+  try {
+    const accounts = await api("/banking/accounts");
+    if (!accounts.length) { el.innerHTML = `<div class="empty">Aucun compte.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>ID</th><th>Société</th><th>Banque</th><th>N° compte</th></tr></thead><tbody>
+      ${accounts.map(a => `<tr><td>${a.id}</td><td>${esc(a.society)}</td><td>${esc(a.bank_name)}</td><td>${esc(a.account_number)}</td></tr>`).join("")}
+    </tbody></table>`;
+  } catch (err) { el.innerHTML = `<div class="msg error">${esc(err.message)}</div>`; }
+}
+
+async function loadTransactionsList() {
+  const el = document.querySelector("#tx-list");
+  const filter = document.querySelector("#tx-filter")?.value;
+  try {
+    const qs = filter ? `?bank_account_id=${encodeURIComponent(filter)}&page_size=50` : "?page_size=50";
+    const data = await api("/banking/transactions" + qs);
+    if (!data.items.length) { el.innerHTML = `<div class="empty">Aucune transaction.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>Date</th><th>Libellé</th><th>Référence</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>
+      ${data.items.map(t => `<tr><td>${esc(t.value_date)}</td><td>${esc(t.label)}</td><td>${esc(t.reference)}</td><td>${esc(t.amount)}</td><td>${statusBadgeReconcile(t.reconcile_status)}</td>
+        <td>${t.reconcile_status === "unmatched" ? `<button class="btn" data-propose="${t.id}">Proposer un rapprochement</button>` : ""}</td></tr>`).join("")}
+    </tbody></table>`;
+    el.querySelectorAll("[data-propose]").forEach(btn => btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        const c = await api(`/reconciliation/transactions/${btn.dataset.propose}/propose`, { method: "POST" });
+        if (c) { alert(`Proposition créée (cas #${c.id}, confiance ${c.confidence_score}%) — voir l'onglet Rapprochement.`); ACTIVE_TAB = "reconciliation"; renderTab(); }
+        else { alert("Aucune proposition suffisamment fiable — transaction envoyée en exception."); loadTransactionsList(); }
+      } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "Proposer un rapprochement"; }
+    }));
+  } catch (err) { el.innerHTML = `<div class="msg error">${esc(err.message)}</div>`; }
+}
+
+function statusBadgeReconcile(s) {
+  const cls = s === "matched" ? "success" : s === "unmatched" ? "warn" : "";
+  return `<span class="badge ${cls}">${esc(s)}</span>`;
+}
+
+// ── Reconciliation ───────────────────────────────────────────────────────────────────────
+async function renderReconciliation() {
+  const view = document.querySelector("#view");
+  view.innerHTML = `<div class="card"><h2>Cas de rapprochement proposés</h2><div id="case-list">Chargement…</div></div>
+  <div class="card"><h2>File d'exceptions (non rapprochées)</h2><div id="exc-list">Chargement…</div></div>`;
+  loadCasesList();
+  loadExceptionsList();
+}
+
+async function loadCasesList() {
+  const el = document.querySelector("#case-list");
+  try {
+    const cases = await api("/reconciliation/cases?status_filter=proposed");
+    if (!cases.length) { el.innerHTML = `<div class="empty">Aucun cas en attente.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>#</th><th>Société</th><th>Type</th><th>Confiance</th><th>Montant</th><th>Explication</th><th></th></tr></thead><tbody>
+      ${cases.map(c => `<tr><td>${c.id}</td><td>${esc(c.society)}</td><td>${esc(c.kind)}</td><td>${c.confidence_score}%</td><td>${esc(c.total_amount)}</td><td style="font-size:11px;color:var(--muted)">${esc(c.explanation || "—")}</td>
+        <td><button class="btn btn-primary" data-confirm="${c.id}">Confirmer</button> <button class="btn btn-danger" data-reject="${c.id}">Rejeter</button></td></tr>`).join("")}
+    </tbody></table>`;
+    el.querySelectorAll("[data-confirm]").forEach(btn => btn.addEventListener("click", async () => {
+      try { await api(`/reconciliation/cases/${btn.dataset.confirm}/confirm`, { method: "POST" }); loadCasesList(); }
+      catch (err) { alert(err.message); }
+    }));
+    el.querySelectorAll("[data-reject]").forEach(btn => btn.addEventListener("click", async () => {
+      const reason = prompt("Motif du rejet ?") || "rejeté depuis l'interface";
+      try { await api(`/reconciliation/cases/${btn.dataset.reject}/reject`, { method: "POST", body: { reason } }); loadCasesList(); }
+      catch (err) { alert(err.message); }
+    }));
+  } catch (err) { el.innerHTML = `<div class="msg error">${esc(err.message)}</div>`; }
+}
+
+async function loadExceptionsList() {
+  const el = document.querySelector("#exc-list");
+  try {
+    const items = await api("/reconciliation/exceptions?resolved=false");
+    if (!items.length) { el.innerHTML = `<div class="empty">Aucune exception.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>Transaction</th><th>Motif</th></tr></thead><tbody>
+      ${items.map(e => `<tr><td>#${e.bank_transaction_id}</td><td>${esc(e.reason)}</td></tr>`).join("")}
+    </tbody></table>`;
+  } catch (err) { el.innerHTML = `<div class="msg error">${esc(err.message)}</div>`; }
+}
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────────────────
+if (TOKEN) {
+  api("/auth/me").then(u => { USER = u; renderShell(); }).catch(() => { TOKEN = null; localStorage.removeItem("fp_token"); renderLogin(); });
+} else {
+  renderLogin();
+}
+</script>
+</body>
+</html>
