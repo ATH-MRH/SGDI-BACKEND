@@ -57,8 +57,17 @@ def calendar(society: str | None = None, upcoming_only: bool = False, db: Sessio
 
 @router.post("/{obligation_id}/mark-paid")
 def mark_paid(obligation_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    # P0 (revue d'intégrité, item 10/11 — multi-société/RBAC) — TROUVÉ PENDANT L'AUDIT : le
+    # contrôle de société était fait APRÈS l'appel à service.mark_paid() (qui mute déjà
+    # obligation.status et flush()) — un utilisateur non autorisé pouvait déclencher l'effet
+    # de bord avant d'être refusé. L'autorisation DOIT toujours précéder toute mutation,
+    # jamais la suivre — corrigé en vérifiant sur une lecture seule d'abord.
+    from app.modules.fiscalite.models import FiscalObligation
+    existing = db.get(FiscalObligation, obligation_id)
+    if not existing:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Obligation fiscale introuvable")
+    _ensure_society_allowed(user, existing.society)
     obligation = service.mark_paid(db, obligation_id)
-    _ensure_society_allowed(user, obligation.society)
     db.commit()
     db.refresh(obligation)
     return _out(obligation)

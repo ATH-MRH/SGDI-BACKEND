@@ -27,6 +27,17 @@ def _ensure_society_allowed(user: User, society: str | None) -> None:
 
 @router.post("/transactions/{transaction_id}/propose", response_model=ReconciliationCaseOut | None)
 def propose_for_transaction(transaction_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    # P0 (revue d'intégrité, item 10/11 — multi-société/RBAC) — TROUVÉ PENDANT L'AUDIT : cet
+    # endpoint n'appliquait AUCUN contrôle de société avant cette correction. Un utilisateur
+    # restreint à une société pouvait proposer (et donc lire, via la réponse) un rapprochement
+    # sur une transaction bancaire — et les obligations qu'elle mettrait en correspondance —
+    # d'une AUTRE société entièrement. Vérifié AVANT tout appel au service, comme partout
+    # ailleurs dans ce module.
+    from app.modules.banking.models import BankTransaction
+    transaction = db.get(BankTransaction, transaction_id)
+    if not transaction:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Transaction introuvable")
+    _ensure_society_allowed(user, transaction.society)
     case = service.propose_matches_for_transaction(db, transaction_id)
     db.commit()
     if case:

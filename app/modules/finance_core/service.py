@@ -262,6 +262,25 @@ def settle_obligation(
     if amt <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Montant de règlement invalide")
 
+    intent = None
+    if payment_intent_id is not None:
+        # P0 (revue d'intégrité, item 10 — multi-société) — TROUVÉ PENDANT L'AUDIT : aucune
+        # vérification que payment_intent_id référence bien une intention créée POUR CETTE
+        # obligation. Un appelant pouvait faire régler N'IMPORTE QUELLE obligation (y compris
+        # d'une autre société) en passant l'id d'un PaymentIntent appartenant à une TOUT AUTRE
+        # obligation — celui-ci se retrouvait alors marqué "settled" par effet de bord, sans
+        # aucun lien réel avec le règlement en cours (corruption d'état inter-locataire).
+        # Vérifié AVANT toute écriture (y compris l'UPDATE atomique ci-dessous) pour ne rien
+        # avoir à annuler en cas de refus.
+        intent = db.get(PaymentIntent, payment_intent_id)
+        if not intent:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Intention de paiement introuvable")
+        if intent.obligation_id != obligation.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Cette intention de paiement ne correspond pas à l'obligation réglée",
+            )
+
     cas_result = db.execute(
         sa_update(FinancialObligation)
         .where(
@@ -296,10 +315,8 @@ def settle_obligation(
         amount=amt, kind="normal", idempotency_key=idempotency_key, notes=notes,
     )
     db.add(settlement)
-    if payment_intent_id is not None:
-        intent = db.get(PaymentIntent, payment_intent_id)
-        if intent:
-            intent.status = "settled"
+    if intent is not None:
+        intent.status = "settled"
     try:
         db.flush()
     except IntegrityError:
