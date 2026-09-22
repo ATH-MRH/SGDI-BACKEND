@@ -59,6 +59,23 @@ def create_salary_grid(
     return grid
 
 
+def get_grid_applicable_at(db: Session, *, society: str, poste: str, as_of_date: date) -> SalaryGrid | None:
+    """P0 (revue d'intégrité, §3 paie historique) : reproduit pour la grille salariale la
+    même garantie que regulatory.get_applicable_version() pour les règles — la version dont
+    la fenêtre [effective_from, effective_to) couvre RÉELLEMENT as_of_date, jamais "la
+    version active actuelle" appliquée par erreur à une période passée. create_salary_grid()
+    ferme déjà effective_to de l'ancienne version à la création d'une nouvelle, donc cette
+    requête est précise sans logique supplémentaire. Retourne None si aucune grille ne
+    couvre la date (à la charge de l'appelant de retomber sur employee.salary_net, comme le
+    fait déjà compute_slip)."""
+    stmt = select(SalaryGrid).where(
+        SalaryGrid.society == society, SalaryGrid.poste == poste, SalaryGrid.effective_from <= as_of_date,
+    ).where(
+        (SalaryGrid.effective_to.is_(None)) | (SalaryGrid.effective_to > as_of_date)
+    ).order_by(SalaryGrid.effective_from.desc())
+    return db.scalar(stmt)
+
+
 # ── Pointage clôturé -> variables ───────────────────────────────────────────────────────
 
 def compute_presence_variables(db: Session, *, employee_id: int, period: str) -> dict:
@@ -115,6 +132,23 @@ def compute_slip(
     employee = db.get(Employee, employee_id)
     if not employee:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Employé introuvable")
+
+    # P0 (revue d'intégrité, §3 paie historique) — TROUVÉ PENDANT L'AUDIT : un index UNIQUE
+    # (payroll_run_id, employee_id) existe déjà en base (un seul bulletin par employé et par
+    # cycle, jamais un recalcul parallèle) mais rien ne le vérifiait ici avant l'INSERT — un
+    # second calcul avec une idempotency_key différente remontait un IntegrityError brut
+    # (500) au lieu d'un refus métier propre. Un bulletin déjà présent pour cet employé sur ce
+    # cycle ne doit JAMAIS être recalculé silencieusement ; le seul chemin de correction est
+    # de clôturer/annuler le cycle et d'en ouvrir un nouveau, jamais un second bulletin parallèle.
+    duplicate = db.scalar(
+        select(PayrollSlip).where(PayrollSlip.payroll_run_id == payroll_run_id, PayrollSlip.employee_id == employee_id)
+    )
+    if duplicate:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail=f"Un bulletin (#{duplicate.id}) existe déjà pour cet employé sur ce cycle de paie — "
+                   "jamais de second calcul parallèle pour le même employé/cycle",
+        )
 
     grid = db.get(SalaryGrid, salary_grid_id) if salary_grid_id else None
     base = q2(grid.salaire_base) if grid else q2(employee.salary_net or 0)

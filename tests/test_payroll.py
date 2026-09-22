@@ -217,3 +217,114 @@ def test_payroll_slip_end_to_end_blocked_then_unblocked_by_verification(client, 
 
     obligations_before = client.get("/api/finance-core/obligations", headers=auth_headers, params={"society": "Sword Corporation", "direction": "payable"}).json()["items"]
     assert not any(o["source_type"] == "payroll_slip" and o["source_id"] == str(slip["id"]) for o in obligations_before), "aucune obligation ne doit exister pour un bulletin refusé"
+
+
+# ── P0 (revue d'intégrité, §3 paie historique) : période P -> grille/règles applicables à P,
+# jamais recalcul rétroactif silencieux d'un bulletin déjà validé ────────────────────────────
+
+def test_salary_grid_historical_lookup_is_precise(client, auth_headers, db):
+    """Reproduit pour la grille salariale la même preuve que
+    test_regulatory.test_proposal_approve_creates_version_and_historical_lookup_is_precise :
+    une date de mars doit retrouver la grille DE MARS, jamais celle de juillet, même après
+    qu'une nouvelle version a été créée. Pas d'endpoint API dédié (get_grid_applicable_at est
+    un utilitaire interne, au même titre que regulatory.get_applicable_version) — testé
+    directement via le service pour ne pas introduire de route supplémentaire hors mission."""
+    from datetime import date
+    from app.modules.payroll import service as payroll_service
+
+    poste = "Agent grille historique"
+    g1 = client.post("/api/payroll/salary-grids", headers=auth_headers, json={
+        "society": SOC, "poste": poste, "salaire_base": "50000.00", "effective_from": "2026-01-01",
+    }).json()
+    g2 = client.post("/api/payroll/salary-grids", headers=auth_headers, json={
+        "society": SOC, "poste": poste, "salaire_base": "60000.00", "effective_from": "2026-06-01",
+    }).json()
+
+    before_any = payroll_service.get_grid_applicable_at(db, society=SOC, poste=poste, as_of_date=date(2025, 12, 1))
+    assert before_any is None, "aucune grille ne doit être retournée pour une date antérieure à toute version"
+
+    march = payroll_service.get_grid_applicable_at(db, society=SOC, poste=poste, as_of_date=date(2026, 3, 15))
+    assert march is not None and march.id == g1["id"], "mars doit retrouver la grille de janvier, pas la plus récente"
+
+    august = payroll_service.get_grid_applicable_at(db, society=SOC, poste=poste, as_of_date=date(2026, 8, 15))
+    assert august is not None and august.id == g2["id"]
+
+
+def test_future_regulatory_rule_never_alters_already_validated_slip(client, auth_headers):
+    """Un bulletin validé fige les valeurs (et rules_used) au moment du calcul — une nouvelle
+    version réglementaire créée APRÈS coup, même avec une effective_from future, ne doit
+    JAMAIS modifier le bulletin déjà validé (re-consultation via GET, pas de recalcul
+    silencieux)."""
+    soc = "Historique Paie SA"
+    _seed_cnas_irg_rules(client, auth_headers)
+    # _seed_cnas_irg_rules cible la société SOC="Iron Global Securite" par défaut ; on
+    # duplique manuellement pour une société dédiée à ce test afin d'isoler les versions.
+    src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": "Barème historique", "reference": "TEST-HIST-0001", "reliability": "verified"}).json()
+    for rule_type, params in (
+        ("cnas_taux_salarial", {"taux": 0.09}),
+        ("cnas_taux_patronal", {"taux": 0.26}),
+        ("irg_bareme", {"brackets": [{"up_to": 30000, "rate": 0.0}, {"up_to": None, "rate": 0.1}]}),
+    ):
+        rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": rule_type, "society": soc, "label": rule_type}).json()
+        proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+            "rule_id": rule["id"], "proposed_parameters": params, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+        }).json()
+        client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": True})
+
+    emp = client.post("/api/drh/employees", headers=auth_headers, json={
+        "code": "PAIE_HIST1", "first_name": "Hist", "last_name": "Paie", "society": soc, "status": "actif", "contract_type": "CDI",
+    }).json()
+    emp_id = emp.get("id") or emp.get("backendId")
+    run = client.post("/api/payroll/runs", headers=auth_headers, json={"society": soc, "period": "2026-09", "idempotency_key": "run:hist1"}).json()
+    slip = client.post(f"/api/payroll/runs/{run['id']}/slips", headers=auth_headers, json={"employee_id": int(emp_id), "idempotency_key": "slip:hist1"}).json()
+    assert slip["validatable"] is True
+    validated = client.post(f"/api/payroll/slips/{slip['id']}/validate", headers=auth_headers).json()
+    assert validated["status"] == "validated"
+    snapshot_rules_used = validated["rules_used"]
+    snapshot_cotisation = validated["cotisation_salariale"]
+
+    # Nouvelle version CNAS salarial, taux très différent, effective à partir d'octobre — donc
+    # future par rapport au bulletin de septembre déjà calculé/validé.
+    rule_cnas = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": "cnas_taux_salarial", "society": soc, "label": "cnas_taux_salarial"}).json()
+    proposal2 = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule_cnas["id"], "proposed_parameters": {"taux": 0.50}, "proposed_effective_from": "2026-10-01", "source_id": src["id"],
+    }).json()
+    approve2 = client.post(f"/api/regulatory/proposals/{proposal2['id']}/approve", headers=auth_headers, json={"mark_verified": True})
+    assert approve2.status_code == 200, approve2.text
+
+    refetched = client.get(f"/api/payroll/slips/{slip['id']}", headers=auth_headers).json()
+    assert refetched["status"] == "validated"
+    assert refetched["rules_used"] == snapshot_rules_used, "rules_used doit rester un instantané figé, jamais réévalué avec la nouvelle version"
+    assert refetched["cotisation_salariale"] == snapshot_cotisation, "un taux futur ne doit jamais modifier rétroactivement un bulletin déjà validé"
+
+
+def test_validated_slip_cannot_be_mutated_or_recomputed_in_parallel(client, auth_headers):
+    """Preuve structurelle + comportementale : aucun verbe de mutation n'existe sur
+    /api/payroll/slips/{id} (seuls GET et POST .../validate sont exposés — voir
+    payroll/routes.py), et une tentative de second calcul pour le MÊME employé sur le MÊME
+    cycle (nouvel idempotency_key, donc pas de simple no-op idempotent) est refusée
+    proprement (409) — jamais un second bulletin parallèle, jamais un recalcul silencieux de
+    celui déjà validé. (Un index UNIQUE (payroll_run_id, employee_id) existe déjà en base ;
+    ce test prouve aussi que le service la fait respecter proprement, voir le garde ajouté
+    dans compute_slip — trouvé pendant cette revue : l'IntegrityError brut remontait en 500
+    avant ce correctif.)"""
+    _seed_cnas_irg_rules(client, auth_headers)
+    emp = _emp(client, auth_headers, "PAIE_NOMUT1")
+    run = client.post("/api/payroll/runs", headers=auth_headers, json={"society": SOC, "period": "2027-03", "idempotency_key": "run:nomut1"}).json()
+    slip = client.post(f"/api/payroll/runs/{run['id']}/slips", headers=auth_headers, json={"employee_id": int(emp), "idempotency_key": "slip:nomut1"}).json()
+    validated = client.post(f"/api/payroll/slips/{slip['id']}/validate", headers=auth_headers).json()
+    assert validated["status"] == "validated"
+
+    put_attempt = client.put(f"/api/payroll/slips/{slip['id']}", headers=auth_headers, json={"net_a_payer": "999999.99"})
+    assert put_attempt.status_code in (404, 405), "aucun verbe de mutation ne doit exister sur un bulletin"
+    delete_attempt = client.delete(f"/api/payroll/slips/{slip['id']}", headers=auth_headers)
+    assert delete_attempt.status_code in (404, 405)
+
+    recompute = client.post(f"/api/payroll/runs/{run['id']}/slips", headers=auth_headers, json={
+        "employee_id": int(emp), "idempotency_key": "slip:nomut1-bis",
+    })
+    assert recompute.status_code == 409, "un second calcul pour le même employé/cycle doit être refusé proprement, jamais un 500 ni un second bulletin"
+
+    still_there = client.get(f"/api/payroll/slips/{slip['id']}", headers=auth_headers).json()
+    assert still_there["status"] == "validated"
+    assert still_there["net_a_payer"] == validated["net_a_payer"], "le bulletin validé initial doit rester strictement inchangé"
