@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -28,10 +28,10 @@ def declare(
     existing = db.scalar(select(FiscalObligation).where(FiscalObligation.idempotency_key == idempotency_key))
     if existing:
         return existing
-    montant_q = Decimal(str(montant)).quantize(Decimal("0.01"))
+    montant_q = Decimal(str(montant)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     obligation = FiscalObligation(
         society=society, obligation_type=obligation_type, period=period,
-        base_calcul=Decimal(str(base_calcul)).quantize(Decimal("0.01")) if base_calcul is not None else None,
+        base_calcul=Decimal(str(base_calcul)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if base_calcul is not None else None,
         montant=montant_q, echeance=echeance, status="declared",
         regulatory_version_id=regulatory_version_id, proof_reference=proof_reference,
         declared_by=declared_by, declared_at=datetime.utcnow(), idempotency_key=idempotency_key,

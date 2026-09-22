@@ -50,6 +50,10 @@ def margin(db: Session, *, society: str, period: str, client: str | None = None)
     cout_achats = Decimal(str(db.scalar(achats_stmt) or 0))
 
     marge_brute = (ca - cout_personnel - cout_achats).quantize(Decimal("0.01"))
+    # Revue d'intégrité, item 4 (Decimal/arrondis) : seul float() de tout le Finance Platform,
+    # revu et jugé sans risque — taux_marge_pct est un RATIO d'affichage (pourcentage), jamais
+    # un montant monétaire réinjecté dans un calcul ultérieur, et il est déjà quantize()
+    # (Decimal, 2 décimales) AVANT ce cast — aucune perte de précision monétaire possible ici.
     taux_marge = float((marge_brute / ca * 100).quantize(Decimal("0.01"))) if ca > 0 else None
 
     return {

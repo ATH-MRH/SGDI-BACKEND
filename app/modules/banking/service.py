@@ -14,7 +14,7 @@ import csv
 import hashlib
 import io
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -27,7 +27,15 @@ TWO_PLACES = Decimal("0.01")
 
 
 def q2(value: Any) -> Decimal:
-    return Decimal(str(value)).quantize(TWO_PLACES)
+    # Revue d'intégrité, item 4 (Decimal/arrondis) — TROUVÉ PENDANT L'AUDIT : rounding=
+    # manquant ici retombait sur le contexte decimal par défaut de Python (ROUND_HALF_EVEN,
+    # "bankers' rounding"), alors que finance_core.service.q2 et payroll.service.q2 utilisent
+    # explicitement ROUND_HALF_UP — la politique d'arrondi DOIT être identique partout où un
+    # montant financier est manipulé (voir docs/atlas-finance-platform-parity.md, "Politique
+    # d'arrondi"), sans quoi un même montant à la limite exacte (ex. x,xx5) pourrait arrondir
+    # différemment selon qu'il transite par le module bancaire ou par finance_core/payroll —
+    # un désaccord d'un centime en rapprochement bancaire, silencieux et difficile à tracer.
+    return Decimal(str(value)).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
 
 
 # ── Comptes bancaires ───────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ source comptable ne les porte."""
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -29,7 +29,7 @@ def _month_bounds(period: str) -> tuple[date, date]:
 def create_line(db: Session, *, society: str, period: str, compte: str | None, centre_cout: str | None, contrat: str | None, client: str | None, site: str | None, montant_budgete, created_by: str) -> BudgetLine:
     line = BudgetLine(
         society=society, period=period, compte=compte, centre_cout=centre_cout, contrat=contrat,
-        client=client, site=site, montant_budgete=Decimal(str(montant_budgete)).quantize(Decimal("0.01")),
+        client=client, site=site, montant_budgete=Decimal(str(montant_budgete)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
         status="draft", created_by=created_by,
     )
     db.add(line)
@@ -76,7 +76,7 @@ def revise(db: Session, line_id: int, *, montant_budgete, created_by: str) -> Bu
     revision = BudgetLine(
         society=original.society, period=original.period, centre_cout=original.centre_cout,
         contrat=original.contrat, client=original.client, site=original.site, compte=original.compte,
-        montant_budgete=Decimal(str(montant_budgete)).quantize(Decimal("0.01")), status="draft",
+        montant_budgete=Decimal(str(montant_budgete)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), status="draft",
         revises_id=original.id, created_by=created_by,
     )
     db.add(revision)
@@ -102,7 +102,7 @@ def realise(db: Session, *, society: str, period: str, compte: str | None) -> De
         )
     )
     total = db.scalar(stmt) or 0
-    return Decimal(str(total)).quantize(Decimal("0.01"))
+    return Decimal(str(total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def engage(db: Session, *, society: str, period: str) -> Decimal:
@@ -115,7 +115,7 @@ def engage(db: Session, *, society: str, period: str) -> Decimal:
         FinancialObligation.created_at < datetime.combine(end, datetime.min.time()),
     )
     total = db.scalar(stmt) or 0
-    return Decimal(str(total)).quantize(Decimal("0.01"))
+    return Decimal(str(total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def line_summary(db: Session, line: BudgetLine) -> dict:
@@ -126,5 +126,5 @@ def line_summary(db: Session, line: BudgetLine) -> dict:
         "id": line.id, "society": line.society, "period": line.period, "compte": line.compte,
         "centre_cout": line.centre_cout, "contrat": line.contrat, "client": line.client, "site": line.site,
         "status": line.status, "budget": str(budget), "realise": str(realized), "engage": str(engaged),
-        "ecart": str((budget - realized).quantize(Decimal("0.01"))),
+        "ecart": str((budget - realized).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
     }

@@ -4,7 +4,7 @@ Combine les agrégats déjà réels de treasury/profitability/fiscalite/reconcil
 aucune nouvelle table, aucun recalcul dupliqué."""
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -57,12 +57,12 @@ def summary(db: Session, *, society: str, period: str) -> dict:
             "position_bancaire": forecast["position_bancaire_actuelle"],
             "solde_previsionnel": forecast["solde_previsionnel"],
         },
-        "creances_ouvertes": str(Decimal(str(creances)).quantize(Decimal("0.01"))),
-        "dettes_ouvertes": str(Decimal(str(dettes)).quantize(Decimal("0.01"))),
+        "creances_ouvertes": str(Decimal(str(creances)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+        "dettes_ouvertes": str(Decimal(str(dettes)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
         "chiffre_affaires": marge["ca"],
         "marge_brute": marge["marge_brute"],
         "taux_marge_pct": marge["taux_marge_pct"],
-        "masse_salariale": str(Decimal(str(masse_salariale)).quantize(Decimal("0.01"))),
+        "masse_salariale": str(Decimal(str(masse_salariale)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
         "charges_achats": marge["cout_achats"],
         "fiscalite_a_echeance": [{"id": o.id, "type": o.obligation_type, "montant": str(o.montant), "echeance": str(o.echeance), "status": o.status} for o in fiscal_a_echeance],
         "rapprochements_non_resolus": rapprochements_ouverts,
