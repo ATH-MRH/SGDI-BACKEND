@@ -109,3 +109,32 @@ def test_banking_statements_society_scope_enforced(client, restricted_headers, a
 
     r = client.get("/api/banking/statements", headers=restricted_headers, params={"society": SOC_B})
     assert r.status_code == 403
+
+
+def test_cockpit_summary_new_dashboard_aggregates(client, auth_headers):
+    """Dashboard (frontend V2, §3) : créances/dettes échues, CNAS/IRG à payer, encaissements/
+    décaissements de la période — agrégats serveur ajoutés à cockpit.service.summary(),
+    vérifiés avec des montants réels (pas de collection complète renvoyée pour que le
+    frontend calcule lui-même)."""
+    soc = "Cockpit Dashboard SA"
+    past_due = client.post("/api/finance-core/obligations", headers=auth_headers, json={
+        "society": soc, "direction": "receivable", "source_type": "manual", "source_id": "V2-DASH-OVERDUE",
+        "amount_total": "300.00", "due_date": "2020-01-01", "idempotency_key": "v2:dash:overdue1",
+    }).json()
+    assert past_due["status"] == "open"
+
+    obl = client.post("/api/finance-core/obligations", headers=auth_headers, json={
+        "society": soc, "direction": "payable", "source_type": "manual", "source_id": "V2-DASH-SETTLE",
+        "amount_total": "500.00", "idempotency_key": "v2:dash:settle1",
+    }).json()
+    client.post(f"/api/finance-core/obligations/{obl['id']}/settle", headers=auth_headers, json={
+        "amount": "500.00", "idempotency_key": "v2:dash:settle1:s1",
+    })
+
+    period = date.today().strftime("%Y-%m")
+    r = client.get("/api/cockpit/summary", headers=auth_headers, params={"society": soc, "period": period})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert float(body["creances_echues"]) >= 300.0
+    assert float(body["decaissements_periode"]) >= 500.0
+    assert "cnas_a_payer" in body and "irg_a_payer" in body
