@@ -227,3 +227,42 @@ def ecriture_caisse(db: Session, entry: Any) -> EcritureComptable | None:
         date_ecriture=getattr(entry, "entry_date", None),
         lignes=lignes,
     )
+
+
+# ── Finance Core — Accounting Bridge (P1-B) ────────────────────────────────────
+#
+# Point d'entrée unique pour TOUT règlement passé par Finance Core (manuel, ou confirmé
+# par le moteur de rapprochement bancaire) — mêmes comptes PCN, même statut "brouillon",
+# réutilise _create_ecriture ci-dessus (aucune deuxième implémentation du double-entry).
+# Contrairement à ecriture_paiement_client/fournisseur (qui prennent un objet Legacy
+# Payment/FactureFournisseur et un float), celle-ci prend des types Finance Core (Decimal,
+# FinancialObligation.direction) — c'est la SEULE différence, la logique comptable est
+# identique (Banque/Client pour receivable, Fournisseur/Banque pour payable).
+
+def ecriture_settlement(db: Session, *, society: str | None, direction: str, amount, counterparty_name: str | None, reference: str, settlement_date=None) -> EcritureComptable | None:
+    """
+    direction="receivable" (encaissement client) : D 512 Banque / C 411 Client
+    direction="payable"   (décaissement fournisseur) : D 401 Fournisseur / C 512 Banque
+    """
+    montant = float(amount or 0)
+    if montant <= 0:
+        return None
+    nom = counterparty_name or ("Client" if direction == "receivable" else "Fournisseur")
+    if direction == "receivable":
+        lignes = [
+            {"compte": "512", "libelle": "Banque", "debit": montant, "credit": 0},
+            {"compte": "411", "libelle": f"Client {nom}", "debit": 0, "credit": montant},
+        ]
+        journal = "BQ"
+    else:
+        lignes = [
+            {"compte": "401", "libelle": f"Fournisseur {nom}", "debit": montant, "credit": 0},
+            {"compte": "512", "libelle": "Banque", "debit": 0, "credit": montant},
+        ]
+        journal = "BQ"
+    return _create_ecriture(
+        db, society=society, journal=journal,
+        libelle=f"Règlement Finance Core {reference} — {nom}",
+        ref_externe=reference, date_ecriture=settlement_date or date.today(),
+        lignes=lignes,
+    )

@@ -7,7 +7,8 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.finance_core import service
-from app.modules.finance_core.models import Settlement
+from app.modules.finance_core.accounting_bridge import handle_financial_event
+from app.modules.finance_core.models import AccountingEvent, Settlement
 from app.modules.finance_core.schemas import (
     ObligationCreate,
     ObligationOut,
@@ -127,3 +128,36 @@ def create_payment_intent(payload: PaymentIntentCreate, db: Session = Depends(ge
         "id": intent.id, "society": intent.society, "obligation_id": intent.obligation_id,
         "direction": intent.direction, "amount": str(intent.amount), "status": intent.status,
     }
+
+
+# ── Accounting Bridge (P1-B) — traitement de l'outbox ──────────────────────────────────
+# Réservé aux rôles Administration (impact transverse toutes sociétés) : déclenche le
+# traitement des événements financiers en attente (patron outbox, §P0-F) — en production,
+# appelé par une tâche planifiée ; exposé ici en POST pour rester déclenchable manuellement
+# et testable sans dépendre d'un scheduler.
+def _require_admin(user: User) -> None:
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    if role not in {"admin", "adm", "adm1", "adm2"}:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Réservé à l'administration")
+
+
+@router.post("/outbox/dispatch")
+def dispatch_outbox(limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _require_admin(user)
+    return service.dispatch_pending_events(db, handler=lambda event: handle_financial_event(db, event), limit=limit)
+
+
+@router.get("/accounting-events")
+def list_accounting_events(society: str | None = None, status_filter: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from sqlalchemy import select as _select
+    stmt = _select(AccountingEvent)
+    if society:
+        stmt = stmt.where(AccountingEvent.society == society)
+    if status_filter:
+        stmt = stmt.where(AccountingEvent.status == status_filter)
+    rows = db.scalars(stmt.order_by(AccountingEvent.id.desc())).all()
+    return [
+        {"id": r.id, "society": r.society, "source_type": r.source_type, "source_id": r.source_id,
+         "ecriture_id": r.ecriture_id, "status": r.status, "last_error": r.last_error}
+        for r in rows
+    ]
