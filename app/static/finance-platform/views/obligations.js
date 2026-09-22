@@ -22,13 +22,14 @@
         container.innerHTML = `
           <h1 class="section-title">${FP.esc(title)}</h1>
           <p class="section-sub">${direction === "receivable" ? "Montants dus par des tiers (clients, salariés, organismes) à la société." : "Montants dus par la société à des tiers (fournisseurs, salariés, organismes)."}</p>
-          ${ctx.canWrite ? `<div class="card"><div class="card-head"><h2>Nouvelle obligation (manuelle)</h2></div>
-            <form id="obl-form" class="form-row">
+          <div class="card"><div class="card-head"><h2>Nouvelle obligation (manuelle)</h2></div>
+            ${ctx.canWrite ? `<form id="obl-form" class="form-row">
               <div class="field"><label>Contrepartie</label><input name="counterparty_name"></div>
               <div class="field"><label>Montant</label><input name="amount_total" type="number" step="0.01" required></div>
               <div class="field"><label>Référence source</label><input name="source_id" required placeholder="ex: FAC-001"></div>
               <button class="btn btn-primary" type="submit">Créer</button>
-            </form><div id="obl-msg" class="msg"></div></div>` : ""}
+            </form><div id="obl-msg" class="msg"></div>` : FP.noAccessNotice("création d'obligation")}
+          </div>
           <div class="card">
             <div class="card-head"><h2>Liste</h2></div>
             <div class="filters-row">
