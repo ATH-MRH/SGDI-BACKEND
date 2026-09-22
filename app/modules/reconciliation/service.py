@@ -105,6 +105,14 @@ def propose_matches_for_transaction(db: Session, transaction_id: int) -> Reconci
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Transaction introuvable")
     if transaction.reconcile_status != "unmatched":
         return None
+    from app.modules.banking.models import BankStatement
+    statement = db.get(BankStatement, transaction.bank_statement_id)
+    if statement and statement.closed:
+        # Garde-fou explicite (P1-H) : en pratique close_statement() refuse déjà de clôturer
+        # un relevé avec des transactions non rapprochées, donc ce cas ne devrait jamais se
+        # produire — mais un rapprochement ne doit JAMAIS être proposé sur une période gelée,
+        # même si un futur chemin de code venait à contourner cette garantie.
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Relevé clôturé — période gelée, aucun nouveau rapprochement possible")
 
     direction = _obligation_direction_for(transaction.amount)
     candidates = _open_obligation_candidates(db, transaction.society, direction)

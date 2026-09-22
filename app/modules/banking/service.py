@@ -64,6 +64,43 @@ def list_accounts(db: Session, *, society: str | None, allowed: list[str] | None
     return list(db.scalars(stmt.order_by(BankAccount.id.desc())).all())
 
 
+# ── Clôture (P1-H) ──────────────────────────────────────────────────────────────────────
+# Un relevé clôturé devient une période gelée : les transactions qui le composent ne
+# peuvent plus être proposées à un NOUVEAU rapprochement (reconciliation/service.py le
+# vérifie explicitement — voir _ensure_statement_open). Clôturer n'annule JAMAIS un
+# rapprochement déjà confirmé — ce n'est pas une suppression, seulement un verrou vers
+# l'avant, cohérent avec l'intégrité append-only du reste de Finance Core (P0-A).
+
+def close_statement(db: Session, statement_id: int, *, closed_by: str) -> BankStatement:
+    statement = db.get(BankStatement, statement_id)
+    if not statement:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Relevé introuvable")
+    if statement.closed:
+        return statement
+    unmatched = db.scalar(
+        select(BankTransaction).where(
+            BankTransaction.bank_statement_id == statement_id, BankTransaction.reconcile_status == "unmatched",
+        )
+    )
+    if unmatched is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Des transactions de ce relevé restent non rapprochées — traitez-les (ou classez-les en exception) avant de clôturer",
+        )
+    statement.closed = 1
+    db.flush()
+    return statement
+
+
+def reopen_statement(db: Session, statement_id: int) -> BankStatement:
+    statement = db.get(BankStatement, statement_id)
+    if not statement:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Relevé introuvable")
+    statement.closed = 0
+    db.flush()
+    return statement
+
+
 # ── Déduplication ───────────────────────────────────────────────────────────────────────
 
 def _dedup_hash(bank_account_id: int, value_date: date | None, amount: Decimal, label: str, reference: str) -> str:

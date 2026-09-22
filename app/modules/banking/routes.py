@@ -80,3 +80,29 @@ async def import_statement(
     db.commit()
     db.refresh(statement)
     return statement
+
+
+@router.post("/statements/{statement_id}/close", response_model=BankStatementOut)
+def close_statement(statement_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from app.modules.banking.models import BankStatement
+    existing = db.get(BankStatement, statement_id)
+    if not existing:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Relevé introuvable")
+    _ensure_society_allowed(user, existing.society)
+    statement = service.close_statement(db, statement_id, closed_by=user.username)
+    db.commit()
+    db.refresh(statement)
+    return statement
+
+
+@router.post("/statements/{statement_id}/reopen", response_model=BankStatementOut)
+def reopen_statement(statement_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from app.modules.banking.models import BankStatement
+    existing = db.get(BankStatement, statement_id)
+    if not existing:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Relevé introuvable")
+    _ensure_society_allowed(user, existing.society)
+    statement = service.reopen_statement(db, statement_id)
+    db.commit()
+    db.refresh(statement)
+    return statement
