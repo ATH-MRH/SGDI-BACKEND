@@ -51,6 +51,13 @@ from app.modules.finance_core import models as _finance_core_models  # noqa: F40
 from app.modules.banking import models as _banking_models  # noqa: F401
 from app.modules.reconciliation import models as _reconciliation_models  # noqa: F401
 from app.modules.alerts import models as _alerts_models  # noqa: F401
+from app.modules.regulatory import models as _regulatory_models  # noqa: F401
+from app.modules.payroll import models as _payroll_models  # noqa: F401
+from app.modules.budget import models as _budget_models  # noqa: F401
+from app.modules.fiscalite import models as _fiscalite_models  # noqa: F401
+# treasury, profitability, cockpit : agrégation pure sur des tables déjà déclarées
+# ailleurs (banking/finance_core/accounting/achats/ventes) — aucune table propre, donc
+# aucun modèle à enregistrer ici.
 from app.modules.alerts.scheduler import start_scheduler as start_alerts_scheduler, stop_scheduler as stop_alerts_scheduler
 
 

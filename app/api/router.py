@@ -23,6 +23,13 @@ from app.modules.alerts.routes import router as alerts_router
 from app.modules.finance_core.routes import router as finance_core_router
 from app.modules.banking.routes import router as banking_router
 from app.modules.reconciliation.routes import router as reconciliation_router
+from app.modules.regulatory.routes import router as regulatory_router
+from app.modules.payroll.routes import router as payroll_router
+from app.modules.treasury.routes import router as treasury_router
+from app.modules.budget.routes import router as budget_router
+from app.modules.profitability.routes import router as profitability_router
+from app.modules.fiscalite.routes import router as fiscalite_router
+from app.modules.cockpit.routes import router as cockpit_router
 
 
 api_router = APIRouter()
@@ -49,3 +56,10 @@ api_router.include_router(alerts_router, prefix="/alerts", tags=["Alertes"])
 api_router.include_router(finance_core_router, prefix="/finance-core", tags=["Finance Core"])
 api_router.include_router(banking_router, prefix="/banking", tags=["Banking"])
 api_router.include_router(reconciliation_router, prefix="/reconciliation", tags=["Rapprochement bancaire"])
+api_router.include_router(regulatory_router, prefix="/regulatory", tags=["Référentiel réglementaire"])
+api_router.include_router(payroll_router, prefix="/payroll", tags=["Paie"])
+api_router.include_router(treasury_router, prefix="/treasury", tags=["Trésorerie"])
+api_router.include_router(budget_router, prefix="/budget", tags=["Budget"])
+api_router.include_router(profitability_router, prefix="/profitability", tags=["Rentabilité"])
+api_router.include_router(fiscalite_router, prefix="/fiscalite", tags=["Fiscalité"])
+api_router.include_router(cockpit_router, prefix="/cockpit", tags=["Cockpit DG"])

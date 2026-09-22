@@ -19,6 +19,8 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/ronde", "/api/loans",
     "/api/irongs", "/api/assistant", "/api/erp",
     "/api/finance-core", "/api/banking", "/api/reconciliation",
+    "/api/regulatory", "/api/payroll", "/api/treasury", "/api/budget",
+    "/api/profitability", "/api/fiscalite", "/api/cockpit",
 )
 
 # Plusieurs interfaces autonomes partagent le meme routeur backend. Les valeurs
@@ -49,6 +51,16 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/finance-core", frozenset({"finances"})),
     ("/api/banking", frozenset({"finances"})),
     ("/api/reconciliation", frozenset({"finances"})),
+    # Paie/référentiel réglementaire/trésorerie/budget/rentabilité/fiscalité/cockpit DG :
+    # même module "finances", même raisonnement que ci-dessus — domaine fonctionnellement
+    # unique du point de vue de l'habilitation, pas une nouvelle famille de comptes.
+    ("/api/regulatory", frozenset({"finances"})),
+    ("/api/payroll", frozenset({"finances"})),
+    ("/api/treasury", frozenset({"finances"})),
+    ("/api/budget", frozenset({"finances"})),
+    ("/api/profitability", frozenset({"finances"})),
+    ("/api/fiscalite", frozenset({"finances"})),
+    ("/api/cockpit", frozenset({"finances"})),
 )
 
 MODULE_KEY_ALIASES = {
