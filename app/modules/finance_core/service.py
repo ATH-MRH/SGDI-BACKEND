@@ -11,7 +11,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, update as sa_update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.finance_core.models import (
@@ -209,7 +210,18 @@ def settle_obligation(
     propre écriture comptable pour ce paiement (ex. achats.payer_facture appelle encore
     directement ecriture_paiement_fournisseur, chemin pré-existant conservé pour ne rien
     casser) — évite que le pont comptable (accounting_bridge) ne re-poste une SECONDE
-    écriture pour le même règlement lors d'un futur dispatch de l'outbox (double comptage)."""
+    écriture pour le même règlement lors d'un futur dispatch de l'outbox (double comptage).
+
+    P0 (revue d'intégrité, item 5 — double paiement) — TROUVÉ PENDANT L'AUDIT, reproduit
+    empiriquement par un test de concurrence réelle (tests/test_finance_concurrency.py, vrais
+    threads, vrai serveur, vraie base) : la version précédente lisait `remaining` sur l'objet
+    Python PUIS écrivait `amount_settled` en deux temps distincts — une course franche
+    (TOCTOU) entre requêtes concurrentes sur la MÊME obligation permettait un dépassement réel
+    du montant dû (5 règlements de 30.00 tous acceptés sur un dû de 100.00). Corrigé par une
+    UPDATE ... WHERE atomique (compare-and-swap en base, portable SQLite/Postgres, jamais une
+    dépendance à un niveau d'isolation particulier) : la ligne n'est incrémentée QUE si la
+    contrainte est encore respectée AU MOMENT DE L'ÉCRITURE, jamais sur une lecture devenue
+    périmée entre-temps."""
     existing = _existing_by_key(db, Settlement, idempotency_key)
     if existing:
         return existing
@@ -219,25 +231,58 @@ def settle_obligation(
     amt = q2(amount)
     if amt <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Montant de règlement invalide")
-    remaining = amount_remaining(obligation)
-    if amt > remaining:
+
+    cas_result = db.execute(
+        sa_update(FinancialObligation)
+        .where(
+            FinancialObligation.id == obligation_id,
+            FinancialObligation.status != "cancelled",
+            (FinancialObligation.amount_settled + amt) <= FinancialObligation.amount_total,
+        )
+        .values(amount_settled=FinancialObligation.amount_settled + amt)
+    )
+    if cas_result.rowcount == 0:
+        # Deux causes possibles, à distinguer explicitement plutôt que refuser à l'aveugle :
+        # (a) une requête CONCURRENTE avec la MÊME idempotency_key vient de committer entre
+        #     notre vérification initiale et cet UPDATE — un simple retry légitime, doit
+        #     renvoyer LE MÊME règlement (200), jamais une erreur ; (b) le reste à régler est
+        #     réellement insuffisant — refus 409 explicite, avec le reste réellement à jour.
+        db.rollback()
+        winner = _existing_by_key(db, Settlement, idempotency_key)
+        if winner:
+            return winner
+        obligation = get_obligation_or_404(db, obligation_id)
+        remaining = amount_remaining(obligation)
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             detail=f"Montant ({amt}) supérieur au reste à régler ({remaining}) — trop-perçu non automatique",
         )
+    db.refresh(obligation)
+    obligation.status = "settled" if obligation.amount_settled >= obligation.amount_total else "partially_settled"
+
     settlement = Settlement(
         society=society or obligation.society, obligation_id=obligation.id,
         payment_intent_id=payment_intent_id, bank_transaction_id=bank_transaction_id,
         amount=amt, kind="normal", idempotency_key=idempotency_key, notes=notes,
     )
     db.add(settlement)
-    obligation.amount_settled = q2(obligation.amount_settled) + amt
-    obligation.status = "settled" if obligation.amount_settled >= obligation.amount_total else "partially_settled"
     if payment_intent_id is not None:
         intent = db.get(PaymentIntent, payment_intent_id)
         if intent:
             intent.status = "settled"
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Course sur idempotency_key : notre UPDATE atomique ci-dessus a réussi (il n'y avait
+        # pas de conflit sur LE MONTANT), mais une transaction concurrente pour LA MÊME clé a
+        # inséré son propre Settlement entre-temps et gagné la contrainte UNIQUE. Annule
+        # notre propre incrément (sinon double comptage) et renvoie le règlement gagnant —
+        # jamais une IntegrityError brute remontée à l'appelant, jamais un second règlement.
+        db.rollback()
+        winner = _existing_by_key(db, Settlement, idempotency_key)
+        if winner:
+            return winner
+        raise
     event = emit_event(
         db, society=obligation.society, event_type="settlement.created", aggregate_type="settlement",
         aggregate_id=settlement.id,
@@ -264,7 +309,14 @@ def _preempt_accounting_event(db: Session, event: FinancialEvent, *, society: st
 def reverse_settlement(db: Session, *, settlement_id: int, reason: str, idempotency_key: str) -> Settlement:
     """Annule un règlement SANS jamais le supprimer (P0-A intégrité) : crée un settlement
     miroir kind="reversal" de montant négatif-équivalent (montant positif, sens inverse porté
-    par kind), restaure amount_settled/status de l'obligation."""
+    par kind), restaure amount_settled/status de l'obligation.
+
+    P0 (revue d'intégrité, item 5/6) — TROUVÉ PENDANT L'AUDIT : rien n'empêchait auparavant
+    d'annuler DEUX FOIS le même règlement (deux appels avec des idempotency_key différentes) —
+    chaque annulation décrémente amount_settled, une double annulation pouvait artificiellement
+    rouvrir une obligation déjà soldée et permettre un second règlement réel derrière (vecteur
+    de double paiement). Garde applicative ci-dessous + index UNIQUE en base (migration
+    20260922_0045, défense en profondeur) sur reversed_settlement_id."""
     existing = _existing_by_key(db, Settlement, idempotency_key)
     if existing:
         return existing
@@ -273,6 +325,9 @@ def reverse_settlement(db: Session, *, settlement_id: int, reason: str, idempote
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Règlement introuvable")
     if original.kind != "normal":
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Seul un règlement normal peut être annulé")
+    already_reversed = db.scalar(select(Settlement).where(Settlement.reversed_settlement_id == original.id))
+    if already_reversed:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=f"Règlement déjà annulé (annulation #{already_reversed.id})")
     obligation = get_obligation_or_404(db, original.obligation_id)
     reversal = Settlement(
         society=obligation.society, obligation_id=obligation.id, amount=original.amount,
@@ -287,7 +342,15 @@ def reverse_settlement(db: Session, *, settlement_id: int, reason: str, idempote
         "settled" if obligation.amount_settled >= obligation.amount_total and obligation.amount_total > 0
         else "partially_settled" if obligation.amount_settled > 0 else "open"
     )
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Course : une annulation concurrente (idempotency_key différente) du MÊME règlement
+        # a gagné l'index UNIQUE (reversed_settlement_id) entre notre vérification et ce
+        # flush — annule notre propre décrément (sinon double comptabilisation) et refuse
+        # proprement, jamais une IntegrityError brute.
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Règlement déjà annulé (course concurrente détectée)")
     emit_event(
         db, society=obligation.society, event_type="settlement.reversed", aggregate_type="settlement",
         aggregate_id=reversal.id,

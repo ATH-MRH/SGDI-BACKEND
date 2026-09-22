@@ -86,6 +86,37 @@ def test_reverse_settlement_restores_obligation(client, auth_headers):
     assert got2["amount_settled"] == "0.00" or got2["amount_settled"] == "0"
 
 
+# ── P0 (revue d'intégrité, item 5/6) : un règlement ne doit jamais pouvoir être annulé deux
+# fois — chaque annulation décrémente amount_settled, une double annulation rouvrirait
+# artificiellement une obligation déjà soldée (vecteur de double paiement) ───────────────────
+
+def test_reverse_settlement_twice_is_refused(client, auth_headers):
+    # Société DÉDIÉE (pas SOC partagée) : une obligation "open" laissée par ce test (avant
+    # son annulation, ou si l'annulation change de comportement un jour) avec un montant rond
+    # (300.00) pourrait sinon être capturée par erreur par le moteur de rapprochement N:1/1:N
+    # d'un AUTRE fichier de test qui cherche une combinaison de somme exacte pour SOC — piège
+    # réellement rencontré pendant cette revue (voir tests/test_reconciliation.py, même
+    # société + même montant qu'un test de reconciliation ailleurs faussait sa correspondance).
+    obl = _create_obligation(client, auth_headers, "obl-doublerev", amount="300.00", society="Annulation Double SA")
+    settle = client.post(f"/api/finance-core/obligations/{obl['id']}/settle", headers=auth_headers, json={
+        "amount": "300.00", "idempotency_key": "stl:doublerev",
+    }).json()
+
+    first = client.post(f"/api/finance-core/settlements/{settle['id']}/reverse", headers=auth_headers, json={
+        "reason": "erreur de saisie", "idempotency_key": "stl:doublerev:reversal1",
+    })
+    assert first.status_code == 200, first.text
+
+    second = client.post(f"/api/finance-core/settlements/{settle['id']}/reverse", headers=auth_headers, json={
+        "reason": "tentative répétée", "idempotency_key": "stl:doublerev:reversal2",
+    })
+    assert second.status_code == 409, "un règlement déjà annulé ne doit jamais pouvoir l'être une seconde fois (idempotency_key différente)"
+
+    got = client.get(f"/api/finance-core/obligations/{obl['id']}", headers=auth_headers).json()
+    assert got["status"] == "open"
+    assert got["amount_settled"] == "0.00" or got["amount_settled"] == "0", "une seule annulation doit avoir été appliquée, jamais deux"
+
+
 def test_obligation_society_scope_enforced(client, auth_headers, restricted_headers, db):
     """restricted_headers (testops) n'a pas le module 'finances' -> 403 avant tout traitement.
     Remise à un état neutre explicite (voir test_reconciliation.py pour le détail) : d'autres

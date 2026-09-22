@@ -129,6 +129,17 @@ class Settlement(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text)
     idempotency_key: Mapped[str] = mapped_column(String(160), unique=True, index=True)
 
+    # P0 (revue d'intégrité, item 5/6) : un règlement ne doit jamais pouvoir être annulé deux
+    # fois (double décrément de amount_settled = vecteur de double paiement) — index UNIQUE en
+    # défense en profondeur du garde applicatif (finance_core.service.reverse_settlement).
+    # NULL répété autorisé (un règlement normal n'a pas de reversed_settlement_id) : seule une
+    # valeur non NULL doit être unique, standard SQL. Voir migration 20260922_0045 (même nom
+    # d'index, tenu synchronisé ici pour que Base.metadata.create_all() — utilisé par les
+    # tests — porte la même garantie que la migration en production).
+    __table_args__ = (
+        Index("ix_settlements_reversed_settlement_id_unique", "reversed_settlement_id", unique=True),
+    )
+
 
 class FinancialEvent(Base, TimestampMixin):
     """Journal d'événements immuable (event log) — jamais modifié après création, jamais
