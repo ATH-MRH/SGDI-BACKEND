@@ -260,8 +260,19 @@ def serve_atlas_v3_entry_asset(asset_path: str, v: str | None = None):
 # périmètre fonctionnel (obligations/comptes bancaires/import CSV/rapprochement) ne justifie
 # pas la machinerie de versionnement ES modules réutilisée par /atlas-v3, route explicite en
 # no-cache suffisante pour ne jamais servir une version obsolète après un déploiement.
+#
+# finance.irongs.com (domaine canonique) — TROUVÉ PENDANT LA REVUE DE ROUTAGE : rien
+# n'empêchait auparavant deux interfaces Finance distinctes de coexister (ce chemin
+# /finance-platform, accessible depuis N'IMPORTE QUEL domaine partagé, ET le nouveau domaine
+# dédié finance.irongs.com — voir _is_finance_host ci-dessus). Seul drh.irongs.com est
+# explicitement retiré ici (redirection 301), conformément à la demande ; les autres domaines
+# partagés (atlas/ops/materiel/...) continuent de servir ce chemin tel quel — hors périmètre
+# explicite de ce changement, aucune route existante n'y est retirée.
 @app.get("/finance-platform", include_in_schema=False)
-def serve_finance_platform():
+def serve_finance_platform(request: Request):
+    host = request.headers.get("host", "").split(":")[0].lower()
+    if _is_drh_host(host):
+        return RedirectResponse("https://finance.irongs.com/", status_code=301)
     html_content = (STATIC_DIR / "finance-platform" / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html_content, headers=_NO_CACHE)
 
@@ -742,6 +753,21 @@ def _is_dc_host(host: str) -> bool:
 
 def _is_rh_host(host: str) -> bool:
     return host.split(":")[0].lower() == "rh.irongs.com"
+
+
+def _is_finance_host(host: str) -> bool:
+    # finance.irongs.com — domaine canonique de Finance Platform (même backend/auth/
+    # session/RBAC/société que tout le reste, voir /finance-platform ci-dessous : même
+    # patron que les autres domaines dédiés de cette liste, aucune application parallèle).
+    return host.split(":")[0].lower() == "finance.irongs.com"
+
+
+def _is_drh_host(host: str) -> bool:
+    # drh.irongs.com — sert l'application DRH inchangée (même index par défaut que les
+    # autres domaines partagés) ; distinct de rh.irongs.com (_is_rh_host, rh.html dédié).
+    # Utilisé uniquement pour retirer /finance-platform de ce domaine (voir plus bas) —
+    # finance.irongs.com est désormais la seule adresse canonique de Finance Platform.
+    return host.split(":")[0].lower() == "drh.irongs.com"
 
 
 def _is_retired_commercial_host(host: str) -> bool:
@@ -1480,6 +1506,12 @@ def frontend(request: Request) -> HTMLResponse:
             STATIC_DIR / "facturation.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_finance_host(host):
+        return FileResponse(
+            STATIC_DIR / "finance-platform" / "index.html",
+            media_type="text/html; charset=utf-8",
+            headers=_NO_CACHE,
         )
     if _is_cheque_host(host):
         return FileResponse(
