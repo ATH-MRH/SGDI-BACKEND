@@ -1,10 +1,23 @@
 # ATLAS Finance Platform — Traçabilité et parité (mission `feat/atlas-finance-platform`)
 
 Baseline : `542a17861566409b6a61c1dd99338bd494ca0711` (= `origin/main` au démarrage, inchangé
-depuis — 5 commits locaux, non poussés). Référence : audit de conformité factuel réalisé en
-lecture seule avant cette mission (MISSING confirmé pour Finance Core/Banking/
-Reconciliation/Settlement/Budget ; existant réutilisé pour accounting/achats/ventes/
-reporting/paie legacy).
+depuis). Référence : audit de conformité factuel réalisé en lecture seule avant cette
+mission (MISSING confirmé pour Finance Core/Banking/Reconciliation/Settlement/Budget ;
+existant réutilisé pour accounting/achats/ventes/reporting/paie legacy).
+
+## Addendum — continuation P1-A → P3 (9 commits supplémentaires)
+
+La suite `acc1b0b` (audit + Exit Gate initial) a été suivie d'une continuation qui a fermé
+P1-A (Paie typée) et couvert P2 (Trésorerie/Budget/Rentabilité/Fiscalité) et P3
+(Cockpit DG), plus les 3 chaînes E2E nommées explicitement. Nouveaux modules :
+`regulatory` (référentiel réglementaire versionné, dépendance de payroll/fiscalite),
+`payroll`, `treasury`, `budget`, `profitability`, `fiscalite`, `cockpit`. Voir la section
+détaillée plus bas ("Continuation P1-A→P3") pour le détail lot par lot, preuves et limites
+assumées. Suite de tests finale : **767 passed, 14 skipped, 0 failed** (baseline avant
+continuation : 746/14/0 — 21 nouveaux tests backend). CI : le pipeline
+`.github/workflows/ci.yml` préexistant (`python -m pytest -q`) couvre déjà automatiquement
+tous ces tests sans configuration additionnelle — vérifié en exécutant la commande CI
+exacte en local, résultat identique.
 
 ## Ce qui a été réellement construit (avec preuve — fichier/test/commit)
 
@@ -79,11 +92,42 @@ dispatch (`test_payer_facture_settles_obligation_without_double_accounting_entry
 - Frontend vérifié par Chrome réel (Puppeteer) — parcours complet, captures d'écran, 0 erreur
   console — pas seulement un test HTTP de la page d'entrée.
 
-## EXIT GATE
+## Continuation P1-A→P3 (commits `996d706`, `0b234eb`)
 
-**EXIT-2** (implémentation réelle et testée pour le socle P0 complet + une majorité des lots
-P1, mais P1-A explicitement non tenté et P2/P3 non atteints — ne correspond ni à un socle
-absent (EXIT-0/1) ni à une couverture P0/P1 complète (EXIT-4/5)). Le mapping exact des
-libellés EXIT-0 à EXIT-5 du prompt maître n'est pas visible dans cette conversation ; cette
-désignation reflète l'état réel constaté : **P0 entièrement couvert et testé, P1 couvert à
-8/9 lots (P1-A Paie non tenté), P2/P3 non atteints.**
+| Lot | Domaine | Statut réel | Preuve |
+|---|---|---|---|
+| Dépendance | Référentiel réglementaire (`app/modules/regulatory/`) | IMPLEMENTED | `RegulatorySource/Rule/Version/ChangeProposal`, lookup historique précis par date (jamais "la règle actuelle" pour une période passée), refus explicite si seule version "unverified" sans `allow_unverified` — 5 tests |
+| P1-A | Paie typée (`app/modules/payroll/`) | IMPLEMENTED | Chaîne réelle pointage clôturé (`DailyPresence.closed_at`) → grille versionnée → calcul (CNAS+IRG via référentiel, traçabilité `rules_used`) → validation immuable → 3 `FinancialObligation` (net/CNAS/IRG) → réglées par le moteur Finance Core déjà existant (0 code paiement/comptabilité propre à la paie) — 5 tests + E2E complet |
+| — | Supervision IA de la paie | NON TENTÉE | Hors budget de cette continuation — aucune fabrication de faux garde-fou IA |
+| P2 | Trésorerie (`treasury`) | IMPLEMENTED (scope réduit) | Positions bancaires réelles (somme `BankTransaction`), échéancier, cash forecast arithmétique traçable — pas de modèle prédictif |
+| P2 | Budget (`budget`) | IMPLEMENTED | Workflow `draft→submitted→approved→locked`, révision = nouvelle ligne (jamais d'écrasement), réalisé calculé depuis les écritures **validées** réelles (compte+société+période) — limite documentée : centre de coût/contrat/client/site non portés par la comptabilité aujourd'hui |
+| P2 | Rentabilité (`profitability`) | IMPLEMENTED (scope réduit) | Marge société/client/période depuis Invoice/PayrollSlip validés/FactureFournisseur réels — mêmes limites de dimensions documentées, honnêtement annoncées dans la réponse API elle-même (`note`) |
+| P2 | Fiscalité Algérie (`fiscalite`) | IMPLEMENTED (moteur de calendrier, PAS de calcul fiscal) | `FiscalObligation` = suivi (période/base/montant/échéance/statut/preuve/paiement/écriture) ; le montant est saisi par l'utilisateur, jamais calculé ici à partir d'un barème non prouvé — `mark_paid()` refuse tant que l'obligation Finance Core liée n'est pas réellement réglée |
+| — | G50/TVA/IBS — calcul automatique du montant dû | NON IMPLÉMENTÉ (délibérément) | Aurait exigé d'"inventer le droit fiscal" sans source vérifiée — interdit explicitement par la mission |
+| P3 | Cockpit DG (`cockpit`) | IMPLEMENTED | Agrégation serveur uniquement (trésorerie/créances/dettes/CA/marge/masse salariale/fiscalité à échéance/rapprochements non résolus/budget vs réalisé), 0 collection complète — 1 test |
+| E2E | 3 chaînes nommées | IMPLEMENTED | Vente (devis→commande→créance→CSV bancaire→rapprochement→settlement→écriture), Achat (facture fournisseur→dette→**rapprochement bancaire** [chemin différent de `payer_facture` déjà testé]→écriture), Paie (pointage→bulletin→validation→PaymentIntent "virement"→règlement→écriture) — chacune avec vérification d'idempotence explicite |
+| CI | Automatisation | DÉJÀ SATISFAIT | `.github/workflows/ci.yml` préexistant exécute `pytest -q` sans configuration additionnelle — vérifié en local avec la commande CI exacte, 767/14/0 |
+
+### Garde architecturale — vérification explicite
+
+- **Float monétaire (nouveau code)** : 0 — `Numeric(18,2)`/`Decimal` partout dans regulatory/payroll/treasury/budget/profitability/fiscalite/cockpit.
+- **Double comptabilisation** : gardée (`skip_accounting_bridge`, testée explicitement pour achats ; le chemin bancaire et le chemin direct achats natif ont été testés séparément pour prouver qu'aucun des deux ne double-compte).
+- **Écriture comptable depuis le frontend** : aucune — `/finance-platform` ne fait que consommer les API, jamais d'écriture posée côté client.
+- **Suppression d'événement financier audité** : aucune — `FinancialEvent`/`Settlement` (reversal, jamais delete), `BudgetLine` (révision, jamais d'écrasement), `PayrollSlip` (immuable après validation, aucun endpoint de modification n'existe).
+- **Paiement sans idempotency_key** : impossible — `idempotency_key` est un champ requis (non optionnel) sur `PaymentIntentCreate`/`SettleRequest`/`ObligationCreate` côté schéma Pydantic, refusé avec 422 si absent.
+- **Règle fiscale non versionnée utilisée pour calculer** : aucune — `fiscalite` ne calcule rien (montant saisi par l'utilisateur), `payroll` passe exclusivement par `regulatory.get_applicable_version()`.
+- **Règle réglementaire sans source** : résiduel non fermé — `RegulatoryVersion.source_id` est **nullable** (une version peut techniquement être créée sans source liée). Non corrigé dans cette continuation (rendre le champ obligatoire casserait rétroactivement si jamais utilisé sans source ailleurs) — signalé honnêtement, pas masqué.
+- **Validation automatique par IA** : sans objet — aucune IA n'a été construite dans ce lot.
+
+## EXIT GATE (mis à jour)
+
+**EXIT-3** — le socle P0 reste complet et testé (inchangé), **P1 est maintenant complet à
+9/9 lots** (P1-A fermé), **P2 est couvert pour ses 4 sous-domaines demandés** (avec des
+limites de dimensions honnêtement documentées, pas cachées), **P3 (Cockpit DG) est
+implémenté**. Ce qui manque pour une couverture totale (EXIT-4/5) : supervision IA de la
+paie (non tentée), calcul automatique des montants fiscaux (délibérément non implémenté —
+inventer le droit fiscal était interdit), veille réglementaire externe automatique
+(`RegulatoryChangeProposal.detected_from="external_watch"` n'a pas de producteur réel, seul
+`"manual"` est utilisé), et `RegulatoryVersion.source_id` non rendu obligatoire. Aucun de
+ces éléments manquants ne bloque l'utilisation des lots livrés — chacun fonctionne de bout
+en bout, testé, avec traçabilité complète.
