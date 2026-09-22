@@ -1,11 +1,34 @@
 def test_finance_platform_entry_serves_html(client):
+    """V2 (frontend complet) : index.html est désormais une coquille qui charge api.js/
+    shell.js/views/*.js — plus un fichier auto-porté unique (voir CHANGELOG de la mission
+    "ATLAS Finance Platform V2"). Les assertions portent donc sur la présence des scripts
+    référencés, chacun vérifié séparément ci-dessous pour son propre contenu."""
     r = client.get("/finance-platform")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     assert "ATLAS Finance Platform" in r.text
-    assert "/banking/accounts" in r.text
-    assert "/reconciliation/cases" in r.text
-    assert 'const API = "/api"' in r.text
+    for src in ("api.js", "shell.js", "views/banque.js", "views/obligations.js", "views/paie.js",
+                "views/budget.js", "views/rentabilite.js", "views/fiscalite.js", "views/comptabilite.js",
+                "views/reglementation.js", "views/cockpit.js", "views/tresorerie.js", "views/dashboard.js"):
+        assert src in r.text, f"script manquant dans la coquille : {src}"
+
+
+def test_finance_platform_static_assets_serve_real_content(client):
+    """Les fichiers référencés par index.html sont réellement servis (StaticFiles couvre
+    app/static entièrement) et portent le contenu attendu — preuve directe que l'architecture
+    modulaire fonctionne de bout en bout, pas seulement que les <script src> existent."""
+    api_js = client.get("/static/finance-platform/api.js")
+    assert api_js.status_code == 200
+    assert 'const API = "/api"' in api_js.text
+
+    banque_js = client.get("/static/finance-platform/views/banque.js")
+    assert banque_js.status_code == 200
+    assert "/banking/accounts" in banque_js.text
+    assert "/reconciliation/cases" in banque_js.text
+
+    app_css = client.get("/static/finance-platform/app.css")
+    assert app_css.status_code == 200
+    assert "--primary" in app_css.text
 
 
 def test_legacy_still_served_unaffected(client):
@@ -24,7 +47,7 @@ def test_finance_host_serves_finance_platform_at_root(client):
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     assert "ATLAS Finance Platform" in r.text
-    assert "/banking/accounts" in r.text
+    assert "shell.js" in r.text
 
 
 def test_finance_host_root_is_nocache(client):

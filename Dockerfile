@@ -1,10 +1,16 @@
 # --- Étape de contrôle : valide la syntaxe JavaScript AVANT de construire l'image. ---
 # Si un fichier JS est cassé (parenthèse/accolade en trop, etc.), le build échoue ici
 # et Coolify garde l'ancien conteneur en marche -> jamais de page blanche en production.
+# Finance Platform V2 : app/static/finance-platform/{api,shell}.js et views/*.js ajoutés à la
+# couverture — le glob top-level *.js ne descend pas dans les sous-répertoires, trouvé en
+# construisant l'interface V2 (fichiers séparés par domaine, contrairement à V1 qui était
+# un seul fichier auto-porté sans .js externe à valider ici).
 FROM node:20-alpine AS jscheck
 WORKDIR /check
 COPY app/static/*.js ./
-RUN for f in *.js; do case "$f" in *.min.js) ;; *) echo "check $f" && node --check "$f" ;; esac; done \
+COPY app/static/finance-platform/*.js ./finance-platform/
+COPY app/static/finance-platform/views/*.js ./finance-platform/views/
+RUN for f in *.js finance-platform/*.js finance-platform/views/*.js; do case "$f" in *.min.js) ;; *) echo "check $f" && node --check "$f" ;; esac; done \
     && echo ok > /check/passed
 
 FROM python:3.13-slim
