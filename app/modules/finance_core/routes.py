@@ -43,6 +43,15 @@ def _effective_society(user: User, requested: str | None) -> str | None:
     return None
 
 
+@router.get("/societies")
+def known_societies(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Sociétés réellement connues du périmètre Finance (obligations/comptes bancaires/paie),
+    respectant authorized_societies — alimente le sélecteur d'en-tête et la vue groupe Cockpit
+    DG (frontend V2). Lecture/agrégat pur, voir service.list_known_societies."""
+    allowed = _allowed_societies(user)
+    return {"items": service.list_known_societies(db, allowed=allowed or None)}
+
+
 @router.get("/obligations")
 def obligations_page(
     society: str | None = None, direction: str | None = None, status_filter: str | None = None,
@@ -148,14 +157,23 @@ def dispatch_outbox(limit: int = 50, db: Session = Depends(get_db), user: User =
 
 
 @router.get("/accounting-events")
-def list_accounting_events(society: str | None = None, status_filter: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def list_accounting_events(
+    society: str | None = None, status_filter: str | None = None,
+    limit: int = 200, offset: int = 0,
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+):
+    # limit/offset (pas une enveloppe {items,total,...}) : ajoutés pour le frontend V2 sans
+    # changer la forme de réponse existante (liste brute) — tous les appelants actuels
+    # (tests + E2E) itèrent directement dessus ; défaut à 200 pour rester sans effet sur eux.
     from sqlalchemy import select as _select
+    safe_limit = min(max(int(limit or 200), 1), 500)
+    safe_offset = max(int(offset or 0), 0)
     stmt = _select(AccountingEvent)
     if society:
         stmt = stmt.where(AccountingEvent.society == society)
     if status_filter:
         stmt = stmt.where(AccountingEvent.status == status_filter)
-    rows = db.scalars(stmt.order_by(AccountingEvent.id.desc())).all()
+    rows = db.scalars(stmt.order_by(AccountingEvent.id.desc()).limit(safe_limit).offset(safe_offset)).all()
     return [
         {"id": r.id, "society": r.society, "source_type": r.source_type, "source_id": r.source_id,
          "ecriture_id": r.ecriture_id, "status": r.status, "last_error": r.last_error}

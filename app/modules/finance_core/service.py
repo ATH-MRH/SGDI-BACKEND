@@ -424,3 +424,22 @@ def list_obligations(
         stmt = stmt.where(FinancialObligation.status == status_filter)
     from app.core.pagination import paginate_statement
     return paginate_statement(db, stmt, model=FinancialObligation, page=page, page_size=page_size)
+
+
+def list_known_societies(db: Session, *, allowed: list[str] | None) -> list[str]:
+    """Frontend V2 (sélecteur société d'en-tête + vue groupe Cockpit DG) — TROUVÉ PENDANT LA
+    CONSTRUCTION : aucun endpoint n'énumérait les sociétés réellement connues du périmètre
+    Finance. Lecture/agrégat pur (aucune nouvelle table, aucune donnée fabriquée) : union des
+    sociétés distinctes déjà portées par FinancialObligation/BankAccount/PayrollRun — jamais
+    une liste inventée. `allowed` restreint le résultat pour un compte non-admin (même
+    politique que list_obligations) ; None (admin global) renvoie tout ce qui existe."""
+    from app.modules.banking.models import BankAccount
+    from app.modules.payroll.models import PayrollRun
+
+    names: set[str] = set()
+    for model in (FinancialObligation, BankAccount, PayrollRun):
+        stmt = select(model.society).distinct()
+        if allowed:
+            stmt = stmt.where(model.society.in_(allowed))
+        names.update(v for v in db.scalars(stmt).all() if v)
+    return sorted(names)

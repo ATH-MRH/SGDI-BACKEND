@@ -86,7 +86,44 @@ def list_runs(society: str | None = None, db: Session = Depends(get_db), user: U
     if society:
         stmt = stmt.where(PayrollRun.society == society)
     rows = db.scalars(stmt.order_by(PayrollRun.id.desc())).all()
-    return [{"id": r.id, "society": r.society, "period": r.period, "status": r.status} for r in rows]
+    # Cockpit Paie (frontend V2) — TROUVÉ PENDANT LA CONSTRUCTION : le nombre de salariés et
+    # les totaux (brut/CNAS/IRG/net) n'étaient nulle part disponibles sans recharger chaque
+    # bulletin individuellement côté client (N+1, exactement ce que la mission interdit).
+    # UNE requête groupée, lecture/agrégat pur — aucune donnée fabriquée, aucun bulletin
+    # recalculé (les montants stockés sont déjà figés par la validation, voir P0-A).
+    from sqlalchemy import func
+    run_ids = [r.id for r in rows]
+    totals: dict[int, dict] = {}
+    if run_ids:
+        agg_stmt = (
+            select(
+                PayrollSlip.payroll_run_id, func.count(PayrollSlip.id),
+                func.sum(PayrollSlip.brut), func.sum(PayrollSlip.cotisation_salariale),
+                func.sum(PayrollSlip.cotisation_patronale), func.sum(PayrollSlip.irg),
+                func.sum(PayrollSlip.net), func.sum(PayrollSlip.net_a_payer),
+            )
+            .where(PayrollSlip.payroll_run_id.in_(run_ids))
+            .group_by(PayrollSlip.payroll_run_id)
+        )
+        for run_id, count, brut, cnas_sal, cnas_pat, irg, net, net_a_payer in db.execute(agg_stmt).all():
+            totals[run_id] = {
+                "slip_count": count, "brut": str(brut or 0), "cotisation_salariale": str(cnas_sal or 0),
+                "cotisation_patronale": str(cnas_pat or 0), "irg": str(irg or 0), "net": str(net or 0),
+                "net_a_payer": str(net_a_payer or 0),
+            }
+        validated_stmt = (
+            select(PayrollSlip.payroll_run_id, func.count(PayrollSlip.id))
+            .where(PayrollSlip.payroll_run_id.in_(run_ids), PayrollSlip.status == "validated")
+            .group_by(PayrollSlip.payroll_run_id)
+        )
+        validated_counts = dict(db.execute(validated_stmt).all())
+        for run_id, count in validated_counts.items():
+            totals.setdefault(run_id, {})["validated_count"] = count
+    empty = {"slip_count": 0, "brut": "0", "cotisation_salariale": "0", "cotisation_patronale": "0", "irg": "0", "net": "0", "net_a_payer": "0", "validated_count": 0}
+    return [
+        {"id": r.id, "society": r.society, "period": r.period, "status": r.status, **{**empty, **totals.get(r.id, {})}}
+        for r in rows
+    ]
 
 
 @router.post("/runs/{run_id}/slips")

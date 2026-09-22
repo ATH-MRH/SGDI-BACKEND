@@ -274,3 +274,21 @@ def list_transactions(
         stmt = stmt.where(BankTransaction.reconcile_status == reconcile_status)
     from app.core.pagination import paginate_statement
     return paginate_statement(db, stmt, model=BankTransaction, page=page, page_size=page_size)
+
+
+def list_statements(
+    db: Session, *, society: str | None, allowed: list[str] | None, bank_account_id: int | None = None,
+    page: int = 1, page_size: int = 25,
+) -> dict:
+    """Écran "Relevés" (frontend V2) — TROUVÉ PENDANT LA CONSTRUCTION : aucune route ne
+    listait les BankStatement déjà importés (seuls import/close/reopen par id existaient).
+    Lecture/agrégat pur sur le modèle existant — aucune colonne/migration ajoutée."""
+    stmt = select(BankStatement)
+    if society:
+        stmt = stmt.where(BankStatement.society == society)
+    elif allowed:
+        stmt = stmt.where(BankStatement.society.in_(allowed))
+    if bank_account_id:
+        stmt = stmt.where(BankStatement.bank_account_id == bank_account_id)
+    from app.core.pagination import paginate_statement
+    return paginate_statement(db, stmt, model=BankStatement, page=page, page_size=page_size)

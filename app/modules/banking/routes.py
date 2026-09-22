@@ -57,6 +57,20 @@ def list_transactions(
     )
 
 
+@router.get("/statements")
+def list_statements(
+    society: str | None = None, bank_account_id: int | None = None,
+    page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user),
+):
+    allowed = _allowed_societies(user)
+    if society:
+        _ensure_society_allowed(user, society)
+    return service.list_statements(
+        db, society=society, allowed=allowed if allowed and not society else None,
+        bank_account_id=bank_account_id, page=page, page_size=page_size,
+    )
+
+
 @router.post("/statements/import", response_model=BankStatementOut)
 async def import_statement(
     society: str = Form(...),
