@@ -131,3 +131,89 @@ inventer le droit fiscal était interdit), veille réglementaire externe automat
 `"manual"` est utilisé), et `RegulatoryVersion.source_id` non rendu obligatoire. Aucun de
 ces éléments manquants ne bloque l'utilisation des lots livrés — chacun fonctionne de bout
 en bout, testé, avec traçabilité complète.
+
+## REVUE FINALE BLOQUANTE — Résultats (8 commits supplémentaires, `7b59c78`→`4786e78`)
+
+Revue d'intégrité factuelle post-continuation, ciblée sur double paiement, double
+comptabilisation, arrondis, historique paie, multi-société et RBAC réel — pas une nouvelle
+fonctionnalité, uniquement des corrections de défauts réellement trouvés. Base de départ :
+767 passed/14 skipped/0 failed. Base d'arrivée : **797 passed/14 skipped/0 failed**, stable
+sur plusieurs exécutions répétées de la suite complète.
+
+### P0 trouvés et corrigés
+
+1. **Paie — validation sans garde de vérification** (`7b59c78`) : `validate_slip()` créait des
+   `FinancialObligation` réelles même si les règles CNAS/IRG utilisées étaient "unverified" ou
+   absentes. Corrigé par `slip_validation_blockers()` — 409 explicite avant toute obligation.
+2. **Référentiel — version "active" sans source** (`7b59c78`) : `RegulatoryVersion.source_id`
+   était nullable sans contrainte. Corrigé par un garde applicatif + `CHECK` constraint DB
+   (migration `20260922_0044`) — ferme le "résiduel non fermé" signalé dans l'addendum
+   précédent de ce document.
+3. **Paie historique — recalcul parallèle non géré** (`3d12c9d`) : un second calcul pour le
+   même employé/cycle (idempotency_key différente) remontait un `IntegrityError` brut (500)
+   au lieu d'un refus propre — l'index UNIQUE `(payroll_run_id, employee_id)` existait déjà en
+   base mais n'était pas vérifié applicativement. Corrigé (409 propre) + `get_grid_applicable_at()`
+   ajouté pour prouver période→grille comme pour période→règle.
+4. **Arrondis — politique incohérente** (`28bed91`) : `banking/treasury/budget/fiscalite/cockpit`
+   appelaient `.quantize(Decimal("0.01"))` sans `rounding=` explicite (ROUND_HALF_EVEN par
+   défaut de Python), incohérent avec `finance_core`/`payroll` (ROUND_HALF_UP explicite).
+   Unifié sur ROUND_HALF_UP partout (16 points de correction).
+5. **Double paiement — course réelle sur `settle_obligation`** (`9e4cd17`) : reproduit
+   empiriquement avec de vrais threads (5 règlements de 30.00 tous acceptés sur un dû de
+   100.00 = dépassement de 50.00 ; requêtes concurrentes à idempotency_key identique
+   remontant un `IntegrityError` brut). Corrigé par une UPDATE...WHERE atomique
+   (compare-and-swap SQL, portable SQLite/Postgres).
+6. **Double annulation d'un même règlement** (`9e4cd17`) : rien n'empêchait d'annuler deux
+   fois le même `Settlement` (idempotency_keys différentes), rouvrant artificiellement une
+   obligation soldée. Corrigé (garde applicatif + index UNIQUE `reversed_settlement_id`,
+   migration `20260922_0045`).
+7. **Outbox — entrées "failed" jamais reprises** (`8cedaff`) : une panne transitoire du pont
+   comptable laissait une écriture manquante pour toujours, sans nouvelle tentative. Corrigé
+   (reprise automatique sous `MAX_OUTBOX_ATTEMPTS=5`).
+8. **Outbox — écriture partielle non annulée en cas d'échec** (`8cedaff`) : un handler qui
+   échoue APRÈS une écriture partielle ne voyait rien annulé avant le commit du lot entier.
+   Corrigé par un SAVEPOINT par entrée.
+9. **Multi-société — `payment_intent_id` non vérifié** (`7b87176`) : `settle_obligation`
+   n'exigeait pas que le `PaymentIntent` référencé appartienne à l'obligation réglée — un
+   PaymentIntent d'une AUTRE obligation (société différente) pouvait être détourné et marqué
+   "settled" par effet de bord. Corrigé (400 explicite).
+10. **RBAC — `POST /reconciliation/transactions/{id}/propose` sans contrôle de société**
+    (`7b87176`) : le plus sérieux des défauts RBAC trouvés — AUCUN contrôle de société
+    n'existait, permettant à un utilisateur restreint de lire un rapprochement d'une autre
+    société entièrement. Corrigé.
+11. **RBAC — `POST /fiscalite/{id}/mark-paid` : autorisation après mutation** (`7b87176`) :
+    `service.mark_paid()` (mutation + flush réels) était appelé AVANT le contrôle de société.
+    Corrigé (vérification sur lecture seule d'abord — l'autorisation doit toujours précéder
+    la mutation, jamais la suivre).
+12. **Fiscalité — provenance implicite, non validée** (`4786e78`) : `regulatory_version_id`
+    n'était ni exposé explicitement ni validé (n'importe quel id acceptable). Ajout de
+    `FiscalObligation.provenance` ("manual"/"calculated_verified", migration `20260922_0046`)
+    avec validation stricte (la version référencée doit exister et être "active").
+
+### Items 8/9/13/14/15 — vérifiés, pas de défaut trouvé nécessitant correction
+
+- **Comptabilité (item 8)** : les 3 chaînes E2E affirment désormais explicitement
+  `SUM(debit) == SUM(credit)` au centime près, traçable au document source.
+- **E2E paie + rejeu intégral (item 9)** : nouveau test qui rejoue la chaîne paie ENTIÈRE
+  (mêmes idempotency_keys) — zéro duplication financière/comptable de bout en bout.
+- **Migrations (item 13)** : chaîne complète `<base>` → `20260922_0046` vérifiée sur SQLite
+  neuf, un seul head Alembic, aucune opération destructive dans les 6 migrations de cette
+  continuation+revue.
+- **Tests (item 14)** : suite complète 797/14/0, `git diff --check` propre sur tout le
+  périmètre de la branche, arbre de travail propre.
+- **Dettes non bloquantes (item 15)** : confirmées toujours non implémentées, comme requis —
+  supervision IA paie (absente), veille réglementaire externe (absente, seule la
+  documentation en parle comme possibilité future, garde architecturale déjà en place),
+  calcul automatique G50/TVA/IBS (absent, `declare()` prend toujours un montant saisi),
+  dimensions contrat/site réelles en Budget/Rentabilité (absentes — restent des tags
+  déclaratifs non tracés, honnêtement documenté dans `profitability.service.margin`).
+
+### Constat méthodologique notable
+
+Plusieurs des défauts ci-dessus (5, 9, 10, 11) n'ont été détectés qu'en écrivant des tests de
+CONCURRENCE RÉELLE (vrais threads, vrai serveur, `live_client`/`live_headers`, patron déjà
+établi par `tests/test_concurrency.py`) ou des tests d'ISOLATION SOCIÉTÉ RÉELLE (A/B avec un
+utilisateur réellement restreint, `tests/test_multi_society_isolation.py`) plutôt que des
+tests séquentiels/unitaires classiques — confirmant que ces deux catégories de test sont
+irremplaçables pour ce type de plateforme financière et ne doivent jamais être considérées
+comme optionnelles dans une revue future.
