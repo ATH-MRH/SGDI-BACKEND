@@ -18,6 +18,7 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/finance", "/api/accounting", "/api/achats", "/api/ventes", "/api/reporting",
     "/api/ronde", "/api/loans",
     "/api/irongs", "/api/assistant", "/api/erp",
+    "/api/finance-core", "/api/banking", "/api/reconciliation",
 )
 
 # Plusieurs interfaces autonomes partagent le meme routeur backend. Les valeurs
@@ -40,6 +41,14 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/loans", frozenset({"pret", "caisse"})),
     ("/api/drh", frozenset({"drh"})),
     ("/api/ops", frozenset({"ops"})),
+    # Finance Core (couche d'intégration commune) et ses briques Banking/Reconciliation
+    # partagent le même module "finances" que accounting/achats/reporting déjà existants —
+    # une seconde clé de module aurait fabriqué une distinction que le panneau
+    # Administration ne connaît pas et aurait obligé chaque compte "finances" existant à
+    # être reconfiguré à la main pour accéder à ce qui est fonctionnellement le même domaine.
+    ("/api/finance-core", frozenset({"finances"})),
+    ("/api/banking", frozenset({"finances"})),
+    ("/api/reconciliation", frozenset({"finances"})),
 )
 
 MODULE_KEY_ALIASES = {

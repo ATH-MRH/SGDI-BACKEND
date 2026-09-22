@@ -20,6 +20,9 @@ from app.modules.ronde.routes import router as ronde_router
 from app.modules.public_candidates import router as public_candidates_router
 from app.modules.loans.routes import router as loans_router
 from app.modules.alerts.routes import router as alerts_router
+from app.modules.finance_core.routes import router as finance_core_router
+from app.modules.banking.routes import router as banking_router
+from app.modules.reconciliation.routes import router as reconciliation_router
 
 
 api_router = APIRouter()
@@ -43,3 +46,6 @@ api_router.include_router(ronde_router, prefix="/ronde", tags=["Contrôleur de R
 api_router.include_router(public_candidates_router, prefix="/public", tags=["Candidatures publiques"])
 api_router.include_router(loans_router, prefix="/loans", tags=["Prêts et avances"])
 api_router.include_router(alerts_router, prefix="/alerts", tags=["Alertes"])
+api_router.include_router(finance_core_router, prefix="/finance-core", tags=["Finance Core"])
+api_router.include_router(banking_router, prefix="/banking", tags=["Banking"])
+api_router.include_router(reconciliation_router, prefix="/reconciliation", tags=["Rapprochement bancaire"])

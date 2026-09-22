@@ -47,6 +47,9 @@ from app.modules.achats import models as _achats_models  # noqa: F401
 from app.modules.ventes import models as _ventes_models  # noqa: F401
 from app.modules.ronde import models as _ronde_models  # noqa: F401
 from app.modules.loans import models as _loans_models  # noqa: F401
+from app.modules.finance_core import models as _finance_core_models  # noqa: F401
+from app.modules.banking import models as _banking_models  # noqa: F401
+from app.modules.reconciliation import models as _reconciliation_models  # noqa: F401
 from app.modules.alerts import models as _alerts_models  # noqa: F401
 from app.modules.alerts.scheduler import start_scheduler as start_alerts_scheduler, stop_scheduler as stop_alerts_scheduler
 
