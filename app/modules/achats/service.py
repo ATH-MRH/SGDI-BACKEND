@@ -28,6 +28,7 @@ from app.modules.achats.schemas import (
 )
 from app.modules.materiel.models import StockArticle, StockMovement, Supplier
 from app.modules.accounting.auto import ecriture_facture_fournisseur, ecriture_paiement_fournisseur
+from app.modules.finance_core import service as finance_core_service
 
 
 def _next_numero(db: Session, model, field, prefix: str) -> str:
@@ -404,6 +405,18 @@ def create_facture(db: Session, payload: FactureFournisseurCreate) -> FactureFou
         ecriture_facture_fournisseur(db, facture)
     except Exception:
         pass  # Ne pas bloquer la création si la comptabilité échoue
+    # P1-C : Finance Core — dette ouverte dès qu'une facture fournisseur existe (même
+    # tolérance que l'appel comptable ci-dessus : ne doit jamais faire échouer la création
+    # de la facture elle-même).
+    try:
+        finance_core_service.create_obligation(
+            db, society=facture.society, direction="payable", source_type="facture_fournisseur",
+            source_id=facture.numero or str(facture.id), amount_total=facture.total_ttc,
+            counterparty_name=facture.fournisseur_name, due_date=facture.date_echeance,
+            idempotency_key=f"obl:facture_fournisseur:{facture.id}",
+        )
+    except Exception:
+        pass
     db.commit()
     db.refresh(facture)
     return facture
@@ -429,6 +442,25 @@ def payer_facture(db: Session, facture_id: int, montant: float) -> FactureFourni
         raise HTTPException(status_code=400, detail=f"Montant ({montant}) dépasse le restant à payer ({restant})")
     facture.montant_paye = round(facture.montant_paye + montant, 2)
     facture.status = "payée" if facture.montant_paye >= facture.total_ttc else "partiellement_payée"
+    # P1-C : miroir Finance Core — achats reste la source de vérité pour son propre statut
+    # (montant_paye/status ci-dessus, INCHANGÉS), mais l'obligation correspondante est aussi
+    # réglée pour que le reste du système (rapprochement bancaire, cockpit DG) voie le même
+    # état sans dupliquer la logique de validation (le contrôle "dépassement" est déjà fait
+    # ci-dessus ; settle_obligation() referait le même contrôle de son côté, defense en
+    # profondeur plutôt que redondance risquée).
+    try:
+        obligation = finance_core_service.find_obligation_by_source(
+            db, source_type="facture_fournisseur", source_id=facture.numero or str(facture.id)
+        )
+        if obligation:
+            finance_core_service.settle_obligation(
+                db, obligation_id=obligation.id, amount=montant, society=facture.society,
+                idempotency_key=f"stl:facture_fournisseur:{facture.id}:{facture.montant_paye}",
+                notes="Réglé depuis Achats (payer_facture)",
+                skip_accounting_bridge=True,  # ecriture_paiement_fournisseur() ci-dessous poste déjà l'écriture
+            )
+    except Exception:
+        pass
     try:
         ecriture_paiement_fournisseur(db, facture, montant)
     except Exception:

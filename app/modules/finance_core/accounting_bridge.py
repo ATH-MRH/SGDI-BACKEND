@@ -33,7 +33,10 @@ def handle_financial_event(db: Session, event: FinancialEvent) -> None:
 
     idempotency_key = f"acc:{event.idempotency_key}"
     existing = _existing_accounting_event(db, idempotency_key)
-    if existing and existing.status == "posted":
+    if existing and existing.status in ("posted", "skipped"):
+        # "skipped" = préempté par settle_obligation(skip_accounting_bridge=True) : l'appelant
+        # (ex. achats.payer_facture) a déjà posté sa propre écriture pour ce règlement —
+        # reposter ici créerait un double comptage.
         return
 
     settlement = db.get(Settlement, event.aggregate_id)

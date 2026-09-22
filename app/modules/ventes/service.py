@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.finance_models import Invoice
 from app.modules.accounting.auto import ecriture_facture_client
+from app.modules.finance_core import service as finance_core_service
 from app.modules.commercial.service import get_or_create_dc_settings
 from app.modules.ventes.models import (
     BonDeLivraison,
@@ -72,6 +73,20 @@ def _create_invoice_from_commande(db: Session, cmd: "CommandeClient") -> Invoice
     db.flush()
     try:
         ecriture_facture_client(db, invoice)
+    except Exception:
+        pass
+    # P1-C : Finance Core (couche d'intégration commune) — une créance ouverte dès qu'une
+    # facture client existe, pour que le moteur de rapprochement bancaire (P1-F) puisse la
+    # retrouver. Même tolérance que ecriture_facture_client ci-dessus (ne doit jamais faire
+    # échouer la confirmation de commande elle-même) — source_id = numéro de facture, c'est
+    # la référence que le moteur cherche dans le libellé/référence du virement bancaire.
+    try:
+        finance_core_service.create_obligation(
+            db, society=invoice.society, direction="receivable", source_type="invoice",
+            source_id=invoice.number or str(invoice.id), amount_total=invoice.total_ttc,
+            counterparty_name=invoice.client_name, due_date=None,
+            idempotency_key=f"obl:invoice:{invoice.id}",
+        )
     except Exception:
         pass
     return invoice

@@ -144,6 +144,17 @@ def amount_remaining(obligation: FinancialObligation) -> Decimal:
     return q2(obligation.amount_total) - q2(obligation.amount_settled)
 
 
+def find_obligation_by_source(db: Session, *, source_type: str, source_id: str) -> FinancialObligation | None:
+    """Retrouve l'obligation créée pour un enregistrement métier donné (P1-C : permet à
+    achats/ventes d'appeler settle_obligation() depuis leur propre flux de paiement existant
+    sans avoir à connaître/stocker l'obligation_id)."""
+    return db.scalar(
+        select(FinancialObligation).where(
+            FinancialObligation.source_type == source_type, FinancialObligation.source_id == str(source_id),
+        )
+    )
+
+
 def cancel_obligation(db: Session, obligation_id: int, *, reason: str | None = None) -> FinancialObligation:
     obligation = get_obligation_or_404(db, obligation_id)
     if obligation.status == "settled":
@@ -187,12 +198,18 @@ def create_payment_intent(
 def settle_obligation(
     db: Session, *, obligation_id: int, amount: Any, society: str | None = None,
     payment_intent_id: int | None = None, bank_transaction_id: int | None = None,
-    idempotency_key: str, notes: str | None = None,
+    idempotency_key: str, notes: str | None = None, skip_accounting_bridge: bool = False,
 ) -> Settlement:
     """Règle (totalement ou partiellement) une obligation. JAMAIS de dépassement silencieux :
     un montant qui excéderait le reste à régler est refusé explicitement (pas de trop-perçu
     implicite — un trop-perçu réel doit être un settlement de kind="overpayment" saisi en
-    connaissance de cause, non implémenté automatiquement dans ce lot)."""
+    connaissance de cause, non implémenté automatiquement dans ce lot).
+
+    skip_accounting_bridge=True : à utiliser UNIQUEMENT quand l'appelant a DÉJÀ posté sa
+    propre écriture comptable pour ce paiement (ex. achats.payer_facture appelle encore
+    directement ecriture_paiement_fournisseur, chemin pré-existant conservé pour ne rien
+    casser) — évite que le pont comptable (accounting_bridge) ne re-poste une SECONDE
+    écriture pour le même règlement lors d'un futur dispatch de l'outbox (double comptage)."""
     existing = _existing_by_key(db, Settlement, idempotency_key)
     if existing:
         return existing
@@ -221,13 +238,27 @@ def settle_obligation(
         if intent:
             intent.status = "settled"
     db.flush()
-    emit_event(
+    event = emit_event(
         db, society=obligation.society, event_type="settlement.created", aggregate_type="settlement",
         aggregate_id=settlement.id,
         payload={"obligation_id": obligation.id, "amount": str(amt), "kind": "normal"},
         idempotency_key=f"evt:{idempotency_key}:created",
     )
+    if skip_accounting_bridge:
+        _preempt_accounting_event(db, event, society=obligation.society, reason="Écriture déjà postée par l'appelant (chemin métier existant)")
     return settlement
+
+
+def _preempt_accounting_event(db: Session, event: FinancialEvent, *, society: str | None, reason: str) -> None:
+    """Écrit un AccountingEvent status="skipped" PAR AVANCE pour que le pont comptable
+    (accounting_bridge.handle_financial_event) ne tente jamais de reposter une écriture pour
+    cet événement lors d'un futur dispatch de l'outbox."""
+    from app.modules.finance_core.models import AccountingEvent
+    key = f"acc:{event.idempotency_key}"
+    if _existing_by_key(db, AccountingEvent, key):
+        return
+    db.add(AccountingEvent(society=society, source_type="settlement", source_id=event.aggregate_id, status="skipped", last_error=reason, idempotency_key=key))
+    db.flush()
 
 
 def reverse_settlement(db: Session, *, settlement_id: int, reason: str, idempotency_key: str) -> Settlement:
