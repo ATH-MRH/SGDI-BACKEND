@@ -17,6 +17,20 @@ from app.db.base import Base, TimestampMixin
 MONEY = Numeric(18, 2)
 OBLIGATION_TYPES = ("g50_tva", "g50_irg_retenue", "ibs", "cnas_echeance", "autre")
 STATUSES = ("pending", "declared", "paid", "late")
+# Revue d'intégrité, item 12 (fiscalité) : la mission exige que CHAQUE montant expose sa
+# provenance de façon non ambiguë. regulatory_version_id (nullable) portait déjà cette
+# information de façon IMPLICITE (présent = calculé depuis une règle vérifiée, absent =
+# saisie manuelle) mais rien ne l'exposait explicitement, et rien ne validait que la version
+# référencée était réellement "active" (vérifiée) — un appelant pouvait passer n'importe quel
+# id sans contrôle. PROVENANCE_MANUAL : montant saisi par l'utilisateur (le seul mode
+# actuellement possible pour G50/TVA/IBS — AUCUN calcul automatique n'existe, exigence
+# explicite de la mission, non implémentée délibérément). PROVENANCE_CALCULATED_VERIFIED :
+# montant dérivé d'une RegulatoryVersion "active" (vérifiée) — actuellement inatteignable
+# depuis la simple saisie de `montant`, réservé à un futur moteur de calcul qui n'existe pas
+# encore (dette documentée, item 15).
+PROVENANCE_MANUAL = "manual"
+PROVENANCE_CALCULATED_VERIFIED = "calculated_verified"
+PROVENANCES = (PROVENANCE_MANUAL, PROVENANCE_CALCULATED_VERIFIED)
 
 
 class FiscalObligation(Base, TimestampMixin):
@@ -31,6 +45,7 @@ class FiscalObligation(Base, TimestampMixin):
     echeance: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     regulatory_version_id: Mapped[int | None] = mapped_column(ForeignKey("regulatory_versions.id", ondelete="SET NULL"))
+    provenance: Mapped[str] = mapped_column(String(30), default=PROVENANCE_MANUAL, server_default=PROVENANCE_MANUAL)
     financial_obligation_id: Mapped[int | None] = mapped_column(Integer)  # FK logique -> financial_obligations
     proof_reference: Mapped[str | None] = mapped_column(Text)  # référence de déclaration / preuve
     declared_by: Mapped[str | None] = mapped_column(String(120))

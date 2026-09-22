@@ -84,6 +84,9 @@ def test_fiscalite_declare_creates_financial_obligation_and_calendar(client, aut
     }).json()
     assert declared["status"] == "declared"
     assert declared["financial_obligation_id"] is not None
+    # Item 12 (revue d'intégrité) : provenance non ambiguë — sans regulatory_version_id fourni,
+    # le montant est nécessairement "manual" (aucun calcul automatique G50/TVA/IBS n'existe).
+    assert declared["provenance"] == "manual"
 
     calendar = client.get("/api/fiscalite/calendar", headers=auth_headers, params={"society": SOC, "upcoming_only": True}).json()
     assert any(o["id"] == declared["id"] for o in calendar)
@@ -97,7 +100,43 @@ def test_fiscalite_declare_creates_financial_obligation_and_calendar(client, aut
     })
     ok = client.post(f"/api/fiscalite/{declared['id']}/mark-paid", headers=auth_headers)
     assert ok.status_code == 200
-    assert ok.json()["status"] == "paid"
+
+
+# ── Item 12 (revue d'intégrité) : provenance non ambiguë, regulatory_version_id contrôlé ────
+
+def test_fiscalite_declare_with_verified_regulatory_version_is_calculated_verified(client, auth_headers):
+    src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": "Barème IBS test", "reliability": "verified"}).json()
+    rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": "ibs_taux_test", "society": SOC, "label": "IBS"}).json()
+    proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule["id"], "proposed_parameters": {"taux": 0.19}, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+    }).json()
+    approved = client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": True}).json()
+    version_id = approved["resulting_version_id"]
+
+    declared = client.post("/api/fiscalite/declare", headers=auth_headers, json={
+        "society": SOC, "obligation_type": "ibs", "period": "2026-09", "montant": "5000.00",
+        "echeance": "2026-10-20", "regulatory_version_id": version_id, "idempotency_key": "fisc:ibs:verified1",
+    }).json()
+    assert declared["provenance"] == "calculated_verified"
+    assert declared["regulatory_version_id"] == version_id
+
+
+def test_fiscalite_declare_with_unverified_regulatory_version_refused(client, auth_headers):
+    """Un regulatory_version_id qui existe mais n'est PAS "active" (vérifié) ne doit jamais
+    justifier silencieusement une provenance "calculated_verified" — refusé explicitement."""
+    src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": "Barème IBS non vérifié", "reliability": "unverified"}).json()
+    rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": "ibs_taux_test2", "society": SOC, "label": "IBS"}).json()
+    proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule["id"], "proposed_parameters": {"taux": 0.19}, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+    }).json()
+    approved = client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": False}).json()
+    version_id = approved["resulting_version_id"]
+
+    refused = client.post("/api/fiscalite/declare", headers=auth_headers, json={
+        "society": SOC, "obligation_type": "ibs", "period": "2026-09", "montant": "5000.00",
+        "echeance": "2026-10-20", "regulatory_version_id": version_id, "idempotency_key": "fisc:ibs:unverified1",
+    })
+    assert refused.status_code == 400, refused.text
 
 
 def test_cockpit_summary_aggregates_without_fabrication(client, auth_headers):

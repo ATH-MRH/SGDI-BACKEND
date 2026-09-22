@@ -29,6 +29,11 @@ def _out(o) -> dict:
         "base_calcul": str(o.base_calcul) if o.base_calcul is not None else None, "montant": str(o.montant),
         "echeance": str(o.echeance), "status": o.status, "financial_obligation_id": o.financial_obligation_id,
         "proof_reference": o.proof_reference,
+        # Item 12 (revue d'intégrité) : provenance non ambiguë du montant — "manual" (saisi
+        # par l'utilisateur, seul mode actuellement possible) ou "calculated_verified" (dérivé
+        # d'une RegulatoryVersion vérifiée, réservé à un futur moteur de calcul).
+        "provenance": o.provenance,
+        "regulatory_version_id": o.regulatory_version_id,
     }
 
 
