@@ -86,7 +86,17 @@ function renderLogin(error) {
   });
 }
 
-function renderShell() {
+// RBAC (revue diagnostic production, smoke RH01) : le backend a toujours refusé
+// correctement les mutations à un compte sans le module "finances" (enforce_module_access,
+// indépendant de cette interface) — mais l'interface, elle, affichait quand même les
+// formulaires "Créer"/boutons de mutation à un utilisateur qui n'a que la lecture refusée,
+// ce qui est trompeur. /api/auth/me expose déjà effective_modules/module_access_global,
+// calculés côté serveur avec exactement la même politique — jamais reconstruits ici.
+function hasFinanceAccess() {
+  return !!(USER && (USER.module_access_global || (USER.effective_modules || []).includes("finances")));
+}
+
+async function renderShell(preloadedUser) {
   document.querySelector("#root").innerHTML = `
     <header>
       <div><b>ATLAS Finance Platform</b><span>expérimental</span></div>
@@ -100,8 +110,11 @@ function renderShell() {
     <main id="view"></main>`;
   document.querySelector("#logout-btn").addEventListener("click", () => { localStorage.removeItem("fp_token"); TOKEN = null; renderLogin(); });
   document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => { ACTIVE_TAB = b.dataset.tab; renderTab(); }));
+  // USER doit porter effective_modules AVANT le premier rendu d'onglet, sinon les
+  // formulaires de mutation s'afficheraient une fois sans garde (voir hasFinanceAccess).
+  try { USER = preloadedUser || await api("/auth/me"); } catch (e) { USER = null; }
+  const lbl = document.querySelector("#user-label"); if (lbl) lbl.textContent = USER?.full_name || USER?.username || "";
   renderTab();
-  api("/auth/me").then(u => { USER = u; const lbl = document.querySelector("#user-label"); if (lbl) lbl.textContent = u.full_name || u.username; }).catch(() => {});
 }
 
 function renderTab() {
@@ -117,10 +130,18 @@ function statusBadge(status) {
 }
 
 // ── Obligations ──────────────────────────────────────────────────────────────────────────
+// noAccessNotice() : remplace un formulaire de mutation par un message explicite plutôt que
+// de l'afficher inutilisable — la lecture seule ci-dessous continue de fonctionner
+// normalement pour un compte qui a au moins l'accès en lecture.
+function noAccessNotice(action) {
+  return `<div class="empty">Lecture seule — module "Finances" non autorisé pour ce compte (${esc(action)} désactivé).</div>`;
+}
+
 async function renderObligations() {
   const view = document.querySelector("#view");
+  const canWrite = hasFinanceAccess();
   view.innerHTML = `<div class="card"><h2>Nouvelle obligation (manuelle)</h2>
-    <form id="obl-form" class="row">
+    ${canWrite ? `<form id="obl-form" class="row">
       <div><label>Société</label><input name="society" required></div>
       <div><label>Sens</label><select name="direction"><option value="receivable">Créance (on nous doit)</option><option value="payable">Dette (on doit)</option></select></div>
       <div><label>Montant</label><input name="amount_total" type="number" step="0.01" required></div>
@@ -128,11 +149,11 @@ async function renderObligations() {
       <div><label>Référence source</label><input name="source_id" required placeholder="ex: FAC-001"></div>
       <button class="btn btn-primary" type="submit">Créer</button>
     </form>
-    <div id="obl-msg" class="msg"></div>
+    <div id="obl-msg" class="msg"></div>` : noAccessNotice("création d'obligation")}
   </div>
   <div class="card"><h2>Obligations</h2><div id="obl-list">Chargement…</div></div>`;
 
-  document.querySelector("#obl-form").addEventListener("submit", async (e) => {
+  if (canWrite) document.querySelector("#obl-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const msg = document.querySelector("#obl-msg");
@@ -167,33 +188,34 @@ let SELECTED_ACCOUNT = null;
 
 async function renderBanking() {
   const view = document.querySelector("#view");
+  const canWrite = hasFinanceAccess();
   view.innerHTML = `<div class="card"><h2>Nouveau compte bancaire</h2>
-    <form id="acc-form" class="row">
+    ${canWrite ? `<form id="acc-form" class="row">
       <div><label>Société</label><input name="society" required></div>
       <div><label>Banque</label><input name="bank_name" required></div>
       <div><label>N° de compte</label><input name="account_number" required></div>
       <div><label>IBAN</label><input name="iban"></div>
       <button class="btn btn-primary" type="submit">Créer</button>
     </form>
-    <div id="acc-msg" class="msg"></div>
+    <div id="acc-msg" class="msg"></div>` : noAccessNotice("création de compte bancaire")}
   </div>
   <div class="card"><h2>Comptes</h2><div id="acc-list">Chargement…</div></div>
   <div class="card"><h2>Importer un relevé (CSV)</h2>
-    <form id="import-form" class="row">
+    ${canWrite ? `<form id="import-form" class="row">
       <div><label>Compte bancaire (ID)</label><input name="bank_account_id" type="number" required></div>
       <div><label>Fichier CSV</label><input name="file" type="file" accept=".csv" required></div>
       <div><label>Solde ouverture (optionnel)</label><input name="opening_balance" type="number" step="0.01"></div>
       <div><label>Solde clôture (optionnel)</label><input name="closing_balance" type="number" step="0.01"></div>
       <button class="btn btn-primary" type="submit">Importer</button>
     </form>
-    <div id="import-msg" class="msg"></div>
+    <div id="import-msg" class="msg"></div>` : noAccessNotice("import de relevé")}
   </div>
   <div class="card"><h2>Transactions</h2>
     <div class="row" style="margin-bottom:10px"><div><label>Filtrer par compte (ID)</label><input id="tx-filter" type="number" placeholder="tous"></div><button class="btn" id="tx-refresh">Actualiser</button></div>
     <div id="tx-list">—</div>
   </div>`;
 
-  document.querySelector("#acc-form").addEventListener("submit", async (e) => {
+  if (canWrite) document.querySelector("#acc-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const msg = document.querySelector("#acc-msg");
@@ -207,7 +229,7 @@ async function renderBanking() {
     } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
   });
 
-  document.querySelector("#import-form").addEventListener("submit", async (e) => {
+  if (canWrite) document.querySelector("#import-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const msg = document.querySelector("#import-msg");
@@ -254,7 +276,7 @@ async function loadTransactionsList() {
     if (!data.items.length) { el.innerHTML = `<div class="empty">Aucune transaction.</div>`; return; }
     el.innerHTML = `<table><thead><tr><th>Date</th><th>Libellé</th><th>Référence</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>
       ${data.items.map(t => `<tr><td>${esc(t.value_date)}</td><td>${esc(t.label)}</td><td>${esc(t.reference)}</td><td>${esc(t.amount)}</td><td>${statusBadgeReconcile(t.reconcile_status)}</td>
-        <td>${t.reconcile_status === "unmatched" ? `<button class="btn" data-propose="${t.id}">Proposer un rapprochement</button>` : ""}</td></tr>`).join("")}
+        <td>${t.reconcile_status === "unmatched" && hasFinanceAccess() ? `<button class="btn" data-propose="${t.id}">Proposer un rapprochement</button>` : ""}</td></tr>`).join("")}
     </tbody></table>`;
     el.querySelectorAll("[data-propose]").forEach(btn => btn.addEventListener("click", async () => {
       btn.disabled = true; btn.textContent = "…";
@@ -286,9 +308,10 @@ async function loadCasesList() {
   try {
     const cases = await api("/reconciliation/cases?status_filter=proposed");
     if (!cases.length) { el.innerHTML = `<div class="empty">Aucun cas en attente.</div>`; return; }
+    const canWrite = hasFinanceAccess();
     el.innerHTML = `<table><thead><tr><th>#</th><th>Société</th><th>Type</th><th>Confiance</th><th>Montant</th><th>Explication</th><th></th></tr></thead><tbody>
       ${cases.map(c => `<tr><td>${c.id}</td><td>${esc(c.society)}</td><td>${esc(c.kind)}</td><td>${c.confidence_score}%</td><td>${esc(c.total_amount)}</td><td style="font-size:11px;color:var(--muted)">${esc(c.explanation || "—")}</td>
-        <td><button class="btn btn-primary" data-confirm="${c.id}">Confirmer</button> <button class="btn btn-danger" data-reject="${c.id}">Rejeter</button></td></tr>`).join("")}
+        <td>${canWrite ? `<button class="btn btn-primary" data-confirm="${c.id}">Confirmer</button> <button class="btn btn-danger" data-reject="${c.id}">Rejeter</button>` : `<span style="font-size:11px;color:var(--muted)">lecture seule</span>`}</td></tr>`).join("")}
     </tbody></table>`;
     el.querySelectorAll("[data-confirm]").forEach(btn => btn.addEventListener("click", async () => {
       try { await api(`/reconciliation/cases/${btn.dataset.confirm}/confirm`, { method: "POST" }); loadCasesList(); }
@@ -315,7 +338,7 @@ async function loadExceptionsList() {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────────────────
 if (TOKEN) {
-  api("/auth/me").then(u => { USER = u; renderShell(); }).catch(() => { TOKEN = null; localStorage.removeItem("fp_token"); renderLogin(); });
+  api("/auth/me").then(u => renderShell(u)).catch(() => { TOKEN = null; localStorage.removeItem("fp_token"); renderLogin(); });
 } else {
   renderLogin();
 }
