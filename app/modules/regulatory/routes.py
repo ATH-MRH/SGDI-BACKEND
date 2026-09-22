@@ -58,7 +58,7 @@ def list_versions(rule_id: int, db: Session = Depends(get_db), user: User = Depe
     rows = db.scalars(select(RegulatoryVersion).where(RegulatoryVersion.rule_id == rule_id).order_by(RegulatoryVersion.effective_from.desc())).all()
     return [
         {"id": v.id, "version_number": v.version_number, "parameters": v.parameters, "effective_from": str(v.effective_from),
-         "effective_to": str(v.effective_to) if v.effective_to else None, "status": v.status}
+         "effective_to": str(v.effective_to) if v.effective_to else None, "status": v.status, "source_id": v.source_id}
         for v in rows
     ]
 
@@ -93,7 +93,7 @@ def list_proposals(status_filter: str | None = None, db: Session = Depends(get_d
     if status_filter:
         stmt = stmt.where(RegulatoryChangeProposal.status == status_filter)
     rows = db.scalars(stmt.order_by(RegulatoryChangeProposal.id.desc())).all()
-    return [{"id": p.id, "rule_id": p.rule_id, "status": p.status, "diff_summary": p.diff_summary, "proposed_effective_from": str(p.proposed_effective_from)} for p in rows]
+    return [{"id": p.id, "rule_id": p.rule_id, "status": p.status, "diff_summary": p.diff_summary, "proposed_effective_from": str(p.proposed_effective_from), "source_id": p.source_id} for p in rows]
 
 
 @router.post("/proposals/{proposal_id}/approve")
