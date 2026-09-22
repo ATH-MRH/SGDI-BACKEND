@@ -26,6 +26,7 @@ def _ensure_society_allowed(user: User, society: str | None) -> None:
 
 
 def _slip_out(s: PayrollSlip) -> dict:
+    blockers = service.slip_validation_blockers(s)
     return {
         "id": s.id, "payroll_run_id": s.payroll_run_id, "employee_id": s.employee_id, "society": s.society,
         "base": str(s.base), "brut": str(s.brut), "cotisation_salariale": str(s.cotisation_salariale),
@@ -33,6 +34,10 @@ def _slip_out(s: PayrollSlip) -> dict:
         "autres_retenues": str(s.autres_retenues), "net": str(s.net), "net_a_payer": str(s.net_a_payer),
         "status": s.status, "rules_used": s.rules_used, "inputs": s.inputs,
         "obligation_id": s.obligation_id, "cnas_obligation_id": s.cnas_obligation_id, "irg_obligation_id": s.irg_obligation_id,
+        # Marquage EXPLICITE (revue P0) : un bulletin en draft avec des règles non vérifiées
+        # ou manquantes est une SIMULATION — jamais validable en l'état, voir blockers.
+        "validatable": not blockers if s.status == "draft" else True,
+        "validation_blockers": blockers if s.status == "draft" else [],
     }
 
 

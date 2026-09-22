@@ -45,7 +45,19 @@ def add_version(
     """Ajoute une version. Ne ferme PAS automatiquement la version précédente qui
     chevaucherait — get_applicable_version() prend la version avec la effective_from la plus
     récente parmi celles qui couvrent la date, donc une nouvelle version à effective_from
-    postérieure prend le dessus naturellement sans qu'il faille éditer l'ancienne."""
+    postérieure prend le dessus naturellement sans qu'il faille éditer l'ancienne.
+
+    GARDE P0 (revue d'intégrité) — TROUVÉ PENDANT L'AUDIT : rien n'empêchait auparavant de
+    marquer une version "active" (vérifiée) sans RegulatorySource lié — une règle qui produit
+    réellement une obligation financière doit être traçable jusqu'à une source identifiable.
+    Contrainte également posée au niveau base de données (voir migration 20260922_0044,
+    CHECK constraint) — ce garde applicatif est la première ligne de défense, la contrainte
+    SQL la seconde (défense en profondeur, en cas d'écriture hors de ce chemin)."""
+    if status_ == "active" and source_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Une version 'active' (vérifiée) doit être liée à une RegulatorySource identifiable — aucune source fournie",
+        )
     rule = db.get(RegulatoryRule, rule_id)
     if not rule:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Règle réglementaire introuvable")
@@ -115,6 +127,11 @@ def approve_proposal(db: Session, proposal_id: int, *, reviewed_by: str, mark_ve
         raise HTTPException(status.HTTP_409_CONFLICT, detail=f"Proposition déjà {proposal.status}")
     if not proposal.rule_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Proposition sans règle cible — créer la règle d'abord")
+    if mark_verified and not proposal.source_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Impossible de marquer vérifié sans source réglementaire — renseignez source_id sur la proposition avant d'approuver avec mark_verified=True",
+        )
     version = add_version(
         db, rule_id=proposal.rule_id, parameters=proposal.proposed_parameters,
         effective_from=proposal.proposed_effective_from, effective_to=None,

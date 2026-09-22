@@ -174,16 +174,51 @@ def compute_slip(
     return slip
 
 
+def slip_validation_blockers(slip: PayrollSlip) -> list[str]:
+    """P0 (revue d'intégrité) — TROUVÉ PENDANT L'AUDIT : rien n'empêchait auparavant un
+    bulletin calculé avec une règle réglementaire "unverified" (ou carrément absente) de se
+    valider et d'ouvrir des obligations financières réelles. rules_used (déjà stocké par
+    compute_slip, aucune migration nécessaire) porte le statut de CHAQUE règle utilisée —
+    cette fonction est la SEULE porte que validate_slip() doit franchir. Une règle en erreur
+    (NoApplicableRuleError, aucune version trouvée) bloque aussi : un composant à 0 par
+    absence de règle serait un montant silencieusement faux, pas juste "non vérifié"."""
+    blockers = []
+    for rule_type, entry in (slip.rules_used or {}).items():
+        if "error" in entry:
+            blockers.append(f"{rule_type} : aucune règle réglementaire applicable trouvée ({entry['error']})")
+        elif entry.get("status") != "active":
+            blockers.append(f"{rule_type} : règle non vérifiée (version #{entry.get('version_id')}, statut '{entry.get('status')}')")
+    return blockers
+
+
+def is_slip_validatable(slip: PayrollSlip) -> bool:
+    return not slip_validation_blockers(slip)
+
+
 def validate_slip(db: Session, slip_id: int, *, validated_by: str) -> PayrollSlip:
     """Fige le bulletin (immuable) et ouvre les obligations Finance Core correspondantes —
     net à payer (dû au salarié), charges sociales (dues à la CNAS), IRG (dû au Trésor). AUCUN
     virement/règlement n'est déclenché ici — settle_obligation() reste un acte séparé,
-    explicite, via Finance Core (même chemin que pour une facture)."""
+    explicite, via Finance Core (même chemin que pour une facture).
+
+    GARDE P0 : refuse si une règle réglementaire non vérifiée (ou absente) a servi au calcul
+    — un bulletin dans cet état reste une SIMULATION (consultable, jamais validable) tant
+    qu'un administrateur n'a pas approuvé une version "active" de la/les règle(s) manquante(s)
+    (voir regulatory.service.approve_proposal(mark_verified=True)) et que le bulletin n'a pas
+    été recalculé (nouvel idempotency_key -> nouveau PayrollSlip, l'ancien reste tel quel,
+    jamais réécrit)."""
     slip = db.get(PayrollSlip, slip_id)
     if not slip:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Bulletin introuvable")
     if slip.status != "draft":
         return slip  # déjà validé — idempotent par construction (rien à refaire)
+
+    blockers = slip_validation_blockers(slip)
+    if blockers:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Bulletin non validable — simulation uniquement (règle(s) réglementaire(s) non vérifiée(s) ou manquante(s)) : " + " ; ".join(blockers),
+        )
 
     employee = db.get(Employee, slip.employee_id)
     employee_label = f"{employee.last_name} {employee.first_name}".strip() if employee else f"Employé #{slip.employee_id}"

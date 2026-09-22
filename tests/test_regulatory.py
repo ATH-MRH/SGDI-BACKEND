@@ -74,3 +74,39 @@ def test_reject_proposal_creates_no_version(client, auth_headers):
 def test_regulatory_reserved_to_admin_for_writes(client, restricted_headers):
     r = client.post("/api/regulatory/rules", headers=restricted_headers, json={"rule_type": "x", "label": "x"})
     assert r.status_code == 403
+
+
+# ── P0 (revue d'intégrité) : une version "active" doit toujours être sourcée ────────────
+
+def test_mark_verified_without_source_refused(client, auth_headers):
+    """Aucune RegulatorySource fournie sur la proposition -> approve(mark_verified=True)
+    doit être refusé explicitement (400), jamais silencieusement dégradé en "unverified"."""
+    rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": "cnas_taux_salarial_nosrc", "society": SOC, "label": "Test"}).json()
+    proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule["id"], "proposed_parameters": {"taux": 0.09}, "proposed_effective_from": "2026-01-01",
+    }).json()
+    assert proposal.get("source_id") is None or "source_id" not in proposal
+
+    refused = client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": True})
+    assert refused.status_code == 400, refused.text
+
+    # Toujours approuvable en "unverified" (simulation), la source n'étant requise QUE pour
+    # une version active/vérifiée.
+    ok = client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": False})
+    assert ok.status_code == 200
+    assert ok.json()["status"] == "approved"
+
+    lookup = client.get("/api/regulatory/applicable", headers=auth_headers, params={"rule_type": "cnas_taux_salarial_nosrc", "as_of_date": "2026-03-01", "society": SOC, "allow_unverified": True}).json()
+    assert lookup["status"] == "unverified"
+
+
+def test_mark_verified_with_source_succeeds(client, auth_headers):
+    src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": "Source réelle test", "reference": "JO-TEST-0042", "reliability": "verified"}).json()
+    rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": "cnas_taux_salarial_withsrc", "society": SOC, "label": "Test"}).json()
+    proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule["id"], "proposed_parameters": {"taux": 0.09}, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+    }).json()
+    ok = client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": True})
+    assert ok.status_code == 200, ok.text
+    lookup = client.get("/api/regulatory/applicable", headers=auth_headers, params={"rule_type": "cnas_taux_salarial_withsrc", "as_of_date": "2026-03-01", "society": SOC}).json()
+    assert lookup["status"] == "active"

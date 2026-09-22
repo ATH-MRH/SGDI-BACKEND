@@ -122,17 +122,18 @@ def test_e2e_paie_pointage_to_accounting_with_payment_intent(client, auth_header
     ref = _next_ref("PAIE-E2E")
     src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": f"Barème {ref}", "reliability": "unverified"}).json()
     # Le moteur payroll lit des rule_type FIXES (cnas_taux_salarial/cnas_taux_patronal/
-    # irg_bareme) — société+date déjà couvertes par une version existante (ex. seedée par
-    # un autre test dans la même session pytest) ne sont pas recréées, pour rester idempotent
-    # d'une exécution à l'autre.
+    # irg_bareme). Toujours créées avec mark_verified=True : validate_slip() (garde P0
+    # ajoutée en revue d'intégrité) refuse désormais explicitement toute validation basée
+    # sur une règle non vérifiée — voir test_payroll.py pour le test dédié au cas refusé.
+    # get_or_create_rule() est déjà idempotent par (rule_type, société) ; ajouter une
+    # version supplémentaire si une autre suite en a déjà seedé une n'est pas un problème
+    # (toutes actives, get_applicable_version en choisit une, peu importe laquelle).
     for rule_type, params in (("cnas_taux_salarial", {"taux": 0.09}), ("cnas_taux_patronal", {"taux": 0.26}), ("irg_bareme", {"brackets": [{"up_to": None, "rate": 0.1}]})):
-        existing = client.get("/api/regulatory/applicable", headers=auth_headers, params={"rule_type": rule_type, "as_of_date": "2026-09-30", "society": SOC, "allow_unverified": True})
-        if existing.status_code == 404:
-            rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": rule_type, "society": SOC, "label": rule_type}).json()
-            proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
-                "rule_id": rule["id"], "proposed_parameters": params, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
-            }).json()
-            client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": False})
+        rule = client.post("/api/regulatory/rules", headers=auth_headers, json={"rule_type": rule_type, "society": SOC, "label": rule_type}).json()
+        proposal = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+            "rule_id": rule["id"], "proposed_parameters": params, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+        }).json()
+        client.post(f"/api/regulatory/proposals/{proposal['id']}/approve", headers=auth_headers, json={"mark_verified": True})
 
     emp = client.post("/api/drh/employees", headers=auth_headers, json={
         "code": ref, "first_name": "E2E", "last_name": "Paie", "society": SOC, "status": "actif", "contract_type": "CDI",
