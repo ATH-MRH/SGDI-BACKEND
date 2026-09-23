@@ -21,6 +21,7 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/finance-core", "/api/banking", "/api/reconciliation",
     "/api/regulatory", "/api/payroll", "/api/treasury", "/api/budget",
     "/api/profitability", "/api/fiscalite", "/api/cockpit",
+    "/api/site-workforce",
 )
 
 # Plusieurs interfaces autonomes partagent le meme routeur backend. Les valeurs
@@ -61,6 +62,9 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/profitability", frozenset({"finances"})),
     ("/api/fiscalite", frozenset({"finances"})),
     ("/api/cockpit", frozenset({"finances"})),
+    # ATLAS Site Workforce — module dédié, propre clé (jamais "ops"/"drh" : ce rôle n'a pas
+    # les droits transversaux de ces modules, seulement son unique site imposé).
+    ("/api/site-workforce", frozenset({"site_workforce"})),
 )
 
 MODULE_KEY_ALIASES = {

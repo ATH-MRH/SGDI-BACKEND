@@ -23,6 +23,7 @@ from app.modules.ventes import models as _ventes_models  # noqa: F401
 from app.modules.commercial import models as _commercial_models  # noqa: F401
 from app.modules.client_portal import models as _client_portal_models  # noqa: F401
 from app.modules.ronde import models as _ronde_models  # noqa: F401
+from app.modules.site_workforce import models as _site_workforce_models  # noqa: F401
 
 
 config = context.config

@@ -162,6 +162,15 @@ class Document(Base, TimestampMixin):
     file_path: Mapped[str | None] = mapped_column(String(500))
     mime_type: Mapped[str | None] = mapped_column(String(120))
     uploaded_by: Mapped[str | None] = mapped_column(String(120))
+    # ATLAS Site Workforce (§B9/§B10) — statut de VALIDITÉ DU DOCUMENT lui-même, strictement
+    # séparé de toute décision sur le dossier qu'il justifie (ex. une absence — voir
+    # daily_presence.data côté site_workforce) : "document conforme" ne devient jamais
+    # implicitement "absence validée". Additif, migration 20260923_0001, défaut neutre pour
+    # les documents existants (aucun n'était jusqu'ici "vérifié").
+    validity_status: Mapped[str] = mapped_column(String(20), default="en_attente")
+    verified_by: Mapped[str | None] = mapped_column(String(120))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime)
+    comment: Mapped[str | None] = mapped_column(Text)
 
 
 # P1 finalisation DRH Next — décision produit : "un enregistrement RH audité et réversible,
