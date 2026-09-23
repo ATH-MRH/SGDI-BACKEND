@@ -18238,7 +18238,12 @@ const ADMIN_LOGIN_MODULES=[
   {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
   {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Pointage",host:"pointage.irongs.com"},
   {key:"pointeur",label:"Pointeur terrain",host:"pointeur.irongs.com"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
-  {key:"caisse",label:"Caisse",host:"caisse.irongs.com"},{key:"conges",label:"Congés",host:"conges.irongs.com"},{key:"portail",label:"Portail RH",host:"portail-rh.irongs.com"}
+  {key:"caisse",label:"Caisse",host:"caisse.irongs.com"},{key:"conges",label:"Congés",host:"conges.irongs.com"},{key:"portail",label:"Portail RH",host:"portail-rh.irongs.com"},
+  // Hotfix administration — clé canonique déjà en vigueur côté backend (API_MODULE_PREFIXES,
+  // auth/dependencies.py) depuis l'intégration Site Workforce ; ce module n'a délibérément
+  // aucun domaine dédié (voir /site-workforce, servi sur les domaines partagés existants) —
+  // le sous-titre porte donc une description réelle plutôt qu'un host inventé.
+  {key:"site_workforce",label:"Chargé des effectifs",host:"Gestion du personnel limitée au site affecté"}
 ];
 // Libellés affichés uniquement : les valeurs internes agent/dispatch/ops/ADM restent
 // inchangées partout (logique de rôles) — seul le texte montré à l'écran change.

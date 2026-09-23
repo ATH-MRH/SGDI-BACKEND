@@ -45,6 +45,7 @@ const exposeSuffix = `
   sgdiEditingBlocksRender: (typeof sgdiEditingBlocksRender !== 'undefined') ? sgdiEditingBlocksRender : null,
   sgdiModuleHostConfigs: (typeof sgdiModuleHostConfigs !== 'undefined') ? sgdiModuleHostConfigs : null,
   adminSidebarOrganizerDefaults: (typeof adminSidebarOrganizerDefaults !== 'undefined') ? adminSidebarOrganizerDefaults : null,
+  ADMIN_LOGIN_MODULES: (typeof ADMIN_LOGIN_MODULES !== 'undefined') ? ADMIN_LOGIN_MODULES : null,
   setDb: (v) => { db = v; },
   setSession: (v) => { session = v; },
   setViewMode: (v) => { sgdiViewModeActive = v; },
@@ -64,6 +65,34 @@ const T = () => window.__sgdiTest || {};
 test('sgdi-app.js se charge sans erreur dans jsdom', () => {
   assert.strictEqual(loadError, null, loadError && loadError.stack);
   assert.ok(window.__sgdiTest, 'le suffixe d\'exposition doit avoir tourné');
+});
+
+// ── Hotfix Administration (§8.A) : le catalogue "Modules accessibles" doit exposer
+// site_workforce — source canonique unique (voir aussi administration-user-forms.js, qui
+// réutilise EXACTEMENT ce même tableau pour construire le payload authorized_modules
+// envoyé au backend, jamais un second catalogue).
+test('le catalogue de modules Administration expose "Chargé des effectifs" (site_workforce)', () => {
+  const modules = T().ADMIN_LOGIN_MODULES;
+  assert.ok(Array.isArray(modules), 'ADMIN_LOGIN_MODULES doit être exposé');
+  const entry = modules.find((m) => m.key === 'site_workforce');
+  assert.ok(entry, 'aucune entrée "site_workforce" dans le catalogue');
+  assert.strictEqual(entry.label, 'Chargé des effectifs');
+  // Unicité de la clé : jamais un doublon accidentel dans le catalogue.
+  assert.strictEqual(modules.filter((m) => m.key === 'site_workforce').length, 1);
+});
+
+test('le formulaire utilisateur construit exactement authorized_modules=["site_workforce"] quand seule cette case est cochée', () => {
+  // Reproduit fidèlement la ligne réelle de administration-user-forms.js (modulesAutorises
+  // = ADMIN_LOGIN_MODULES.filter(...).map(...)) avec un FormData simulé, sans dupliquer une
+  // seconde logique de filtrage — même expression, juste rejouée avec un formulaire test.
+  const modules = T().ADMIN_LOGIN_MODULES;
+  const fd = new Map([['module_site_workforce', 'site_workforce']]);
+  const get = (k) => (fd.has(k) ? fd.get(k) : null);
+  // [...] : reconstruit un tableau natif Node — modules.filter()/.map() renvoient un
+  // tableau du royaume jsdom, dont le prototype Array diffère de celui de Node, ce qui
+  // ferait échouer deepStrictEqual sur une comparaison structurellement identique.
+  const modulesAutorises = [...modules.filter((m) => get('module_' + m.key) === m.key).map((m) => m.key)];
+  assert.deepStrictEqual(modulesAutorises, ['site_workforce']);
 });
 
 test('le recrutement est placé immédiatement sous le tableau de bord DRH', () => {
