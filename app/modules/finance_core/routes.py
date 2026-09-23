@@ -165,12 +165,23 @@ def list_accounting_events(
     # limit/offset (pas une enveloppe {items,total,...}) : ajoutés pour le frontend V2 sans
     # changer la forme de réponse existante (liste brute) — tous les appelants actuels
     # (tests + E2E) itèrent directement dessus ; défaut à 200 pour rester sans effet sur eux.
+    #
+    # P0 (revue finale bloquante V2, item 2 — audit de contrat API) — TROUVÉ PENDANT CETTE
+    # REVUE, préexistant (pas introduit par l'ajout de limit/offset) : cette route n'appliquait
+    # AUCUN scope société. Un compte restreint pouvait omettre `society` et voir les
+    # événements comptables de TOUTES les sociétés, ou passer une société hors de son
+    # périmètre sans être refusé. Corrigé en appliquant exactement le même patron que
+    # obligations_page() ci-dessus.
+    allowed = _allowed_societies(user)
+    effective = _effective_society(user, society)
     from sqlalchemy import select as _select
     safe_limit = min(max(int(limit or 200), 1), 500)
     safe_offset = max(int(offset or 0), 0)
     stmt = _select(AccountingEvent)
-    if society:
-        stmt = stmt.where(AccountingEvent.society == society)
+    if effective:
+        stmt = stmt.where(AccountingEvent.society == effective)
+    elif allowed:
+        stmt = stmt.where(AccountingEvent.society.in_(allowed))
     if status_filter:
         stmt = stmt.where(AccountingEvent.status == status_filter)
     rows = db.scalars(stmt.order_by(AccountingEvent.id.desc()).limit(safe_limit).offset(safe_offset)).all()

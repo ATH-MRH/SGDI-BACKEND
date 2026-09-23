@@ -151,3 +151,57 @@ def test_cockpit_summary_cross_society_denied(client, auth_headers, restricted_h
     _grant_finances(db)
     r = client.get("/api/cockpit/summary", headers=restricted_headers, params={"society": SOC_B, "period": "2026-09"})
     assert r.status_code == 403
+
+
+def test_accounting_events_cross_society_denied(client, auth_headers, restricted_headers, db):
+    """Revue finale bloquante V2, item 2 — TROUVÉ PENDANT L'AUDIT : GET /finance-core/
+    accounting-events n'appliquait aucun scope société. (a) un compte restreint qui omet
+    `society` ne doit voir QUE les événements de ses propres sociétés autorisées — jamais
+    ceux d'une autre société entièrement ; (b) passer explicitement une société hors scope
+    doit être refusé (403), pas silencieusement servi."""
+    _grant_finances(db)
+    obl_b = client.post("/api/finance-core/obligations", headers=auth_headers, json={
+        "society": SOC_B, "direction": "receivable", "source_type": "manual", "source_id": "MS-EVT-B",
+        "amount_total": "77.00", "idempotency_key": "ms:evt:obl-b",
+    }).json()
+    client.post(f"/api/finance-core/obligations/{obl_b['id']}/settle", headers=auth_headers, json={
+        "amount": "77.00", "idempotency_key": "ms:evt:stl-b",
+    })
+    client.post("/api/finance-core/outbox/dispatch", headers=auth_headers)
+
+    # (b) refus explicite d'une société hors scope
+    denied = client.get("/api/finance-core/accounting-events", headers=restricted_headers, params={"society": SOC_B})
+    assert denied.status_code == 403
+
+    # (a) même en omettant `society`, aucun événement de SOC_B ne doit fuiter vers un
+    # compte restreint à SOC_A — même si SOC_B a bien des événements réels à cet instant.
+    omitted = client.get("/api/finance-core/accounting-events", headers=restricted_headers)
+    assert omitted.status_code == 200, omitted.text
+    leaked = [e for e in omitted.json() if e["society"] == SOC_B]
+    assert not leaked, f"fuite cross-société détectée : {leaked}"
+
+
+def test_regulatory_rules_and_proposals_cross_society_denied(client, auth_headers, restricted_headers, db):
+    """Revue finale bloquante V2, item 2 — TROUVÉ PENDANT L'AUDIT : /api/regulatory ne
+    filtrait aucune lecture (rules/proposals/versions) par société, alors qu'une
+    RegulatoryRule PEUT être spécifique à une société. Un compte restreint à SOC_A ne doit
+    jamais voir une règle/proposition/version propre à SOC_B — mais doit toujours voir les
+    règles nationales (society=None)."""
+    _grant_finances(db)
+    rule_b = client.post("/api/regulatory/rules", headers=auth_headers, json={
+        "rule_type": "ms_regulatory_test", "society": SOC_B, "label": "Règle SOC_B",
+    }).json()
+    src = client.post("/api/regulatory/sources", headers=auth_headers, json={"name": "Source test MS", "reliability": "verified"}).json()
+    proposal_b = client.post("/api/regulatory/proposals", headers=auth_headers, json={
+        "rule_id": rule_b["id"], "proposed_parameters": {"taux": 0.5}, "proposed_effective_from": "2026-01-01", "source_id": src["id"],
+    }).json()
+    client.post(f"/api/regulatory/proposals/{proposal_b['id']}/approve", headers=auth_headers, json={"mark_verified": True})
+
+    rules = client.get("/api/regulatory/rules", headers=restricted_headers).json()
+    assert not any(r["id"] == rule_b["id"] for r in rules), "une règle propre à une autre société ne doit jamais fuiter"
+
+    proposals = client.get("/api/regulatory/proposals", headers=restricted_headers).json()
+    assert not any(p["id"] == proposal_b["id"] for p in proposals), "une proposition propre à une autre société ne doit jamais fuiter"
+
+    versions_denied = client.get(f"/api/regulatory/rules/{rule_b['id']}/versions", headers=restricted_headers)
+    assert versions_denied.status_code == 403

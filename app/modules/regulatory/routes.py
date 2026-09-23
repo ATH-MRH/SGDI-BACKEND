@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -18,6 +18,31 @@ def _require_admin(user: User) -> None:
     role = str(getattr(user, "role", "") or "").strip().lower()
     if role not in {"admin", "adm", "adm1", "adm2"}:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Réservé à l'administration (référentiel réglementaire transverse)")
+
+
+def _allowed_societies(user: User) -> list[str]:
+    values = user.authorized_societies if isinstance(user.authorized_societies, list) else []
+    return [str(v).strip() for v in values if str(v).strip()]
+
+
+# Revue finale bloquante V2, item 2 (audit de contrat API) — TROUVÉ PENDANT CETTE REVUE,
+# préexistant : ce module n'appliquait AUCUN scope société sur ses lectures (list_rules/
+# list_proposals/list_versions), alors que /api/regulatory est dans SOCIETY_SCOPED_PREFIXES —
+# être "dans le périmètre société" (avoir un scope non-NONE) ne filtrait pas pour autant les
+# RÉSULTATS. Un compte restreint à une société pouvait lire les règles/propositions/versions
+# d'une AUTRE société (RegulatoryRule.society est nullable — national — ou une société
+# précise). RegulatorySource reste volontairement non scopé : ce n'est qu'une référence
+# documentaire (nom/texte de loi), jamais liée à une société.
+def _rule_society_filter(stmt, allowed: list[str]):
+    if not allowed:
+        return stmt
+    return stmt.where(or_(RegulatoryRule.society.is_(None), RegulatoryRule.society.in_(allowed)))
+
+
+def _ensure_rule_society_allowed(user: User, rule: RegulatoryRule) -> None:
+    allowed = _allowed_societies(user)
+    if allowed and rule.society is not None and rule.society not in allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
 
 
 @router.get("/sources")
@@ -40,6 +65,7 @@ def list_rules(rule_type: str | None = None, db: Session = Depends(get_db), user
     stmt = select(RegulatoryRule)
     if rule_type:
         stmt = stmt.where(RegulatoryRule.rule_type == rule_type)
+    stmt = _rule_society_filter(stmt, _allowed_societies(user))
     rows = db.scalars(stmt.order_by(RegulatoryRule.id.desc())).all()
     return [{"id": r.id, "rule_type": r.rule_type, "society": r.society, "label": r.label} for r in rows]
 
@@ -55,6 +81,10 @@ def create_rule(payload: RuleCreate, db: Session = Depends(get_db), user: User =
 
 @router.get("/rules/{rule_id}/versions")
 def list_versions(rule_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rule = db.get(RegulatoryRule, rule_id)
+    if not rule:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Règle réglementaire introuvable")
+    _ensure_rule_society_allowed(user, rule)
     rows = db.scalars(select(RegulatoryVersion).where(RegulatoryVersion.rule_id == rule_id).order_by(RegulatoryVersion.effective_from.desc())).all()
     return [
         {"id": v.id, "version_number": v.version_number, "parameters": v.parameters, "effective_from": str(v.effective_from),
@@ -92,6 +122,13 @@ def list_proposals(status_filter: str | None = None, db: Session = Depends(get_d
     stmt = select(RegulatoryChangeProposal)
     if status_filter:
         stmt = stmt.where(RegulatoryChangeProposal.status == status_filter)
+    allowed = _allowed_societies(user)
+    if allowed:
+        # LEFT JOIN : une proposition pas encore liée à une règle (rule_id NULL) reste
+        # visible — elle n'expose aucune donnée de société tant qu'elle n'est pas approuvée.
+        stmt = stmt.outerjoin(RegulatoryRule, RegulatoryChangeProposal.rule_id == RegulatoryRule.id).where(
+            or_(RegulatoryChangeProposal.rule_id.is_(None), RegulatoryRule.society.is_(None), RegulatoryRule.society.in_(allowed))
+        )
     rows = db.scalars(stmt.order_by(RegulatoryChangeProposal.id.desc())).all()
     return [{"id": p.id, "rule_id": p.rule_id, "status": p.status, "diff_summary": p.diff_summary, "proposed_effective_from": str(p.proposed_effective_from), "source_id": p.source_id} for p in rows]
 
