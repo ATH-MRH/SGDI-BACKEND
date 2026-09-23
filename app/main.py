@@ -277,6 +277,16 @@ def serve_finance_platform(request: Request):
     return HTMLResponse(content=html_content, headers=_NO_CACHE)
 
 
+# ATLAS Site Workforce — portail "Chargé des effectifs — Site" (mission Site Workforce).
+# Même patron que /finance-platform ci-dessus : aucun domaine dédié demandé pour ce portail,
+# servi tel quel sur tout domaine partagé existant, jamais de cache (toujours la version
+# courante après un déploiement).
+@app.get("/site-workforce", include_in_schema=False)
+def serve_site_workforce() -> HTMLResponse:
+    html_content = (STATIC_DIR / "site-workforce" / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=html_content, headers=_NO_CACHE)
+
+
 # P0 sécurité (fermeture DRH-NEXT-DOC-URL-AUTH) — audit préalable (voir rapport de mission) :
 # DOCS_DIR est PARTAGÉ entre des Document.owner_type="employee" (RH, ce que cette route
 # protège) et owner_type="client_observation" (pièces jointes du portail client,
