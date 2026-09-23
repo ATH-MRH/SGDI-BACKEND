@@ -383,3 +383,72 @@ def test_module_access_refused_without_site_workforce_module(client, db):
     headers = _login(client, "noModule", "nomodulepass")
     r = client.get("/api/site-workforce/dashboard", headers=headers)
     assert r.status_code == 403
+
+
+# ── §B22 (revue de sécurité indépendante) — P0 trouvé : la route historique
+# /uploads/photos/docs/{filename} (app/main.py) ne reconnaissait que owner_type="employee"
+# et servait TOUT LE RESTE publiquement, sans authentification. Les justificatifs Site
+# Workforce (owner_type="leave"/"attendance"/"reclamation") tombaient dans cette seconde
+# branche — accessibles sans authentification à quiconque connaîtrait le nom de fichier.
+def test_uploaded_justificatif_is_never_served_without_authentication(client, db):
+    ctx = _setup(db)
+    headers = _login_as(client, ctx, "charge_a")
+    today = str(date.today())
+    presence_id = client.post("/api/site-workforce/attendance", headers=headers, json={
+        "employee_id": ctx["emp_a"].id, "presence_date": today, "status": "absent",
+    }).json()["id"]
+    tiny_pdf = "data:application/pdf;base64,JVBERi0xLjQK"
+    file_path = client.post("/api/site-workforce/documents", headers=headers, json={
+        "owner_type": "attendance", "owner_id": presence_id, "label": "Certificat", "data_url": tiny_pdf,
+    }).json()["file_path"]
+
+    # Sans authentification : refusé (pas servi publiquement).
+    r_anon = client.get(file_path)
+    assert r_anon.status_code == 401
+
+    # Authentifié mais sans le module site_workforce (testops : ops/dc uniquement) : refusé.
+    r_wrong_module = client.get(file_path, headers=restricted_headers_for(db, client))
+    assert r_wrong_module.status_code == 403
+
+    # Authentifié, bon module, bon site : servi.
+    r_ok = client.get(file_path, headers=headers)
+    assert r_ok.status_code == 200
+
+
+def restricted_headers_for(db, client):
+    resp = client.post("/api/auth/login", json={"username": "testops", "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+def test_uploaded_justificatif_refused_across_sites(client, db):
+    ctx = _setup(db)
+    headers_a = _login_as(client, ctx, "charge_a")
+    today = str(date.today())
+    presence_id = client.post("/api/site-workforce/attendance", headers=headers_a, json={
+        "employee_id": ctx["emp_a"].id, "presence_date": today, "status": "absent",
+    }).json()["id"]
+    tiny_pdf = "data:application/pdf;base64,JVBERi0xLjQK"
+    file_path = client.post("/api/site-workforce/documents", headers=headers_a, json={
+        "owner_type": "attendance", "owner_id": presence_id, "label": "Certificat", "data_url": tiny_pdf,
+    }).json()["file_path"]
+
+    # Un second compte, scopé à un AUTRE site (même module, société différente) : refusé.
+    # commit() (jamais flush() seul, exceptionnellement ici) : la route /uploads/photos/docs
+    # (app/main.py) ouvre volontairement sa PROPRE SessionLocal() — pas celle substituée par
+    # le fixture `client` — pour rester fidèle au comportement réel de production ; elle ne
+    # verrait donc jamais une ligne seulement flush()ée sur la session de test.
+    other_site = Site(name=f"Site C {ctx['tag']}", active=1, equipment_plan={"societe": SOC_B})
+    db.add(other_site)
+    db.flush()
+    other_user = User(
+        username=f"chargeC_{ctx['tag']}", full_name="Chargé Site C", role="charge_effectifs_site", access_level="H2",
+        authorized_societies=[SOC_B], authorized_structures=[], authorized_modules=["site_workforce"],
+        authorized_sites=[other_site.id], authorized_actions=["read", "create", "update", "validate"],
+        password_hash=hash_password("chargeCpass"), validation_password_hash=hash_password("x"), is_active=True,
+    )
+    db.add(other_user)
+    db.commit()
+    headers_c = _login(client, f"chargeC_{ctx['tag']}", "chargeCpass")
+    r = client.get(file_path, headers=headers_c)
+    assert r.status_code == 403

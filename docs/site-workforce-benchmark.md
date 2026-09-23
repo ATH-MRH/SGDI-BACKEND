@@ -1,16 +1,16 @@
 # ATLAS Site Workforce — Benchmark réel (Chrome)
 
-Généré le 2026-09-23T01:10:12.650Z — Chrome réel, serveur uvicorn réel, 40 employés + affectations seedés (site réaliste, pas un cas vide).
+Généré le 2026-09-23T02:15:30.650Z — Chrome réel, serveur uvicorn réel, 40 employés + affectations seedés (site réaliste, pas un cas vide).
 
 ## Transitions mesurées
 
 | Transition | Temps (ms) | Requêtes API | Doublons |
 |---|---:|---:|---:|
-| Login → Dashboard | 158 | 5 | 0 |
-| Dashboard → Personnel | 20 | 1 | 0 |
+| Login → Dashboard | 219 | 5 | 0 |
+| Dashboard → Personnel | 21 | 1 | 0 |
 | Dashboard → Pointage | 21 | 1 | 0 |
-| Dashboard → Absences | 8 | 1 | 0 |
-| Dashboard → Justificatifs | 10 | 1 | 0 |
+| Dashboard → Absences | 14 | 1 | 0 |
+| Dashboard → Justificatifs | 15 | 1 | 0 |
 
 ## Invariantes qualitatives
 

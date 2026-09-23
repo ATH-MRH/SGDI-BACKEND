@@ -299,6 +299,15 @@ def serve_site_workforce() -> HTMLResponse:
 # exactement comme avant, comportement inchangé. DRH Next lui-même n'utilise plus jamais
 # cette URL brute (voir employee-dossier.mjs, passé sur /api/drh/documents/{id}/content) —
 # cette route ferme le trou pour les liens historiques/legacy qui la référenceraient encore.
+#
+# P0 sécurité (revue Site Workforce, §B22) : TROUVÉ EN REVUE INDÉPENDANTE — cette route ne
+# reconnaissait que owner_type="employee". Les justificatifs Site Workforce
+# (owner_type="leave"/"attendance"/"reclamation", potentiellement sensibles — certificats
+# médicaux d'une déclaration de maladie notamment) créés via save_base64_document()
+# atterrissent dans le MÊME DOCS_DIR et tombaient donc dans la branche "servi publiquement,
+# comportement inchangé" — accessibles SANS authentification à quiconque connaîtrait ou
+# devinerait le nom de fichier. Fermé de la même façon que pour "employee" : authentification
+# + scope désormais obligatoires pour ces trois owner_type également.
 @app.get("/uploads/photos/docs/{filename}", include_in_schema=False)
 def serve_uploaded_document(filename: str, request: Request):
     candidate = (DOCS_DIR / filename).resolve()
@@ -314,10 +323,11 @@ def serve_uploaded_document(filename: str, request: Request):
     db = SessionLocal()
     try:
         public_path = f"{PUBLIC_DOC_PREFIX}/{filename}"
-        doc = db.query(Document).filter(Document.file_path == public_path, Document.owner_type == "employee").first()
-        if doc is not None:
-            # Document RH identifié : authentification + scope désormais obligatoires,
-            # jamais servi anonymement — c'est précisément le P0 corrigé ici.
+        doc = db.query(Document).filter(Document.file_path == public_path).first()
+        protected_types = {"employee", "leave", "attendance", "reclamation"}
+        if doc is not None and doc.owner_type in protected_types:
+            # Document RH ou Site Workforce identifié : authentification + scope désormais
+            # obligatoires, jamais servi anonymement.
             auth_header = request.headers.get("authorization", "")
             if not auth_header.lower().startswith("bearer "):
                 raise HTTPException(status_code=401, detail="Token manquant")
@@ -330,14 +340,28 @@ def serve_uploaded_document(filename: str, request: Request):
                 raise HTTPException(status_code=401, detail="Utilisateur inactif")
             from app.modules.auth.routes import is_admin_role
 
-            if not is_admin_role(user.role):
-                configured = user.authorized_modules
-                allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
-                if allowed.isdisjoint({"drh"}):
-                    raise HTTPException(status_code=403, detail="Module non autorisé pour ce compte")
-            from app.modules.drh.routes import _ensure_document_allowed
+            if doc.owner_type == "employee":
+                if not is_admin_role(user.role):
+                    configured = user.authorized_modules
+                    allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
+                    if allowed.isdisjoint({"drh"}):
+                        raise HTTPException(status_code=403, detail="Module non autorisé pour ce compte")
+                from app.modules.drh.routes import _ensure_document_allowed
 
-            _ensure_document_allowed(db, user, doc.owner_type, doc.owner_id)
+                _ensure_document_allowed(db, user, doc.owner_type, doc.owner_id)
+            else:
+                if not is_admin_role(user.role):
+                    configured = user.authorized_modules
+                    allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
+                    if allowed.isdisjoint({"site_workforce"}):
+                        raise HTTPException(status_code=403, detail="Module non autorisé pour ce compte")
+                    from app.modules.site_workforce.security import resolve_scoped_site, site_employee_ids
+                    from app.modules.site_workforce.routes import _scoped_document_owner_ids
+
+                    site = resolve_scoped_site(db=db, user=user)
+                    scoped = _scoped_document_owner_ids(db, site, site_employee_ids(db, site.id))
+                    if doc.owner_id not in scoped.get(doc.owner_type, set()):
+                        raise HTTPException(status_code=403, detail="Document hors du périmètre de ce site")
         # Sinon (pièce jointe portail client, photo, rapport IA, fichier orphelin) : servi
         # publiquement, comportement strictement inchangé — hors périmètre de cette correction.
     finally:

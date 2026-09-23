@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import append_audit
@@ -56,9 +56,10 @@ def _emit(db: Session, site: Site, *, notif_type: str, message: str, level: str 
 
 def _audit(db: Session, request: Request, user: User, site: Site, *, action: str, resource: str,
            resource_id: int, old_state=None, new_state=None) -> None:
+    from app.modules.site_workforce.security import _site_society
     append_audit(
         db, action=f"site_workforce.{action}", resource=f"site_workforce.{resource}",
-        resource_id=f"{site.id}:{resource_id}", society=None, result="success",
+        resource_id=f"{site.id}:{resource_id}", society=_site_society(site), result="success",
         user=user, request=request, old_state=old_state, new_state=new_state,
     )
 
@@ -280,30 +281,35 @@ def decide_absence(presence_id: int, payload: AbsenceDecision, request: Request,
 
 
 # ── Justificatifs / documents (§B10) ────────────────────────────────────────────────────
-def _document_in_scope(db: Session, site: Site, employee_ids: list[int], doc: Document) -> bool:
-    if doc.owner_type == "leave":
-        leave = db.get(Leave, doc.owner_id)
-        return bool(leave and leave.employee_id in employee_ids)
-    if doc.owner_type == "attendance":
-        presence = db.get(DailyPresence, doc.owner_id)
-        return bool(presence and presence.site_id == site.id)
-    if doc.owner_type == "reclamation":
-        rec = db.get(Reclamation, doc.owner_id)
-        return bool(rec and rec.site_id == site.id)
-    return False
+# TROUVÉ EN REVUE DE SÉCURITÉ INDÉPENDANTE (§B22) : la version précédente chargeait TOUS les
+# Document de type leave/attendance/reclamation de TOUTE LA BASE (table réellement partagée
+# entre modules — photos employé, pièces jointes portail client, etc. — jamais scopée par
+# site elle-même), puis appelait _document_in_scope() PAR LIGNE, chacune exécutant un
+# db.get() supplémentaire — un N+1 réel, et une requête SQL qui ne filtrait rien par site
+# avant le filtrage Python (jamais une fuite constatée — le filtre Python était correct —
+# mais une seconde ligne de défense manquante et un passage à l'échelle qui se dégraderait
+# avec le volume total de documents du système, pas seulement ceux de ce site). Corrigé :
+# les ensembles d'ids autorisés sont calculés UNE SEULE FOIS (3 requêtes), puis une SEULE
+# requête Document filtre directement dessus — scopée dès le SQL, aucun N+1.
+def _scoped_document_owner_ids(db: Session, site: Site, employee_ids: list[int]) -> dict[str, set[int]]:
+    presence_ids = set(db.scalars(select(DailyPresence.id).where(DailyPresence.site_id == site.id)))
+    leave_ids = set(db.scalars(select(Leave.id).where(Leave.employee_id.in_(employee_ids or [-1])))) if employee_ids else set()
+    reclamation_ids = set(db.scalars(select(Reclamation.id).where(Reclamation.site_id == site.id)))
+    return {"attendance": presence_ids, "leave": leave_ids, "reclamation": reclamation_ids}
 
 
 @router.get("/documents")
 def documents(owner_type: str | None = None, owner_id: int | None = None,
               db: Session = Depends(get_db), site: Site = Depends(resolve_scoped_site)):
     ids = site_employee_ids(db, site.id)
-    stmt = select(Document).where(Document.owner_type.in_(["leave", "attendance", "reclamation"]))
+    scoped = _scoped_document_owner_ids(db, site, ids)
+    clauses = [and_(Document.owner_type == t, Document.owner_id.in_(owner_ids or [-1])) for t, owner_ids in scoped.items()]
+    stmt = select(Document).where(or_(*clauses))
     if owner_type:
         stmt = stmt.where(Document.owner_type == owner_type)
     if owner_id is not None:
         stmt = stmt.where(Document.owner_id == owner_id)
     rows = db.execute(stmt).scalars().all()
-    rows = [r for r in rows if _document_in_scope(db, site, ids, r)]
     return [{
         "id": r.id, "owner_type": r.owner_type, "owner_id": r.owner_id, "label": r.label,
         "validity_status": r.validity_status, "verified_by": r.verified_by,
@@ -317,8 +323,8 @@ def upload_document(payload: DocumentUpload, request: Request, db: Session = Dep
     if payload.owner_type not in {"leave", "attendance", "reclamation"}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Type de dossier invalide")
     ids = site_employee_ids(db, site.id)
-    fake = Document(owner_type=payload.owner_type, owner_id=payload.owner_id, label=payload.label)
-    if not _document_in_scope(db, site, ids, fake):
+    scoped = _scoped_document_owner_ids(db, site, ids)
+    if payload.owner_id not in scoped[payload.owner_type]:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Dossier hors du périmètre de ce site")
     url, saved = save_base64_document(payload.data_url, f"just_{payload.owner_type}_{payload.owner_id}_{datetime.utcnow().timestamp():.0f}")
     row = Document(owner_type=payload.owner_type, owner_id=payload.owner_id, label=payload.label,
@@ -347,7 +353,8 @@ def verify_document(document_id: int, payload: DocumentVerify, request: Request,
     _require_action(user, "validate")
     row = db.get(Document, document_id)
     ids = site_employee_ids(db, site.id)
-    if not row or not _document_in_scope(db, site, ids, row):
+    scoped = _scoped_document_owner_ids(db, site, ids)
+    if not row or row.owner_type not in scoped or row.owner_id not in scoped[row.owner_type]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Document introuvable")
     old_state = {"validity_status": row.validity_status}
     # §B9 : ceci change UNIQUEMENT document_validity_status. absence_decision_status (table
