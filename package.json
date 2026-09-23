@@ -8,7 +8,8 @@
     "test:drh-performance-loading": "node --test tests_frontend/drh-performance-loading.test.js",
     "test:drh-next": "node --test tests_frontend/drh-next/lot1.test.mjs tests_frontend/drh-next/lot2-employees.test.mjs tests_frontend/drh-next/lot3-dossier.test.mjs tests_frontend/drh-next/lot4-contracts.test.mjs tests_frontend/drh-next/lot5-assignments.test.mjs tests_frontend/drh-next/lot6-leaves.test.mjs tests_frontend/drh-next/lot7-discipline.test.mjs tests_frontend/drh-next/lot8-documents.test.mjs tests_frontend/drh-next/lot9-dashboard.test.mjs tests_frontend/drh-next/lot10-finalisation.test.mjs tests_frontend/drh-next/lot11-parity.test.mjs",
     "test:core-v3": "node --test tests_frontend/core-v3/bootstrap.test.mjs tests_frontend/core-v3/dashboard-module.test.mjs tests_frontend/core-v3/module-registry.test.mjs tests_frontend/core-v3/permissions-telemetry-errors.test.mjs tests_frontend/core-v3/race-guard-events.test.mjs tests_frontend/core-v3/drh-module.test.mjs",
-    "test:finance-e2e": "node --test tests_frontend/finance-platform-e2e.test.js"
+    "test:finance-e2e": "node --test tests_frontend/finance-platform-e2e.test.js",
+    "test:site-workforce-e2e": "node --test tests_frontend/site-workforce-e2e.test.js"
   },
   "devDependencies": {
     "jsdom": "29.1.1",
