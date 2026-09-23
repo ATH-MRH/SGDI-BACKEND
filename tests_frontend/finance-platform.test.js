@@ -51,8 +51,14 @@ test("pct()/dateFr()/daysUntil()", () => {
   assert.strictEqual(w.FP.pct(12.345), "12.3%");
   assert.strictEqual(w.FP.pct(null), "—");
   assert.strictEqual(w.FP.dateFr(null), "—");
+  // TROUVÉ EN CONSTRUISANT LA REVUE FINALE V2 (§13) : daysUntil() raisonne entièrement en
+  // heure LOCALE (new Date(v+"T00:00:00") sans "Z"), donc construire la date attendue via
+  // .toISOString() (qui restitue de l'UTC) fait un aller-retour par un fuseau différent —
+  // flaky près de minuit local dans un fuseau UTC+, ex. 00:51 heure locale : le test
+  // attendait 3 et obtenait 2. Corrigé en restant en composants de date locaux, comme
+  // daysUntil() lui-même, plutôt que d'introduire un correctif dans l'application.
   const future = new Date(); future.setDate(future.getDate() + 3);
-  const iso = future.toISOString().slice(0, 10);
+  const iso = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
   assert.strictEqual(w.FP.daysUntil(iso), 3);
   assert.strictEqual(w.FP.daysUntil(null), null);
 });
