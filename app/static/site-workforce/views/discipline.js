@@ -30,6 +30,10 @@
       e.preventDefault();
       const fd = new FormData(e.target);
       const msg = document.querySelector("#disc-msg");
+      // §16 (revue finale d'intégration, double-submit) : désactivé pendant la requête —
+      // rejoué et démontré : un double-clic réel créait deux incidents identiques.
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
       try {
         const eid = fd.get("employee_id");
         await SW.api("/site-workforce/discipline", { method: "POST", body: {
@@ -40,6 +44,7 @@
         e.target.reset();
         load();
       } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+      finally { btn.disabled = false; }
     });
 
     async function load() {

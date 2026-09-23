@@ -33,6 +33,10 @@
       const fd = new FormData(e.target);
       const file = fd.get("file");
       const msg = document.querySelector("#just-msg");
+      // §16 (revue finale d'intégration, double-submit) : désactivé pendant la requête —
+      // rejoué et démontré : un double-clic réel déposait deux fois le même justificatif.
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
       try {
         const dataUrl = await SW.readFileAsDataUrl(file);
         await SW.api("/site-workforce/documents", { method: "POST", body: {
@@ -42,6 +46,7 @@
         e.target.reset();
         load();
       } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+      finally { btn.disabled = false; }
     });
 
     async function load() {

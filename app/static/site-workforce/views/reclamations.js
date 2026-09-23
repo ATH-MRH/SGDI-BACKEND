@@ -28,6 +28,10 @@
       e.preventDefault();
       const fd = new FormData(e.target);
       const msg = document.querySelector("#rec-msg");
+      // §16 (revue finale d'intégration, double-submit) : désactivé pendant la requête —
+      // rejoué et démontré : un double-clic réel créait deux réclamations identiques.
+      const btn = e.target.querySelector("button[type=submit]");
+      btn.disabled = true;
       try {
         await SW.api("/site-workforce/reclamations", { method: "POST", body: {
           employee_id: Number(fd.get("employee_id")), subject: fd.get("subject"),
@@ -37,6 +41,7 @@
         e.target.reset();
         load();
       } catch (err) { msg.textContent = err.message; msg.className = "msg error"; }
+      finally { btn.disabled = false; }
     });
 
     async function load() {

@@ -521,15 +521,25 @@ def create_transmission(payload: TransmissionCreate, request: Request, db: Sessi
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Type de ressource invalide")
     if payload.destinataire not in {"drh", "ops", "direction"}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Destinataire invalide")
+    # TROUVÉ EN REVUE FINALE D'INTÉGRATION (§16, double-submit) : rejoué et démontré — un
+    # double POST identique (double-clic réel) créait deux Transmission pour le même
+    # dossier, donc une DRH avertie/saisie deux fois du même incident. Corrigé par une
+    # vérification d'état AVANT création, même patron déjà établi par signaler_incident()
+    # (if row.status != "brouillon": 409) — pas un nouveau mécanisme, la même garde
+    # appliquée ici : une fois transmis, le statut du dossier source l'atteste déjà.
     if payload.resource_type == "incident":
         source = db.get(Incident, payload.resource_id)
         if not source or source.site_id != site.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dossier introuvable")
+        if source.status not in {"brouillon", "signale"}:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="Incident déjà transmis")
         source.status = "transmis"
     else:
         source = db.get(Reclamation, payload.resource_id)
         if not source or source.site_id != site.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Dossier introuvable")
+        if source.status not in {"nouvelle", "en_cours"}:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="Réclamation déjà transmise")
         source.status = "transmise"
     row = Transmission(resource_type=payload.resource_type, resource_id=payload.resource_id, site_id=site.id,
                         destinataire=payload.destinataire, objet=payload.objet, commentaire=payload.commentaire,

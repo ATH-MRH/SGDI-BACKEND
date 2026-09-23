@@ -91,6 +91,54 @@ test("views/discipline.js n'expose jamais d'action de décision ou de clôture",
   assert.ok(container.querySelector("[data-transmit]"), "un incident signalé doit pouvoir être transmis à la DRH");
 });
 
+// ── Revue finale d'intégration (§5) : rejoue le XSS stocké corrigé — un sujet d'incident/
+// réclamation contenant balises, gestionnaires d'événement et caractères spéciaux ne doit
+// JAMAIS s'exécuter ni s'injecter dans la boîte de confirmation de transmission.
+test("la confirmation de transmission (discipline) échappe un sujet contenant balises/script/gestionnaires d'événement", async () => {
+  const payload = `<img src=x onerror="window.__xss_fired=1"><script>window.__xss_fired=2</script>"'&<b>`;
+  const w = freshWindow({
+    fetchImpl: () => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify([
+      { id: 1, subject: payload, event_type: "retard", employee_id: 5, status: "signale" },
+    ])) }),
+  });
+  w.eval(fs.readFileSync(path.join(VIEWS_DIR, "discipline.js"), "utf8"));
+  const container = w.document.createElement("div");
+  w.document.body.appendChild(container);
+  await w.SiteWorkforceViews.discipline(container);
+  await new Promise((r) => setTimeout(r, 0));
+  container.querySelector("[data-transmit]").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const box = w.document.querySelector(".confirm-box");
+  assert.ok(box, "la boîte de confirmation doit s'afficher");
+  assert.strictEqual(box.querySelector("img"), null, "aucune balise <img> injectée depuis le sujet");
+  assert.strictEqual(box.querySelector("script"), null, "aucune balise <script> injectée depuis le sujet");
+  assert.strictEqual(w.__xss_fired, undefined, "aucun gestionnaire d'événement injecté ne doit jamais s'exécuter");
+  assert.match(box.innerHTML, /&lt;img/, "le sujet doit apparaître échappé dans le HTML, jamais interprété");
+});
+
+test("la confirmation de transmission (réclamations) échappe un sujet contenant balises/script/gestionnaires d'événement", async () => {
+  const payload = `<img src=x onerror="window.__xss_fired=1"><script>window.__xss_fired=2</script>"'&<b>`;
+  const w = freshWindow({
+    fetchImpl: () => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify([
+      { id: 1, subject: payload, employee_id: 5, status: "nouvelle", priority: "normale" },
+    ])) }),
+  });
+  w.prompt = () => "drh"; // window.prompt est appelé par la vue pour choisir le destinataire
+  w.eval(fs.readFileSync(path.join(VIEWS_DIR, "reclamations.js"), "utf8"));
+  const container = w.document.createElement("div");
+  w.document.body.appendChild(container);
+  await w.SiteWorkforceViews.reclamations(container);
+  await new Promise((r) => setTimeout(r, 0));
+  container.querySelector("[data-transmit]").click();
+  await new Promise((r) => setTimeout(r, 0));
+  const box = w.document.querySelector(".confirm-box");
+  assert.ok(box, "la boîte de confirmation doit s'afficher");
+  assert.strictEqual(box.querySelector("img"), null, "aucune balise <img> injectée depuis le sujet");
+  assert.strictEqual(box.querySelector("script"), null, "aucune balise <script> injectée depuis le sujet");
+  assert.strictEqual(w.__xss_fired, undefined, "aucun gestionnaire d'événement injecté ne doit jamais s'exécuter");
+  assert.match(box.innerHTML, /&lt;img/, "le sujet doit apparaître échappé dans le HTML, jamais interprété");
+});
+
 // ── §B9 : la vue Absences ne présente jamais un contrôle de vérification de document, et
 // la vue Justificatifs ne présente jamais un contrôle de décision d'absence — deux écrans,
 // deux statuts, jamais mélangés dans la même action.

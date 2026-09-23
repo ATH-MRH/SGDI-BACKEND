@@ -452,3 +452,112 @@ def test_uploaded_justificatif_refused_across_sites(client, db):
     headers_c = _login(client, f"chargeC_{ctx['tag']}", "chargeCpass")
     r = client.get(file_path, headers=headers_c)
     assert r.status_code == 403
+
+
+# ── Revue finale d'intégration (§7 IDOR) : deux endpoints prenant un ID n'avaient jamais été
+# testés avec un ID forgé appartenant au site B — trouvé en revue, code déjà correctement
+# gardé (row.site_id != site.id / _scoped_document_owner_ids), mais sans couverture de
+# régression jusqu'ici.
+def test_attendance_correction_on_site_b_presence_refused(client, db):
+    ctx = _setup(db)
+    from app.modules.ops.models import DailyPresence
+    presence_b = DailyPresence(presence_date=date.today(), employee_id=ctx["emp_b"].id, site_id=ctx["site_b"].id, status="present")
+    db.add(presence_b)
+    db.flush()
+    headers = _login_as(client, ctx, "charge_a")
+    r = client.post(f"/api/site-workforce/attendance/{presence_b.id}/correct", headers=headers, json={
+        "status": "absent", "reason": "tentative IDOR",
+    })
+    assert r.status_code == 404
+
+
+def test_document_verify_on_site_b_document_refused(client, db):
+    ctx = _setup(db)
+    from app.modules.ops.models import DailyPresence
+    headers_a = _login_as(client, ctx, "charge_a")
+    presence_b = DailyPresence(presence_date=date.today(), employee_id=ctx["emp_b"].id, site_id=ctx["site_b"].id, status="absent")
+    db.add(presence_b)
+    db.flush()
+    tiny_pdf = "data:application/pdf;base64,JVBERi0xLjQK"
+    # Un document légitime du site B, créé hors périmètre du compte A (via une insertion
+    # directe — le compte multi-site ne peut pas non plus créer, garde "un seul site").
+    from app.modules.drh.models import Document
+    doc_b = Document(owner_type="attendance", owner_id=presence_b.id, label="Doc site B",
+                      file_path="/uploads/photos/docs/doc_site_b.pdf", validity_status="en_attente")
+    db.add(doc_b)
+    db.flush()
+    r = client.post(f"/api/site-workforce/documents/{doc_b.id}/verify", headers=headers_a, json={"validity_status": "conforme"})
+    assert r.status_code == 404
+
+
+# ── Revue finale d'intégration (§8 scope société) : le contrôle site ne doit JAMAIS se
+# substituer au contrôle société — un compte dont authorized_sites pointe vers un site
+# RÉEL mais dont authorized_societies ne couvre PAS la société de ce site (configuration
+# incohérente, ex. erreur d'administration) doit être refusé, pas silencieusement autorisé
+# parce que le site lui-même existe et est actif.
+def test_site_belonging_to_unauthorized_society_is_refused_even_with_valid_site_id(client, db):
+    ctx = _setup(db)
+    mismatched_user = User(
+        username=f"chargeMismatch_{ctx['tag']}", full_name="Société incohérente", role="charge_effectifs_site", access_level="H2",
+        authorized_societies=[SOC_B],  # ne couvre PAS SOC_A, la société réelle de site_a
+        authorized_structures=[], authorized_modules=["site_workforce"],
+        authorized_sites=[ctx["site_a"].id],  # site_a appartient à SOC_A
+        authorized_actions=["read", "create", "update", "validate"],
+        password_hash=hash_password("mismatchpass"), validation_password_hash=hash_password("x"), is_active=True,
+    )
+    db.add(mismatched_user)
+    db.flush()
+    headers = _login(client, f"chargeMismatch_{ctx['tag']}", "mismatchpass")
+    r = client.get("/api/site-workforce/dashboard", headers=headers)
+    assert r.status_code == 403
+
+
+# ── Revue finale d'intégration (§9 pointage) : après clôture, aucune modification ne doit
+# être possible sans la permission "validate" explicite — jamais une simple présence du
+# module suffisante. Reconfirme aussi qu'un compte read-only ne peut pas clôturer.
+def test_attendance_close_and_correct_refused_without_validate_action(client, db):
+    ctx = _setup(db)
+    read_only_user = User(
+        username=f"chargeReadOnly_{ctx['tag']}", full_name="Lecture seule", role="charge_effectifs_site", access_level="H2",
+        authorized_societies=[SOC_A], authorized_structures=[], authorized_modules=["site_workforce"],
+        authorized_sites=[ctx["site_a"].id], authorized_actions=["read"],
+        password_hash=hash_password("readonlypass"), validation_password_hash=hash_password("x"), is_active=True,
+    )
+    db.add(read_only_user)
+    db.flush()
+    headers_write = _login_as(client, ctx, "charge_a")
+    today = str(date.today())
+    presence_id = client.post("/api/site-workforce/attendance", headers=headers_write, json={
+        "employee_id": ctx["emp_a"].id, "presence_date": today, "status": "present",
+    }).json()["id"]
+
+    headers_ro = _login(client, f"chargeReadOnly_{ctx['tag']}", "readonlypass")
+    r_close = client.post("/api/site-workforce/attendance/close", headers=headers_ro, params={"presence_date": today})
+    assert r_close.status_code == 403
+
+    # Clôture réelle par le compte autorisé, puis tentative de correction par le lecteur seul.
+    client.post("/api/site-workforce/attendance/close", headers=headers_write, params={"presence_date": today})
+    r_correct = client.post(f"/api/site-workforce/attendance/{presence_id}/correct", headers=headers_ro, json={
+        "status": "absent", "reason": "tentative sans droit validate",
+    })
+    assert r_correct.status_code == 403
+
+
+# ── Revue finale d'intégration (§16 double-submit) : rejoué et démontré avant correctif —
+# un double POST identique sur /transmissions créait deux Transmission pour le même
+# dossier. Corrigé par une vérification d'état ; ce test verrouille le correctif.
+def test_double_submit_transmission_refused_after_first_success(client, db):
+    ctx = _setup(db)
+    headers = _login_as(client, ctx, "charge_a")
+    incident_id = client.post("/api/site-workforce/discipline", headers=headers, json={
+        "employee_id": ctx["emp_a"].id, "event_type": "retard", "subject": "Retard double-submit",
+    }).json()["id"]
+    client.post(f"/api/site-workforce/discipline/{incident_id}/signaler", headers=headers)
+
+    body = {"resource_type": "incident", "resource_id": incident_id, "destinataire": "drh", "objet": "Retard double-submit"}
+    r1 = client.post("/api/site-workforce/transmissions", headers=headers, json=body)
+    r2 = client.post("/api/site-workforce/transmissions", headers=headers, json=body)
+    assert r1.status_code == 200
+    assert r2.status_code == 409, "un second POST identique ne doit jamais créer une seconde transmission"
+    rows = client.get("/api/site-workforce/transmissions", headers=headers, params={"resource_type": "incident", "resource_id": incident_id}).json()
+    assert len(rows) == 1, "la DRH ne doit jamais recevoir deux transmissions pour le même incident"
