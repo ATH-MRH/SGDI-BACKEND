@@ -5,7 +5,6 @@ grossissait à chaque sauvegarde — et prouve qu'il ne peut plus se produire. V
 aussi que la migration one-shot réduit sans rien perdre, et qu'elle est idempotente.
 """
 import base64
-import importlib
 import json
 
 import pytest
@@ -16,14 +15,34 @@ from app.modules.drh.models import Employee
 
 @pytest.fixture()
 def uploads(tmp_path, monkeypatch):
-    """Répertoire d'upload isolé pour l'externalisation des documents."""
-    monkeypatch.setenv("SGDI_UPLOADS_DIR", str(tmp_path))
+    """Répertoire d'upload isolé pour l'externalisation des documents.
+
+    TROUVÉ EN REVUE DE SÉCURITÉ SITE WORKFORCE (§B22) : la version précédente faisait
+    monkeypatch.setenv("SGDI_UPLOADS_DIR", ...) PUIS importlib.reload(ps) pour appliquer le
+    nouveau chemin, et rechargeait une seconde fois en fin de test pour "annuler" — mais
+    cette seconde recharge s'exécute alors que monkeypatch.setenv n'a PAS ENCORE été
+    annulé (les fixtures monkeypatch ne se remettent qu'après le retour de CETTE fixture),
+    donc elle rechargeait ps AVEC LA MÊME VARIABLE D'ENVIRONNEMENT TEMPORAIRE encore
+    active — ps.DOCS_DIR restait donc pointé sur ce tmp_path pour TOUT LE RESTE DE LA
+    SESSION pytest, bien après que ce tmp_path ait cessé d'exister. Conséquence concrète,
+    démontrée par tests/test_site_workforce.py : toute route qui référence DOCS_DIR/
+    UPLOADS_ROOT comme un NOM importé une fois (`from app.core.photo_storage import
+    DOCS_DIR`, ex. app/main.py) reste figée sur la valeur d'origine (correcte), alors que
+    tout code qui l'utilise comme un attribut de module réévalué à chaque appel (ex.
+    save_base64_document(), qui lit ps.DOCS_DIR dans son propre __globals__ à CHAQUE
+    appel) suivait la valeur polluée — un fichier réellement écrit à un endroit, jamais
+    trouvable à un autre. Corrigé : monkeypatch.setattr() directement sur les attributs
+    du module (jamais de reload), pour que l'annulation automatique de monkeypatch (LIFO,
+    au bon moment) restaure exactement l'état d'origine, sans dépendre d'un second reload.
+    """
     import app.core.photo_storage as ps
-    importlib.reload(ps)
-    # sql_bridge a importé les fonctions au chargement : on les repointe sur le module rechargé
-    monkeypatch.setattr(sql_bridge, "externalize_employee_documents", ps.externalize_employee_documents)
+    monkeypatch.setattr(ps, "UPLOADS_ROOT", tmp_path)
+    monkeypatch.setattr(ps, "PHOTOS_DIR", tmp_path / "photos")
+    monkeypatch.setattr(ps, "DOCS_DIR", tmp_path / "photos" / "docs")
+    # sql_bridge a importé la fonction au chargement : elle lit ps.DOCS_DIR dans son propre
+    # __globals__ à chaque appel (module non rechargé, juste ses attributs patchés
+    # ci-dessus) — aucun repointage supplémentaire n'est donc nécessaire ici.
     yield tmp_path
-    importlib.reload(ps)
 
 
 def _b64_pdf(tag):

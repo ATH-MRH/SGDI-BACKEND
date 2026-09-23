@@ -5,19 +5,30 @@ et .url devient /uploads/docs/... (le frontend affiche déjà ce format). Aucun
 document n'est jamais perdu, même en cas d'erreur de décodage.
 """
 import base64
-import importlib
 
 import pytest
 
 
 @pytest.fixture()
 def photo_storage(tmp_path, monkeypatch):
-    """Recharge le module avec un répertoire d'upload temporaire et isolé."""
-    monkeypatch.setenv("SGDI_UPLOADS_DIR", str(tmp_path))
+    """Répertoire d'upload temporaire et isolé.
+
+    TROUVÉ EN REVUE DE SÉCURITÉ SITE WORKFORCE (§B22, même défaut que
+    tests/test_employee_bloat_regression.py — voir son commentaire pour le mécanisme
+    complet) : monkeypatch.setenv() + importlib.reload() pour appliquer, puis un second
+    reload() pour "restaurer" — mais ce second reload s'exécute alors que setenv() n'a
+    pas encore été annulé par monkeypatch (son propre revert n'arrive qu'après le retour
+    de cette fixture), donc il ré-applique la MÊME variable temporaire au lieu de
+    restaurer l'originale : app.core.photo_storage.DOCS_DIR restait pollué pour tout le
+    reste de la session pytest. Corrigé : monkeypatch.setattr() directement sur les
+    attributs du module, jamais de reload — l'annulation automatique de monkeypatch
+    restaure alors l'état exact d'origine, dans le bon ordre.
+    """
     import app.core.photo_storage as ps
-    importlib.reload(ps)
+    monkeypatch.setattr(ps, "UPLOADS_ROOT", tmp_path)
+    monkeypatch.setattr(ps, "PHOTOS_DIR", tmp_path / "photos")
+    monkeypatch.setattr(ps, "DOCS_DIR", tmp_path / "photos" / "docs")
     yield ps
-    importlib.reload(ps)  # restaure l'état par défaut pour les autres tests
 
 
 def _data_url(mime, raw_bytes):
