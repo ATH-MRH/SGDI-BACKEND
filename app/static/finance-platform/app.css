@@ -63,11 +63,18 @@ table{font-variant-numeric:tabular-nums}
 }
 .shell-header-left{display:flex;align-items:center;gap:10px;min-width:0}
 .shell-header-title{font-size:14px;font-weight:900;color:var(--text);white-space:nowrap}
-.shell-header-right{display:flex;align-items:center;gap:10px;flex:none}
+/* TROUVÉ EN CONSTRUISANT LE TEST RESPONSIVE (revue finale bloquante V2, §11), deuxième cause
+   du même débordement horizontal à 390px (le correctif KPI seul n'y suffisait pas) :
+   flex:none interdisait à .shell-header-right (sélecteur de société + nom utilisateur +
+   déconnexion) de rétrécir sous la largeur de son contenu — "Iron Global Securite" seul
+   dépassait déjà la largeur utile du viewport. Passé en flex rétractable + min-width:0, avec
+   troncature (ellipsis) sur le select société et le nom utilisateur plutôt qu'un débordement. */
+.shell-header-right{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;justify-content:flex-end}
 .sidebar-toggle{display:none;border:1px solid var(--border);background:var(--surface);border-radius:7px;width:32px;height:32px;align-items:center;justify-content:center;cursor:pointer;flex:none}
-.society-select{border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;color:var(--primary-strong);background:var(--primary-soft);cursor:pointer}
-.period-select{border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;color:var(--text);background:var(--surface)}
-.user-chip{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.society-select{border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;color:var(--primary-strong);background:var(--primary-soft);cursor:pointer;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.period-select{border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;color:var(--text);background:var(--surface);flex:none}
+.user-chip{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);min-width:0}
+.user-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
 .user-avatar{width:30px;height:30px;border-radius:999px;background:var(--border-soft);color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex:none}
 .shell-content{padding:20px;flex:1;overflow-x:auto;max-width:1440px;width:100%;margin:0 auto}
 @media(max-width:900px){
@@ -76,6 +83,10 @@ table{font-variant-numeric:tabular-nums}
   .sidebar-toggle{display:inline-flex}
   .shell-content{padding:12px}
   .period-select{display:none}
+}
+@media(max-width:480px){
+  .society-select{max-width:92px}
+  .user-chip span{display:none}
 }
 .sidebar-scrim{display:none}
 .shell.sidebar-open .sidebar-scrim{display:block;position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:15}
@@ -89,11 +100,20 @@ table{font-variant-numeric:tabular-nums}
 .section-sub{font-size:12.5px;color:var(--text-faint);margin:0 0 16px}
 
 /* ── KPI ─────────────────────────────────────────────────────────────────────────────── */
+/* TROUVÉ EN CONSTRUISANT LE TEST RESPONSIVE (revue finale bloquante V2, §11) :
+   .kpi-value en white-space:nowrap, combiné aux espaces fines insécables (U+202F) du
+   séparateur de milliers de money() — un point de rupture qu'un navigateur ne peut jamais
+   couper — forçait la carte (donc la page entière) plus large que le viewport à 390px sur
+   un montant à 6+ chiffres (ex. "125 000,00"). Corrigé : nowrap retiré (le texte peut
+   redescendre à la ligne si vraiment nécessaire), overflow-wrap en filet de sécurité, et une
+   seule colonne forcée sous 480px pour donner sa pleine largeur à chaque carte plutôt que de
+   viser 180px minimum sur un écran qui n'en offre que ~360 utiles. */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}
-.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;min-width:0}
 .kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tone,var(--primary))}
 .kpi-label{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);margin-bottom:6px;display:block}
-.kpi-value{font-size:22px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi-value{font-size:22px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(max-width:480px){.kpi-grid{grid-template-columns:1fr}}
 .kpi-sub{font-size:11.5px;color:var(--text-faint);margin-top:4px}
 .kpi-card.tone-success{--tone:var(--success)}
 .kpi-card.tone-warn{--tone:var(--warn)}
