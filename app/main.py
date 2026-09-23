@@ -661,9 +661,24 @@ def on_startup() -> None:
     if settings.startup_maintenance_enabled:
         _fix_societe_name()
         _purge_oversized_collections()
-    start_contract_email_alert_scheduler()
-    start_assistant_scheduler()
-    start_alerts_scheduler()
+    # TROUVÉ EN CONSTRUISANT LES TESTS SITE WORKFORCE (§B23) : chacun de ces trois
+    # planificateurs lance un premier passage IMMÉDIAT (avant tout `asyncio.sleep`), via
+    # `asyncio.to_thread`, sur sa PROPRE connexion SessionLocal() — jamais la session de
+    # test surchargée par le fixture `client`. TestClient(app) déclenche ce startup à
+    # CHAQUE test ; un test qui garde une transaction ouverte (db.flush() sans commit, le
+    # patron même du fixture `db`, voir tests/conftest.py) peut alors entrer en collision
+    # avec l'écriture immédiate d'un de ces planificateurs sur le même fichier SQLite —
+    # chacun attend jusqu'à busy_timeout (30s) avant d'abandonner, et l'annulation d'une
+    # tâche asyncio bloquée dans un thread réel ne l'interrompt pas avant la fin de cet
+    # appel. Observé : un test isolé qui crée plusieurs comptes/entités peut ainsi rester
+    # bloqué plusieurs dizaines de secondes, sans aucun rapport avec son propre code.
+    # Aucune valeur en environnement de test : ces planificateurs sont un souci de
+    # production (alertes email de contrat, assistant IA, détecteurs d'alertes), jamais
+    # exercés par la suite de tests elle-même.
+    if settings.app_env.strip().lower() != "test":
+        start_contract_email_alert_scheduler()
+        start_assistant_scheduler()
+        start_alerts_scheduler()
 
 
 @app.on_event("shutdown")
