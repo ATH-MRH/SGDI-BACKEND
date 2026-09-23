@@ -56,9 +56,12 @@
         el.querySelectorAll("[data-transmit]").forEach((btn) => btn.addEventListener("click", async () => {
           const destinataire = prompt("Destinataire (drh / ops / direction) :", "drh");
           if (!destinataire || !["drh", "ops", "direction"].includes(destinataire)) return;
+          // TROUVÉ EN REVUE DE SÉCURITÉ (§B22, même défaut que views/discipline.js) :
+          // btn.dataset.subject revient décodé des entités HTML — repassé par SW.esc() ici,
+          // sinon XSS stocké possible via le sujet d'une réclamation.
           const ok = await SW.confirmAction({
             title: "Transmettre cette réclamation ?",
-            impact: [["Réclamation", "#" + btn.dataset.transmit], ["Objet", btn.dataset.subject], ["Destinataire", destinataire], ["Effet", "Le dossier source change de statut — aucune copie créée"]],
+            impact: [["Réclamation", "#" + btn.dataset.transmit], ["Objet", SW.esc(btn.dataset.subject)], ["Destinataire", destinataire], ["Effet", "Le dossier source change de statut — aucune copie créée"]],
             confirmLabel: "Transmettre",
           });
           if (!ok) return;

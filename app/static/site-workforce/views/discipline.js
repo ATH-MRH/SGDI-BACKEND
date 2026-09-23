@@ -66,9 +66,14 @@
           catch (err) { alert(err.message); }
         }));
         el.querySelectorAll("[data-transmit]").forEach((btn) => btn.addEventListener("click", async () => {
+          // TROUVÉ EN REVUE DE SÉCURITÉ (§B22) : btn.dataset.subject revient DÉCODÉ des
+          // entités HTML par le navigateur (l'attribut data-subject avait pourtant été
+          // écrit via SW.esc()) — kvRow() n'échappe jamais sa "value" (convention réutilisée
+          // depuis Finance V2, où "value" est déjà du HTML de confiance comme money()).
+          // Repassé par SW.esc() ici : XSS stocké sinon possible via le sujet d'un incident.
           const ok = await SW.confirmAction({
             title: "Transmettre cet incident à la DRH ?",
-            impact: [["Incident", "#" + btn.dataset.transmit], ["Objet", btn.dataset.subject], ["Destinataire", "DRH"], ["Effet", "Le dossier source change de statut — aucune copie créée"]],
+            impact: [["Incident", "#" + btn.dataset.transmit], ["Objet", SW.esc(btn.dataset.subject)], ["Destinataire", "DRH"], ["Effet", "Le dossier source change de statut — aucune copie créée"]],
             confirmLabel: "Transmettre",
           });
           if (!ok) return;
