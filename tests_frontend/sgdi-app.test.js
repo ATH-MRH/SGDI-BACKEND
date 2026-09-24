@@ -46,6 +46,11 @@ const exposeSuffix = `
   sgdiModuleHostConfigs: (typeof sgdiModuleHostConfigs !== 'undefined') ? sgdiModuleHostConfigs : null,
   adminSidebarOrganizerDefaults: (typeof adminSidebarOrganizerDefaults !== 'undefined') ? adminSidebarOrganizerDefaults : null,
   ADMIN_LOGIN_MODULES: (typeof ADMIN_LOGIN_MODULES !== 'undefined') ? ADMIN_LOGIN_MODULES : null,
+  renderAdmin: (typeof renderAdmin !== 'undefined') ? renderAdmin : null,
+  renderAdminBeo: (typeof renderAdminBeo !== 'undefined') ? renderAdminBeo : null,
+  beoUsers: (typeof beoUsers !== 'undefined') ? beoUsers : null,
+  beoConfigState: (typeof beoConfigState !== 'undefined') ? beoConfigState : null,
+  isAdminGeneralSession: (typeof isAdminGeneralSession !== 'undefined') ? isAdminGeneralSession : null,
   setDb: (v) => { db = v; },
   setSession: (v) => { session = v; },
   setViewMode: (v) => { sgdiViewModeActive = v; },
@@ -660,4 +665,78 @@ test('connexions autonomes : présentation commune et contrôles conservés',()=
     assert.ok(document.querySelector('#loginBtn')&&document.querySelector('#loginError'),filename);
     page.window.close();
   }
+});
+
+// ── Administration BEO (Bureau des Effectifs Ouest / site_workforce) ──────────────────────
+// La clé RBAC réellement persistée reste EXCLUSIVEMENT "site_workforce" — BEO n'est qu'une
+// identité fonctionnelle/UI, jamais une seconde clé ni un second catalogue (audit préalable :
+// ADMIN_LOGIN_MODULES reste l'unique source, enrichie de deux champs optionnels appName/
+// domain qui ne changent le rendu d'AUCUNE autre entrée).
+test('§16.B/C : le catalogue affiche le nom fonctionnel et le domaine BEO, sans toucher aux autres entrées', () => {
+  const entry = T().ADMIN_LOGIN_MODULES.find((m) => m.key === 'site_workforce');
+  assert.strictEqual(entry.appName, 'Bureau des Effectifs Ouest');
+  assert.strictEqual(entry.domain, 'beo.irongs.com');
+  const others = T().ADMIN_LOGIN_MODULES.filter((m) => m.key !== 'site_workforce');
+  assert.ok(others.every((m) => !('appName' in m) && !('domain' in m)), 'aucune autre entrée ne doit porter appName/domain');
+});
+
+test('§16.D : beoUsers() ne retourne que les comptes avec authorized_modules contenant site_workforce', () => {
+  T().setDb({ users: [
+    { username: 'CE01', modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true },
+    { username: 'DRH01', modulesAutorises: ['drh'], sitesAutorises: [], societesAutorisees: [], actif: true },
+    { username: 'MULTI', modulesAutorises: ['site_workforce', 'drh'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true },
+  ], sites: [] });
+  const rows = T().beoUsers();
+  assert.deepStrictEqual([...rows.map((u) => u.username)].sort(), ['CE01', 'MULTI']);
+});
+
+test('§16.E-G : états de configuration reflètent exactement resolve_scoped_site (société + un seul site)', () => {
+  T().setDb({ sites: [{ id: 1, backendId: 1, nom: 'Site A', equipmentPlan: { societe: 'SOC' } }] });
+  const ok = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true });
+  assert.strictEqual(ok.state, 'ok'); assert.strictEqual(ok.label, 'CONFIGURÉ');
+
+  const noSite = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [], societesAutorisees: ['SOC'], actif: true });
+  assert.strictEqual(noSite.state, 'incomplete'); assert.match(noSite.reason, /Aucun site/);
+
+  const multiSite = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1, 2], societesAutorisees: ['SOC'], actif: true });
+  assert.strictEqual(multiSite.state, 'invalid'); assert.match(multiSite.reason, /Plusieurs sites/);
+
+  const noSoc = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: [], actif: true });
+  assert.strictEqual(noSoc.state, 'incomplete'); assert.match(noSoc.reason, /Aucune société/);
+
+  const inactive = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: false });
+  assert.strictEqual(inactive.state, 'inactive');
+});
+
+test('§16.H : retirer BEO ne retire que la clé site_workforce, jamais les autres modules', () => {
+  const modules = ['drh', 'site_workforce', 'finances'];
+  const next = modules.filter((m) => m !== 'site_workforce');
+  assert.deepStrictEqual(next, ['drh', 'finances']);
+});
+
+test('§16.I : la carte BEO n\'accorde jamais DRH/OPS/Finance implicitement', () => {
+  T().setDb({ users: [{ username: 'CE01', modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true }], sites: [] });
+  const rows = T().beoUsers();
+  assert.strictEqual(rows.length, 1);
+  assert.deepStrictEqual([...rows[0].modulesAutorises], ['site_workforce']);
+});
+
+test('§16.J : un compte non-admin (ex. charge_effectifs_site) ne peut pas ouvrir Administration -> BEO', () => {
+  T().setSession({ username: 'CE01', role: 'charge_effectifs_site' });
+  assert.strictEqual(T().isAdminGeneralSession(), false);
+  const view = window.document.createElement('div');
+  T().renderAdmin(view, 'beo');
+  assert.match(view.innerHTML, /Accès refusé/);
+  assert.doesNotMatch(view.innerHTML, /Bureau des Effectifs Ouest/);
+});
+
+test('§16.K : un administrateur système autorisé peut ouvrir Administration -> BEO', () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [{ username: 'CE01', modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true, nom: 'CE01' }], sites: [{ id: 1, backendId: 1, nom: 'Site A', equipmentPlan: { societe: 'SOC' } }] });
+  const view = window.document.createElement('div');
+  T().renderAdmin(view, 'beo');
+  assert.match(view.innerHTML, /Bureau des Effectifs Ouest/);
+  assert.match(view.innerHTML, /beo\.irongs\.com/);
+  assert.match(view.innerHTML, /CE01/);
+  assert.match(view.innerHTML, /CONFIGURÉ/);
 });

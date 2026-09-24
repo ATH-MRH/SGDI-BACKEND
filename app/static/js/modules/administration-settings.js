@@ -33,6 +33,7 @@ async function renderAdminSystemDashboard(view){
 	    ${card("Configuration recrutement","Contrôler l'ordre des sections du formulaire candidat et les règles de déverrouillage.","admin/sections_candidat","#059669",CANDIDAT_SECTIONS.length,"Recrutement")}
 	    ${card("Rotations","Créer les cycles, les associer aux sites et affecter les employés par groupe.","admin/rotations","#7c3aed","∞","Planification")}
 	    ${card("Utilisateurs","Créer, bloquer et rattacher chaque compte à un profil et un périmètre.","admin/users","#043970",users.length,"1. Comptes")}
+	    ${card("Bureau des Effectifs Ouest","Gestion des effectifs par site — module site_workforce, domaine beo.irongs.com.","admin/beo","#0d9488",users.filter(u=>Array.isArray(u.modulesAutorises)&&u.modulesAutorises.includes("site_workforce")).length,"Applications")}
 	    ${card("Profils d'accès","Définir les modules visibles et le référentiel d'actions par profil.","admin/niveaux","#7c3aed",profileCount,"2. Droits")}
 	    ${card("Périmètres & sécurité","Sociétés, structures, code journalier et règles de sécurité.","admin/access","#0891b2","", "3. Périmètres")}
 	    ${card("Données métier","Effectifs, fiches, postes, sites, matériel et modèles documents.","admin/effectifs","#0f766e",agents.length,"4. Métier")}
