@@ -166,3 +166,69 @@ def test_granting_site_workforce_never_implicitly_grants_other_modules(client, a
     assert client.get("/api/drh/employees", headers=headers).status_code == 403
     assert client.get("/api/ops/sites", headers=headers).status_code == 403
     assert client.get("/api/finance-core/obligations", headers=headers, params={"society": SOC}).status_code == 403
+
+
+def _login(client, username, password="ce01password"):
+    token = client.post("/api/auth/login", json={"username": username, "password": password}).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_beo_user_cannot_modify_own_scope_permissions_or_users(client, auth_headers, db):
+    """Administration BEO §14/§16.J — un chargé des effectifs ne peut ni changer son site,
+    ni s'accorder DRH, ni modifier ses actions, ni créer/lister des comptes : tout
+    /api/auth/users reste réservé aux administrateurs (require_admin)."""
+    site, _ = _seeded_site(db)
+    other = Site(name=f"Autre site {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": SOC})
+    db.add(other); db.flush()
+    client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "ce01_self", "email": "ce01_self@test.com", "role": "charge_effectifs_site",
+        "access_level": "H2", "authorized_modules": ["site_workforce"],
+        "authorized_societies": [SOC], "authorized_sites": [site.id],
+        "authorized_actions": ["read"],
+        "password": "ce01password", "validation_password": "validation123",
+    })
+    headers = _login(client, "ce01_self")
+    for payload in (
+        {"authorized_sites": [site.id, other.id]},
+        {"authorized_modules": ["site_workforce", "drh"]},
+        {"authorized_actions": ["read", "create", "update", "validate"]},
+        {"role": "admin"},
+    ):
+        assert client.patch("/api/auth/users/ce01_self", headers=headers, json=payload).status_code == 403
+    assert client.get("/api/auth/users", headers=headers).status_code == 403
+    assert client.post("/api/auth/users", headers=headers, json={
+        "username": "ce01_child", "email": "ce01_child@test.com", "role": "agent",
+        "access_level": "H1", "authorized_modules": ["drh"],
+        "password": "ce01password", "validation_password": "validation123",
+    }).status_code == 403
+    # Rien n'a bougé côté base.
+    me = client.get("/api/auth/me", headers=headers).json()
+    assert me["effective_modules"] == ["site_workforce"]
+    assert [int(v) for v in me["authorized_sites"]] == [site.id]
+
+
+def test_admin_can_fix_beo_scope_and_portal_follows(client, auth_headers, db):
+    """Administration BEO §16.K — un admin autorisé passe un compte de "plusieurs sites"
+    (périmètre invalide, portail refusé) à exactement un site : le portail l'accepte alors,
+    sans qu'aucun autre module ne soit ajouté."""
+    site_a, _ = _seeded_site(db)
+    site_b = Site(name=f"Site B {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": SOC})
+    db.add(site_b); db.flush()
+    client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "ce01_fix", "email": "ce01_fix@test.com", "role": "charge_effectifs_site",
+        "access_level": "H2", "authorized_modules": ["site_workforce"],
+        "authorized_societies": [SOC], "authorized_sites": [site_a.id, site_b.id],
+        "password": "ce01password", "validation_password": "validation123",
+    })
+    assert client.get("/api/site-workforce/dashboard", headers=_login(client, "ce01_fix")).status_code == 403
+    r = client.patch("/api/auth/users/ce01_fix", headers=auth_headers, json={
+        "authorized_sites": [site_a.id], "authorized_actions": ["read", "create", "update", "validate"],
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["authorized_modules"] == ["site_workforce"]
+    headers = _login(client, "ce01_fix")
+    dash = client.get("/api/site-workforce/dashboard", headers=headers)
+    assert dash.status_code == 200
+    assert dash.json()["site"]["id"] == site_a.id
+    assert client.get("/api/drh/employees", headers=headers).status_code == 403
+    assert client.get("/api/ops/sites", headers=headers).status_code == 403
