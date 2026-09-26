@@ -56,6 +56,48 @@ def resolve_scoped_site(db: Session = Depends(get_db), user: User = Depends(curr
     return site
 
 
+BEO_ROLE = "charge_effectifs_site"
+
+
+def is_beo_account(role: str | None, modules: list | None) -> bool:
+    """Compte "Chargé des effectifs" (Bureau des Effectifs Ouest) : rôle métier ET clé
+    site_workforce. Un autre profil qui a aussi site_workforce garde la sémantique
+    historique (périmètres libres) ; resolve_scoped_site() le filtre de toute façon au runtime."""
+    return str(role or "").strip().lower() == BEO_ROLE and "site_workforce" in [str(m).strip() for m in (modules or [])]
+
+
+def validate_beo_account_scope(db: Session, *, role, modules, societies, sites, global_society_access) -> None:
+    """Garde d'écriture (création/modification d'un compte via Administration) : exactement
+    UNE société explicite, exactement UN site, et ce site appartient à cette société. Même
+    comparaison société que resolve_scoped_site() — un état que le portail refuserait ne
+    peut donc jamais être enregistré. Sans effet sur tout autre compte."""
+    if not is_beo_account(role, modules):
+        return
+
+    def refuse(detail: str) -> None:
+        raise HTTPException(status_code=422, detail=f"Chargé des effectifs (BEO) : {detail}")
+
+    if global_society_access:
+        refuse("l'accès global aux sociétés est interdit")
+    allowed = [str(v).strip() for v in (societies or []) if str(v).strip()]
+    if not allowed:
+        refuse("une société autorisée est obligatoire (une liste vide n'est jamais un accès global)")
+    if len(allowed) > 1:
+        refuse("une seule société autorisée")
+    site_ids = [int(v) for v in (sites or []) if str(v).strip().lstrip("-").isdigit()]
+    if len(site_ids) != len(list(sites or [])):
+        refuse("identifiant de site invalide")
+    if not site_ids:
+        refuse("un site autorisé est obligatoire")
+    if len(site_ids) > 1:
+        refuse("un seul site autorisé")
+    site = db.get(Site, site_ids[0])
+    if not site:
+        refuse("site introuvable")
+    if _site_society(site) != allowed[0]:
+        refuse("le site n'appartient pas à la société autorisée")
+
+
 def site_employee_ids(db: Session, site_id: int, *, as_of: date | None = None) -> list[int]:
     """Employés RÉELLEMENT affectés à CE site aujourd'hui (Assignment active), jamais tous
     les employés de la société — c'est la seule source de vérité "qui est sur ce site"."""

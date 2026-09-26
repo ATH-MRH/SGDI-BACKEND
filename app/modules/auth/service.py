@@ -35,11 +35,21 @@ def get_user(db: Session, user_id: int) -> User | None:
     return db.get(User, user_id)
 
 
+def _validate_beo_scope(db: Session, *, role, modules, societies, sites, global_society_access) -> None:
+    # Import paresseux : site_workforce.security importe auth.dependencies.
+    from app.modules.site_workforce.security import validate_beo_account_scope
+    validate_beo_account_scope(db, role=role, modules=modules, societies=societies, sites=sites,
+                               global_society_access=global_society_access)
+
+
 def create_user(db: Session, payload: UserCreate) -> User:
     username = normalize_username(payload.username)
     email = normalize_login(str(payload.email)) if payload.email else None
     if get_user_by_login(db, username) or (email and get_user_by_login(db, email)):
         raise HTTPException(status_code=409, detail="Utilisateur déjà existant")
+    _validate_beo_scope(db, role=payload.role, modules=payload.authorized_modules,
+                        societies=payload.authorized_societies, sites=payload.authorized_sites,
+                        global_society_access=payload.global_society_access)
     user = User(
         username=username,
         email=email,
@@ -109,6 +119,15 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
         user.validation_password_hash = hash_password(payload.validation_password)
     if payload.is_active is not None:
         user.is_active = payload.is_active
+    # Valide l'état FINAL fusionné (existant + PATCH partiel) : un PATCH ne peut jamais
+    # laisser un compte BEO dans un état que le portail refuserait.
+    try:
+        _validate_beo_scope(db, role=user.role, modules=user.authorized_modules,
+                            societies=user.authorized_societies, sites=user.authorized_sites,
+                            global_society_access=user.global_society_access)
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(user)
     user.has_validation_password = bool(user.validation_password_hash)
