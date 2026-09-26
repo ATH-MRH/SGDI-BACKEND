@@ -233,10 +233,23 @@ def test_paie_subdomain_serves_autonomous_module_and_accepts_paie_user(client, d
 
 
 def test_pointage_subdomain_contains_seven_day_planning_engine(client):
-    root = client.get("/", headers={"host": "pointage.irongs.com"}, follow_redirects=True)
+    # Le terminal (pointeur.html) garde son moteur de planning ; il est servi à la racine de
+    # pointeur.irongs.com et sur /pointeur (y compris sur pointage.irongs.com, transition).
+    for host, path in (("pointeur.irongs.com", "/"), ("pointage.irongs.com", "/pointeur")):
+        root = client.get(path, headers={"host": host}, follow_redirects=True)
+        assert root.status_code == 200
+        assert "Planning intelligent" in root.text
+        assert "attendance-feed?days=8" in root.text
+
+
+def test_pointage_host_serves_the_control_center_not_the_terminal(client):
+    root = client.get("/", headers={"host": "pointage.irongs.com"})
     assert root.status_code == 200
-    assert "Planning intelligent" in root.text
-    assert "attendance-feed?days=8" in root.text
+    assert "Centre de contrôle Pointage" in root.text
+    assert "Planning intelligent" not in root.text
+    assert "no-store" in root.headers.get("cache-control", "")
+    # Transition des terminaux déjà installés sur ce domaine.
+    assert 'display-mode: standalone' in root.text and 'location.replace("/pointeur")' in root.text
 
 
 def test_protected_endpoint_without_token(client):

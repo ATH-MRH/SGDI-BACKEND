@@ -760,9 +760,15 @@ def _is_portal_host(host: str) -> bool:
 
 
 def _is_pointer_host(host: str) -> bool:
-    # pointage.irongs.com est le domaine canonique. L'ancien nom reste accepté
-    # pendant la transition pour les PWA installées et les favoris existants.
-    return host.split(":")[0].lower() in {"pointage.irongs.com", "pointeur.irongs.com"}
+    # pointeur.irongs.com = application TERRAIN (terminal, tablette, borne).
+    return host.split(":")[0].lower() == "pointeur.irongs.com"
+
+
+def _is_attendance_center_host(host: str) -> bool:
+    # pointage.irongs.com = CENTRE DE CONTRÔLE (DRH/OPS/superviseurs). Les terminaux déjà
+    # installés sur ce domaine (PWA « Pointeur » à start_url "/") sont renvoyés vers
+    # /pointeur par la page elle-même (display-mode standalone) ; /pointeur reste servi.
+    return host.split(":")[0].lower() == "pointage.irongs.com"
 
 
 def _is_recrute_host(host: str) -> bool:
@@ -1525,6 +1531,12 @@ def frontend(request: Request) -> HTMLResponse:
             STATIC_DIR / "pointeur.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_attendance_center_host(host):
+        return FileResponse(
+            STATIC_DIR / "pointage" / "index.html",
+            media_type="text/html; charset=utf-8",
+            headers=_NO_CACHE,
         )
     if _is_recrute_host(host):
         return FileResponse(

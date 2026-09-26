@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#043970">
+<title>POINTAGE — Centre de contrôle ATLAS</title>
+<link rel="icon" href="/static/sgdi-icon-192.png">
+<style>
+:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8;--card:#fff}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+.hidden{display:none!important}
+.login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
+.login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:18px;font-weight:900;letter-spacing:.04em}
+h1{font-size:22px;text-align:center;margin:0}.login-sub{text-align:center;color:var(--muted);margin:7px 0 22px;font-size:14px}
+label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--ink);background:#fff;font-size:13px}
+input,select{height:38px}textarea{padding:8px 10px;min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.primary{border:0;border-radius:12px;background:var(--navy);color:#fff;padding:11px 16px;font-weight:900;cursor:pointer}
+.primary:disabled{opacity:.55;cursor:wait}
+.secondary{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:10px 14px;font-weight:850;cursor:pointer}
+.danger{border:0;border-radius:12px;background:var(--red);color:#fff;padding:10px 14px;font-weight:850;cursor:pointer}
+.login .primary{width:100%;margin-top:18px;padding:13px}
+.error{display:none;margin-top:13px;border-radius:11px;padding:11px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:700}
+.error.show{display:block}
+.top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(16px,env(safe-area-inset-top)) 18px 17px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1680px;margin:auto;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}.brand-logo{width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900;font-size:13px;flex-shrink:0}
+.brand-title{font-size:17px;font-weight:950;letter-spacing:.06em}.brand-user{font-size:12px;opacity:.82;margin-top:2px}
+.top-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.top-actions select,.top-actions input{height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.94);font-weight:800;font-size:12px;width:auto;min-width:0}
+.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 12px;font-weight:750;cursor:pointer}
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;padding:20px 28px;max-width:1680px;margin:auto}
+.side{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;height:fit-content;position:sticky;top:16px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
+.side-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
+.nav-btn{width:100%;border:0;background:transparent;color:#31465f;border-radius:12px;padding:12px 13px;display:flex;align-items:center;gap:10px;text-align:left;font-size:13px;font-weight:850;cursor:pointer}
+.nav-btn:hover{background:#eff6ff;color:var(--navy)}.nav-btn.active{background:var(--navy);color:#fff;box-shadow:0 8px 18px rgba(4,57,112,.2)}
+.nav-count{margin-left:auto;background:#fee2e2;color:#991b1b;border-radius:999px;padding:1px 8px;font-size:11px}
+.nav-btn.active .nav-count{background:rgba(255,255,255,.2);color:#fff}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.page-head h2{margin:0;font-size:22px;font-weight:950}.page-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid var(--line);border-left:4px solid var(--kpi,var(--blue));border-radius:14px;padding:12px 14px;cursor:pointer;text-align:left}
+.kpi:hover{box-shadow:0 8px 20px rgba(4,57,112,.08)}.kpi.active{outline:2px solid var(--kpi,var(--blue))}
+.kpi span{display:block;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kpi strong{display:block;font-size:26px;font-weight:950;margin-top:4px}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 34px rgba(4,57,112,.06)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-bottom:1px solid var(--line)}
+.filters>*{flex:1 1 150px;min-width:0}.filters .grow{flex:3 1 220px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:#f8fbfe}
+td{padding:10px 12px;border-bottom:1px solid #edf2f7;vertical-align:middle}
+tr:hover td{background:#fafcff}
+.who b{display:block}.who small{color:var(--muted)}
+.pill{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:850;white-space:nowrap}
+.st-present{background:#dcfce7;color:#166534}.st-absent{background:#fee2e2;color:#991b1b}.st-non_pointe{background:#fef3c7;color:#92400e}
+.st-repos{background:#e2e8f0;color:#334155}.st-conge,.st-mission{background:#e0f2fe;color:#075985}.st-maladie{background:#f3e8ff;color:#6b21a8}
+.sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#92400e}.sev-info{background:#e0f2fe;color:#075985}
+.src{font-size:11px;font-weight:800;color:#42566f}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+.link{border:0;background:#eff6ff;color:var(--navy);border-radius:9px;padding:6px 10px;font-weight:850;font-size:12px;cursor:pointer;white-space:nowrap}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.empty{padding:36px;text-align:center;color:var(--muted)}
+.state{padding:16px;border-radius:12px;margin:12px;font-weight:700}
+.state.error{display:block;background:#fee2e2;color:#991b1b}.state.info{background:#eff6ff;color:var(--navy)}
+.modal-bg{position:fixed;inset:0;background:rgba(6,24,48,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.3)}
+.modal h3{margin:0 0 6px;font-size:18px}.modal .sub{color:var(--muted);font-size:13px;margin-bottom:6px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:800;z-index:60;box-shadow:0 12px 30px rgba(0,0,0,.25)}
+.toast.err{background:var(--red)}
+.anomaly-list{margin:10px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto}
+.anomaly-list li{padding:8px 0;border-bottom:1px solid #edf2f7;font-size:13px}
+@media (max-width:900px){.shell{grid-template-columns:1fr;padding:14px}.side{position:static}.side nav{display:flex;gap:6px;overflow-x:auto}.nav-btn{width:auto;white-space:nowrap}.side-title{display:none}}
+@media (max-width:520px){.top{border-radius:0 0 18px 18px}.brand-title{font-size:15px}.grid2{grid-template-columns:1fr}.kpi strong{font-size:22px}}
+</style>
+</head>
+<body>
+<section id="login" class="login">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="logo">PTG</div>
+    <h1>Centre de contrôle Pointage</h1>
+    <p class="login-sub">ATLAS — suivi, anomalies, corrections et clôtures</p>
+    <label for="login-user">Identifiant</label><input id="login-user" name="username" autocomplete="username" required>
+    <label for="login-pass">Mot de passe</label><input id="login-pass" name="password" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit" id="login-btn">Se connecter</button>
+    <div class="error" id="login-error" role="alert"></div>
+  </form>
+</section>
+
+<section id="app" class="hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand"><div class="brand-logo">PTG</div><div><div class="brand-title">POINTAGE — CENTRE DE CONTRÔLE</div><div class="brand-user" id="brand-user"></div></div></div>
+      <div class="top-actions">
+        <select id="f-site" aria-label="Site"><option value="">Tous les sites autorisés</option></select>
+        <input id="f-date" type="date" aria-label="Date">
+        <button class="logout" id="logout-btn" type="button">Déconnexion</button>
+      </div>
+    </div>
+  </header>
+  <div class="shell">
+    <aside class="side"><div class="side-title">Pilotage</div>
+      <nav>
+        <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
+        <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
+      </nav>
+    </aside>
+    <main>
+      <section id="view-board">
+        <div class="page-head"><div><h2>Situation du jour</h2><p id="board-sub">—</p></div>
+          <button class="primary" id="close-btn" type="button">Clôturer la journée</button></div>
+        <div class="kpis" id="kpis"></div>
+        <div class="card">
+          <div class="filters">
+            <input class="grow" id="f-q" type="search" placeholder="Rechercher nom ou matricule…" aria-label="Recherche">
+            <select id="f-status" aria-label="Statut"><option value="">Tous les statuts</option><option value="present">Présent</option><option value="absent">Absent</option><option value="non_pointe">Non pointé</option><option value="conge">Congé</option><option value="maladie">Maladie</option><option value="repos">Repos</option><option value="mission">Mission</option></select>
+            <select id="f-source" aria-label="Source"><option value="">Toutes les sources</option><option value="QR">QR</option><option value="MANUAL">Manuel</option><option value="FACIAL">Facial</option><option value="SITE_WORKFORCE">BEO</option><option value="PORTAL_GPS">Portail GPS</option><option value="IMPORT">Import</option></select>
+            <select id="f-anomaly" aria-label="Anomalie"><option value="">Toutes les lignes</option><option value="any">Avec anomalie</option><option value="LATE">Retard</option><option value="ABSENT">Absence</option><option value="MANUAL_POINTAGE">Pointage manuel</option><option value="OFF_SCHEDULE">Hors planning</option><option value="OVERTIME">Dépassement</option></select>
+          </div>
+          <div id="board-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Planning</th><th>Entrée</th><th>Sortie</th><th>Statut</th><th>Source</th><th>Anomalie</th><th></th></tr></thead><tbody id="board-rows"></tbody></table></div>
+          <div class="pager"><span id="board-count"></span><span><button class="secondary" id="prev-btn" type="button">‹ Précédent</button> <button class="secondary" id="next-btn" type="button">Suivant ›</button></span></div>
+        </div>
+      </section>
+      <section id="view-anomalies" class="hidden">
+        <div class="page-head"><div><h2>Anomalies</h2><p>Chaque anomalie reste ouverte jusqu'à sa résolution tracée. Une clôture ne les masque jamais.</p></div>
+          <select id="a-status" aria-label="Statut des anomalies" style="width:auto"><option value="OPEN">Ouvertes</option><option value="RESOLVED">Résolues</option><option value="DISMISSED">Classées</option><option value="">Toutes</option></select></div>
+        <div class="card"><div id="anomaly-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Employé</th><th>Site</th><th>Type</th><th>Détail</th><th>Statut</th><th></th></tr></thead><tbody id="anomaly-rows"></tbody></table></div>
+          <div class="pager"><span id="anomaly-total"></span><span><button class="secondary" id="a-prev" type="button">‹ Précédent</button> <button class="secondary" id="a-next" type="button">Suivant ›</button></span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</section>
+<div id="modal-host"></div>
+
+<script>
+// Transition : un terminal « Pointeur » installé autrefois sur pointage.irongs.com (PWA à
+// start_url "/") s'ouvre en mode application. Le centre de contrôle n'étant pas installable,
+// ce mode signifie un terminal : il est renvoyé vers /pointeur, toujours servi.
+if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) location.replace("/pointeur");
+</script>
+<script>
+(function () {
+  "use strict";
+  const TOKEN_KEY = "atlas_pointage_token";
+  const STATUS_LABEL = { present: "Présent", absent: "Absent", non_pointe: "Non pointé", conge: "Congé", maladie: "Maladie", repos: "Repos", mission: "Mission" };
+  const SOURCE_LABEL = { QR: "QR", MANUAL: "Manuel", FACIAL: "Facial", SITE_WORKFORCE: "BEO", PORTAL_GPS: "Portail GPS", IMPORT: "Import", SYSTEM: "Système" };
+  const ANOMALY_LABEL = { LATE: "Retard", ABSENT: "Absence", MANUAL_POINTAGE: "Pointage manuel", OFF_SCHEDULE: "Hors planning", OVERTIME: "Dépassement", CORRECTION: "Correction", POSSIBLE_DUPLICATE_FACE: "Doublon facial possible", UNKNOWN_FACE: "Visage inconnu", LIVENESS_FAILED: "Échec liveness" };
+  const state = { token: sessionStorage.getItem(TOKEN_KEY) || "", user: null, view: "board", page: 1, aPage: 1, board: null, seq: 0 };
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+  async function api(path, options) {
+    const opts = options || {};
+    const res = await fetch("/api" + path, {
+      method: opts.method || "GET",
+      headers: Object.assign({ "Content-Type": "application/json" }, state.token ? { Authorization: "Bearer " + state.token } : {}),
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+    if (res.status === 401) { logout(); throw new Error("Session expirée — reconnectez-vous."); }
+    if (!res.ok) {
+      const detail = data && data.detail;
+      throw new Error(typeof detail === "string" ? detail : (res.status === 403 ? "Accès refusé pour ce compte." : "Erreur " + res.status));
+    }
+    return data;
+  }
+
+  function toast(message, isError) {
+    const el = document.createElement("div");
+    el.className = "toast" + (isError ? " err" : "");
+    el.setAttribute("role", "status");
+    el.textContent = message;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  }
+
+  // ── Connexion ───────────────────────────────────────────────────────────────────────
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("login-btn"), err = $("login-error");
+    btn.disabled = true; err.classList.remove("show");
+    try {
+      const data = await api("/auth/login", { method: "POST", body: { username: $("login-user").value.trim(), password: $("login-pass").value } });
+      state.token = data.access_token;
+      sessionStorage.setItem(TOKEN_KEY, state.token);
+      await enter();
+    } catch (ex) {
+      err.textContent = ex.message; err.classList.add("show");
+    } finally { btn.disabled = false; }
+  });
+
+  function logout() {
+    state.token = ""; state.user = null;
+    sessionStorage.removeItem(TOKEN_KEY);
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  $("logout-btn").addEventListener("click", logout);
+
+  async function enter() {
+    state.user = await api("/auth/me");
+    const sites = await api("/attendance/sites");
+    $("brand-user").textContent = (state.user.full_name || state.user.username) + " · " + sites.length + " site(s) autorisé(s)";
+    $("f-site").innerHTML = '<option value="">Tous les sites autorisés</option>' + sites.map((s) => `<option value="${s.id}">${esc(s.name)}${s.society ? " — " + esc(s.society) : ""}</option>`).join("");
+    if (!$("f-date").value) $("f-date").value = today();
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    show(location.hash === "#/anomalies" ? "anomalies" : "board");
+  }
+
+  // ── Navigation ──────────────────────────────────────────────────────────────────────
+  document.querySelectorAll(".nav-btn").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
+  function show(view) {
+    state.view = view;
+    history.replaceState(null, "", "#/" + view);
+    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+    $("view-board").classList.toggle("hidden", view !== "board");
+    $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
+    return view === "board" ? loadBoard() : loadAnomalies();
+  }
+
+  // ── Situation du jour ───────────────────────────────────────────────────────────────
+  let searchTimer = null;
+  $("f-q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.page = 1; loadBoard(); }, 300); });
+  ["f-status", "f-source", "f-anomaly"].forEach((id) => $(id).addEventListener("change", () => { state.page = 1; loadBoard(); }));
+  ["f-site", "f-date"].forEach((id) => $(id).addEventListener("change", () => { state.page = 1; state.aPage = 1; show(state.view); }));
+  $("prev-btn").addEventListener("click", () => { if (state.page > 1) { state.page--; loadBoard(); } });
+  $("next-btn").addEventListener("click", () => { if (state.board && state.page < state.board.pages) { state.page++; loadBoard(); } });
+
+  function boardQuery() {
+    const p = new URLSearchParams({ presence_date: $("f-date").value || today(), page: state.page, page_size: 25 });
+    const pairs = { site_id: $("f-site").value, status: $("f-status").value, source: $("f-source").value, anomaly: $("f-anomaly").value, q: $("f-q").value.trim() };
+    Object.keys(pairs).forEach((k) => { if (pairs[k]) p.set(k, pairs[k]); });
+    return p.toString();
+  }
+
+  async function loadBoard() {
+    const seq = ++state.seq; // seule la dernière requête est affichée (filtres tapés vite)
+    $("board-state").innerHTML = '<div class="state info">Chargement…</div>';
+    try {
+      const data = await api("/attendance/board?" + boardQuery());
+      if (seq !== state.seq) return;
+      state.board = data;
+      renderBoard(data);
+      $("board-state").innerHTML = "";
+    } catch (ex) {
+      if (seq !== state.seq) return;
+      $("board-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`;
+      $("board-rows").innerHTML = "";
+    }
+  }
+
+  const KPI_DEF = [
+    ["expected", "Effectif prévu", "var(--navy)", ""], ["present", "Présents", "var(--green)", "present"],
+    ["absent", "Absents", "var(--red)", "absent"], ["not_pointed", "Non pointés", "var(--amber)", "non_pointe"],
+    ["late", "Retards", "var(--amber)", "anomaly:LATE"], ["conge", "Congés", "#0284c7", "conge"],
+    ["maladie", "Maladies", "#7c3aed", "maladie"], ["repos", "Repos", "#64748b", "repos"],
+    ["anomalies", "Anomalies", "var(--red)", "anomaly:any"], ["incomplete", "Incomplets", "#b45309", ""],
+  ];
+
+  function renderBoard(data) {
+    const d = new Date(data.date + "T00:00:00");
+    $("board-sub").textContent = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) + ($("f-site").value ? " · " + $("f-site").selectedOptions[0].textContent : " · tous les sites autorisés");
+    const activeStatus = $("f-status").value, activeAnomaly = $("f-anomaly").value;
+    $("kpis").innerHTML = KPI_DEF.map(([key, label, color, filter]) => {
+      const active = filter && ((filter.startsWith("anomaly:") && activeAnomaly === filter.slice(8)) || filter === activeStatus);
+      return `<button type="button" class="kpi${active ? " active" : ""}" style="--kpi:${color}" data-filter="${filter}"><span>${label}</span><strong>${data.kpi[key] ?? 0}</strong></button>`;
+    }).join("");
+    $("kpis").querySelectorAll(".kpi").forEach((k) => k.addEventListener("click", () => {
+      const f = k.dataset.filter; if (!f) return;
+      if (f.startsWith("anomaly:")) { $("f-anomaly").value = $("f-anomaly").value === f.slice(8) ? "" : f.slice(8); $("f-status").value = ""; }
+      else { $("f-status").value = $("f-status").value === f ? "" : f; $("f-anomaly").value = ""; }
+      state.page = 1; loadBoard();
+    }));
+    const rows = data.items;
+    $("board-rows").innerHTML = rows.length ? rows.map((r) => {
+      const plan = r.planning.known ? (r.planning.working === false ? "Repos" : (r.planning.start_time ? r.planning.start_time + "–" + r.planning.end_time : esc(r.planning.period || "Travail"))) : "—";
+      const anomalies = r.anomalies.map((a) => `<span class="pill sev-${esc(a.severity)}" title="${esc(a.message)}">${esc(ANOMALY_LABEL[a.type] || a.type)}</span>`).join(" ") || "—";
+      return `<tr>
+        <td class="who"><b>${esc(r.nom)}</b><small>${esc(r.matricule)}</small></td>
+        <td>${esc(r.fonction) || "—"}</td><td>${esc(r.site)}</td><td>${plan}</td>
+        <td>${esc(r.arrival) || "—"}</td><td>${esc(r.departure) || "—"}${r.incomplete ? ' <span class="pill sev-warning">Incomplet</span>' : ""}</td>
+        <td><span class="pill st-${esc(r.status)}">${esc(STATUS_LABEL[r.status] || r.status)}</span>${r.closed ? ' <span class="pill st-repos" title="Journée clôturée">🔒</span>' : ""}</td>
+        <td class="src">${esc(SOURCE_LABEL[r.source] || r.source) || "—"}</td><td>${anomalies}</td>
+        <td><div class="row-actions">${r.presence_id ? `<button class="link" type="button" data-correct="${r.presence_id}">Corriger</button>` : ""}</div></td>
+      </tr>`;
+    }).join("") : '<tr><td colspan="10" class="empty">Aucun employé ne correspond à ces critères.</td></tr>';
+    $("board-rows").querySelectorAll("[data-correct]").forEach((b) => b.addEventListener("click", () => openCorrection(rows.find((r) => String(r.presence_id) === b.dataset.correct))));
+    $("board-count").textContent = `${data.total} employé(s) · page ${data.page}/${data.pages}`;
+    $("prev-btn").disabled = data.page <= 1; $("next-btn").disabled = data.page >= data.pages;
+    const count = $("anomaly-count");
+    count.textContent = data.kpi.anomalies; count.classList.toggle("hidden", !data.kpi.anomalies);
+  }
+
+  // ── Correction ──────────────────────────────────────────────────────────────────────
+  function modal(html) { $("modal-host").innerHTML = `<div class="modal-bg" role="dialog" aria-modal="true"><div class="modal">${html}</div></div>`; return $("modal-host").querySelector(".modal"); }
+  function closeModal() { $("modal-host").innerHTML = ""; }
+
+  function openCorrection(row) {
+    if (!row) return;
+    const m = modal(`<h3>Corriger le pointage</h3><div class="sub">${esc(row.nom)} · ${esc(row.matricule)} · ${esc(row.site)}${row.closed ? " · <b>journée clôturée</b> (validation requise)" : ""}</div>
+      <form id="corr-form">
+        <label for="c-status">Statut</label><select id="c-status">${Object.keys(STATUS_LABEL).filter((k) => k !== "non_pointe").map((k) => `<option value="${k}"${k === row.status ? " selected" : ""}>${STATUS_LABEL[k]}</option>`).join("")}</select>
+        <div class="grid2"><div><label for="c-arr">Entrée</label><input id="c-arr" type="time" value="${esc(row.arrival)}"></div><div><label for="c-dep">Sortie</label><input id="c-dep" type="time" value="${esc(row.departure)}"></div></div>
+        <label for="c-reason">Motif (obligatoire)</label><textarea id="c-reason" required minlength="3" placeholder="Ex. : oubli de badge confirmé par le chef de poste"></textarea>
+        <div class="error" id="c-error" role="alert"></div>
+        <div class="modal-actions"><button class="secondary" type="button" id="c-cancel">Annuler</button><button class="primary" type="submit" id="c-save">Enregistrer la correction</button></div>
+      </form>`);
+    m.querySelector("#c-cancel").addEventListener("click", closeModal);
+    m.querySelector("#corr-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const reason = m.querySelector("#c-reason").value.trim(), err = m.querySelector("#c-error"), save = m.querySelector("#c-save");
+      if (reason.length < 3) { err.textContent = "Le motif est obligatoire."; err.classList.add("show"); return; }
+      const body = { reason };
+      const status = m.querySelector("#c-status").value, arr = m.querySelector("#c-arr").value, dep = m.querySelector("#c-dep").value;
+      if (status !== row.status) body.status = status;
+      if (arr !== (row.arrival || "")) body.arrival_time = arr || null;
+      if (dep !== (row.departure || "")) body.departure_time = dep || null;
+      if (Object.keys(body).length === 1) { err.textContent = "Aucune valeur modifiée."; err.classList.add("show"); return; }
+      save.disabled = true;
+      try { await api("/attendance/presences/" + row.presence_id, { method: "PATCH", body }); closeModal(); toast("Correction enregistrée et tracée"); loadBoard(); }
+      catch (ex) { err.textContent = ex.message; err.classList.add("show"); save.disabled = false; }
+    });
+  }
+
+  // ── Clôture ─────────────────────────────────────────────────────────────────────────
+  $("close-btn").addEventListener("click", async () => {
+    const day = $("f-date").value || today(), siteId = $("f-site").value;
+    let open = [];
+    try {
+      const q = new URLSearchParams({ date_from: day, date_to: day, status: "OPEN", page_size: 200 });
+      if (siteId) q.set("site_id", siteId);
+      open = (await api("/attendance/anomalies?" + q)).items;
+    } catch (ex) { toast(ex.message, true); return; }
+    const m = modal(`<h3>Clôturer le ${esc(new Date(day + "T00:00:00").toLocaleDateString("fr-FR"))}</h3>
+      <div class="sub">${siteId ? esc($("f-site").selectedOptions[0].textContent) : "Tous les sites autorisés"}. Après clôture, la paie peut consommer la période ; toute modification passera par une correction avec validation.</div>
+      ${open.length ? `<p><b>${open.length} anomalie(s) ouverte(s)</b> — elles resteront ouvertes et visibles :</p><ul class="anomaly-list">${open.map((a) => `<li><span class="pill sev-${esc(a.severity)}">${esc(ANOMALY_LABEL[a.type] || a.type)}</span> ${esc(a.nom)} — ${esc(a.message)}</li>`).join("")}</ul>` : "<p>Aucune anomalie ouverte.</p>"}
+      <div class="error" id="cl-error" role="alert"></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="cl-cancel">Annuler</button><button class="primary" type="button" id="cl-ok">Confirmer la clôture</button></div>`);
+    m.querySelector("#cl-cancel").addEventListener("click", closeModal);
+    m.querySelector("#cl-ok").addEventListener("click", async (ev) => {
+      ev.target.disabled = true;
+      try {
+        const res = await api("/attendance/close", { method: "POST", body: { presence_date: day, site_id: siteId ? Number(siteId) : null } });
+        closeModal(); toast(res.closed + " journée(s) clôturée(s)"); loadBoard();
+      } catch (ex) { const err = m.querySelector("#cl-error"); err.textContent = ex.message; err.classList.add("show"); ev.target.disabled = false; }
+    });
+  });
+
+  // ── Anomalies ───────────────────────────────────────────────────────────────────────
+  $("a-status").addEventListener("change", () => { state.aPage = 1; loadAnomalies(); });
+  $("a-prev").addEventListener("click", () => { if (state.aPage > 1) { state.aPage--; loadAnomalies(); } });
+  $("a-next").addEventListener("click", () => { state.aPage++; loadAnomalies(); });
+
+  async function loadAnomalies() {
+    $("anomaly-state").innerHTML = '<div class="state info">Chargement…</div>';
+    const q = new URLSearchParams({ page: state.aPage, page_size: 25 });
+    if ($("a-status").value) q.set("status", $("a-status").value); else q.set("status", "");
+    if ($("f-site").value) q.set("site_id", $("f-site").value);
+    try {
+      const data = await api("/attendance/anomalies?" + q);
+      $("anomaly-state").innerHTML = "";
+      $("anomaly-rows").innerHTML = data.items.length ? data.items.map((a) => `<tr>
+        <td>${esc(a.date)}</td><td class="who"><b>${esc(a.nom) || "—"}</b><small>${esc(a.matricule)}</small></td><td>${esc(a.site) || "—"}</td>
+        <td><span class="pill sev-${esc(a.severity)}">${esc(ANOMALY_LABEL[a.type] || a.type)}</span></td><td>${esc(a.message)}${a.resolution ? `<br><small>↳ ${esc(a.resolution)} — ${esc(a.resolved_by)}</small>` : ""}</td>
+        <td>${a.status === "OPEN" ? "Ouverte" : a.status === "RESOLVED" ? "Résolue" : "Classée"}</td>
+        <td><div class="row-actions">${a.status === "OPEN" ? `<button class="link" type="button" data-resolve="${a.id}">Traiter</button>` : ""}</div></td></tr>`).join("")
+        : '<tr><td colspan="7" class="empty">Aucune anomalie.</td></tr>';
+      $("anomaly-rows").querySelectorAll("[data-resolve]").forEach((b) => b.addEventListener("click", () => openResolve(data.items.find((a) => String(a.id) === b.dataset.resolve))));
+      $("anomaly-total").textContent = `${data.total} anomalie(s) · page ${data.page}/${data.pages}`;
+      $("a-prev").disabled = data.page <= 1; $("a-next").disabled = data.page >= data.pages;
+    } catch (ex) { $("anomaly-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`; }
+  }
+
+  function openResolve(a) {
+    const m = modal(`<h3>Traiter l'anomalie</h3><div class="sub">${esc(ANOMALY_LABEL[a.type] || a.type)} · ${esc(a.nom)} · ${esc(a.date)}</div><p>${esc(a.message)}</p>
+      <form id="r-form"><label for="r-status">Décision</label><select id="r-status"><option value="RESOLVED">Résolue</option><option value="DISMISSED">Classée sans suite</option></select>
+      <label for="r-text">Résolution (obligatoire)</label><textarea id="r-text" required minlength="3"></textarea><div class="error" id="r-error" role="alert"></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="r-cancel">Annuler</button><button class="primary" type="submit">Enregistrer</button></div></form>`);
+    m.querySelector("#r-cancel").addEventListener("click", closeModal);
+    m.querySelector("#r-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = m.querySelector("#r-text").value.trim(), err = m.querySelector("#r-error");
+      if (text.length < 3) { err.textContent = "La résolution est obligatoire."; err.classList.add("show"); return; }
+      try { await api("/attendance/anomalies/" + a.id, { method: "PATCH", body: { status: m.querySelector("#r-status").value, resolution: text } }); closeModal(); toast("Anomalie traitée"); loadAnomalies(); }
+      catch (ex) { err.textContent = ex.message; err.classList.add("show"); }
+    });
+  }
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+  if (state.token) enter().catch(() => logout());
+})();
+</script>
+</body>
+</html>
