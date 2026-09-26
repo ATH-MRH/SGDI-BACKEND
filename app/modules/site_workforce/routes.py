@@ -33,6 +33,8 @@ from app.modules.site_workforce.schemas import (
     ReclamationRespond,
     TransmissionCreate,
 )
+from app.modules.attendance import core as attendance_core
+from app.modules.attendance.models import SOURCE_SITE_WORKFORCE
 from app.modules.site_workforce.security import ensure_employee_in_site, resolve_scoped_site, site_employee_ids
 
 router = APIRouter(dependencies=[Depends(current_user)])
@@ -178,28 +180,20 @@ def upsert_attendance(payload: AttendanceUpsert, request: Request, db: Session =
                        site: Site = Depends(resolve_scoped_site), user: User = Depends(current_user)):
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Statut de pointage invalide")
-    ensure_employee_in_site(db, site.id, payload.employee_id)
+    employee = ensure_employee_in_site(db, site.id, payload.employee_id)
     existing = db.execute(select(DailyPresence).where(
-        DailyPresence.site_id == site.id, DailyPresence.employee_id == payload.employee_id,
-        DailyPresence.presence_date == payload.presence_date,
-    )).scalars().first()
-    if existing and existing.closed_at is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Journée clôturée — utiliser la correction post-clôture")
+        DailyPresence.employee_id == payload.employee_id, DailyPresence.presence_date == payload.presence_date,
+    ).order_by(DailyPresence.id.desc())).scalars().first()
+    if existing is not None and existing.site_id not in (None, site.id):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Journée déjà pointée sur un autre site")
     old_state = {"status": existing.status} if existing else None
-    if existing:
-        existing.status = payload.status
-        existing.arrival_time = payload.arrival_time
-        existing.departure_time = payload.departure_time
-        existing.notes = payload.notes
-        row = existing
-    else:
-        row = DailyPresence(
-            presence_date=payload.presence_date, employee_id=payload.employee_id, site_id=site.id,
-            status=payload.status, arrival_time=payload.arrival_time, departure_time=payload.departure_time,
-            notes=payload.notes, generated=0,
-        )
-        db.add(row)
-    db.flush()
+    # Écriture via Attendance Core (seul point d'écriture de la présence) ; l'audit métier
+    # Site Workforce ci-dessous reste celui du module.
+    row = attendance_core.record_day_status(
+        db, employee=employee, site_id=site.id, day=payload.presence_date, status=payload.status,
+        source=SOURCE_SITE_WORKFORCE, actor=user, arrival_time=payload.arrival_time,
+        departure_time=payload.departure_time, notes=payload.notes, request=request, audit=False,
+    )
     if payload.status == "absent" and (not old_state or old_state.get("status") != "absent"):
         _emit(db, site, notif_type="absence_sans_justificatif", message=f"Absence non justifiée — employé #{payload.employee_id}", level="warn", employee_id=payload.employee_id)
     _audit(db, request, user, site, action="attendance.upsert", resource="attendance", resource_id=row.id, old_state=old_state, new_state={"status": payload.status})
@@ -217,10 +211,8 @@ def close_attendance(presence_date: date, request: Request, db: Session = Depend
     )).scalars().all()
     pointed_ids = {r.employee_id for r in rows}
     missing = [eid for eid in ids if eid not in pointed_ids]
-    now = datetime.utcnow()
-    for row in rows:
-        if row.closed_at is None:
-            row.closed_at = now
+    attendance_core.close_day(db, day=presence_date, site_ids=[site.id], actor=user,
+                              source=SOURCE_SITE_WORKFORCE, request=request)
     if missing:
         _emit(db, site, notif_type="pointage_incomplet", message=f"{len(missing)} employé(s) non pointé(s) le {presence_date.isoformat()}", level="warn")
     _audit(db, request, user, site, action="attendance.close", resource="attendance_day", resource_id=0, new_state={"date": presence_date.isoformat(), "missing": len(missing)})
@@ -238,8 +230,11 @@ def correct_attendance(presence_id: int, payload: AttendanceCorrection, request:
     if not row or row.site_id != site.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pointage introuvable")
     old_state = {"status": row.status, "notes": row.notes}
-    row.status = payload.status
-    row.notes = payload.notes
+    # Correction post-clôture autorisée ici : l'action "validate" a été exigée ci-dessus.
+    attendance_core.correct_presence(
+        db, row=row, reason=payload.reason, source=SOURCE_SITE_WORKFORCE, actor=user, allow_closed=True,
+        status=payload.status, notes=payload.notes, request=request, audit=False,
+    )
     _audit(db, request, user, site, action="attendance.correct", resource="attendance", resource_id=row.id,
            old_state=old_state, new_state={"status": payload.status, "reason": payload.reason})
     db.commit()

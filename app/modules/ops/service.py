@@ -252,15 +252,6 @@ def generate_daily_presence(db: Session, presence_date: date):
     return {"generated": created, "date": presence_date}
 
 
-def close_daily_presence(db: Session, presence_date: date):
-    rows = db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date)).scalars().all()
-    now = datetime.utcnow()
-    for row in rows:
-        row.closed_at = now
-    db.commit()
-    return {"closed": len(rows), "date": presence_date}
-
-
 def rotation_for_date(rotation_system: str | None, group_code: str | None, work_date: date, base_date: date | None = None) -> dict[str, Any]:
     system = rotation_system or "24/48"
     groups = ["A", "B", "C", "D"]

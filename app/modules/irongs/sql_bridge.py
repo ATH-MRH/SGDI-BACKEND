@@ -1090,7 +1090,10 @@ def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
     if name in {"agents", "employees"}: return upsert_employee(db, item)
     if name == "sites": return upsert_site(db, item)
     if name == "clients": return upsert_client(db, item)
-    if name == "feuillePresence": return upsert_presence(db, item, name)
+    if name == "feuillePresence":
+        # Via Attendance Core : refus des journées clôturées + traçabilité.
+        from app.modules.attendance.core import legacy_upsert_presence
+        return legacy_upsert_presence(db, item, name)
     if name in FINANCE_MODELS: return upsert_finance(db, FINANCE_MODELS[name], item, name)
     if name in STOCK_MODELS: return upsert_stock(db, STOCK_MODELS[name], item, name)
     if name in {"assignments", "affectations"}:
@@ -1129,5 +1132,8 @@ def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
         row = db.execute(select(model).where(model.external_id == str(item_id))).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Élément SQL introuvable")
+    if model is DailyPresence:
+        from app.modules.attendance.core import legacy_delete_presence
+        legacy_delete_presence(db, row)
     db.delete(row); db.commit()
     return {"deleted": item_id, "storage": "sql"}

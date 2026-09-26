@@ -10,6 +10,33 @@ from zoneinfo import ZoneInfo
 
 from app.modules.irongs import service as irongs_service
 
+
+def _seed_scan(db, row):
+    """Prépare un événement historique dans le journal Attendance Core (remplace l'ancienne
+    collection JSON attendanceQrScans), avec la même correspondance que la migration
+    20260927_0001. Crée l'employé s'il n'existe pas (clé étrangère)."""
+    from app.modules.attendance.models import AttendanceEvent
+    from app.modules.drh.models import Employee
+
+    employee_id = int(row["employeeId"])
+    if db.get(Employee, employee_id) is None:
+        db.add(Employee(id=employee_id, code=row.get("matricule") or f"EMP{employee_id}",
+                        first_name="Test", last_name=row.get("agentName") or "Seed", status="actif"))
+        db.flush()
+    scanned = datetime.fromisoformat(str(row["scannedAt"]).replace("Z", "+00:00"))
+    if scanned.tzinfo is None:
+        scanned = scanned.replace(tzinfo=timezone.utc)
+    db.add(AttendanceEvent(
+        employee_id=employee_id, site_id=row.get("siteId"),
+        presence_date=scanned.astimezone(ZoneInfo("Africa/Algiers")).date(),
+        occurred_at=scanned.astimezone(timezone.utc).replace(tzinfo=None),
+        event_type="ARRIVAL" if row["action"] == "arrivee" else "DEPARTURE",
+        source="QR", idempotency_key=row.get("nonce") or row["id"], cycle=row.get("cycle"),
+        actor_label=row.get("scannedBy"),
+        data={k: row[k] for k in ("matricule", "agentName") if row.get(k)} | {"siteName": row.get("site") or ""},
+    ))
+    db.commit()
+
 SOCIETY = "Iron Global Securite"
 
 
@@ -89,7 +116,8 @@ def test_manual_search_too_short_returns_empty(client, auth_headers):
     assert r.json() == []
 
 
-def test_manual_scan_toggles_arrival_then_departure(client, auth_headers):
+def test_manual_scan_toggles_arrival_then_departure(client, auth_headers, monkeypatch):
+    from app.modules.attendance import core as attendance_core
     emp_id = _emp(client, auth_headers, "PTM03", fn="Amine", ln="Ouali")
     r1 = client.post(
         "/api/portal/attendance-manual/scan",
@@ -112,6 +140,9 @@ def test_manual_scan_toggles_arrival_then_departure(client, auth_headers):
     assert "Retard signalé au pointeur" in row["observations"]
     assert "ARRIVÉE" in row["observations"]
 
+    # Départ réel 2 h plus tard (un second scan immédiat serait un rebond, voir le test suivant).
+    real_now = attendance_core._now_local
+    monkeypatch.setattr(attendance_core, "_now_local", lambda: real_now() + timedelta(hours=2))
     r2 = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={"employee_id": emp_id})
     assert r2.status_code == 201, r2.text
     body2 = r2.json()
@@ -120,6 +151,21 @@ def test_manual_scan_toggles_arrival_then_departure(client, auth_headers):
     assert body2["departure_time"] == body2["heure"]
     assert body2["duration_minutes"] >= 0
     assert " h " in body2["duration_label"]
+
+
+def test_immediate_second_scan_is_a_duplicate_not_a_departure(client, auth_headers, db):
+    """Anti-rebond : double clic, double scan ou visage resté devant la caméra ne produisent
+    jamais arrivée puis départ — le second pointage est rendu « déjà enregistré », sans effet."""
+    from sqlalchemy import func, select
+    from app.modules.attendance.models import AttendanceEvent
+    emp_id = _emp(client, auth_headers, "PTM04", fn="Rebond", ln="Test")
+    r1 = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={"employee_id": emp_id})
+    r2 = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={"employee_id": emp_id})
+    assert r1.status_code == 201 and r2.status_code == 201, r2.text
+    assert r1.json()["action"] == "arrivee" and r1.json()["duplicate"] is False
+    assert r2.json()["duplicate"] is True and r2.json()["action"] == "arrivee"
+    assert r2.json()["event_id"] == r1.json()["event_id"]
+    assert db.scalar(select(func.count(AttendanceEvent.id)).where(AttendanceEvent.employee_id == emp_id)) == 1
 
 
 def test_manual_scan_unknown_employee_404(client, auth_headers):
@@ -173,7 +219,7 @@ def test_attendance_feed_since_filters_older_events(client, auth_headers):
 
 def test_attendance_feed_keeps_only_last_48_hours(client, auth_headers, db):
     old_id = "attendance-old-49h"
-    irongs_service.create_item(db, "attendanceQrScans", {
+    _seed_scan(db, {
         "id": old_id, "nonce": old_id, "employeeId": 999999,
         "matricule": "OLD49", "agentName": "Ancien Passage",
         "action": "arrivee", "cycle": 1,
@@ -186,7 +232,7 @@ def test_attendance_feed_keeps_only_last_48_hours(client, auth_headers, db):
 
 def test_attendance_feed_can_supply_eight_days_to_planning_engine(client, auth_headers, db):
     event_id = "attendance-learned-seven-days"
-    irongs_service.create_item(db, "attendanceQrScans", {
+    _seed_scan(db, {
         "id": event_id, "nonce": event_id, "employeeId": 999998,
         "matricule": "LEARN7", "agentName": "Planning Appris",
         "action": "arrivee", "cycle": 1,
@@ -200,7 +246,7 @@ def test_attendance_feed_can_supply_eight_days_to_planning_engine(client, auth_h
 def test_attendance_feed_restores_missing_employee_identity(client, auth_headers, db):
     emp_id = _emp(client, auth_headers, "PTF-ID", fn="Nora", ln="Identite")
     event_id = "attendance-missing-identity"
-    irongs_service.create_item(db, "attendanceQrScans", {
+    _seed_scan(db, {
         "id": event_id, "nonce": event_id, "employeeId": emp_id,
         "action": "arrivee", "cycle": 1,
         "scannedAt": datetime.now(timezone.utc).isoformat(),
@@ -643,7 +689,7 @@ def test_scenario_j_site_dhl_type_etat_actuel_donne_dc_unconfigured(client, auth
 
 
 def _scan_event(db, *, event_id, emp_id, matricule, name, action, hours_ago, site="", site_id=None):
-    irongs_service.create_item(db, "attendanceQrScans", {
+    _seed_scan(db, {
         "id": event_id, "nonce": event_id, "employeeId": emp_id,
         "matricule": matricule, "agentName": name,
         "action": action, "cycle": 1,

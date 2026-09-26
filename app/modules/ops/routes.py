@@ -1,7 +1,7 @@
 from datetime import date
 import unicodedata
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -482,8 +482,23 @@ def pointage_standby(presence_date: date | None = None, society: str | None = No
 
 
 @router.post("/pointage/daily/close")
-def close_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return service.close_daily_presence(db, presence_date or date.today())
+def close_daily(request: Request, presence_date: date | None = None, site_id: int | None = None,
+                db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Clôture limitée au périmètre du compte (sites autorisés ou société) — auparavant, toute
+    la journée de TOUTES les sociétés était clôturée. Via Attendance Core (anomalies ouvertes
+    renvoyées, jamais masquées)."""
+    from app.modules.attendance import core as attendance_core
+    from app.modules.attendance.models import SOURCE_SYSTEM
+
+    if site_id is not None:
+        _ensure_site_allowed(db, user, site_id)
+        site_ids: list[int] | None = [site_id]
+    else:
+        site_ids = _allowed_assignment_site_ids(db, user)
+    result = attendance_core.close_day(db, day=presence_date or date.today(), site_ids=site_ids, actor=user,
+                                       source=SOURCE_SYSTEM, request=request)
+    db.commit()
+    return result
 
 
 @router.get("/pointage/daily/page")
@@ -503,16 +518,72 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
     return service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
 
 
+_PLANNING_FIELDS = ("group_code", "relief_time", "rotation_system", "rotation_group", "rotation_period",
+                    "faction", "recovery", "standby")
+
+
+def _presence_in_scope(db: Session, user: User, row: DailyPresence) -> None:
+    if row.site_id is not None:
+        _ensure_site_allowed(db, user, row.site_id)
+        return
+    allowed = _allowed_assignment_site_ids(db, user)
+    if allowed is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site non autorisé")
+
+
 @router.post("/pointage/daily", response_model=DailyPresenceOut)
-def create_daily_presence(payload: DailyPresenceCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if hasattr(payload, "site_id") and payload.site_id:
+def create_daily_presence(payload: DailyPresenceCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Saisie OPS via Attendance Core : une seule journée par employé (mise à jour si elle
+    existe déjà), refusée si la journée est clôturée, tracée et auditée."""
+    from app.modules.attendance import core as attendance_core
+    from app.modules.attendance.models import SOURCE_MANUAL
+
+    if payload.site_id:
         _ensure_site_allowed(db, user, payload.site_id)
-    return service.create_row(db, DailyPresence, payload)
+    employee = db.get(Employee, payload.employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    row = attendance_core.record_day_status(
+        db, employee=employee, site_id=payload.site_id, day=payload.presence_date, status=payload.status,
+        source=SOURCE_MANUAL, actor=user, arrival_time=payload.arrival_time,
+        departure_time=payload.departure_time, notes=payload.notes, request=request,
+    )
+    for field in _PLANNING_FIELDS:
+        value = getattr(payload, field, None)
+        if value is not None:
+            setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut)
-def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return service.update_row(db, DailyPresence, presence_id, payload)
+def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Modification d'une journée OUVERTE, dans le périmètre du compte, tracée (événement
+    CORRECTION + audit). Une journée clôturée — déjà lisible par la paie — n'est jamais
+    modifiée ici : correction post-clôture avec motif via /api/attendance."""
+    from app.modules.attendance import core as attendance_core
+    from app.modules.attendance.models import SOURCE_MANUAL
+
+    row = db.get(DailyPresence, presence_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    _presence_in_scope(db, user, row)
+    if row.closed_at is not None:
+        raise HTTPException(status_code=409, detail="Journée clôturée — correction post-clôture avec motif requise")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("site_id") is not None:
+        _ensure_site_allowed(db, user, changes["site_id"])
+    core_fields = {k: changes[k] for k in ("status", "arrival_time", "departure_time", "notes") if k in changes}
+    if core_fields:
+        attendance_core.correct_presence(db, row=row, reason="Modification OPS (journée ouverte)", source=SOURCE_MANUAL,
+                                         actor=user, allow_closed=False, request=request, **core_fields)
+    for field, value in changes.items():
+        if field not in core_fields:
+            setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @router.get("/events/page")

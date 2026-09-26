@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     startup_maintenance_enabled: bool = False
     public_employee_pages_require_token: bool = True
     max_photo_upload_bytes: int = 5_000_000
+    # Attendance Core — anti-rebond : un nouvel événement du même employé moins de N secondes
+    # après le précédent (double scan, visage resté devant la caméra, retry réseau) est rendu
+    # comme « déjà enregistré », sans effet. Un vrai départ reste possible au-delà.
+    attendance_min_event_gap_seconds: int = 300
+    # Tolérance métier avant qu'une arrivée soit signalée en retard par rapport à l'horaire
+    # prévu du planning (rotation). Réglage d'exploitation, pas une règle légale.
+    attendance_late_tolerance_minutes: int = 15
     # Les candidatures du portail public arrivent dans cette file de recrutement.
     public_candidate_default_society: str = "IRON GLOBAL SÉCURITÉ"
     admin_system_password: str | None = None

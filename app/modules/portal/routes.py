@@ -23,10 +23,13 @@ from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs import service
 from app.modules.irongs.models import Position
-from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
+from app.modules.irongs.sql_bridge import employee_by_ref
 from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids, _site_society
 
+
+from app.modules.attendance import core as attendance_core
+from app.modules.attendance.models import SOURCE_MANUAL, SOURCE_PORTAL_GPS, SOURCE_QR
 
 router = APIRouter()
 
@@ -36,37 +39,9 @@ ATTENDANCE_QR_REFRESH_SECONDS = 10
 # application is backgrounded. Keep a short server-side grace period while the
 # displayed QR is still replaced every ten seconds and remains single-use.
 ATTENDANCE_QR_TTL_SECONDS = 120
-ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
-# Un cycle non fermé ne doit pas rester actif indéfiniment. La limite standard
-# couvre les postes de nuit ; les sites en rotation 24 h bénéficient d'une
-# fenêtre plus large afin que le départ du lendemain ferme bien leur arrivée.
-ATTENDANCE_OPEN_CYCLE_MAX = timedelta(hours=16)
-ATTENDANCE_OPEN_24H_CYCLE_MAX = timedelta(hours=30)
-
-
-def _authorized_work_minutes(db: Session, assignment: Assignment | None, site: Site | None, work_date: Any) -> int:
-    """Durée autorisée issue du cycle configuré, avec repli sur l'ancien régime du site."""
-    if assignment and assignment.rotation_id:
-        rotation = db.get(RotationTemplate, assignment.rotation_id)
-        days = rotation.cycle_days if rotation and isinstance(rotation.cycle_days, list) else []
-        if rotation and days:
-            offsets = rotation.group_offsets if isinstance(rotation.group_offsets, dict) else {}
-            try: offset = int(offsets.get((assignment.group_code or "A").upper(), 0))
-            except (TypeError, ValueError): offset = 0
-            index = ((work_date - assignment.start_date).days + offset) % max(1, min(rotation.cycle_length, len(days)))
-            day = days[index] if isinstance(days[index], dict) else {}
-            start, end = str(day.get("start_time") or ""), str(day.get("end_time") or "")
-            try:
-                start_minutes = int(start[:2]) * 60 + int(start[3:5])
-                end_minutes = int(end[:2]) * 60 + int(end[3:5])
-                return (end_minutes - start_minutes) % (24 * 60) or 24 * 60
-            except (TypeError, ValueError):
-                pass
-    system = _clean_text(getattr(site, "rotation_system", "") if site else "").lower()
-    if "24/48" in system: return 24 * 60
-    if "3x8" in system: return 8 * 60
-    explicit = re.search(r"(?:^|\D)(8|12|16|24)\s*h?(?:\D|$)", system)
-    return int(explicit.group(1)) * 60 if explicit else 8 * 60
+# Règles de bascule arrivée/départ et durée autorisée : implémentation unique dans
+# Attendance Core (app/modules/attendance/core.py). Alias conservé pour les appelants.
+_authorized_work_minutes = attendance_core.authorized_work_minutes
 
 
 def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Employee) -> None:
@@ -610,47 +585,19 @@ def create_pointage(payload: dict[str, Any], db: Session = Depends(get_db), auth
     if not pointage.get("id"):
         pointage.pop("id", None)
     saved = service.create_item(db, "pointagesPortail", pointage)
-    # Write instantly to feuillePresence so the attendance sheet updates in real time
+    # Présence via Attendance Core : l'arrivée/le départ découle de l'état réel de la journée,
+    # jamais de l'action envoyée par le client.
     employee = employee_by_ref(db, pointage["matricule"])
     if employee:
-        tz = ZoneInfo("Africa/Algiers")
-        now = datetime.now(tz)
-        today_str = pointage.get("date") or now.strftime("%Y-%m-%d")
-        heure = pointage.get("heure") or now.strftime("%H:%M")
-        action = pointage.get("action") or "arrivee"
-        assignment = db.execute(
-            select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
-        ).scalars().first()
-        site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
-        site_name = (site.name or site.indicatif or "") if site else ""
-        presence_item: dict[str, Any] = {
-            "date": today_str,
-            "agentId": str(employee.id),
-            "employee_id": employee.id,
-            "agentBackendId": employee.id,
-            "matricule": employee.code,
-            "societe": employee.society or pointage.get("societe") or "",
-            "agentName": " ".join([employee.last_name or "", employee.first_name or ""]).strip(),
-            "statut": "present",
-            "status": "present",
-            "source": "portail-rh-gps",
-        }
-        if action == "arrivee":
-            presence_item["heureArrivee"] = heure
-        else:
-            presence_item["heureDepart"] = heure
+        gps = {}
         if position.get("lat") and position.get("lng"):
-            presence_item["posGpsLat"] = position["lat"]
-            presence_item["posGpsLng"] = position["lng"]
+            gps = {"posGpsLat": position["lat"], "posGpsLng": position["lng"]}
             if position.get("accuracy"):
-                presence_item["posGpsAccuracy"] = position["accuracy"]
-        if assignment:
-            presence_item["siteBackendId"] = assignment.site_id
-            presence_item["siteId"] = assignment.site_id
-            presence_item["siteName"] = site_name
-            presence_item["groupe"] = assignment.group_code or ""
-        upsert_presence(db, presence_item, "feuillePresence")
-        db.commit()
+                gps["posGpsAccuracy"] = position["accuracy"]
+        attendance_core.record_scan(
+            db, employee=employee, source=SOURCE_PORTAL_GPS, actor=None,
+            idempotency_key=(f"portal-{pointage['ref']}" if pointage.get("ref") else None), extra=gps,
+        )
     return saved
 
 
@@ -690,77 +637,11 @@ def create_pointage_qr(payload: dict[str, Any], db: Session = Depends(get_db), a
     employee = employee_by_ref(db, matricule)
     if not employee:
         raise HTTPException(status_code=404, detail=f"Employé introuvable: {matricule}")
-    tz = ZoneInfo("Africa/Algiers")
-    now = datetime.now(tz)
-    heure = now.strftime("%H:%M")
-    today_str = now.strftime("%Y-%m-%d")
-    existing = db.execute(
-        select(DailyPresence).where(
-            DailyPresence.presence_date == now.date(),
-            DailyPresence.employee_id == employee.id,
-        ).order_by(DailyPresence.id.desc())
-    ).scalars().first()
-    existing_legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
-    if existing and (existing.arrival_time == "P" or existing_legacy.get("code") == "P" or existing_legacy.get("heureArrivee") == "P"):
-        scan_time = existing_legacy.get("scanArrivee") or existing.arrival_time or heure
-        return {
-            "success": True,
-            "duplicate": True,
-            "message": "Déjà enregistré",
-            "heure": scan_time,
-            "date": today_str,
-            "employee": {
-                "id": employee.id,
-                "matricule": employee.code,
-                "nom": employee.last_name,
-                "prenom": employee.first_name,
-            },
-            "record": upsert_presence(db, {"backendId": existing.id, "date": today_str, "employee_id": employee.id}, "feuillePresence"),
-        }
-    assignment = db.execute(
-        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
-    ).scalars().first()
-    site_name = ""
-    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
-    if site:
-        site_name = site.name or site.indicatif or ""
-    item: dict[str, Any] = {
-        "date": today_str,
-        "agentId": str(employee.id),
-        "employee_id": employee.id,
-        "agentBackendId": employee.id,
-        "matricule": employee.code,
-        "agentName": " ".join([employee.last_name or "", employee.first_name or ""]).strip(),
-        "statut": "present",
-        "status": "present",
-        "code": "P",
-        "heureArrivee": "P",
-        "scanArrivee": heure,
-        "valide": True,
-        "valideAt": now.isoformat(),
-        "source": "portail-rh-qr",
-    }
-    if assignment:
-        item["siteBackendId"] = assignment.site_id
-        item["siteId"] = assignment.site_id
-        item["siteName"] = site_name
-        item["groupe"] = assignment.group_code or ""
-    result = upsert_presence(db, item, "feuillePresence")
-    db.commit()
+    result = attendance_core.record_scan(db, employee=employee, source=SOURCE_QR, actor=None, idempotency_key=None)
     return {
-        "success": True,
-        "duplicate": False,
-        "message": "PRÉSENT",
-        "heure": heure,
-        "date": today_str,
-        "site": site_name,
-        "employee": {
-            "id": employee.id,
-            "matricule": employee.code,
-            "nom": employee.last_name,
-            "prenom": employee.first_name,
-        },
-        "record": result,
+        **result,
+        "message": "Déjà enregistré" if result.get("duplicate") else "PRÉSENT",
+        "employee": {k: result["employee"][k] for k in ("id", "matricule", "nom", "prenom")},
     }
 
 
@@ -808,215 +689,13 @@ def _register_attendance(
     source: str,
     observation: str = "",
 ) -> dict[str, Any]:
-    """Logique de pointage partagée entre le scan QR et la saisie manuelle (employé sans
-    smartphone) : bascule arrivée/départ, écrit la feuille de présence partagée, construit
-    la réponse affichée au pointeur. `nonce` identifie l'événement dans attendanceQrScans
-    (pour la déduplication QR et l'historique arrivée/départ, quelle que soit la source)."""
-    blocked_reason = _employee_portal_block_reason(employee)
-    if blocked_reason:
-        raise HTTPException(status_code=403, detail=f"Pointage refusé : {blocked_reason}")
-
-    tz = ZoneInfo("Africa/Algiers")
-    now = datetime.now(tz)
-    scan_date_str = now.strftime("%Y-%m-%d")
-    heure = now.strftime("%H:%M:%S")
-    observation = _clean_text(observation)[:500]
-    assignment = db.execute(
-        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
-    ).scalars().first()
-    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
-    site_name = (site.name or site.indicatif or "") if site else ""
-
-    def scan_datetime(row: dict[str, Any] | None) -> datetime | None:
-        if not row or not row.get("scannedAt"):
-            return None
-        try:
-            value = datetime.fromisoformat(str(row["scannedAt"]).replace("Z", "+00:00"))
-            return (value.replace(tzinfo=tz) if value.tzinfo is None else value).astimezone(tz)
-        except (TypeError, ValueError):
-            return None
-
-    employee_scans = sorted(
-        (
-            row for row in service.list_items(db, "attendanceQrScans")
-            if isinstance(row, dict)
-            and str(row.get("employeeId") or "") == str(employee.id)
-            and row.get("action") in {"arrivee", "depart"}
-            and row.get("scannedAt")
-        ),
-        key=lambda row: str(row.get("scannedAt")),
+    """Pointage QR / saisie manuelle : délégué à Attendance Core (seul point d'écriture de la
+    présence). `nonce` est la clé d'idempotence de l'événement ; `source` (libellé historique)
+    ne sert plus qu'à distinguer la saisie manuelle du scan QR."""
+    core_source = SOURCE_MANUAL if (nonce.startswith("manual-") or "manuel" in source) else SOURCE_QR
+    return attendance_core.record_scan(
+        db, employee=employee, source=core_source, actor=scanner, idempotency_key=nonce, observation=observation,
     )
-    last_event = employee_scans[-1] if employee_scans else None
-    last_arrival = next((row for row in reversed(employee_scans) if row.get("action") == "arrivee"), None)
-    last_arrival_at = scan_datetime(last_arrival)
-    rotation = _clean_text(getattr(site, "rotation_system", "") if site else "")
-    open_cycle_max = ATTENDANCE_OPEN_24H_CYCLE_MAX if "24" in rotation else ATTENDANCE_OPEN_CYCLE_MAX
-    open_arrival = (
-        last_arrival
-        if last_event is last_arrival
-        and last_arrival_at is not None
-        and timedelta(0) <= now - last_arrival_at <= open_cycle_max
-        else None
-    )
-    action = "depart" if open_arrival else "arrivee"
-    cycle_number = sum(1 for row in employee_scans if row.get("action") == "arrivee") + (1 if action == "arrivee" else 0)
-    presence_date_str = scan_date_str
-    if action == "depart" and open_arrival:
-        presence_date_str = str(open_arrival.get("scannedAt"))[:10] or scan_date_str
-    if action == "arrivee" and last_arrival:
-        remaining = ATTENDANCE_NEW_ARRIVAL_DELAY - (now - last_arrival_at) if last_arrival_at else timedelta(0)
-        if remaining > timedelta(0):
-            remaining_minutes = max(1, int(remaining.total_seconds() // 60) + 1)
-            hours, minutes = divmod(remaining_minutes, 60)
-            wait_label = f"{hours} h {minutes:02d}" if hours else f"{minutes} min"
-            raise HTTPException(
-                status_code=409,
-                detail=f"Nouvelle arrivée disponible dans {wait_label}. Le départ précédent est bien enregistré.",
-            )
-
-    existing = db.execute(
-        select(DailyPresence).where(
-            DailyPresence.presence_date == datetime.fromisoformat(presence_date_str).date(),
-            DailyPresence.employee_id == employee.id,
-        ).order_by(DailyPresence.id.desc())
-    ).scalars().first()
-    legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
-    arrival_at_for_departure = last_arrival_at if action == "depart" else None
-    # Compatibilité avec les pointages créés avant l'historique multi-cycles.
-    if not employee_scans and existing:
-        has_arrival = bool(existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee"))
-        has_departure = bool(existing.departure_time or legacy.get("scanDepart") or legacy.get("heureDepart"))
-        action = "depart" if has_arrival and not has_departure else "arrivee"
-        cycle_number = 1
-        if action == "depart":
-            legacy_arrival = existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee")
-            try:
-                arrival_at_for_departure = datetime.combine(existing.presence_date, datetime.strptime(str(legacy_arrival), "%H:%M:%S").time(), tz)
-            except (TypeError, ValueError):
-                arrival_at_for_departure = None
-    existing_notes = _clean_text((existing.notes if existing else "") or legacy.get("observations"))
-    observation_line = (
-        f"[{heure} · {scanner.username} · {'DÉPART' if action == 'depart' else 'ARRIVÉE'}] {observation}"
-        if observation
-        else ""
-    )
-    worked_minutes = (
-        max(0, int((now - arrival_at_for_departure).total_seconds() // 60))
-        if action == "depart" and arrival_at_for_departure else None
-    )
-    authorized_minutes = _authorized_work_minutes(
-        db, assignment, site, (arrival_at_for_departure or now).date()
-    )
-    overtime_minutes = max(0, worked_minutes - authorized_minutes) if worked_minutes is not None else 0
-    item: dict[str, Any] = {
-        "date": presence_date_str,
-        "agentId": str(employee.id),
-        "employee_id": employee.id,
-        "agentBackendId": employee.id,
-        "matricule": employee.code,
-        "societe": employee.society or "",
-        "agentName": " ".join([employee.last_name or "", employee.first_name or ""]).strip(),
-        "statut": "present",
-        "status": "present",
-        "code": "P",
-        "valide": True,
-        "valideAt": now.isoformat(),
-        "source": source,
-        "scannedBy": scanner.username,
-        "scannedByUserId": scanner.id,
-        "scanCycles": [
-            *(legacy.get("scanCycles") if isinstance(legacy.get("scanCycles"), list) else []),
-            {
-                "action": action,
-                "heure": heure,
-                "scannedAt": now.isoformat(),
-                "scannedBy": scanner.username,
-                "cycle": cycle_number,
-                **({"observation": observation} if observation else {}),
-            },
-        ],
-        "authorizedMinutes": authorized_minutes,
-        **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
-    }
-    if observation_line:
-        item["observations"] = "\n".join(part for part in (existing_notes, observation_line) if part)
-    if action == "arrivee":
-        if not existing or not existing.arrival_time:
-            item["heureArrivee"] = "P"
-            item["scanArrivee"] = heure
-        item["lastScanArrivee"] = heure
-    else:
-        item["heureDepart"] = heure
-        item["scanDepart"] = heure
-    if assignment:
-        item.update({
-            "siteBackendId": assignment.site_id,
-            "siteId": assignment.site_id,
-            "siteName": site_name,
-            "groupe": assignment.group_code or "",
-        })
-    result = upsert_presence(db, item, "feuillePresence")
-    service.create_item(db, "attendanceQrScans", {
-        "id": nonce,
-        "nonce": nonce,
-        "employeeId": employee.id,
-        "matricule": employee.code,
-        "agentName": item["agentName"],
-        "action": action,
-        "cycle": cycle_number,
-        "scannedAt": now.isoformat(),
-        "site": site_name,
-        "siteId": assignment.site_id if assignment else None,
-        "scannedBy": scanner.username,
-        "scannedByUserId": scanner.id,
-        **({"observation": observation} if observation else {}),
-        "authorizedMinutes": authorized_minutes,
-        **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
-    })
-    db.commit()
-    employee_extra = employee.extra if isinstance(employee.extra, dict) else {}
-    employee_legacy = employee_extra.get("_legacy") if isinstance(employee_extra.get("_legacy"), dict) else {}
-    employee_photo = next(
-        (
-            _clean_text(employee_extra.get(key) or employee_legacy.get(key))
-            for key in ("photo", "photoUrl", "photoData", "photo_url")
-            if employee_extra.get(key) or employee_legacy.get(key)
-        ),
-        "",
-    )
-    duration_minutes = worked_minutes
-    duration_label = ""
-    if duration_minutes is not None:
-        duration_hours, remaining_minutes = divmod(duration_minutes, 60)
-        duration_label = f"{duration_hours} h {remaining_minutes:02d} min"
-    return {
-        "success": True,
-        "action": action,
-        "cycle": cycle_number,
-        "heure": heure,
-        "arrival_time": arrival_at_for_departure.strftime("%H:%M:%S") if arrival_at_for_departure else (heure if action == "arrivee" else ""),
-        "departure_time": heure if action == "depart" else "",
-        "duration_minutes": duration_minutes,
-        "duration_label": duration_label,
-        "authorized_minutes": authorized_minutes,
-        "overtime_minutes": overtime_minutes,
-        "overtime_alert": overtime_minutes > 0,
-        "date": scan_date_str,
-        "site": site_name,
-        "observation": observation,
-        "employee": {
-            "id": employee.id,
-            "matricule": employee.code,
-            "nom": employee.last_name,
-            "prenom": employee.first_name,
-            "photo": employee_photo,
-            "societe": employee.society or "",
-            "poste": employee.position or "",
-            "statut": employee.status or "",
-            "site": site_name,
-        },
-        "record": result,
-    }
 
 
 @router.post("/attendance-qr/scan", status_code=status.HTTP_201_CREATED)
@@ -1037,14 +716,7 @@ def scan_employee_attendance_qr(
         raise HTTPException(status_code=400, detail="Ce QR n'est pas un QR de pointage employé")
 
     nonce = str(qr["nonce"])
-    used = next(
-        (
-            row for row in service.list_items(db, "attendanceQrScans")
-            if isinstance(row, dict) and row.get("nonce") == nonce
-        ),
-        None,
-    )
-    if used:
+    if attendance_core.key_used(db, nonce):
         raise HTTPException(status_code=409, detail="Ce QR a déjà été utilisé")
 
     employee = employee_by_ref(db, str(qr.get("sub") or ""))
@@ -1107,8 +779,8 @@ def attendance_feed(
             return False
 
     rows = [
-        row for row in service.list_items(db, "attendanceQrScans")
-        if isinstance(row, dict) and within_retention(row)
+        row for row in attendance_core.scan_rows(db, site_ids=allowed_site_ids, since=cutoff)
+        if within_retention(row)
     ]
     if allowed_site_ids is not None:
         allowed = set(allowed_site_ids)
@@ -1360,10 +1032,11 @@ def attendance_statistics(
         if _clean_text(site_row_ref.name):
             society_by_site_name[site_row_ref.name] = _site_society(site_row_ref) or "Société non renseignée"
     site_filter = _clean_text(site).casefold()
-    source_rows = [
-        row for row in service.list_items(db, "attendanceQrScans")
-        if isinstance(row, dict) and row.get("action") in {"arrivee", "depart"}
-    ]
+    source_rows = attendance_core.scan_rows(
+        db, site_ids=allowed_site_ids,
+        since=datetime(selected_year, 1, 1, tzinfo=tz) - timedelta(seconds=1),
+        until=datetime(selected_year + 1, 1, 1, tzinfo=tz),
+    )
     if allowed_site_ids is not None:
         allowed = set(allowed_site_ids)
         source_rows = [row for row in source_rows if row.get("siteId") in allowed]
@@ -1561,14 +1234,7 @@ def attendance_alerts(
     # 4 jours de recul : assez large pour couvrir une vacation ouverte depuis avant-hier
     # (rotations longues comprises), sans avoir à charger tout l'historique.
     cutoff = now - timedelta(days=4)
-    rows = [
-        row for row in service.list_items(db, "attendanceQrScans")
-        if isinstance(row, dict) and row.get("action") in {"arrivee", "depart"}
-    ]
-    if allowed_site_ids is not None:
-        allowed = set(allowed_site_ids)
-        rows = [row for row in rows if row.get("siteId") in allowed]
-    rows = [row for row in rows if (_parse_scan_at(row.get("scannedAt"), tz) or cutoff) >= cutoff]
+    rows = attendance_core.scan_rows(db, site_ids=allowed_site_ids, since=cutoff)
 
     return _compute_attendance_alerts(rows, now, tz)
 
@@ -1681,18 +1347,25 @@ def manual_employee_attendance_scan(
         ).scalars().first()
         site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
         observation = _clean_text(payload.get("observation"))
-        result = upsert_presence(db, {
-            "backendId": existing.id if existing else None,
-            "date": now.date().isoformat(), "employee_id": employee.id,
-            "matricule": employee.code, "agentName": " ".join(filter(None, [employee.last_name, employee.first_name])),
-            "statut": "absent", "status": "absent", "code": "A", "valide": True,
-            "valideAt": now.isoformat(), "validePar": scanner.username,
-            "observations": observation or "Absence constatée par le pointeur",
-            "source": "pointage-manuel-absence",
-            "siteBackendId": assignment.site_id if assignment else None,
-            "siteName": (site.name or site.indicatif or "") if site else "",
-            "groupe": assignment.group_code if assignment else "",
-        }, "feuillePresence")
+        # Via Attendance Core : statut de journée (refusé si la journée est clôturée).
+        row = attendance_core.record_day_status(
+            db, employee=employee, site_id=assignment.site_id if assignment else None, day=now.date(),
+            status="absent", source=SOURCE_MANUAL, actor=scanner,
+            notes=observation or "Absence constatée par le pointeur",
+            legacy={
+                "date": now.date().isoformat(), "employee_id": employee.id, "matricule": employee.code,
+                "agentName": " ".join(filter(None, [employee.last_name, employee.first_name])),
+                "statut": "absent", "status": "absent", "code": "A", "valide": True,
+                "valideAt": now.isoformat(), "validePar": scanner.username,
+                "observations": observation or "Absence constatée par le pointeur",
+                "source": "pointage-manuel-absence",
+                "siteBackendId": assignment.site_id if assignment else None,
+                "siteName": (site.name or site.indicatif or "") if site else "",
+                "groupe": assignment.group_code if assignment else "",
+            },
+        )
+        from app.modules.irongs.sql_bridge import presence_to_item
+        result = presence_to_item(row)
         extra = employee.extra if isinstance(employee.extra, dict) else {}
         legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
         events = list(legacy.get("gestionEvents") or [])
@@ -1750,11 +1423,7 @@ def list_pointages_personnel(matricule: str, db: Session = Depends(get_db), _: s
         for p in pointages
         if isinstance(p, dict) and _clean_text(p.get("matricule")).lower() == key
     ]
-    attendance_events = [
-        event
-        for event in service.list_items(db, "attendanceQrScans")
-        if isinstance(event, dict) and _clean_text(event.get("matricule")).lower() == key
-    ]
+    attendance_events = attendance_core.scan_rows(db, employee_id=employee.id) if employee else []
     attendance_dates: set[str] = set()
     for event in attendance_events:
         scanned_at = _clean_text(event.get("scannedAt"))
