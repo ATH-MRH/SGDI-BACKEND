@@ -41,9 +41,10 @@ function beoConfigState(u){
   if(sites.length===0)return{state:"incomplete",label:"CONFIGURATION INCOMPLÈTE",reason:"Aucun site affecté",tone:"#d97706"};
   if(sites.length>1)return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Plusieurs sites affectés ("+sites.length+")",tone:"#dc2626"};
   if(societes.length===0)return{state:"incomplete",label:"CONFIGURATION INCOMPLÈTE",reason:"Aucune société autorisée",tone:"#d97706"};
+  if(societes.length>1)return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Plusieurs sociétés autorisées ("+societes.length+")",tone:"#dc2626"};
   const site=beoSiteById(sites[0]);
   const siteSoc=beoSiteSociete(site);
-  if(site&&siteSoc&&!societes.some(s=>String(s).trim().toLowerCase()===String(siteSoc).trim().toLowerCase())){
+  if(site&&siteSoc&&!societes.some(s=>String(s).trim()===String(siteSoc).trim())){
     return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Le site affecté n'appartient à aucune société autorisée du compte",tone:"#dc2626"};
   }
   return{state:"ok",label:"CONFIGURÉ",reason:"",tone:"#16a34a"};

@@ -89,13 +89,19 @@ function adminTogglePasswordVisibility(button){
   button.setAttribute("aria-label",`${visible?"Masquer":"Afficher"} le ${button.dataset.passwordLabel}`);
   button.title=button.getAttribute("aria-label");
 }
-// Règle du rôle Chargé des effectifs (BEO), en miroir de resolve_scoped_site() : une société
-// explicite (jamais "vide = toutes") et au plus un site. Zéro site reste enregistrable : le
-// compte apparaît alors "CONFIGURATION INCOMPLÈTE" dans Administration → BEO.
+// Règle du rôle Chargé des effectifs (BEO) avec site_workforce — confort de saisie uniquement :
+// le serveur (validate_beo_account_scope) applique la même règle et reste seul autoritaire.
+// Une société explicite, un site, et ce site appartient à cette société.
 function adminBeoRoleGuard(data){
   if(normalizeAdminUserRole(data&&data.role)!=="charge_effectifs_site")return"";
-  if(!(data.societesAutorisees||[]).length)return"Chargé des effectifs : cochez explicitement la société du compte (une liste vide n'est jamais un accès global).";
-  if((data.sitesAutorises||[]).length>1)return"Chargé des effectifs : un seul site autorisé (actuellement "+data.sitesAutorises.length+").";
+  if(!(data.modulesAutorises||[]).includes("site_workforce"))return"";
+  const socs=data.societesAutorisees||[],sites=data.sitesAutorises||[];
+  if(!socs.length)return"Chargé des effectifs : cochez explicitement la société du compte (une liste vide n'est jamais un accès global).";
+  if(socs.length>1)return"Chargé des effectifs : une seule société autorisée (actuellement "+socs.length+").";
+  if(!sites.length)return"Chargé des effectifs : sélectionnez le site autorisé.";
+  if(sites.length>1)return"Chargé des effectifs : un seul site autorisé (actuellement "+sites.length+").";
+  const siteSoc=typeof beoSiteSociete==="function"?beoSiteSociete(beoSiteById(sites[0])):null;
+  if(siteSoc&&siteSoc!==socs[0])return"Chargé des effectifs : le site sélectionné n'appartient pas à la société "+socs[0]+".";
   return"";
 }
 function adminUserRoleOptions(){return[...ADMIN_USER_ROLES,"charge_effectifs_site"]}
