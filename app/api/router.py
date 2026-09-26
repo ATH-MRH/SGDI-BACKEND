@@ -31,6 +31,7 @@ from app.modules.profitability.routes import router as profitability_router
 from app.modules.fiscalite.routes import router as fiscalite_router
 from app.modules.cockpit.routes import router as cockpit_router
 from app.modules.site_workforce.routes import router as site_workforce_router
+from app.modules.attendance.routes import router as attendance_router
 
 
 api_router = APIRouter()
@@ -65,3 +66,4 @@ api_router.include_router(profitability_router, prefix="/profitability", tags=["
 api_router.include_router(fiscalite_router, prefix="/fiscalite", tags=["Fiscalité"])
 api_router.include_router(cockpit_router, prefix="/cockpit", tags=["Cockpit DG"])
 api_router.include_router(site_workforce_router, prefix="/site-workforce", tags=["Site Workforce"])
+api_router.include_router(attendance_router, prefix="/attendance", tags=["Attendance"])

@@ -1,0 +1,381 @@
+"""API Attendance — centre de contrôle (pointage.irongs.com) et Employé 360.
+
+Lecture et pilotage de la présence canonique (DailyPresence + journal d'événements). Toute
+écriture passe par app/modules/attendance/core.py. Périmètre : sites autorisés du compte
+(authorized_sites) ou sa société — même règle que le module OPS
+(_allowed_assignment_site_ids : None = compte global).
+"""
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.modules.attendance import core
+from app.modules.attendance.models import (
+    ANOMALY_DISMISSED,
+    ANOMALY_OPEN,
+    ANOMALY_RESOLVED,
+    EVENT_ARRIVAL,
+    EVENT_DEPARTURE,
+    SOURCE_MANUAL,
+    SOURCE_SYSTEM,
+    AttendanceAnomaly,
+    AttendanceEvent,
+)
+from app.modules.auth.dependencies import AUTHORIZED_ACTIONS, current_user
+from app.modules.auth.models import User
+from app.modules.drh.models import Employee
+from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.modules.ops.routes import _allowed_assignment_site_ids, _ensure_site_allowed, _site_society
+
+router = APIRouter()
+
+KPI_STATUSES = ("present", "absent", "conge", "maladie", "repos", "mission")
+
+
+def _require_action(user: User, action: str) -> None:
+    """Action au-delà de la déduction HTTP (ex. correction d'une journée clôturée) : même
+    politique authorized_actions que le reste du backend (liste vide = profil)."""
+    actions = [str(v).strip().lower() for v in (user.authorized_actions or [])]
+    actions = [v for v in actions if v in AUTHORIZED_ACTIONS]
+    if actions and action not in actions and "admin" not in actions:
+        raise HTTPException(status_code=403, detail=f"Action non autorisée : {action}")
+
+
+def _scope(db: Session, user: User, site_id: int | None) -> list[int] | None:
+    """Sites visibles pour la requête. None = compte global sans filtre."""
+    if site_id is not None:
+        _ensure_site_allowed(db, user, site_id)
+        return [site_id]
+    return _allowed_assignment_site_ids(db, user)
+
+
+def _presence_in_scope(db: Session, user: User, row: DailyPresence) -> None:
+    allowed = _allowed_assignment_site_ids(db, user)
+    if allowed is None:
+        return
+    if row.site_id is None or row.site_id not in set(allowed):
+        raise HTTPException(status_code=404, detail="Pointage introuvable")
+
+
+def _local_hhmm(value: datetime | None) -> str:
+    return core.to_local(value).strftime("%H:%M") if value else ""
+
+
+# ── Tableau du jour ──────────────────────────────────────────────────────────────────────
+@router.get("/board")
+def board(
+    presence_date: date | None = None,
+    site_id: int | None = None,
+    society: str | None = None,
+    status: str | None = None,
+    source: str | None = None,
+    anomaly: str | None = None,
+    q: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Situation d'une journée : population = affectations actives du périmètre. KPI calculés
+    sur TOUTE la population filtrée côté serveur (jamais sur la page affichée)."""
+    day = presence_date or core._now_local().date()
+    site_ids = _scope(db, user, site_id)
+    stmt = select(Assignment).where(
+        Assignment.active == 1, Assignment.start_date <= day,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= day),
+    )
+    if site_ids is not None:
+        if not site_ids:
+            return _empty_board(day, page, page_size)
+        stmt = stmt.where(Assignment.site_id.in_(site_ids))
+    assignments = db.execute(stmt.order_by(Assignment.id)).scalars().all()
+    by_employee: dict[int, Assignment] = {}
+    for a in assignments:  # une ligne par employé (dernière affectation active)
+        by_employee[a.employee_id] = a
+    employee_ids = list(by_employee)
+    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars()} if employee_ids else {}
+    sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({a.site_id for a in by_employee.values()}))).scalars()} if by_employee else {}
+    presences = {p.employee_id: p for p in db.execute(select(DailyPresence).where(
+        DailyPresence.presence_date == day, DailyPresence.employee_id.in_(employee_ids)).order_by(DailyPresence.id)).scalars()} if employee_ids else {}
+    events: dict[int, list[AttendanceEvent]] = {}
+    for ev in (db.execute(select(AttendanceEvent).where(
+            AttendanceEvent.presence_date == day, AttendanceEvent.employee_id.in_(employee_ids)
+    ).order_by(AttendanceEvent.occurred_at, AttendanceEvent.id)).scalars() if employee_ids else []):
+        events.setdefault(ev.employee_id, []).append(ev)
+    open_anomalies: dict[int, list[AttendanceAnomaly]] = {}
+    for an in (db.execute(select(AttendanceAnomaly).where(
+            AttendanceAnomaly.presence_date == day, AttendanceAnomaly.status == ANOMALY_OPEN,
+            AttendanceAnomaly.employee_id.in_(employee_ids))).scalars() if employee_ids else []):
+        open_anomalies.setdefault(an.employee_id, []).append(an)
+
+    rows: list[dict[str, Any]] = []
+    for employee_id, assignment in by_employee.items():
+        employee = employees.get(employee_id)
+        site = sites.get(assignment.site_id)
+        if not employee or not site:
+            continue
+        site_society = _site_society(site) or employee.society or ""
+        if society and site_society != society and employee.society != society:
+            continue
+        plan = core.planned_day(db, assignment, site, day)
+        presence = presences.get(employee_id)
+        evs = events.get(employee_id, [])
+        arrivals = [e for e in evs if e.event_type == EVENT_ARRIVAL]
+        departures = [e for e in evs if e.event_type == EVENT_DEPARTURE]
+        last_source = evs[-1].source if evs else ""
+        if presence:
+            day_status = presence.status or "present"
+        elif plan["known"] and plan["on"] is False:
+            day_status = "repos"
+        else:
+            day_status = "non_pointe"
+        incomplete = bool(arrivals) and not departures and day < core._now_local().date()
+        anomalies = open_anomalies.get(employee_id, [])
+        rows.append({
+            "employee_id": employee_id, "matricule": employee.code,
+            "nom": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
+            "fonction": assignment.position or employee.position or "",
+            "society": site_society, "site_id": site.id, "site": site.name,
+            "planning": {"known": plan["known"], "working": plan["on"], "period": plan["period"],
+                         "start_time": plan["start_time"], "end_time": plan["end_time"]},
+            "arrival": _local_hhmm(arrivals[0].occurred_at) if arrivals else (presence.arrival_time if presence and presence.arrival_time not in (None, "P") else ""),
+            "departure": _local_hhmm(departures[-1].occurred_at) if departures else (presence.departure_time or "" if presence else ""),
+            "status": day_status, "source": last_source, "incomplete": incomplete,
+            "closed": bool(presence and presence.closed_at), "presence_id": presence.id if presence else None,
+            "anomalies": [{"id": a.id, "type": a.anomaly_type, "severity": a.severity, "message": a.message} for a in anomalies],
+        })
+
+    expected = [r for r in rows if r["planning"]["working"] is not False]
+    kpi = {
+        "expected": len(expected),
+        "present": sum(1 for r in rows if r["status"] == "present"),
+        "absent": sum(1 for r in rows if r["status"] == "absent"),
+        "not_pointed": sum(1 for r in expected if r["status"] == "non_pointe"),
+        "late": sum(1 for r in rows if any(a["type"] == "LATE" for a in r["anomalies"])),
+        "conge": sum(1 for r in rows if r["status"] == "conge"),
+        "maladie": sum(1 for r in rows if r["status"] == "maladie"),
+        "repos": sum(1 for r in rows if r["status"] == "repos"),
+        "anomalies": sum(len(r["anomalies"]) for r in rows),
+        "incomplete": sum(1 for r in rows if r["incomplete"]),
+    }
+    filtered = rows
+    if status:
+        filtered = [r for r in filtered if r["status"] == status]
+    if source:
+        filtered = [r for r in filtered if r["source"] == source]
+    if anomaly:
+        filtered = [r for r in filtered if (r["anomalies"] if anomaly == "any" else any(a["type"] == anomaly for a in r["anomalies"]))]
+    if q:
+        needle = q.strip().lower()
+        filtered = [r for r in filtered if needle in r["nom"].lower() or needle in (r["matricule"] or "").lower()]
+    filtered.sort(key=lambda r: (r["site"], r["nom"]))
+    total = len(filtered)
+    start = (page - 1) * page_size
+    return {"date": day.isoformat(), "kpi": kpi, "total": total, "page": page, "page_size": page_size,
+            "pages": max(1, -(-total // page_size)), "items": filtered[start:start + page_size]}
+
+
+def _empty_board(day: date, page: int, page_size: int) -> dict[str, Any]:
+    kpi = {k: 0 for k in ("expected", "present", "absent", "not_pointed", "late", "conge", "maladie", "repos", "anomalies", "incomplete")}
+    return {"date": day.isoformat(), "kpi": kpi, "total": 0, "page": page, "page_size": page_size, "pages": 1, "items": []}
+
+
+@router.get("/sites")
+def sites(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    allowed = _allowed_assignment_site_ids(db, user)
+    stmt = select(Site).where(Site.active == 1)
+    if allowed is not None:
+        if not allowed:
+            return []
+        stmt = stmt.where(Site.id.in_(allowed))
+    return [{"id": s.id, "name": s.name, "society": _site_society(s) or ""} for s in db.execute(stmt.order_by(Site.name)).scalars()]
+
+
+# ── Anomalies ────────────────────────────────────────────────────────────────────────────
+class AnomalyResolution(BaseModel):
+    status: str = Field(ANOMALY_RESOLVED)
+    resolution: str = Field(min_length=3, max_length=2000)
+
+
+def _anomaly_out(a: AttendanceAnomaly, employee: Employee | None, site: Site | None) -> dict[str, Any]:
+    return {
+        "id": a.id, "type": a.anomaly_type, "severity": a.severity, "status": a.status, "message": a.message,
+        "employee_id": a.employee_id, "matricule": employee.code if employee else "",
+        "nom": f"{employee.last_name or ''} {employee.first_name or ''}".strip() if employee else "",
+        "site_id": a.site_id, "site": site.name if site else "", "date": a.presence_date.isoformat() if a.presence_date else "",
+        "source": a.source or "", "details": a.details or {}, "resolution": a.resolution or "",
+        "resolved_by": a.resolved_by or "", "resolved_at": a.resolved_at.isoformat() if a.resolved_at else "",
+        "created_at": a.created_at.isoformat() if a.created_at else "",
+    }
+
+
+@router.get("/anomalies")
+def anomalies(
+    date_from: date | None = None, date_to: date | None = None, site_id: int | None = None,
+    status: str | None = ANOMALY_OPEN, anomaly_type: str | None = None,
+    page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200),
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+) -> dict[str, Any]:
+    site_ids = _scope(db, user, site_id)
+    stmt = select(AttendanceAnomaly)
+    if site_ids is not None:
+        if not site_ids:
+            return {"total": 0, "page": page, "page_size": page_size, "pages": 1, "items": []}
+        stmt = stmt.where(AttendanceAnomaly.site_id.in_(site_ids))
+    if date_from:
+        stmt = stmt.where(AttendanceAnomaly.presence_date >= date_from)
+    if date_to:
+        stmt = stmt.where(AttendanceAnomaly.presence_date <= date_to)
+    if status:
+        stmt = stmt.where(AttendanceAnomaly.status == status)
+    if anomaly_type:
+        stmt = stmt.where(AttendanceAnomaly.anomaly_type == anomaly_type)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.execute(stmt.order_by(AttendanceAnomaly.presence_date.desc(), AttendanceAnomaly.id.desc())
+                      .offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({r.employee_id for r in rows if r.employee_id}))).scalars()} if rows else {}
+    site_map = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows if r.site_id}))).scalars()} if rows else {}
+    return {"total": total, "page": page, "page_size": page_size, "pages": max(1, -(-total // page_size)),
+            "items": [_anomaly_out(r, employees.get(r.employee_id), site_map.get(r.site_id)) for r in rows]}
+
+
+@router.patch("/anomalies/{anomaly_id}")
+def resolve_anomaly(anomaly_id: int, payload: AnomalyResolution, request: Request,
+                    db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    from app.core.audit import append_audit
+
+    _require_action(user, "validate")
+    if payload.status not in (ANOMALY_RESOLVED, ANOMALY_DISMISSED):
+        raise HTTPException(status_code=422, detail="Statut de résolution invalide")
+    row = db.get(AttendanceAnomaly, anomaly_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if not row or (allowed is not None and row.site_id not in set(allowed)):
+        raise HTTPException(status_code=404, detail="Anomalie introuvable")
+    if row.status != ANOMALY_OPEN:
+        raise HTTPException(status_code=409, detail="Anomalie déjà traitée")
+    row.status = payload.status
+    row.resolution = payload.resolution.strip()
+    row.resolved_by = user.username
+    row.resolved_at = datetime.utcnow()
+    append_audit(db, action="attendance.anomaly.resolve", resource="attendance_anomaly", resource_id=row.id,
+                 result="success", user=user, request=request, society=row.society,
+                 new_state={"status": row.status, "resolution": row.resolution})
+    db.commit()
+    return _anomaly_out(row, db.get(Employee, row.employee_id) if row.employee_id else None,
+                        db.get(Site, row.site_id) if row.site_id else None)
+
+
+# ── Corrections, clôture, réouverture ────────────────────────────────────────────────────
+class CorrectionIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+    status: str | None = None
+    arrival_time: str | None = None
+    departure_time: str | None = None
+    notes: str | None = None
+
+
+@router.patch("/presences/{presence_id}")
+def correct(presence_id: int, payload: CorrectionIn, request: Request,
+            db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    row = db.get(DailyPresence, presence_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pointage introuvable")
+    _presence_in_scope(db, user, row)
+    _require_action(user, "update")
+    if row.closed_at is not None:
+        _require_action(user, "validate")  # permission renforcée après clôture
+    fields = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k != "reason"}
+    if not fields:
+        raise HTTPException(status_code=422, detail="Aucune valeur à corriger")
+    core.correct_presence(db, row=row, reason=payload.reason, source=SOURCE_MANUAL, actor=user,
+                          allow_closed=True, request=request, **fields)
+    db.commit()
+    return {"id": row.id, "status": row.status, "arrival_time": row.arrival_time,
+            "departure_time": row.departure_time, "closed": row.closed_at is not None}
+
+
+class CloseIn(BaseModel):
+    presence_date: date
+    site_id: int | None = None
+
+
+@router.post("/close")
+def close(payload: CloseIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Clôture (action validate déduite du chemin). Les anomalies ouvertes sont renvoyées et
+    restent ouvertes ; une clôture n'en masque jamais."""
+    site_ids = _scope(db, user, payload.site_id)
+    result = core.close_day(db, day=payload.presence_date, site_ids=site_ids, actor=user, source=SOURCE_SYSTEM, request=request)
+    db.commit()
+    return result
+
+
+class ReopenIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/presences/{presence_id}/unlock")
+def reopen(presence_id: int, payload: ReopenIn, request: Request,
+           db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Réouverture d'une journée clôturée : action « unlock » (déduite du chemin) + motif + audit."""
+    row = db.get(DailyPresence, presence_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pointage introuvable")
+    _presence_in_scope(db, user, row)
+    core.reopen_presence(db, row=row, reason=payload.reason, actor=user, source=SOURCE_MANUAL, request=request)
+    db.commit()
+    return {"id": row.id, "closed": False}
+
+
+# ── Employé 360 : onglet Pointages ───────────────────────────────────────────────────────
+@router.get("/employees/{employee_id}")
+def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
+                        db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    employee = db.get(Employee, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    allowed = _allowed_assignment_site_ids(db, user)
+    if allowed is not None:
+        visible = db.execute(select(Assignment.id).where(
+            Assignment.employee_id == employee_id, Assignment.site_id.in_(allowed or [-1]))).first()
+        if not visible:
+            raise HTTPException(status_code=404, detail="Employé introuvable")
+    since = core._now_local().date() - timedelta(days=days - 1)
+    presences = db.execute(select(DailyPresence).where(
+        DailyPresence.employee_id == employee_id, DailyPresence.presence_date >= since,
+    ).order_by(DailyPresence.presence_date.desc())).scalars().all()
+    events = db.execute(select(AttendanceEvent).where(
+        AttendanceEvent.employee_id == employee_id, AttendanceEvent.presence_date >= since,
+    ).order_by(AttendanceEvent.occurred_at.desc(), AttendanceEvent.id.desc()).limit(500)).scalars().all()
+    anomalies_rows = db.execute(select(AttendanceAnomaly).where(
+        AttendanceAnomaly.employee_id == employee_id, AttendanceAnomaly.presence_date >= since,
+    ).order_by(AttendanceAnomaly.id.desc())).scalars().all()
+    site_ids = {p.site_id for p in presences if p.site_id} | {e.site_id for e in events if e.site_id}
+    site_map = {s.id: s.name for s in db.execute(select(Site).where(Site.id.in_(site_ids))).scalars()} if site_ids else {}
+    assignment = core.active_assignment(db, employee_id)
+    today = core._now_local().date()
+    current = next((p for p in presences if p.presence_date == today), None)
+    return {
+        "employee_id": employee_id,
+        "current": {
+            "date": today.isoformat(), "status": current.status if current else "non_pointe",
+            "site": site_map.get(current.site_id, "") if current else (db.get(Site, assignment.site_id).name if assignment else ""),
+            "closed": bool(current and current.closed_at),
+        },
+        "days": [{"id": p.id, "date": p.presence_date.isoformat(), "status": p.status, "site": site_map.get(p.site_id, ""),
+                  "arrival": p.arrival_time if p.arrival_time != "P" else "", "departure": p.departure_time or "",
+                  "closed": p.closed_at is not None} for p in presences],
+        "events": [{"id": e.id, "date": e.presence_date.isoformat(), "at": core.to_local(e.occurred_at).isoformat(),
+                    "type": e.event_type, "source": e.source, "site": site_map.get(e.site_id, ""),
+                    "actor": e.actor_label or "", "device_id": e.device_id, "observation": e.observation or "",
+                    "changes": (e.data or {}).get("changes") if e.event_type == "CORRECTION" else None}
+                   for e in events],
+        "anomalies": [{"id": a.id, "date": a.presence_date.isoformat() if a.presence_date else "", "type": a.anomaly_type,
+                       "severity": a.severity, "status": a.status, "message": a.message} for a in anomalies_rows],
+    }
