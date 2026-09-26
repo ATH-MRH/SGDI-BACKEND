@@ -3,7 +3,8 @@ function adminRoleGuide(){return[
   ["agent","Consultation","Accès simple aux modules et périmètres autorisés"],
   ["dispatch","Supervision terrain","Suivi opérationnel, sites, pointage et missions autorisées"],
   ["ops","Gestion métier","Exploitation OPS/DRH selon profil et périmètre"],
-  ["ADM","Administration","Configuration système, utilisateurs, profils et sécurité"]
+  ["ADM","Administration","Configuration système, utilisateurs, profils et sécurité"],
+  ["charge_effectifs_site","Chargé des effectifs","Bureau des Effectifs Ouest — une société explicite, un seul site"]
 ]}
 
 function adminRoleDescription(role){const r=adminRoleGuide().find(x=>x[0]===String(role||""));return r?r[1]+" — "+r[2]:"Profil utilisateur SGDI"}
@@ -49,6 +50,7 @@ function adminUsernamePrefixFromForm(form){
   const niveau=String(form.niveau?.value||"").toUpperCase();
   const structures=[...form.querySelectorAll('input[name^="struct_"]:checked')].map(el=>normalizeStructureKey(el.value)).filter(Boolean);
   if(role==="ADM")return niveau==="H5"&&structures.includes("admin")?"ADG":"ADM";
+  if(role==="charge_effectifs_site")return"CE";
   if(structures.length===1)return adminUsernamePrefixForStructure(structures[0]);
   if(role==="dispatch"||role==="ops")return"ATL";
   return structures.length?adminUsernamePrefixForStructure(structures[0]):"ATL";
@@ -69,7 +71,7 @@ function adminSuggestUsernameForForm(force){
   const input=form.querySelector('[name="username"]');
   if(!input||input.readOnly)return;
   const current=String(input.value||"").trim().toUpperCase();
-  const generatedLike=/^(ADG|ADM|ATL|DRH|OPS|SUP|MAT|FIN|FAC|COM|SEC|AGD|PTG|PRH)\d+$/.test(current);
+  const generatedLike=/^(ADG|ADM|ATL|DRH|OPS|SUP|MAT|FIN|FAC|COM|SEC|AGD|PTG|PRH|CE)\d+$/.test(current);
   if(!force&&current&&!generatedLike)return;
   input.value=adminNextUsername(adminUsernamePrefixFromForm(form));
 }
@@ -87,7 +89,22 @@ function adminTogglePasswordVisibility(button){
   button.setAttribute("aria-label",`${visible?"Masquer":"Afficher"} le ${button.dataset.passwordLabel}`);
   button.title=button.getAttribute("aria-label");
 }
+// Règle du rôle Chargé des effectifs (BEO), en miroir de resolve_scoped_site() : une société
+// explicite (jamais "vide = toutes") et au plus un site. Zéro site reste enregistrable : le
+// compte apparaît alors "CONFIGURATION INCOMPLÈTE" dans Administration → BEO.
+function adminBeoRoleGuard(data){
+  if(normalizeAdminUserRole(data&&data.role)!=="charge_effectifs_site")return"";
+  if(!(data.societesAutorisees||[]).length)return"Chargé des effectifs : cochez explicitement la société du compte (une liste vide n'est jamais un accès global).";
+  if((data.sitesAutorises||[]).length>1)return"Chargé des effectifs : un seul site autorisé (actuellement "+data.sitesAutorises.length+").";
+  return"";
+}
+function adminUserRoleOptions(){return[...ADMIN_USER_ROLES,"charge_effectifs_site"]}
+// Préréglage "Nouvel utilisateur BEO", consommé (puis effacé) à l'ouverture suivante.
+let adminUserModalPreset="";
+function openAdminBeoUserModal(){adminUserModalPreset="beo";return openAdminUserModal("")}
+
 async function openAdminUserModal(username){
+  const preset=adminUserModalPreset;adminUserModalPreset="";
   const current=adminCaptureView(document.getElementById("view"),document.getElementById("modal-host"));
   username=String(username||"").trim();
   // Le périmètre "sites autorisés" doit couvrir TOUTES les sociétés, pas seulement
@@ -104,6 +121,8 @@ async function openAdminUserModal(username){
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
   const u=isNew?{username:"",email:"",password:"",validationPassword:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],modulesAutorises:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  // Préréglage "Nouvel utilisateur BEO" : rôle métier + seule clé site_workforce, rien d'autre.
+  if(isNew&&preset==="beo")Object.assign(u,{role:"charge_effectifs_site",modulesAutorises:["site_workforce"],actionsAutorisees:["read","create","update","validate"]});
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -116,7 +135,7 @@ async function openAdminUserModal(username){
         ${adminPasswordFieldHTML("password","Mot de passe de connexion",isNew,!isNew)}
         ${adminPasswordFieldHTML("validationPassword","Mot de passe de validation",isNew,!!u.hasValidationPassword)}
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
+        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${adminUserRoleOptions().map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
@@ -126,7 +145,7 @@ async function openAdminUserModal(username){
       <label class="label">Modules accessibles avec cet identifiant et ce mot de passe *</label>
       <p class="text-xs text-slate-500 mb-2">Cochez chaque application autorisée. L'utilisateur conservera la même identité de connexion sur tous ces sous-domaines.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">${ADMIN_LOGIN_MODULES.map(m=>`<label class="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-white"><input type="checkbox" name="module_${m.key}" value="${m.key}" ${(u.modulesAutorises||[]).includes(m.key)?"checked":""}/><span><b class="block text-sm">${escapeHTML(m.label)}</b>${m.appName?`<small class="block font-bold text-slate-600">${escapeHTML(m.appName)}</small>`:""}${m.domain?`<small class="block text-teal-700">${escapeHTML(m.domain)}</small>`:""}<small class="text-slate-500">${escapeHTML(m.host)}</small></span></label>`).join("")}</div>
-      <label class="label mt-3">Périmètre sociétés (vide = toutes)</label>
+      <label class="label mt-3">Périmètre sociétés (vide = toutes, sauf Chargé des effectifs : société obligatoire)</label>
       <div class="admin-access-societies">${SOCIETES.map(s=>`<label><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/><span>${escapeHTML(s)}</span></label>`).join("")}</div>
       <div class="admin-access-separator"></div>
       <label class="label">Périmètre structures (vide = toutes)</label>
@@ -204,6 +223,7 @@ async function confirmAdminUser(originalUsername){
   if((db.users||[]).some(user=>String(user.email||"").toLowerCase()===data.email&&String(user.username||"").toLowerCase()!==String(originalUsername||"").toLowerCase())){toast("Cette adresse email est déjà attribuée à un autre utilisateur","error");return}
   if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)){toast("Niveau d'accès obligatoire","error");return}
   if(normalizeAdminUserRole(data.role)!=="ADM"&&!data.modulesAutorises.length){toast("Sélectionnez au moins un module accessible","error");return}
+  const beoGuard=adminBeoRoleGuard(data);if(beoGuard){toast(beoGuard,"error");return}
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
@@ -295,7 +315,9 @@ function adminAccessModuleGroup(module){
   return"Module";
 }
 
-function normalizeAdminUserRole(role){const b=adminAccessBaseRole(role);if(b==="admin")return"ADM";if(b==="dispatch")return"dispatch";if(b==="ops"||b==="rh")return"ops";return"agent"}
+// charge_effectifs_site (rôle métier BEO) est conservé tel quel : le ramener à "agent"
+// ferait perdre le rôle au premier enregistrement de la fiche.
+function normalizeAdminUserRole(role){const b=adminAccessBaseRole(role);if(b==="charge_effectifs_site")return b;if(b==="admin")return"ADM";if(b==="dispatch")return"dispatch";if(b==="ops"||b==="rh")return"ops";return"agent"}
 
 function adminSupervisorUsers(){
   return (db.users||[]).filter(u=>{

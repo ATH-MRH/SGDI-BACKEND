@@ -50,6 +50,13 @@ const exposeSuffix = `
   renderAdminBeo: (typeof renderAdminBeo !== 'undefined') ? renderAdminBeo : null,
   beoUsers: (typeof beoUsers !== 'undefined') ? beoUsers : null,
   beoConfigState: (typeof beoConfigState !== 'undefined') ? beoConfigState : null,
+  beoCandidateUsers: (typeof beoCandidateUsers !== 'undefined') ? beoCandidateUsers : null,
+  beoModulesWithAccess: (typeof beoModulesWithAccess !== 'undefined') ? beoModulesWithAccess : null,
+  adminRemoveBeoAccess: (typeof adminRemoveBeoAccess !== 'undefined') ? adminRemoveBeoAccess : null,
+  adminAddBeoAccess: (typeof adminAddBeoAccess !== 'undefined') ? adminAddBeoAccess : null,
+  adminBeoRoleGuard: (typeof adminBeoRoleGuard !== 'undefined') ? adminBeoRoleGuard : null,
+  normalizeAdminUserRole: (typeof normalizeAdminUserRole !== 'undefined') ? normalizeAdminUserRole : null,
+  adminRoleDisplayLabel: (typeof adminRoleDisplayLabel !== 'undefined') ? adminRoleDisplayLabel : null,
   isAdminGeneralSession: (typeof isAdminGeneralSession !== 'undefined') ? isAdminGeneralSession : null,
   setDb: (v) => { db = v; },
   setSession: (v) => { session = v; },
@@ -708,10 +715,63 @@ test('§16.E-G : états de configuration reflètent exactement resolve_scoped_si
   assert.strictEqual(inactive.state, 'inactive');
 });
 
-test('§16.H : retirer BEO ne retire que la clé site_workforce, jamais les autres modules', () => {
-  const modules = ['drh', 'site_workforce', 'finances'];
-  const next = modules.filter((m) => m !== 'site_workforce');
-  assert.deepStrictEqual(next, ['drh', 'finances']);
+// Appelle la VRAIE action d'Administration -> BEO ; seul l'appel réseau est intercepté.
+async function withUpdateUserSpy(fn) {
+  const calls = [];
+  const original = window.SGDI.auth.updateUser;
+  const originalConfirm = window.confirm;
+  window.SGDI.auth.updateUser = async (username, payload) => { calls.push({ username, payload }); return {}; };
+  window.confirm = () => true;
+  try { await fn(calls); } finally { window.SGDI.auth.updateUser = original; window.confirm = originalConfirm; }
+}
+
+test('§16.H : retirer BEO ne retire que la clé site_workforce, jamais le compte ni les autres modules', async () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [{ username: 'CE02', modulesAutorises: ['drh', 'site_workforce', 'finances'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true }], sites: [] });
+  await withUpdateUserSpy(async (calls) => {
+    await T().adminRemoveBeoAccess(encodeURIComponent('CE02'));
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(Object.keys(calls[0].payload), ['authorized_modules']);
+    assert.deepStrictEqual([...calls[0].payload.authorized_modules], ['drh', 'finances']);
+  });
+  assert.strictEqual(T().beoUsers().length, 0);
+});
+
+test('§4 : ajouter un utilisateur existant n\'ajoute que site_workforce et conserve ses modules', async () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [
+    { username: 'OPS01', role: 'ops', modulesAutorises: ['ops'], actif: true },
+    { username: 'ADM01', role: 'ADM', modulesAutorises: [], actif: true },
+    { username: 'CE01', role: 'charge_effectifs_site', modulesAutorises: ['site_workforce'], actif: true },
+  ], sites: [] });
+  assert.deepStrictEqual(T().beoCandidateUsers().map((u) => u.username), ['OPS01']);
+  await withUpdateUserSpy(async (calls) => {
+    await T().adminAddBeoAccess('OPS01');
+    assert.deepStrictEqual([...calls[0].payload.authorized_modules], ['ops', 'site_workforce']);
+  });
+  assert.deepStrictEqual([...T().beoModulesWithAccess(['site_workforce', 'drh'], true)], ['drh', 'site_workforce']);
+});
+
+test('§14 : un administrateur ne modifie jamais son propre accès BEO depuis cet écran', async () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [{ username: 'ADMIN01', role: 'ADM', modulesAutorises: ['site_workforce'], actif: true }], sites: [] });
+  await withUpdateUserSpy(async (calls) => {
+    assert.strictEqual(await T().adminRemoveBeoAccess('ADMIN01'), false);
+    assert.strictEqual(calls.length, 0);
+  });
+});
+
+test('§5/§6/§7 : le rôle Chargé des effectifs est conservé et exige une société explicite et au plus un site', () => {
+  assert.strictEqual(T().normalizeAdminUserRole('charge_effectifs_site'), 'charge_effectifs_site');
+  assert.strictEqual(T().normalizeAdminUserRole('agent'), 'agent');
+  assert.match(T().adminRoleDisplayLabel('charge_effectifs_site'), /Chargé des effectifs/);
+  const base = { role: 'charge_effectifs_site', modulesAutorises: ['site_workforce'] };
+  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: [], sitesAutorises: ['1'] }), /société/);
+  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1', '2'] }), /un seul site/);
+  assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1'] }), '');
+  assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: [] }), '');
+  // Les autres rôles gardent la règle historique ("vide = toutes").
+  assert.strictEqual(T().adminBeoRoleGuard({ role: 'ops', societesAutorisees: [], sitesAutorises: ['1', '2'] }), '');
 });
 
 test('§16.I : la carte BEO n\'accorde jamais DRH/OPS/Finance implicitement', () => {

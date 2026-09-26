@@ -18249,7 +18249,7 @@ const ADMIN_LOGIN_MODULES=[
 ];
 // Libellés affichés uniquement : les valeurs internes agent/dispatch/ops/ADM restent
 // inchangées partout (logique de rôles) — seul le texte montré à l'écran change.
-const ADMIN_ROLE_DISPLAY_LABELS={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
+const ADMIN_ROLE_DISPLAY_LABELS={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur",charge_effectifs_site:"Chargé des effectifs (BEO)"};
 function adminRoleDisplayLabel(code){return ADMIN_ROLE_DISPLAY_LABELS[code]||code}
 const ADMIN_PRIMARY_STRUCTURES=[
   {key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},
