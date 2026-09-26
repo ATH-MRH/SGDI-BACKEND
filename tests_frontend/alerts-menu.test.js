@@ -10,6 +10,16 @@ const fs = require('node:fs');
 const { loadSgdiApp } = require('./load-app');
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 150));
+// Fermer la fenêtre seulement une fois l'application au repos : sans cela, sous charge (suite
+// complète en parallèle), une continuation asynchrone encore en vol (chargement de module,
+// promesse de rendu) s'exécutait APRÈS window.close() et levait une exception hors du test
+// ("Cannot read properties of null (reading '_location')").
+async function closeWhenIdle(r) {
+  r.window.setTimeout = () => 0;
+  r.window.setInterval = () => 0;
+  await tick();
+  r.window.close();
+}
 
 function bootLazy() {
   const ctx = loadSgdiApp(['renderView', 'renderSidebar', 'adminSidebarOrganizerDefaults', 'navigate'], { lazyModules: true });
@@ -85,7 +95,7 @@ test('clic sur ALERTES → #/alerts charge alerts.js une seule fois et affiche l
   assert.match(r.view().textContent, /Cockpit Alertes/);
   assert.equal(r.downloads.filter(d => d.endsWith('/alerts.js')).length, 1, 'alerts.js chargé une seule fois');
   assert.deepEqual(r.errors, []);
-  r.window.close();
+  await closeWhenIdle(r);
 });
 
 test('deep link #/alerts fonctionne directement (sans passer par le dashboard)', async () => {
@@ -94,7 +104,7 @@ test('deep link #/alerts fonctionne directement (sans passer par le dashboard)',
   await tick();
   assert.match(r.view().textContent, /Cockpit Alertes/);
   assert.deepEqual(r.errors, []);
-  r.window.close();
+  await closeWhenIdle(r);
 });
 
 test('navigation croisée Dashboard → Alertes → DRH → Alertes → Pointage → Alertes : un seul chargement de script', async () => {
@@ -108,7 +118,7 @@ test('navigation croisée Dashboard → Alertes → DRH → Alertes → Pointage
   assert.match(r.view().textContent, /Cockpit Alertes/);
   assert.equal(r.downloads.filter(d => d.endsWith('/alerts.js')).length, 1);
   assert.deepEqual(r.errors, []);
-  r.window.close();
+  await closeWhenIdle(r);
 });
 
 test('retour navigateur (back) depuis #/alerts revient proprement au dashboard', async () => {
@@ -121,5 +131,5 @@ test('retour navigateur (back) depuis #/alerts revient proprement au dashboard',
   assert.equal(R.activeModuleKey, null);
   assert.doesNotMatch(r.view().textContent, /ReferenceError|TypeError/);
   assert.deepEqual(r.errors, []);
-  r.window.close();
+  await closeWhenIdle(r);
 });
