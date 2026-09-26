@@ -585,13 +585,27 @@ def create_demande(payload: dict[str, Any], db: Session = Depends(get_db)) -> di
     return service.create_item(db, "demandesPersonnel", demande)
 
 
+def _ensure_portal_self(authorization: str | None, matricule: str) -> None:
+    """Un pointage portail n'est accepté que de l'employé lui-même, authentifié par son
+    jeton portail (même contrôle que /attendance-qr). Sans cette garde, n'importe qui
+    pouvait créer une présence pour n'importe quel matricule."""
+    identity = _portal_identity(authorization)
+    if identity.strip().upper() != str(matricule or "").strip().upper():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
+
+
 @router.post("/pointages", status_code=status.HTTP_201_CREATED)
-def create_pointage(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def create_pointage(payload: dict[str, Any], db: Session = Depends(get_db), authorization: str | None = Header(default=None)) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload invalide")
     pointage = _to_pointage(payload)
     if not pointage.get("matricule"):
         raise HTTPException(status_code=400, detail="Code employé obligatoire")
+    _ensure_portal_self(authorization, pointage["matricule"])
+    # Date et heure imposées par le serveur : un client ne peut jamais antidater une présence.
+    server_now = datetime.now(ZoneInfo("Africa/Algiers"))
+    pointage["date"] = server_now.strftime("%Y-%m-%d")
+    pointage["heure"] = server_now.strftime("%H:%M")
     position = pointage.get("position") if isinstance(pointage.get("position"), dict) else {}
     if not pointage.get("id"):
         pointage.pop("id", None)
@@ -649,13 +663,10 @@ def create_pointage_qr(payload: dict[str, Any], db: Session = Depends(get_db), a
         raise HTTPException(status_code=400, detail="token obligatoire")
     if not matricule:
         raise HTTPException(status_code=400, detail="matricule obligatoire")
-    if authorization and authorization.startswith("Bearer "):
-        try:
-            auth_payload = decode_token(authorization.removeprefix("Bearer "))
-        except ValueError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token portail invalide")
-        if auth_payload.get("portal") and auth_payload.get("sub") != matricule:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
+    # Le jeton QR de cette route historique n'est qu'un créneau horaire non signé (calculable
+    # par n'importe qui) : l'authentification portail de l'employé lui-même est donc
+    # obligatoire — auparavant optionnelle, ce qui permettait de pointer sans être connecté.
+    _ensure_portal_self(authorization, matricule)
     # Validate time-based token
     # New format:    "{siteId}|{slot10s}"  — 10-second windows
     # Legacy format: "{slot300s}"          — 5-minute windows

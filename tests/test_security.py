@@ -162,3 +162,59 @@ def test_ventes_unauthenticated(client):
 
 def test_reporting_unauthenticated(client):
     assert client.get("/api/reporting/dashboard").status_code == 401
+
+
+# ── Pointages portail : jamais sans l'authentification de l'employé lui-même ─────────
+def _portal_employee(db, code):
+    from app.modules.drh.models import Employee
+    emp = Employee(code=code, first_name="A", last_name="B", society="Iron Global Securite", status="actif")
+    db.add(emp); db.commit()
+    return emp
+
+
+def _portal_headers(subject):
+    from app.core.security import create_access_token
+    return {"Authorization": f"Bearer {create_access_token(subject=subject, claims={'portal': True}, ttl_minutes=60)}"}
+
+
+def _presences(db, emp):
+    from sqlalchemy import select
+    from app.modules.ops.models import DailyPresence
+    return db.execute(select(DailyPresence).where(DailyPresence.employee_id == emp.id)).scalars().all()
+
+
+def test_portal_pointage_post_requires_token_and_writes_nothing(client, db):
+    emp = _portal_employee(db, "SECPT01")
+    body = {"employee": {"matricule": "SECPT01"}, "action": "arrivee", "date": "2026-01-15", "heure": "07:00"}
+    assert client.post("/api/portal/pointages", json=body).status_code == 401
+    assert client.post("/api/portal/pointages", json=body, headers=_portal_headers("AUTRE_AGT")).status_code == 403
+    assert _presences(db, emp) == []
+
+
+def test_portal_pointage_post_rejects_staff_jwt(client, db, auth_headers):
+    _portal_employee(db, "SECPT02")
+    body = {"employee": {"matricule": "SECPT02"}, "action": "arrivee"}
+    assert client.post("/api/portal/pointages", json=body, headers=auth_headers).status_code == 403
+
+
+def test_portal_pointage_post_never_backdated(client, db):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    emp = _portal_employee(db, "SECPT03")
+    r = client.post("/api/portal/pointages", headers=_portal_headers("SECPT03"),
+                    json={"employee": {"matricule": "SECPT03"}, "action": "arrivee", "date": "2026-01-15", "heure": "07:00"})
+    assert r.status_code == 201, r.text
+    today = datetime.now(ZoneInfo("Africa/Algiers")).date()
+    assert [row.presence_date for row in _presences(db, emp)] == [today]
+
+
+def test_legacy_pointage_qr_requires_employee_portal_token(client, db):
+    import math
+    from datetime import datetime, timezone
+    emp = _portal_employee(db, "SECPT04")
+    slot = math.floor(datetime.now(timezone.utc).timestamp() * 1000 / 10000)
+    body = {"token": f"1|{slot}", "matricule": "SECPT04"}
+    assert client.post("/api/portal/pointage-qr", json=body).status_code == 401
+    assert client.post("/api/portal/pointage-qr", json=body, headers=_portal_headers("AUTRE_AGT")).status_code == 403
+    assert _presences(db, emp) == []
+    assert client.post("/api/portal/pointage-qr", json=body, headers=_portal_headers("SECPT04")).status_code == 201

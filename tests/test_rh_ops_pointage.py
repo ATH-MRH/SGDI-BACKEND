@@ -154,8 +154,11 @@ def test_pointage_gps_updates_feuille_presence(client, auth_headers):
         "status": "actif",
     }).json()
     matricule = emp.get("code") or "GPS001"
+    # Le pointage portail est fait par l'employé lui-même, avec SON jeton portail.
+    from app.core.security import create_access_token
+    portal_headers = {"Authorization": f"Bearer {create_access_token(subject=matricule, claims={'portal': True}, ttl_minutes=60)}"}
 
-    resp = client.post("/api/portal/pointages", headers=auth_headers, json={
+    resp = client.post("/api/portal/pointages", headers=portal_headers, json={
         "employee": {
             "matricule": matricule,
         },
