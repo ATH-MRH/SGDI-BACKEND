@@ -69,6 +69,20 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
 }
 
 
+# Sous-domaine dédié → clé module RBAC exigée à la connexion. Source unique (utilisée par
+# enforce_subdomain_login_scope) ; un sous-domaine absent vaut sa propre clé (drh, ops...).
+# beo.irongs.com (Bureau des Effectifs Ouest) exige la clé canonique site_workforce, et
+# elle seule : "beo" est un nom de domaine, jamais une clé module (STRICT_SUBDOMAINS).
+SUBDOMAIN_MODULE_ALIASES: dict[str, str] = {
+    "finance": "finances", "commercial": "dc", "portail-rh": "portail", "beo": "site_workforce",
+}
+STRICT_SUBDOMAINS: frozenset[str] = frozenset({"beo"})
+
+
+def required_module_for_subdomain(subdomain: str) -> str:
+    return SUBDOMAIN_MODULE_ALIASES.get(subdomain, subdomain)
+
+
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
@@ -97,9 +111,9 @@ def enforce_subdomain_login_scope(request: Request, user: User) -> None:
     # avant cette fonctionnalité (NULL) conservent le contrôle historique ci-dessous.
     if user.authorized_modules is not None:
         allowed = {str(value or "").strip().lower() for value in user.authorized_modules}
-        aliases = {"finance": "finances", "commercial": "dc", "portail-rh": "portail"}
-        module_key = aliases.get(subdomain, subdomain)
-        if is_admin_role(user.role) or subdomain in allowed or module_key in allowed:
+        module_key = required_module_for_subdomain(subdomain)
+        subdomain_key_ok = subdomain in allowed and subdomain not in STRICT_SUBDOMAINS
+        if is_admin_role(user.role) or subdomain_key_ok or module_key in allowed:
             return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

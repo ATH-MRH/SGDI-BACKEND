@@ -811,6 +811,11 @@ def _is_finance_host(host: str) -> bool:
     return host.split(":")[0].lower() == "finance.irongs.com"
 
 
+def _is_beo_host(host: str) -> bool:
+    # Bureau des Effectifs Ouest : domaine canonique du portail Site Workforce.
+    return host.split(":")[0].lower() == "beo.irongs.com"
+
+
 def _is_drh_host(host: str) -> bool:
     # drh.irongs.com — sert l'application DRH inchangée (même index par défaut que les
     # autres domaines partagés) ; distinct de rh.irongs.com (_is_rh_host, rh.html dédié).
@@ -1559,6 +1564,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_finance_host(host):
         return FileResponse(
             STATIC_DIR / "finance-platform" / "index.html",
+            media_type="text/html; charset=utf-8",
+            headers=_NO_CACHE,
+        )
+    if _is_beo_host(host):
+        return FileResponse(
+            STATIC_DIR / "site-workforce" / "index.html",
             media_type="text/html; charset=utf-8",
             headers=_NO_CACHE,
         )

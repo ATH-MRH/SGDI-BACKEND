@@ -175,3 +175,19 @@ test("noAccessNotice/emptyState/errorState rendent un état explicite, jamais un
   assert.match(w.SW.emptyState("Rien ici"), /Rien ici/);
   assert.match(w.SW.errorState(new w.SW.ApiError("Panne", 500)), /Panne/);
 });
+
+test("portail BEO : écran de connexion et badge affichent Bureau des Effectifs Ouest, Chargé des effectifs et le site imposé", async () => {
+  const w = freshWindow({
+    site: { id: 7, name: "HAMOUL 01" },
+    fetchImpl: () => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify({ site: { id: 7, name: "HAMOUL 01" }, kpi: {}, actions_rapides: { prochains_conges: [] } })) }),
+  });
+  w.eval(SHELL_SRC.replace(/if \(state\.token\) \{[\s\S]*?\n  \}\n/, ""));
+  w.SiteWorkforceShell.renderLogin();
+  assert.match(w.document.querySelector("#login-screen").textContent, /Bureau des Effectifs Ouest/);
+  w.SW.state.user = { full_name: "CE Test" };
+  await w.SiteWorkforceShell.renderShell();
+  const badge = w.document.querySelector(".shell-role-badge").textContent;
+  assert.match(badge, /Chargé des effectifs/);
+  assert.match(badge, /Bureau des Effectifs Ouest/);
+  assert.match(badge, /Site : HAMOUL 01/);
+});

@@ -51,6 +51,7 @@
           </div>
           <div class="shell-role-badge">
             <b>Chargé des effectifs</b>
+            <span>Bureau des Effectifs Ouest</span>
             <span>Site : ${esc(site ? site.name : "—")}</span>
           </div>
           <nav class="shell-nav"><div class="shell-nav-group">${renderNav()}</div></nav>
@@ -138,8 +139,8 @@
   function renderLogin(error) {
     document.querySelector("#root").innerHTML = `
       <div id="login-screen" class="card">
-        <h2 style="margin-top:0">ATLAS Site Workforce</h2>
-        <p class="section-sub" style="margin-top:-8px">Chargé des effectifs — Site</p>
+        <h2 style="margin-top:0">Bureau des Effectifs Ouest</h2>
+        <p class="section-sub" style="margin-top:-8px">ATLAS Site Workforce — Chargé des effectifs</p>
         <form id="login-form">
           <div class="field" style="margin-bottom:10px"><label>Identifiant</label><input name="username" required autocomplete="username"></div>
           <div class="field" style="margin-bottom:10px"><label>Mot de passe</label><input name="password" type="password" required autocomplete="current-password"></div>
