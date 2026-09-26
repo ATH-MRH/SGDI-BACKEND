@@ -92,6 +92,11 @@ FEATURE_CATALOG: dict[str, dict] = {
         "manual_entry": ("Saisie manuelle", "Recherche et saisie par le pointeur", ("read", "create")),
         "staffing": ("Effectifs par shift", "Effectifs contractuels et présence", ("read", "export")),
         "statistics": ("Statistiques et alertes", "Indicateurs et anomalies de pointage", ("read", "export")),
+        # Biométrie : permissions EXPLICITES uniquement (jamais accordées par défaut au DRH) —
+        # appliquées par app/modules/biometrics/routes.py, seul endroit où elles sont actives.
+        "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé", ("read",)),
+        "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement, ré-enrôlement, désactivation", ("create", "update")),
+        "biometric_admin": ("Biométrie — administration", "Doublons, seuils, caméras", ("validate", "admin")),
     }},
     "material": {"label": "Matériel", "domain": "materiel.irongs.com", "description": "Équipements, stocks et dotations", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs et alertes matériel", ("read",)),

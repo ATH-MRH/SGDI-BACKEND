@@ -10,6 +10,7 @@ from app.modules.attendance.models import AttendanceAnomaly
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
+from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 
 SOC = "Iron Global Securite"
 DAY = date(2027, 4, 5)

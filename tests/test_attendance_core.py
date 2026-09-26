@@ -12,6 +12,7 @@ from app.modules.attendance import core
 from app.modules.attendance.models import AttendanceAnomaly, AttendanceEvent
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
+from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 
 TZ = ZoneInfo("Africa/Algiers")
 SOC = "Iron Global Securite"

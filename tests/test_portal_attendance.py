@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.modules.irongs import service as irongs_service
+from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 
 
 def _seed_scan(db, row):

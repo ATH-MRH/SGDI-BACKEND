@@ -1,0 +1,138 @@
+"""Biométrie faciale et caméras — stockage spécialisé, séparé de la fiche employé.
+
+- La photo administrative reste celle de la fiche (Employee.extra["photo"]) ; elle n'est
+  jamais copiée ici. Un gabarit (embedding) n'est JAMAIS stocké dans Employee.extra, jamais
+  renvoyé au frontend, jamais journalisé : colonne chiffrée (Fernet) accessible au seul
+  backend.
+- Le consentement est un état administratif tracé (source, date, référence, version du
+  texte d'information, auteur) — pas un booléen frontend.
+- Les secrets caméra sont chiffrés et ne sortent jamais du backend.
+Voir docs/biometrics.md.
+"""
+from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base, TimestampMixin
+
+# Consentement
+CONSENT_CONTRACT = "contract_confirmed"     # accord général du contrat, confirmé par les RH
+CONSENT_EXPLICIT = "explicit_confirmed"     # accord explicite (document RH, enrôlement numérique)
+CONSENT_PENDING = "pending"
+CONSENT_REFUSED = "refused"
+CONSENT_WITHDRAWN = "withdrawn"
+CONSENT_STATUSES = frozenset({CONSENT_CONTRACT, CONSENT_EXPLICIT, CONSENT_PENDING, CONSENT_REFUSED, CONSENT_WITHDRAWN})
+CONSENT_ADMISSIBLE = frozenset({CONSENT_CONTRACT, CONSENT_EXPLICIT})
+CONSENT_SOURCES = frozenset({"EMPLOYMENT_CONTRACT", "HR_DOCUMENT", "DIGITAL_ENROLLMENT", "OTHER_AUTHORIZED_PROCESS"})
+
+# Gabarits
+TEMPLATE_ACTIVE = "ACTIVE"
+TEMPLATE_PENDING_REVIEW = "PENDING_REVIEW"   # doublon possible : décision humaine obligatoire
+TEMPLATE_INACTIVE = "INACTIVE"               # désactivé, remplacé, consentement retiré, départ
+TEMPLATE_REJECTED = "REJECTED"               # doublon confirmé / refus à la revue
+
+
+class BiometricConsent(Base, TimestampMixin):
+    """Historique append-only : la ligne la plus récente d'un employé fait foi."""
+    __tablename__ = "biometric_consents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(30))
+    source: Mapped[str] = mapped_column(String(40))
+    consent_date: Mapped[datetime | None] = mapped_column(DateTime)
+    proof_reference: Mapped[str | None] = mapped_column(String(200))
+    notice_version: Mapped[str] = mapped_column(String(20))
+    recorded_by: Mapped[str | None] = mapped_column(String(120))
+    comment: Mapped[str | None] = mapped_column(Text)
+
+
+class BiometricTemplate(Base, TimestampMixin):
+    __tablename__ = "biometric_templates"
+    __table_args__ = (Index("ix_biometric_templates_employee_status", "employee_id", "status"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    embedding_encrypted: Mapped[bytes] = mapped_column(LargeBinary)   # jamais exposé
+    engine: Mapped[str] = mapped_column(String(60))                   # moteur + version des modèles
+    config_version: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(30))                   # EMPLOYEE_PHOTO | CAMERA
+    source_ref: Mapped[str | None] = mapped_column(String(200))       # chemin photo / caméra, sans image
+    quality: Mapped[dict | None] = mapped_column(JSON)                # scores (jamais l'image)
+    consent_id: Mapped[int | None] = mapped_column(ForeignKey("biometric_consents.id", ondelete="SET NULL"))
+    duplicate_of_employee_id: Mapped[int | None] = mapped_column(Integer)
+    duplicate_score: Mapped[float | None] = mapped_column(Float)
+    created_by: Mapped[str | None] = mapped_column(String(120))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class BiometricConfig(Base):
+    """Seuils versionnés : chaque modification crée une nouvelle version (jamais d'écrasement)."""
+    __tablename__ = "biometric_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, unique=True)
+    recognition_threshold: Mapped[float] = mapped_column(Float)
+    review_margin: Mapped[float] = mapped_column(Float)
+    duplicate_threshold: Mapped[float] = mapped_column(Float)
+    liveness_threshold: Mapped[float] = mapped_column(Float)
+    quality_min_detection_score: Mapped[float] = mapped_column(Float)
+    quality_min_face_px: Mapped[int] = mapped_column(Integer)
+    quality_min_sharpness: Mapped[float] = mapped_column(Float)
+    cooldown_seconds: Mapped[int] = mapped_column(Integer)
+    provenance: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CameraModel(Base, TimestampMixin):
+    """Catalogue administrable (fabricant/modèle) — jamais de modèle inventé dans le code."""
+    __tablename__ = "camera_models"
+    __table_args__ = (UniqueConstraint("manufacturer", "model", name="uq_camera_models_manufacturer_model"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manufacturer: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    adapter: Mapped[str] = mapped_column(String(40))   # DAHUA | GENERIC_RTSP
+    resolution: Mapped[str | None] = mapped_column(String(40))
+    capabilities: Mapped[dict | None] = mapped_column(JSON)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+CAMERA_USAGES = frozenset({"ATTENDANCE", "ENROLLMENT", "ATTENDANCE_AND_ENROLLMENT"})
+CAMERA_ROLES = frozenset({"ENTRY", "EXIT", "ENROLLMENT", "SECONDARY"})
+
+
+class Camera(Base, TimestampMixin):
+    __tablename__ = "cameras"
+    __table_args__ = (UniqueConstraint("site_id", "name", name="uq_cameras_site_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    camera_model_id: Mapped[int | None] = mapped_column(ForeignKey("camera_models.id", ondelete="SET NULL"))
+    manufacturer: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    adapter: Mapped[str] = mapped_column(String(40))
+    society: Mapped[str] = mapped_column(String(150), index=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    location: Mapped[str | None] = mapped_column(String(120))
+    serial_number: Mapped[str | None] = mapped_column(String(80))
+    host: Mapped[str] = mapped_column(String(255))             # adresse réseau (LAN / passerelle)
+    http_port: Mapped[int | None] = mapped_column(Integer)
+    rtsp_port: Mapped[int | None] = mapped_column(Integer)
+    connection_type: Mapped[str] = mapped_column(String(30), default="LAN")
+    channel: Mapped[int] = mapped_column(Integer, default=1)
+    resolution: Mapped[str | None] = mapped_column(String(40))
+    fps: Mapped[int | None] = mapped_column(Integer)
+    profiles: Mapped[dict | None] = mapped_column(JSON)       # CAPTURE_HIGH_QUALITY / RECOGNITION_REALTIME / PREVIEW_LOW_BANDWIDTH
+    capabilities: Mapped[dict | None] = mapped_column(JSON)
+    usage: Mapped[str] = mapped_column(String(40), default="ATTENDANCE")
+    role: Mapped[str] = mapped_column(String(20), default="ENTRY")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    credentials_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)   # jamais exposé
+    last_check: Mapped[dict | None] = mapped_column(JSON)

@@ -201,26 +201,39 @@ def _expected_membership(column: str, values) -> tuple:
     return (((column, tuple(sorted(values))),),)
 
 
-def _expected_feature_clauses() -> tuple:
+def _expected_feature_clauses(catalog=None) -> tuple:
     return tuple(sorted(
         tuple(sorted((
             ("module_key", (module,)),
             ("feature_key", tuple(sorted(features))),
         )))
-        for module, features in FEATURE_ACTIONS.items()
+        for module, features in (catalog or FEATURE_ACTIONS).items()
     ))
 
 
-def _expected_applicable_clauses() -> tuple:
+def _expected_applicable_clauses(catalog=None) -> tuple:
     return tuple(sorted(
         tuple(sorted((
             ("module_key", (module,)),
             ("feature_key", (feature,)),
             ("action_key", tuple(sorted(actions))),
         )))
-        for module, features in FEATURE_ACTIONS.items()
+        for module, features in (catalog or FEATURE_ACTIONS).items()
         for feature, actions in features.items()
     ))
+
+
+def _current_application_catalog() -> dict | None:
+    """Catalogue courant de l'application. Sur une base NEUVE, la migration 0001
+    (Base.metadata.create_all) crée cette table avec les contraintes des modèles actuels :
+    elles reflètent le catalogue courant, pas l'instantané ci-dessus. Les migrations
+    ultérieures (ex. 20260927_0002) gardent la base alignée sur ce catalogue."""
+    try:
+        from app.core.permission_catalog import FEATURE_CATALOG
+    except Exception:  # noqa: BLE001
+        return None
+    return {module: {feature: tuple(spec[2]) for feature, spec in data["features"].items()}
+            for module, data in FEATURE_CATALOG.items()}
 
 
 def _validate_existing_table(bind) -> None:
@@ -273,12 +286,17 @@ def _validate_existing_table(bind) -> None:
     }
     if set(checks) != set(expected_checks):
         errors.append(f"contraintes CHECK={sorted(checks)!r}")
+    current = _current_application_catalog()
+    also_accepted = {
+        "ck_user_feature_permission_feature": _expected_feature_clauses(current) if current else None,
+        "ck_user_feature_permission_applicable": _expected_applicable_clauses(current) if current else None,
+    }
     for name, expected in expected_checks.items():
         sqltext = checks.get(name)
         if sqltext is None:
             continue
         actual = _check_clauses(sqltext)
-        if actual != expected:
+        if actual != expected and actual != also_accepted.get(name):
             errors.append(f"expression CHECK invalide pour {name}: {sqltext}")
     foreign_keys = {
         tuple(item.get("constrained_columns") or ()): (

@@ -32,6 +32,7 @@ from app.modules.fiscalite.routes import router as fiscalite_router
 from app.modules.cockpit.routes import router as cockpit_router
 from app.modules.site_workforce.routes import router as site_workforce_router
 from app.modules.attendance.routes import router as attendance_router
+from app.modules.biometrics.routes import router as biometrics_router
 
 
 api_router = APIRouter()
@@ -67,3 +68,4 @@ api_router.include_router(fiscalite_router, prefix="/fiscalite", tags=["Fiscalit
 api_router.include_router(cockpit_router, prefix="/cockpit", tags=["Cockpit DG"])
 api_router.include_router(site_workforce_router, prefix="/site-workforce", tags=["Site Workforce"])
 api_router.include_router(attendance_router, prefix="/attendance", tags=["Attendance"])
+api_router.include_router(biometrics_router, prefix="/biometrics", tags=["Biométrie"])

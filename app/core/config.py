@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # Tolérance métier avant qu'une arrivée soit signalée en retard par rapport à l'horaire
     # prévu du planning (rotation). Réglage d'exploitation, pas une règle légale.
     attendance_late_tolerance_minutes: int = 15
+    # Biométrie faciale — DÉSACTIVÉE par défaut (jamais d'activation implicite en production).
+    # Activation = décision explicite : BIOMETRIC_ENABLED=true + clé de chiffrement dédiée des
+    # gabarits (Fernet, générée hors dépôt) + modèles présents et vérifiés (empreintes SHA-256,
+    # voir docs/biometrics.md). Sans clé, aucun gabarit ne peut être enregistré.
+    biometric_enabled: bool = False
+    biometric_template_key: str | None = None
+    biometric_models_dir: str = "/app/models/biometrics"
     # Les candidatures du portail public arrivent dans cette file de recrutement.
     public_candidate_default_society: str = "IRON GLOBAL SÉCURITÉ"
     admin_system_password: str | None = None

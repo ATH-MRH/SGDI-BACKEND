@@ -23,6 +23,7 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/profitability", "/api/fiscalite", "/api/cockpit",
     "/api/site-workforce",
     "/api/attendance",
+    "/api/biometrics",
 )
 
 # Plusieurs interfaces autonomes partagent le meme routeur backend. Les valeurs
@@ -68,6 +69,9 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/site-workforce", frozenset({"site_workforce"})),
     # Centre de contrôle du pointage + onglet Pointages de l'Employé 360.
     ("/api/attendance", frozenset({"pointage", "ops", "drh"})),
+    # Biométrie : terminal (reconnaissance) + administration ; actions sensibles soumises en
+    # plus à une permission biométrique explicite (app/modules/biometrics/routes.py).
+    ("/api/biometrics", frozenset({"pointage", "pointeur", "ops", "drh"})),
 )
 
 MODULE_KEY_ALIASES = {
