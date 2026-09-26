@@ -79,7 +79,7 @@ function renderAdminBeo(view){
   const candidates=beoCandidateUsers();
   view.innerHTML=`<div class="mb-5">
       <div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div>
-      <h1 class="text-3xl font-black mt-1">🏢 Bureau des Effectifs Ouest</h1>
+      <h1 class="text-3xl font-black mt-1" data-keep-case>Bureau des Effectifs Ouest</h1>
       <p class="text-sm text-slate-500 mt-1">Code <b>BEO</b> · Module <code>site_workforce</code> — Gestion opérationnelle des effectifs limitée aux sites affectés.</p>
       <div class="flex items-center gap-3 mt-2 text-sm">
         <span class="pill pill-blue">beo.irongs.com</span>
@@ -151,8 +151,12 @@ async function adminSetBeoAccess(username,grant){
     ?`Accorder l'accès Bureau des Effectifs Ouest (site_workforce) à ${u.username} ?\n\nSes autres modules ne sont pas modifiés. Pensez ensuite à définir sa société et son site.`
     :`Retirer l'accès Bureau des Effectifs Ouest (site_workforce) à ${u.username} ?\n\nLe compte et ses autres modules ne sont pas modifiés.`;
   if(!confirm(msg))return false;
-  const next=beoModulesWithAccess(u.modulesAutorises,grant);
   try{
+    // Relire les modules sur le serveur juste avant d'écrire : partir du cache local
+    // effacerait un module accordé entre-temps (autre onglet, autre administrateur).
+    const fresh=(await SGDI.auth.listUsers()||[]).find(x=>String(x.username||"").toLowerCase()===String(u.username).toLowerCase());
+    if(!fresh){toast("Utilisateur introuvable sur le serveur","error");return false}
+    const next=beoModulesWithAccess(fresh.authorized_modules,grant);
     await SGDI.auth.updateUser(u.username,{authorized_modules:next});
     u.modulesAutorises=next;
     logActivity(grant?"Octroi accès BEO (site_workforce)":"Retrait accès BEO (site_workforce)",u.username);

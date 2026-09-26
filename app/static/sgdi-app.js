@@ -8113,6 +8113,8 @@ function normalizeCentralPage(view){
   nodes.forEach(node=>{node.nodeValue=(node.nodeValue||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trimStart()});
   view.querySelectorAll("h1").forEach(h=>{
     h.classList.add("module-title-clean");
+    // Nom propre (ex. "Bureau des Effectifs Ouest") : casse d'origine conservée.
+    if(h.hasAttribute("data-keep-case"))return;
     h.textContent=sgdiTitleCaseText(h.textContent||"");
   });
   view.querySelectorAll("h2,h3").forEach(h=>{h.textContent=(h.textContent||"").replace(/\s+/g," ").trim()});

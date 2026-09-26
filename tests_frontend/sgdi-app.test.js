@@ -58,6 +58,7 @@ const exposeSuffix = `
   normalizeAdminUserRole: (typeof normalizeAdminUserRole !== 'undefined') ? normalizeAdminUserRole : null,
   adminRoleDisplayLabel: (typeof adminRoleDisplayLabel !== 'undefined') ? adminRoleDisplayLabel : null,
   renderAdminUsers: (typeof renderAdminUsers !== 'undefined') ? renderAdminUsers : null,
+  normalizeCentralPage: (typeof normalizeCentralPage !== 'undefined') ? normalizeCentralPage : null,
   adminFilterUsers: (typeof adminFilterUsers !== 'undefined') ? adminFilterUsers : null,
   isAdminGeneralSession: (typeof isAdminGeneralSession !== 'undefined') ? isAdminGeneralSession : null,
   setDb: (v) => { db = v; },
@@ -722,15 +723,19 @@ async function withUpdateUserSpy(fn) {
   const calls = [];
   const original = window.SGDI.auth.updateUser;
   const originalConfirm = window.confirm;
+  const originalList = window.SGDI.auth.listUsers;
+  // Le serveur fait foi : listUsers renvoie les modules réels (au format API).
+  window.SGDI.auth.listUsers = async () => (window.__serverUsers || []);
   window.SGDI.auth.updateUser = async (username, payload) => { calls.push({ username, payload }); return {}; };
   window.confirm = () => true;
-  try { await fn(calls); } finally { window.SGDI.auth.updateUser = original; window.confirm = originalConfirm; }
+  try { await fn(calls); } finally { window.SGDI.auth.updateUser = original; window.SGDI.auth.listUsers = originalList; window.confirm = originalConfirm; window.__serverUsers = null; }
 }
 
 test('§16.H : retirer BEO ne retire que la clé site_workforce, jamais le compte ni les autres modules', async () => {
   T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
   T().setDb({ users: [{ username: 'CE02', modulesAutorises: ['drh', 'site_workforce', 'finances'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true }], sites: [] });
   await withUpdateUserSpy(async (calls) => {
+    window.__serverUsers = [{ username: 'CE02', authorized_modules: ['drh', 'site_workforce', 'finances'] }];
     await T().adminRemoveBeoAccess(encodeURIComponent('CE02'));
     assert.strictEqual(calls.length, 1);
     assert.deepStrictEqual(Object.keys(calls[0].payload), ['authorized_modules']);
@@ -748,10 +753,22 @@ test('§4 : ajouter un utilisateur existant n\'ajoute que site_workforce et cons
   ], sites: [] });
   assert.deepStrictEqual(T().beoCandidateUsers().map((u) => u.username), ['OPS01']);
   await withUpdateUserSpy(async (calls) => {
+    window.__serverUsers = [{ username: 'OPS01', authorized_modules: ['ops'] }];
     await T().adminAddBeoAccess('OPS01');
     assert.deepStrictEqual([...calls[0].payload.authorized_modules], ['ops', 'site_workforce']);
   });
   assert.deepStrictEqual([...T().beoModulesWithAccess(['site_workforce', 'drh'], true)], ['drh', 'site_workforce']);
+});
+
+test('Retirer BEO part des modules du serveur, jamais d\'un cache local périmé', async () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [{ username: 'CE03', modulesAutorises: ['site_workforce'], actif: true }], sites: [] });
+  await withUpdateUserSpy(async (calls) => {
+    // Un autre administrateur a accordé "pointage" après le chargement de la page.
+    window.__serverUsers = [{ username: 'CE03', authorized_modules: ['site_workforce', 'pointage'] }];
+    await T().adminRemoveBeoAccess('CE03');
+    assert.deepStrictEqual([...calls[0].payload.authorized_modules], ['pointage']);
+  });
 });
 
 test('§14 : un administrateur ne modifie jamais son propre accès BEO depuis cet écran', async () => {
@@ -858,4 +875,18 @@ test('BEO K/L : états CONFIGURÉ / incomplets / invalides', () => {
   assert.match(st({ sitesAutorises: [1], societesAutorisees: ['SOC', 'AUTRE'] }).reason, /Plusieurs sociétés/);
   assert.match(st({ sitesAutorises: [2], societesAutorisees: ['SOC'] }).reason, /n'appartient/);
   assert.strictEqual(st({ sitesAutorises: [1], societesAutorisees: ['SOC'], actif: false }).reason, 'Compte inactif');
+});
+
+test('BEO : le titre "Bureau des Effectifs Ouest" garde sa casse après la normalisation des en-têtes', () => {
+  T().setSession({ username: 'ADMIN01', role: 'ADM', adminSystem: true });
+  T().setDb({ users: [], sites: [] });
+  const view = window.document.createElement('div');
+  T().renderAdmin(view, 'beo');
+  T().normalizeCentralPage(view);
+  assert.strictEqual(view.querySelector('h1').textContent, 'Bureau des Effectifs Ouest');
+  // Les autres titres restent soumis à la convention (casse de phrase).
+  const other = window.document.createElement('div');
+  other.innerHTML = '<h1>GESTION DES UTILISATEURS</h1>';
+  T().normalizeCentralPage(other);
+  assert.strictEqual(other.querySelector('h1').textContent, 'Gestion des utilisateurs');
 });
