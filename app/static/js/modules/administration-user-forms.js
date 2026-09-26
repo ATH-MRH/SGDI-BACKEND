@@ -95,6 +95,7 @@ function adminTogglePasswordVisibility(button){
 function adminBeoRoleGuard(data){
   if(normalizeAdminUserRole(data&&data.role)!=="charge_effectifs_site")return"";
   if(!(data.modulesAutorises||[]).includes("site_workforce"))return"";
+  if(data.actif===false)return""; // suspendre n'est jamais bloqué (même règle serveur)
   const socs=data.societesAutorisees||[],sites=data.sitesAutorises||[];
   if(!socs.length)return"Chargé des effectifs : cochez explicitement la société du compte (une liste vide n'est jamais un accès global).";
   if(socs.length>1)return"Chargé des effectifs : une seule société autorisée (actuellement "+socs.length+").";

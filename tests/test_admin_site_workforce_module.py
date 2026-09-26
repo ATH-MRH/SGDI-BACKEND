@@ -362,3 +362,16 @@ def test_beo_patch_cannot_create_invalid_state(client, auth_headers, db):
     assert client.patch("/api/auth/users/beo_h", headers=auth_headers, json={"authorized_sites": [site_b.id]}).status_code == 200
     r = client.patch("/api/auth/users/beo_h", headers=auth_headers, json={"authorized_modules": ["pointage"], "authorized_sites": []})
     assert r.status_code == 200, r.text
+
+
+def test_invalid_beo_account_can_always_be_suspended_but_not_reactivated(client, auth_headers, db):
+    """Suspendre un compte BEO mal configuré (donnée héritée) n'est jamais bloqué ; le
+    réactiver repasse par la garde tant que le périmètre n'est pas corrigé."""
+    site, _ = _seeded_site(db)
+    _legacy_beo_user(db, "ce01_legacy", societies=[SOC], sites=[])
+    assert client.patch("/api/auth/users/ce01_legacy", headers=auth_headers, json={"is_active": False}).status_code == 200
+    _assert_refused(client.patch("/api/auth/users/ce01_legacy", headers=auth_headers, json={"is_active": True}),
+                    "site autorisé est obligatoire")
+    r = client.patch("/api/auth/users/ce01_legacy", headers=auth_headers, json={"is_active": True, "authorized_sites": [site.id]})
+    assert r.status_code == 200, r.text
+    assert r.json()["is_active"] is True

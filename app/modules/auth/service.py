@@ -120,11 +120,14 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
     if payload.is_active is not None:
         user.is_active = payload.is_active
     # Valide l'état FINAL fusionné (existant + PATCH partiel) : un PATCH ne peut jamais
-    # laisser un compte BEO dans un état que le portail refuserait.
+    # laisser un compte BEO ACTIF dans un état que le portail refuserait. Un compte
+    # désactivé ne se connecte pas : le suspendre ne doit jamais être bloqué par un
+    # périmètre incomplet, et sa réactivation repasse par cette validation.
     try:
-        _validate_beo_scope(db, role=user.role, modules=user.authorized_modules,
-                            societies=user.authorized_societies, sites=user.authorized_sites,
-                            global_society_access=user.global_society_access)
+        if user.is_active:
+            _validate_beo_scope(db, role=user.role, modules=user.authorized_modules,
+                                societies=user.authorized_societies, sites=user.authorized_sites,
+                                global_society_access=user.global_society_access)
     except HTTPException:
         db.rollback()
         raise

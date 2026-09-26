@@ -795,6 +795,8 @@ test('§5/§6/§7 : le rôle Chargé des effectifs est conservé et exige une so
   assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1', '2'] }), /un seul site/);
   assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['2'] }), /n'appartient pas/);
   assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1'] }), '');
+  // Suspendre un compte mal configuré n'est jamais bloqué, comme côté serveur.
+  assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: [], sitesAutorises: [], actif: false }), '');
   // Rôle chargé des effectifs SANS site_workforce : règle historique, comme le serveur.
   assert.strictEqual(T().adminBeoRoleGuard({ role: 'charge_effectifs_site', modulesAutorises: ['drh'], societesAutorisees: [], sitesAutorises: [] }), '');
   // Les autres rôles gardent la règle historique ("vide = toutes").
