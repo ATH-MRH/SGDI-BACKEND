@@ -45,6 +45,7 @@ const TABS = [
   { key: "documents", label: "Documents" },
   { key: "historique", label: "Historique" },
   { key: "pointage", label: "Pointage" },
+  { key: "biometrie", label: "Biométrie" },
   { key: "materiel", label: "Matériel" },
   { key: "blacklist", label: "Blacklist" },
 ];
@@ -104,7 +105,7 @@ function selectTab(employee, tabKey) {
 function renderTab(employee, tabKey) {
   if (tabKey === "identite") return mount("#dn-dossier-panel", identiteHTML(employee));
   if (tabKey === "affectation") return mount("#dn-dossier-panel", affectationHTML(employee));
-  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments, historique: sectionAssignmentHistory, pointage: sectionAttendance, materiel: sectionEquipment, blacklist: sectionBlacklist }[tabKey];
+  const section = { contrats: sectionContracts, conges: sectionLeaves, discipline: sectionSanctions, documents: sectionDocuments, historique: sectionAssignmentHistory, pointage: sectionAttendance, biometrie: sectionBiometrics, materiel: sectionEquipment, blacklist: sectionBlacklist }[tabKey];
   if (section) loadSection(employee, tabKey, section);
 }
 
@@ -128,6 +129,7 @@ async function loadSection(employee, tabKey, sectionFn) {
     if (tabKey === "contrats") wireContractsSection(employee);
     if (tabKey === "documents") wireDocumentsSection();
     if (tabKey === "blacklist") wireBlacklistSection(employee);
+    if (tabKey === "biometrie") wireBiometricsSection(employee);
   } catch (err) {
     if (err?.aborted) return;
     if (mySeq !== tabRequestSeq || state.activeTab !== tabKey || !raceContextStillValid(raceCtx)) return;
@@ -473,12 +475,72 @@ async function sectionAssignmentHistory(e) {
   </tbody></table>`;
 }
 
+const SOURCE_LABELS = { QR: "QR", MANUAL: "Manuel", FACIAL: "Facial", SITE_WORKFORCE: "BEO", PORTAL_GPS: "Portail GPS", IMPORT: "Import", SYSTEM: "Système" };
+const EVENT_LABELS = { ARRIVAL: "Entrée", DEPARTURE: "Sortie", STATUS: "Statut", CORRECTION: "Correction", CLOSE: "Clôture", REOPEN: "Réouverture" };
+
+// Source canonique Attendance Core (GET /attendance/employees/{id}) : journées, événements
+// (source, terminal/caméra, auteur), anomalies et corrections (avant/après) en UN appel,
+// à l'ouverture de l'onglet uniquement.
 async function sectionAttendance(e) {
-  const rows = await loadData(`drh:employee:${e.id}:attendance`, (signal) => api.get(`/drh/employees/${encodeURIComponent(e.id)}/attendance`, { signal }), { ttlMs: 10000 });
-  if (!Array.isArray(rows) || !rows.length) return emptyStateHTML("Aucun pointage enregistré.");
-  return `<table class="dn-table"><thead><tr><th>Date</th><th>Site</th><th>Statut</th><th>Arrivée</th><th>Départ</th></tr></thead><tbody>
-    ${rows.map(p => `<tr><td>${escapeHTML(p.presence_date || "—")}</td><td>${escapeHTML(p.site_name || "—")}</td><td><span class="dn-badge">${escapeHTML(p.status || "—")}</span></td><td>${escapeHTML(p.arrival_time || "—")}</td><td>${escapeHTML(p.departure_time || "—")}</td></tr>`).join("")}
-  </tbody></table>`;
+  const data = await loadData(`drh:employee:${e.id}:attendance-core`, (signal) => api.get(`/attendance/employees/${encodeURIComponent(e.id)}?days=90`, { signal }), { ttlMs: 10000 });
+  const days = Array.isArray(data?.days) ? data.days : [];
+  const events = Array.isArray(data?.events) ? data.events : [];
+  const anomalies = Array.isArray(data?.anomalies) ? data.anomalies : [];
+  if (!days.length && !events.length) return emptyStateHTML("Aucun pointage enregistré sur les 90 derniers jours.");
+  const cur = data.current || {};
+  const changes = (c) => c ? Object.entries(c).map(([k, v]) => `${escapeHTML(k)} : ${escapeHTML(v?.avant ?? "—")} → ${escapeHTML(v?.apres ?? "—")}`).join("<br>") : "";
+  return `<div class="dn-error-state-text" style="margin:0 0 10px">Aujourd'hui : <b>${escapeHTML(cur.status || "—")}</b>${cur.site ? " · " + escapeHTML(cur.site) : ""}${cur.closed ? " · clôturé" : ""}</div>
+    <table class="dn-table"><thead><tr><th>Date</th><th>Site</th><th>Statut</th><th>Arrivée</th><th>Départ</th><th>Clôture</th></tr></thead><tbody>
+    ${days.map(p => `<tr><td>${escapeHTML(p.date || "—")}</td><td>${escapeHTML(p.site || "—")}</td><td><span class="dn-badge">${escapeHTML(p.status || "—")}</span></td><td>${escapeHTML(p.arrival || "—")}</td><td>${escapeHTML(p.departure || "—")}</td><td>${p.closed ? "Clôturé" : "—"}</td></tr>`).join("")}
+    </tbody></table>
+    ${anomalies.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Anomalies</h3><table class="dn-table"><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th>Statut</th></tr></thead><tbody>
+      ${anomalies.map(a => `<tr><td>${escapeHTML(a.date || "—")}</td><td>${escapeHTML(a.type)}</td><td>${escapeHTML(a.message)}</td><td>${escapeHTML(a.status)}</td></tr>`).join("")}</tbody></table>` : ""}
+    ${events.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Événements</h3><table class="dn-table"><thead><tr><th>Horodatage</th><th>Événement</th><th>Source</th><th>Site</th><th>Auteur / terminal</th><th>Détail</th></tr></thead><tbody>
+      ${events.map(ev => `<tr><td>${escapeHTML(String(ev.at || "").slice(0, 16).replace("T", " "))}</td><td>${escapeHTML(EVENT_LABELS[ev.type] || ev.type)}</td><td>${escapeHTML(SOURCE_LABELS[ev.source] || ev.source)}</td><td>${escapeHTML(ev.site || "—")}</td><td>${escapeHTML(ev.actor || "—")}${ev.device_id ? " · caméra #" + escapeHTML(ev.device_id) : ""}</td><td>${ev.observation ? escapeHTML(ev.observation) : ""}${ev.changes ? (ev.observation ? "<br>" : "") + changes(ev.changes) : ""}</td></tr>`).join("")}</tbody></table>` : ""}`;
+}
+
+// Biométrie (lecture de l'état + enrôlement depuis la photo + désactivation). Permission
+// biométrique EXPLICITE exigée par le backend : un 403 est expliqué, jamais masqué.
+const CONSENT_LABELS = { contract_confirmed: "Accord du contrat confirmé", explicit_confirmed: "Accord explicite", pending: "En attente", refused: "Refusé", withdrawn: "Retiré" };
+const TEMPLATE_LABELS = { ACTIVE: "Actif", PENDING_REVIEW: "En revue (doublon possible)", INACTIVE: "Inactif", REJECTED: "Rejeté" };
+
+async function sectionBiometrics(e) {
+  let data;
+  try {
+    data = await api.get(`/biometrics/employees/${encodeURIComponent(e.id)}`);
+  } catch (err) {
+    if (err?.status === 403) return emptyStateHTML("Permission biométrique requise pour consulter cette section (Administration → Permissions).");
+    throw err;
+  }
+  const c = data.consent;
+  const active = data.active_template;
+  return `<div class="dn-error-state-text" style="margin:0 0 10px">${data.enabled ? "" : "Biométrie désactivée sur ce serveur. "}Gestion complète (consentement, caméras, doublons) : centre de contrôle pointage.irongs.com.</div>
+    <table class="dn-table"><tbody>
+      <tr><th>Consentement</th><td>${c ? `${escapeHTML(CONSENT_LABELS[c.status] || c.status)}${c.proof_reference ? " · réf. " + escapeHTML(c.proof_reference) : ""} · texte ${escapeHTML(c.notice_version)}${c.admissible ? "" : " · <b>non admissible</b>"}` : "Aucun"}</td></tr>
+      <tr><th>Enrôlement</th><td>${escapeHTML(data.enrollment === "ACTIVE" ? "Actif" : data.enrollment === "PENDING_REVIEW" ? "En revue (doublon possible)" : "Aucun")}</td></tr>
+      <tr><th>Photo source</th><td>${data.photo_available ? "Photo de la fiche disponible" : "Aucune photo exploitable dans la fiche"}</td></tr>
+      <tr><th>Dernière mise à jour</th><td>${escapeHTML((active?.activated_at || data.templates?.[0]?.created_at || "—").slice(0, 16).replace("T", " "))}</td></tr>
+    </tbody></table>
+    ${data.templates?.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Historique des gabarits</h3><table class="dn-table"><thead><tr><th>Créé le</th><th>Source</th><th>Statut</th><th>Motif</th></tr></thead><tbody>
+      ${data.templates.map(t => `<tr><td>${escapeHTML((t.created_at || "").slice(0, 16).replace("T", " "))}</td><td>${t.source === "EMPLOYEE_PHOTO" ? "Photo de la fiche" : "Caméra"}</td><td>${escapeHTML(TEMPLATE_LABELS[t.status] || t.status)}</td><td>${escapeHTML(t.status_reason || "—")}</td></tr>`).join("")}</tbody></table>` : ""}
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button type="button" class="dn-btn" data-dn-bio-enroll ${data.photo_available ? "" : "disabled"}>${active ? "Ré-enrôler depuis la photo" : "Enrôler depuis la photo"}</button>
+      ${data.enrollment !== "NONE" ? `<button type="button" class="dn-btn" data-dn-bio-deactivate>Désactiver</button>` : ""}
+    </div><div class="dn-error-state-text" data-dn-bio-feedback role="status"></div>`;
+}
+
+function wireBiometricsSection(employee) {
+  const feedback = document.querySelector("[data-dn-bio-feedback]");
+  const run = async (fn, okText) => {
+    try { await fn(); invalidate(`drh:employee:${employee.id}:biometrics`); feedback.textContent = okText; loadSection(employee, "biometrie", sectionBiometrics); }
+    catch (err) { feedback.textContent = err?.status === 403 ? "Permission biométrique requise pour cette action." : (err?.message || "Action impossible"); }
+  };
+  document.querySelector("[data-dn-bio-enroll]")?.addEventListener("click", () => run(() => api.post(`/biometrics/employees/${encodeURIComponent(employee.id)}/enroll`, {}), "Enrôlement enregistré."));
+  document.querySelector("[data-dn-bio-deactivate]")?.addEventListener("click", () => {
+    const reason = window.prompt("Motif de la désactivation (obligatoire) :");
+    if (!reason || reason.trim().length < 3) return;
+    run(() => api.post(`/biometrics/employees/${encodeURIComponent(employee.id)}/deactivate`, { reason: reason.trim() }), "Biométrie désactivée.");
+  });
 }
 
 async function sectionEquipment(e) {

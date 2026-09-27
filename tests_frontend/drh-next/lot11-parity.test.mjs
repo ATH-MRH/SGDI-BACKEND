@@ -58,15 +58,19 @@ test("approbation réussie (200) : aucun message d'erreur résiduel", async () =
 
 // ── LOT 11B : onglets Pointage et Matériel (vues composées) ───────────────────
 
+// Source canonique Attendance Core (GET /attendance/employees/{id}) depuis la mission
+// Attendance V1 : même intention (un appel, données réelles), réponse structurée.
+const ATTENDANCE_CORE = { current: { status: "present", site: "SITE Y" }, days: [{ id: 1, date: "2025-01-01", site: "SITE Y", status: "present", arrival: "08:00", departure: "16:00", closed: false }], events: [], anomalies: [] };
+
 test("onglet Pointage : 1 appel à /attendance, données réelles affichées", async () => {
   const { window } = setup();
   window.fetch = async (url) => {
-    if (String(url).includes("/attendance")) return jsonResp([{ id: 1, presence_date: "2025-01-01", site_name: "SITE Y", status: "present", arrival_time: "08:00", departure_time: "16:00" }]);
+    if (String(url).includes("/attendance")) return jsonResp(ATTENDANCE_CORE);
     return jsonResp(employee(1));
   };
   await renderEmployeeDossier({ id: "1" });
   let calls = 0;
-  window.fetch = async () => { calls++; return jsonResp([{ id: 1, presence_date: "2025-01-01", site_name: "SITE Y", status: "present", arrival_time: "08:00", departure_time: "16:00" }]); };
+  window.fetch = async () => { calls++; return jsonResp(ATTENDANCE_CORE); };
   document.querySelector('[data-dn-tab="pointage"]').click();
   await tick(); await tick();
   assert.equal(calls, 1);

@@ -18,6 +18,7 @@ import { renderLeaves } from "./modules/leaves.mjs";
 import { renderDiscipline } from "./modules/discipline.mjs";
 import { renderDocuments } from "./modules/documents.mjs";
 import { renderRecruitment } from "./modules/recruitment.mjs";
+import { renderAttendance } from "./modules/attendance.mjs";
 
 const NAV_ITEMS = [
   { route: "dashboard", label: "Tableau de bord" },
@@ -29,25 +30,11 @@ const NAV_ITEMS = [
   { route: "discipline", label: "Discipline" },
   { route: "recruitment", label: "Recrutement" },
   { route: "documents", label: "Documents" },
-  { route: "alerts", label: "Alertes" },
 ];
 
-// dashboard (LOT 1), employees (LOT 2), employee-dossier (LOT 3), contracts (LOT 4),
-// assignments (LOT 5) et leaves (LOT 6) sont désormais de vrais modules. Le reste est un
-// squelette de route explicite ("arrive au LOT n") — jamais semblant qu'un écran existe
-// déjà. Numérotation alignée sur le plan LOT 3-10 en cours (mission autonome) :
-// discipline=7, documents=8, dashboard=9. "attendance" et "recruitment" ne font PAS
-// partie du périmètre LOTS 3-10 de cette mission — aucun numéro de lot fictif ne leur
-// est attribué (pas de fausse promesse).
-const COMING_SOON_LOT = { attendance: null, alerts: null };
-
-function renderComingSoon(route) {
-  const item = NAV_ITEMS.find(n => n.route === route);
-  const lot = COMING_SOON_LOT[route];
-  const text = lot ? `Cet écran arrive au LOT ${lot}.` : "Cet écran n'est pas encore planifié.";
-  document.querySelector("#dn-view").innerHTML = `<div class="dn-page-head"><h1>${escapeHTML(item?.label || route)}</h1></div>
-    <div class="dn-card dn-panel"><div class="dn-empty-state">${escapeHTML(text)}</div></div>`;
-}
+// Plus aucun écran « bientôt disponible » : « Pointage » lit la source canonique
+// Attendance Core (modules/attendance.mjs) ; l'entrée « Alertes », sans écran, est retirée
+// (le cockpit Alertes existe dans ATLAS). Voir docs/drh-next-unmerged-audit.md (c99e23a).
 
 function shellHTML(user) {
   return `<div class="dn-app" id="dn-app">
@@ -102,9 +89,7 @@ function registerRoutes() {
   registerRoute("discipline", async () => { highlightActiveNav("discipline"); await renderDiscipline(); });
   registerRoute("documents", async () => { highlightActiveNav("documents"); await renderDocuments(); });
   registerRoute("recruitment", async () => { highlightActiveNav("recruitment"); await renderRecruitment(); });
-  for (const route of Object.keys(COMING_SOON_LOT)) {
-    registerRoute(route, async () => { highlightActiveNav(route); renderComingSoon(route); });
-  }
+  registerRoute("attendance", async () => { highlightActiveNav("attendance"); await renderAttendance(); });
   registerNotFound(() => {
     document.querySelector("#dn-view").innerHTML = `<div class="dn-card dn-panel"><div class="dn-empty-state">Page introuvable. <a href="#/dashboard">Retour au tableau de bord</a>.</div></div>`;
   });
