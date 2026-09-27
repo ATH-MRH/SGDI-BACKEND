@@ -3651,8 +3651,8 @@ table{width:100%;max-width:100%}
   width:100%;
 }
 /* Commandes de ligne indépendantes du style global des boutons de barre d'outils. */
-#view .effectif-table .effectif-open-btn,
-#view .effectif-table .effectif-more-btn{
+#view .effectif-table .effectif-row-actions .effectif-open-btn,
+#view .effectif-table .effectif-row-actions .effectif-more-btn{
   display:inline-flex!important;
   align-items:center!important;
   justify-content:center!important;
@@ -3674,7 +3674,7 @@ table{width:100%;max-width:100%}
   cursor:pointer;
   transition:background .15s,color .15s,border-color .15s!important;
 }
-#view .effectif-table .effectif-open-btn{
+#view .effectif-table .effectif-row-actions .effectif-open-btn{
   width:88px!important;
   min-width:88px!important;
   max-width:88px!important;
@@ -3682,12 +3682,12 @@ table{width:100%;max-width:100%}
   background:#eef6ff!important;
   color:#0b3d75!important;
 }
-#view .effectif-table .effectif-open-btn:hover{
+#view .effectif-table .effectif-row-actions .effectif-open-btn:hover{
   background:#0b3d75!important;
   border-color:#0b3d75!important;
   color:#fff!important;
 }
-#view .effectif-table .effectif-more-btn{
+#view .effectif-table .effectif-row-actions .effectif-more-btn{
   width:34px!important;
   min-width:34px!important;
   max-width:34px!important;
@@ -3695,13 +3695,13 @@ table{width:100%;max-width:100%}
   background:#fff!important;
   color:#52677f!important;
 }
-#view .effectif-table .effectif-more-btn:hover{
+#view .effectif-table .effectif-row-actions .effectif-more-btn:hover{
   background:#eef6ff!important;
   border-color:#0b3d75!important;
   color:#0b3d75!important;
 }
-#view .effectif-table .effectif-open-btn:focus-visible,
-#view .effectif-table .effectif-more-btn:focus-visible{
+#view .effectif-table .effectif-row-actions .effectif-open-btn:focus-visible,
+#view .effectif-table .effectif-row-actions .effectif-more-btn:focus-visible{
   outline:2px solid #2563eb!important;
   outline-offset:2px!important;
 }
@@ -7719,7 +7719,7 @@ body.sgdi-view-mode #view .rh-erp-photo .photo-cam-overlay{display:none!importan
     gap:8px!important;
     width:100%!important;
   }
-  #view .effectif-table .effectif-open-btn{
+  #view .effectif-table .effectif-row-actions .effectif-open-btn{
     width:auto!important;
     min-width:0!important;
     max-width:none!important;
@@ -7729,7 +7729,7 @@ body.sgdi-view-mode #view .rh-erp-photo .photo-cam-overlay{display:none!importan
     font-size:13px!important;
     border-radius:12px!important;
   }
-  #view .effectif-table .effectif-more-btn{
+  #view .effectif-table .effectif-row-actions .effectif-more-btn{
     flex:0 0 44px!important;
     width:44px!important;
     min-width:44px!important;
