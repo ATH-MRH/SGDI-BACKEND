@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import secrets
 import logging
 import os
 import re
@@ -84,7 +85,10 @@ def save_base64_photo(value: str, item: dict[str, Any] | None = None, fallback: 
         logger.warning("Photo Base64 ignoree: taille %s octets > limite %s", len(content), settings.max_photo_upload_bytes)
         return ""
     ensure_upload_dirs()
-    name = _candidate_photo_name(item, fallback)
+    # Nom IMPRÉVISIBLE (matricule + 128 bits aléatoires) : les photos sont servies sans
+    # authentification (balises <img>) ; un nom égal au matricule permettait de récupérer toutes
+    # les photos par énumération — source même de l'enrôlement biométrique.
+    name = f"{_candidate_photo_name(item, fallback)}-{secrets.token_hex(16)}"
     path = PHOTOS_DIR / f"{name}.jpg"
     path.write_bytes(content)
     return f"{PUBLIC_PHOTO_PREFIX}/{name}.jpg"

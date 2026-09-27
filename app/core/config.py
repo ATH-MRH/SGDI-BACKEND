@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     biometric_enabled: bool = False
     biometric_template_key: str | None = None
     biometric_models_dir: str = "/app/models/biometrics"
+    # À activer SEULEMENT après scripts/rename_public_photos.py --apply : refuse les photos dont
+    # le nom est prévisible (ex. matricule.jpg). Désactivé par défaut pour ne casser aucune photo.
+    photos_require_unguessable_names: bool = False
     # Les candidatures du portail public arrivent dans cette file de recrutement.
     public_candidate_default_society: str = "IRON GLOBAL SÉCURITÉ"
     admin_system_password: str | None = None

@@ -310,6 +310,27 @@ def serve_site_workforce() -> HTMLResponse:
 # comportement inchangé" — accessibles SANS authentification à quiconque connaîtrait ou
 # devinerait le nom de fichier. Fermé de la même façon que pour "employee" : authentification
 # + scope désormais obligatoires pour ces trois owner_type également.
+UNGUESSABLE_PHOTO_RE = re.compile(r"^[A-Za-z0-9_.-]+-[0-9a-f]{32}\.[A-Za-z0-9]+$")
+
+
+@app.get("/uploads/photos/{filename}", include_in_schema=False)
+def serve_uploaded_photo(filename: str):
+    """Photos (employés, candidats) : servies sans authentification (balises <img>), mais une
+    fois les anciens noms migrés, seuls les noms imprévisibles (URL-capacités) sont servis."""
+    from app.core.photo_storage import PHOTOS_DIR
+
+    if settings.photos_require_unguessable_names and not UNGUESSABLE_PHOTO_RE.match(filename):
+        raise HTTPException(status_code=404, detail="Not Found")
+    candidate = (PHOTOS_DIR / filename).resolve()
+    try:
+        candidate.relative_to(PHOTOS_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(candidate, headers={"X-Content-Type-Options": "nosniff"})
+
+
 @app.get("/uploads/photos/docs/{filename}", include_in_schema=False)
 def serve_uploaded_document(filename: str, request: Request):
     candidate = (DOCS_DIR / filename).resolve()
