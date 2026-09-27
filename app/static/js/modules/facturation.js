@@ -262,6 +262,15 @@ function filterFactureList(){
 
 function parseFrNum(s){return parseFloat(String(s||"").replace(/\s/g,"").replace(",","."))||0;}
 
+// NBR (nombre d'éléments facturés : agents, véhicules, équipements…) × QUANTITÉ (par élément :
+// jours, heures, mois…) × PRIX UNITAIRE. Même règle que le serveur (app/modules/irongs/
+// invoice_lines.py), qui recalcule et reste seul juge du montant enregistré : arrondi au
+// centime, demi vers le haut. Ligne sans NBR (factures antérieures) : NBR = 1.
+function factureLineNbr(l){const raw=l&&l.nbr;if(raw===undefined||raw===null||raw==="")return 1;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:1;}
+function factureRoundCents(v){const n=Number(v)||0;return Math.sign(n)*Math.round((Math.abs(n)+Number.EPSILON)*100)/100;}
+function factureNbrValid(v){const n=Number(v);return String(v).trim()!==""&&Number.isInteger(n)&&n>=1;}
+function factureLineAmount(nbr,qte,prix){return factureRoundCents((Number(nbr)||0)*(Number(qte)||0)*(Number(prix)||0));}
+
 function formatPrixHT(n){n=parseFloat(n)||0;return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 function factureEditorLigneHTML(l){
@@ -276,13 +285,13 @@ function factureEditorLigneHTML(l){
   if(type==="commentaire"){
     const TA="width:100%;border:none;padding:6px 10px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:32px;line-height:1.5;box-sizing:border-box;display:block;outline:none;font-style:italic;color:#64748b";
     return '<tr class="fact-ligne-row" data-type="commentaire" style="border-bottom:1px solid #f1f5f9;background:#f8fafc">'+
-      '<td colspan="5" style="padding:0"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Commentaire ou note..." oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea></td>'+DEL+'</tr>';
+      '<td colspan="6" style="padding:0"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Commentaire ou note..." oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea></td>'+DEL+'</tr>';
   }
   if(type==="remise"){
     const IS="border:1px solid #fed7aa;border-radius:4px;padding:5px 8px;font-size:12px;background:#fff;text-align:right;width:100%;box-sizing:border-box;outline:none";
     const pct=parseFloat(l.remisePct)||0;
     return '<tr class="fact-ligne-row" data-type="remise" style="border-bottom:1px solid #f1f5f9;background:#fff7ed">'+
-      '<td colspan="3" style="padding:4px 10px;vertical-align:middle">'+
+      '<td colspan="4" style="padding:4px 10px;vertical-align:middle">'+
       '<input class="fact-ligne-desig" style="border:none;background:transparent;font-size:12px;font-weight:600;color:#92400e;width:100%;outline:none" value="'+escapeHTML(l.designation||"Remise commerciale")+'" placeholder="Libellé remise"></td>'+
       '<td style="padding:4px 6px;vertical-align:middle;width:90px">'+
       '<input type="number" class="fact-ligne-remise-pct" min="0" max="100" step="0.01" value="'+pct+'" style="'+IS+'" placeholder="%" oninput="factureEditorCalcTotals()">'+
@@ -292,24 +301,25 @@ function factureEditorLigneHTML(l){
   }
   if(type==="soustotal"){
     return '<tr class="fact-ligne-row" data-type="soustotal" style="border-bottom:2px solid #e5e7eb;background:#f1f5f9">'+
-      '<td colspan="4" style="padding:8px 12px;font-weight:800;font-size:12px;text-align:right;color:#374151;vertical-align:middle">Sous-total</td>'+
+      '<td colspan="5" style="padding:8px 12px;font-weight:800;font-size:12px;text-align:right;color:#374151;vertical-align:middle">Sous-total</td>'+
       '<td class="fact-ligne-total" style="padding:8px 10px;text-align:right;font-weight:800;font-family:monospace;white-space:nowrap;vertical-align:middle;color:#0f172a">'+formatDZD(0)+'</td>'+
       DEL+'</tr>';
   }
   // article (default)
   const qte=parseFloat(l.qte||l.quantite)||1;
   const prix=parseFloat(l.prixUnitHT||l.prixUnitaire)||0;
-  const total=qte*prix;
+  const nbr=factureLineNbr(l);
   const IS="border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:12px;background:#fff;text-align:right;width:100%;box-sizing:border-box;outline:none";
   const TA="width:100%;border:none;border-radius:0;padding:6px 8px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:34px;line-height:1.5;box-sizing:border-box;display:block;outline:none";
   const on="oninput=\"factureEditorCalcRow(this.closest('tr'));factureEditorCalcTotals()\"";
   const unite=l.unite||"Mois";
   const uniteOpts=DEVIS_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
   const SEL="border:1px solid #e5e7eb;border-radius:4px;padding:5px 6px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
-  const total2=qte*prix;
+  const total2=factureLineAmount(nbr,qte,prix);
   return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+Number(l.contractQuantity??l.qte??1)+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
     '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" data-previous-unit="'+escapeHTML(unite)+'" onchange="factureEditorUnitChange(this)" style="'+SEL+'">'+uniteOpts+'</select></td>'+
+    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:76px"><input type="number" min="0" step="1" inputmode="numeric" class="fact-ligne-nbr" style="'+IS+'" value="'+nbr+'" aria-label="NBR — nombre d\'éléments facturés" title="NBR : nombre d\'éléments facturés (agents, véhicules, équipements…)" '+on+'/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+qte+'" '+on+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
@@ -430,8 +440,9 @@ function factureEditorCalcRow(tr){
   if((tr.dataset.type||"article")!=="article")return;
   const p=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
   const q=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
+  const n=factureLineNbr({nbr:tr.querySelector(".fact-ligne-nbr")?.value});
   const t=tr.querySelector(".fact-ligne-total");
-  if(t)t.textContent=formatDZD(q*p);
+  if(t)t.textContent=formatDZD(factureLineAmount(n,q,p));
 }
 
 function factureEditorCalcTotals(){
@@ -447,11 +458,12 @@ function factureEditorCalcTotals(){
     if(type==="article"){
       const p=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
       const q=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
-      const lt=q*p;const t=tr.querySelector(".fact-ligne-total");if(t)t.textContent=formatDZD(lt);
+      const n=factureLineNbr({nbr:tr.querySelector(".fact-ligne-nbr")?.value});
+      const lt=factureLineAmount(n,q,p);const t=tr.querySelector(".fact-ligne-total");if(t)t.textContent=formatDZD(lt);
       totalHT+=lt;sectionHT+=lt;
     } else if(type==="remise"){
       const pct=parseFloat(tr.querySelector(".fact-ligne-remise-pct")?.value)||0;
-      const amt=sectionHT*pct/100;
+      const amt=factureRoundCents(sectionHT*pct/100);
       const t=tr.querySelector(".fact-ligne-total");if(t)t.textContent="-"+formatDZD(amt);
       totalHT-=amt;sectionHT-=amt;
     } else if(type==="soustotal"){
@@ -460,8 +472,9 @@ function factureEditorCalcTotals(){
     }
   });
   const tvaPct=parseFloat(document.getElementById("fact-tva-global")?.value)||19;
-  const totalTVA=totalHT*tvaPct/100;
-  const ttc=totalHT+totalTVA;
+  totalHT=factureRoundCents(totalHT);
+  const totalTVA=factureRoundCents(totalHT*tvaPct/100);
+  const ttc=factureRoundCents(totalHT+totalTVA);
   const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=formatDZD(v);};
   s("fact-r-ht",totalHT);s("fact-r-tva",totalTVA);s("fact-r-ttc",ttc);s("fact-header-ttc",ttc);
 }
@@ -471,17 +484,19 @@ function factureComputeLinesTotals(lignes,tvaPct){
   (lignes||[]).forEach(l=>{
     const type=l.type||"article";
     if(type==="article"){
-      const lt=Number(l.totalHT)||((Number(l.qte||l.quantite)||0)*(Number(l.prixUnitHT||l.prixUnitaire)||0));
+      // Total déjà enregistré (calculé par le serveur) sinon NBR × quantité × prix.
+      const lt=Number(l.totalHT)||factureLineAmount(factureLineNbr(l),Number(l.qte||l.quantite)||0,Number(l.prixUnitHT||l.prixUnitaire)||0);
       totalHT+=lt;sectionHT+=lt;
     }else if(type==="remise"){
-      const amt=sectionHT*(Number(l.remisePct)||0)/100;
+      const amt=factureRoundCents(sectionHT*(Number(l.remisePct)||0)/100);
       l.totalHT=-amt;totalHT-=amt;sectionHT-=amt;
     }else if(type==="soustotal"){
       sectionHT=0;
     }
   });
-  const totalTVA=totalHT*(Number(tvaPct)||0)/100;
-  return{totalHT,totalTVA,totalTTC:totalHT+totalTVA};
+  totalHT=factureRoundCents(totalHT);
+  const totalTVA=factureRoundCents(totalHT*(Number(tvaPct)||0)/100);
+  return{totalHT,totalTVA,totalTTC:factureRoundCents(totalHT+totalTVA)};
 }
 
 function factureEditorLigneAdd(type){
@@ -489,7 +504,7 @@ function factureEditorLigneAdd(type){
   const tbody=document.getElementById("fact-lignes-body");if(!tbody)return;
   const emp=tbody.querySelector("#fact-lignes-empty");if(emp)emp.remove();
   const l={type:type||"article"};
-  if(!type||type==="article"){l.designation="";l.qte=1;l.prixUnitHT=0;}
+  if(!type||type==="article"){l.designation="";l.nbr=1;l.qte=1;l.prixUnitHT=0;}
   tbody.insertAdjacentHTML("beforeend",factureEditorLigneHTML(l));
   factureEditorCalcTotals();
   tbody.lastElementChild?.querySelector(".fact-ligne-desig,.fact-ligne-remise-pct")?.focus();
@@ -536,7 +551,7 @@ function factureEditorLigneRemove(btn){
   }
   factureEditorCalcTotals();
   const tbody=document.getElementById("fact-lignes-body");
-  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — choisissez une prestation dans le catalogue ci-dessus</td></tr>';
+  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="7" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — choisissez une prestation dans le catalogue ci-dessus</td></tr>';
 }
 
 function factureCalcEcheance(){
@@ -755,10 +770,11 @@ function factureEditorValidate(){
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
   if(!rows.length)errors.push("Ajoutez au moins un article.");
   rows.forEach((tr,i)=>{
-    const d=tr.querySelector(".fact-ligne-desig"),p=tr.querySelector(".fact-ligne-prix"),q=tr.querySelector(".fact-ligne-qte");
+    const d=tr.querySelector(".fact-ligne-desig"),p=tr.querySelector(".fact-ligne-prix"),q=tr.querySelector(".fact-ligne-qte"),n=tr.querySelector(".fact-ligne-nbr");
     if(!(d?.value||"").trim()){errors.push("Article "+(i+1)+" : désignation obligatoire.");factureEditorMarkInvalid(d);}
     if(parseFrNum(p?.value)<=0){errors.push("Article "+(i+1)+" : prix unitaire obligatoire.");factureEditorMarkInvalid(p);}
     if((parseFloat(q?.value)||0)<=0){errors.push("Article "+(i+1)+" : quantité obligatoire.");factureEditorMarkInvalid(q);}
+    if(n&&!factureNbrValid(n.value)){errors.push("Article "+(i+1)+" : NBR doit être un nombre entier au moins égal à 1.");factureEditorMarkInvalid(n);}
   });
   if(errors.length){toast(errors[0],"error");return false;}
   return true;
@@ -773,7 +789,7 @@ function factureEditorScheduleDraft(){
 function factureEditorUpdateWorkflow(){
   const clientOk=!!document.getElementById("fact-clientId")?.value;
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
-  const linesOk=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0);
+  const linesOk=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0&&factureNbrValid(r.querySelector(".fact-ligne-nbr")?.value??1));
   const objectOk=!!(document.getElementById("fact-objet")?.value||"").trim();
   [["fact-step-client",clientOk],["fact-step-lines",linesOk],["fact-step-validation",clientOk&&linesOk&&objectOk&&factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0]].forEach(([id,ok])=>{const e=document.getElementById(id);if(e){e.style.background=ok?"#ecfdf5":"#eff6ff";e.style.color=ok?"#047857":"#1d4ed8";e.style.borderColor=ok?"#a7f3d0":"#bfdbfe"}});
   const periodOk=factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0;
@@ -831,8 +847,10 @@ async function factureEditorSave(options){
       const unite=tr.querySelector(".fact-ligne-unite")?.value||"";
       const prixUnitHT=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
       const qte=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
-      const totalHT=qte*prixUnitHT;
-      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT,siteNom:tr.dataset.siteNom||"",catalogKey:tr.dataset.catalogKey||"",contractQuantity:Number(tr.dataset.contractQuantity)||null});
+      const nbrField=tr.querySelector(".fact-ligne-nbr")?.value;
+      const nbr=nbrField===undefined||nbrField===""?1:Number(nbrField);
+      const totalHT=factureLineAmount(nbr,qte,prixUnitHT);
+      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,nbr,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT,siteNom:tr.dataset.siteNom||"",catalogKey:tr.dataset.catalogKey||"",contractQuantity:Number(tr.dataset.contractQuantity)||null});
     }
   });
   const totals=factureComputeLinesTotals(lignes,tvaPct);
@@ -926,7 +944,8 @@ function factureVoirApercu(fId){
     else{
       const prix=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
       const qte=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
-      if(desig||prix)lignes.push({type:"article",designation:desig,unite:tr.querySelector(".fact-ligne-unite")?.value||"",qte,prixUnitHT:prix,prixUnitaire:prix,quantite:qte,totalHT:qte*prix});
+      const nbr=factureLineNbr({nbr:tr.querySelector(".fact-ligne-nbr")?.value});
+      if(desig||prix)lignes.push({type:"article",designation:desig,unite:tr.querySelector(".fact-ligne-unite")?.value||"",nbr,qte,prixUnitHT:prix,prixUnitaire:prix,quantite:qte,totalHT:factureLineAmount(nbr,qte,prix)});
     }
   });
   const useLines=lignes.length?lignes:(f?.lignes||[]);
@@ -958,6 +977,7 @@ function factureVoirApercu(fId){
     '<tr style="background:'+(i%2===0?"#fff":"#f9fafb")+';border-bottom:1px solid #e5e7eb">'+
     '<td style="'+tdC+'">'+escapeHTML(l.designation||"")+(l.type==="remise"?' ('+escapeHTML(String(l.remisePct||0))+' %)':'')+'</td>'+
     '<td style="'+tdC+';text-align:center;color:#6b7280">'+escapeHTML(l.unite||"")+'</td>'+
+    '<td style="'+tdC+';text-align:center">'+(l.type==="remise"||l.type==="commentaire"?'—':escapeHTML(String(factureLineNbr(l))))+'</td>'+
     '<td style="'+tdC+';text-align:right">'+(l.type==="remise"?'—':DZD(l.prixUnitHT||l.prixUnitaire||0))+'</td>'+
     '<td style="'+tdC+';text-align:center">'+(l.type==="remise"?'—':escapeHTML(String(l.qte||l.quantite||0)))+'</td>'+
     '<td style="'+tdC+';text-align:right;font-weight:700">'+DZD(l.totalHT||0)+'</td>'+
@@ -1018,14 +1038,15 @@ function factureVoirApercu(fId){
     '<thead><tr>'+
     '<th style="'+thC+';min-width:200px">Désignation</th>'+
     '<th style="'+thC+';text-align:center;width:80px">Unité</th>'+
+    '<th style="'+thC+';text-align:center;width:50px" title="Nombre d\'éléments facturés">NBR</th>'+
     '<th style="'+thC+';text-align:right;width:130px">P.U./HT</th>'+
     '<th style="'+thC+';text-align:center;width:70px">Quantité</th>'+
     '<th style="'+thC+';text-align:right;width:140px">Montant</th>'+
     '</tr></thead><tbody>'+lignesRows+'</tbody>'+
     '<tfoot>'+
-    '<tr style="border-top:2px solid #e5e7eb"><td colspan="4" style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif">'+DZD(totalHT)+'</td></tr>'+
-    '<tr><td colspan="4" style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif">'+DZD(totalTVA)+'</td></tr>'+
-    '<tr style="background:#e8f1fb;border-top:2px solid #043970;border-bottom:2px solid #043970"><td colspan="4" style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important">TOTAL TTC</td><td style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important;background:#e8f1fb;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
+    '<tr style="border-top:2px solid #e5e7eb"><td colspan="5" style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif">'+DZD(totalHT)+'</td></tr>'+
+    '<tr><td colspan="5" style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif">'+DZD(totalTVA)+'</td></tr>'+
+    '<tr style="background:#e8f1fb;border-top:2px solid #043970;border-bottom:2px solid #043970"><td colspan="5" style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important">TOTAL TTC</td><td style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important;background:#e8f1fb;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
     '</tfoot></table>'+
     (montantEnLettres?
       '<div style="margin-top:14px;padding:10px 14px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc">'+
@@ -1179,13 +1200,14 @@ function renderFactureEditor(view){
     '<thead><tr>'+
     '<th style="'+thL+';min-width:180px">Désignation</th>'+
     '<th style="'+thL+';width:90px">Unité</th>'+
+    '<th style="'+thL+';text-align:center;width:76px" title="Nombre d\'éléments facturés (agents, véhicules, équipements…)">NBR</th>'+
     '<th style="'+thL+';text-align:right;width:140px">Prix unitaire</th>'+
     '<th style="'+thL+';text-align:center;width:90px">Quantité</th>'+
     '<th style="'+thL+';text-align:right;width:140px">Total</th>'+
     '<th style="'+thL+';width:140px;text-align:center">Actions</th>'+
     '</tr></thead>'+
     '<tbody id="fact-lignes-body">'+
-    (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="6" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+
+    (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+
     '</tbody>'+
     '</table></div>'+
     '<div style="padding:10px 14px;border-top:1px solid #e5e7eb;background:#f9fafb">'+

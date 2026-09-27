@@ -10508,7 +10508,7 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .fact-editor-lines tbody tr[data-type="article"] input,.fact-editor-lines tbody tr[data-type="article"] select,.fact-editor-lines tbody tr[data-type="article"] textarea{display:block;box-sizing:border-box;margin:0!important}
 .fact-editor-lines tbody tr[data-type="article"] .fact-ligne-total{line-height:34px!important;padding-top:8px!important;padding-bottom:8px!important;text-align:right}
 .fact-editor-lines .fact-line-buttons{min-height:34px;margin:0}
-.fact-editor-lines .fact-ligne-qte,.fact-editor-lines .fact-ligne-unite{text-align:center!important}
+.fact-editor-lines .fact-ligne-qte,.fact-editor-lines .fact-ligne-nbr,.fact-editor-lines .fact-ligne-unite{text-align:center!important}
 .fact-editor-lines .fact-ligne-prix{text-align:right!important}
 .fact-editor-lines th:nth-child(2),.fact-editor-lines th:nth-child(4){text-align:center!important}
 
