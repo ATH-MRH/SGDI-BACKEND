@@ -199,8 +199,9 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script defer src="/static/pointeur-facial.js?v=1"></script>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
+<link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body>
+<body class="atlas-ui" data-atlas-surface="pointeur">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE POINTAGE</span><h2>Vos présences.<br>Un suivi terrain.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Pointage</strong><small>Enregistrez les présences</small></div><div><b>02</b><strong>Sites</strong><small>Retrouvez vos affectations</small></div><div><b>03</b><strong>Planning</strong><small>Consultez votre organisation</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">

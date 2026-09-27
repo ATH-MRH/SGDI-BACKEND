@@ -1,0 +1,94 @@
+/* ATLAS Design System V1 — canonical values. All adapters reference these tokens. */
+:root {
+  --atlas-primary: #165dde;
+  --atlas-primary-hover: #114bb5;
+  --atlas-primary-soft: #eaf2ff;
+  --atlas-on-primary: #ffffff;
+  --atlas-background: #f3f7fc;
+  --atlas-surface: #ffffff;
+  --atlas-surface-secondary: #f8fafd;
+  --atlas-text: #172b4d;
+  --atlas-text-secondary: #51627c;
+  --atlas-text-muted: #61748f;
+  --atlas-border: #dde7f3;
+  --atlas-border-strong: #b9cbe2;
+  --atlas-success: #117647;
+  --atlas-success-soft: #e7f6ef;
+  --atlas-warning: #9f580a;
+  --atlas-warning-soft: #fff3df;
+  --atlas-danger: #bb303e;
+  --atlas-danger-soft: #fff0f1;
+  --atlas-info: #126a9d;
+  --atlas-info-soft: #e9f6fd;
+  --atlas-sidebar-text: #17427a;
+  --atlas-overlay: #172b4d66;
+  --atlas-radius-sm: 6px;
+  --atlas-radius-md: 10px;
+  --atlas-radius-lg: 14px;
+  --atlas-shadow-sm: 0 2px 10px #173e7608;
+  --atlas-shadow-md: 0 8px 28px #173e7614;
+  --atlas-focus-ring: 0 0 0 3px #165dde30;
+  --atlas-space-1: 4px;
+  --atlas-space-2: 8px;
+  --atlas-space-3: 12px;
+  --atlas-space-4: 16px;
+  --atlas-space-5: 20px;
+  --atlas-space-6: 24px;
+  --atlas-space-7: 32px;
+  --atlas-space-8: 40px;
+  --atlas-sidebar-width: 224px;
+  --atlas-header-height: 56px;
+  --atlas-font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+/* These existing frontends already offer a dark theme. Preserve that preference,
+   while the default/light reference remains the white floating ATLAS shell. */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):has(body:is([data-atlas-surface="drh-next"],[data-atlas-surface="rh"],[data-atlas-surface="commercial"])) {
+    --atlas-background: #111b2b;
+    --atlas-surface: #19263a;
+    --atlas-surface-secondary: #20304a;
+    --atlas-text: #edf3ff;
+    --atlas-text-secondary: #c4d1e5;
+    --atlas-text-muted: #a5b8d2;
+    --atlas-border: #30445e;
+    --atlas-border-strong: #556e91;
+    --atlas-primary: #8db5ff;
+    --atlas-primary-hover: #b4ceff;
+    --atlas-primary-soft: #233d66;
+    --atlas-on-primary: #102442;
+    --atlas-sidebar-text: #c6d9ff;
+    --atlas-success: #7ee1ac;
+    --atlas-success-soft: #153d31;
+    --atlas-warning: #f0c77f;
+    --atlas-warning-soft: #493921;
+    --atlas-danger: #ffb1b8;
+    --atlas-danger-soft: #492834;
+    --atlas-info: #8ed5ff;
+    --atlas-info-soft: #1d3b51;
+  }
+}
+@media screen {
+  :root[data-theme="dark"]:has(body[data-atlas-surface="drh-next"]) {
+    --atlas-background: #111b2b;
+    --atlas-surface: #19263a;
+    --atlas-surface-secondary: #20304a;
+    --atlas-text: #edf3ff;
+    --atlas-text-secondary: #c4d1e5;
+    --atlas-text-muted: #a5b8d2;
+    --atlas-border: #30445e;
+    --atlas-border-strong: #556e91;
+    --atlas-primary: #8db5ff;
+    --atlas-primary-hover: #b4ceff;
+    --atlas-primary-soft: #233d66;
+    --atlas-on-primary: #102442;
+    --atlas-sidebar-text: #c6d9ff;
+    --atlas-success: #7ee1ac;
+    --atlas-success-soft: #153d31;
+    --atlas-warning: #f0c77f;
+    --atlas-warning-soft: #493921;
+    --atlas-danger: #ffb1b8;
+    --atlas-danger-soft: #492834;
+    --atlas-info: #8ed5ff;
+    --atlas-info-soft: #1d3b51;
+  }
+}

@@ -1,0 +1,98 @@
+/* Shared presentation primitives. Existing DOM, visibility and handlers remain owned
+   by each frontend. No reset of .hidden, display, positions or field widths. */
+@media screen {
+  body.atlas-ui {
+    --bg: var(--atlas-background); --bg-soft: var(--atlas-background);
+    --surface: var(--atlas-surface); --surface-2: var(--atlas-surface-secondary);
+    --card: var(--atlas-surface); --border: var(--atlas-border); --line: var(--atlas-border);
+    --border-soft: var(--atlas-surface-secondary); --border-strong: var(--atlas-border-strong);
+    --text: var(--atlas-text); --ink: var(--atlas-text);
+    --text-soft: var(--atlas-text-secondary); --text-muted: var(--atlas-text-secondary);
+    --text-mute: var(--atlas-text-muted); --text-faint: var(--atlas-text-muted); --muted: var(--atlas-text-muted);
+    --primary: var(--atlas-primary); --primary-strong: var(--atlas-primary-hover);
+    --primary-dark: var(--atlas-primary-hover); --primary-light: var(--atlas-primary-soft);
+    --primary-soft: var(--atlas-primary-soft); --primary-grad: var(--atlas-primary);
+    --blue: var(--atlas-primary); --navy: var(--atlas-sidebar-text);
+    --success: var(--atlas-success); --green: var(--atlas-success); --success-soft: var(--atlas-success-soft);
+    --warn: var(--atlas-warning); --warning: var(--atlas-warning); --amber: var(--atlas-warning);
+    --warn-soft: var(--atlas-warning-soft); --danger: var(--atlas-danger); --red: var(--atlas-danger);
+    --danger-soft: var(--atlas-danger-soft); --info: var(--atlas-info); --info-soft: var(--atlas-info-soft);
+    --shadow: var(--atlas-shadow-sm); --shadow-sm: var(--atlas-shadow-sm); --shadow-lg: var(--atlas-shadow-md);
+    --shadow-lift: var(--atlas-shadow-md); --shadow-xl: var(--atlas-shadow-md);
+    --radius: var(--atlas-radius-md); --r-sm: var(--atlas-radius-sm);
+    --r: var(--atlas-radius-md); --r-lg: var(--atlas-radius-lg); --r-xl: var(--atlas-radius-lg);
+    font-family: var(--atlas-font); color: var(--atlas-text); background: var(--atlas-background);
+    -webkit-font-smoothing: antialiased;
+  }
+  .atlas-ui :where(button,input,select,textarea) { font-family: inherit; }
+  .atlas-ui :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible {
+    outline: 2px solid var(--atlas-primary) !important; outline-offset: 3px !important;
+  }
+  .atlas-ui :where(button,[role="button"]):disabled { cursor:not-allowed; }
+  .atlas-ui :where(h1,.page-title,.module-title-clean) { color:var(--atlas-text); font-weight:750; letter-spacing:-.025em; line-height:1.25; }
+  .atlas-ui :where(h2,h3,.section-title) { color:var(--atlas-text); letter-spacing:-.01em; }
+  .atlas-ui :is(.atlas-card,.card,.panel,.dn-card,.scanner-card,.admin-users-filters,.admin-users-table-card,.table-card) {
+    background:var(--atlas-surface); border-color:var(--atlas-border); border-radius:var(--atlas-radius-md); box-shadow:var(--atlas-shadow-sm);
+  }
+  .atlas-ui :is(.atlas-kpi,.kpi-card,.kpi,.dash-kpi,.dashboard-kpi,.admin-users-kpi,.dn-kpi) {
+    background:var(--atlas-surface); border:1px solid var(--atlas-border); border-radius:var(--atlas-radius-md);
+    box-shadow:var(--atlas-shadow-sm); min-width:0; color:var(--atlas-text);
+  }
+  .atlas-ui :is(.kpi-value,.dn-kpi-value,.atlas-kpi-value) { font-variant-numeric:tabular-nums; color:var(--atlas-text); font-weight:750; }
+  .atlas-ui :is(.kpi-label,.dn-kpi-label,.atlas-kpi-label) { color:var(--atlas-text-secondary); font-weight:600; }
+  .atlas-ui :is(.btn,.atlas-button,.dn-btn,.v3-btn,.primary,.secondary) {
+    border-radius:var(--atlas-radius-sm); box-shadow:none; font-weight:650; letter-spacing:0; text-transform:none;
+  }
+  .atlas-ui :is(.btn-primary,.atlas-button-primary,.dn-btn-primary,.v3-btn-primary,.primary) {
+    background:var(--atlas-primary); border-color:var(--atlas-primary); color:var(--atlas-on-primary);
+  }
+  .atlas-ui :is(.btn-primary,.atlas-button-primary,.dn-btn-primary,.v3-btn-primary,.primary):hover:not(:disabled) {
+    background:var(--atlas-primary-hover); border-color:var(--atlas-primary-hover);
+  }
+  .atlas-ui :is(.btn-secondary,.btn-ghost,.atlas-button-secondary,.dn-btn-secondary,.secondary) {
+    background:var(--atlas-surface); color:var(--atlas-primary); border:1px solid var(--atlas-border-strong);
+  }
+  .atlas-ui :is(.btn-secondary,.btn-ghost,.atlas-button-secondary,.dn-btn-secondary,.secondary):hover:not(:disabled) { background:var(--atlas-primary-soft); }
+  .atlas-ui :is(.btn-danger,.dn-btn-danger,.danger) { background:var(--atlas-danger); border-color:var(--atlas-danger); color:var(--atlas-on-primary); }
+  .atlas-ui:not([data-atlas-surface="cheque"]) :is(.input,.select,.dn-input,.dn-select,input:not([type]),input[type="text"],input[type="email"],input[type="password"],input[type="search"],input[type="number"],input[type="date"],input[type="tel"],select,textarea) {
+    border-color:var(--atlas-border-strong); border-radius:var(--atlas-radius-sm); background-color:var(--atlas-surface); color:var(--atlas-text); box-shadow:none;
+  }
+  .atlas-ui :is(.input,.select,.dn-input,.dn-select):focus { border-color:var(--atlas-primary); box-shadow:var(--atlas-focus-ring); }
+  .atlas-ui :is(input[type="checkbox"],input[type="radio"]) { accent-color:var(--atlas-primary); }
+  .atlas-ui :is(.label,.field>label,.dn-field>label) { color:var(--atlas-text-secondary); font-weight:600; }
+  .atlas-ui :is(.filters-row,.filter-bar,.atlas-filters,.admin-users-filters) { border-color:var(--atlas-border); background:var(--atlas-surface); border-radius:var(--atlas-radius-md); }
+  .atlas-ui :is(.table-wrap,.table-wrapper,.table-container,.overflow-x-auto,.dn-table-wrap,.admin-users-table-scroll) { max-width:100%; overscroll-behavior-inline:contain; }
+  .atlas-ui :is(table.data,.module-table-clean,.dn-table,.admin-users-table,.atlas-table) { color:var(--atlas-text); border-color:var(--atlas-border); font-variant-numeric:tabular-nums; }
+  .atlas-ui :is(table.data,.module-table-clean,.dn-table,.admin-users-table,.atlas-table) th {
+    background:var(--atlas-surface-secondary); color:var(--atlas-text-secondary); border-color:var(--atlas-border); font-weight:650;
+  }
+  .atlas-ui :is(table.data,.module-table-clean,.dn-table,.admin-users-table,.atlas-table) td { border-color:var(--atlas-border); }
+  .atlas-ui :is(table.data,.module-table-clean,.dn-table,.admin-users-table,.atlas-table) tbody tr:hover { background:var(--atlas-surface-secondary); }
+  .atlas-ui :is(.badge,.pill,.dn-badge,.atlas-badge,.admin-user-state) { border-radius:999px; font-weight:650; }
+  .atlas-ui :is(.badge.success,.badge.green,.pill.green,.dn-badge-success,.atlas-badge-success,.admin-user-state.active,.st-present) { color:var(--atlas-success); background:var(--atlas-success-soft); }
+  .atlas-ui :is(.badge.warn,.badge.orange,.pill.orange,.dn-badge-warning,.atlas-badge-warning,.st-retard,.sev-warning) { color:var(--atlas-warning); background:var(--atlas-warning-soft); }
+  .atlas-ui :is(.badge.danger,.badge.red,.pill.red,.dn-badge-danger,.atlas-badge-danger,.admin-user-state.blocked,.st-absent,.sev-critical) { color:var(--atlas-danger); background:var(--atlas-danger-soft); }
+  .atlas-ui :is(.badge.info,.badge.blue,.pill.blue,.atlas-badge-info) { color:var(--atlas-info); background:var(--atlas-info-soft); }
+  .atlas-ui :is(.modal,.dn-modal,.confirm-box,.drawer,.dn-drawer) { background:var(--atlas-surface); color:var(--atlas-text); border-color:var(--atlas-border); box-shadow:var(--atlas-shadow-md); }
+  .atlas-ui :is(.modal,.dn-modal,.confirm-box) { border-radius:var(--atlas-radius-lg); }
+  .atlas-ui :is(.drawer-head,.modal-header,.modal-footer,.dn-modal-header,.dn-modal-footer) { border-color:var(--atlas-border); background:var(--atlas-surface); }
+  .atlas-ui :is(.toast,.atlas-toast,.dn-toast) { border-radius:var(--atlas-radius-md); box-shadow:var(--atlas-shadow-md); }
+  .atlas-ui :is(.empty-state,.v3-empty-state,.dn-empty-state,.atlas-empty) { color:var(--atlas-text-secondary); background:var(--atlas-surface-secondary); border-color:var(--atlas-border); border-radius:var(--atlas-radius-md); }
+  .atlas-ui :is(.error-state,.v3-error-state,.dn-error-state,.atlas-error) { background:var(--atlas-danger-soft); border-color:var(--atlas-danger); color:var(--atlas-danger); border-radius:var(--atlas-radius-md); }
+  .atlas-ui :is(.error-state-title,.error-state-text,.v3-error-state-title,.v3-error-state-text) { color:var(--atlas-danger); }
+  .atlas-ui :is(.pagination,.dn-pagination,.admin-users-pagination,.pager,.v3-pagination) { color:var(--atlas-text-secondary); gap:var(--atlas-space-2); }
+  .atlas-ui :is(.pagination,.dn-pagination,.admin-users-pagination,.pager,.v3-pagination) button { border-color:var(--atlas-border); border-radius:var(--atlas-radius-sm); }
+  .atlas-ui :is(.tab.active,.subtab.active,.dn-tab.active,.atlas-tab[aria-selected="true"]) { color:var(--atlas-primary); border-color:var(--atlas-primary); background:var(--atlas-primary-soft); }
+  .atlas-ui :is(.breadcrumb,.admin-users-breadcrumb,.dn-breadcrumb,.atlas-breadcrumb) { color:var(--atlas-text-muted); font-size:12px; }
+  .atlas-ui :is(.breadcrumb,.admin-users-breadcrumb,.dn-breadcrumb,.atlas-breadcrumb) [aria-current] { color:var(--atlas-primary); }
+  .atlas-ui :is(.skeleton,.dn-skeleton,.v3-skeleton,.atlas-skeleton) { background-color:var(--atlas-surface-secondary); border-radius:var(--atlas-radius-sm); }
+  @media (prefers-reduced-motion:reduce) {
+    .atlas-ui :is(.skeleton,.dn-skeleton,.v3-skeleton,.atlas-skeleton) { animation:none; }
+    .atlas-ui :is(.btn,.card,.kpi-card,.nav-link,.dn-nav-link) { transition:none; }
+  }
+  @media (max-width:767px) {
+    .atlas-ui :is(button,a.btn,summary) { touch-action:manipulation; }
+    .atlas-ui :is(.btn,.dn-btn,.v3-btn,.atlas-button) { min-height:40px; }
+    .atlas-ui :is(.admin-user-actions>button,.fp-card-action-more) { min-width:36px; min-height:36px; }
+  }
+}

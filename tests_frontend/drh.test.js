@@ -369,7 +369,7 @@ for (const module of ['ops','superviseur','admin']) {
     const route=module==='admin'?'admin/fiches':'fiches';
     const item=f.nav.querySelector(`[data-route="${route}"]`);
     assert.ok(item,route);
-    assert.equal(item.querySelector('.nav-label').textContent,'FICHE DE POSITION');
+    assert.equal(item.querySelector('.nav-label').textContent,'Fiche de position');
     assert.ok(item.querySelector('.nav-ico svg'));
     assert.ok(f.t.adminSidebarOrganizerDefaults()[module].some(([,value])=>value===route));
   });

@@ -35,8 +35,9 @@ window.sgdiLoadXLSX=function(){return window._xlsxLoaded?Promise.resolve():new P
 window.sgdiLoadQRLib=function(){return window._qrLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.QRCode){window._qrLoaded=true;return res()}const s=document.createElement('script');s.src='/static/qrcode.min.js?v=1';s.onload=()=>{window._qrLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
 window.sgdiLoadHtml5QR=function(){return window._h5qrLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.Html5Qrcode){window._h5qrLoaded=true;return res()}const s=document.createElement('script');s.src='/static/html5-qrcode.min.js?v=1';s.onload=()=>{window._h5qrLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
 </script>
+<link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body>
+<body class="atlas-ui" data-atlas-surface="legacy">
 <div id="ui-progress"></div>
 <div id="ui-save-state"><span class="ui-dot"></span><span id="ui-save-text">Synchronisation</span></div>
 <div id="app"></div>
@@ -47,9 +48,9 @@ window.sgdiLoadHtml5QR=function(){return window._h5qrLoaded?Promise.resolve():ne
 <div id="atlas-ai-widget"></div>
 <script defer src="/static/algeria-communes.js?v=20260625-communes"></script>
 <script defer src="/static/js/core/utils.js?v=20260908-modular"></script>
-<script defer src="/static/js/core/module-registry.js?v=20260927-admin-users-v2"></script>
-<script defer src="/static/js/core/files.js?v=20260927-admin-users-v2"></script>
-<script defer src="/static/sgdi-app.js?v=20260927-admin-users-v2"></script>
+<script defer src="/static/js/core/module-registry.js?v=20260927-atlas-ds-v1"></script>
+<script defer src="/static/js/core/files.js?v=20260927-atlas-ds-v1"></script>
+<script defer src="/static/sgdi-app.js?v=20260927-atlas-ds-v1"></script>
 <script defer src="/static/erp-frontend.js?v=20260606-admin-employee-delete"></script>
 
 <script defer src="/static/sgdi-inline-2.js?v=20260902-recruitment-workflow-v2"></script>

@@ -1,0 +1,541 @@
+/* ATLAS — adapters for independent application shells.
+   Only screen presentation: route IDs, visibility states, print layouts and
+   each application's existing mobile navigation remain owned by that app. */
+@media screen {
+  /* Shared aliases live in components.css; only prefixed local tokens need a bridge. */
+  body.atlas-ui[data-atlas-surface="drh-next"] {
+    --dn-bg: var(--atlas-background);
+    --dn-surface: var(--atlas-surface);
+    --dn-border: var(--atlas-border);
+    --dn-text: var(--atlas-text);
+    --dn-text-muted: var(--atlas-text-muted);
+    --dn-accent: var(--atlas-primary);
+    --dn-accent-weak: var(--atlas-primary-soft);
+    --dn-success: var(--atlas-success);
+    --dn-warning: var(--atlas-warning);
+    --dn-danger: var(--atlas-danger);
+    --dn-radius: var(--atlas-radius-md);
+    --dn-radius-sm: var(--atlas-radius-sm);
+    --dn-shadow: var(--atlas-shadow-sm);
+    --dn-font: var(--atlas-font);
+    --dn-sidebar-w: var(--atlas-sidebar-width);
+    --dn-header-h: var(--atlas-header-height);
+  }
+
+  body.atlas-ui[data-atlas-surface="core-v3"] {
+    --v3-bg: var(--atlas-background);
+    --v3-surface: var(--atlas-surface);
+    --v3-border: var(--atlas-border);
+    --v3-text: var(--atlas-text);
+    --v3-text-muted: var(--atlas-text-muted);
+    --v3-accent: var(--atlas-primary);
+    --v3-accent-strong: var(--atlas-primary-hover);
+    --v3-accent-weak: var(--atlas-primary-soft);
+    --v3-sidebar-w: var(--atlas-sidebar-width);
+    --v3-header-h: var(--atlas-header-height);
+  }
+
+  body.atlas-ui[data-atlas-surface="paie"] {
+    --paie-navy: var(--atlas-primary);
+    --paie-blue: var(--atlas-primary-hover);
+    --paie-bg: var(--atlas-background);
+    --paie-line: var(--atlas-border);
+  }
+  body.atlas-ui[data-atlas-surface="facturation"] {
+    --fac-navy: var(--atlas-primary);
+    --fac-green: var(--atlas-primary-hover);
+    --fac-bg: var(--atlas-background);
+    --fac-line: var(--atlas-border);
+  }
+
+  /* The shared legacy login sets these backgrounds with !important. Keep the
+     standalone document surface in the shared palette without changing login layout. */
+  body.atlas-ui:is([data-atlas-surface="paie"], [data-atlas-surface="facturation"], [data-atlas-surface="conges"]),
+  body.atlas-ui:is([data-atlas-surface="paie"], [data-atlas-surface="facturation"], [data-atlas-surface="conges"]) #app {
+    background: var(--atlas-background) !important;
+  }
+  body.atlas-ui[data-atlas-surface="recruitment"] #loginView .login-card .primary {
+    background: var(--atlas-primary);
+    color: var(--atlas-on-primary);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+  body.atlas-ui[data-atlas-surface="recruitment"] #loginView .login-card .primary:hover {
+    background: var(--atlas-primary-hover);
+  }
+  body.atlas-ui:is([data-atlas-surface="paie"], [data-atlas-surface="facturation"], [data-atlas-surface="conges"]) .sgdi-login-page-unified .sgdi-login-submit {
+    background: var(--atlas-primary) !important;
+    color: var(--atlas-on-primary) !important;
+    box-shadow: var(--atlas-shadow-sm) !important;
+  }
+  body.atlas-ui:is([data-atlas-surface="paie"], [data-atlas-surface="facturation"], [data-atlas-surface="conges"]) .sgdi-login-page-unified .sgdi-login-submit:hover {
+    background: var(--atlas-primary-hover) !important;
+  }
+
+  /* Finance/BEO and the two prefixed shells share a flex layout. The sidebar
+     stays in flow on desktop; no second offset is added to the main panel. */
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) {
+    --sidebar-w: var(--atlas-sidebar-width);
+    --header-h: var(--atlas-header-height);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-app,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell {
+    padding: var(--atlas-space-4);
+    gap: var(--atlas-space-4);
+    background: var(--atlas-background);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-sidebar,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-sidebar,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-sidebar {
+    width: var(--atlas-sidebar-width);
+    flex: 0 0 var(--atlas-sidebar-width);
+    top: var(--atlas-space-4);
+    height: calc(100vh - var(--atlas-space-4) - var(--atlas-space-4));
+    height: calc(100dvh - var(--atlas-space-4) - var(--atlas-space-4));
+    min-height: 0;
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border: 1px solid var(--atlas-border);
+    border-radius: var(--atlas-radius-lg);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) :is(.shell-brand, .shell-role-badge),
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-sidebar-brand,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-brand {
+    border-color: var(--atlas-border);
+    color: var(--atlas-text);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) :is(.shell-brand-text b, .shell-role-badge b) {
+    color: var(--atlas-text);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) :is(.shell-brand-text span, .shell-role-badge span, .shell-nav-group-label) {
+    color: var(--atlas-text-muted);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-brand-mark {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+    border-radius: var(--atlas-radius-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-nav,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-sidebar-nav,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-nav {
+    min-height: 0;
+    padding: var(--atlas-space-3);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-header,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-header,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-header {
+    top: var(--atlas-space-4);
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border: 1px solid var(--atlas-border);
+    border-radius: var(--atlas-radius-lg);
+    box-shadow: var(--atlas-shadow-sm);
+    min-height: var(--atlas-header-height);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-main,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-main,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-main {
+    min-width: 0;
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-content,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-content,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-content {
+    padding: var(--atlas-space-5) var(--atlas-space-2);
+  }
+
+  /* Existing card sidebars: keep their individual mobile navigation model. */
+  body.atlas-ui[data-atlas-surface="pointage"] #app > .shell > .side,
+  body.atlas-ui[data-atlas-surface="recruitment"] .recruit-sidebar,
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) #appView > .shell > .sidebar,
+  body.atlas-ui[data-atlas-surface="client"] .portal-sidebar,
+  body.atlas-ui[data-atlas-surface="paie"] .paie-nav,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-nav {
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border: 1px solid var(--atlas-border);
+    border-radius: var(--atlas-radius-lg);
+    box-shadow: var(--atlas-shadow-sm);
+    padding: var(--atlas-space-3);
+  }
+  body.atlas-ui[data-atlas-surface="pointage"] .side-title,
+  body.atlas-ui[data-atlas-surface="recruitment"] .recruit-sidebar-title,
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .sidebar-title,
+  body.atlas-ui[data-atlas-surface="client"] .portal-sidebar-title,
+  body.atlas-ui[data-atlas-surface="paie"] .paie-nav-title,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-nav-title {
+    color: var(--atlas-text-muted);
+  }
+
+  /* Navigation styles change appearance only: active/hidden remain JS-owned. */
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .nav-link,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-nav-link,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-nav-link,
+  body.atlas-ui[data-atlas-surface="pointage"] .side .nav-btn,
+  body.atlas-ui[data-atlas-surface="recruitment"] .recruit-nav-btn,
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .sidebar .nav-btn,
+  body.atlas-ui[data-atlas-surface="client"] .portal-nav-btn,
+  body.atlas-ui[data-atlas-surface="paie"] .paie-nav-link,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-nav-link {
+    min-width: 0;
+    border-radius: var(--atlas-radius-sm);
+    color: var(--atlas-sidebar-text);
+    font-family: var(--atlas-font);
+    font-weight: 650;
+    line-height: 1.4;
+    box-shadow: none;
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .nav-link:hover,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-nav-link:hover,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-nav-link:hover,
+  body.atlas-ui[data-atlas-surface="pointage"] .side .nav-btn:hover,
+  body.atlas-ui[data-atlas-surface="recruitment"] .recruit-nav-btn:hover,
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .sidebar .nav-btn:hover,
+  body.atlas-ui[data-atlas-surface="client"] .portal-nav-btn:hover:not(.active),
+  body.atlas-ui[data-atlas-surface="paie"] .paie-nav-link:hover,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-nav-link:hover {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-primary);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .nav-link.active,
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-nav-link.active,
+  body.atlas-ui[data-atlas-surface="core-v3"] .v3-nav-link.active,
+  body.atlas-ui[data-atlas-surface="pointage"] .side .nav-btn.active,
+  body.atlas-ui[data-atlas-surface="recruitment"] .recruit-nav-btn.active,
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .sidebar .nav-btn.active,
+  body.atlas-ui[data-atlas-surface="client"] .portal-nav-btn.active,
+  body.atlas-ui[data-atlas-surface="paie"] .paie-nav-link.active,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-nav-link.active {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+    font-weight: 750;
+    box-shadow: none;
+  }
+  body.atlas-ui[data-atlas-surface="recruitment"] :is(.recruit-nav-icon, .recruit-nav-btn.active .recruit-nav-icon),
+  body.atlas-ui[data-atlas-surface="client"] :is(.portal-nav-icon, .portal-nav-btn.active .portal-nav-icon),
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .sidebar :is(.nav-icon, .nav-btn.active .nav-icon) {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+    border-radius: var(--atlas-radius-sm);
+  }
+  body.atlas-ui[data-atlas-surface="pointage"] .nav-btn.active .nav-count {
+    background: var(--atlas-danger-soft);
+    color: var(--atlas-danger);
+  }
+  /* White operational headers; client branding remains in its own header. */
+  body.atlas-ui[data-atlas-surface="pointage"] #app > .top,
+  body.atlas-ui:is([data-atlas-surface="recruitment"], [data-atlas-surface="rh"], [data-atlas-surface="commercial"]) #appView > .top,
+  body.atlas-ui[data-atlas-surface="paie"] .paie-standalone-header,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-standalone-header,
+  body.atlas-ui[data-atlas-surface="conges"] .conges-standalone-header {
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border-bottom: 1px solid var(--atlas-border);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointage"], [data-atlas-surface="recruitment"], [data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .top :is(.brand-logo, .top-logo, .society-badge),
+  body.atlas-ui[data-atlas-surface="paie"] .paie-brand-mark,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-brand-mark,
+  body.atlas-ui[data-atlas-surface="conges"] .conges-brand-mark {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+    border-color: var(--atlas-border);
+    border-radius: var(--atlas-radius-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointage"], [data-atlas-surface="recruitment"], [data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .top :is(.brand-user, .top-sub),
+  body.atlas-ui[data-atlas-surface="paie"] .paie-main-head span,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-main-head span {
+    color: var(--atlas-text-muted);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointage"], [data-atlas-surface="recruitment"], [data-atlas-surface="rh"], [data-atlas-surface="commercial"]) .top :is(.logout, select, input),
+  body.atlas-ui[data-atlas-surface="paie"] .paie-header-actions button,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-header-actions button,
+  body.atlas-ui[data-atlas-surface="conges"] .conges-header-actions button {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text-secondary);
+    border-color: var(--atlas-border);
+    border-radius: var(--atlas-radius-sm);
+  }
+  body.atlas-ui[data-atlas-surface="paie"] .paie-main-head h2,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-main-head h2 {
+    color: var(--atlas-text);
+  }
+  body.atlas-ui[data-atlas-surface="paie"] .paie-standalone-body,
+  body.atlas-ui[data-atlas-surface="facturation"] .fac-standalone-body {
+    gap: var(--atlas-space-4);
+    padding: var(--atlas-space-4);
+  }
+  body.atlas-ui[data-atlas-surface="conges"] .conges-standalone-shell {
+    background: var(--atlas-background);
+    color: var(--atlas-text);
+    font-family: var(--atlas-font);
+  }
+
+  /* Terminal and public headers share the palette, not the sidebar layout.
+     Explicit descendants cover the white text of their original blue headers.
+     Scanner, QR, clock segments and cheque calibration geometry stay untouched. */
+  body.atlas-ui:is([data-atlas-surface="pointeur"], [data-atlas-surface="supervision"]) #appView > .top,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header,
+  body.atlas-ui:is([data-atlas-surface="candidate"], [data-atlas-surface="loans"]) > .top,
+  body.atlas-ui[data-atlas-surface="cheque"] > .topbar {
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border-bottom: 1px solid var(--atlas-border);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointeur"], [data-atlas-surface="supervision"]) .top .brand-logo,
+  body.atlas-ui[data-atlas-surface="loans"] .top .brand-mark,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .header-employee-photo {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-sidebar-text);
+    border-color: var(--atlas-border);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointeur"], [data-atlas-surface="supervision"]) .top .brand-user,
+  body.atlas-ui[data-atlas-surface="pointeur"] .top :is(.seg-date, .site-control-label),
+  body.atlas-ui[data-atlas-surface="candidate"] .top :is(.brand small, .secure),
+  body.atlas-ui[data-atlas-surface="loans"] .top .brand small,
+  body.atlas-ui[data-atlas-surface="cheque"] > .topbar .sub,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header :is(.header-ddn, .employee-code-line) {
+    color: var(--atlas-text-muted);
+  }
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .header-name-block .name {
+    color: var(--atlas-text);
+  }
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .employee-code-line strong {
+    color: var(--atlas-sidebar-text);
+  }
+  body.atlas-ui:is([data-atlas-surface="pointeur"], [data-atlas-surface="supervision"]) .top :is(.logout, .header-menu),
+  body.atlas-ui[data-atlas-surface="pointeur"] .top .module-nav button,
+  body.atlas-ui[data-atlas-surface="loans"] .top .top-actions button,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header :is(.home-card-deco, .language-switcher button),
+  body.atlas-ui[data-atlas-surface="cheque"] > .topbar .btn.ghost {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-sidebar-text);
+    border-color: var(--atlas-border);
+    box-shadow: none;
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top :is(.module-nav button.active, .module-nav button:hover, .logout:hover, .header-menu:hover),
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header :is(.language-switcher button.active, .language-switcher button:hover, .home-card-deco:hover) {
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+    border-color: var(--atlas-border-strong);
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top :is(.site-control, .site-selector),
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .language-switcher {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text);
+    border-color: var(--atlas-border);
+    box-shadow: none;
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top :is(.header-scanner-status, .conn-pill),
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .employee-status {
+    background: var(--atlas-success-soft);
+    color: var(--atlas-success);
+    border-color: var(--atlas-success);
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top :is(.header-scanner-status .dot, .conn-dot),
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .employee-status::before {
+    background: var(--atlas-success);
+    box-shadow: none;
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top .conn-pill.offline,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .employee-status.inactive {
+    background: var(--atlas-danger-soft);
+    color: var(--atlas-danger);
+    border-color: var(--atlas-danger);
+  }
+  body.atlas-ui[data-atlas-surface="pointeur"] .top .conn-pill.offline .conn-dot,
+  body.atlas-ui[data-atlas-surface="employee"] #appView > header .employee-status.inactive::before {
+    background: var(--atlas-danger);
+  }
+
+  /* Component surfaces that use specialised names, with no geometry changes. */
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) :is(.card, .kpi-card, .drawer, .confirm-box),
+  body.atlas-ui[data-atlas-surface="pointage"] :is(.card, .kpi, .modal),
+  body.atlas-ui[data-atlas-surface="pointeur"] .scanner-card,
+  body.atlas-ui[data-atlas-surface="employee"] :is(.card, .attendance-qr-card, .attendance-history-card, .home-nav-item),
+  body.atlas-ui[data-atlas-surface="candidate"] .wrap > .card,
+  body.atlas-ui[data-atlas-surface="recruitment"] :is(.dashboard-kpi, .dashboard-panel, .table-card),
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) :is(.table-card, .position-card, .modal),
+  body.atlas-ui[data-atlas-surface="loans"] :is(.card, .kpi, .request),
+  body.atlas-ui[data-atlas-surface="supervision"] :is(.kpi-card, .feed-card),
+  body.atlas-ui[data-atlas-surface="cheque"] .wrap > .grid > .card {
+    background: var(--atlas-surface);
+    color: var(--atlas-text);
+    border-color: var(--atlas-border);
+    border-radius: var(--atlas-radius-md);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+  body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) :is(.card-head, .drawer-head),
+  body.atlas-ui[data-atlas-surface="loans"] .card-head,
+  body.atlas-ui[data-atlas-surface="supervision"] .feed-head,
+  body.atlas-ui[data-atlas-surface="candidate"] .section-head {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text);
+    border-color: var(--atlas-border);
+  }
+  body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) :is(.section-head p, .position-card-role, .position-card-site),
+  body.atlas-ui[data-atlas-surface="supervision"] :is(.feed-meta, .feed-head span),
+  body.atlas-ui[data-atlas-surface="cheque"] .hint {
+    color: var(--atlas-text-muted);
+  }
+  body.atlas-ui[data-atlas-surface="rh"] .position-card-name {
+    color: var(--atlas-text);
+  }
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-badge-success {
+    background: var(--atlas-success-soft);
+    color: var(--atlas-success);
+  }
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-badge-warning {
+    background: var(--atlas-warning-soft);
+    color: var(--atlas-warning);
+  }
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-badge-danger {
+    background: var(--atlas-danger-soft);
+    color: var(--atlas-danger);
+  }
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-btn-primary {
+    background: var(--atlas-primary);
+    border-color: var(--atlas-primary);
+    color: var(--atlas-on-primary);
+  }
+  body.atlas-ui[data-atlas-surface="drh-next"] .dn-btn-primary:hover {
+    background: var(--atlas-primary-hover);
+    border-color: var(--atlas-primary-hover);
+  }
+  body.atlas-ui[data-atlas-surface="supervision"] .feed-action.arrivee {
+    background: var(--atlas-success-soft);
+    color: var(--atlas-success);
+  }
+  body.atlas-ui[data-atlas-surface="supervision"] .feed-action.depart {
+    background: var(--atlas-danger-soft);
+    color: var(--atlas-danger);
+  }
+  body.atlas-ui[data-atlas-surface="supervision"] .feed-obs {
+    background: var(--atlas-warning-soft);
+    color: var(--atlas-warning);
+  }
+  body.atlas-ui[data-atlas-surface="cheque"] .check-lettres-box {
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text);
+    border-color: var(--atlas-border);
+    border-radius: var(--atlas-radius-sm);
+  }
+  body.atlas-ui[data-atlas-surface="candidate"] .welcome-button.secondary small {
+    color: var(--atlas-text-secondary);
+  }
+  /* These titles sit on their application's retained dark branded surface. */
+  body.atlas-ui[data-atlas-surface="candidate"] :is(.welcome-title, .status-box h2),
+  body.atlas-ui[data-atlas-surface="client"] .employee-profile-head h2,
+  body.atlas-ui[data-atlas-surface="employee"] .auth-header h1 {
+    color: var(--atlas-on-primary);
+  }
+
+  /* Fixed millimetre paper stays full size inside a local scroll container.
+     The grid cards must be allowed to shrink independently of that paper. */
+  body.atlas-ui[data-atlas-surface="cheque"] .wrap > .grid > .card {
+    min-width: 0;
+  }
+  body.atlas-ui[data-atlas-surface="cheque"] .preview-outer {
+    justify-content: flex-start;
+  }
+  body.atlas-ui[data-atlas-surface="cheque"] .preview-outer > .cheque-page {
+    flex-shrink: 0;
+    margin-inline: auto;
+  }
+
+  /* Header wrapping is local to shells whose scope controls must remain visible. */
+  body.atlas-ui[data-atlas-surface="beo"] .shell-header {
+    height: auto;
+  }
+  body.atlas-ui[data-atlas-surface="beo"] .scope-field select {
+    border-color: var(--atlas-border);
+    border-radius: var(--atlas-radius-sm);
+  }
+
+  @media (min-width: 901px) {
+    body.atlas-ui[data-atlas-surface="pointage"] #app > .shell,
+    body.atlas-ui[data-atlas-surface="client"] #appView > .shell {
+      grid-template-columns: var(--atlas-sidebar-width) minmax(0, 1fr);
+      gap: var(--atlas-space-5);
+    }
+  }
+  @media (min-width: 1001px) {
+    body.atlas-ui[data-atlas-surface="recruitment"] .app-shell,
+    body.atlas-ui:is([data-atlas-surface="rh"], [data-atlas-surface="commercial"]) #appView > .shell {
+      grid-template-columns: var(--atlas-sidebar-width) minmax(0, 1fr);
+      gap: var(--atlas-space-5);
+    }
+  }
+  @media (min-width: 761px) {
+    body.atlas-ui[data-atlas-surface="paie"] .paie-standalone-body,
+    body.atlas-ui[data-atlas-surface="facturation"] .fac-standalone-body {
+      grid-template-columns: var(--atlas-sidebar-width) minmax(0, 1fr);
+    }
+  }
+
+  /* Preserve off-canvas menus and existing open classes at their native widths.
+     The closed transform includes the new margin so no sidebar strip remains. */
+  @media (max-width: 900px) {
+    body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell {
+      padding: var(--atlas-space-3);
+      gap: 0;
+    }
+    body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-sidebar {
+      left: var(--atlas-space-3);
+      top: var(--atlas-space-3);
+      max-width: calc(100vw - var(--atlas-space-3) - var(--atlas-space-3));
+      height: calc(100dvh - var(--atlas-space-3) - var(--atlas-space-3));
+      transform: translateX(calc(-100% - var(--atlas-space-3)));
+      box-shadow: var(--atlas-shadow-md);
+    }
+    body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell.sidebar-open .shell-sidebar {
+      transform: translateX(0);
+    }
+    body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-header {
+      top: var(--atlas-space-3);
+    }
+    body.atlas-ui:is([data-atlas-surface="finance"], [data-atlas-surface="beo"]) .shell-content {
+      padding: var(--atlas-space-4) 0;
+    }
+  }
+  @media (max-width: 860px) {
+    body.atlas-ui[data-atlas-surface="drh-next"] .dn-app,
+    body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell {
+      padding: var(--atlas-space-3);
+      gap: 0;
+    }
+    body.atlas-ui[data-atlas-surface="drh-next"] .dn-sidebar,
+    body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-sidebar {
+      left: var(--atlas-space-3);
+      top: var(--atlas-space-3);
+      max-width: calc(100vw - var(--atlas-space-3) - var(--atlas-space-3));
+      height: calc(100dvh - var(--atlas-space-3) - var(--atlas-space-3));
+      transform: translateX(calc(-100% - var(--atlas-space-3)));
+      box-shadow: var(--atlas-shadow-md);
+    }
+    body.atlas-ui[data-atlas-surface="drh-next"] .dn-app.dn-sidebar-open .dn-sidebar,
+    body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell.v3-sidebar-open .v3-shell-sidebar {
+      transform: translateX(0);
+    }
+    body.atlas-ui[data-atlas-surface="drh-next"] .dn-header,
+    body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-header {
+      top: var(--atlas-space-3);
+    }
+    body.atlas-ui[data-atlas-surface="drh-next"] .dn-content,
+    body.atlas-ui[data-atlas-surface="core-v3"] .v3-shell-content {
+      padding: var(--atlas-space-4) 0;
+    }
+  }
+  @media (max-width: 760px) {
+    body.atlas-ui[data-atlas-surface="paie"] .paie-standalone-body,
+    body.atlas-ui[data-atlas-surface="facturation"] .fac-standalone-body {
+      padding: var(--atlas-space-3);
+      gap: var(--atlas-space-3);
+    }
+    body.atlas-ui[data-atlas-surface="paie"] .paie-nav,
+    body.atlas-ui[data-atlas-surface="facturation"] .fac-nav {
+      padding: var(--atlas-space-2);
+    }
+  }
+}

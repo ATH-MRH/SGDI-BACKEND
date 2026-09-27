@@ -6217,6 +6217,12 @@ function applyLanguagePreference(root){
   scope.querySelectorAll('input[placeholder],textarea[placeholder],button[title],select[title]').forEach(el=>{
     ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v,translations);if(t!==v)el.setAttribute(a,t)}});
   });
+  // Keep the original navigation labels for the case-sensitive language dictionary.
+  scope.querySelectorAll('.nav-label[data-atlas-nav-label]').forEach(el=>{
+    const original=el.dataset.atlasNavLabel;
+    el.textContent=mode==='ar'?sgdiTranslateText(original,translations):(original==='GRH'?original:sgdiTitleCaseText(original));
+    if(el.parentElement?.hasAttribute('aria-label'))el.parentElement.setAttribute('aria-label',el.textContent);
+  });
   scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
 
@@ -6285,6 +6291,26 @@ document.addEventListener("click",(event)=>{
     setTimeout(()=>closeSgdiMobileSidebar(),120);
   }
 });
+function atlasBrandHTML(){
+  return '<div class="atlas-brand admin-users-brand"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 6.5h14M5 17.5h14"/></svg><span>IRON GLOBAL<small>UN MONDE DE SOLUTIONS</small></span></div>';
+}
+function atlasAccountHTML(){
+  if(!session)return"";
+  const name=String(session.nom||session.username||"Utilisateur");
+  const role=typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role;
+  const initials=name.trim().split(/\s+/).slice(0,2).map(part=>part.charAt(0)).join("").toUpperCase();
+  return `<div class="atlas-account" aria-label="Compte connecté"><span class="atlas-account-initials" aria-hidden="true">${escapeHTML(initials)}</span><span class="atlas-account-name" title="${escapeHTML(name)}">${escapeHTML(name)}<small>${escapeHTML(role||"")}</small></span></div>`;
+}
+function atlasLegacyTopbarHTML(title,context,isTrans){
+  return `<div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print">
+    <div class="sgdi-topbar-left ${isTrans?"sgdi-topbar-left-module":""} flex items-center gap-3 shrink-0">
+      <button type="button" class="sgdi-sidebar-toggle ${sgdiSidebarCollapsed()?"is-collapsed":""}" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button>
+      <button type="button" class="btn btn-ghost text-xs topbar-back-btn" onclick="goBackSmart()" title="Retour" aria-label="Retour">←</button>
+      <div class="atlas-context"><div class="sgdi-topbar-title-right sgdi-topbar-module-title ${isTrans?"sgdi-topbar-module-title-active":""}">${escapeHTML(title)}</div><div class="atlas-context-label">${escapeHTML(context)}</div></div>
+    </div>
+    <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0"><details class="atlas-workspace-tools"><summary>Outils</summary>${workspaceTabsBarHTML()}</details>${atlasAccountHTML()}</div>
+  </div>`;
+}
 function render(options={}){
   // Wrapper : garantit que la barre de progression du haut (#ui-progress, démarrée au
   // hashchange) est TOUJOURS terminée, même sur les pages à retour anticipé (portail,
@@ -6344,12 +6370,9 @@ function renderInternal(options={}){
     renderCongesStandaloneShell();return;
   }
   const app=document.getElementById("app");
-  const socColors={};
   const isTrans=!!session.transverse;
   const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",superviseur:"MODULE SUPERVISEUR",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
-  const transColors={facturation:"#043970",facmod:"#0f766e",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af",superviseur:"#0f766e",secretariat:"#0f766e",agenda:"#2563eb",paie:"#0f766e",global:"#0f172a"};
   const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",superviseur:"Supervision terrain · Sites autorisés · Pointage",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
-  const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
   const shellSidebarClass=sgdiIsMobileViewport()
@@ -6357,21 +6380,12 @@ function renderInternal(options={}){
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}">
     ${connectedAccountHeadingHTML()}
-    <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:#011b3f;border-bottom:1px solid #062b5f;gap:12px">
-      <div class="sgdi-topbar-left ${isTrans?"sgdi-topbar-left-module":""} flex items-center gap-3 shrink-0">
-        <button type="button" class="sgdi-sidebar-toggle ${sgdiSidebarCollapsed()?"is-collapsed":""}" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button>
-        <button type="button" class="btn btn-ghost text-xs topbar-back-btn" onclick="goBackSmart()" title="Retour" aria-label="Retour">←</button>
-        <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
-      </div>
-      <div class="sgdi-topbar-title-right sgdi-topbar-module-title ${isTrans?"sgdi-topbar-module-title-active":""}" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
-      <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0"></div>
-    </div>
+    ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">
       <aside class="sidebar w-72 flex flex-col shrink-0">
         <div class="sidebar-user sidebar-user-identity sidebar-user-profile-large px-4 py-5 text-xs">
-          <div class="sidebar-profile-mark" aria-hidden="true"><span>${escapeHTML((session.nom||"A").slice(0,1).toUpperCase())}</span></div>
-          <div class="sidebar-atlas-brand sidebar-current-user-name">${escapeHTML(session.nom)}</div>
-          <div class="sidebar-user-role">${escapeHTML(typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role)}</div>
+          ${atlasBrandHTML()}
+          <div class="atlas-sidebar-profile" aria-label="Compte connecté"><div class="sidebar-atlas-brand sidebar-current-user-name">${escapeHTML(session.nom||session.username)}</div><div class="sidebar-user-role">${escapeHTML(typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role)}</div></div>
         </div>
         <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
         <div id="sidebar-back-slot"></div>
@@ -6381,7 +6395,6 @@ function renderInternal(options={}){
       </aside>
       <button type="button" class="sgdi-sidebar-backdrop no-print" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu"></button>
       <main class="flex-1 flex flex-col overflow-hidden min-w-0">
-        ${workspaceTabsBarHTML()}
         ${moduleCountersRibbonHTML()}
         <div class="sgdi-view flex-1 overflow-y-auto" id="view"></div>
       </main>
@@ -6945,17 +6958,24 @@ function renderSidebar(){
   };
   const itemHTML=item=>{
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
+    const label=item.custom||item.label==="GRH"?item.label:sgdiTitleCaseText(item.label);
     const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)!==null?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
     const gapClass=item.gapBefore?" nav-gap-before":"";
-    return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(item.label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
+    return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label"${item.custom?"":` data-atlas-nav-label="${escapeHTML(item.label)}"`}>${escapeHTML(label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
-    let prevGroup=null;
-    nav.innerHTML=items.map(item=>{
-      const groupHTML=item.group&&item.group!==prevGroup?`<div class="nav-group-lbl">${escapeHTML(item.group)}</div>`:"";
-      prevGroup=item.group||prevGroup;
-      return groupHTML+itemHTML(item);
-    }).join("");
+    const groupItemsHTML=rows=>{
+      let prevGroup=null;
+      return rows.map(item=>{
+        const groupHTML=item.group&&item.group!==prevGroup?`<div class="nav-group-lbl">${escapeHTML(item.group)}</div>`:"";
+        prevGroup=item.group||prevGroup;
+        return groupHTML+itemHTML(item);
+      }).join("");
+    };
+    const secondary=session?.transverse==="admin"&&isAdminSystemSession()?items.filter(item=>item.secondary&&!item.custom):[];
+    const primary=secondary.length?items.filter(item=>!secondary.includes(item)):items;
+    const secondaryActive=secondary.some(item=>sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r)));
+    nav.innerHTML=groupItemsHTML(primary)+(secondary.length?`<details class="atlas-admin-secondary"${secondaryActive?" open":""}><summary>Paramètres métier</summary>${groupItemsHTML(secondary)}</details>`:"");
     if(backSlot&&showBack){
       backSlot.innerHTML=`<div class="sidebar-back"><button type="button" class="sidebar-return-button" onclick="exitTransverseModule()" title="${session.societe?"Retour société":"Retour à la sélection"}" aria-label="${session.societe?"Retour société":"Retour à la sélection"}"><span aria-hidden="true">←</span><span>Retour</span></button></div>`;
     }
@@ -7181,17 +7201,17 @@ function renderSidebar(){
         {label:"ORGANISER LES COMPTEURS",route:"admin/counters",group:"PARAMÈTRES"},
         {label:"STOCKAGE POSTGRESQL",route:"admin/storage",group:"PARAMÈTRES"},
         {label:"ALERTES",route:"alerts",group:"PILOTAGE"},
-        {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
-        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length},
-        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length},
-        {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",count:(db.pointages||[]).length},
-        {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",count:POSTES.length},
-        {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",count:adminMagasinsCount},
-        {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",count:adminArticlesCount},
-        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length},
-        {label:"CONTRAT",route:"admin/contrats",group:"DOCUMENTS"},
-        {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ"},
-        {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ"}
+        {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",secondary:true,count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
+        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",secondary:true,count:drhAgents.length},
+        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",secondary:true,count:drhAgents.length},
+        {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",secondary:true,count:(db.pointages||[]).length},
+        {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",secondary:true,count:POSTES.length},
+        {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",secondary:true,count:adminMagasinsCount},
+        {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",secondary:true,count:adminArticlesCount},
+        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",secondary:true,count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length},
+        {label:"CONTRAT",route:"admin/contrats",group:"DOCUMENTS",secondary:true},
+        {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ",secondary:true},
+        {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ",secondary:true}
       ]:[
         {label:"COCKPIT DG",route:"admin/dashboard",group:"PILOTAGE"},
         {label:"VUE SOCIÉTÉS",route:"admin/dashboard",group:"PILOTAGE"},
@@ -7273,6 +7293,7 @@ function syncSidebarActiveState(){
     const aliases=(el.dataset.aliases||"").split("|").filter(Boolean);
     const active=route&&(sidebarRouteActive(path,route)||aliases.some(a=>sidebarRouteActive(path,a)));
     el.classList.toggle("active",!!active);
+    if(active){const section=el.closest("details.atlas-admin-secondary");if(section)section.open=true;}
   });
   return true;
 }
@@ -8366,6 +8387,7 @@ function sidebarNavigate(event,route){
     event.preventDefault();
     event.stopPropagation();
   }
+  closeSgdiMobileSidebar();
   const path=(location.hash||"#/dashboard").slice(2);
   const target=String(route||"").replace(/^#?\/?/,"");
   // Le clic direct sur « Factures » ouvre toujours le centre de gestion,
@@ -8387,7 +8409,7 @@ function adminUsersShellActive(){
 function adminUsersTopbarHTML(){
   return `<div class="admin-users-global-context"><button type="button" class="sgdi-sidebar-toggle" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button><strong>Administration Système</strong></div>
     <div class="admin-users-global-search"><label class="admin-users-visually-hidden" for="admin-users-global-search">Recherche globale</label><input id="admin-users-global-search" type="search" data-no-lock placeholder="Rechercher globalement…" autocomplete="off" aria-controls="global-search-results" oninput="renderGlobalSearchResults(this.value)" onkeydown="if(event.key==='Escape'){document.getElementById('global-search-results').classList.remove('active');this.value=''}"><div id="global-search-results" class="global-search-results" aria-live="polite"></div></div>
-    <div class="admin-users-global-account">${notificationTopbarButtonHTML()}<span class="admin-users-account-initials" aria-hidden="true">${escapeHTML((session.nom||session.username||"A").trim().slice(0,2).toUpperCase())}</span><span class="admin-users-account-name">${escapeHTML(session.nom||session.username)}<small>Administration système</small></span></div>`;
+    <div class="admin-users-global-account" data-atlas-tools-slot>${atlasAccountHTML()}</div>`;
 }
 function syncAdminUsersShell(){
   const shell=document.querySelector(".sgdi-shell"),active=adminUsersShellActive();
@@ -8395,17 +8417,29 @@ function syncAdminUsersShell(){
   shell.classList.toggle("sgdi-admin-users-shell",active);
   const topbar=shell.querySelector(":scope > .sgdi-topbar");
   if(topbar&&active&&!topbar.__adminUsersOriginal){
+    // Keep the same tools node (and its listeners/open state) in the active header.
+    const tools=topbar.querySelector(".atlas-workspace-tools");
+    if(tools){
+      const placeholder=document.createComment("Atlas workspace tools");
+      tools.replaceWith(placeholder);
+      topbar.__adminUsersTools={tools,placeholder};
+    }
     topbar.__adminUsersOriginal=document.createDocumentFragment();
     while(topbar.firstChild)topbar.__adminUsersOriginal.appendChild(topbar.firstChild);
     topbar.innerHTML=adminUsersTopbarHTML();
+    if(tools)topbar.querySelector("[data-atlas-tools-slot]").prepend(tools);
   }else if(topbar&&!active&&topbar.__adminUsersOriginal){
+    if(topbar.__adminUsersTools){
+      topbar.__adminUsersTools.placeholder.replaceWith(topbar.__adminUsersTools.tools);
+      delete topbar.__adminUsersTools;
+    }
     topbar.replaceChildren(topbar.__adminUsersOriginal);delete topbar.__adminUsersOriginal;
   }
   const identity=shell.querySelector(".sidebar-user-identity");
   if(identity&&active&&!identity.__adminUsersOriginal){
     identity.__adminUsersOriginal=document.createDocumentFragment();
     while(identity.firstChild)identity.__adminUsersOriginal.appendChild(identity.firstChild);
-    identity.innerHTML='<div class="admin-users-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 6.5h14M5 17.5h14"/></svg><span>IRON GLOBAL<small>UN MONDE DE SOLUTIONS</small></span></div>';
+    identity.innerHTML=atlasBrandHTML();
   }else if(identity&&!active&&identity.__adminUsersOriginal){
     identity.replaceChildren(identity.__adminUsersOriginal);delete identity.__adminUsersOriginal;
   }

@@ -75,9 +75,9 @@ test('menu latéral Administration : ALERTES apparaît dans PILOTAGE, juste apr�
   r.T().renderSidebar();
   const nav = r.sidebar();
   const labels = [...nav.querySelectorAll('.nav-link .nav-label')].map(el => el.textContent);
-  const pilotageIdx = labels.indexOf('TABLEAU DE BORD');
+  const pilotageIdx = labels.indexOf('Tableau de bord');
   assert.ok(pilotageIdx >= 0, 'TABLEAU DE BORD doit toujours être présent');
-  assert.equal(labels[pilotageIdx + 1], 'ALERTES');
+  assert.equal(labels[pilotageIdx + 1], 'Alertes');
   const link = [...nav.querySelectorAll('.nav-link')].find(el => el.dataset.route === 'alerts');
   assert.ok(link, 'un lien de route "alerts" doit exister dans le menu');
   assert.equal(link.getAttribute('onclick'), "sidebarNavigate(event,'alerts')");

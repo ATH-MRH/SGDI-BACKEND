@@ -196,7 +196,7 @@ test('Administration sidebar groups the three identity routes and keeps only rea
     if (el.classList.contains('nav-group-lbl')) group = el.textContent;
     if (el.dataset.route) links.set(el.dataset.route, { group, el });
   }
-  for (const [route, label] of [['admin/users', 'UTILISATEURS'], ['admin/niveaux', "PROFILS D'ACCÈS"], ['admin/droits', 'MATRICE DES DROITS']]) {
+  for (const [route, label] of [['admin/users', 'Utilisateurs'], ['admin/niveaux', "Profils d'accès"], ['admin/droits', 'Matrice des droits']]) {
     const item = links.get(route);
     assert.ok(item, route);
     assert.equal(item.group, 'IDENTITÉS & ACCÈS');
