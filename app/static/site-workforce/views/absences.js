@@ -19,21 +19,28 @@
             <option value="">Toutes</option>
           </select>
         </div>
+        <div class="field"><label>Du</label><input type="date" id="abs-from"></div>
+        <div class="field"><label>Au</label><input type="date" id="abs-to"></div>
+        <div class="field"><label>Employé #</label><input type="number" id="abs-emp" min="1"></div>
       </div>
       <div class="card"><div id="abs-list">${SW.skeletonRows(6)}</div></div>`;
 
     document.querySelector("#abs-filter").addEventListener("change", (e) => { filter = e.target.value; load(); });
+    ["#abs-from", "#abs-to", "#abs-emp"].forEach((sel) => document.querySelector(sel).addEventListener("change", load));
 
     async function load() {
       const el = document.querySelector("#abs-list");
       try {
-        const rows = await SW.guardedApi("absences", "/site-workforce/absences", { params: { decision_status: filter } });
+        const rows = await SW.guardedApi("absences", "/site-workforce/absences", { params: {
+          decision_status: filter, date_from: document.querySelector("#abs-from").value,
+          date_to: document.querySelector("#abs-to").value, employee_id: document.querySelector("#abs-emp").value,
+        } });
         if (!rows.length) { el.innerHTML = SW.emptyState("Aucune absence dans ce filtre."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Employé #</th><th>Date</th><th>Statut</th><th></th>
+          <th>Employé</th>${SW.siteHeaders()}<th>Date</th><th>Statut</th><th></th>
         </tr></thead><tbody>
           ${rows.map((r) => `<tr>
-            <td>#${r.employee_id}</td><td>${SW.dateFr(r.presence_date)}</td>
+            <td>${SW.employeeLabel(r)}</td>${SW.siteCells(r)}<td>${SW.dateFr(r.presence_date)}</td>
             <td>${SW.statusBadge(r.absence_decision_status, SW.ABSENCE_DECISION_STATUS)}</td>
             <td class="actions">${r.absence_decision_status === "en_attente" ? `
               <button class="btn btn-sm" data-decide="${r.id}" data-decision="justifiee">Justifier</button>

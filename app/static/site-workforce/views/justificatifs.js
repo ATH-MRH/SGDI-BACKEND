@@ -55,10 +55,10 @@
         const rows = await SW.guardedApi("justificatifs", "/site-workforce/documents");
         if (!rows.length) { el.innerHTML = SW.emptyState("Aucun justificatif."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Libellé</th><th>Type</th><th>Dossier #</th><th>Statut</th><th>Vérifié par</th><th></th>
+          <th>Libellé</th>${SW.siteHeaders()}<th>Type</th><th>Dossier #</th><th>Statut</th><th>Vérifié par</th><th></th>
         </tr></thead><tbody>
           ${rows.map((r) => `<tr>
-            <td>${SW.esc(r.label)}</td><td>${SW.esc(r.owner_type)}</td><td>#${r.owner_id}</td>
+            <td>${SW.esc(r.label)}</td>${SW.siteCells(r)}<td>${SW.esc(r.owner_type)}</td><td>#${r.owner_id}</td>
             <td>${SW.statusBadge(r.validity_status, SW.DOCUMENT_STATUS)}</td>
             <td>${SW.esc(r.verified_by || "—")}</td>
             <td class="actions">${r.validity_status === "en_attente" ? `

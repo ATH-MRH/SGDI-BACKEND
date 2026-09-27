@@ -8,11 +8,12 @@
   window.SiteWorkforceViews.reclamations = async function (container) {
     container.innerHTML = `
       <h1 class="section-title">Réclamations</h1>
-      <p class="section-sub">Suivi des réclamations du personnel du site</p>
+      <p class="section-sub">Suivi des réclamations du personnel · ${SW.esc(SW.scopeLabel())}</p>
       <div class="card">
         <div class="card-head"><h2>Nouvelle réclamation</h2></div>
         <form id="rec-form" class="form-row">
           <div class="field"><label>Employé #</label><input name="employee_id" type="number" required></div>
+          ${SW.siteSelectHTML("site_id")}
           <div class="field"><label>Sujet</label><input name="subject" required></div>
           <div class="field"><label>Description</label><input name="description" required></div>
           <div class="field"><label>Priorité</label>
@@ -34,7 +35,7 @@
       btn.disabled = true;
       try {
         await SW.api("/site-workforce/reclamations", { method: "POST", body: {
-          employee_id: Number(fd.get("employee_id")), subject: fd.get("subject"),
+          employee_id: Number(fd.get("employee_id")), site_id: fd.get("site_id") ? Number(fd.get("site_id")) : null, subject: fd.get("subject"),
           description: fd.get("description"), priority: fd.get("priority"),
         } });
         msg.textContent = "Réclamation créée."; msg.className = "msg ok";
@@ -50,10 +51,10 @@
         const rows = await SW.guardedApi("reclamations", "/site-workforce/reclamations");
         if (!rows.length) { el.innerHTML = SW.emptyState("Aucune réclamation."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Sujet</th><th>Employé #</th><th>Priorité</th><th>Statut</th><th></th>
+          <th>Sujet</th>${SW.siteHeaders()}<th>Employé</th><th>Priorité</th><th>Statut</th><th></th>
         </tr></thead><tbody>
           ${rows.map((r) => `<tr>
-            <td>${SW.esc(r.subject)}</td><td>#${r.employee_id}</td><td>${SW.esc(r.priority)}</td>
+            <td>${SW.esc(r.subject)}</td>${SW.siteCells(r)}<td>${SW.employeeLabel(r)}</td><td>${SW.esc(r.priority)}</td>
             <td>${SW.statusBadge(r.status, SW.RECLAMATION_STATUS)}</td>
             <td class="actions">${r.status === "nouvelle" || r.status === "en_cours" ? `<button class="btn btn-sm" data-transmit="${r.id}" data-subject="${SW.esc(r.subject)}">Transmettre</button>` : ""}</td>
           </tr>`).join("")}

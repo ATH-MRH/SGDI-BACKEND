@@ -13,6 +13,7 @@
         <div class="card-head"><h2>Déclarer une maladie</h2></div>
         <form id="maladie-form" class="form-row">
           <div class="field"><label>Employé #</label><input name="employee_id" type="number" required></div>
+          ${SW.siteSelectHTML("site_id")}
           <div class="field"><label>Début</label><input name="start_date" type="date" required></div>
           <div class="field"><label>Fin prévue</label><input name="end_date" type="date" required></div>
           <div class="field"><label>Commentaire</label><input name="reason" placeholder="Type administratif, réception…"></div>
@@ -31,7 +32,7 @@
       btn.disabled = true;
       try {
         await SW.api("/site-workforce/leaves", { method: "POST", body: {
-          employee_id: Number(fd.get("employee_id")), leave_type: "maladie",
+          employee_id: Number(fd.get("employee_id")), site_id: fd.get("site_id") ? Number(fd.get("site_id")) : null, leave_type: "maladie",
           start_date: fd.get("start_date"), end_date: fd.get("end_date"), reason: fd.get("reason") || null,
         } });
         msg.textContent = "Déclaration enregistrée."; msg.className = "msg ok";
@@ -47,9 +48,9 @@
         const rows = await SW.guardedApi("maladies", "/site-workforce/leaves", { params: { leave_type: "maladie" } });
         if (!rows.length) { el.innerHTML = SW.emptyState("Aucune déclaration."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Employé #</th><th>Début</th><th>Fin prévue</th><th>Statut</th><th>Commentaire</th>
+          <th>Employé</th>${SW.siteHeaders()}<th>Début</th><th>Fin prévue</th><th>Statut</th><th>Commentaire</th>
         </tr></thead><tbody>
-          ${rows.map((r) => `<tr><td>#${r.employee_id}</td><td>${SW.dateFr(r.start_date)}</td><td>${SW.dateFr(r.end_date)}</td>
+          ${rows.map((r) => `<tr><td>${SW.employeeLabel(r)}</td>${SW.siteCells(r)}<td>${SW.dateFr(r.start_date)}</td><td>${SW.dateFr(r.end_date)}</td>
             <td>${SW.statusBadge(r.status, SW.LEAVE_STATUS)}</td><td>${SW.esc(r.reason || "—")}</td></tr>`).join("")}
         </tbody></table></div>`;
       } catch (err) { if (err.name !== "AbortError") el.innerHTML = SW.errorState(err); }

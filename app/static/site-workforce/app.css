@@ -60,13 +60,21 @@ table{font-variant-numeric:tabular-nums}
 .nav-link-icon{width:18px;text-align:center;flex:none;font-size:13px}
 .shell-main{flex:1;min-width:0;display:flex;flex-direction:column}
 .shell-header{
-  height:var(--header-h);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
-  padding:0 18px;border-bottom:1px solid var(--border);background:var(--surface);
-  position:sticky;top:0;z-index:10;gap:12px;
+  min-height:var(--header-h);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  padding:6px 18px;border-bottom:1px solid var(--border);background:var(--surface);
+  position:sticky;top:0;z-index:10;gap:8px 12px;
 }
+.shell-header-heading{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.shell-header-app{font-size:11px;font-weight:800;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+/* Sélecteurs de périmètre : toujours visibles, jamais masqués (on doit savoir où l'on travaille). */
+.scope-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.scope-field{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;min-width:0}
+.scope-field select{font-size:12.5px;font-weight:700;text-transform:none;padding:5px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);max-width:220px;min-width:0}
+.scope-field select:disabled{opacity:1;background:var(--primary-soft);color:var(--primary-strong)}
+.scope-chip{max-width:280px}
 .shell-header-left{display:flex;align-items:center;gap:10px;min-width:0}
 .shell-header-title{font-size:14px;font-weight:900;color:var(--text);white-space:nowrap}
-.shell-header-right{display:flex;align-items:center;gap:10px;flex:1 1 auto;min-width:0;justify-content:flex-end}
+.shell-header-right{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0;justify-content:flex-end}
 .sidebar-toggle{display:none;border:1px solid var(--border);background:var(--surface);border-radius:7px;width:32px;height:32px;align-items:center;justify-content:center;cursor:pointer;flex:none}
 .site-chip{border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:800;color:var(--primary-strong);background:var(--primary-soft);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .user-chip{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);min-width:0}
@@ -79,10 +87,19 @@ table{font-variant-numeric:tabular-nums}
   .sidebar-toggle{display:inline-flex}
   .shell-content{padding:12px}
 }
+@media(max-width:900px){
+  .scope-bar{order:3;width:100%}
+  .scope-field{flex:1 1 140px}
+  .scope-field select{flex:1;max-width:none;width:100%}
+  .scope-chip{display:none}
+}
 @media(max-width:480px){
   .site-chip{max-width:92px}
   .user-chip span{display:none}
+  .shell-header-app{display:none}
 }
+.site-row-link{cursor:pointer}
+.site-row-link:hover td{background:var(--primary-soft)}
 .sidebar-scrim{display:none}
 .shell.sidebar-open .sidebar-scrim{display:block;position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:15}
 

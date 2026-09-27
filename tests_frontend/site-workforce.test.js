@@ -46,23 +46,153 @@ test("hasSiteWorkforceAccess() reflète exactement effective_modules/module_acce
   assert.strictEqual(w2.SW.hasSiteWorkforceAccess(), true);
 });
 
-test("shell.js définit les 9 entrées de navigation attendues, toutes distinctes, sans sélecteur libre de société/site", () => {
-  const w = freshWindow({
-    site: { id: 1, name: "Site A" },
-    fetchImpl: () => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify({ site: { id: 1, name: "Site A" }, kpi: {}, actions_rapides: { prochains_conges: [] } })) }),
-  });
+// Faux backend : périmètre autorisé A(A1,A2) + B(B1) ; toute requête est journalisée.
+const SCOPE = { societies: ["SocA", "SocB"], sites: [
+  { id: 1, name: "A1", society: "SocA" }, { id: 2, name: "A2", society: "SocA" }, { id: 3, name: "B1", society: "SocB" },
+] };
+function scopedFetch(calls, extra = {}) {
+  return (url) => {
+    calls.push(url);
+    const u = new URL(url, "http://localhost");
+    let body = [];
+    if (u.pathname === "/api/site-workforce/scope") body = extra.scope || SCOPE;
+    else if (u.pathname === "/api/site-workforce/dashboard") body = { site: null, kpi: {}, actions_rapides: { prochains_conges: [] }, by_site: [] };
+    else if (u.pathname === "/api/site-workforce/employees") body = { items: [], total: 0, page: 1, pages: 1 };
+    if (extra[u.pathname]) body = extra[u.pathname](u);
+    return Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(body)) });
+  };
+}
+function shellWindow(fetchImpl) {
+  const w = freshWindow({ fetchImpl });
+  VIEW_SRCS.forEach((src) => w.eval(src));
   w.eval(SHELL_SRC.replace(/if \(state\.token\) \{[\s\S]*?\n  \}\n/, ""));
-  w.SW.state.user = { full_name: "Test" };
-  return w.SiteWorkforceShell.renderShell().then(() => {
-    const rendered = [...w.document.querySelectorAll("[data-nav]")].map((b) => b.dataset.nav);
-    for (const key of NAV_KEYS) assert.ok(rendered.includes(key), `navigation manquante : ${key}`);
-    assert.strictEqual(new Set(rendered).size, rendered.length, "clés de navigation dupliquées");
-    // §B6 : aucun <select>/champ libre de société ou de site dans le header — le site est
-    // affiché (site-chip, texte non éditable), jamais choisi.
-    assert.strictEqual(w.document.querySelector("#society-select"), null);
-    assert.strictEqual(w.document.querySelector("#site-select"), null);
-    assert.ok(w.document.querySelector(".site-chip"), "le site actif doit être affiché (lecture seule)");
+  w.SW.state.user = { full_name: "CE Test", username: "ce01" };
+  return w;
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test("shell.js définit les 9 entrées de navigation, et des sélecteurs limités au périmètre autorisé", async () => {
+  const calls = [];
+  const w = shellWindow(scopedFetch(calls));
+  await w.SiteWorkforceShell.renderShell();
+  const rendered = [...w.document.querySelectorAll("[data-nav]")].map((b) => b.dataset.nav);
+  for (const key of NAV_KEYS) assert.ok(rendered.includes(key), `navigation manquante : ${key}`);
+  assert.strictEqual(new Set(rendered).size, rendered.length, "clés de navigation dupliquées");
+  const socs = [...w.document.querySelectorAll("#society-select option")].map((o) => [o.value, o.textContent]);
+  assert.deepStrictEqual(socs, [["", "Toutes mes sociétés"], ["SocA", "SocA"], ["SocB", "SocB"]]);
+  const sites = [...w.document.querySelectorAll("#site-select option")].map((o) => o.textContent);
+  assert.deepStrictEqual(sites, ["Tous mes sites", "A1", "A2", "B1"]);
+  assert.match(w.document.querySelector(".scope-chip").textContent, /Toutes mes sociétés — tous mes sites \(3\)/);
+});
+
+test("sélecteurs : société → sites de la société ; site → requêtes filtrées ; retour à tous les sites", async () => {
+  const calls = [];
+  const w = shellWindow(scopedFetch(calls));
+  await w.SiteWorkforceShell.renderShell();
+  const soc = w.document.querySelector("#society-select");
+  soc.value = "SocA"; soc.dispatchEvent(new w.Event("change"));
+  await tick();
+  assert.deepStrictEqual([...w.document.querySelectorAll("#site-select option")].map((o) => o.textContent), ["Tous mes sites", "A1", "A2"]);
+  assert.ok(calls.at(-1).includes("society=SocA") && !calls.at(-1).includes("site_id"), calls.at(-1));
+  const site = w.document.querySelector("#site-select");
+  site.value = "2"; site.dispatchEvent(new w.Event("change"));
+  await tick();
+  assert.ok(calls.at(-1).includes("site_id=2"), calls.at(-1));
+  assert.match(w.document.querySelector(".scope-chip").textContent, /Site : A2 — SocA/);
+  assert.match(w.document.querySelector(".shell-role-badge").textContent, /Site : A2/);
+  const soc2 = w.document.querySelector("#society-select");
+  soc2.value = ""; soc2.dispatchEvent(new w.Event("change"));
+  await tick();
+  assert.ok(!calls.at(-1).includes("site_id") && !calls.at(-1).includes("society"), calls.at(-1));
+  assert.match(w.document.querySelector(".scope-chip").textContent, /tous mes sites \(3\)/);
+});
+
+test("une valeur mémorisée hors périmètre n'est jamais envoyée (retour à tout le périmètre autorisé)", async () => {
+  const calls = [];
+  const w = shellWindow(scopedFetch(calls));
+  w.localStorage.setItem("sw_scope", JSON.stringify({ society: "SocC", site_id: "99" }));
+  await w.SiteWorkforceShell.renderShell();
+  assert.deepStrictEqual({ ...w.SW.state.scope }, { society: "", site_id: "" });
+  assert.ok(calls.every((u) => !u.includes("SocC") && !u.includes("site_id=99")), calls.join("\n"));
+});
+
+test("la sélection mémorisée d'un autre compte n'est jamais reprise", async () => {
+  const w = shellWindow(scopedFetch([]));
+  w.localStorage.setItem("sw_scope", JSON.stringify({ society: "SocA", site_id: "1", user: "autre_compte" }));
+  await w.SiteWorkforceShell.renderShell();
+  assert.deepStrictEqual({ ...w.SW.state.scope }, { society: "", site_id: "" });
+  assert.strictEqual(JSON.parse(w.localStorage.getItem("sw_scope")).user, "ce01");
+});
+
+test("aucune donnée périmée : une réponse de l'ancien périmètre est ignorée après un changement", async () => {
+  let release;
+  const calls = [];
+  const w = shellWindow((url) => {
+    calls.push(url);
+    if (url.includes("/employees") && url.includes("site_id=1")) {
+      return new Promise((resolve) => { release = () => resolve({ ok: true, text: () => Promise.resolve(JSON.stringify({ items: [{ id: 1, code: "OLD-A1", first_name: "Old", last_name: "A1" }], total: 1, page: 1, pages: 1 })) }); });
+    }
+    return scopedFetch([])(url);
   });
+  w.localStorage.setItem("sw_scope", JSON.stringify({ society: "SocA", site_id: "1", user: "ce01" }));
+  w.location.hash = "#/personnel";
+  await w.SiteWorkforceShell.renderShell();
+  await tick();
+  const site = w.document.querySelector("#site-select");
+  site.value = "2"; site.dispatchEvent(new w.Event("change"));
+  await tick();
+  release();
+  await tick(); await tick();
+  assert.ok(!w.document.querySelector("#view").textContent.includes("OLD-A1"), "réponse du site A1 affichée sous le site A2");
+});
+
+test("guardedApi rejette (AbortError) une réponse arrivée après un changement de périmètre", async () => {
+  let release;
+  const w = freshWindow({ fetchImpl: (url) => (url.includes("/scope")
+    ? Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(SCOPE)) })
+    : new Promise((resolve) => { release = () => resolve({ ok: true, text: () => Promise.resolve('{"items":["périmé"]}') }); })) });
+  await w.SW.loadScope();
+  const pending = w.SW.guardedApi("personnel", "/site-workforce/employees");
+  await tick();
+  w.SW.setScope({ society: "SocB", site_id: "" });
+  release();
+  await assert.rejects(pending, (err) => err.name === "AbortError");
+});
+
+test("compte historique 1 société / 1 site : sélection automatique, sélecteurs figés, comportement inchangé", async () => {
+  const calls = [];
+  const w = shellWindow(scopedFetch(calls, { scope: { societies: ["SocB"], sites: [{ id: 3, name: "HAMOUL 01", society: "SocB" }] } }));
+  await w.SiteWorkforceShell.renderShell();
+  assert.ok(w.document.querySelector("#society-select").disabled && w.document.querySelector("#site-select").disabled);
+  assert.match(w.document.querySelector(".shell-role-badge").textContent, /Site : HAMOUL 01/);
+  assert.ok(calls.filter((u) => u.includes("/dashboard")).every((u) => u.includes("site_id=3")));
+});
+
+test("la cloche agrège tout le périmètre autorisé et affiche société/site de chaque notification", async () => {
+  const calls = [];
+  const w = shellWindow(scopedFetch(calls, { "/api/site-workforce/notifications": () => [
+    { id: 5, notif_type: "reclamation", message: "Nouvelle", status: "nouvelle", society: "SocB", site_name: "B1", site_id: 3 },
+  ] }));
+  w.localStorage.setItem("sw_scope", JSON.stringify({ society: "SocA", site_id: "1", user: "ce01" }));
+  await w.SiteWorkforceShell.renderShell();
+  assert.strictEqual(w.SW.state.scope.site_id, "1");
+  w.document.querySelector("#notif-btn").click();
+  await tick(); await tick();
+  const notifCalls = calls.filter((u) => u.includes("/notifications"));
+  assert.ok(notifCalls.length && notifCalls.every((u) => !u.includes("site_id") && !u.includes("society=")), notifCalls.join("\n"));
+  assert.match(w.document.querySelector("#sw-drawer-scrim").textContent, /SocB · B1/);
+});
+
+test("vue agrégée « Tous mes sites » : colonnes Société et Site dans Personnel", async () => {
+  const w = shellWindow(scopedFetch([], { "/api/site-workforce/employees": () => ({ items: [
+    { id: 1, code: "E1", first_name: "A", last_name: "Un", society: "SocA", site_name: "A1", presence_status: "present" },
+  ], total: 1, page: 1, pages: 1 }) }));
+  w.location.hash = "#/personnel";
+  await w.SiteWorkforceShell.renderShell();
+  await tick(); await tick();
+  const heads = [...w.document.querySelectorAll("#pers-list th")].map((t) => t.textContent);
+  assert.ok(heads.includes("Société") && heads.includes("Site"), heads.join(","));
+  assert.match(w.document.querySelector("#pers-list").textContent, /SocA/);
 });
 
 test("chaque clé de navigation a une vue réellement enregistrée dans window.SiteWorkforceViews", () => {
@@ -176,18 +306,14 @@ test("noAccessNotice/emptyState/errorState rendent un état explicite, jamais un
   assert.match(w.SW.errorState(new w.SW.ApiError("Panne", 500)), /Panne/);
 });
 
-test("portail BEO : écran de connexion et badge affichent Bureau des Effectifs Ouest, Chargé des effectifs et le site imposé", async () => {
-  const w = freshWindow({
-    site: { id: 7, name: "HAMOUL 01" },
-    fetchImpl: () => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify({ site: { id: 7, name: "HAMOUL 01" }, kpi: {}, actions_rapides: { prochains_conges: [] } })) }),
-  });
-  w.eval(SHELL_SRC.replace(/if \(state\.token\) \{[\s\S]*?\n  \}\n/, ""));
+test("portail BEO : écran de connexion et badge affichent Bureau des Effectifs Ouest, Chargé des effectifs et le périmètre consulté", async () => {
+  const w = shellWindow(scopedFetch([], { scope: { societies: ["SocB"], sites: [{ id: 7, name: "HAMOUL 01", society: "SocB" }] } }));
   w.SiteWorkforceShell.renderLogin();
   assert.match(w.document.querySelector("#login-screen").textContent, /Bureau des Effectifs Ouest/);
-  w.SW.state.user = { full_name: "CE Test" };
   await w.SiteWorkforceShell.renderShell();
   const badge = w.document.querySelector(".shell-role-badge").textContent;
   assert.match(badge, /Chargé des effectifs/);
   assert.match(badge, /Bureau des Effectifs Ouest/);
   assert.match(badge, /Site : HAMOUL 01/);
+  assert.match(w.document.querySelector(".shell-header").textContent, /Bureau des Effectifs Ouest/);
 });

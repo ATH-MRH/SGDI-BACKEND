@@ -12,7 +12,7 @@
     let date = todayIso();
     container.innerHTML = `
       <h1 class="section-title">Pointage</h1>
-      <p class="section-sub">Statut quotidien du personnel du site</p>
+      <p class="section-sub">Statut quotidien du personnel · ${SW.esc(SW.scopeLabel())}</p>
       <div class="filters-row">
         <div class="field"><label>Date</label><input type="date" id="pt-date" value="${date}"></div>
         <button class="btn btn-sm btn-primary" id="pt-close">Clôturer la journée</button>
@@ -27,13 +27,13 @@
     document.querySelector("#pt-close").addEventListener("click", async () => {
       const ok = await SW.confirmAction({
         title: "Clôturer la journée de pointage ?",
-        impact: [["Date", SW.dateFr(date)], ["Effet", "Verrouille le pointage — toute correction ultérieure sera tracée"]],
+        impact: [["Date", SW.dateFr(date)], ["Périmètre", SW.esc(SW.scopeLabel())], ["Effet", "Verrouille le pointage de ce périmètre — toute correction ultérieure sera tracée"]],
         confirmLabel: "Clôturer",
       });
       if (!ok) return;
       try {
         const r = await SW.api("/site-workforce/attendance/close", { method: "POST", params: { presence_date: date } });
-        alert(`${r.closed} pointage(s) clôturé(s)${r.missing ? `, ${r.missing} employé(s) resté(s) non pointé(s)` : ""}.`);
+        alert(`${r.closed} pointage(s) clôturé(s) sur ${r.sites} site(s)${r.missing ? `, ${r.missing} employé(s) resté(s) non pointé(s)` : ""}.`);
         load();
       } catch (err) { alert(err.message); }
     });
@@ -46,18 +46,18 @@
         const pct = data.progress.total ? Math.round((data.progress.pointed / data.progress.total) * 100) : 0;
         progEl.innerHTML = `<p class="muted" style="margin:0 0 8px">${data.progress.pointed}/${data.progress.total} pointés</p>
           <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
-        if (!data.entries.length) { listEl.innerHTML = SW.emptyState("Aucun employé affecté à ce site."); return; }
+        if (!data.entries.length) { listEl.innerHTML = SW.emptyState("Aucun employé affecté à ce périmètre."); return; }
         listEl.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Employé #</th><th>Statut</th><th>Clôturé</th><th></th>
+          <th>Employé</th>${SW.siteHeaders()}<th>Statut</th><th>Clôturé</th><th></th>
         </tr></thead><tbody>
           ${data.entries.map((e) => `<tr data-row="${e.employee_id}">
-            <td>#${e.employee_id}</td>
+            <td>${SW.employeeLabel(e)}</td>${SW.siteCells(e)}
             <td>${SW.statusBadge(e.status, SW.ATTENDANCE_STATUS)}</td>
             <td>${e.closed_at ? "oui" : "non"}</td>
             <td class="actions">
               ${e.closed_at
                 ? `<button class="btn btn-sm" data-correct="${e.id}">Corriger</button>`
-                : `<select class="status-select" data-set="${e.employee_id}">
+                : `<select class="status-select" data-set="${e.employee_id}" data-site="${e.site_id}">
                      <option value="">Choisir…</option>
                      ${STATUSES.map((s) => `<option value="${s}" ${e.status === s ? "selected" : ""}>${SW.esc((SW.ATTENDANCE_STATUS[s] || {}).label || s)}</option>`).join("")}
                    </select>`}
@@ -67,7 +67,8 @@
         listEl.querySelectorAll("[data-set]").forEach((sel) => sel.addEventListener("change", async (e) => {
           if (!e.target.value) return;
           try {
-            await SW.api("/site-workforce/attendance", { method: "POST", body: { employee_id: Number(e.target.dataset.set), presence_date: date, status: e.target.value } });
+            // site_id réel de la ligne (contrôlé par le serveur contre l'affectation).
+            await SW.api("/site-workforce/attendance", { method: "POST", body: { employee_id: Number(e.target.dataset.set), site_id: Number(e.target.dataset.site), presence_date: date, status: e.target.value } });
             load();
           } catch (err) { alert(err.message); }
         }));

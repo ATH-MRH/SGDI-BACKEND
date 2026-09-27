@@ -15,6 +15,7 @@
         <div class="card-head"><h2>Déclarer un incident</h2></div>
         <form id="disc-form" class="form-row">
           <div class="field"><label>Employé # (optionnel)</label><input name="employee_id" type="number"></div>
+          ${SW.siteSelectHTML("site_id")}
           <div class="field"><label>Type</label>
             <select name="event_type" required>${EVENT_TYPES.map((t) => `<option value="${t}">${t.replace(/_/g, " ")}</option>`).join("")}</select>
           </div>
@@ -37,7 +38,7 @@
       try {
         const eid = fd.get("employee_id");
         await SW.api("/site-workforce/discipline", { method: "POST", body: {
-          employee_id: eid ? Number(eid) : null, event_type: fd.get("event_type"),
+          employee_id: eid ? Number(eid) : null, site_id: fd.get("site_id") ? Number(fd.get("site_id")) : null, event_type: fd.get("event_type"),
           subject: fd.get("subject"), description: fd.get("description") || null,
         } });
         msg.textContent = "Incident créé en brouillon."; msg.className = "msg ok";
@@ -53,10 +54,10 @@
         const rows = await SW.guardedApi("discipline", "/site-workforce/discipline");
         if (!rows.length) { el.innerHTML = SW.emptyState("Aucun incident."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Objet</th><th>Type</th><th>Employé #</th><th>Statut</th><th></th>
+          <th>Objet</th>${SW.siteHeaders()}<th>Type</th><th>Employé</th><th>Statut</th><th></th>
         </tr></thead><tbody>
           ${rows.map((r) => `<tr>
-            <td>${SW.esc(r.subject)}</td><td>${SW.esc(r.event_type)}</td><td>${r.employee_id ? "#" + r.employee_id : "—"}</td>
+            <td>${SW.esc(r.subject)}</td>${SW.siteCells(r)}<td>${SW.esc(r.event_type)}</td><td>${SW.employeeLabel(r)}</td>
             <td>${SW.statusBadge(r.status, SW.DISCIPLINE_STATUS)}</td>
             <td class="actions">
               ${r.status === "brouillon" ? `<button class="btn btn-sm" data-signal="${r.id}">Signaler</button>` : ""}

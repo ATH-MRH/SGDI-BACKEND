@@ -1,18 +1,73 @@
 // ATLAS Site Workforce — client API partagé + utilitaires. Même architecture que
-// app/static/finance-platform/ (aucun framework, pas de build, window.SW) : PAS de
-// sélecteur libre de société/site ici (§B6) — le site est imposé côté serveur
-// (User.authorized_sites), l'écran l'affiche mais ne le laisse jamais choisir.
+// app/static/finance-platform/ (aucun framework, pas de build, window.SW).
+// Périmètre : le serveur résout les sociétés/sites AUTORISÉS du compte (/site-workforce/scope).
+// Le sélecteur Société/Site ne fait que RÉDUIRE la vue (?society= / ?site_id=, ajoutés à
+// chaque appel du module) ; toute valeur hors périmètre est refusée par le serveur (403).
+// Chaque changement de périmètre incrémente scopeEpoch : une réponse arrivée après un
+// changement est ignorée (jamais de donnée périmée affichée sous le nouveau périmètre).
 (function () {
   "use strict";
 
   const API = "/api";
   const STORAGE_KEY = "sw_token";
+  const SCOPE_KEY = "sw_scope";
 
   const state = {
     token: localStorage.getItem(STORAGE_KEY) || null,
     user: null,
-    site: null, // rempli par dashboard() au premier chargement — jamais choisi côté client
+    site: null,        // site consulté quand la vue porte sur un site unique
+    scopeInfo: null,   // { societies: [...], sites: [{id, name, society}] } — périmètre AUTORISÉ
+    scope: { society: "", site_id: "" }, // sélection courante ("" = toutes / tous)
+    scopeEpoch: 0,
   };
+
+  // Sélection mémorisée PAR COMPTE : un autre utilisateur du même navigateur ne reprend
+  // jamais la sélection du précédent (le serveur la revaliderait, mais l'écran s'ouvrirait
+  // sur un périmètre que ce compte n'a pas choisi).
+  function currentUsername() { return String((state.user && state.user.username) || "").toLowerCase(); }
+  function readStoredScope() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SCOPE_KEY) || "null") || {};
+      return stored.user && stored.user === currentUsername() ? stored : {};
+    } catch (e) { return {}; }
+  }
+  function storeScope() {
+    try { localStorage.setItem(SCOPE_KEY, JSON.stringify({ ...state.scope, user: currentUsername() })); } catch (e) { /* stockage indisponible : sans effet */ }
+  }
+  function scopeSites(society) {
+    const sites = (state.scopeInfo && state.scopeInfo.sites) || [];
+    return society ? sites.filter((s) => s.society === society) : sites;
+  }
+  // Fixe le périmètre consulté, toujours DANS le périmètre autorisé (valeur inconnue -> "tout").
+  // Un compte à une seule société / un seul site est positionné automatiquement dessus.
+  function setScope(next) {
+    const info = state.scopeInfo || { societies: [], sites: [] };
+    let society = String((next && next.society) || "");
+    let siteId = String((next && next.site_id) || "");
+    if (info.societies.length === 1) society = info.societies[0];
+    if (society && !info.societies.includes(society)) society = "";
+    const sites = scopeSites(society);
+    if (sites.length === 1) siteId = String(sites[0].id);
+    if (siteId && !sites.some((s) => String(s.id) === siteId)) siteId = "";
+    const changed = society !== state.scope.society || siteId !== state.scope.site_id;
+    state.scope = { society, site_id: siteId };
+    state.site = siteId ? sites.find((s) => String(s.id) === siteId) || null : null;
+    if (changed) { state.scopeEpoch += 1; abortAll(); }
+    storeScope();
+    return changed;
+  }
+  function scopeLabel() {
+    const { society, site_id: siteId } = state.scope;
+    if (siteId && state.site) return `Site : ${state.site.name}${state.site.society ? " — " + state.site.society : ""}`;
+    const n = scopeSites(society).length;
+    return society ? `Société : ${society} — tous mes sites (${n})` : `Toutes mes sociétés — tous mes sites (${n})`;
+  }
+  function scopeParams() {
+    const out = {};
+    if (state.scope.society) out.society = state.scope.society;
+    if (state.scope.site_id) out.site_id = state.scope.site_id;
+    return out;
+  }
 
   function esc(v) {
     return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -29,7 +84,12 @@
     constructor(message, status, detail) { super(message); this.status = status; this.detail = detail; }
   }
 
-  async function api(path, { method = "GET", body, formData, signal, params } = {}) {
+  async function api(path, { method = "GET", body, formData, signal, params, scope = true } = {}) {
+    // Périmètre consulté ajouté à chaque appel du module (le serveur le revalide) ; les
+    // paramètres explicites de l'appelant priment, scope:false le désactive (ex. cloche).
+    if (scope && path.startsWith("/site-workforce") && path !== "/site-workforce/scope") {
+      params = { ...scopeParams(), ...(params || {}) };
+    }
     const headers = {};
     if (state.token) headers.Authorization = "Bearer " + state.token;
     let payload;
@@ -54,14 +114,32 @@
   }
 
   const inflight = new Map();
+  function abortAll() {
+    inflight.forEach((controller) => controller.abort());
+    inflight.clear();
+  }
+  function staleError() {
+    const err = new Error("Réponse d'un périmètre précédent ignorée");
+    err.name = "AbortError";
+    return err;
+  }
   function guardedApi(slot, path, opts = {}) {
     const prev = inflight.get(slot);
     if (prev) prev.abort();
     const controller = new AbortController();
     inflight.set(slot, controller);
-    return api(path, { ...opts, signal: controller.signal }).finally(() => {
+    const epoch = state.scopeEpoch;
+    return api(path, { ...opts, signal: controller.signal }).then((data) => {
+      if (epoch !== state.scopeEpoch) throw staleError();
+      return data;
+    }).finally(() => {
       if (inflight.get(slot) === controller) inflight.delete(slot);
     });
+  }
+  async function loadScope() {
+    state.scopeInfo = await api("/site-workforce/scope");
+    setScope(readStoredScope());
+    return state.scopeInfo;
   }
 
   async function login(username, password) {
@@ -76,6 +154,11 @@
     state.token = null;
     state.user = null;
     state.site = null;
+    state.scopeInfo = null;
+    state.scope = { society: "", site_id: "" };
+    state.scopeEpoch += 1;
+    abortAll();
+    try { localStorage.removeItem(SCOPE_KEY); } catch (e) { /* sans effet */ }
   }
   function hasModule(mod) {
     return !!(state.user && (state.user.module_access_global || (state.user.effective_modules || []).includes(mod)));
@@ -140,6 +223,23 @@
     document.removeEventListener("keydown", drawerEscHandler);
   }
   function kvRow(label, value) { return `<div class="kv-row"><span>${esc(label)}</span><b>${value}</b></div>`; }
+  // Colonnes de contexte d'une vue agrégée : jamais une ligne sans son site/sa société.
+  function multiSite() { return !state.scope.site_id && scopeSites(state.scope.society).length > 1; }
+  function siteHeaders() { return multiSite() ? "<th>Société</th><th>Site</th>" : ""; }
+  function siteCells(row) { return multiSite() ? `<td>${esc(row.society || "—")}</td><td>${esc(row.site_name || "—")}</td>` : ""; }
+  function employeeLabel(row) {
+    const name = row.employee_name ? `${esc(row.employee_name)} ` : "";
+    return row.employee_id ? `${name}<span class="muted">#${row.employee_id}${row.employee_code ? " · " + esc(row.employee_code) : ""}</span>` : "—";
+  }
+  // Choix du site pour une création : limité aux sites consultés (le serveur revérifie).
+  function siteSelectHTML(name, { required } = {}) {
+    const sites = state.scope.site_id ? scopeSites(state.scope.society).filter((s) => String(s.id) === state.scope.site_id) : scopeSites(state.scope.society);
+    if (sites.length <= 1) return sites.length ? `<input type="hidden" name="${name}" value="${sites[0].id}">` : "";
+    return `<div class="field"><label>Site${required ? "" : " (déduit de l'affectation si vide)"}</label><select name="${name}" ${required ? "required" : ""}>
+      <option value="">${required ? "Choisir…" : "Affectation de l'employé"}</option>
+      ${sites.map((s) => `<option value="${s.id}">${esc(s.name)}${s.society ? " — " + esc(s.society) : ""}</option>`).join("")}
+    </select></div>`;
+  }
 
   function confirmAction({ title, impact, confirmLabel, danger }) {
     return new Promise((resolve) => {
@@ -185,6 +285,7 @@
 
   window.SW = {
     state, api, guardedApi, esc, dateFr, ApiError,
+    loadScope, setScope, scopeSites, scopeLabel, scopeParams, multiSite, siteHeaders, siteCells, employeeLabel, siteSelectHTML,
     login, logout, hasModule, hasSiteWorkforceAccess,
     statusBadge, ATTENDANCE_STATUS, ABSENCE_DECISION_STATUS, DOCUMENT_STATUS, LEAVE_STATUS, DISCIPLINE_STATUS, RECLAMATION_STATUS,
     skeletonKpis, skeletonRows, emptyState, errorState,

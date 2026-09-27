@@ -16,6 +16,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const DB_PATH = path.join(os.tmpdir(), `sw_e2e_permanent_${Date.now()}.db`);
 const SOC = "Iron Global Securite";
 const SOC_B = "Sword Corporation";
+const SOC_C = "Tiers Société E2E";
 
 function findChrome() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -53,7 +54,7 @@ async function api(path_, { method = "GET", token, body } = {}) {
 
 let serverProc;
 let chargeToken;
-let siteAId, siteBId, empAId, empBId;
+let siteAId, siteBId, empAId, empBId, siteA2Id, siteCId, empA2Id, empCId;
 
 test("site-workforce E2E permanent", { skip: !CHROME_PATH ? "Chrome introuvable (définir PUPPETEER_EXECUTABLE_PATH) — non exécuté, ne bloque pas npm test par défaut" : (!puppeteer ? "puppeteer-core absent" : false) }, async (t) => {
   await t.test("démarrage serveur + seed", async () => {
@@ -112,8 +113,23 @@ if not S.query(User).filter(User.username == "chargeE2E").first():
         authorized_societies=["${SOC}"], authorized_structures=[], authorized_modules=["site_workforce"],
         authorized_sites=[site_a.id], authorized_actions=["read", "create", "update", "validate"],
         password_hash=hash_password("chargeE2Epass"), validation_password_hash=hash_password("x"), is_active=True))
+# Multi-sociétés / multi-sites : A = {Site E2E A, Site E2E A2}, B = {Site E2E B}, C = {Site E2E C}.
+site_a2 = Site(name="Site E2E A2", active=1, equipment_plan={"societe": "${SOC}"})
+site_c = Site(name="Site E2E C", active=1, equipment_plan={"societe": "${SOC_C}"})
+S.add_all([site_a2, site_c]); S.flush()
+emp_a2 = Employee(code="SWE2E-A2", first_name="Anis", last_name="Deuxieme", society="${SOC}", status="actif")
+emp_c = Employee(code="SWE2E-C", first_name="Chems", last_name="Interdit", society="${SOC_C}", status="actif")
+S.add_all([emp_a2, emp_c]); S.flush()
+S.add_all([
+    Assignment(employee_id=emp_a2.id, site_id=site_a2.id, group_code="A", start_date=today - timedelta(days=30), active=1),
+    Assignment(employee_id=emp_c.id, site_id=site_c.id, group_code="A", start_date=today - timedelta(days=30), active=1),
+])
+S.add(User(username="ce01Multi", full_name="CE01 multi-sites", role="charge_effectifs_site", access_level="H2",
+    authorized_societies=["${SOC}", "${SOC_B}"], authorized_structures=[], authorized_modules=["site_workforce"],
+    authorized_sites=[site_a.id, site_a2.id, site_b.id], authorized_actions=["read", "create", "update", "validate"],
+    password_hash=hash_password("ce01MultiPass"), validation_password_hash=hash_password("x"), is_active=True))
 S.commit()
-print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id)
+print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id, emp_a2.id, emp_c.id)
 `;
     // execFileSync (jamais execSync) : voir finance-platform-e2e.test.js pour la raison
     // exacte (le shell n'interprète jamais les \\n de JSON.stringify).
@@ -122,7 +138,7 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id)
       env: { ...process.env, DATABASE_URL: `sqlite:///${DB_PATH}`, JWT_SECRET: "sw-e2e-permanent-secret-0000000000000", APP_ENV: "test" },
     }).toString();
     const parts = seedOut.trim().split("\n").pop().split(" ");
-    [, siteAId, siteBId, empAId, empBId] = parts.map((v, i) => (i === 0 ? v : Number(v)));
+    [, siteAId, siteBId, empAId, empBId, siteA2Id, siteCId, empA2Id, empCId] = parts.map((v, i) => (i === 0 ? v : Number(v)));
 
     const r = await api("/auth/login", { method: "POST", body: { username: "chargeE2E", password: "chargeE2Epass" } });
     assert.strictEqual(r.status, 200, JSON.stringify(r.data));
@@ -304,6 +320,107 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id)
     assert.strictEqual(results.leave, 403, "congé forgé sur un employé du site B doit être refusé");
     assert.strictEqual(results.discipline, 403, "incident forgé sur un employé du site B doit être refusé");
     assert.strictEqual(results.reclamation, 403, "réclamation forgée sur un employé du site B doit être refusée");
+  });
+
+  await t.test("multi-sociétés / multi-sites : sélecteurs A1, A2, B1, tous les sites, puis C/C1 forgé — 0 fuite", async () => {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1440, height: 900 });
+    const consoleErrors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) consoleErrors.push(m.text()); });
+    page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message));
+    await page.goto(`${BASE}/site-workforce`, { waitUntil: "domcontentloaded", timeout: 15000 });
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#login-form", { timeout: 15000 });
+    await page.type("input[name=username]", "ce01Multi");
+    await page.type("input[name=password]", "ce01MultiPass");
+    await Promise.all([page.click("button[type=submit]"), page.waitForSelector("#site-select", { timeout: 8000 })]);
+
+    const options = await page.evaluate(() => ({
+      socs: [...document.querySelectorAll("#society-select option")].map((o) => o.textContent),
+      sites: [...document.querySelectorAll("#site-select option")].map((o) => o.textContent),
+    }));
+    assert.strictEqual(options.socs[0], "Toutes mes sociétés");
+    assert.ok(options.socs.includes(SOC) && options.socs.includes(SOC_B) && !options.socs.includes(SOC_C), options.socs.join(","));
+    assert.deepStrictEqual([...options.sites].sort(), ["Site E2E A", "Site E2E A2", "Site E2E B", "Tous mes sites"]);
+
+    const personnel = async () => {
+      await page.evaluate(() => { location.hash = "#/personnel"; });
+      await page.waitForFunction(() => document.querySelector("#pers-list") && !document.querySelector("#pers-list .skeleton"), { timeout: 10000 });
+      await new Promise((r) => setTimeout(r, 250));
+      return page.evaluate(() => document.querySelector("#pers-list").innerText);
+    };
+    const pick = async (selector, value) => {
+      await page.select(selector, String(value));
+      await new Promise((r) => setTimeout(r, 400));
+    };
+    const chip = () => page.evaluate(() => document.querySelector(".scope-chip")?.innerText || "");
+
+    let text = await personnel();                                          // tous les sites
+    for (const name of ["Terrain", "Deuxieme", "Autre"]) assert.match(text, new RegExp(name));
+    assert.doesNotMatch(text, /Interdit/);
+    assert.match(text, /Société/i);                                        // colonnes société/site en vue agrégée
+    await pick("#site-select", siteAId);
+    text = await personnel();
+    assert.match(text, /Terrain/); assert.doesNotMatch(text, /Deuxieme|Autre|Interdit/);
+    assert.match(await chip(), /Site E2E A\b/);
+    await pick("#site-select", siteA2Id);
+    text = await personnel();
+    assert.match(text, /Deuxieme/); assert.doesNotMatch(text, /Terrain|Autre|Interdit/);
+    await pick("#site-select", siteBId);
+    text = await personnel();
+    assert.match(text, /Autre/); assert.doesNotMatch(text, /Terrain|Deuxieme|Interdit/);
+    await pick("#society-select", SOC);
+    text = await personnel();
+    assert.match(text, /Terrain/); assert.match(text, /Deuxieme/); assert.doesNotMatch(text, /Autre|Interdit/);
+    await pick("#society-select", "");
+    text = await personnel();
+    for (const name of ["Terrain", "Deuxieme", "Autre"]) assert.match(text, new RegExp(name));
+    assert.match(await chip(), /Toutes mes sociétés — tous mes sites \(3\)/);
+
+    // Dashboard agrégé + répartition par site cliquable.
+    await page.evaluate(() => { location.hash = "#/dashboard"; });
+    await page.waitForSelector("[data-site-row]", { timeout: 10000 });
+    const rows = await page.evaluate(() => [...document.querySelectorAll("[data-site-row]")].map((r) => r.dataset.siteRow));
+    assert.deepStrictEqual(rows.map(Number).sort((a, b) => a - b), [siteAId, siteA2Id, siteBId].sort((a, b) => a - b));
+    await page.click(`[data-site-row="${siteA2Id}"]`);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.strictEqual(await page.evaluate(() => document.querySelector("#site-select").value), String(siteA2Id));
+
+    // Forgé : C / C1 — toutes les routes refusent, rien ne fuit.
+    const forged = await page.evaluate(async ({ siteCId, empCId, SOC_C }) => {
+      const h = { Authorization: "Bearer " + localStorage.getItem("sw_token") };
+      const json = { ...h, "Content-Type": "application/json" };
+      const out = {};
+      for (const p of ["dashboard", "employees", "absences", "leaves", "discipline", "reclamations", "documents", "notifications", "transmissions"]) {
+        out["site:" + p] = (await fetch(`/api/site-workforce/${p}?site_id=${siteCId}`, { headers: h })).status;
+        out["soc:" + p] = (await fetch(`/api/site-workforce/${p}?society=${encodeURIComponent(SOC_C)}`, { headers: h })).status;
+      }
+      out.attendance = (await fetch("/api/site-workforce/attendance", { method: "POST", headers: json, body: JSON.stringify({ employee_id: empCId, presence_date: new Date().toISOString().slice(0, 10), status: "present" }) })).status;
+      out.attendanceForgedSite = (await fetch("/api/site-workforce/attendance", { method: "POST", headers: json, body: JSON.stringify({ employee_id: empCId, site_id: siteCId, presence_date: new Date().toISOString().slice(0, 10), status: "present" }) })).status;
+      out.incident = (await fetch("/api/site-workforce/discipline", { method: "POST", headers: json, body: JSON.stringify({ site_id: siteCId, event_type: "retard", subject: "hostile" }) })).status;
+      out.close = (await fetch(`/api/site-workforce/attendance/close?presence_date=2026-01-01&site_id=${siteCId}`, { method: "POST", headers: h })).status;
+      const all = await (await fetch("/api/site-workforce/employees?page_size=100", { headers: h })).json();
+      out.leak = all.items.some((e) => e.id === empCId);
+      const scope = await (await fetch("/api/site-workforce/scope", { headers: h })).json();
+      out.scopeLeak = scope.sites.some((s) => s.id === siteCId) || scope.societies.includes(SOC_C);
+      return out;
+    }, { siteCId, empCId, SOC_C });
+    for (const [key, status] of Object.entries(forged)) {
+      if (key === "leak" || key === "scopeLeak") assert.strictEqual(status, false, key);
+      else assert.strictEqual(status, 403, `${key} → ${status}`);
+    }
+
+    // Mobile : sélecteurs visibles, aucun débordement.
+    await page.setViewport({ width: 390, height: 844 });
+    await new Promise((r) => setTimeout(r, 200));
+    const mobile = await page.evaluate(() => ({
+      overflow: document.body.scrollWidth > document.documentElement.clientWidth + 2,
+      selectors: !!document.querySelector("#site-select")?.offsetParent && !!document.querySelector("#society-select")?.offsetParent,
+    }));
+    assert.deepStrictEqual(mobile, { overflow: false, selectors: true });
+    assert.deepStrictEqual(consoleErrors, []);
+    await page.close();
   });
 
   await t.test("responsive : 1440/1024/768/390 px sur les 9 écrans, aucun débordement horizontal", async () => {
