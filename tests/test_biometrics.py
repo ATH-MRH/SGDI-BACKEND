@@ -383,3 +383,51 @@ def test_camera_catalog_and_camera_tests_are_audited_without_secrets(client, aut
     assert client.post(f"/api/biometrics/cameras/{cam}/test", headers=auth_headers).status_code == 200
     actions = {a.action for a in db.execute(select(AuditEvent).where(AuditEvent.action.like("biometrics.camera%"))).scalars()}
     assert {"biometrics.camera_model.create", "biometrics.camera.create", "biometrics.camera.test"} <= actions
+
+
+# ── Caméras : inactive, hors ligne, RTSP (revue finale) ─────────────────────────────────
+def test_inactive_camera_is_never_contacted(client, auth_headers, db, monkeypatch):
+    """Une caméra désactivée (remplacée, compromise, retirée) n'est plus interrogée : ni
+    capture, ni aperçu, ni pointage."""
+    from app.modules.biometrics.cameras import DahuaCameraAdapter
+    site, emp, cam, W = _enrolled(client, auth_headers, db, "WORKER")
+    assert client.patch(f"/api/biometrics/cameras/{cam}", headers=auth_headers, json={"active": False}).status_code == 200
+    contacted = []
+    monkeypatch.setattr(DahuaCameraAdapter, "burst", lambda self, count=3, interval=0.25: contacted.append("burst") or [])
+    monkeypatch.setattr(DahuaCameraAdapter, "snapshot", lambda self, profile="": contacted.append("snapshot") or b"")
+    assert _recognize(client, auth_headers, cam, _burst(W)).status_code == 409
+    assert client.get(f"/api/biometrics/cameras/{cam}/preview.jpg", headers=auth_headers).status_code == 409
+    assert contacted == []
+    assert _facial_events(db, emp) == []
+
+
+def test_offline_camera_or_wrong_credentials_record_nothing_and_leak_nothing(client, auth_headers, db, monkeypatch):
+    from app.modules.biometrics.cameras import CameraError, DahuaCameraAdapter
+    site, emp, cam, W = _enrolled(client, auth_headers, db, "WORKER")
+    client.patch(f"/api/biometrics/cameras/{cam}", headers=auth_headers, json={"username": "svc", "password": "S3cret-Cam!"})
+    for message in ("Caméra injoignable (URLError)", "Authentification caméra refusée"):
+        def fail(self, count=3, interval=0.25, _m=message):
+            raise CameraError(_m)
+        monkeypatch.setattr(DahuaCameraAdapter, "burst", fail)
+        r = _recognize(client, auth_headers, cam, [])
+        assert r.status_code == 502 and "S3cret" not in r.text and "svc" not in r.text
+    assert _facial_events(db, emp) == []
+
+
+def test_rtsp_camera_unreachable_is_reported_without_credentials(client, auth_headers, db):
+    """Adaptateur RTSP générique réel (sans caméra) : port fermé ⇒ rapport d'échec lisible,
+    identifiants absents de la réponse et de l'audit."""
+    from app.modules.auth.models import AuditEvent
+    site = _site(db)
+    model = client.post("/api/biometrics/camera-models", headers=auth_headers, json={
+        "manufacturer": "Générique", "model": f"RTSP {_tag()}", "adapter": "GENERIC_RTSP"}).json()
+    r = client.post("/api/biometrics/cameras", headers=auth_headers, json={
+        "name": f"RTSP-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "127.0.0.1", "rtsp_port": 9,
+        "usage": "ATTENDANCE", "username": "rtspuser", "password": "Rtsp-P4ss!"})
+    assert r.status_code == 200, r.text
+    report = client.post(f"/api/biometrics/cameras/{r.json()['id']}/test", headers=auth_headers)
+    assert report.status_code == 200
+    assert report.json()["connection"]["ok"] is False
+    assert "Rtsp-P4ss" not in report.text and "rtspuser" not in report.text
+    audits = db.execute(select(AuditEvent).where(AuditEvent.resource == "camera", AuditEvent.resource_id == str(r.json()["id"]))).scalars().all()
+    assert audits and all("Rtsp-P4ss" not in json.dumps([a.old_state, a.new_state], default=str) for a in audits)

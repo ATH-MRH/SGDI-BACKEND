@@ -466,6 +466,8 @@ def preview(camera_id: int, db: Session = Depends(get_db), user: User = Depends(
     camera = _camera_in_scope(db, user, camera_id)
     if camera.adapter == "TERMINAL":
         raise HTTPException(409, detail="Caméra du terminal : aperçu local")
+    if not camera.active:
+        raise HTTPException(409, detail="Caméra désactivée")
     try:
         data = adapter_for(camera).snapshot("PREVIEW_LOW_BANDWIDTH")
     except CameraError as exc:
@@ -501,6 +503,9 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
     service.ensure_enabled()
     if camera.adapter == "TERMINAL":
         raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
+    # Vérifié AVANT toute capture : une caméra désactivée n'est plus jamais interrogée.
+    if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
+        raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
     # Les images sont TOUJOURS lues par le serveur sur la caméra : aucune image fournie par
     # le client n'est acceptée pour pointer (voir docs/biometrics.md, injection numérique).
     frames = _frames_for(camera, None)
