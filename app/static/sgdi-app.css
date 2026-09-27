@@ -3635,43 +3635,79 @@ table{width:100%;max-width:100%}
   text-align:center;
   white-space:nowrap;
   overflow:visible;
-  width:92px!important;
-  min-width:92px!important;
-  max-width:92px!important;
-  padding-left:4px!important;
-  padding-right:4px!important;
+  width:148px!important;
+  min-width:148px!important;
+  max-width:148px!important;
+  padding-left:9px!important;
+  padding-right:9px!important;
 }
 #view .effectif-table .effectif-row-actions{
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:0;
+  gap:8px;
+  flex-wrap:nowrap;
   min-width:0;
   width:100%;
 }
+/* Commandes de ligne indépendantes du style global des boutons de barre d'outils. */
 #view .effectif-table .effectif-open-btn,
-#view .effectif-table td .effectif-open-btn{
-  width:78px!important;
-  min-width:78px!important;
-  max-width:78px!important;
-  height:32px!important;
+#view .effectif-table .effectif-more-btn{
+  display:inline-flex!important;
+  align-items:center!important;
   justify-content:center!important;
-  padding:0 8px!important;
-  border-radius:999px!important;
-  background:#eef6ff!important;
-  color:#011b3f!important;
-  border:1px solid #0b3d75!important;
-  font-weight:950!important;
-  font-size:11px!important;
-  white-space:nowrap!important;
+  height:34px!important;
+  min-height:34px!important;
+  flex:0 0 auto!important;
+  gap:6px!important;
+  border:1px solid #c5d8ec!important;
+  border-radius:8px!important;
+  box-shadow:none!important;
+  font-size:12px!important;
+  font-weight:750!important;
   line-height:1!important;
+  letter-spacing:0!important;
+  text-transform:none!important;
+  text-decoration:none!important;
+  white-space:nowrap!important;
   box-sizing:border-box!important;
-  transition:background .15s,color .15s!important;
+  cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s!important;
 }
-#view .effectif-table .effectif-open-btn:hover,
-#view .effectif-table td .effectif-open-btn:hover{
+#view .effectif-table .effectif-open-btn{
+  width:88px!important;
+  min-width:88px!important;
+  max-width:88px!important;
+  padding:0 10px!important;
+  background:#eef6ff!important;
+  color:#0b3d75!important;
+}
+#view .effectif-table .effectif-open-btn:hover{
   background:#0b3d75!important;
+  border-color:#0b3d75!important;
   color:#fff!important;
+}
+#view .effectif-table .effectif-more-btn{
+  width:34px!important;
+  min-width:34px!important;
+  max-width:34px!important;
+  padding:0!important;
+  background:#fff!important;
+  color:#52677f!important;
+}
+#view .effectif-table .effectif-more-btn:hover{
+  background:#eef6ff!important;
+  border-color:#0b3d75!important;
+  color:#0b3d75!important;
+}
+#view .effectif-table .effectif-open-btn:focus-visible,
+#view .effectif-table .effectif-more-btn:focus-visible{
+  outline:2px solid #2563eb!important;
+  outline-offset:2px!important;
+}
+#view .effectif-table .effectif-row-actions svg{
+  display:block;
+  flex:0 0 auto;
 }
 
 /* ---- Gestion des effectifs : habillage moderne (recherche, tri, table) ---- */
@@ -7664,12 +7700,11 @@ body.sgdi-view-mode #view .rh-erp-photo .photo-cam-overlay{display:none!importan
     text-align:left!important;
   }
   #view .effectif-table .effectif-status-cell{
-    position:absolute!important;
-    top:10px!important;
-    right:12px!important;
+    position:static!important;
     width:auto!important;
-    padding:0!important;
+    padding:8px 0 0!important;
   }
+  #view .effectif-table .effectif-open-cell{padding:10px 0 0!important}
   #view .effectif-table .effectif-status-cell::before{display:none!important}
   #view .effectif-table .effectif-status-cell .pill{
     width:auto!important;
@@ -7684,21 +7719,23 @@ body.sgdi-view-mode #view .rh-erp-photo .photo-cam-overlay{display:none!importan
     gap:8px!important;
     width:100%!important;
   }
-  #view .effectif-table .effectif-open-btn,
-  #view .effectif-table td .effectif-open-btn{
+  #view .effectif-table .effectif-open-btn{
     width:auto!important;
     min-width:0!important;
     max-width:none!important;
     flex:1 1 auto!important;
-    height:42px!important;
+    height:44px!important;
+    min-height:44px!important;
     font-size:13px!important;
     border-radius:12px!important;
   }
-  #view .effectif-table .effectif-row-actions button{
+  #view .effectif-table .effectif-more-btn{
     flex:0 0 44px!important;
     width:44px!important;
     min-width:44px!important;
-    height:42px!important;
+    max-width:44px!important;
+    height:44px!important;
+    min-height:44px!important;
     border-radius:12px!important;
   }
 }
