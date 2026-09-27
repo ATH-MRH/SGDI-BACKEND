@@ -775,6 +775,15 @@ def valider_facture(db: Session, item_id: str, user: Any | None) -> dict[str, An
     existing = get_item(db, "factures", item_id)
     ensure_item_allowed_for_user(existing, user, "factures")
     result = sql_bridge.validate_invoice(db, item_id)
+    from app.core.audit import append_audit
+    append_audit(db, action="facturation.validate", resource="facture", resource_id=item_id, result="success", user=user,
+                 society=result.get("societe") or existing.get("societe"),
+                 old_state={"statut": existing.get("statut"), "totalHT": existing.get("totalHT"), "ttc": existing.get("ttc")},
+                 new_state={"numero": result.get("numero"), "statut": result.get("statut"), "totalHT": result.get("totalHT"),
+                            "ttc": result.get("ttc"),
+                            "lignes": [{k: l.get(k) for k in ("designation", "unite", "nbr", "qte", "prixUnitHT", "totalHT")}
+                                       for l in (result.get("lignes") or []) if isinstance(l, dict)]})
+    db.commit()
     _snapshot_cache_invalidate()
     return result
 

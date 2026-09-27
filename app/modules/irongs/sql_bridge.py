@@ -645,6 +645,7 @@ def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: s
         db.add(row)
     row.external_id = external
     if isinstance(row, Invoice):
+        item = _canonical_invoice_item(row, item)
         raw_number = str(item.get("numero") or item.get("number") or "").strip()
         # Plusieurs brouillons doivent pouvoir coexister. La colonne number est
         # unique : « BROUILLON » n'est donc pas un numéro comptable et reste NULL
@@ -688,6 +689,33 @@ def _next_invoice_number(db: Session) -> str:
     return f"FAC{seq + 1:04d}/{mm}/{yy}"
 
 
+_INVOICE_SNAPSHOT_FIELDS = ("lignes", "totalHT", "montantHT", "tvaAmt", "montantTTC", "ttc", "numero")
+
+
+def _canonical_invoice_item(row: Invoice, item: dict[str, Any]) -> dict[str, Any]:
+    """Montants d'une facture = calcul serveur (invoice_lines.compute_invoice), jamais ceux
+    envoyés par le navigateur. Une facture déjà validée est un document historique : ses
+    lignes (NBR compris) et ses montants restent ceux du snapshot enregistré."""
+    from app.modules.irongs.invoice_lines import compute_invoice
+
+    stored = dict((row.data or {}).get("_legacy") or {}) if row.id else {}
+    if row.id and row.status and row.status != "brouillon":
+        frozen = dict(item)
+        for key in _INVOICE_SNAPSHOT_FIELDS:
+            if key in stored:
+                frozen[key] = deepcopy(stored[key])
+            else:
+                frozen.pop(key, None)
+        if not frozen.get("numero") and row.number:
+            frozen["numero"] = row.number
+        # Jamais de retour à « brouillon » par un simple enregistrement : sinon l'appel suivant
+        # pourrait réécrire les lignes d'une facture déjà émise.
+        if str(frozen.get("statut") or "").lower() in ("", "brouillon"):
+            frozen["statut"] = row.status
+        return frozen
+    return compute_invoice(dict(item))
+
+
 def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
     """Attribue le numéro définitif d'une facture de façon atomique côté serveur.
 
@@ -702,6 +730,15 @@ def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     if row.number and row.status != "brouillon":
         return simple_raw(row)
+    # Validation : recalcul serveur de toutes les lignes (NBR × quantité × prix) et refus
+    # d'une ligne incohérente ; le snapshot validé porte ces montants définitifs.
+    from app.modules.irongs.invoice_lines import compute_invoice
+    current = dict((row.data or {}).get("_legacy") or {})
+    if isinstance(current.get("lignes"), list) and current["lignes"]:
+        current = compute_invoice(current, for_validation=True)
+        row.total_ht = current["totalHT"]
+        row.total_ttc = current["ttc"]
+        row.data = {**(row.data or {}), "_legacy": current}
     for _ in range(5):
         candidate = _next_invoice_number(db)
         savepoint = db.begin_nested()
