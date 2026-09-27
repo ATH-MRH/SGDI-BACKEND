@@ -378,13 +378,12 @@ def serve_uploaded_document(filename: str, request: Request):
                     allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
                     if allowed.isdisjoint({"site_workforce"}):
                         raise HTTPException(status_code=403, detail="Module non autorisé pour ce compte")
-                    from app.modules.site_workforce.security import resolve_scoped_site, site_employee_ids
-                    from app.modules.site_workforce.routes import _scoped_document_owner_ids
+                    from app.modules.site_workforce.security import build_scope
+                    from app.modules.site_workforce.routes import document_owner_site
 
-                    site = resolve_scoped_site(db=db, user=user)
-                    scoped = _scoped_document_owner_ids(db, site, site_employee_ids(db, site.id))
-                    if doc.owner_id not in scoped.get(doc.owner_type, set()):
-                        raise HTTPException(status_code=403, detail="Document hors du périmètre de ce site")
+                    scope = build_scope(db, user)
+                    if document_owner_site(db, doc.owner_type, doc.owner_id, list(scope.sites))[0] is None:
+                        raise HTTPException(status_code=403, detail="Document hors du périmètre de ce compte")
         # Sinon (pièce jointe portail client, photo, rapport IA, fichier orphelin) : servi
         # publiquement, comportement strictement inchangé — hors périmètre de cette correction.
     finally:

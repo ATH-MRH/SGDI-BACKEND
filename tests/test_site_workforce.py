@@ -87,11 +87,13 @@ def test_account_without_site_is_refused(client, db):
     assert r.status_code == 403
 
 
-def test_account_with_multiple_sites_is_refused(client, db):
+def test_account_with_multiple_explicit_sites_sees_both(client, db):
+    """Hotfix multi-sites : 2 sociétés + 2 sites explicitement attribués ⇒ les deux sites."""
     ctx = _setup(db)
     headers = _login_as(client, ctx, "multi")
     r = client.get("/api/site-workforce/dashboard", headers=headers)
-    assert r.status_code == 403
+    assert r.status_code == 200
+    assert {row["site_id"] for row in r.json()["by_site"]} == {ctx["site_a"].id, ctx["site_b"].id}
 
 
 # ── §B3 : tests de fuite avant UI ──────────────────────────────────────────────────────────

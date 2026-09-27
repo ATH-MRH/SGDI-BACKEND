@@ -147,16 +147,18 @@ def _legacy_beo_user(db, username, *, societies, sites):
     return user
 
 
-def test_user_with_site_workforce_and_multiple_sites_still_refused(client, auth_headers, db):
-    """§5/§8.G — un compte BEO multi-sites (donnée héritée : l'Administration refuse
-    désormais de l'écrire) reste refusé par le portail — la garde runtime
-    resolve_scoped_site() est conservée en plus de la garde d'écriture."""
+def test_user_with_site_workforce_and_multiple_sites_sees_exactly_those_sites(client, auth_headers, db):
+    """Hotfix multi-sites — un compte BEO à plusieurs sites explicites voit ces sites, et
+    seulement eux ; un compte sans aucun site reste refusé par la garde runtime."""
     site_a, _ = _seeded_site(db)
     site_b = Site(name=f"Site B secondaire {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": SOC})
     db.add(site_b); db.flush()
     _legacy_beo_user(db, "ce01_multi", societies=[SOC], sites=[site_a.id, site_b.id])
     dash = client.get("/api/site-workforce/dashboard", headers=_login(client, "ce01_multi"))
-    assert dash.status_code == 403
+    assert dash.status_code == 200
+    assert {row["site_id"] for row in dash.json()["by_site"]} == {site_a.id, site_b.id}
+    _legacy_beo_user(db, "ce01_nosite", societies=[SOC], sites=[])
+    assert client.get("/api/site-workforce/dashboard", headers=_login(client, "ce01_nosite")).status_code == 403
 
 
 def test_granting_site_workforce_never_implicitly_grants_other_modules(client, auth_headers, db):
@@ -217,13 +219,13 @@ def test_beo_user_cannot_modify_own_scope_permissions_or_users(client, auth_head
 
 
 def test_admin_can_fix_beo_scope_and_portal_follows(client, auth_headers, db):
-    """Administration BEO §16.K — un admin autorisé passe un compte de "plusieurs sites"
-    (périmètre invalide, portail refusé) à exactement un site : le portail l'accepte alors,
-    sans qu'aucun autre module ne soit ajouté."""
+    """Administration BEO §16.K — un admin autorisé corrige un compte au périmètre invalide
+    (site d'une société non autorisée, portail refusé) : le portail l'accepte alors, sans
+    qu'aucun autre module ne soit ajouté."""
     site_a, _ = _seeded_site(db)
-    site_b = Site(name=f"Site B {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": SOC})
+    site_b = Site(name=f"Site B {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": OTHER_SOC})
     db.add(site_b); db.flush()
-    _legacy_beo_user(db, "ce01_fix", societies=[SOC], sites=[site_a.id, site_b.id])
+    _legacy_beo_user(db, "ce01_fix", societies=[SOC], sites=[site_b.id])
     assert client.get("/api/site-workforce/dashboard", headers=_login(client, "ce01_fix")).status_code == 403
     r = client.patch("/api/auth/users/ce01_fix", headers=auth_headers, json={
         "authorized_sites": [site_a.id], "authorized_actions": ["read", "create", "update", "validate"],
@@ -274,19 +276,24 @@ def test_beo_create_without_site_refused(client, auth_headers, db):
     _assert_refused(r, "site autorisé est obligatoire")
 
 
-def test_beo_create_with_several_societies_refused(client, auth_headers, db):
-    """C — plusieurs sociétés : refus (règle = une seule société)."""
-    site, _ = _seeded_site(db)
-    r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_c", authorized_societies=[SOC, OTHER_SOC], authorized_sites=[site.id]))
-    _assert_refused(r, "une seule société")
-
-
-def test_beo_create_with_several_sites_refused(client, auth_headers, db):
-    """D — plusieurs sites : refus."""
+def test_beo_create_with_several_societies_and_sites_succeeds(client, auth_headers, db):
+    """C — 2 sociétés + 3 sites (chacun dans une société autorisée) : accepté."""
     site_a, _ = _seeded_site(db)
     site_b, _ = _seeded_site(db)
-    r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_d", authorized_sites=[site_a.id, site_b.id]))
-    _assert_refused(r, "un seul site")
+    other = Site(name=f"Site C {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": OTHER_SOC})
+    db.add(other); db.flush()
+    r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload(
+        "beo_c", authorized_societies=[SOC, OTHER_SOC], authorized_sites=[site_a.id, site_b.id, other.id]))
+    assert r.status_code in (200, 201), r.text
+    assert sorted(r.json()["authorized_societies"]) == sorted([SOC, OTHER_SOC])
+
+
+def test_beo_create_with_several_sites_of_one_society_succeeds(client, auth_headers, db):
+    """D — 1 société + 3 sites : accepté."""
+    sites = [_seeded_site(db)[0] for _ in range(3)]
+    r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_d", authorized_sites=[s.id for s in sites]))
+    assert r.status_code in (200, 201), r.text
+    assert sorted(int(v) for v in r.json()["authorized_sites"]) == sorted(s.id for s in sites)
 
 
 def test_beo_create_with_site_outside_society_refused(client, auth_headers, db):
@@ -295,7 +302,10 @@ def test_beo_create_with_site_outside_society_refused(client, auth_headers, db):
     foreign = Site(name=f"Site étranger {uuid.uuid4().hex[:6]}", active=1, equipment_plan={"societe": OTHER_SOC})
     db.add(foreign); db.flush()
     r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_e", authorized_sites=[foreign.id]))
-    _assert_refused(r, "n'appartient pas à la société autorisée")
+    _assert_refused(r, "hors des sociétés autorisées")
+    site, _ = _seeded_site(db)
+    r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_e4", authorized_sites=[site.id, foreign.id]))
+    _assert_refused(r, "hors des sociétés autorisées")
     r = client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_e2", authorized_sites=[999999]))
     _assert_refused(r, "site introuvable")
     site, _ = _seeded_site(db)
@@ -340,11 +350,11 @@ def test_beo_patch_cannot_create_invalid_state(client, auth_headers, db):
     assert client.post("/api/auth/users", headers=auth_headers, json=_beo_payload("beo_h", authorized_sites=[site.id])).status_code in (200, 201)
     for payload, fragment in (
         ({"authorized_societies": []}, "société autorisée est obligatoire"),
-        ({"authorized_societies": [SOC, OTHER_SOC]}, "une seule société"),
         ({"authorized_sites": []}, "site autorisé est obligatoire"),
-        ({"authorized_sites": [site.id, site_b.id]}, "un seul site"),
-        ({"authorized_sites": [foreign.id]}, "n'appartient pas"),
-        ({"authorized_societies": [OTHER_SOC]}, "n'appartient pas"),
+        ({"authorized_sites": [foreign.id]}, "hors des sociétés autorisées"),
+        ({"authorized_sites": [site.id, foreign.id]}, "hors des sociétés autorisées"),
+        ({"authorized_societies": [OTHER_SOC]}, "hors des sociétés autorisées"),
+        ({"authorized_sites": [site.id, 999999]}, "site introuvable"),
         ({"global_society_access": True}, "accès global"),
     ):
         _assert_refused(client.patch("/api/auth/users/beo_h", headers=auth_headers, json=payload), fragment)
@@ -360,6 +370,9 @@ def test_beo_patch_cannot_create_invalid_state(client, auth_headers, db):
     assert rows["BEO_H"]["authorized_societies"] == [SOC]
     assert rows["BEO_H_OPS"]["role"] == "ops"
     assert client.patch("/api/auth/users/beo_h", headers=auth_headers, json={"authorized_sites": [site_b.id]}).status_code == 200
+    # PATCH partiel multi : l'état final (2 sociétés, 3 sites cohérents) est accepté.
+    assert client.patch("/api/auth/users/beo_h", headers=auth_headers, json={
+        "authorized_societies": [SOC, OTHER_SOC], "authorized_sites": [site.id, site_b.id, foreign.id]}).status_code == 200
     r = client.patch("/api/auth/users/beo_h", headers=auth_headers, json={"authorized_modules": ["pointage"], "authorized_sites": []})
     assert r.status_code == 200, r.text
 

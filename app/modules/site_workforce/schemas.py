@@ -9,6 +9,7 @@ class AttendanceUpsert(BaseModel):
     employee_id: int
     presence_date: date
     status: str
+    site_id: int | None = None  # contrôlé contre l'affectation réelle de l'employé
     arrival_time: str | None = None
     departure_time: str | None = None
     notes: str | None = None
@@ -39,6 +40,7 @@ class DocumentVerify(BaseModel):
 
 class LeaveCreate(BaseModel):
     employee_id: int
+    site_id: int | None = None
     leave_type: str  # "conge" | "maladie"
     start_date: date
     end_date: date
@@ -47,6 +49,7 @@ class LeaveCreate(BaseModel):
 
 class ReclamationCreate(BaseModel):
     employee_id: int
+    site_id: int | None = None
     category: str | None = None
     subject: str
     description: str
@@ -59,6 +62,7 @@ class ReclamationRespond(BaseModel):
 
 class IncidentCreate(BaseModel):
     employee_id: int | None = None
+    site_id: int | None = None  # obligatoire sans employé si le périmètre compte plusieurs sites
     event_type: str
     category: str | None = None
     severity: str | None = None
