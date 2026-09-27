@@ -180,8 +180,24 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .idle-warning-btn{width:100%;border:0;border-radius:13px;background:var(--navy);color:#fff;padding:14px;font-weight:900;margin-top:18px;cursor:pointer;font-size:14px}
 .idle-warning-btn:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
 .idle-locking{pointer-events:none}
+.face-view{padding:18px 22px 40px;max-width:1100px;margin:auto}
+.face-card{background:#fff;border:1px solid var(--line);border-radius:21px;padding:21px;box-shadow:0 12px 34px rgba(4,57,112,.09)}
+.face-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.face-camera{display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-weight:800;color:var(--muted);font-size:13px}
+.face-stage{margin:14px 0;background:#0b1b2e;border-radius:18px;overflow:hidden;aspect-ratio:16/9;display:grid;place-items:center}
+.face-stage video,.face-stage img{width:100%;height:100%;object-fit:contain}
+.face-status{border-radius:16px;padding:18px;text-align:center;font-size:20px;font-weight:950;background:#eff6ff;color:var(--navy)}
+.face-status small{display:block;font-size:14px;font-weight:700;margin-top:6px}
+.face-success{background:#dcfce7;color:#166534}.face-already{background:#e0f2fe;color:#075985}
+.face-unknown,.face-refused,.face-liveness_failed,.face-ambiguous{background:#fee2e2;color:#991b1b}
+.face-multiple_faces,.face-quality_failed,.face-review_required{background:#fef3c7;color:#92400e}
+.face-error,.face-disabled{background:#f1f5f9;color:#334155}
+.face-check{font-size:24px;letter-spacing:.03em}.face-name{font-size:30px;margin-top:8px}.face-meta{font-size:16px;font-weight:700;margin-top:6px}
+.face-fallback{margin-top:12px}
+@media (max-width:640px){.face-view{padding:10px}.face-check{font-size:20px}.face-name{font-size:24px}}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
+<script defer src="/static/pointeur-facial.js?v=1"></script>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 </head>
 <body>
@@ -208,7 +224,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
         <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
-        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button></nav>
+        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> SCANNER ACTIF</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
@@ -271,6 +287,14 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     </div>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
+  <section id="faceView" class="face-view hidden" aria-live="polite">
+    <div class="face-card">
+      <div class="face-head"><div><div class="scanner-title">Pointage facial automatique</div><p class="scanner-hint">Aucune action : présentez-vous face à la caméra.</p></div>
+        <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
+      <div class="face-stage"><video id="faceVideo" class="hidden" autoplay muted playsinline></video><img id="facePreview" class="hidden" alt="Aperçu caméra"></div>
+      <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
+    </div>
+  </section>
 </section>
 
 <script>
@@ -515,8 +539,11 @@ function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.g
 function eventTime(value){return String(value||"").slice(11,16)}
 function eventMinutes(value){const m=String(value||"").match(/(\d{2}):(\d{2})/);return m?+m[1]*60 + +m[2]:null}
 function showPointerSection(section){
-  const planning=section==="planning";document.querySelector("main.main").classList.toggle("hidden",planning);document.getElementById("planningView").classList.toggle("hidden",!planning);
-  document.getElementById("scanNav").classList.toggle("active",!planning);document.getElementById("planningNav").classList.toggle("active",planning);
+  const planning=section==="planning",facial=section==="facial";document.querySelector("main.main").classList.toggle("hidden",planning||facial);document.getElementById("planningView").classList.toggle("hidden",!planning);
+  document.getElementById("faceView").classList.toggle("hidden",!facial);document.getElementById("faceNav").classList.toggle("active",facial);
+  document.getElementById("scanNav").classList.toggle("active",!planning&&!facial);document.getElementById("planningNav").classList.toggle("active",planning);
+  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.start();return}
+  window.PointeurFacial&&PointeurFacial.stop();
   if(planning){stopScanner();loadPlanning();clearInterval(planningRefreshTimer);planningRefreshTimer=setInterval(loadPlanning,30000)}else{clearInterval(planningRefreshTimer);planningRefreshTimer=null;setupScanMode()}
 }
 async function loadPlanning(){
@@ -543,6 +570,7 @@ async function logout(){
   try{
     stopIdleWatch();
     await stopScanner();
+    window.PointeurFacial&&PointeurFacial.stop();
     clearInterval(headerClockTimer);headerClockTimer=null;
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
