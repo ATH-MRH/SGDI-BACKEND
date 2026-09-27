@@ -28,6 +28,8 @@ function adminUserFromApi(u){
     role:u.role||"agent",
     niveau:u.access_level||u.niveau||"",
     actif:u.is_active!==false,
+    globalSocietyAccess:u.global_society_access===true,
+    moduleAccessGlobal:u.module_access_global===true,
     sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):(Array.isArray(u.sitesAutorises)?u.sitesAutorises:[]),
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),

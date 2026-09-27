@@ -1,0 +1,47 @@
+/* Administration Users V2 — scoped shell; no change to other workspaces. */
+.admin-users-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.sgdi-admin-users-shell{background:#f3f6fb}
+.sgdi-admin-users-shell>.sgdi-topbar{grid-template-columns:minmax(230px,1fr) minmax(180px,320px) auto!important;min-height:58px!important;flex-basis:58px!important;padding:0 22px 0 16px!important;gap:24px!important;background:#fff!important;color:#172b4d!important;border-bottom:1px solid #dfe7f1!important;overflow:visible!important;box-shadow:none!important}
+.admin-users-global-context,.admin-users-global-account{display:flex;align-items:center;gap:12px;min-width:0}
+.admin-users-global-context strong{font-size:14px;font-weight:750;white-space:nowrap}
+.sgdi-admin-users-shell .sgdi-topbar .sgdi-sidebar-toggle{color:#344d71!important;background:#f4f7fb!important;border:1px solid #e4eaf3!important;box-shadow:none!important;width:32px!important;height:32px!important;min-width:32px!important;border-radius:6px!important}
+.admin-users-global-search{position:relative;min-width:0}
+.admin-users-global-search input{width:100%;height:34px;border:1px solid #dce5f1;border-radius:6px;background:#f7f9fd;padding:0 12px;color:#243c60;font-size:12px}
+.admin-users-global-search .global-search-results{position:absolute;top:calc(100% + 8px);right:0;width:min(500px,80vw);max-height:65vh;overflow:auto;background:#fff;border:1px solid #dce5f1;border-radius:8px;box-shadow:0 12px 30px #142e5220;z-index:1100}
+.admin-users-global-search .global-search-results:not(.active){display:none}
+.admin-users-global-account{justify-content:flex-end}
+.admin-users-account-initials{display:grid;place-items:center;flex:none;width:32px;height:32px;border-radius:50%;background:#064b9d;color:#fff;font-size:10px;font-weight:750}
+.admin-users-account-name{display:block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:700;color:#243650}
+.admin-users-account-name small{display:block;font-size:10px;font-weight:400;color:#74829a;margin-top:2px}
+.sgdi-admin-users-shell .topbar-notification-btn{color:#355078!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.sgdi-admin-users-shell .ws-browser-chrome{display:none!important}
+.sgdi-admin-users-shell .sidebar{width:216px!important;flex-basis:216px!important;background:#092746!important;border-right:1px solid #163855!important;box-shadow:none!important}
+.sgdi-admin-users-shell .sidebar-user-identity{padding:15px 16px!important;min-height:0!important;border-bottom:1px solid #24415f!important}
+.admin-users-brand{display:flex;align-items:center;gap:9px;color:#fff;text-align:left}
+.admin-users-brand svg{height:27px;width:27px;fill:none;stroke:#bfd5ef;stroke-width:1.2;flex:none}
+.admin-users-brand>span{font-size:13px;font-weight:800;letter-spacing:.04em}
+.admin-users-brand small{display:block;font-size:6px;letter-spacing:.17em;font-weight:500;margin-top:3px;color:#b1c7e1}
+.sgdi-admin-users-shell #sidebar-nav{padding:12px 8px!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-link{min-height:34px!important;padding:7px 9px!important;margin:2px 0!important;border-radius:6px!important;font-size:11px!important;gap:8px!important;background:transparent!important;box-shadow:none!important;color:#d6e1ef!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-link.active{background:#0860d8!important;color:#fff!important;border-color:transparent!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-link:hover{background:#173f68!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-group-lbl{padding:18px 8px 6px!important;font-size:9px!important;letter-spacing:.065em!important;color:#8ea7c5!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-count{display:none}
+.sgdi-admin-users-shell #sidebar-nav .nav-ico{width:17px!important;min-width:17px!important;height:17px!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-ico svg{width:17px!important;height:17px!important}
+.sgdi-admin-users-shell #sidebar-nav .nav-label{font-weight:500!important;white-space:normal!important;line-height:1.3!important}
+.sgdi-admin-users-shell .sidebar-user-logout{padding:10px!important}
+.sgdi-admin-users-shell #view{padding:16px 20px!important;background:#f3f6fb;min-width:0}
+.sgdi-admin-users-shell button:focus-visible,.sgdi-admin-users-shell input:focus-visible,.sgdi-admin-users-shell a:focus-visible{outline:2px solid #216cd5!important;outline-offset:3px!important}
+@media(max-width:1100px){.sgdi-admin-users-shell>.sgdi-topbar{grid-template-columns:1fr 210px auto!important;gap:12px!important}.admin-users-account-name{max-width:110px}.sgdi-admin-users-shell .sidebar{width:190px!important;flex-basis:190px!important}.sgdi-admin-users-shell #view{padding:14px!important}}
+@media(max-width:767px){.sgdi-admin-users-shell>.sgdi-topbar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;padding:10px 12px!important;min-height:58px!important;flex-basis:auto!important}.admin-users-global-context strong{font-size:12px}.admin-users-global-context{gap:8px}.admin-users-global-search{grid-row:2;grid-column:1/-1}.admin-users-global-account{grid-row:1;grid-column:2;gap:5px}.admin-users-account-name{display:none}.admin-users-account-initials{width:27px;height:27px}.sgdi-admin-users-shell .sidebar{width:230px!important;flex-basis:230px!important}.sgdi-admin-users-shell #view{padding:12px 10px!important}.admin-users-global-search .global-search-results{width:100%}}
+/* Override the legacy white sidebar surfaces and its fixed min/max widths. */
+.sgdi-shell.sgdi-admin-users-shell .sidebar{--admin-sidebar-width:216px;width:var(--admin-sidebar-width)!important;min-width:var(--admin-sidebar-width)!important;max-width:var(--admin-sidebar-width)!important;flex-basis:var(--admin-sidebar-width)!important}
+.sgdi-shell.sgdi-admin-users-shell .sidebar nav,.sgdi-shell.sgdi-admin-users-shell .sidebar-user,.sgdi-shell.sgdi-admin-users-shell .sidebar-back{background:#092746!important;color:#d6e1ef!important;border-color:#24415f!important}
+.sgdi-shell.sgdi-admin-users-shell .sidebar-user-identity{align-items:flex-start!important}
+.sgdi-shell.sgdi-admin-users-shell #sidebar-nav .nav-count{display:none!important}
+.sgdi-shell.sgdi-admin-users-shell #sidebar-nav .nav-ico,.sgdi-shell.sgdi-admin-users-shell #sidebar-nav .nav-newtab-btn{color:inherit!important;background:transparent!important}
+.sgdi-shell.sgdi-admin-users-shell #sidebar-nav .nav-link:focus-visible{outline:2px solid #84b6ff;outline-offset:2px}
+.sgdi-shell.sgdi-admin-users-shell .sidebar-user-logout button,.sgdi-shell.sgdi-admin-users-shell .sidebar-return-button{background:#103859!important;color:#dce9f8!important;border:1px solid #365675!important;box-shadow:none!important;border-radius:6px!important}
+@media(max-width:1100px){.sgdi-shell.sgdi-admin-users-shell .sidebar{--admin-sidebar-width:190px}}
+@media(max-width:767px){.sgdi-shell.sgdi-admin-users-shell .sidebar{--admin-sidebar-width:230px}}

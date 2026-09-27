@@ -2144,6 +2144,7 @@ async function sgdiRefreshSessionFromServer(){
 async function sgdiLoadAuthState(){
   if(!sgdiAuthToken()||!db)return;
   if(!isAdmin())return;
+  window.__sgdiAdminUsersLoading=true;
   try{
     const users=await SGDI.auth.listUsers();
     const cache=userPermissionCache();
@@ -2160,6 +2161,7 @@ async function sgdiLoadAuthState(){
         backendId:u.id||u.backendId||null,
         username:u.username,
         email:u.email||"",modulesAutorises:u.authorized_modules,hasValidationPassword:!!u.has_validation_password,
+        globalSocietyAccess:u.global_society_access===true,moduleAccessGlobal:u.module_access_global===true,
         nom:u.full_name||u.username,
         role:u.role||"agent",
         niveau,
@@ -2172,8 +2174,13 @@ async function sgdiLoadAuthState(){
         supervisorReadOnly:u.supervisor_read_only!==false
       };
     });
+    window.__sgdiAdminUsersLoadError="";
+    window.__sgdiAdminUsersLoadedAt=Date.now();
   }catch(e){
+    window.__sgdiAdminUsersLoadError="Impossible de charger les utilisateurs. Réessayez.";
     console.warn("Utilisateurs PostgreSQL indisponibles",e);
+  }finally{
+    window.__sgdiAdminUsersLoading=false;
   }
   try{
     const rules=await SGDI.auth.accessRules();
@@ -3471,6 +3478,7 @@ function sgdiApplyActiveEmployeeStyles(root){
   root=root||document;
   root.querySelectorAll(".fp-agent-card").forEach(sgdiForceActiveEmployeeNode);
   root.querySelectorAll("tr").forEach(row=>{
+    if(row.closest(".admin-users-page"))return;
     const pill=[...row.querySelectorAll(".pill,span")].find(el=>sgdiIsActiveText(el.textContent));
     if(!pill)return;
     const code=row.querySelector("td .font-mono, .font-mono");
@@ -5710,7 +5718,7 @@ function moduleCountersRibbonHTML(){
   if(!session||!db)return"";
   const path=(location.hash||"").slice(2);
   const root=path.split("/")[0]||"";
-  if(root==="fiches"||root==="badge")return"";
+  if(root==="fiches"||root==="badge"||path==="admin/users")return"";
   const module=session.transverse||sgdiCurrentAlertModule()||root;
   const scopeSoc=(module==="drh"?(typeof drhActiveSocieteFilter==="function"&&drhActiveSocieteFilter()):(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter()))||session?.societe||(typeof mySoc==="function"?mySoc():"")||"";
   if(module==="drh"||(session.transverse==="ops"&&root==="effectif")){
@@ -6939,7 +6947,7 @@ function renderSidebar(){
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
     const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)!==null?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
     const gapClass=item.gapBefore?" nav-gap-before":"";
-    return `<div class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
+    return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(item.label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
     let prevGroup=null;
@@ -7158,30 +7166,32 @@ function renderSidebar(){
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"MODULES"}
       ],
       admin:isAdminSystemSession()?[
-        {label:"TABLEAU CONFIGURATION",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"TABLEAU DE BORD",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"UTILISATEURS",route:"admin/users",group:"IDENTITÉS & ACCÈS",count:(db.users||[]).length},
+        {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"IDENTITÉS & ACCÈS",count:(db.niveauxAcces||[]).length},
+        {label:"MATRICE DES DROITS",route:"admin/droits",group:"IDENTITÉS & ACCÈS",count:Object.keys(db.droitsAcces||{}).length},
+        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"IDENTITÉS & ACCÈS",count:(adminClientPortalUsersCache||[]).length},
+        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"IDENTITÉS & ACCÈS",count:(db.supervisorScopes||[]).length},
+        {label:"MODULES",route:"admin/modules",group:"PARAMÈTRES"},
+        {label:"ACCÈS SOCIÉTÉS",route:"admin/access_societes",group:"PARAMÈTRES"},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"PARAMÈTRES",count:adminSitesActifs},
+        {label:"SÉCURITÉ DES ACCÈS",route:"admin/access",group:"PARAMÈTRES"},
+        {label:"JOURNAL D'ACTIVITÉ",route:"admin/log",group:"PARAMÈTRES"},
+        {label:"ORGANISER MENU LATÉRAL",route:"admin/menu",group:"PARAMÈTRES"},
+        {label:"ORGANISER LES COMPTEURS",route:"admin/counters",group:"PARAMÈTRES"},
+        {label:"STOCKAGE POSTGRESQL",route:"admin/storage",group:"PARAMÈTRES"},
         {label:"ALERTES",route:"alerts",group:"PILOTAGE"},
         {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length},
         {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length},
         {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",count:(db.pointages||[]).length},
         {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",count:POSTES.length},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"SITES & STOCK",count:adminSitesActifs},
         {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",count:adminMagasinsCount},
         {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",count:adminArticlesCount},
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length},
         {label:"CONTRAT",route:"admin/contrats",group:"DOCUMENTS"},
-        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",group:"ACCÈS & SÉCURITÉ",count:(db.users||[]).length},
-        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"ACCÈS & SÉCURITÉ",count:(adminClientPortalUsersCache||[]).length},
-        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length},
-        {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length},
         {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ"},
-        {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ"},
-        {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"ACCÈS & SÉCURITÉ",count:(db.niveauxAcces||[]).length},
-        {label:"SÉCURITÉ DES ACCÈS",route:"admin/access",group:"ACCÈS & SÉCURITÉ"},
-        {label:"ORGANISER MENU LATÉRAL",route:"admin/menu",group:"SYSTÈME"},
-        {label:"ORGANISER LES COMPTEURS",route:"admin/counters",group:"SYSTÈME"},
-        {label:"JOURNAL D'ACTIVITÉ",route:"admin/log",group:"SYSTÈME"},
-        {label:"STOCKAGE POSTGRESQL",route:"admin/storage",group:"SYSTÈME"}
+        {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ"}
       ]:[
         {label:"COCKPIT DG",route:"admin/dashboard",group:"PILOTAGE"},
         {label:"VUE SOCIÉTÉS",route:"admin/dashboard",group:"PILOTAGE"},
@@ -8173,7 +8183,7 @@ function normalizePageHeader(view){
   // leurs boutons vers le style d'action jaune admin (repère déjà vu sur .ops-dash-hero,
   // dont le dégradé disparaissait entièrement à cause de cette règle).
   // This page owns its header; its table and pagination are not header actions.
-  if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel'))return;
+  if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel,.admin-users-page'))return;
   if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero')||first.classList.contains('drh-leave-page'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');
@@ -8369,7 +8379,40 @@ function sidebarNavigate(event,route){
   navigate(target);
 }
 
+// Users V2 owns a compact shell only while its route is active. Other modules
+// recover their existing nodes and controls, including workspace save/edit actions.
+function adminUsersShellActive(){
+  return String(location.hash||"").replace(/^#\/?/,"")==="admin/users"&&!!session&&isAdminSystemSession();
+}
+function adminUsersTopbarHTML(){
+  return `<div class="admin-users-global-context"><button type="button" class="sgdi-sidebar-toggle" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button><strong>Administration Système</strong></div>
+    <div class="admin-users-global-search"><label class="admin-users-visually-hidden" for="admin-users-global-search">Recherche globale</label><input id="admin-users-global-search" type="search" data-no-lock placeholder="Rechercher globalement…" autocomplete="off" aria-controls="global-search-results" oninput="renderGlobalSearchResults(this.value)" onkeydown="if(event.key==='Escape'){document.getElementById('global-search-results').classList.remove('active');this.value=''}"><div id="global-search-results" class="global-search-results" aria-live="polite"></div></div>
+    <div class="admin-users-global-account">${notificationTopbarButtonHTML()}<span class="admin-users-account-initials" aria-hidden="true">${escapeHTML((session.nom||session.username||"A").trim().slice(0,2).toUpperCase())}</span><span class="admin-users-account-name">${escapeHTML(session.nom||session.username)}<small>Administration système</small></span></div>`;
+}
+function syncAdminUsersShell(){
+  const shell=document.querySelector(".sgdi-shell"),active=adminUsersShellActive();
+  if(!shell)return;
+  shell.classList.toggle("sgdi-admin-users-shell",active);
+  const topbar=shell.querySelector(":scope > .sgdi-topbar");
+  if(topbar&&active&&!topbar.__adminUsersOriginal){
+    topbar.__adminUsersOriginal=document.createDocumentFragment();
+    while(topbar.firstChild)topbar.__adminUsersOriginal.appendChild(topbar.firstChild);
+    topbar.innerHTML=adminUsersTopbarHTML();
+  }else if(topbar&&!active&&topbar.__adminUsersOriginal){
+    topbar.replaceChildren(topbar.__adminUsersOriginal);delete topbar.__adminUsersOriginal;
+  }
+  const identity=shell.querySelector(".sidebar-user-identity");
+  if(identity&&active&&!identity.__adminUsersOriginal){
+    identity.__adminUsersOriginal=document.createDocumentFragment();
+    while(identity.firstChild)identity.__adminUsersOriginal.appendChild(identity.firstChild);
+    identity.innerHTML='<div class="admin-users-brand"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 6.5h14M5 17.5h14"/></svg><span>IRON GLOBAL<small>UN MONDE DE SOLUTIONS</small></span></div>';
+  }else if(identity&&!active&&identity.__adminUsersOriginal){
+    identity.replaceChildren(identity.__adminUsersOriginal);delete identity.__adminUsersOriginal;
+  }
+}
+
 function renderView(){
+  syncAdminUsersShell();
   // Invalide immédiatement tout rendu asynchrone lancé par la vue précédente.
   // Les vues qui utilisent une coque dédiée la réactivent explicitement durant
   // leur rendu. Ainsi, la navigation suivante retrouve toujours le shell ERP.
