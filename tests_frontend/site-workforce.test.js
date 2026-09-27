@@ -161,6 +161,27 @@ test("guardedApi rejette (AbortError) une réponse arrivée après un changement
   await assert.rejects(pending, (err) => err.name === "AbortError");
 });
 
+test("navigation rapide : la réponse tardive du tableau de bord n'écrase jamais l'écran suivant", async () => {
+  let releaseDashboard;
+  const w = shellWindow((url) => {
+    if (url.includes("/site-workforce/dashboard")) {
+      return new Promise((resolve) => { releaseDashboard = () => resolve({ ok: true, text: () => Promise.resolve(JSON.stringify({ site: null, kpi: {}, actions_rapides: { prochains_conges: [] }, by_site: [] })) }); });
+    }
+    return scopedFetch([], { "/api/site-workforce/employees": () => ({ items: [{ id: 1, code: "E1", first_name: "Visible", last_name: "Personnel" }], total: 1, page: 1, pages: 1 }) })(url);
+  });
+  w.location.hash = "#/dashboard";
+  await w.SiteWorkforceShell.renderShell();
+  await tick();
+  w.location.hash = "#/personnel";
+  w.dispatchEvent(new w.HashChangeEvent("hashchange"));
+  await tick(); await tick();
+  releaseDashboard();
+  await tick(); await tick();
+  const text = w.document.querySelector("#view").textContent;
+  assert.doesNotMatch(text, /Impossible de charger/, "erreur de l'écran précédent affichée sur Personnel");
+  assert.match(text, /Visible/);
+});
+
 test("compte historique 1 société / 1 site : sélection automatique, sélecteurs figés, comportement inchangé", async () => {
   const calls = [];
   const w = shellWindow(scopedFetch(calls, { scope: { societies: ["SocB"], sites: [{ id: 3, name: "HAMOUL 01", society: "SocB" }] } }));

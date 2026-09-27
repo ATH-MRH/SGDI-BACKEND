@@ -23,6 +23,7 @@
 
   let currentKey = null;
   let currentCleanup = null;
+  let renderToken = 0; // rendu courant : un rendu dépassé n'écrit plus jamais dans #view
 
   function currentRouteKey() {
     const h = (location.hash || "").replace(/^#\/?/, "");
@@ -157,6 +158,7 @@
   function closeSidebar() { document.querySelector("#shell")?.classList.remove("sidebar-open"); }
 
   async function renderRoute() {
+    const token = ++renderToken;
     const key = currentRouteKey();
     currentKey = key;
     document.querySelectorAll(".nav-link").forEach((b) => b.classList.toggle("active", b.dataset.nav === key));
@@ -176,9 +178,10 @@
     };
     try {
       const cleanup = await view(container, ctx);
-      if (typeof cleanup === "function") currentCleanup = cleanup;
+      if (typeof cleanup === "function" && token === renderToken) currentCleanup = cleanup;
     } catch (err) {
-      container.innerHTML = window.SW.errorState(err);
+      // Erreur d'un écran quitté entre-temps (réponse tardive) : jamais affichée sur le suivant.
+      if (token === renderToken && err.name !== "AbortError") container.innerHTML = window.SW.errorState(err);
     }
   }
 
