@@ -101,7 +101,13 @@ trois fonctionnalités (sans cela, PostgreSQL les refuserait).
 - Abstraction `CameraAdapter` : `DahuaCameraAdapter` (instantané `/cgi-bin/snapshot.cgi`,
   authentification Digest ; flux RTSP `/cam/realmonitor?channel=N&subtype=0|1`),
   `GenericRtspCameraAdapter` (chemin par profil), `TerminalCameraAdapter` (caméra de la
-  tablette : images envoyées par le terminal). Attendance Core ne connaît aucun fabricant.
+  tablette). Attendance Core ne connaît aucun fabricant.
+- **Pointage : images TOUJOURS lues par le serveur** sur une caméra Dahua/RTSP. Une image fournie
+  par un navigateur pourrait être une photo injectée — le liveness passif accepte une photo
+  pleine résolution (mesuré 0,84–0,92) —, elle n'est donc jamais utilisée pour pointer. La caméra
+  « terminal » est limitée à l'**enrôlement supervisé** (usage `ENROLLMENT` uniquement, permission
+  explicite, audit). Risque résiduel : un opérateur habilité pourrait enrôler un visage substitué ;
+  limité par la détection de doublons, le consentement référencé et l'audit.
 - **Catalogue administrable** (`camera_models`) : aucun modèle Dahua n'est codé ; l'administrateur
   ajoute la référence exacte (fabricant, modèle, adaptateur, résolution, capacités).
 - Une caméra appartient à une **société ET un site** ; rôle (entrée, sortie, enrôlement,
@@ -134,7 +140,13 @@ Vérifié (tests automatiques) :
   consentement retiré, employé suspendu, caméra d'enrôlement), non-répétition, idempotence,
   doublon bloqué, permissions, périmètre, secrets.
 
-**Non vérifiable sans matériel** — protocole à exécuter avec la caméra Dahua avant activation :
+**Mesure importante** : une simulation numérique d'écran/photo n'est PAS probante — un même
+portrait cadré comme sur un écran a été accepté (1,0) pour une photo et refusé (0,04) pour une
+autre. Le liveness passif seul n'est pas une garantie ; la résistance aux présentations physiques
+se mesure sur la vraie caméra (`docs/attendance-hardware-checklist.md`, critère : zéro acceptation).
+
+**Non vérifiable sans matériel** — protocole à exécuter avec la caméra Dahua avant activation
+(détaillé dans `docs/attendance-hardware-checklist.md`) :
 1. 50 passages réels (5 employés × 10, lumière jour/nuit) : taux d'acceptation, scores.
 2. Attaques : photo imprimée (A4, papier photo), photo sur smartphone, photo sur tablette,
    vidéo sur écran, masque papier ; 20 essais chacun. Attendu : aucun pointage accepté.
