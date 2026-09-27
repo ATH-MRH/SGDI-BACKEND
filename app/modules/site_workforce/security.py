@@ -173,10 +173,6 @@ def employee_site_map(db: Session, site_ids: list[int], *, as_of: date | None = 
     return {emp_id: site_id for emp_id, site_id in db.execute(stmt)}
 
 
-def site_employee_ids(db: Session, site_id: int, *, as_of: date | None = None) -> list[int]:
-    return sorted(employee_site_map(db, [site_id], as_of=as_of))
-
-
 def assigned_employees_subquery(site_ids: list[int], *, as_of: date | None = None):
     """Sous-requête SQL (jamais matérialisée en Python) des employés affectés aux sites."""
     today = as_of or date.today()

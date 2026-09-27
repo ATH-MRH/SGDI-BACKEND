@@ -99,7 +99,9 @@ test("sélecteurs : société → sites de la société ; site → requêtes fil
   await tick();
   assert.ok(calls.at(-1).includes("site_id=2"), calls.at(-1));
   assert.match(w.document.querySelector(".scope-chip").textContent, /Site : A2 — SocA/);
-  assert.match(w.document.querySelector(".shell-role-badge").textContent, /Site : A2/);
+  // Sidebar : périmètre AUTORISÉ (3 sites), indépendant de la sélection ; jamais « Site : — ».
+  assert.match(w.document.querySelector(".shell-role-badge").textContent, /Périmètre : 3 sites/);
+  assert.doesNotMatch(w.document.querySelector(".shell-role-badge").textContent, /Site : —/);
   const soc2 = w.document.querySelector("#society-select");
   soc2.value = ""; soc2.dispatchEvent(new w.Event("change"));
   await tick();

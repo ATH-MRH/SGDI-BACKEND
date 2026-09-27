@@ -62,6 +62,13 @@
     const n = scopeSites(society).length;
     return society ? `Société : ${society} — tous mes sites (${n})` : `Toutes mes sociétés — tous mes sites (${n})`;
   }
+  // Libellé du périmètre AUTORISÉ (sidebar) : le site s'il est unique, sinon le nombre de
+  // sites — jamais « Site : — ». La sélection en cours est affichée dans le header.
+  function perimeterLabel() {
+    const sites = scopeSites("");
+    if (sites.length === 1) return `Site : ${sites[0].name}`;
+    return `Périmètre : ${sites.length} sites`;
+  }
   function scopeParams() {
     const out = {};
     if (state.scope.society) out.society = state.scope.society;
@@ -285,7 +292,7 @@
 
   window.SW = {
     state, api, guardedApi, esc, dateFr, ApiError,
-    loadScope, setScope, scopeSites, scopeLabel, scopeParams, multiSite, siteHeaders, siteCells, employeeLabel, siteSelectHTML,
+    loadScope, setScope, scopeSites, scopeLabel, perimeterLabel, scopeParams, multiSite, siteHeaders, siteCells, employeeLabel, siteSelectHTML,
     login, logout, hasModule, hasSiteWorkforceAccess,
     statusBadge, ATTENDANCE_STATUS, ABSENCE_DECISION_STATUS, DOCUMENT_STATUS, LEAVE_STATUS, DISCIPLINE_STATUS, RECLAMATION_STATUS,
     skeletonKpis, skeletonRows, emptyState, errorState,

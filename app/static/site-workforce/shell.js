@@ -56,6 +56,7 @@
     if (bar) bar.innerHTML = scopeSelectorsHTML();
     const label = window.SW.scopeLabel();
     document.querySelectorAll("[data-scope-label]").forEach((el) => { el.textContent = label; });
+    document.querySelectorAll("[data-perimeter-label]").forEach((el) => { el.textContent = window.SW.perimeterLabel(); });
     document.querySelector("#society-select")?.addEventListener("change", (e) => changeScope({ society: e.target.value, site_id: "" }));
     document.querySelector("#site-select")?.addEventListener("change", (e) => changeScope({ society: state.scope.society, site_id: e.target.value }));
   }
@@ -87,7 +88,7 @@
           <div class="shell-role-badge">
             <b>Chargé des effectifs</b>
             <span>Bureau des Effectifs Ouest</span>
-            <span data-scope-label></span>
+            <span data-perimeter-label></span>
           </div>
           <nav class="shell-nav"><div class="shell-nav-group">${renderNav()}</div></nav>
         </aside>

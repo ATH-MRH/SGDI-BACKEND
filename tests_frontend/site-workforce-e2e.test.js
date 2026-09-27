@@ -343,6 +343,9 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id,
     assert.strictEqual(options.socs[0], "Toutes mes sociétés");
     assert.ok(options.socs.includes(SOC) && options.socs.includes(SOC_B) && !options.socs.includes(SOC_C), options.socs.join(","));
     assert.deepStrictEqual([...options.sites].sort(), ["Site E2E A", "Site E2E A2", "Site E2E B", "Tous mes sites"]);
+    const badge = await page.evaluate(() => document.querySelector(".shell-role-badge").innerText);
+    assert.match(badge, /Périmètre : 3 sites/);
+    assert.doesNotMatch(badge, /Site : —|exactement un site/);
 
     const personnel = async () => {
       await page.evaluate(() => { location.hash = "#/personnel"; });
