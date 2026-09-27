@@ -18,12 +18,20 @@ retest → commit.
 | S8 | Lecture OPS des présences **d'autres sites** sans `site_id` ; génération pour tous les sites | sonde compte site A → employé site B visible | `ebe67c0` |
 | S9 | Photos employés **publiques à nom prévisible** (`/uploads/photos/<MATRICULE>.jpg`) — source de l'enrôlement | GET anonyme → 200 | `4fbe974` : noms imprévisibles, migration (non exécutée), réglage de refus |
 | S10 | Audit absent sur le catalogue caméra et les tests caméra ; URL RTSP (identifiants) possiblement journalisée par FFmpeg | relecture + test | `164841b` |
+| S11 | Génération du planning (rotation) **réécrivait une journée réellement pointée** (statut, heures) | `test_rotation_generation_never_overwrites_a_real_presence` | `c443863` |
+| S12 | Saisie de statut BEO/OPS **effaçait les heures mesurées par le terminal** (le BEO n'envoie que le statut) | `test_day_status_after_real_scan_keeps_the_measured_times` | `5ff5ddb` |
+| S13 | Caméra **désactivée** encore interrogée (rafale capturée avant contrôle, aperçu servi) | `test_inactive_camera_is_never_contacted` | `ebf89e2` |
+| S14 | Migration photos **non réversible** : échec base après renommage ⇒ toutes les photos cassées ; table de correspondance inexistante avant la fin | `test_migration_failure_restores_files_and_journal_is_written_first` | `f38a9b1` (script toujours non exécuté) |
+
+S11–S14 : revue finale d'intégration (suite permanente `tests/test_attendance_final_review.py`,
+courses PostgreSQL QR + facial + manuel, clé d'un autre employé, BEO + terminal).
 
 ## Points vérifiés sans défaut
 
 | Contrôle | Résultat |
 |---|---|
-| Routes anonymes (`/api/attendance`, `/api/biometrics`, `/api/portal/attendance*`, `/api/portal/pointage*`, `/api/ops/pointage*`, `/api/site-workforce`, `/api/irongs/collections`) | 79 routes balayées : 77 × 401/403 ; 2 × 400 (corps vide rejeté avant l'identité — avec un corps valide : 401, prouvé) |
+| Routes anonymes (`/api/attendance`, `/api/biometrics`, `/api/portal/attendance*`, `/api/portal/pointage*`, `/api/ops/pointage*`, `/api/site-workforce`, `/api/irongs/collections`) | balayage permanent (test) : 100 % 401/403 avec corps plausible |
+| Deux sociétés, trois sites : tableau, anomalies, Employé 360, correction, déblocage, clôture, consentement, enrôlement, caméra (reconnaissance, test, aperçu, liste) | zéro fuite, zéro écriture hors périmètre (test) |
 | IDOR employé / présence / anomalie / caméra / gabarit | 404 hors périmètre (tests + E2E : employé forgé, caméra d'un autre site) |
 | Scope société / site | module + société obligatoires sur les préfixes ; site dérivé des sites autorisés ou de la société |
 | Écriture hors Attendance Core | aucune : pointeur, portail, BEO, OPS, écran legacy passent par le cœur ; génération planning = lignes prévues, jamais sur journée clôturée |
@@ -43,5 +51,6 @@ retest → commit.
 | Enrôlement par caméra terminal : un opérateur habilité pourrait enrôler un visage substitué | Moyen | permission explicite, doublons, audit ; réserver la caméra terminal à des postes contrôlés |
 | Pas de limitation de débit sur `/recognize` (3 captures + analyse par appel) | Faible | limiter par caméra si abus constaté |
 | Clôture par ligne (une journée créée après clôture reste ouverte) | Faible | comportement historique ; la paie ne lit que les journées clôturées |
-| Terminal déconnecté après 30 s sans passage (règle de sécurité existante) | Produit | décider d'un mode kiosque dédié pour les bornes faciales |
+| Terminal déconnecté après 30 s sans passage (règle de sécurité existante) | Produit | chantier séparé « KIOSK DEVICE IDENTITY » (`docs/biometrics.md` §11), non implémenté |
+| Génération du planning : une journée pointée n'est jamais réécrite, mais le BEO peut toujours changer le **statut** d'une journée pointée (heures conservées) | Faible | comportement voulu (saisie d'encadrement tracée) |
 | Comptes à modules non configurés (`authorized_modules` NULL) : règle legacy par préfixe sur `pointage.irongs.com`, même administrateur | Info | comportement préexistant, hors périmètre |

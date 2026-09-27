@@ -156,6 +156,10 @@ se mesure sur la vraie caméra (`docs/attendance-hardware-checklist.md`, critèr
 
 ## 9. Activation (checklist)
 
+**Prérequis bloquants** (aucune activation sans eux) : migration des photos exécutée (§10) ;
+checklist terrain `docs/attendance-hardware-checklist.md` signée GO (liveness **À VALIDER SUR
+VRAIE CAMÉRA DAHUA**) ; décision sur le mode kiosque (§11).
+
 1. Installer `requirements-biometric.txt` dans l'image.
 2. Copier les trois modèles dans `BIOMETRIC_MODELS_DIR` (empreintes du §2).
 3. Générer une clé : `python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`,
@@ -168,3 +172,47 @@ se mesure sur la vraie caméra (`docs/attendance-hardware-checklist.md`, critèr
 **Rotation de clé** : un gabarit chiffré avec une ancienne clé devient illisible ; le système le
 signale explicitement (erreur, jamais d'ignorance silencieuse qui laisserait passer un doublon).
 Procédure : désactiver les gabarits, changer la clé, ré-enrôler.
+
+## 10. Migration des photos à nom prévisible — procédure de production
+
+Les photos de fiche sont la source de l'enrôlement ; un nom prévisible
+(`/uploads/photos/<MATRICULE>.jpg`) permet de les récupérer anonymement. Le script
+`scripts/rename_public_photos.py` (non exécuté à ce jour) les renomme en URL-capacités.
+
+| Étape | Action | Contrôle |
+|---|---|---|
+| 1 | Fenêtre de maintenance ; arrêter les écritures DRH (upload photo) | — |
+| 2 | Sauvegarde **base** (pg_dump) **et** dossier `uploads/photos` (archive) | restauration testée sur une copie |
+| 3 | `python scripts/rename_public_photos.py` (simulation, aucune écriture) | `photos`, `references_rows`, `missing_files` relus ; les noms affichés sont indicatifs (régénérés à l'application) |
+| 4 | `python scripts/rename_public_photos.py --apply` depuis un répertoire **hors** `uploads` | le journal `photo_migration_journal_<horodatage>.json` est écrit **avant** tout renommage |
+| 5 | Vérifier quelques fiches (photo affichée), relancer la simulation : `photos` = 0 | idempotence |
+| 6 | `PHOTOS_REQUIRE_UNGUESSABLE_NAMES=true`, redéploiement | ancien nom → 404 |
+| 7 | Conserver le journal hors serveur web (il contient les URL-capacités) | — |
+
+Garanties du code : simulation par défaut ; `--apply` refusé sans journal ou avec un journal
+dans `uploads` (servi publiquement) ; aucun fichier existant écrasé (collision ⇒ nouveau nom) ;
+en cas d'erreur (base indisponible…), les fichiers déjà renommés reprennent leur nom et rien
+n'est écrit en base. Références manquantes : listées dans `missing_files`, jamais inventées.
+
+**Retour arrière** après succès : restaurer la sauvegarde base + archive `photos` (étape 2), ou
+renommer chaque `nouveau → ancien` du journal puis restaurer la base ; remettre
+`PHOTOS_REQUIRE_UNGUESSABLE_NAMES=false`.
+
+## 11. Chantier séparé « KIOSK DEVICE IDENTITY » (non implémenté)
+
+Aujourd'hui une borne faciale fonctionne avec une session utilisateur ordinaire (pointeur),
+déconnectée après 30 s sans passage. Une borne sans surveillance exige une **identité
+d'équipement**, distincte d'un compte humain. Cahier des charges, à traiter comme un chantier
+à part (conception + revue sécurité) :
+
+| Exigence | Contenu |
+|---|---|
+| Terminal enregistré | enrôlement explicite par un administrateur, identifiant unique, état actif/révoqué |
+| Rattachement | une société, un site, une (ou des) caméra(s) déclarée(s) ; aucun autre périmètre |
+| Credential technique | secret propre à l'équipement, révocable, jamais un mot de passe humain ; stocké haché/chiffré |
+| Permissions minimales | reconnaissance sur ses caméras + flux de passages de son site ; **aucun accès aux autres API** (DRH, paie, OPS, administration) |
+| Rotation | durée de vie limitée, renouvellement sans intervention sur la borne |
+| Révocation | immédiate, effective sur la requête suivante |
+| Audit | chaque appel rattaché à l'équipement (et non à un humain) ; enregistrement, rotation, révocation audités |
+
+Tant que ce chantier n'est pas livré : pas de borne faciale sans surveillance.
