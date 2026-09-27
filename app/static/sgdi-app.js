@@ -6672,7 +6672,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["ARCHIVES","effectif/archives_sortants"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["ARCHIVES","effectif/archives_sortants"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -6903,7 +6903,6 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD",route:"drh/dashboard",group:"PILOTAGE"},
         {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:(srvDrh?.recrutement?.shared_pending??srvDrh?.recrutement?.total??drhCandidates.length)},
         {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:srvDrh?.recrutement?.contracts_pending??drhContractsToEstablish.length},
-        {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhTotalAgents},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhTotalAgents},
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const agIds=new Set(drhAgents.filter(a=>!employeeIsFormer(a)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length})()},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length},

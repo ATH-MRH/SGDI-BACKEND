@@ -307,13 +307,127 @@ test('sidebar uses server totals and displays zero counts for supported module r
   app.T().renderSidebar();
   const badge=route=>app.window.document.querySelector(`[data-route="${route}"] .nav-count`)?.textContent;
   assert.equal(badge('recrutement/candidats'),'7');
-  assert.equal(badge('fiches'),'165');
+  assert.equal(app.window.document.querySelector('[data-route="fiches"]'),null);
   assert.equal(badge('effectif/recap'),'165');
   app.T().setSession({username:'admin',role:'admin',transverse:'facmod'});
   app.T().renderSidebar();
   assert.equal(badge('facturation/paiements'),'0');
   assert.equal(badge('facturation/clients'),'4');
   app.dom.window.close();
+});
+
+function bootDrhSidebarReview(ctx, module='drh') {
+  const app=loadSgdiApp(['renderSidebar','emptyDB','adminSidebarOrganizerDefaults','sgdiModuleHostConfigs',
+    'effectifListHTML','renderAgentForm','renderFiches','renderView','saveAgent','canAccess']);
+  ctx.after(()=>app.window.close());
+  assert.equal(app.loadError,null,app.loadError?.stack);
+  const w=app.window,t=app.T(),db=t.emptyDB();
+  t.setDb(db);
+  t.setSession({username:'admin',role:'admin',transverse:module,adminSystem:module==='admin'});
+  w.SGDI_SIDEBAR_STATS={scope:{active_society:''},erp:{employees:{non_archived:164},ops:{},materiel:{}},drh:{recrutement:{shared_pending:0,contracts_pending:0}}};
+  w.toast=()=>{};
+  return {w,t,db,nav:w.document.getElementById('sidebar-nav'),view:w.document.getElementById('view')};
+}
+
+function assertDrhPersonnelSidebar(f) {
+  assert.equal(f.nav.querySelector('[data-route="fiches"]'),null,'aucune entrée Fiche de position, icône ou badge associé');
+  assert.doesNotMatch(f.nav.textContent,/FICHE DE POSITION/i);
+  assert.equal(f.nav.querySelectorAll('.nav-count').length,f.nav.querySelectorAll('.nav-link .nav-count').length,'aucun badge orphelin');
+  assert.equal(f.nav.querySelectorAll('.nav-ico').length,f.nav.querySelectorAll('.nav-link').length,'une icône par entrée restante');
+  const personnel=[...f.nav.querySelectorAll('.nav-group-lbl')].find(el=>el.textContent==='PERSONNEL');
+  assert.ok(personnel);
+  const grh=personnel.nextElementSibling;
+  assert.equal(grh.dataset.route,'effectif/recap','GRH devient la première entrée PERSONNEL');
+  assert.equal(grh.querySelector('.nav-label').textContent,'GRH');
+  assert.equal(grh.querySelector('.nav-count').textContent,'164','compteur serveur GRH inchangé');
+  assert.equal(grh.nextElementSibling.dataset.route,'drh/conges','CONGÉS suit GRH');
+}
+
+test('sidebar DRH : supprime Fiche de position et conserve GRH 164 en tête du personnel', ctx=>{
+  const f=bootDrhSidebarReview(ctx);
+  f.t.renderSidebar();
+  assertDrhPersonnelSidebar(f);
+  assert.ok(!f.t.adminSidebarOrganizerDefaults().drh.some(([,route])=>route==='fiches'),'organisation DRH sans entrée obsolète');
+  assert.ok(f.t.sgdiModuleHostConfigs().drh.sections.some(item=>item.route==='fiches'),'les tuiles du portail restent distinctes de la sidebar');
+});
+
+test('sidebar DRH : un ancien ordre enregistré contenant fiches ne réintroduit pas son entrée', ctx=>{
+  const f=bootDrhSidebarReview(ctx);
+  const previous=['drh/dashboard','recrutement/candidats','contrats/dashboard','fiches','effectif/recap','drh/conges'];
+  f.db.settings.sidebarOrder={drh:previous.slice()};
+  f.t.renderSidebar();
+  assertDrhPersonnelSidebar(f);
+  f.t.renderSidebar();
+  assertDrhPersonnelSidebar(f);
+  assert.deepEqual(f.db.settings.sidebarOrder.drh,previous,'rendre le menu ne doit pas réécrire les préférences existantes');
+});
+
+for (const module of ['ops','superviseur','admin']) {
+  test(`sidebar ${module} : conserve son entrée Fiche de position`, ctx=>{
+    const f=bootDrhSidebarReview(ctx,module);
+    f.t.renderSidebar();
+    const route=module==='admin'?'admin/fiches':'fiches';
+    const item=f.nav.querySelector(`[data-route="${route}"]`);
+    assert.ok(item,route);
+    assert.equal(item.querySelector('.nav-label').textContent,'FICHE DE POSITION');
+    assert.ok(item.querySelector('.nav-ico svg'));
+    assert.ok(f.t.adminSidebarOrganizerDefaults()[module].some(([,value])=>value===route));
+  });
+}
+
+test('sidebar DRH : GRH ouvre la liste, le dossier Employé 360 et conserve son enregistrement', async ctx=>{
+  const f=bootDrhSidebarReview(ctx);
+  const agent={id:'sidebar-employee',backendId:123,matricule:'K01',nom:'BENALI',prenom:'Samira',
+    societe:'IRON GLOBAL SOLUTION',statut:'actif',nombreEnfants:0};
+  f.db.agents.push(agent);
+  f.w.sessionStorage.setItem('ficheContext','drh');
+  f.t.setFullDataReady(true);
+  f.t.setHydrated(true);
+  f.t.renderSidebar();
+  const grh=f.nav.querySelector('[data-route="effectif/recap"]');
+  assert.ok(grh);
+  assert.match(grh.getAttribute('onclick'),/sidebarNavigate\(event,'effectif\/recap'\)/);
+  f.w.history.replaceState(null,'','#/effectif/recap');
+  await f.w.SGDIModules.initModule(f.w.SGDIModules.moduleKeyForRoute('effectif'));
+  f.t.renderView();
+  const open=f.view.querySelector('a[href="#/agents/sidebar-employee"]');
+  assert.ok(open,'GRH conserve le lien Ouvrir vers la même fiche employé');
+  f.w.history.replaceState(null,'',open.getAttribute('href'));
+  f.t.renderView();
+  const form=f.view.querySelector('#agent-form');
+  assert.ok(form,'le routeur rend toujours le dossier Employé 360');
+  const name=form.querySelector('[name="nom"]');
+  assert.equal(name.value,'BENALI');
+  assert.equal(name.disabled,false);
+  name.value='BENALI MODIFIÉ';
+  f.t.setViewMode(false);
+  let sent;
+  f.w.SGDI={...f.w.SGDI,employees:{update:async(id,payload)=>{sent={id,payload};return {id,...payload};}}};
+  f.w.saveDBAndWaitToast=async()=>true;
+  assert.equal(await f.t.saveAgent(agent.id,{silent:true}),true);
+  assert.equal(sent.id,123);
+  assert.equal(sent.payload.last_name,'BENALI MODIFIÉ');
+  assert.equal(f.db.agents[0].nom,'BENALI MODIFIÉ');
+});
+
+test('sidebar DRH : ancienne route #/fiches encore rendue et droits existants inchangés', async ctx=>{
+  const f=bootDrhSidebarReview(ctx);
+  f.db.agents.push({id:'legacy-position',nom:'DOSSIER',prenom:'Historique',matricule:'K02',
+    societe:'IRON GLOBAL SOLUTION',statut:'actif'});
+  f.t.setFullDataReady(true);
+  f.t.setHydrated(true);
+  const rightsBefore=['fiches','effectif','agents','drh'].map(key=>f.t.canAccess(key));
+  f.t.renderSidebar();
+  assert.deepEqual(['fiches','effectif','agents','drh'].map(key=>f.t.canAccess(key)),rightsBefore);
+  f.w.history.replaceState(null,'','#/fiches');
+  await f.w.SGDIModules.initModule(f.w.SGDIModules.moduleKeyForRoute('fiches'));
+  f.t.renderView();
+  assert.ok(f.view.querySelector('.fp-page'),'la suppression du lien ne supprime pas le rendu de l’ancienne route');
+  assert.match(f.view.textContent,/DOSSIER/);
+  f.db.droitsAcces={'fiches:admin':false,'effectif:admin':false};
+  f.t.renderSidebar();
+  assert.equal(f.t.canAccess('fiches'),false,'un refus explicite fiches reste effectif');
+  assert.equal(f.t.canAccess('effectif'),false,'un refus explicite effectif reste effectif');
 });
 
 test('counter responses from a previous account are discarded', async () => {
