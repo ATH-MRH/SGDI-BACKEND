@@ -7,13 +7,15 @@ PHOTOS_REQUIRE_UNGUESSABLE_NAMES=true. Voir scripts/rename_public_photos.py.
 """
 from __future__ import annotations
 
+import json
 import re
 import secrets
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.photo_storage import PHOTOS_DIR, PUBLIC_PHOTO_PREFIX
+from app.core.photo_storage import PHOTOS_DIR, PUBLIC_PHOTO_PREFIX, UPLOADS_ROOT
 
 UNGUESSABLE = re.compile(r"^[A-Za-z0-9_.-]+-[0-9a-f]{32}\.[A-Za-z0-9]+$")
 PHOTO_URL = re.compile(re.escape(PUBLIC_PHOTO_PREFIX) + r"/([^/?\"']+)")
@@ -49,9 +51,19 @@ def _sources(db: Session):
     return ((Employee, "extra"), (Candidate, "data"), (SgdiRecord, "data"))
 
 
-def migrate_public_photos(db: Session, *, apply: bool = False) -> dict[str, Any]:
+def migrate_public_photos(db: Session, *, apply: bool = False, journal_path: Path | str | None = None) -> dict[str, Any]:
     """Renvoie le plan (et l'applique si apply=True). Idempotent : un nom déjà imprévisible
-    n'est jamais retouché ; une référence vers un fichier absent est signalée, pas inventée."""
+    n'est jamais retouché ; une référence vers un fichier absent est signalée, pas inventée.
+
+    apply=True exige un journal HORS du dossier uploads (servi publiquement) : la
+    correspondance ancien → nouveau nom y est écrite AVANT le premier renommage. En cas
+    d'échec, les fichiers déjà renommés reprennent leur nom et rien n'est écrit en base."""
+    if apply:
+        if journal_path is None:
+            raise ValueError("journal_path obligatoire avec apply=True")
+        journal_path = Path(journal_path).resolve()
+        if journal_path.is_relative_to(UPLOADS_ROOT.resolve()):
+            raise ValueError("Le journal ne doit pas être dans le dossier uploads (servi publiquement)")
     found: set[str] = set()
     rows = []
     for model, column in _sources(db):
@@ -65,7 +77,10 @@ def migrate_public_photos(db: Session, *, apply: bool = False) -> dict[str, Any]
     missing: list[str] = []
     for name in sorted(found):
         stem, dot, ext = name.rpartition(".")
-        mapping[name] = f"{stem or name}-{secrets.token_hex(16)}.{ext if dot else 'jpg'}"
+        target = f"{stem or name}-{secrets.token_hex(16)}.{ext if dot else 'jpg'}"
+        while (PHOTOS_DIR / target).exists():                     # collision : jamais d'écrasement
+            target = f"{stem or name}-{secrets.token_hex(16)}.{ext if dot else 'jpg'}"
+        mapping[name] = target
         if not (PHOTOS_DIR / name).is_file():
             missing.append(name)
     plan = {"photos": len(mapping), "renamed": dict(mapping), "missing_files": missing, "references_rows": 0, "applied": apply}
@@ -78,11 +93,20 @@ def migrate_public_photos(db: Session, *, apply: bool = False) -> dict[str, Any]
     plan["references_rows"] = len(changed_rows)
     if not apply:
         return plan
-    for old, new in mapping.items():
-        source = PHOTOS_DIR / old
-        if source.is_file():
-            source.rename(PHOTOS_DIR / new)
-    for row, column, new in changed_rows:
-        setattr(row, column, new)
-    db.commit()
+    journal_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    done: list[tuple[Path, Path]] = []
+    try:
+        for old, new in mapping.items():
+            source, target = PHOTOS_DIR / old, PHOTOS_DIR / new
+            if source.is_file():
+                source.rename(target)
+                done.append((source, target))
+        for row, column, new in changed_rows:
+            setattr(row, column, new)
+        db.commit()
+    except BaseException:
+        db.rollback()
+        for source, target in reversed(done):
+            target.rename(source)
+        raise
     return plan
