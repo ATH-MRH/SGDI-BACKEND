@@ -34,6 +34,17 @@ async function boot({ status = { enabled: true, engine_available: true }, camera
   return { ...ctx, w, d: w.document, calls, recognizeCalls: () => calls.filter((c) => c.path.endsWith('/recognize')) };
 }
 
+test('caméra qui tourne sans passage : ce n\'est jamais une activité utilisateur', async () => {
+  const r = await boot({ results: [{ state: 'NO_FACE', recorded: false, reasons: [] }] });
+  r.w.__pointeurTest.setLastActivity(0);
+  await r.w.PointeurFacial.start();
+  await wait(1300);
+  assert.ok(r.recognizeCalls().length >= 1);
+  assert.equal(r.w.__pointeurTest.getLastActivity(), 0);
+  r.w.PointeurFacial.stop();
+  r.w.close();
+});
+
 test('désactivé : message clair, aucune tentative de reconnaissance', async () => {
   const r = await boot({ status: { enabled: false, engine_available: false } });
   await r.w.PointeurFacial.start();
@@ -44,8 +55,10 @@ test('désactivé : message clair, aucune tentative de reconnaissance', async ()
 
 test('parcours normal ZÉRO CLIC : reconnaissance automatique, résultat affiché, pause avant READY', async () => {
   const r = await boot({ results: [{ state: 'ATTENDANCE_RECORDED', recorded: true, employee: { nom: 'OUALI', prenom: 'Amine', matricule: 'M001' }, action: 'ENTRÉE', heure: '07:58', site: 'Site A' }] });
+  r.w.__pointeurTest.setLastActivity(0);
   await r.w.PointeurFacial.start();
   await wait(700);
+  assert.ok(r.w.__pointeurTest.getLastActivity() > 0, 'un passage reconnu compte comme une lecture réelle (règle d\'inactivité)');
   const status = r.d.getElementById('faceStatus').textContent;
   assert.match(status, /POINTAGE ENREGISTRÉ/);
   assert.match(status, /OUALI Amine/);

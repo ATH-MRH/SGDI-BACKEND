@@ -64,6 +64,9 @@
   function render(result) {
     const s = result.state;
     if (s === "ATTENDANCE_RECORDED" || s === "ALREADY_RECORDED") {
+      // Une reconnaissance aboutie = une personne physiquement passée : même statut qu'une
+      // lecture QR réelle pour la règle d'inactivité (jamais la caméra qui tourne à vide).
+      if (typeof noteUserActivity === "function") noteUserActivity();
       const e = result.employee || {};
       const already = s === "ALREADY_RECORDED";
       setStatus(already ? "ALREADY" : "SUCCESS", `<div class="face-check">${already ? "✓ DÉJÀ ENREGISTRÉ" : "✓ POINTAGE ENREGISTRÉ"}</div>
