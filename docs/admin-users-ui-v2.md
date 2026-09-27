@@ -2,18 +2,23 @@
 
 ## Git
 
-Branche dédiée `feat/admin-users-ui-v2`, créée depuis `origin/main` réel après fetch
-le 27 septembre 2026 : `c94d710`. Worktree livré :
-`/Users/ath/Downloads/ATLAS-admin-users-ui-v2`.
-Les autres worktrees et leurs modifications locales sont préservés. Les commits
-restent exclusivement locaux : aucun push, aucun déploiement.
+Refonte initiale préparée sur `feat/admin-users-ui-v2` depuis `c94d710`,
+avec les commits locaux `5d04ae1` et `1d40554`.
 
-La branche locale `fix/beo-multi-society-multi-site` comporte trois commits non présents
-dans ce main (`77c2115`, `6f16898`, `0e79609`). Une clarification a été proposée ; sans
-réponse, la consigne explicite « depuis origin/main réel » a été retenue. Ces trois
-commits restent intacts dans leur branche. Cette refonte UI ne les réécrit pas et
-n'introduit aucune nouvelle contrainte BEO. Main conserve donc sa règle BEO 1 société /
-1 site ; les comptes génériques multi-sociétés/multi-sites restent supportés.
+Intégration pour publication le 27 septembre 2026 sur
+`fix/admin-users-ui-release`, depuis le nouveau `origin/main` `e1a9103`.
+Les cinq commits BEO multi-sociétés / multi-sites déjà publiés sont conservés.
+Les seuls conflits concernaient les versions de cache de `index.html` et du
+registre des modules ; elles utilisent désormais `20260927-admin-users-v2`.
+Les deux champs de périmètre de la refonte et les règles BEO du formulaire
+sont conservés ensemble. Les autres worktrees restent intacts.
+
+Validation de cette intégration : `npm test`, **605 réussis, aucun échec ni
+test ignoré** (73,38 s). Backend ciblé (`test_auth`, `test_beo_host_login`,
+`test_admin_site_workforce_module`, `test_site_workforce_multi`,
+`test_site_workforce`) : **102 réussis, 1 ignoré** (19,35 s). Le seul test
+ignoré concerne les fonctions PostgreSQL de `/health/db`, absentes de SQLite.
+Les validations de la branche initiale ci-dessous restent identifiées comme telles.
 
 ## Architecture avant
 
@@ -235,7 +240,8 @@ Validation : `package.json`, `tests_frontend/alerts-menu.test.js`,
 1. `5d04ae1` — `feat(admin): reorganize users management UI`
 2. `test(admin): cover users management UI v2` — tests, commandes et rapport de validation.
 
-Commits exclusivement locaux sur la branche dédiée. Aucun push ni déploiement.
+Commits repris sur le main actualisé : `9acc152` (interface) et `b9c5bbc` (tests).
+Le résultat de la publication est à vérifier sur le SHA retourné par `/api/version`.
 
 ---
 
@@ -267,12 +273,10 @@ tableau dense, pagination et états explicites.
 À ne pas toucher : Auth, RBAC, règles métier, authorized_modules/societies/sites/actions,
 profils, matrice, backend des actions, autres modules. Aucun nouveau backend nécessaire.
 
-### Divergence BEO identifiée
+### Évolution de la base BEO
 
-`origin/main` contient encore la contrainte BEO une société / un site. La branche locale
-`fix/beo-multi-society-multi-site` comporte trois commits absents du distant :
-`77c2115`, `6f16898`, `0e79609`. Ils sont laissés intacts pendant la clarification du
-choix de base. La nouvelle liste ne crée aucune contrainte BEO et reste compatible
-avec les périmètres multiples. La clé canonique reste `site_workforce`.
-
-
+Lors de l’audit initial sur `c94d710`, le main utilisait encore un périmètre BEO
+mono-société / mono-site. Les changements multi-sociétés / multi-sites ont depuis
+été publiés jusqu’à `e1a9103` et constituent la base de cette intégration.
+La liste Utilisateurs reste compatible avec les périmètres multiples ; la clé
+canonique demeure `site_workforce`.
