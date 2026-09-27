@@ -95,3 +95,115 @@ def test_parallel_distinct_scans_never_produce_two_arrivals(pg_sessionmaker):
     assert not errors, errors
     assert _count(pg_sessionmaker, employee_id) == 1
     assert {r["action"] for r in results} == {"arrivee"}
+
+
+def _fire_mixed(Session, employee_id, calls):
+    """Exécute en parallèle des appels hétérogènes Attendance Core (callable(db, employee))."""
+    from app.modules.drh.models import Employee
+
+    barrier = threading.Barrier(len(calls))
+    results, errors = [], []
+
+    def worker(fn):
+        with Session() as db:
+            employee = db.get(Employee, employee_id)
+            barrier.wait()
+            try:
+                results.append(fn(db, employee))
+                db.commit()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(fn,)) for fn in calls]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results, errors
+
+
+def _presences(Session, employee_id):
+    from app.modules.ops.models import DailyPresence
+    with Session() as db:
+        return db.execute(select(DailyPresence).where(DailyPresence.employee_id == employee_id)).scalars().all()
+
+
+def test_parallel_qr_facial_manual_produce_one_arrival_and_one_presence(pg_sessionmaker):
+    """QR + facial + saisie manuelle au même instant : un seul événement, une seule journée."""
+    from app.modules.attendance import core
+    employee_id = _employee(pg_sessionmaker)
+    run = uuid.uuid4().hex
+    sources = ["QR", "FACIAL", "MANUAL"] * 4
+
+    def scan(source, i):
+        return lambda db, emp: core.record_scan(db, employee=emp, source=source, actor=SimpleNamespace(id=None, username=f"S{i}"),
+                                                idempotency_key=f"mix-{run}-{i}", confidence=0.9 if source == "FACIAL" else None)
+
+    results, errors = _fire_mixed(pg_sessionmaker, employee_id, [scan(s, i) for i, s in enumerate(sources)])
+    assert not errors, errors
+    assert _count(pg_sessionmaker, employee_id) == 1
+    assert {r["action"] for r in results} == {"arrivee"}
+    assert len(_presences(pg_sessionmaker, employee_id)) == 1
+
+
+def test_parallel_key_of_other_employee_never_leaks(pg_sessionmaker):
+    """Même clé rejouée simultanément pour deux employés : un seul l'obtient, l'autre reçoit 409."""
+    from fastapi import HTTPException
+
+    from app.modules.attendance import core
+    a, b = _employee(pg_sessionmaker), _employee(pg_sessionmaker)
+    key = f"shared-{uuid.uuid4().hex}"
+    from app.modules.drh.models import Employee
+
+    barrier = threading.Barrier(2)
+    outcomes = {}
+
+    def worker(emp_id):
+        with pg_sessionmaker() as db:
+            emp = db.get(Employee, emp_id)
+            barrier.wait()
+            try:
+                outcomes[emp_id] = core.record_scan(db, employee=emp, source="QR", actor=SimpleNamespace(id=None, username="K"), idempotency_key=key)
+            except HTTPException as exc:
+                outcomes[emp_id] = exc.status_code
+            except Exception as exc:  # noqa: BLE001
+                outcomes[emp_id] = exc
+
+    threads = [threading.Thread(target=worker, args=(x,)) for x in (a, b)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    winners = [e for e, o in outcomes.items() if isinstance(o, dict)]
+    assert len(winners) == 1, outcomes
+    loser = a if winners[0] == b else b
+    assert outcomes[loser] == 409, outcomes
+    assert _count(pg_sessionmaker, loser) == 0
+    assert _count(pg_sessionmaker, winners[0]) == 1
+
+
+def test_parallel_beo_status_and_terminal_scan_share_one_presence(pg_sessionmaker):
+    """BEO (statut du jour) + terminal (scan) simultanés : aucune erreur, une seule journée,
+    deux événements tracés, aucun interblocage."""
+    from app.modules.attendance import core
+    from app.modules.attendance.models import AttendanceEvent
+    from app.modules.ops.models import Assignment
+    employee_id = _employee(pg_sessionmaker)
+    with pg_sessionmaker() as db:
+        site_id = db.execute(select(Assignment.site_id).where(Assignment.employee_id == employee_id)).scalar_one()
+    day = core._now_local().date()
+    run = uuid.uuid4().hex
+    calls = [
+        lambda db, emp: core.record_day_status(db, employee=emp, site_id=site_id, day=day, status="present",
+                                               source="SITE_WORKFORCE", actor=SimpleNamespace(id=None, username="BEO")),
+        lambda db, emp: core.record_scan(db, employee=emp, source="QR", actor=SimpleNamespace(id=None, username="TERM"),
+                                         idempotency_key=f"term-{run}"),
+    ]
+    results, errors = _fire_mixed(pg_sessionmaker, employee_id, calls)
+    assert not errors, errors
+    rows = _presences(pg_sessionmaker, employee_id)
+    assert len(rows) == 1 and rows[0].status == "present"
+    assert rows[0].arrival_time, "l'heure d'arrivée réelle du terminal ne doit jamais être effacée par le BEO"
+    with pg_sessionmaker() as db:
+        sources = set(db.execute(select(AttendanceEvent.source).where(AttendanceEvent.employee_id == employee_id)).scalars())
+    assert sources == {"SITE_WORKFORCE", "QR"}
