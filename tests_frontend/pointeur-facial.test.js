@@ -101,27 +101,29 @@ test('plusieurs visages / liveness : refus explicite, jamais d\'attribution', as
   }
 });
 
-test('caméra du terminal : 3 images capturées et envoyées, flux arrêté en quittant la vue', async () => {
-  const cam = [{ id: 9, name: 'Tablette entrée', adapter: 'TERMINAL', usage: 'ATTENDANCE_AND_ENROLLMENT', role: 'ENTRY', is_default: true, active: true }];
-  const r = await boot({ cameras: cam, results: [{ state: 'NO_FACE', recorded: false, reasons: [] }] });
-  let stopped = 0;
-  r.w.navigator.mediaDevices = { getUserMedia: async () => ({ getTracks: () => [{ stop: () => { stopped++; } }] }) };
-  const video = r.d.getElementById('faceVideo');
-  Object.defineProperty(video, 'videoWidth', { value: 1920 });
-  Object.defineProperty(video, 'videoHeight', { value: 1080 });
-  video.play = () => Promise.resolve();
-  r.w.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
-  r.w.HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,AAAA';
+test('le terminal n\'envoie JAMAIS d\'image : les caméras « terminal » ne sont pas proposées au pointage', async () => {
+  const cams = [
+    { id: 9, name: 'Tablette', adapter: 'TERMINAL', usage: 'ENROLLMENT', role: 'ENROLLMENT', is_default: false, active: true },
+    { id: 7, name: 'CAM-ENTREE-01', adapter: 'DAHUA', usage: 'ATTENDANCE', role: 'ENTRY', is_default: true, active: true },
+  ];
+  const r = await boot({ cameras: cams, results: [{ state: 'NO_FACE', recorded: false, reasons: [] }] });
   await r.w.PointeurFacial.start();
   await wait(1200);
-  const body = r.recognizeCalls()[0].body;
-  assert.equal(body.frames.length, 3);
-  assert.ok(body.frames.every((f) => f.startsWith('data:image/jpeg;base64,')));
+  assert.deepEqual(r.w.PointeurFacial.cameras.map((c) => c.id), [7]);
+  assert.ok(r.recognizeCalls().length >= 1);
+  assert.ok(r.recognizeCalls().every((c) => c.path === '/api/biometrics/cameras/7/recognize' && !('frames' in c.body)), 'aucune image envoyée par le navigateur');
   r.w.PointeurFacial.stop();
-  assert.equal(stopped, 1, 'la caméra est libérée');
   const before = r.recognizeCalls().length;
   await wait(1200);
   assert.equal(r.recognizeCalls().length, before, 'plus aucune tentative après arrêt');
+  r.w.close();
+});
+
+test('site sans caméra serveur (seulement une tablette d\'enrôlement) : message clair, aucune tentative', async () => {
+  const r = await boot({ cameras: [{ id: 9, name: 'Tablette', adapter: 'TERMINAL', usage: 'ENROLLMENT', role: 'ENROLLMENT', active: true }] });
+  await r.w.PointeurFacial.start();
+  assert.match(r.d.getElementById('faceStatus').textContent, /AUCUNE CAMÉRA DE POINTAGE/);
+  assert.equal(r.recognizeCalls().length, 0);
   r.w.close();
 });
 

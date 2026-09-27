@@ -3,19 +3,19 @@
  * READY → (rafale d'images) → reconnaissance serveur (qualité, liveness, 1:N du site,
  * contrôles employé/affectation, règles Attendance Core) → résultat affiché → cooldown → READY.
  * Aucune sélection d'employé, aucun bouton Capturer/Valider. Le navigateur ne voit jamais la
- * caméra IP : aperçu et images passent par le backend (identifiants jamais exposés). Pour la
- * caméra intégrée du terminal (adaptateur TERMINAL), les images sont capturées ici puis
- * envoyées au backend qui fait tout le calcul (un terminal ne peut pas fabriquer un gabarit).
+ * caméra : aperçu et images sont lus par le SERVEUR sur la caméra (identifiants jamais
+ * exposés). Le terminal n'envoie JAMAIS d'image pour pointer : une image fournie par un
+ * navigateur pourrait être une photo injectée, que le liveness passif ne couvre pas
+ * (docs/biometrics.md). Les caméras « terminal » servent uniquement à l'enrôlement supervisé.
  */
 (function () {
   "use strict";
   const TICK_MS = 900;          // cadence d'essai en état READY
   const RESULT_MS = 3500;       // affichage du résultat avant retour à READY
   const ERROR_RETRY_MS = 5000;  // reprise après erreur réseau/caméra
-  const BURST = 3, BURST_GAP_MS = 220;
 
   const F = {
-    running: false, busy: false, camera: null, cameras: [], stream: null, timer: null,
+    running: false, busy: false, camera: null, cameras: [], timer: null,
     previewTimer: null, previewUrl: null, cooldownUntil: 0, lastState: "",
   };
   window.PointeurFacial = F;
@@ -100,26 +100,6 @@
     if (typeof toggleManualPanel === "function" && $("manualPanel") && $("manualPanel").classList.contains("hidden")) toggleManualPanel();
   };
 
-  function captureFrame() {
-    const video = $("faceVideo");
-    if (!video || !video.videoWidth) return null;
-    const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
-  }
-
-  async function terminalBurst() {
-    const frames = [];
-    for (let i = 0; i < BURST; i++) {
-      const f = captureFrame();
-      if (f) frames.push(f);
-      if (i + 1 < BURST) await new Promise((r) => setTimeout(r, BURST_GAP_MS));
-    }
-    return frames;
-  }
-
   async function tick() {
     F.timer = null;
     if (!F.running) return;
@@ -127,10 +107,6 @@
     F.busy = true;
     try {
       const body = { burst_id: uuid() };
-      if (F.camera.adapter === "TERMINAL") {
-        body.frames = await terminalBurst();
-        if (!body.frames.length) { setStatus("READY", "Caméra en cours d'initialisation…"); return; }
-      }
       const result = await api(`/biometrics/cameras/${F.camera.id}/recognize`, { method: "POST", body });
       if (F.running) render(result);
     } catch (error) {
@@ -149,7 +125,7 @@
   }
 
   async function refreshPreview() {
-    if (!F.running || !F.camera || F.camera.adapter === "TERMINAL") return;
+    if (!F.running || !F.camera) return;
     try {
       const res = await api(`/biometrics/cameras/${F.camera.id}/preview.jpg`, { raw: true });
       const url = URL.createObjectURL(await res.blob());
@@ -161,17 +137,9 @@
   }
 
   async function openCamera() {
-    const video = $("faceVideo"), img = $("facePreview");
-    if (F.camera.adapter === "TERMINAL") {
-      img.classList.add("hidden"); video.classList.remove("hidden");
-      F.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 } }, audio: false });
-      video.srcObject = F.stream;
-      await video.play().catch(() => {});
-    } else {
-      video.classList.add("hidden"); img.classList.remove("hidden");
-      await refreshPreview();
-      F.previewTimer = setInterval(refreshPreview, 1000);
-    }
+    $("facePreview").classList.remove("hidden");
+    await refreshPreview();
+    F.previewTimer = setInterval(refreshPreview, 1000);
   }
 
   F.selectCamera = async function (id) {
@@ -195,7 +163,7 @@
         return;
       }
       const all = await api("/biometrics/cameras" + (site() ? "?site_id=" + encodeURIComponent(site()) : ""));
-      F.cameras = all.filter((c) => c.active && (c.usage === "ATTENDANCE" || c.usage === "ATTENDANCE_AND_ENROLLMENT"));
+      F.cameras = all.filter((c) => c.active && c.adapter !== "TERMINAL" && (c.usage === "ATTENDANCE" || c.usage === "ATTENDANCE_AND_ENROLLMENT"));
       if (!F.cameras.length) {
         setStatus("DISABLED", `<div class="face-check">AUCUNE CAMÉRA DE POINTAGE</div><small>Aucune caméra active n'est déclarée pour ce site.</small>`);
         F.running = false;
@@ -219,7 +187,6 @@
 
   F.stopMedia = function () {
     clearInterval(F.previewTimer); F.previewTimer = null;
-    if (F.stream) { F.stream.getTracks().forEach((t) => t.stop()); F.stream = null; }
     if (F.previewUrl) { URL.revokeObjectURL(F.previewUrl); F.previewUrl = null; }
   };
 

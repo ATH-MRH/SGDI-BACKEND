@@ -448,6 +448,8 @@ def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], ac
     from app.modules.portal.routes import _employee_portal_block_reason
 
     engine = ensure_enabled()
+    if camera.adapter == "TERMINAL":
+        raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
     if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
         raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
     cfg = active_config(db)

@@ -291,7 +291,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <div class="face-card">
       <div class="face-head"><div><div class="scanner-title">Pointage facial automatique</div><p class="scanner-hint">Aucune action : présentez-vous face à la caméra.</p></div>
         <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
-      <div class="face-stage"><video id="faceVideo" class="hidden" autoplay muted playsinline></video><img id="facePreview" class="hidden" alt="Aperçu caméra"></div>
+      <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
       <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
     </div>
   </section>

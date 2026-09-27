@@ -377,9 +377,13 @@ class CameraPatch(BaseModel):
     password: str | None = Field(None, max_length=200)
 
 
-def _validate_usage_role(usage: str | None, role: str | None) -> None:
+def _validate_usage_role(usage: str | None, role: str | None, adapter: str | None = None) -> None:
     if usage is not None and usage not in CAMERA_USAGES:
         raise HTTPException(422, detail="Usage de caméra invalide")
+    # Images fournies par un navigateur = entrée non fiable (injection numérique d'une photo
+    # possible, que le liveness passif ne couvre pas) : jamais pour le pointage.
+    if adapter == "TERMINAL" and usage is not None and usage != "ENROLLMENT":
+        raise HTTPException(422, detail="Caméra du terminal : enrôlement supervisé uniquement — le pointage exige une caméra lue par le serveur")
     if role is not None and role not in CAMERA_ROLES:
         raise HTTPException(422, detail="Rôle de caméra invalide")
 
@@ -398,7 +402,7 @@ def add_camera(payload: CameraIn, db: Session = Depends(get_db), user: User = De
     model = db.get(CameraModel, payload.camera_model_id)
     if not model or not model.active:
         raise HTTPException(422, detail="Modèle de caméra inconnu — l'ajouter d'abord au catalogue")
-    _validate_usage_role(payload.usage, payload.role)
+    _validate_usage_role(payload.usage, payload.role, model.adapter)
     society = _site_society(site) or ""
     if not society:
         raise HTTPException(422, detail="Le site n'a pas de société : une caméra appartient à une société ET un site")
@@ -425,7 +429,7 @@ def update_camera(camera_id: int, payload: CameraPatch, db: Session = Depends(ge
     require_feature(db, user, "biometric_admin", "admin")
     camera = _camera_in_scope(db, user, camera_id)
     changes = payload.model_dump(exclude_unset=True)
-    _validate_usage_role(changes.get("usage"), changes.get("role"))
+    _validate_usage_role(changes.get("usage"), changes.get("role"), camera.adapter)
     secret_changed = "username" in changes or "password" in changes
     if secret_changed:
         current = crypto.decrypt_secret(camera.credentials_encrypted)
@@ -464,10 +468,14 @@ def preview(camera_id: int, db: Session = Depends(get_db), user: User = Depends(
 
 
 def _frames_for(camera: Camera, frames: list[str] | None) -> list[bytes]:
-    if frames:
-        return _decode_frames(frames)
+    """Images fournies par le client : UNIQUEMENT pour une caméra de terminal (enrôlement
+    supervisé). Une caméra lue par le serveur est toujours capturée par le serveur."""
     if camera.adapter == "TERMINAL":
-        raise HTTPException(422, detail="Images du terminal attendues")
+        if not frames:
+            raise HTTPException(422, detail="Images du terminal attendues")
+        return _decode_frames(frames)
+    if frames:
+        raise HTTPException(422, detail="Images client refusées : cette caméra est lue par le serveur")
     try:
         return adapter_for(camera).burst(3)
     except CameraError as exc:
@@ -475,7 +483,6 @@ def _frames_for(camera: Camera, frames: list[str] | None) -> list[bytes]:
 
 
 class RecognizeIn(BaseModel):
-    frames: list[str] | None = None
     burst_id: str | None = Field(None, max_length=80)
     employee_id: int | None = None   # 1:1 si un identifiant préalable (QR/matricule) est connu
 
@@ -486,6 +493,10 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
     manuelle dans le parcours normal. Toute condition non remplie ⇒ aucun pointage."""
     camera = _camera_in_scope(db, user, camera_id)
     service.ensure_enabled()
-    frames = _frames_for(camera, payload.frames)
+    if camera.adapter == "TERMINAL":
+        raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
+    # Les images sont TOUJOURS lues par le serveur sur la caméra : aucune image fournie par
+    # le client n'est acceptée pour pointer (voir docs/biometrics.md, injection numérique).
+    frames = _frames_for(camera, None)
     return service.recognize_and_record(db, camera=camera, frames=frames, actor=user, burst_id=payload.burst_id,
                                         employee_hint=payload.employee_id)

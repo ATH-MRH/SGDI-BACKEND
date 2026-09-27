@@ -27,8 +27,15 @@ SOC = "Iron Global Securite"
 TEST_KEY = Fernet.generate_key().decode()
 
 
+# Capture SERVEUR simulée : les images « vues » par la caméra Dahua du test. Le client ne
+# fournit jamais d'image pour pointer (le serveur lit la caméra).
+CAPTURE: dict = {"frames": []}
+
+
 @pytest.fixture(autouse=True)
 def biometrics_on(monkeypatch):
+    from app.modules.biometrics.cameras import DahuaCameraAdapter
+    monkeypatch.setattr(DahuaCameraAdapter, "burst", lambda self, count=3, interval=0.25: list(CAPTURE["frames"]))
     monkeypatch.setattr(settings, "biometric_enabled", True)
     monkeypatch.setattr(settings, "biometric_template_key", TEST_KEY)
     monkeypatch.setattr(settings, "attendance_min_event_gap_seconds", 0)
@@ -63,14 +70,18 @@ def _burst(who, **kw):
     return _b64(*(frame(face(who, **kw)) for _ in range(3)))
 
 
-def _camera(client, h, site, *, usage="ATTENDANCE_AND_ENROLLMENT", name=None):
+def _camera(client, h, site, *, usage="ATTENDANCE_AND_ENROLLMENT", name=None, adapter="DAHUA"):
     model = client.post("/api/biometrics/camera-models", headers=h, json={
-        "manufacturer": "Terminal", "model": f"Tablette {_tag()}", "adapter": "TERMINAL"}).json()
+        "manufacturer": "DAHUA" if adapter == "DAHUA" else "Terminal", "model": f"Réf {_tag()}", "adapter": adapter}).json()
     r = client.post("/api/biometrics/cameras", headers=h, json={
-        "name": name or f"CAM-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "terminal",
+        "name": name or f"CAM-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "10.0.0.20",
         "usage": usage, "role": "ENTRY"})
     assert r.status_code == 200, r.text
     return r.json()["id"]
+
+
+def _capture(frames_b64):
+    CAPTURE["frames"] = [base64.b64decode(f) for f in frames_b64]
 
 
 def _consent(client, h, emp, **over):
@@ -80,11 +91,19 @@ def _consent(client, h, emp, **over):
 
 
 def _enroll(client, h, emp, cam, who, **kw):
-    return client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=h, json={"camera_id": cam, "frames": _burst(who, **kw)})
+    _capture(_burst(who, **kw))
+    return client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=h, json={"camera_id": cam})
+
+
+def _enroll_frames(client, h, emp, cam, frames_b64):
+    _capture(frames_b64)
+    return client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=h, json={"camera_id": cam})
 
 
 def _recognize(client, h, cam, frames, **extra):
-    return client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=h, json={"frames": frames, **extra})
+    """`frames` = ce que la caméra voit (capture serveur), jamais envoyé par le client."""
+    _capture(frames)
+    return client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=h, json={**extra})
 
 
 def _user(client, db, *, sites, features=(), modules=("pointage",)):
@@ -130,13 +149,13 @@ def test_no_admissible_consent_no_enrollment(client, auth_headers, db):
 def test_enrollment_rejects_bad_captures(client, auth_headers, db):
     site = _site(db); emp = _employee(db, site); cam = _camera(client, auth_headers, site); _consent(client, auth_headers, emp)
     many = _b64(*(frame(face("A"), face("B")) for _ in range(3)))
-    r = client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=auth_headers, json={"camera_id": cam, "frames": many})
+    r = _enroll_frames(client, auth_headers, emp, cam, many)
     assert r.status_code == 422 and r.json()["detail"]["state"] == "MULTIPLE_FACES"
     assert _enroll(client, auth_headers, emp, cam, "A", sharp=5).json()["detail"]["state"] == "QUALITY_FAILED"
     assert _enroll(client, auth_headers, emp, cam, "A", px=40).json()["detail"]["state"] == "QUALITY_FAILED"
     assert _enroll(client, auth_headers, emp, cam, "A", live=0.2).json()["detail"]["state"] == "LIVENESS_FAILED"
     frozen = _b64(*(frame(face("A"), noise=0.5) for _ in range(3)))
-    r = client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=auth_headers, json={"camera_id": cam, "frames": frozen})
+    r = _enroll_frames(client, auth_headers, emp, cam, frozen)
     assert r.json()["detail"]["state"] == "LIVENESS_FAILED" and "figée" in r.json()["detail"]["reasons"][0]
     assert db.scalar(select(func.count(BiometricTemplate.id)).where(BiometricTemplate.employee_id == emp.id)) == 0
 
@@ -325,3 +344,33 @@ def test_thresholds_are_versioned_with_provenance(client, auth_headers, db):
                      json={"provenance": "Calibration site Hamoul 01, 200 passages", "recognition_threshold": 0.42}).json()
     assert v2["version"] == v1["version"] + 1 and v2["recognition_threshold"] == 0.42
     assert v2["liveness_threshold"] == v1["liveness_threshold"]
+
+
+# ── Images fournies par le client : jamais pour pointer ─────────────────────────────────
+def test_terminal_camera_is_enrollment_only(client, auth_headers, db):
+    site = _site(db)
+    model = client.post("/api/biometrics/camera-models", headers=auth_headers,
+                        json={"manufacturer": "Terminal", "model": f"Tab {_tag()}", "adapter": "TERMINAL"}).json()
+    body = {"name": f"TAB-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "terminal", "role": "ENROLLMENT"}
+    for usage in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
+        assert client.post("/api/biometrics/cameras", headers=auth_headers, json={**body, "usage": usage}).status_code == 422
+    tab = client.post("/api/biometrics/cameras", headers=auth_headers, json={**body, "usage": "ENROLLMENT"}).json()["id"]
+    assert client.patch(f"/api/biometrics/cameras/{tab}", headers=auth_headers, json={"usage": "ATTENDANCE"}).status_code == 422
+    emp = _employee(db, site); _consent(client, auth_headers, emp)
+    who = f"TAB-{_tag()}"
+    # Enrôlement supervisé : images fournies par le terminal, liveness exigé.
+    r = client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=auth_headers, json={"camera_id": tab, "frames": _burst(who)})
+    assert r.status_code == 200 and r.json()["status"] == "ACTIVE", r.text
+    assert client.post(f"/api/biometrics/cameras/{tab}/recognize", headers=auth_headers, json={}).status_code == 409
+
+
+def test_client_images_are_never_used_to_record_attendance(client, auth_headers, db):
+    site, emp, cam, W = _enrolled(client, auth_headers, db, "WORKER")
+    CAPTURE["frames"] = [frame(face("STRANGER")) for _ in range(3)]            # ce que la caméra voit réellement
+    forged = _burst(W)                                                          # photo injectée par un client
+    r = client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=auth_headers, json={"frames": forged})
+    assert r.json()["state"] == "UNKNOWN_FACE", r.json()
+    assert _facial_events(db, emp) == []
+    other = _employee(db, site); _consent(client, auth_headers, other)
+    r = client.post(f"/api/biometrics/employees/{other.id}/enroll", headers=auth_headers, json={"camera_id": cam, "frames": forged})
+    assert r.status_code == 422 and "lue par le serveur" in r.json()["detail"]
