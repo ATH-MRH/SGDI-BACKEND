@@ -280,9 +280,22 @@ def _employee_photo_path(employee: Employee) -> Path | None:
     return path if path.is_file() else None
 
 
+_FINGERPRINTS: dict[str, tuple[int, int, str]] = {}
+
+
 def photo_fingerprint(employee: Employee) -> str | None:
+    """Empreinte SHA-256 de la photo de la fiche, mise en cache par (chemin, mtime, taille) :
+    la reconnaissance ne relit ni ne re-hache chaque photo candidate à chaque passage."""
     path = _employee_photo_path(employee)
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path else None
+    if path is None:
+        return None
+    stat = path.stat()
+    cached = _FINGERPRINTS.get(str(path))
+    if cached and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
+        return cached[2]
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    _FINGERPRINTS[str(path)] = (stat.st_mtime_ns, stat.st_size, digest)
+    return digest
 
 
 def invalidate_if_photo_changed(db: Session, employee: Employee, actor: Any = None) -> bool:
@@ -429,7 +442,10 @@ def _candidates(db: Session, site_id: int, employee_hint: int | None) -> list[tu
         employee = employees.get(row.employee_id)
         if employee is None:
             continue
-        if row.source == "EMPLOYEE_PHOTO" and invalidate_if_photo_changed(db, employee):
+        # Contrôle sur le gabarit DÉJÀ chargé (aucune requête par candidat) ; invalidation
+        # (rare) seulement si la photo de la fiche a réellement changé.
+        if row.source == "EMPLOYEE_PHOTO" and (row.quality or {}).get("photo_sha256") != photo_fingerprint(employee):
+            invalidate_if_photo_changed(db, employee)
             continue
         out.append((employee, row))
     return out
