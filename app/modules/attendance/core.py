@@ -521,9 +521,14 @@ def record_day_status(db: Session, *, employee: Employee, site_id: int | None, d
     if site_id is not None:
         row.site_id = site_id
     row.status = status
-    row.arrival_time = arrival_time
-    row.departure_time = departure_time
-    row.notes = notes
+    # None = « non fourni » : une saisie de statut (BEO, OPS) ne doit jamais effacer les heures
+    # réellement mesurées par un terminal ; l'effacement explicite passe par correct_presence().
+    if arrival_time is not None:
+        row.arrival_time = arrival_time
+    if departure_time is not None:
+        row.departure_time = departure_time
+    if notes is not None:
+        row.notes = notes
     if legacy:
         data = dict(row.data or {})
         data["_legacy"] = {**(data.get("_legacy") or {}), **legacy}

@@ -309,3 +309,18 @@ def test_rotation_generation_never_overwrites_a_real_presence(client, auth_heade
         if row.generated or "_legacy" not in (row.data or {}) or row.data["_legacy"].get("scanArrivee") != "07:00:00":
             overwritten.append(offset)
     assert overwritten == [], f"journée pointée réécrite par le planning aux jours +{overwritten}"
+
+
+def test_day_status_after_real_scan_keeps_the_measured_times(db):
+    """BEO confirme « présent » après un scan réel du terminal (ou en même temps, course perdue
+    par le BEO) : les heures mesurées ne doivent pas être effacées."""
+    site = _site(db)
+    emp = _employee(db, site)
+    day = date.today()
+    core.record_scan(db, employee=emp, source="QR", actor=ACTOR, idempotency_key=None, now=_at(day, "07:00"))
+    db.commit()
+    core.record_day_status(db, employee=emp, site_id=site.id, day=day, status="present", source="SITE_WORKFORCE", actor=ACTOR)
+    db.commit()
+    row = db.execute(select(DailyPresence).where(DailyPresence.employee_id == emp.id)).scalar_one()
+    assert row.status == "present"
+    assert row.arrival_time, "heure d'arrivée mesurée effacée par la saisie de statut"
