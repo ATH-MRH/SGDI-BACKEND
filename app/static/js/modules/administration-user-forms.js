@@ -4,7 +4,7 @@ function adminRoleGuide(){return[
   ["dispatch","Supervision terrain","Suivi opérationnel, sites, pointage et missions autorisées"],
   ["ops","Gestion métier","Exploitation OPS/DRH selon profil et périmètre"],
   ["ADM","Administration","Configuration système, utilisateurs, profils et sécurité"],
-  ["charge_effectifs_site","Chargé des effectifs","Bureau des Effectifs Ouest — une société explicite, un seul site"]
+  ["charge_effectifs_site","Chargé des effectifs","Bureau des Effectifs Ouest — sociétés et sites explicitement attribués (jamais d'accès global)"]
 ]}
 
 function adminRoleDescription(role){const r=adminRoleGuide().find(x=>x[0]===String(role||""));return r?r[1]+" — "+r[2]:"Profil utilisateur SGDI"}
@@ -91,19 +91,33 @@ function adminTogglePasswordVisibility(button){
 }
 // Règle du rôle Chargé des effectifs (BEO) avec site_workforce — confort de saisie uniquement :
 // le serveur (validate_beo_account_scope) applique la même règle et reste seul autoritaire.
-// Une société explicite, un site, et ce site appartient à cette société.
+// Au moins une société explicite, au moins un site, chaque site dans une société cochée.
 function adminBeoRoleGuard(data){
   if(normalizeAdminUserRole(data&&data.role)!=="charge_effectifs_site")return"";
   if(!(data.modulesAutorises||[]).includes("site_workforce"))return"";
   if(data.actif===false)return""; // suspendre n'est jamais bloqué (même règle serveur)
   const socs=data.societesAutorisees||[],sites=data.sitesAutorises||[];
-  if(!socs.length)return"Chargé des effectifs : cochez explicitement la société du compte (une liste vide n'est jamais un accès global).";
-  if(socs.length>1)return"Chargé des effectifs : une seule société autorisée (actuellement "+socs.length+").";
-  if(!sites.length)return"Chargé des effectifs : sélectionnez le site autorisé.";
-  if(sites.length>1)return"Chargé des effectifs : un seul site autorisé (actuellement "+sites.length+").";
-  const siteSoc=typeof beoSiteSociete==="function"?beoSiteSociete(beoSiteById(sites[0])):null;
-  if(siteSoc&&siteSoc!==socs[0])return"Chargé des effectifs : le site sélectionné n'appartient pas à la société "+socs[0]+".";
+  if(!socs.length)return"Chargé des effectifs : cochez au moins une société (une liste vide n'est jamais un accès global).";
+  if(!sites.length)return"Chargé des effectifs : sélectionnez au moins un site autorisé.";
+  const outside=sites.filter(sid=>{const soc=typeof beoSiteSociete==="function"?beoSiteSociete(beoSiteById(sid)):null;return soc&&!socs.includes(soc)});
+  if(outside.length)return"Chargé des effectifs : site(s) hors des sociétés cochées — "+outside.map(sid=>typeof beoSiteLabel==="function"?beoSiteLabel(sid):sid).join(", ")+".";
   return"";
+}
+// Formulaire : pour un Chargé des effectifs, ne présenter que les groupes de sites des
+// sociétés cochées. Un groupe qui contient déjà un site coché reste visible (signalé) :
+// une sélection existante n'est jamais perdue en silence.
+function adminSyncBeoSiteGroups(){
+  const form=document.querySelector(".modal-bg form");if(!form)return;
+  const isBeo=normalizeAdminUserRole(form.querySelector('[name="role"]')?.value)==="charge_effectifs_site";
+  const socs=new Set([...form.querySelectorAll('.admin-access-societies input[type=checkbox]:checked')].map(i=>i.value));
+  form.querySelectorAll("[data-site-group]").forEach(group=>{
+    const inScope=socs.has(group.dataset.siteGroup);
+    const hasChecked=!!group.querySelector("input[type=checkbox]:checked");
+    group.hidden=isBeo&&!inScope&&!hasChecked;
+    group.classList.toggle("admin-site-group-outside",isBeo&&!inScope&&hasChecked);
+    const note=group.querySelector("[data-site-group-note]");
+    if(note)note.hidden=!(isBeo&&!inScope&&hasChecked);
+  });
 }
 function adminUserRoleOptions(){return[...ADMIN_USER_ROLES,"charge_effectifs_site"]}
 // Préréglage "Nouvel utilisateur BEO", consommé (puis effacé) à l'ouverture suivante.
@@ -142,7 +156,7 @@ async function openAdminUserModal(username){
         ${adminPasswordFieldHTML("password","Mot de passe de connexion",isNew,!isNew)}
         ${adminPasswordFieldHTML("validationPassword","Mot de passe de validation",isNew,!!u.hasValidationPassword)}
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${adminUserRoleOptions().map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
+        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false);adminSyncBeoSiteGroups()">${adminUserRoleOptions().map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
@@ -152,8 +166,8 @@ async function openAdminUserModal(username){
       <label class="label">Modules accessibles avec cet identifiant et ce mot de passe *</label>
       <p class="text-xs text-slate-500 mb-2">Cochez chaque application autorisée. L'utilisateur conservera la même identité de connexion sur tous ces sous-domaines.</p>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">${ADMIN_LOGIN_MODULES.map(m=>`<label class="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-white"><input type="checkbox" name="module_${m.key}" value="${m.key}" ${(u.modulesAutorises||[]).includes(m.key)?"checked":""}/><span><b class="block text-sm">${escapeHTML(m.label)}</b>${m.appName?`<small class="block font-bold text-slate-600">${escapeHTML(m.appName)}</small>`:""}${m.domain?`<small class="block text-teal-700">${escapeHTML(m.domain)}</small>`:""}<small class="text-slate-500">${escapeHTML(m.host)}</small></span></label>`).join("")}</div>
-      <label class="label mt-3">Périmètre sociétés (vide = toutes, sauf Chargé des effectifs : société obligatoire)</label>
-      <div class="admin-access-societies">${SOCIETES.map(s=>`<label><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/><span>${escapeHTML(s)}</span></label>`).join("")}</div>
+      <label class="label mt-3">Périmètre sociétés (vide = toutes, sauf Chargé des effectifs : au moins une société, jamais toutes implicitement)</label>
+      <div class="admin-access-societies">${SOCIETES.map(s=>`<label><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""} onchange="adminSyncBeoSiteGroups()"/><span>${escapeHTML(s)}</span></label>`).join("")}</div>
       <div class="admin-access-separator"></div>
       <label class="label">Périmètre structures (vide = toutes)</label>
       <div class="admin-access-primary">${ADMIN_PRIMARY_STRUCTURES.map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
@@ -166,7 +180,7 @@ async function openAdminUserModal(username){
       <label class="label">Actions individuelles</label>
       <p class="text-xs text-slate-500 mb-2">Aucune case cochée : héritage du profil. Dès qu'une action est cochée, cette sélection devient la règle effective de l'utilisateur.</p>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">${ADMIN_LEVEL_ACTIONS.map(action=>`<label class="flex items-center gap-2 p-2 rounded border border-slate-200 bg-white text-sm"><input type="checkbox" name="action_${action.key}" value="${action.key}" ${(u.actionsAutorisees||[]).includes(action.key)?"checked":""}/><span>${escapeHTML(action.label)}</span></label>`).join("")}</div>
-      <label class="label mt-3">Périmètre sites (vide = tous)</label>
+      <label class="label mt-3">Périmètre sites (vide = tous, sauf Chargé des effectifs : au moins un site, parmi les sociétés cochées)</label>
       <div style="max-height:320px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{
         const seen=new Set();
         const sites=(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;});
@@ -180,15 +194,16 @@ async function openAdminUserModal(username){
         const socNames=[...groups.keys()].sort((a,b)=>a.localeCompare(b));
         return socNames.map(soc=>{
           const list=groups.get(soc).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||"")));
-          return `<div class="mb-3">
+          return `<div class="mb-3" data-site-group="${escapeHTML(soc)}">
             <div class="text-xs font-black uppercase text-slate-500 mb-1 px-1">${escapeHTML(soc)} <span class="text-slate-400 font-normal normal-case">(${list.length} site${list.length>1?"s":""})</span></div>
+            <div class="text-[11px] text-red-600 px-1" data-site-group-note hidden>Société non cochée : décochez ces sites ou cochez la société.</div>
             <table class="w-full text-sm" style="border-collapse:collapse"><tbody>${list.map(s=>{const sid=String(s.backendId||s.id||"");const checked=(u.sitesAutorises||[]).map(v=>String(v||"")).includes(sid);return`<tr><td style="width:28px;border-bottom:1px solid #f1f5f9"><input type="checkbox" name="site_${sid}" value="${sid}" ${checked?"checked":""}/></td><td style="border-bottom:1px solid #f1f5f9;padding:3px 6px">${escapeHTML(s.nom||s.intitule||"Site #"+sid)}</td></tr>`}).join("")}</tbody></table>
           </div>`;
         }).join("");
       })()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
-  setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false)},0);
+  setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false);adminSyncBeoSiteGroups()},0);
 }
 
 function adminAccessCheckboxHTML(st,user){

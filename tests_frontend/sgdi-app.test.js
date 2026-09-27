@@ -55,6 +55,7 @@ const exposeSuffix = `
   adminRemoveBeoAccess: (typeof adminRemoveBeoAccess !== 'undefined') ? adminRemoveBeoAccess : null,
   adminAddBeoAccess: (typeof adminAddBeoAccess !== 'undefined') ? adminAddBeoAccess : null,
   adminBeoRoleGuard: (typeof adminBeoRoleGuard !== 'undefined') ? adminBeoRoleGuard : null,
+  adminSyncBeoSiteGroups: (typeof adminSyncBeoSiteGroups !== 'undefined') ? adminSyncBeoSiteGroups : null,
   normalizeAdminUserRole: (typeof normalizeAdminUserRole !== 'undefined') ? normalizeAdminUserRole : null,
   adminRoleDisplayLabel: (typeof adminRoleDisplayLabel !== 'undefined') ? adminRoleDisplayLabel : null,
   renderAdminUsers: (typeof renderAdminUsers !== 'undefined') ? renderAdminUsers : null,
@@ -700,8 +701,12 @@ test('§16.D : beoUsers() ne retourne que les comptes avec authorized_modules co
   assert.deepStrictEqual([...rows.map((u) => u.username)].sort(), ['CE01', 'MULTI']);
 });
 
-test('§16.E-G : états de configuration reflètent exactement resolve_scoped_site (société + un seul site)', () => {
-  T().setDb({ sites: [{ id: 1, backendId: 1, nom: 'Site A', equipmentPlan: { societe: 'SOC' } }] });
+test('§16.E-G : états de configuration reflètent validate_beo_account_scope (sociétés + sites explicites)', () => {
+  T().setDb({ sites: [
+    { id: 1, backendId: 1, nom: 'Site A', equipmentPlan: { societe: 'SOC' } },
+    { id: 2, backendId: 2, nom: 'Site A2', equipmentPlan: { societe: 'SOC' } },
+    { id: 3, backendId: 3, nom: 'Site B', equipmentPlan: { societe: 'AUTRE' } },
+  ] });
   const ok = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: ['SOC'], actif: true });
   assert.strictEqual(ok.state, 'ok'); assert.strictEqual(ok.label, 'CONFIGURÉ');
 
@@ -709,7 +714,11 @@ test('§16.E-G : états de configuration reflètent exactement resolve_scoped_si
   assert.strictEqual(noSite.state, 'incomplete'); assert.match(noSite.reason, /Aucun site/);
 
   const multiSite = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1, 2], societesAutorisees: ['SOC'], actif: true });
-  assert.strictEqual(multiSite.state, 'invalid'); assert.match(multiSite.reason, /Plusieurs sites/);
+  assert.strictEqual(multiSite.state, 'ok');
+  const multiSoc = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1, 2, 3], societesAutorisees: ['SOC', 'AUTRE'], actif: true });
+  assert.strictEqual(multiSoc.state, 'ok');
+  const outside = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1, 3], societesAutorisees: ['SOC'], actif: true });
+  assert.strictEqual(outside.state, 'invalid'); assert.match(outside.reason, /aucune société autorisée/);
 
   const noSoc = T().beoConfigState({ modulesAutorises: ['site_workforce'], sitesAutorises: [1], societesAutorisees: [], actif: true });
   assert.strictEqual(noSoc.state, 'incomplete'); assert.match(noSoc.reason, /Aucune société/);
@@ -780,7 +789,7 @@ test('§14 : un administrateur ne modifie jamais son propre accès BEO depuis ce
   });
 });
 
-test('§5/§6/§7 : le rôle Chargé des effectifs est conservé et exige une société explicite et au plus un site', () => {
+test('§5/§6/§7 : le rôle Chargé des effectifs exige au moins une société et un site, sites dans les sociétés cochées', () => {
   assert.strictEqual(T().normalizeAdminUserRole('charge_effectifs_site'), 'charge_effectifs_site');
   assert.strictEqual(T().normalizeAdminUserRole('agent'), 'agent');
   assert.match(T().adminRoleDisplayLabel('charge_effectifs_site'), /Chargé des effectifs/);
@@ -790,10 +799,11 @@ test('§5/§6/§7 : le rôle Chargé des effectifs est conservé et exige une so
     { id: 2, backendId: 2, nom: 'Site X', equipmentPlan: { societe: 'AUTRE' } },
   ] });
   assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: [], sitesAutorises: ['1'] }), /société/);
-  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC', 'AUTRE'], sitesAutorises: ['1'] }), /une seule société/);
+  assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC', 'AUTRE'], sitesAutorises: ['1'] }), '');
+  assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC', 'AUTRE'], sitesAutorises: ['1', '2'] }), '');
   assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: [] }), /site autorisé/);
-  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1', '2'] }), /un seul site/);
-  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['2'] }), /n'appartient pas/);
+  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1', '2'] }), /hors des sociétés cochées — Site X/);
+  assert.match(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['2'] }), /hors des sociétés cochées/);
   assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: ['SOC'], sitesAutorises: ['1'] }), '');
   // Suspendre un compte mal configuré n'est jamais bloqué, comme côté serveur.
   assert.strictEqual(T().adminBeoRoleGuard({ ...base, societesAutorisees: [], sitesAutorises: [], actif: false }), '');
@@ -801,6 +811,36 @@ test('§5/§6/§7 : le rôle Chargé des effectifs est conservé et exige une so
   assert.strictEqual(T().adminBeoRoleGuard({ role: 'charge_effectifs_site', modulesAutorises: ['drh'], societesAutorisees: [], sitesAutorises: [] }), '');
   // Les autres rôles gardent la règle historique ("vide = toutes").
   assert.strictEqual(T().adminBeoRoleGuard({ role: 'ops', societesAutorisees: [], sitesAutorises: ['1', '2'] }), '');
+});
+
+test('Formulaire BEO : sites filtrés par sociétés cochées, sélection existante jamais perdue', () => {
+  const host = window.document.createElement('div');
+  host.className = 'modal-bg';
+  host.innerHTML = `<form>
+    <select name="role"><option value="charge_effectifs_site" selected>CE</option><option value="ops">OPS</option></select>
+    <div class="admin-access-societies">
+      <label><input type="checkbox" value="SOC" checked></label><label><input type="checkbox" value="AUTRE"></label><label><input type="checkbox" value="TIERS"></label>
+    </div>
+    <div data-site-group="SOC"><div data-site-group-note hidden></div><input type="checkbox" name="site_1" value="1"></div>
+    <div data-site-group="AUTRE"><div data-site-group-note hidden></div><input type="checkbox" name="site_2" value="2" checked></div>
+    <div data-site-group="TIERS"><div data-site-group-note hidden></div><input type="checkbox" name="site_3" value="3"></div>
+  </form>`;
+  window.document.body.appendChild(host);
+  try {
+    const group = (k) => host.querySelector(`[data-site-group="${k}"]`);
+    T().adminSyncBeoSiteGroups();
+    assert.strictEqual(group('SOC').hidden, false);
+    assert.strictEqual(group('TIERS').hidden, true);
+    assert.strictEqual(group('AUTRE').hidden, false);
+    assert.strictEqual(group('AUTRE').querySelector('[data-site-group-note]').hidden, false);
+    assert.strictEqual(host.querySelector('[name="site_2"]').checked, true);
+    host.querySelector('.admin-access-societies input[value="AUTRE"]').checked = true;
+    T().adminSyncBeoSiteGroups();
+    assert.strictEqual(group('AUTRE').querySelector('[data-site-group-note]').hidden, true);
+    host.querySelector('[name="role"]').value = 'ops';
+    T().adminSyncBeoSiteGroups();
+    assert.ok(['SOC', 'AUTRE', 'TIERS'].every((k) => group(k).hidden === false));
+  } finally { host.remove(); }
 });
 
 test('§16.I : la carte BEO n\'accorde jamais DRH/OPS/Finance implicitement', () => {
@@ -874,7 +914,8 @@ test('BEO K/L : états CONFIGURÉ / incomplets / invalides', () => {
   assert.deepStrictEqual([st({ sitesAutorises: [], societesAutorisees: ['SOC'] }).label, st({ sitesAutorises: [], societesAutorisees: ['SOC'] }).reason], ['CONFIGURATION INCOMPLÈTE', 'Aucun site affecté']);
   assert.deepStrictEqual([st({ sitesAutorises: [1], societesAutorisees: [] }).label, st({ sitesAutorises: [1], societesAutorisees: [] }).reason], ['CONFIGURATION INCOMPLÈTE', 'Aucune société autorisée']);
   assert.strictEqual(st({ sitesAutorises: [1, 2], societesAutorisees: ['SOC'] }).label, 'PÉRIMÈTRE INVALIDE');
-  assert.match(st({ sitesAutorises: [1], societesAutorisees: ['SOC', 'AUTRE'] }).reason, /Plusieurs sociétés/);
+  assert.strictEqual(st({ sitesAutorises: [1, 2], societesAutorisees: ['SOC', 'AUTRE'] }).label, 'CONFIGURÉ');
+  assert.strictEqual(st({ sitesAutorises: [1], societesAutorisees: ['SOC', 'AUTRE'] }).label, 'CONFIGURÉ');
   assert.match(st({ sitesAutorises: [2], societesAutorisees: ['SOC'] }).reason, /n'appartient/);
   assert.strictEqual(st({ sitesAutorises: [1], societesAutorisees: ['SOC'], actif: false }).reason, 'Compte inactif');
 });

@@ -5,7 +5,8 @@
    deuxième catalogue ni deuxième clé : il affiche/édite le même authorized_modules que le
    reste d'Administration, filtré sur cette seule clé, et réutilise sitesAutorises/
    societesAutorisees/actionsAutorisees déjà en place sur chaque compte. Le backend
-   (resolve_scoped_site) reste seul autoritaire sur la règle "exactement un site" — cette
+   (validate_beo_account_scope / resolve_scope) reste seul autoritaire sur la règle « au
+   moins une société, au moins un site, chaque site dans une société autorisée » — cette
    vue ne fait qu'en refléter honnêtement l'état, jamais ne la contourne.
 */
 
@@ -32,20 +33,17 @@ function beoSiteLabel(siteId){
   return s?(s.nom||s.intitule||("Site #"+siteId)):("Site #"+siteId+" (introuvable)");
 }
 
-// Reflète honnêtement resolve_scoped_site() côté backend (§7/§10) — jamais une seconde
-// règle divergente : mêmes conditions, mêmes causes affichées.
+// Reflète honnêtement validate_beo_account_scope() côté backend — jamais une seconde règle
+// divergente : mêmes conditions, mêmes causes affichées.
 function beoConfigState(u){
   const sites=Array.isArray(u.sitesAutorises)?u.sitesAutorises:[];
-  const societes=Array.isArray(u.societesAutorisees)?u.societesAutorisees:[];
+  const societes=Array.isArray(u.societesAutorisees)?u.societesAutorisees.map(s=>String(s).trim()):[];
   if(u.actif===false)return{state:"inactive",label:"COMPTE INACTIF",reason:"Compte inactif",tone:"#64748b"};
   if(sites.length===0)return{state:"incomplete",label:"CONFIGURATION INCOMPLÈTE",reason:"Aucun site affecté",tone:"#d97706"};
-  if(sites.length>1)return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Plusieurs sites affectés ("+sites.length+")",tone:"#dc2626"};
   if(societes.length===0)return{state:"incomplete",label:"CONFIGURATION INCOMPLÈTE",reason:"Aucune société autorisée",tone:"#d97706"};
-  if(societes.length>1)return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Plusieurs sociétés autorisées ("+societes.length+")",tone:"#dc2626"};
-  const site=beoSiteById(sites[0]);
-  const siteSoc=beoSiteSociete(site);
-  if(site&&siteSoc&&!societes.some(s=>String(s).trim()===String(siteSoc).trim())){
-    return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:"Le site affecté n'appartient à aucune société autorisée du compte",tone:"#dc2626"};
+  const outside=sites.filter(sid=>{const soc=beoSiteSociete(beoSiteById(sid));return soc&&!societes.includes(String(soc).trim())});
+  if(outside.length){
+    return{state:"invalid",label:"PÉRIMÈTRE INVALIDE",reason:(outside.length>1?outside.length+" sites affectés n'appartiennent":"Un site affecté n'appartient")+" à aucune société autorisée du compte",tone:"#dc2626"};
   }
   return{state:"ok",label:"CONFIGURÉ",reason:"",tone:"#16a34a"};
 }
@@ -95,7 +93,7 @@ function renderAdminBeo(view){
     <div class="card p-4 mb-4 text-sm text-slate-600">
       <b class="text-slate-900">Configuration type d'un chargé des effectifs (ex. CE01)</b> —
       Type de compte « Chargé des effectifs (BEO) », module <code>site_workforce</code> seul,
-      <b>une</b> société cochée explicitement, <b>un seul</b> site autorisé,
+      <b>une ou plusieurs</b> sociétés cochées explicitement, <b>un ou plusieurs</b> sites de ces sociétés,
       actions Consulter / Créer / Modifier / Valider. Aucun accès DRH, OPS, Finance ou autre module sauf décision explicite.
     </div>
     <div class="flex flex-wrap items-center justify-end gap-2 mb-3">
@@ -109,7 +107,7 @@ function renderAdminBeo(view){
     <div class="card p-0 overflow-x-auto"><table class="w-full text-sm">
       <thead class="bg-slate-50"><tr>
         <th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom</th><th class="text-left p-3">Statut</th>
-        <th class="text-left p-3">Profil</th><th class="text-left p-3">Société</th><th class="text-left p-3">Site autorisé</th>
+        <th class="text-left p-3">Profil</th><th class="text-left p-3">Sociétés</th><th class="text-left p-3">Sites autorisés</th>
         <th class="text-left p-3">Actions autorisées</th><th class="text-left p-3">Autres modules</th><th class="text-left p-3">Configuration</th><th class="text-left p-3">Actions</th>
       </tr></thead>
       <tbody>${rows.map(u=>{
@@ -124,7 +122,7 @@ function renderAdminBeo(view){
           <td class="p-3">${u.actif!==false?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-gray">Suspendu</span>'}</td>
           <td class="p-3 text-xs">${escapeHTML(adminRoleDisplayLabel(normalizeAdminUserRole(u.role)))}</td>
           <td class="p-3 text-xs">${socs.length?escapeHTML(socs.join(", ")):'<span class="text-red-600">Aucune</span>'}</td>
-          <td class="p-3 text-xs">${sites.length===1?escapeHTML(beoSiteLabel(sites[0])):(sites.length===0?'<span class="text-amber-600">Aucun</span>':'<span class="text-red-600">'+sites.length+' sites</span>')}</td>
+          <td class="p-3 text-xs">${sites.length?sites.map(sid=>escapeHTML(beoSiteLabel(sid))).join("<br>"):'<span class="text-amber-600">Aucun</span>'}</td>
           <td class="p-3 text-xs">${actions.length?actions.map(a=>`<span class="pill pill-gray mr-1">${escapeHTML(a)}</span>`).join(""):'<span class="text-slate-400">Héritage profil (aucune restriction)</span>'}</td>
           <td class="p-3 text-xs">${others.length?`<span class="text-amber-700">${escapeHTML(others.join(", "))}</span>`:'<span class="text-slate-400">Aucun</span>'}</td>
           <td class="p-3"><span class="pill" style="background:${cfg.tone}22;color:${cfg.tone};font-weight:900">${cfg.label}</span>${cfg.reason?`<div class="text-[11px] text-slate-500 mt-1">${escapeHTML(cfg.reason)}</div>`:""}</td>
@@ -148,7 +146,7 @@ async function adminSetBeoAccess(username,grant){
   if(!u){toast("Utilisateur introuvable","error");return false}
   if(String(u.username).toLowerCase()===String(session?.username||"").toLowerCase()){toast("Vous ne pouvez pas modifier votre propre accès BEO.","error");return false}
   const msg=grant
-    ?`Accorder l'accès Bureau des Effectifs Ouest (site_workforce) à ${u.username} ?\n\nSes autres modules ne sont pas modifiés. Pensez ensuite à définir sa société et son site.`
+    ?`Accorder l'accès Bureau des Effectifs Ouest (site_workforce) à ${u.username} ?\n\nSes autres modules ne sont pas modifiés. Pensez ensuite à définir ses sociétés et ses sites.`
     :`Retirer l'accès Bureau des Effectifs Ouest (site_workforce) à ${u.username} ?\n\nLe compte et ses autres modules ne sont pas modifiés.`;
   if(!confirm(msg))return false;
   try{
