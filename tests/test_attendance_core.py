@@ -290,3 +290,22 @@ def test_ops_presence_reads_and_generation_are_scoped(client, db):
     assert emp_a.id in generated and emp_b.id not in generated
     assert client.post("/api/ops/pointage/daily/generate-rotation", headers=h,
                        json={"presence_date": str(gen_day), "site_id": site_b.id}).status_code == 403
+
+
+# ── Revue finale : le planning ne réécrit jamais une journée réellement pointée ─────────
+def test_rotation_generation_never_overwrites_a_real_presence(client, auth_headers, db):
+    from datetime import timedelta
+    overwritten = []
+    for offset in range(4):  # un cycle 24/48 complet : au moins deux jours travaillés
+        site = _site(db, rotation_system="24/48")
+        emp = _employee(db, site, start=date.today() - timedelta(days=10))
+        day = date.today() + timedelta(days=offset)
+        core.record_scan(db, employee=emp, source="QR", actor=ACTOR, idempotency_key=None, now=_at(day, "07:00"))
+        row = db.execute(select(DailyPresence).where(DailyPresence.employee_id == emp.id)).scalar_one()
+        assert client.post("/api/ops/pointage/daily/generate-rotation", headers=auth_headers,
+                           json={"presence_date": str(day), "site_id": site.id}).status_code == 200
+        db.expire_all()
+        row = db.get(DailyPresence, row.id)
+        if row.generated or "_legacy" not in (row.data or {}) or row.data["_legacy"].get("scanArrivee") != "07:00:00":
+            overwritten.append(offset)
+    assert overwritten == [], f"journée pointée réécrite par le planning aux jours +{overwritten}"

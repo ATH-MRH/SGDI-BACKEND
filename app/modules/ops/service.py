@@ -353,6 +353,12 @@ def generate_rotation_daily_presence(db: Session, payload: Any, site_ids: list[i
         if existing and existing.closed_at:
             skipped += 1
             continue
+        # Une journée réellement pointée ou saisie (generated=0, écrite par Attendance Core)
+        # n'est JAMAIS réécrite par le planning : ses heures, sa source et son historique de scan
+        # (data._legacy) seraient perdus. Seules les lignes prévues (generated=1) sont mises à jour.
+        if existing and not existing.generated:
+            skipped += 1
+            continue
         if existing and not payload.overwrite_generated and existing.generated:
             skipped += 1
             continue
