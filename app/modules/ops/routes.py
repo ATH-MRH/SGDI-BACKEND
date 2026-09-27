@@ -462,12 +462,15 @@ def assignments(site_id: int | None = None, employee_id: int | None = None, acti
 
 @router.post("/pointage/daily/generate")
 def generate_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return service.generate_daily_presence(db, presence_date or date.today())
+    # Périmètre du compte (auparavant : génération pour TOUS les sites, quel que soit le compte).
+    return service.generate_daily_presence(db, presence_date or date.today(), site_ids=_allowed_assignment_site_ids(db, user))
 
 
 @router.post("/pointage/daily/generate-rotation")
 def generate_daily_rotation(payload: RotationGenerateRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    return service.generate_rotation_daily_presence(db, payload)
+    if payload.site_id:
+        _ensure_site_allowed(db, user, payload.site_id)
+    return service.generate_rotation_daily_presence(db, payload, site_ids=_allowed_assignment_site_ids(db, user))
 
 
 @router.get("/pointage/standby")
@@ -508,6 +511,11 @@ def daily_presence_page(presence_date: date | None = None, site_id: int | None =
     stmt = select(DailyPresence).where(DailyPresence.presence_date == (presence_date or date.today()))
     if site_id is not None:
         stmt = stmt.where(DailyPresence.site_id == site_id)
+    else:
+        # Sans site demandé : périmètre du compte (auparavant, toutes les présences, tous sites).
+        allowed = _allowed_assignment_site_ids(db, user)
+        if allowed is not None:
+            stmt = stmt.where(DailyPresence.site_id.in_(allowed or [-1]))
     return paginate_statement(db, stmt, model=DailyPresence, search_fields=[DailyPresence.group_code, DailyPresence.status, DailyPresence.notes, DailyPresence.faction], q=q, page=page, page_size=page_size)
 
 
@@ -515,7 +523,9 @@ def daily_presence_page(presence_date: date | None = None, site_id: int | None =
 def daily_presence(presence_date: date | None = None, site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if site_id:
         _ensure_site_allowed(db, user, site_id)
-    return service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
+    rows = service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
+    allowed = None if site_id else _allowed_assignment_site_ids(db, user)
+    return rows if allowed is None else [row for row in rows if row.site_id in set(allowed)]
 
 
 _PLANNING_FIELDS = ("group_code", "relief_time", "rotation_system", "rotation_group", "rotation_period",

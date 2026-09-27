@@ -269,3 +269,24 @@ def test_key_used_by_another_employee_is_refused_not_leaked(db):
         core.record_scan(db, employee=emp_b, source="QR", actor=ACTOR, idempotency_key="shared-key")
     assert exc.value.status_code == 409
     assert _events(db, emp_b) == []
+
+
+# ── Revue de sécurité : lecture et génération OPS limitées au périmètre du compte ───────
+def test_ops_presence_reads_and_generation_are_scoped(client, db):
+    site_a, site_b = _site(db), _site(db)
+    emp_a, emp_b = _employee(db, site_a), _employee(db, site_b)
+    day = date(2027, 5, 5)
+    db.add_all([DailyPresence(presence_date=day, employee_id=emp_a.id, site_id=site_a.id, status="present"),
+                DailyPresence(presence_date=day, employee_id=emp_b.id, site_id=site_b.id, status="present")])
+    db.commit()
+    h = _scoped_headers(client, db, [site_a.id], f"opsR{_tag()}")
+    listed = {r["employee_id"] for r in client.get(f"/api/ops/pointage/daily?presence_date={day}", headers=h).json()}
+    paged = {r["employee_id"] for r in client.get(f"/api/ops/pointage/daily/page?presence_date={day}&page_size=100", headers=h).json()["items"]}
+    assert emp_b.id not in listed and emp_b.id not in paged
+    assert emp_a.id in listed and emp_a.id in paged
+    gen_day = date(2027, 5, 6)
+    assert client.post(f"/api/ops/pointage/daily/generate?presence_date={gen_day}", headers=h).status_code == 200
+    generated = {r.employee_id for r in db.execute(select(DailyPresence).where(DailyPresence.presence_date == gen_day)).scalars()}
+    assert emp_a.id in generated and emp_b.id not in generated
+    assert client.post("/api/ops/pointage/daily/generate-rotation", headers=h,
+                       json={"presence_date": str(gen_day), "site_id": site_b.id}).status_code == 403

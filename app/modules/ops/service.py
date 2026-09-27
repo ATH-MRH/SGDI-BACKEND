@@ -217,14 +217,15 @@ def general_sites_situation(db: Session):
     }
 
 
-def generate_daily_presence(db: Session, presence_date: date):
-    assignments = db.execute(
-        select(Assignment).where(
-            Assignment.active == 1,
-            Assignment.start_date <= presence_date,
-            (Assignment.end_date.is_(None)) | (Assignment.end_date >= presence_date),
-        )
-    ).scalars().all()
+def generate_daily_presence(db: Session, presence_date: date, site_ids: list[int] | None = None):
+    stmt = select(Assignment).where(
+        Assignment.active == 1,
+        Assignment.start_date <= presence_date,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= presence_date),
+    )
+    if site_ids is not None:
+        stmt = stmt.where(Assignment.site_id.in_(site_ids or [-1]))
+    assignments = db.execute(stmt).scalars().all()
     created = 0
     for assignment in assignments:
         exists = db.scalar(
@@ -305,7 +306,7 @@ def configured_rotation_for_date(rotation: RotationTemplate, group_code: str | N
     }
 
 
-def generate_rotation_daily_presence(db: Session, payload: Any):
+def generate_rotation_daily_presence(db: Session, payload: Any, site_ids: list[int] | None = None):
     presence_date = payload.presence_date or date.today()
     stmt = select(Assignment).where(
         Assignment.active == 1,
@@ -314,6 +315,8 @@ def generate_rotation_daily_presence(db: Session, payload: Any):
     )
     if payload.site_id:
         stmt = stmt.where(Assignment.site_id == payload.site_id)
+    if site_ids is not None:
+        stmt = stmt.where(Assignment.site_id.in_(site_ids or [-1]))
     assignments = db.execute(stmt).scalars().all()
     created = updated = skipped = 0
     standby: list[dict[str, Any]] = []
