@@ -151,10 +151,17 @@ class GenericRtspCameraAdapter(CameraAdapter):
         return str(entry.get("path") or "/")
 
     def snapshot(self, profile: str = "RECOGNITION_REALTIME") -> bytes:
+        # L'URL RTSP contient les identifiants : journaux OpenCV/FFmpeg rendus silencieux AVANT
+        # l'ouverture (un message d'erreur de connexion les recopierait sinon dans les logs).
+        import os
+        os.environ.setdefault("OPENCV_LOG_LEVEL", "SILENT")
+        os.environ.setdefault("OPENCV_FFMPEG_LOGLEVEL", "-8")
         try:
             import cv2
         except ImportError:
             raise CameraError("Lecture RTSP indisponible (OpenCV non installé)") from None
+        if hasattr(cv2, "setLogLevel"):
+            cv2.setLogLevel(0)
         username, password = self._credentials()
         cam = self.camera
         auth = f"{urllib.request.quote(username)}:{urllib.request.quote(password)}@" if username else ""

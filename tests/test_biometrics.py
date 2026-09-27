@@ -374,3 +374,12 @@ def test_client_images_are_never_used_to_record_attendance(client, auth_headers,
     other = _employee(db, site); _consent(client, auth_headers, other)
     r = client.post(f"/api/biometrics/employees/{other.id}/enroll", headers=auth_headers, json={"camera_id": cam, "frames": forged})
     assert r.status_code == 422 and "lue par le serveur" in r.json()["detail"]
+
+
+def test_camera_catalog_and_camera_tests_are_audited_without_secrets(client, auth_headers, db):
+    from app.core.audit import AuditEvent
+    site = _site(db)
+    cam = _camera(client, auth_headers, site, adapter="TERMINAL", usage="ENROLLMENT")
+    assert client.post(f"/api/biometrics/cameras/{cam}/test", headers=auth_headers).status_code == 200
+    actions = {a.action for a in db.execute(select(AuditEvent).where(AuditEvent.action.like("biometrics.camera%"))).scalars()}
+    assert {"biometrics.camera_model.create", "biometrics.camera.create", "biometrics.camera.test"} <= actions

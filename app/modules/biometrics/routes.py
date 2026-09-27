@@ -319,6 +319,9 @@ def add_camera_model(payload: CameraModelIn, db: Session = Depends(get_db), user
     row = CameraModel(manufacturer=payload.manufacturer.strip().upper(), model=payload.model.strip(), adapter=payload.adapter,
                       resolution=payload.resolution, capabilities=payload.capabilities or {}, active=True)
     db.add(row)
+    db.flush()
+    append_audit(db, action="biometrics.camera_model.create", resource="camera_model", resource_id=row.id, result="success",
+                 user=user, new_state={"manufacturer": row.manufacturer, "model": row.model, "adapter": row.adapter})
     db.commit()
     return {"id": row.id, "manufacturer": row.manufacturer, "model": row.model, "adapter": row.adapter, "resolution": row.resolution}
 
@@ -450,6 +453,9 @@ def test_camera(camera_id: int, db: Session = Depends(get_db), user: User = Depe
     camera = _camera_in_scope(db, user, camera_id)
     result = adapter_for(camera).test()
     camera.last_check = result
+    append_audit(db, action="biometrics.camera.test", resource="camera", resource_id=camera.id, result="success",
+                 user=user, society=camera.society,
+                 new_state={k: bool((result.get(k) or {}).get("ok")) for k in ("connection", "snapshot", "stream")})
     db.commit()
     return result
 
