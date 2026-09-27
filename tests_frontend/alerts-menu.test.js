@@ -70,13 +70,13 @@ test('Organiser menu latéral : le catalogue du module admin reconnaît ALERTES 
   app.window.close();
 });
 
-test('menu latéral Administration : ALERTES apparaît dans PILOTAGE, juste après TABLEAU CONFIGURATION', () => {
+test('menu latéral Administration : ALERTES apparaît dans PILOTAGE, juste après TABLEAU DE BORD', () => {
   const r = bootLazy();
   r.T().renderSidebar();
   const nav = r.sidebar();
   const labels = [...nav.querySelectorAll('.nav-link .nav-label')].map(el => el.textContent);
-  const pilotageIdx = labels.indexOf('TABLEAU CONFIGURATION');
-  assert.ok(pilotageIdx >= 0, 'TABLEAU CONFIGURATION doit toujours être présent');
+  const pilotageIdx = labels.indexOf('TABLEAU DE BORD');
+  assert.ok(pilotageIdx >= 0, 'TABLEAU DE BORD doit toujours être présent');
   assert.equal(labels[pilotageIdx + 1], 'ALERTES');
   const link = [...nav.querySelectorAll('.nav-link')].find(el => el.dataset.route === 'alerts');
   assert.ok(link, 'un lien de route "alerts" doit exister dans le menu');
