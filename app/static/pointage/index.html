@@ -110,6 +110,9 @@ tr:hover td{background:#fafcff}
       <nav>
         <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
+      </nav><div class="side-title">Biométrie</div><nav>
+        <button class="nav-btn" data-view="cameras" type="button">◉ Caméras</button>
+        <button class="nav-btn" data-view="duplicates" type="button">⧉ Doublons à revoir</button>
       </nav>
     </aside>
     <main>
@@ -128,6 +131,17 @@ tr:hover td{background:#fafcff}
           <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Planning</th><th>Entrée</th><th>Sortie</th><th>Statut</th><th>Source</th><th>Anomalie</th><th></th></tr></thead><tbody id="board-rows"></tbody></table></div>
           <div class="pager"><span id="board-count"></span><span><button class="secondary" id="prev-btn" type="button">‹ Précédent</button> <button class="secondary" id="next-btn" type="button">Suivant ›</button></span></div>
         </div>
+      </section>
+      <section id="view-cameras" class="hidden">
+        <div class="page-head"><div><h2>Caméras</h2><p>Une caméra appartient à une société et un site. Les identifiants ne sont jamais réaffichés.</p></div>
+          <span><button class="secondary" id="model-add" type="button">+ Modèle au catalogue</button> <button class="primary" id="camera-add" type="button">+ Ajouter une caméra</button></span></div>
+        <div class="card"><div id="camera-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Caméra</th><th>Fabricant / modèle</th><th>Site</th><th>Emplacement</th><th>Usage</th><th>Rôle</th><th>Réseau</th><th>Dernier test</th><th>État</th><th></th></tr></thead><tbody id="camera-rows"></tbody></table></div></div>
+      </section>
+      <section id="view-duplicates" class="hidden">
+        <div class="page-head"><div><h2>Doublons biométriques à revoir</h2><p>Un visage proche d'un autre employé n'est jamais activé automatiquement. Décision humaine obligatoire, justifiée et tracée.</p></div></div>
+        <div class="card"><div id="dup-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Employé à enrôler</th><th>Employé déjà enrôlé proche</th><th>Score</th><th>Source</th><th></th></tr></thead><tbody id="dup-rows"></tbody></table></div></div>
       </section>
       <section id="view-anomalies" class="hidden">
         <div class="page-head"><div><h2>Anomalies</h2><p>Chaque anomalie reste ouverte jusqu'à sa résolution tracée. Une clôture ne les masque jamais.</p></div>
@@ -173,7 +187,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (res.status === 401) { logout(); throw new Error("Session expirée — reconnectez-vous."); }
     if (!res.ok) {
       const detail = data && data.detail;
-      throw new Error(typeof detail === "string" ? detail : (res.status === 403 ? "Accès refusé pour ce compte." : "Erreur " + res.status));
+      const reason = detail && typeof detail === "object" && Array.isArray(detail.reasons) && detail.reasons[0];
+      throw new Error(typeof detail === "string" ? detail : reason || (res.status === 403 ? "Accès refusé pour ce compte." : "Erreur " + res.status));
     }
     return data;
   }
@@ -216,7 +231,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("f-site").innerHTML = '<option value="">Tous les sites autorisés</option>' + sites.map((s) => `<option value="${s.id}">${esc(s.name)}${s.society ? " — " + esc(s.society) : ""}</option>`).join("");
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-    show(location.hash === "#/anomalies" ? "anomalies" : "board");
+    const initial = (location.hash || "").replace("#/", "");
+    show(["anomalies", "cameras", "duplicates"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -227,6 +243,10 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
+    $("view-cameras").classList.toggle("hidden", view !== "cameras");
+    $("view-duplicates").classList.toggle("hidden", view !== "duplicates");
+    if (view === "cameras") return loadCameras();
+    if (view === "duplicates") return loadDuplicates();
     return view === "board" ? loadBoard() : loadAnomalies();
   }
 
@@ -293,10 +313,11 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <td>${esc(r.arrival) || "—"}</td><td>${esc(r.departure) || "—"}${r.incomplete ? ' <span class="pill sev-warning">Incomplet</span>' : ""}</td>
         <td><span class="pill st-${esc(r.status)}">${esc(STATUS_LABEL[r.status] || r.status)}</span>${r.closed ? ' <span class="pill st-repos" title="Journée clôturée">🔒</span>' : ""}</td>
         <td class="src">${esc(SOURCE_LABEL[r.source] || r.source) || "—"}</td><td>${anomalies}</td>
-        <td><div class="row-actions">${r.presence_id ? `<button class="link" type="button" data-correct="${r.presence_id}">Corriger</button>` : ""}</div></td>
+        <td><div class="row-actions">${r.presence_id ? `<button class="link" type="button" data-correct="${r.presence_id}">Corriger</button>` : ""}<button class="link" type="button" data-bio="${r.employee_id}">Biométrie</button></div></td>
       </tr>`;
     }).join("") : '<tr><td colspan="10" class="empty">Aucun employé ne correspond à ces critères.</td></tr>';
     $("board-rows").querySelectorAll("[data-correct]").forEach((b) => b.addEventListener("click", () => openCorrection(rows.find((r) => String(r.presence_id) === b.dataset.correct))));
+    $("board-rows").querySelectorAll("[data-bio]").forEach((b) => b.addEventListener("click", () => openBiometrics(rows.find((r) => String(r.employee_id) === b.dataset.bio))));
     $("board-count").textContent = `${data.total} employé(s) · page ${data.page}/${data.pages}`;
     $("prev-btn").disabled = data.page <= 1; $("next-btn").disabled = data.page >= data.pages;
     const count = $("anomaly-count");
@@ -395,6 +416,187 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       if (text.length < 3) { err.textContent = "La résolution est obligatoire."; err.classList.add("show"); return; }
       try { await api("/attendance/anomalies/" + a.id, { method: "PATCH", body: { status: m.querySelector("#r-status").value, resolution: text } }); closeModal(); toast("Anomalie traitée"); loadAnomalies(); }
       catch (ex) { err.textContent = ex.message; err.classList.add("show"); }
+    });
+  }
+
+
+  // ── Biométrie : caméras ───────────────────────────────────────────────────────────
+  const USAGE_LABEL = { ATTENDANCE: "Pointage", ENROLLMENT: "Enrôlement", ATTENDANCE_AND_ENROLLMENT: "Pointage + enrôlement" };
+  const ROLE_LABEL = { ENTRY: "Entrée", EXIT: "Sortie", ENROLLMENT: "Enrôlement", SECONDARY: "Secondaire" };
+  const ADAPTER_LABEL = { DAHUA: "Dahua (HTTP + RTSP)", GENERIC_RTSP: "RTSP générique", TERMINAL: "Caméra du terminal" };
+  const permissionMessage = (ex) => ex.message.includes("Permission biométrique") ? "Permission biométrique explicite requise pour cette action (Administration → Permissions)." : ex.message;
+  let cameraCache = [];
+
+  async function loadCameras() {
+    $("camera-state").innerHTML = '<div class="state info">Chargement…</div>';
+    try {
+      const q = $("f-site").value ? "?site_id=" + $("f-site").value : "";
+      cameraCache = await api("/biometrics/cameras" + q);
+      $("camera-state").innerHTML = "";
+      $("camera-rows").innerHTML = cameraCache.length ? cameraCache.map((c) => {
+        const check = c.last_check || {};
+        const ok = (k) => check[k] ? (check[k].ok ? "✓" : "✗") : "—";
+        return `<tr><td class="who"><b>${esc(c.name)}</b><small>${c.is_default ? "Par défaut · " : ""}${esc(ADAPTER_LABEL[c.adapter] || c.adapter)}</small></td>
+          <td>${esc(c.manufacturer)} ${esc(c.model)}${c.resolution ? `<br><small>${esc(c.resolution)}${c.fps ? " · " + esc(c.fps) + " i/s" : ""}</small>` : ""}</td>
+          <td>${esc(c.site || "")}<br><small>${esc(c.society)}</small></td><td>${esc(c.location || "—")}</td>
+          <td>${esc(USAGE_LABEL[c.usage] || c.usage)}</td><td>${esc(ROLE_LABEL[c.role] || c.role)}</td>
+          <td><small>${esc(c.host)}${c.http_port ? ":" + esc(c.http_port) : ""} · ${esc(c.connection_type)}<br>${c.credentials_set ? "Identifiants enregistrés" : "Sans identifiants"}</small></td>
+          <td><small>Connexion ${ok("connection")} · Image ${ok("snapshot")} · Flux ${ok("stream")}${check.snapshot && check.snapshot.resolution ? "<br>" + esc(check.snapshot.resolution) : ""}${check.checked_at ? "<br>" + esc(check.checked_at.replace("T", " ")) : ""}</small></td>
+          <td><span class="pill ${c.active ? "st-present" : "st-repos"}">${c.active ? "Active" : "Inactive"}</span></td>
+          <td><div class="row-actions"><button class="link" type="button" data-cam-test="${c.id}">Tester</button><button class="link" type="button" data-cam-edit="${c.id}">Modifier</button></div></td></tr>`;
+      }).join("") : '<tr><td colspan="10" class="empty">Aucune caméra déclarée pour ce périmètre.</td></tr>';
+      $("camera-rows").querySelectorAll("[data-cam-test]").forEach((b) => b.addEventListener("click", () => testCamera(b.dataset.camTest, b)));
+      $("camera-rows").querySelectorAll("[data-cam-edit]").forEach((b) => b.addEventListener("click", () => openCameraForm(cameraCache.find((c) => String(c.id) === b.dataset.camEdit))));
+    } catch (ex) { $("camera-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
+  }
+
+  async function testCamera(id, button) {
+    button.disabled = true; button.textContent = "Test…";
+    try {
+      const r = await api(`/biometrics/cameras/${id}/test`, { method: "POST" });
+      const line = (label, x) => x ? `${label} : ${x.ok ? "OK" : "ERREUR"}${x.latency_ms != null ? " (" + x.latency_ms + " ms)" : ""}${x.resolution ? " · " + x.resolution : ""}${x.error || x.message ? " — " + (x.error || x.message) : ""}` : "";
+      toast([line("Connexion", r.connection), line("Image", r.snapshot), line("Flux", r.stream)].filter(Boolean).join(" · "), !(r.connection && r.connection.ok));
+      loadCameras();
+    } catch (ex) { toast(permissionMessage(ex), true); button.disabled = false; button.textContent = "Tester"; }
+  }
+
+  $("model-add").addEventListener("click", () => {
+    const m = modal(`<h3>Ajouter un modèle au catalogue</h3><div class="sub">Référence exacte du fabricant — aucun modèle n'est pré-rempli par ATLAS.</div>
+      <form id="model-form"><div class="grid2"><div><label for="mo-man">Fabricant</label><input id="mo-man" required placeholder="DAHUA"></div><div><label for="mo-model">Modèle (référence exacte)</label><input id="mo-model" required></div></div>
+      <div class="grid2"><div><label for="mo-adapter">Connexion</label><select id="mo-adapter">${Object.keys(ADAPTER_LABEL).map((k) => `<option value="${k}">${ADAPTER_LABEL[k]}</option>`).join("")}</select></div><div><label for="mo-res">Résolution</label><input id="mo-res" placeholder="5 MP"></div></div>
+      <div class="error" id="mo-error" role="alert"></div><div class="modal-actions"><button class="secondary" type="button" id="mo-cancel">Annuler</button><button class="primary" type="submit">Ajouter</button></div></form>`);
+    m.querySelector("#mo-cancel").addEventListener("click", closeModal);
+    m.querySelector("#model-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        await api("/biometrics/camera-models", { method: "POST", body: { manufacturer: m.querySelector("#mo-man").value.trim(), model: m.querySelector("#mo-model").value.trim(), adapter: m.querySelector("#mo-adapter").value, resolution: m.querySelector("#mo-res").value.trim() || null } });
+        closeModal(); toast("Modèle ajouté au catalogue");
+      } catch (ex) { const err = m.querySelector("#mo-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
+    });
+  });
+  $("camera-add").addEventListener("click", () => openCameraForm(null));
+
+  async function openCameraForm(cam) {
+    let models = [], sites = [];
+    try { [models, sites] = await Promise.all([api("/biometrics/camera-models"), api("/attendance/sites")]); } catch (ex) { toast(ex.message, true); return; }
+    if (!cam && !models.length) { toast("Ajoutez d'abord le modèle exact au catalogue", true); return; }
+    const opt = (map, value) => Object.keys(map).map((k) => `<option value="${k}"${k === value ? " selected" : ""}>${map[k]}</option>`).join("");
+    const m = modal(`<h3>${cam ? "Modifier " + esc(cam.name) : "Ajouter une caméra"}</h3>
+      <form id="cam-form">
+        ${cam ? `<div class="sub">${esc(cam.manufacturer)} ${esc(cam.model)} · ${esc(cam.site || "")}</div>` : `
+        <label for="c-model">Fabricant et modèle</label><select id="c-model">${models.map((x) => `<option value="${x.id}">${esc(x.manufacturer)} — ${esc(x.model)}${x.resolution ? " (" + esc(x.resolution) + ")" : ""}</option>`).join("")}</select>
+        <label for="c-site">Site</label><select id="c-site">${sites.map((x) => `<option value="${x.id}">${esc(x.name)} — ${esc(x.society)}</option>`).join("")}</select>`}
+        <div class="grid2"><div><label for="c-name">Nom</label><input id="c-name" required value="${esc(cam ? cam.name : "")}" placeholder="CAM-ENTREE-01"></div><div><label for="c-loc">Emplacement</label><input id="c-loc" value="${esc(cam ? cam.location || "" : "")}" placeholder="Entrée principale"></div></div>
+        <div class="grid2"><div><label for="c-usage">Usage</label><select id="c-usage">${opt(USAGE_LABEL, cam ? cam.usage : "ATTENDANCE")}</select></div><div><label for="c-role">Rôle</label><select id="c-role">${opt(ROLE_LABEL, cam ? cam.role : "ENTRY")}</select></div></div>
+        <div class="grid2"><div><label for="c-host">Adresse réseau (LAN / passerelle)</label><input id="c-host" required value="${esc(cam ? cam.host : "")}"></div><div><label for="c-http">Port HTTP</label><input id="c-http" type="number" value="${esc(cam && cam.http_port || "")}"></div></div>
+        <div class="grid2"><div><label for="c-rtsp">Port RTSP</label><input id="c-rtsp" type="number" value="${esc(cam && cam.rtsp_port || "")}"></div><div><label for="c-chan">Canal</label><input id="c-chan" type="number" min="1" value="${esc(cam ? cam.channel : 1)}"></div></div>
+        <div class="grid2"><div><label for="c-user">Identifiant caméra ${cam && cam.credentials_set ? "(laisser vide = inchangé)" : ""}</label><input id="c-user" autocomplete="off"></div><div><label for="c-pass">Mot de passe caméra ${cam && cam.credentials_set ? "(laisser vide = inchangé)" : ""}</label><input id="c-pass" type="password" autocomplete="new-password"></div></div>
+        <label><input type="checkbox" id="c-default" style="width:auto;height:auto"${cam && cam.is_default ? " checked" : ""}> Caméra par défaut pour ce rôle</label>
+        <label><input type="checkbox" id="c-active" style="width:auto;height:auto"${!cam || cam.active ? " checked" : ""}> Active</label>
+        <div class="error" id="c-error" role="alert"></div>
+        <div class="modal-actions"><button class="secondary" type="button" id="c-cancel">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      </form>`);
+    m.querySelector("#c-cancel").addEventListener("click", closeModal);
+    m.querySelector("#cam-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const v = (id) => m.querySelector(id).value.trim();
+      const num = (id) => v(id) ? Number(v(id)) : null;
+      const body = { name: v("#c-name"), location: v("#c-loc") || null, usage: v("#c-usage"), role: v("#c-role"), host: v("#c-host"),
+        http_port: num("#c-http"), rtsp_port: num("#c-rtsp"), channel: num("#c-chan") || 1,
+        is_default: m.querySelector("#c-default").checked, active: m.querySelector("#c-active").checked };
+      if (v("#c-user")) body.username = v("#c-user");
+      if (m.querySelector("#c-pass").value) body.password = m.querySelector("#c-pass").value;
+      try {
+        if (cam) await api("/biometrics/cameras/" + cam.id, { method: "PATCH", body });
+        else await api("/biometrics/cameras", { method: "POST", body: { ...body, camera_model_id: Number(v("#c-model")), site_id: Number(v("#c-site")) } });
+        closeModal(); toast("Caméra enregistrée"); loadCameras();
+      } catch (ex) { const err = m.querySelector("#c-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
+    });
+  }
+
+  // ── Biométrie : doublons ──────────────────────────────────────────────────────────
+  async function loadDuplicates() {
+    $("dup-state").innerHTML = '<div class="state info">Chargement…</div>';
+    try {
+      const rows = await api("/biometrics/duplicates");
+      $("dup-state").innerHTML = "";
+      $("dup-rows").innerHTML = rows.length ? rows.map((d) => `<tr><td>${esc((d.date || "").slice(0, 10))}</td>
+        <td class="who"><b>${esc(d.target ? d.target.nom : "—")}</b><small>${esc(d.target ? d.target.matricule : "")}</small></td>
+        <td class="who"><b>${esc(d.candidate ? d.candidate.nom : "—")}</b><small>${esc(d.candidate ? d.candidate.matricule : "")}</small></td>
+        <td>${d.score != null ? esc(Number(d.score).toFixed(3)) : "—"}</td><td>${esc(d.source)}<br><small>${esc(d.created_by || "")}</small></td>
+        <td><div class="row-actions"><button class="link" type="button" data-dup="${d.template_id}">Décider</button></div></td></tr>`).join("")
+        : '<tr><td colspan="6" class="empty">Aucun doublon en attente de revue.</td></tr>';
+      $("dup-rows").querySelectorAll("[data-dup]").forEach((b) => b.addEventListener("click", () => reviewDuplicate(rows.find((d) => String(d.template_id) === b.dataset.dup))));
+    } catch (ex) { $("dup-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
+  }
+
+  function reviewDuplicate(d) {
+    const m = modal(`<h3>Revue de doublon</h3><div class="sub">Le visage enrôlé pour <b>${esc(d.target.nom)}</b> (${esc(d.target.matricule)}) ressemble à celui de <b>${esc(d.candidate ? d.candidate.nom : "—")}</b> (score ${esc(Number(d.score).toFixed(3))}).</div>
+      <p>Activer ne doit se faire qu'après vérification d'identité (deux personnes distinctes, ex. jumeaux). Rejeter si c'est la même personne.</p>
+      <form id="dup-form"><label for="dup-comment">Justification (obligatoire)</label><textarea id="dup-comment" required minlength="3"></textarea>
+      <div class="error" id="dup-error" role="alert"></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="dup-cancel">Annuler</button><button class="danger" type="button" id="dup-reject">Rejeter</button><button class="primary" type="button" id="dup-approve">Activer après vérification</button></div></form>`);
+    m.querySelector("#dup-cancel").addEventListener("click", closeModal);
+    const decide = async (approve) => {
+      const comment = m.querySelector("#dup-comment").value.trim(), err = m.querySelector("#dup-error");
+      if (comment.length < 3) { err.textContent = "La justification est obligatoire."; err.classList.add("show"); return; }
+      try { await api(`/biometrics/templates/${d.template_id}/review`, { method: "PATCH", body: { approve, comment } }); closeModal(); toast(approve ? "Gabarit activé" : "Gabarit rejeté"); loadDuplicates(); }
+      catch (ex) { err.textContent = permissionMessage(ex); err.classList.add("show"); }
+    };
+    m.querySelector("#dup-approve").addEventListener("click", () => decide(true));
+    m.querySelector("#dup-reject").addEventListener("click", () => decide(false));
+  }
+
+  // ── Biométrie : fiche employé (consentement, enrôlement) ──────────────────────────
+  const CONSENT_LABEL = { contract_confirmed: "Accord du contrat confirmé", explicit_confirmed: "Accord explicite", pending: "En attente", refused: "Refusé", withdrawn: "Retiré" };
+  const SOURCE_CONSENT = { EMPLOYMENT_CONTRACT: "Contrat de travail", HR_DOCUMENT: "Document RH", DIGITAL_ENROLLMENT: "Enrôlement numérique", OTHER_AUTHORIZED_PROCESS: "Autre processus autorisé" };
+  const TEMPLATE_LABEL = { ACTIVE: "Actif", PENDING_REVIEW: "En revue (doublon possible)", INACTIVE: "Inactif", REJECTED: "Rejeté" };
+
+  async function openBiometrics(row) {
+    if (!row) return;
+    let status, notice, enrolCams = [];
+    try {
+      [status, notice] = await Promise.all([api("/biometrics/employees/" + row.employee_id), api("/biometrics/notice")]);
+      enrolCams = (await api("/biometrics/cameras?site_id=" + row.site_id)).filter((c) => c.active && c.usage !== "ATTENDANCE");
+    } catch (ex) { toast(permissionMessage(ex), true); return; }
+    const c = status.consent;
+    const m = modal(`<h3>Biométrie — ${esc(row.nom)}</h3><div class="sub">${esc(row.matricule)} · ${esc(row.site)}${status.enabled ? "" : " · <b>biométrie désactivée sur ce serveur</b>"}</div>
+      <p><b>Consentement :</b> ${c ? `${esc(CONSENT_LABEL[c.status] || c.status)} — ${esc(SOURCE_CONSENT[c.source] || c.source)}${c.proof_reference ? " · réf. " + esc(c.proof_reference) : ""} · texte ${esc(c.notice_version)} · ${esc(c.recorded_by || "")}${c.admissible ? "" : " · <b>non admissible</b>"}` : "aucun"}</p>
+      <p><b>Enrôlement :</b> ${esc(status.enrollment === "ACTIVE" ? "actif" : status.enrollment === "PENDING_REVIEW" ? "en revue (doublon possible)" : "aucun")} · photo de la fiche ${status.photo_available ? "disponible" : "absente"}</p>
+      ${status.templates.length ? `<ul class="anomaly-list">${status.templates.map((t) => `<li>${esc(TEMPLATE_LABEL[t.status] || t.status)} · ${esc(t.source === "EMPLOYEE_PHOTO" ? "photo de la fiche" : "caméra")} · ${esc((t.created_at || "").slice(0, 16).replace("T", " "))}${t.status_reason ? " — " + esc(t.status_reason) : ""}</li>`).join("")}</ul>` : ""}
+      <details><summary>Texte d'information employé (${esc(notice.version)})</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(notice.text)}</pre></details>
+      <form id="consent-form"><div class="grid2"><div><label for="cs-status">Nouvel état du consentement</label><select id="cs-status">${Object.keys(CONSENT_LABEL).map((k) => `<option value="${k}">${CONSENT_LABEL[k]}</option>`).join("")}</select></div>
+        <div><label for="cs-source">Source</label><select id="cs-source">${Object.keys(SOURCE_CONSENT).map((k) => `<option value="${k}">${SOURCE_CONSENT[k]}</option>`).join("")}</select></div></div>
+        <div class="grid2"><div><label for="cs-ref">Référence du document / contrat</label><input id="cs-ref" placeholder="Ex. Contrat CDD 2026-041 art. 12"></div><div><label for="cs-date">Date de l'accord</label><input id="cs-date" type="date"></div></div>
+        <button class="secondary" type="submit" style="margin-top:10px">Enregistrer le consentement</button></form>
+      <div class="modal-actions" style="flex-wrap:wrap">
+        ${enrolCams.length ? `<select id="en-cam" style="width:auto">${enrolCams.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><button class="secondary" type="button" id="en-cam-btn">Enrôler par caméra</button>` : ""}
+        <button class="primary" type="button" id="en-photo"${status.photo_available ? "" : " disabled"}>Enrôler depuis la photo de la fiche</button>
+        ${status.enrollment !== "NONE" ? '<button class="danger" type="button" id="en-off">Désactiver</button>' : ""}
+        <button class="secondary" type="button" id="bio-close">Fermer</button>
+      </div><div class="error" id="bio-error" role="alert"></div>`);
+    const fail = (ex) => { const err = m.querySelector("#bio-error"); const d = ex.message; err.textContent = permissionMessage({ message: d }); err.classList.add("show"); };
+    m.querySelector("#bio-close").addEventListener("click", closeModal);
+    m.querySelector("#consent-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const date = m.querySelector("#cs-date").value;
+      try {
+        await api(`/biometrics/employees/${row.employee_id}/consent`, { method: "POST", body: { status: m.querySelector("#cs-status").value, source: m.querySelector("#cs-source").value,
+          proof_reference: m.querySelector("#cs-ref").value.trim() || null, consent_date: date ? date + "T00:00:00" : null, notice_version: notice.version } });
+        toast("Consentement enregistré"); openBiometrics(row);
+      } catch (ex) { fail(ex); }
+    });
+    const enroll = async (body) => {
+      try { const r = await api(`/biometrics/employees/${row.employee_id}/enroll`, { method: "POST", body }); toast(r.status === "ACTIVE" ? "Enrôlement actif" : "Doublon possible : enrôlement mis en revue", r.status !== "ACTIVE"); openBiometrics(row); }
+      catch (ex) { fail(ex); }
+    };
+    m.querySelector("#en-photo").addEventListener("click", () => enroll({}));
+    if (m.querySelector("#en-cam-btn")) m.querySelector("#en-cam-btn").addEventListener("click", () => enroll({ camera_id: Number(m.querySelector("#en-cam").value) }));
+    if (m.querySelector("#en-off")) m.querySelector("#en-off").addEventListener("click", async () => {
+      const reason = prompt("Motif de la désactivation (obligatoire) :");
+      if (!reason || reason.trim().length < 3) return;
+      try { await api(`/biometrics/employees/${row.employee_id}/deactivate`, { method: "POST", body: { reason: reason.trim() } }); toast("Biométrie désactivée"); openBiometrics(row); }
+      catch (ex) { fail(ex); }
     });
   }
 

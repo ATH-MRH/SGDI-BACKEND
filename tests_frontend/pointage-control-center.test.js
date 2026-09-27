@@ -129,3 +129,103 @@ test('données serveur échappées (aucune injection HTML)', async () => {
   assert.match(d.getElementById('board-rows').textContent, /<img src=x onerror=alert\(1\)>/);
   dom.window.close();
 });
+
+// ── Administration biométrique ──────────────────────────────────────────────────────
+function bootBio(routes) {
+  const calls = [];
+  const dom = new JSDOM(HTML, {
+    url: 'https://pointage.irongs.com/#/cameras', runScripts: 'dangerously', pretendToBeVisual: true,
+    beforeParse(w) {
+      w.matchMedia = () => ({ matches: false, addEventListener() {} });
+      w.sessionStorage.setItem('atlas_pointage_token', 'tok');
+      w.prompt = () => 'Départ de l\'employé';
+      w.fetch = async (url, opts = {}) => {
+        const u = new URL(url, 'https://pointage.irongs.com');
+        const call = { path: u.pathname, query: Object.fromEntries(u.searchParams), method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null };
+        calls.push(call);
+        const key = `${call.method} ${u.pathname}`;
+        const found = routes[key] || routes[u.pathname];
+        const [status, data] = typeof found === 'function' ? found(call) : (found || [200, u.pathname === '/api/auth/me' ? { username: 'ADM' } : u.pathname === '/api/attendance/sites' ? [{ id: 3, name: 'Site A', society: 'SOC' }] : {}]);
+        return { ok: status < 400, status, text: async () => JSON.stringify(data) };
+      };
+    },
+  });
+  return { dom, w: dom.window, d: dom.window.document, calls };
+}
+
+const CAM = { id: 7, name: 'CAM-ENTREE-01', manufacturer: 'DAHUA', model: 'Réf. X', adapter: 'DAHUA', society: 'SOC', site_id: 3, site: 'Site A',
+  location: 'Entrée', host: '10.0.0.20', http_port: 80, connection_type: 'LAN', channel: 1, usage: 'ATTENDANCE', role: 'ENTRY',
+  is_default: true, active: true, credentials_set: true, last_check: null, resolution: '5MP' };
+
+test('caméras : liste sans aucun identifiant, modification sans renvoyer le mot de passe s\'il n\'est pas saisi', async () => {
+  const { d, w, calls, dom } = bootBio({
+    '/api/biometrics/cameras': [200, [CAM]],
+    '/api/biometrics/camera-models': [200, [{ id: 1, manufacturer: 'DAHUA', model: 'Réf. X', adapter: 'DAHUA' }]],
+    'PATCH /api/biometrics/cameras/7': [200, CAM],
+  });
+  await tick(80);
+  assert.equal(d.getElementById('view-cameras').classList.contains('hidden'), false);
+  assert.match(d.getElementById('camera-rows').textContent, /Identifiants enregistrés/);
+  d.querySelector('[data-cam-edit="7"]').click();
+  await tick(60);
+  assert.equal(d.getElementById('c-pass').value, '', 'le mot de passe n\'est jamais pré-rempli');
+  d.getElementById('c-loc').value = 'Entrée nord';
+  d.getElementById('cam-form').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await tick(60);
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.equal(patch.body.location, 'Entrée nord');
+  assert.equal('password' in patch.body, false);
+  assert.equal('username' in patch.body, false);
+  dom.window.close();
+});
+
+test('doublons : décision impossible sans justification ; rejet tracé', async () => {
+  const dup = { template_id: 42, score: 0.912, source: 'CAMERA', date: '2027-04-05T10:00:00', created_by: 'RH01',
+    target: { id: 2, matricule: 'M002', nom: 'Beta Test' }, candidate: { id: 1, matricule: 'M001', nom: 'Alpha Test' } };
+  const { d, calls, dom } = bootBio({ '/api/biometrics/duplicates': [200, [dup]], 'PATCH /api/biometrics/templates/42/review': [200, {}] });
+  dom.window.location.hash = '#/duplicates';
+  d.querySelector('[data-view="duplicates"]').click();
+  await tick(60);
+  assert.match(d.getElementById('dup-rows').textContent, /0\.912/);
+  d.querySelector('[data-dup="42"]').click();
+  d.getElementById('dup-reject').click();
+  await tick(20);
+  assert.match(d.getElementById('dup-error').textContent, /justification est obligatoire/);
+  assert.equal(calls.some((c) => c.method === 'PATCH'), false);
+  d.getElementById('dup-comment').value = 'Même personne sous deux matricules';
+  d.getElementById('dup-reject').click();
+  await tick(60);
+  assert.deepEqual(calls.find((c) => c.method === 'PATCH').body, { approve: false, comment: 'Même personne sous deux matricules' });
+  dom.window.close();
+});
+
+test('fiche biométrique : consentement sur la version en vigueur, raison du refus d\'enrôlement affichée, permission manquante expliquée', async () => {
+  const board = { date: '2027-04-05', kpi: {}, total: 1, page: 1, page_size: 25, pages: 1, items: [row({ employee_id: 5 })] };
+  const { d, w, calls, dom } = bootBio({
+    '/api/attendance/board': [200, board],
+    '/api/biometrics/employees/5': [200, { employee_id: 5, enabled: true, consent: null, consent_history: [], photo_available: true, enrollment: 'NONE', active_template: null, templates: [] }],
+    '/api/biometrics/notice': [200, { version: '2026-09-v1', text: 'Finalité : contrôler le pointage.' }],
+    '/api/biometrics/cameras': [200, []],
+    'POST /api/biometrics/employees/5/consent': [200, {}],
+    'POST /api/biometrics/employees/5/enroll': [422, { detail: { state: 'QUALITY_FAILED', reasons: ['Image floue — restez immobile'] } }],
+  });
+  d.querySelector('[data-view="board"]').click();
+  await tick(80);
+  d.querySelector('[data-bio="5"]').click();
+  await tick(80);
+  d.getElementById('cs-status').value = 'contract_confirmed';
+  d.getElementById('cs-ref').value = 'Contrat CDD 2026-041 art. 12';
+  d.getElementById('consent-form').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await tick(80);
+  const consent = calls.find((c) => c.path === '/api/biometrics/employees/5/consent');
+  assert.equal(consent.body.notice_version, '2026-09-v1');
+  assert.equal(consent.body.proof_reference, 'Contrat CDD 2026-041 art. 12');
+  d.getElementById('en-photo').click();
+  await tick(80);
+  assert.match(d.getElementById('bio-error').textContent, /Image floue — restez immobile/);
+  dom.window.close();
+  const denied = bootBio({ '/api/biometrics/cameras': [403, { detail: 'Permission biométrique explicite requise' }] });
+  await tick(80);
+  assert.match(denied.d.getElementById('camera-state').textContent, /Permission biométrique explicite requise pour cette action/);
+  denied.dom.window.close();
+});
