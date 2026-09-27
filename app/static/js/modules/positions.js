@@ -190,6 +190,7 @@ function renderFiches(view,sub,_skipEnsure){
     </section>
     ${list.length===0?`<div class="fp-empty-state">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`}
   </div>`;
+  hydrateEmployeePhotos(view);
 }
 
 function setFpSociete(v){
@@ -275,7 +276,7 @@ function fichePositionCard(a){
   const warningTone=status.key==="suspendu"||completeness.missing.length||contractDays!==null&&contractDays>=0&&contractDays<=60?"warning":"ok";
   return`<div class="card fp-agent-card fp-agent-card-modern" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     <div class="fp-agent-card-top">
-      <div class="fp-agent-photo">${a.photo?`<img src="${a.photo}" alt="Photo de ${escapeHTML((a.nom||"")+" "+(a.prenom||""))}"/>`:escapeHTML(((a.nom||"").slice(0,1)+(a.prenom||"").slice(0,1))||"?")}</div>
+      <div class="fp-agent-photo">${employeeAvatarHTML(a)}</div>
       <div class="fp-agent-identity"><div class="fp-agent-name">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule" style="${codeStyle}">${safe(a.matricule)}</div><div class="fp-agent-function">${safe(aff.poste||a.fonction||a.position||a.posteContrat)||"Poste non renseigné"}</div></div>
       <span class="fp-agent-status pill ${status.pill}" style="${statusStyle}">${escapeHTML(statusText)}</span>
     </div>

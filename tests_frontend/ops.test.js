@@ -301,3 +301,190 @@ test('OPS : création autonome bloquée et quatre types de PV disponibles', asyn
   form.elements.kind.value='diminution';assert.strictEqual(t.siteOperationPVData(form).after,8);
   app.window.close();
 });
+
+// Pagination OPS : vraies fonctions UI/API, sans charger la collection complète.
+function opsPageFixture() {
+  const app=loadSgdiApp(['emptyDB','employeeFromApi','employeeAvatarHTML','renderEffectif','renderOpsEffectifPage','opsEffectifPageParams','setEffectifPage','setEffectifSort','setOpsEffectifFilter','setOpsEffectifSearch','sgdiOpsEffectifPageActive','sgdiEnsureEmployeesForDisplay','sgdiSqlSyncTasks','sgdiInvalidateDrhReads']);
+  assert.strictEqual(app.loadError,null);
+  const t=app.T(),w=app.window;
+  t.setDb(t.emptyDB());t.setSession({transverse:'ops',role:'ops',societe:'IRON GLOBAL SOLUTION'});
+  w.sessionStorage.setItem('sgdi_api_token_v1','ops-page-token');
+  w.location.hash='#/effectif/recap';
+  const requests=[];
+  w.SGDI_API.employees.list=async()=>{throw new Error('Liste complète interdite sur EFFECTIFS OPS')};
+  w.SGDI_API.employees.page=async params=>{requests.push({...params});return {items:[],total:0,page:params.page,pages:1}};
+  // Le loader photo sécurisé est couvert séparément; aucun réseau image dans ces tests UI.
+  w.hydrateEmployeePhotos=()=>{};
+  return {...app,t,w,requests,view:w.document.getElementById('view')};
+}
+function opsEmployee(id,extra={}) {
+  return {id,code:`E${id}`,last_name:`Employe ${id}`,first_name:`Prenom ${id}`,society:'IRON GLOBAL SOLUTION',status:'actif',
+    has_photo:true,photo_url:`/api/ops/employees/${id}/photo?v=version1`,extra:{_legacy:{id:`legacy-${id}`,affectationCourante:{siteId:'site-local',siteBackendId:41,siteName:'Site Alpha',poste:'Gardien'}}},...extra};
+}
+function pageResult(items,page=1,total=items.length) { return {items,page,total,pages:Math.max(1,Math.ceil(total/25))}; }
+
+test('OPS photos: mapper sépare URL protégée et photo legacy, respecte ID SQL et absence explicite',()=>{
+  const {t,w}=opsPageFixture();
+  for(const id of [101,287,3901]) {
+    const a=t.employeeFromApi(opsEmployee(id));
+    assert.strictEqual(a.backendId,id);assert.strictEqual(a.id,`legacy-${id}`);
+    assert.strictEqual(a.photoUrl,`/api/ops/employees/${id}/photo?v=version1`);
+    assert.strictEqual(a.hasPhoto,true);assert.strictEqual(a.photo,'');
+  }
+  const absent=t.employeeFromApi(opsEmployee(7,{has_photo:false,photo_url:null,extra:{photo:'/uploads/photos/stale.jpg'}}));
+  assert.strictEqual(absent.hasPhoto,false);assert.strictEqual(absent.photoUrl,'');assert.strictEqual(absent.photo,'');
+  const legacy=t.employeeFromApi({id:8,extra:{_legacy:{photo:'/uploads/photos/legacy.jpg'}}});
+  assert.strictEqual(legacy.photo,'/uploads/photos/legacy.jpg');assert.strictEqual(legacy.photoUrl,'');
+  assert.strictEqual(legacy.hasPhoto,undefined);assert.match(t.employeeAvatarHTML(legacy),/src="\/uploads\/photos\/legacy.jpg"/);
+  w.close();
+});
+
+test('OPS effectifs: page de 25 puis suivantes, rattachement photo par ID SQL',async()=>{
+  const {t,w,view,requests}=opsPageFixture();
+  const rows=Array.from({length:53},(_,i)=>opsEmployee(i+100));
+  w.SGDI_API.employees.page=async params=>{requests.push({...params});return pageResult(rows.slice((params.page-1)*25,params.page*25),params.page,rows.length)};
+  await t.renderEffectif(view,'actifs',true);
+  assert.strictEqual(requests.length,1);assert.strictEqual(requests[0].page_size,25);
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,25);
+  assert.match(view.textContent,/53 employé\(s\) · page 1\/3/);
+  assert.strictEqual(view.querySelector('tbody tr').dataset.backendId,'100');
+  await t.setEffectifPage('actifs',2);
+  assert.strictEqual(requests.length,2);assert.strictEqual(view.querySelector('tbody tr').dataset.backendId,'125');
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,25);
+  await t.setEffectifPage('actifs',3);
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,3);
+  assert.strictEqual(view.querySelector('[data-ops-effectif-pagination] button:last-child').disabled,true);
+  for(const a of t.getDb().agents)assert.strictEqual(a.photoUrl,`/api/ops/employees/${a.backendId}/photo?v=version1`);
+  w.close();
+});
+
+test('OPS effectifs: filtres, société, site SQL et tri sont envoyés avant pagination',async()=>{
+  const {t,w,view,requests}=opsPageFixture();
+  t.getDb().sites=[{id:'site-local',backendId:41,nom:'Site Alpha',societe:'IRON GLOBAL SOLUTION'}];
+  w.sessionStorage.setItem('opsEffectifFilters',JSON.stringify({q:'  Recherche  ',site:'site-local',poste:'Gardien',situation:'Marié',recrutFrom:'2025-01-01',recrutTo:'2026-12-31',birthFrom:'1980-01-01',birthTo:'2000-01-01',ageMin:'25',ageMax:'50'}));
+  await t.renderEffectif(view,'suspension',true);
+  const p=requests[0];
+  assert.strictEqual(p.mode,'suspension');assert.strictEqual(p.society,'IRON GLOBAL SOLUTION');assert.strictEqual(p.site_id,41);
+  assert.strictEqual(p.q,'Recherche');assert.strictEqual(p.poste,'Gardien');assert.strictEqual(p.recrut_from,'2025-01-01');assert.strictEqual(p.birth_to,'2000-01-01');assert.strictEqual(p.age_max,'50');
+  await t.setEffectifPage('suspension',3);
+  await t.setEffectifSort('mat_desc');
+  assert.strictEqual(requests.at(-1).sort,'mat_desc');assert.strictEqual(requests.at(-1).page,1);assert.strictEqual(requests.at(-1).mode,'suspension');
+  await t.setOpsEffectifFilter('site','__none__');
+  assert.strictEqual(requests.at(-1).site_id,'__none__');assert.strictEqual(requests.at(-1).page,1);
+  w.close();
+});
+
+test('OPS effectifs: recherche serveur trouve un employé hors première page et conserve le focus',async()=>{
+  const {t,w,view,requests}=opsPageFixture();
+  w.SGDI_API.employees.page=async params=>{requests.push({...params});return pageResult(params.q?[opsEmployee(999)]:[opsEmployee(101)],1,params.q?1:60)};
+  await t.renderEffectif(view,'actifs',true);
+  const input=view.querySelector('input[oninput*="setEffectifSearch"]');input.focus();input.value='Employe 999';input.setSelectionRange(11,11);
+  t.setOpsEffectifSearch(input.value);
+  await new Promise(resolve=>setTimeout(resolve,320));
+  assert.strictEqual(requests.length,2);assert.strictEqual(requests[1].q,'Employe 999');
+  assert.strictEqual(view.querySelector('tbody tr').dataset.backendId,'999');
+  assert.strictEqual(w.document.activeElement.value,'Employe 999');
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,1);
+  w.close();
+});
+
+test('OPS effectifs: ancienne réponse ne remplace ni DOM ni employés après filtre plus récent',async()=>{
+  const {t,w,view}=opsPageFixture();const pending=[];
+  w.SGDI_API.employees.page=params=>new Promise(resolve=>pending.push({params,resolve}));
+  const first=t.renderEffectif(view,'actifs',true);
+  const second=t.setOpsEffectifFilter('poste','Gardien');
+  pending[1].resolve(pageResult([opsEmployee(200)]));await second;
+  pending[0].resolve(pageResult([opsEmployee(100)]));await first;
+  assert.strictEqual(view.querySelector('tbody tr').dataset.backendId,'200');
+  assert.deepStrictEqual(Array.from(t.getDb().agents,a=>a.backendId),[200]);
+  w.close();
+});
+
+test('OPS effectifs: navigation, déconnexion et invalidation refusent une réponse tardive',async()=>{
+  for(const cancel of [a=>{a.w.location.hash='#/ops/mouvements'},a=>a.w.sessionStorage.removeItem('sgdi_api_token_v1'),a=>a.t.sgdiInvalidateDrhReads()]){
+    const a=opsPageFixture();let resolve;
+    a.w.SGDI_API.employees.page=()=>new Promise(r=>{resolve=r});
+    const pending=a.t.renderEffectif(a.view,'actifs',true);cancel(a);resolve(pageResult([opsEmployee(100)]));await pending;
+    assert.strictEqual(a.t.getDb().agents.length,0);assert.strictEqual(a.view.querySelector('tbody tr'),null);a.w.close();
+  }
+});
+
+test('OPS effectifs: nouvelle photo puis suppression et nouvel employé au rechargement',async()=>{
+  const {t,w,view}=opsPageFixture();let items=[opsEmployee(101)];
+  w.SGDI_API.employees.page=async()=>pageResult(items);
+  await t.renderEffectif(view,'actifs',true);
+  items=[opsEmployee(101,{photo_url:'/api/ops/employees/101/photo?v=version2'}),opsEmployee(202)];
+  await t.renderEffectif(view,'actifs',true);
+  assert.strictEqual(t.getDb().agents.length,2);assert.strictEqual(t.getDb().agents[0].photoUrl,'/api/ops/employees/101/photo?v=version2');
+  items=[opsEmployee(101,{has_photo:false,photo_url:null})];
+  await t.renderEffectif(view,'actifs',true);
+  assert.strictEqual(t.getDb().agents[0].photoUrl,'');assert.strictEqual(t.getDb().agents[0].hasPhoto,false);
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,1);w.close();
+});
+
+test('OPS effectifs: codes identiques entre salariés ne mélangent pas leurs photos',async()=>{
+  const {t,w,view}=opsPageFixture();
+  w.SGDI_API.employees.page=async()=>pageResult([opsEmployee(101,{code:'A01'}),opsEmployee(202,{code:'A01'})]);
+  await t.renderEffectif(view,'actifs',true);
+  assert.strictEqual(t.getDb().agents.length,2);
+  assert.strictEqual(view.querySelectorAll('tbody tr')[0].dataset.backendId,'101');
+  assert.strictEqual(view.querySelectorAll('tbody tr')[1].dataset.backendId,'202');w.close();
+});
+
+test('OPS effectifs: erreur page visible sans repli sur la liste complète',async()=>{
+  const {t,w,view}=opsPageFixture();w.console.warn=()=>{};
+  w.SGDI_API.employees.page=async()=>{throw new Error('indisponible')};
+  await t.renderEffectif(view,'actifs',true);
+  assert.match(view.querySelector('[role="alert"]').textContent,/Chargement des employés impossible/);
+  assert.strictEqual(view.querySelector('#effectif-list-zone').hasAttribute('aria-busy'),false);w.close();
+});
+
+test('OPS effectifs: bootstrap et compteurs ne chargent pas tous les employés; autres modules inchangés',async()=>{
+  const {t,w}=opsPageFixture();let lists=0;
+  w.SGDI_API.employees.list=async()=>{lists++;return []};
+  w.eval('syncSitesFromPostgres=async()=>{};syncAssignmentsFromPostgres=async()=>{};syncOpsMovementsFromPostgres=async()=>{};sgdiShouldSyncCandidates=()=>false;');
+  assert.strictEqual(t.sgdiOpsEffectifPageActive(),true);
+  assert.strictEqual(t.sgdiEnsureEmployeesForDisplay({force:true}),null);
+  await Promise.all(t.sgdiSqlSyncTasks({module:'ops'}));assert.strictEqual(lists,0);
+  w.location.hash='#/ops/dashboard';assert.strictEqual(t.sgdiOpsEffectifPageActive(),false);
+  await Promise.all(t.sgdiSqlSyncTasks({module:'ops'}));assert.strictEqual(lists,1);
+  for(const hash of ['#/effectif/agent/123','#/effectif/sortants','#/effectif/archives_sortants','#/effectif/preparation_affectation']){
+    w.location.hash=hash;assert.strictEqual(t.sgdiOpsEffectifPageActive(),false,hash+' garde ses dépendances propres');
+  }
+  t.setSession({transverse:'superviseur',societe:'IRON GLOBAL SOLUTION'});w.location.hash='#/effectif/recap';
+  assert.strictEqual(t.sgdiOpsEffectifPageActive(),false);w.close();
+});
+
+test('OPS effectifs: facettes postes complètes et page corrigée par le serveur sont conservées',async()=>{
+  const {t,w,view}=opsPageFixture();
+  w.SGDI_API.employees.page=async()=>({...pageResult([opsEmployee(100)],1,1),filters:{postes:['Gardien','Cariste page suivante']}});
+  await t.renderEffectif(view,'recap',true);
+  const poste=view.querySelector('select[onchange*="setOpsEffectifFilter(\'poste\'"]');
+  assert.deepStrictEqual(Array.from(poste.options,o=>o.value),['','Cariste page suivante','Gardien']);
+  await t.setEffectifPage('actifs',7);
+  assert.strictEqual(t.opsEffectifPageParams('actifs').page,1);
+  assert.strictEqual(view.querySelectorAll('tbody tr').length,1);w.close();
+});
+
+test('OPS effectifs: changement de société exclut la page tardive de la société précédente',async()=>{
+  const {t,w,view}=opsPageFixture();const requests=[];
+  w.SGDI_API.employees.page=params=>new Promise(resolve=>requests.push({params,resolve}));
+  const first=t.renderEffectif(view,'actifs',true);
+  t.setSession({transverse:'ops',role:'ops',societe:'SWORD CORPORATION'});
+  const second=t.renderEffectif(view,'actifs',true);
+  assert.strictEqual(requests[1].params.society,'SWORD CORPORATION');
+  requests[1].resolve(pageResult([opsEmployee(202,{society:'SWORD CORPORATION'})]));await second;
+  requests[0].resolve(pageResult([opsEmployee(101)]));await first;
+  assert.strictEqual(view.querySelector('tbody tr').dataset.backendId,'202');
+  assert.deepStrictEqual(Array.from(t.getDb().agents,a=>a.backendId),[202]);w.close();
+});
+
+test('OPS effectifs: la projection canonique retire les anciens champs RH et photos du cache',async()=>{
+  const {t,w,view}=opsPageFixture();
+  t.getDb().agents=[{id:'legacy-101',backendId:101,matricule:'E101',situation:'Donnée RH ancienne',photo:'/uploads/photos/ancienne.jpg',dateNaissance:'1980-01-01',famille:[{nom:'Privé'}]}];
+  w.SGDI_API.employees.page=async()=>pageResult([opsEmployee(101,{has_photo:false,photo_url:null})]);
+  await t.renderEffectif(view,'actifs',true);
+  const a=t.getDb().agents[0];
+  assert.strictEqual(a.situation,undefined);assert.strictEqual(a.famille,undefined);assert.strictEqual(a.dateNaissance,'');assert.strictEqual(a.photo,'');
+  assert.doesNotMatch(view.textContent,/Donnée RH ancienne/);w.close();
+});

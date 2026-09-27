@@ -5,6 +5,7 @@ function setEffectifSociete(v){
   if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}
   if(session?.transverse)sessionStorage.setItem(structureSocieteFilterKey(),v||"");
   else sessionStorage.setItem("effectifSociete",v||"");
+  if(sgdiOpsEffectifUsesPages())sessionStorage.setItem(effectifPageStorageKey(opsEffectifActiveFilter()),"1");
   renderView();
 }
 
@@ -191,7 +192,7 @@ function employeeRowActionsButton(a){
 
 function renderEffectifRecap(view){
   const current=sessionStorage.getItem("effectifStableFilter")||"actifs";
-  renderEffectif(view,current,true);
+  return renderEffectif(view,current,true);
 }
 
 function setEffectifStableFilter(filter){
@@ -206,7 +207,8 @@ function setEffectifStableFilter(filter){
     card.style.borderColor=active?color:(color+"22");
     card.blur&&card.blur();
   });
-  if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);updateEffectifBulkDeleteButton();applyEffectifSearchInPlace(effectifSearchValue(filter))}
+  if(sgdiOpsEffectifUsesPages()&&view){sessionStorage.setItem(effectifPageStorageKey(filter),"1");return renderOpsEffectifPage(view,filter)}
+  if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);hydrateEmployeePhotos(zone);updateEffectifBulkDeleteButton();applyEffectifSearchInPlace(effectifSearchValue(filter))}
   requestAnimationFrame(()=>{const v=document.getElementById("view");if(v)v.scrollTop=scrollTop});
   if(!zone&&view)renderEffectif(view,filter,true);
 }
@@ -238,24 +240,34 @@ function setOpsEffectifFilter(k,v){
   const f=opsEffectifFilters();
   f[k]=String(v||"");
   sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
-  setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");
+  return setEffectifStableFilter(opsEffectifActiveFilter());
 }
+
+function opsEffectifActiveFilter(){return document.getElementById("effectif-list-zone")?.dataset.filter||sessionStorage.getItem("effectifStableFilter")||"actifs"}
 
 function setOpsEffectifSearch(v){
   clearTimeout(opsEffectifSearchTimer);
   const f=opsEffectifFilters();
   f.q=String(v||"");
   sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
+  if(sgdiOpsEffectifUsesPages()){
+    opsEffectifPageRequest++;
+    const filter=document.getElementById("effectif-list-zone")?.dataset.filter||sessionStorage.getItem("effectifStableFilter")||"actifs";
+    sessionStorage.setItem(effectifPageStorageKey(filter),"1");
+    opsEffectifSearchTimer=setTimeout(()=>{const view=document.getElementById("view");if(view&&sgdiOpsEffectifPageActive())renderOpsEffectifPage(view,filter)},250);
+    return;
+  }
   opsEffectifSearchTimer=setTimeout(()=>applyOpsEffectifSearchInPlace(v),80);
 }
 
-function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs")}
+function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");return setEffectifStableFilter(opsEffectifActiveFilter())}
 
 function opsEffectifAdvancedOpen(){return sessionStorage.getItem("opsEffectifAdvanced")==="1"}
 
-function toggleOpsEffectifAdvanced(){sessionStorage.setItem("opsEffectifAdvanced",opsEffectifAdvancedOpen()?"0":"1");setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs")}
+function toggleOpsEffectifAdvanced(){sessionStorage.setItem("opsEffectifAdvanced",opsEffectifAdvancedOpen()?"0":"1");return setEffectifStableFilter(opsEffectifActiveFilter())}
 
 function applyOpsEffectifSearchInPlace(v){
+  if(sgdiOpsEffectifUsesPages())return;
   const q=String(v||"").trim().toLowerCase();
   const rows=[...document.querySelectorAll("#effectif-list-zone tbody tr[data-searchable]")];
   if(!rows.length)return;
@@ -311,6 +323,8 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc)).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const postes=[...new Set((sourceList||[]).map(a=>agentLiveAffectation(a)?.poste||a.affectationCourante?.poste||a.fonction||a.position||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const situations=[...new Set((sourceList||[]).map(a=>a.situation||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  if(f.poste&&!postes.includes(f.poste))postes.push(f.poste);
+  if(f.situation&&!situations.includes(f.situation))situations.push(f.situation);
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card ops-effectif-filter-card">
     <div class="ops-effectif-filter-main">
@@ -339,7 +353,12 @@ function effectifPageStorageKey(filter){return "effectifPage:"+effectifModeToApi
 
 function effectifCurrentPage(filter){return Math.max(parseInt(sessionStorage.getItem(effectifPageStorageKey(filter))||"1",10)||1,1)}
 
-function setEffectifPage(filter,page){sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(parseInt(page||1,10)||1,1)));renderView()}
+function setEffectifPage(filter,page){
+  sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(parseInt(page||1,10)||1,1)));
+  const view=document.getElementById("view");
+  if(sgdiOpsEffectifUsesPages()&&view)return renderOpsEffectifPage(view,filter);
+  renderView();
+}
 
 function effectifBulkDeleteToolbarHTML(){
   if(!isAdminFichePositionContext())return "";
@@ -373,7 +392,73 @@ function employeeListRowHTML(a,filter){
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdminFichePositionContext()?`<td class="text-center effectif-select-cell"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   const opsCells=isOpsEffectifContext()?`<td data-label="Naissance" class="text-xs">${formatDate(a.dateNaissance)}</td><td data-label="Age" class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td data-label="Situation" class="text-xs">${safe(a.situation)}</td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td data-label="Employé" class="effectif-agent-cell"><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td data-label="Code" class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td data-label="Société" class="text-xs">${safe(a.societe)}</td><td data-label="Poste" class="text-xs">${safe(aff?.poste||a.affectationCourante?.poste||a.fonction||a.position)}</td><td data-label="Site" class="text-xs">${safe(aff?.siteName)}</td><td data-label="Recrutement" class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td data-label="Statut" class="effectif-status-cell">${employeeStatusPillHTML(a)}</td><td data-label="Action" class="effectif-open-cell"><div class="effectif-row-actions"><a class="effectif-open-btn" href="#/agents/${employeeRouteId(a)}">Ouvrir <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?(isOpsEffectifContext()?`<td data-label="Affectation" class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="sessionStorage.setItem('opsMovementAgentId','${escapeHTML(a.id)}');navigate('ops/mouvements')">Affecter</button></td>`:`<td data-label="Affectation" class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`):""}</tr>`;
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td data-label="Employé" class="effectif-agent-cell"><div class="flex items-center gap-2"><div class="avatar">${employeeAvatarHTML(a)}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td data-label="Code" class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td data-label="Société" class="text-xs">${safe(a.societe)}</td><td data-label="Poste" class="text-xs">${safe(aff?.poste||a.affectationCourante?.poste||a.fonction||a.position)}</td><td data-label="Site" class="text-xs">${safe(aff?.siteName)}</td><td data-label="Recrutement" class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td data-label="Statut" class="effectif-status-cell">${employeeStatusPillHTML(a)}</td><td data-label="Action" class="effectif-open-cell"><div class="effectif-row-actions"><a class="effectif-open-btn" href="#/agents/${employeeRouteId(a)}">Ouvrir <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?(isOpsEffectifContext()?`<td data-label="Affectation" class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="sessionStorage.setItem('opsMovementAgentId','${escapeHTML(a.id)}');navigate('ops/mouvements')">Affecter</button></td>`:`<td data-label="Affectation" class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`):""}</tr>`;
+}
+
+let opsEffectifPageRequest=0;
+function opsEffectifPageParams(filter){
+  const f=opsEffectifFilters();
+  const site=(db.sites||[]).find(s=>String(s.id)===String(f.site)||String(s.backendId||"")===String(f.site));
+  return {mode:effectifModeToApi(filter),society:effectifSocieteFilter(),page:effectifCurrentPage(filter),page_size:25,
+    q:String(f.q||"").trim(),site_id:f.site==="__none__"?"__none__":(f.site?(site?.backendId||f.site):""),sort:effectifSort,
+    poste:f.poste||"",situation:f.situation||"",recrut_from:f.recrutFrom||"",recrut_to:f.recrutTo||"",
+    birth_from:f.birthFrom||"",birth_to:f.birthTo||"",age_min:f.ageMin||"",age_max:f.ageMax||"",
+    ...(filter==="operationnels"?{operational_requires_dotation:!!effectifConfigSettings().operationalRequiresDotation,
+      operational_requires_pv:!!effectifConfigSettings().operationalRequiresPvInstallation}:{})};
+}
+function opsEffectifPageData(filter,result,list){
+  const titles={actifs:"Gestion des effectifs",operationnels:"Effectif opérationnel",conge:"Agents en congé",maladie:"Agents en maladie",absents:"Agents en absence",suspension:"Agents suspendus",instance_affectation:"Employés en attente d'affectation",sortant:"Sortant",blacklist:"BLACKLIST"};
+  const total=Number(result?.total)||0,page=Number(result?.page)||1,pages=Math.max(Number(result?.pages)||1,1);
+  const routeFilter=escapeHTML(filter||"actifs");
+  const pagination=result?`<div class="flex items-center justify-between gap-2 p-3 text-sm" data-ops-effectif-pagination><div class="text-slate-500">${total} employé(s) · page ${page}/${pages}</div><div class="flex gap-2"><button type="button" class="btn btn-ghost text-xs" ${page<=1?"disabled":""} onclick="setEffectifPage('${routeFilter}',${page-1})">Précédent</button><button type="button" class="btn btn-ghost text-xs" ${page>=pages?"disabled":""} onclick="setEffectifPage('${routeFilter}',${page+1})">Suivant</button></div></div>`:"";
+  const filterSource=Array.isArray(result?.filters?.postes)?result.filters.postes.map(poste=>({fonction:poste})):list;
+  return {list,title:titles[filter]||titles.actifs,soc:effectifSocieteFilter(),filterSource,total,pagination,loading:!result};
+}
+async function renderOpsEffectifPage(view,filter){
+  const request=++opsEffectifPageRequest;
+  const params=opsEffectifPageParams(filter),context=sgdiDrhReadContext(params.society),race=sgdiCaptureRaceContext();
+  const hash=location.hash;
+  let zone=view.querySelector("#effectif-list-zone");
+  if(!zone){view.innerHTML='<div id="effectif-list-zone"></div>';zone=view.querySelector("#effectif-list-zone")}
+  zone.dataset.filter=filter||"actifs";
+  if(!zone.querySelector(".ops-effectif-page"))zone.innerHTML=effectifListHTML(filter,opsEffectifPageData(filter,null,[]));
+  zone.setAttribute("aria-busy","true");
+  const current=()=>request===opsEffectifPageRequest&&sgdiDrhReadIsCurrent(context)&&sgdiRaceContextStillValid(race)&&location.hash===hash&&document.getElementById("effectif-list-zone")===zone&&JSON.stringify(opsEffectifPageParams(filter))===JSON.stringify(params);
+  try{
+    const result=await SGDI.employees.page(params);
+    if(!current())return null;
+    if(!result||!Array.isArray(result.items))throw new Error("Réponse employés invalide");
+    // L'identifiant SQL lie toujours la photo à l'employé, même si des codes/anciens
+    // identifiants se ressemblent entre sociétés.
+    const list=result.items.map(row=>{
+      const employee=employeeFromApi(row);
+      if(!Array.isArray(db.agents))db.agents=[];
+      const index=db.agents.findIndex(a=>String(a.backendId||"")===String(employee.backendId));
+      // Le DTO opérationnel remplace l'ancien objet : ne pas ressusciter des
+      // champs RH absents ni une photo supprimée depuis un dossier en cache.
+      if(index>=0)db.agents[index]=employee;else db.agents.push(employee);
+      return employee;
+    });
+    const focused=document.activeElement;
+    const searchFocused=zone.contains(focused)&&focused?.matches('input[oninput*="setEffectifSearch"]');
+    const selection=searchFocused?[focused.selectionStart,focused.selectionEnd]:null;
+    zone.innerHTML=effectifListHTML(filter,opsEffectifPageData(filter,result,list));
+    zone.removeAttribute("aria-busy");
+    sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(Number(result.page)||1,1)));
+    sgdiApplyActiveEmployeeStyles(zone);
+    hydrateEmployeePhotos(zone);
+    if(selection){const input=zone.querySelector('input[oninput*="setEffectifSearch"]');input?.focus({preventScroll:true});input?.setSelectionRange(...selection)}
+    return result;
+  }catch(error){
+    if(!current())return null;
+    zone.removeAttribute("aria-busy");
+    const previous=zone.querySelector("[data-ops-effectif-error]");if(previous)previous.remove();
+    const message=document.createElement("div");message.dataset.opsEffectifError="";message.className="card p-4 text-red-700";message.setAttribute("role","alert");
+    message.innerHTML=`Chargement des employés impossible. <button type="button" class="btn btn-ghost text-xs" onclick="setEffectifPage('${escapeHTML(filter||"actifs")}',${params.page})">Réessayer</button>`;
+    zone.appendChild(message);
+    console.warn("Effectifs OPS indisponibles",error);
+    return null;
+  }
 }
 
 async function effectifListServerHTML(filter){
@@ -395,9 +480,10 @@ async function effectifListServerHTML(filter){
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table"><colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%"><col style="width:108px"><col style="width:148px"></colgroup><thead><tr>${selectHead}${effectifTableHeadersHTML()}</tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}</div>`;
 }
 
-function effectifListHTML(filter){
-  const data=effectifFilteredData(filter);
+function effectifListHTML(filter,serverData){
+  const data=serverData||effectifFilteredData(filter);
   const {list,title,soc,filterSource}=data;
+  const total=serverData?serverData.total:list.length;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   const sortHTML=`<select class="select" data-no-lock onchange="setEffectifSort(this.value)">
@@ -409,7 +495,7 @@ function effectifListHTML(filter){
     <option value="mat_desc" ${effectifSort==="mat_desc"?"selected":""}>Code ↓</option>
   </select>`;
   const opsHeader=isOpsEffectifContext()?`<div class="card ops-effectif-hero">
-    <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${list.length} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
+    <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${total} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
     <div class="ops-effectif-tools"><label><span>Recherche</span><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/></label><label><span>Tri</span>${sortHTML}</label></div>
   </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header">
     <div class="drh-effectif-title-block">
@@ -421,12 +507,12 @@ function effectifListHTML(filter){
   </div>`:`<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 mb-4"><div><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div>${effectifHeaderSearchHTML(filter)}<div class="flex items-center justify-end gap-2 flex-wrap"><span class="text-xs text-slate-500">Tri :</span><div style="max-width:260px">${sortHTML}</div></div></div>`;
   return `<div class="effectif-page ${isOpsEffectifContext()?"ops-effectif-page":""}">${opsHeader}
   ${isDrhModuleContext()&&filter!=="instance_affectation"?(filter==="suspension"?drhSuspensionOverviewHTML(list):drhEffectifActionsBarHTML()):""}
-  ${opsEffectifFiltersHTML(filterSource,list.length)}
+  ${opsEffectifFiltersHTML(filterSource,total)}
   ${effectifBulkDeleteToolbarHTML()}
-  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
+  ${list.length===0?`<div class="card p-10 text-center text-slate-500">${serverData?.loading?"Chargement des employés…":"Aucun employé."}</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
     <colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%">${isOpsEffectifContext()?`<col style="width:8%"><col style="width:6%"><col style="width:8%">`:""}<col style="width:108px"><col style="width:148px">${actionHeader?`<col style="width:92px">`:""}</colgroup>
     <thead><tr>${selectHead}${effectifTableHeadersHTML({ops:isOpsEffectifContext(),actionHeader})}</tr></thead>
-    <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}</div>`;
+    <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}${serverData?.pagination||""}</div>`;
 }
 
 function employeeHasContractForPreparation(a){
@@ -561,12 +647,14 @@ function absencesRecapHTML(){
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
   if(String(filter||"").startsWith("preparation"))return renderOperationalPreparation(view,filter);
+  if(sgdiOpsEffectifUsesPages())return renderOpsEffectifPage(view,filter);
   const cards=(filter==="instance_affectation"||isOpsEffectifContext()||isDrhModuleContext())?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
   const absRecap=filter==="absents"?`<div id="absences-recap-zone">${absencesRecapHTML()}</div>`:"";
   // Affiche immédiatement les données locales (stale-while-revalidate)
   const localHTML=effectifListHTML(filter);
   view.innerHTML=`${cards}${absRecap}<div id="effectif-list-zone">${localHTML}</div>`;
   sgdiApplyActiveEmployeeStyles(view);
+  hydrateEmployeePhotos(view);
   applyEffectifSearchInPlace(effectifSearchValue(filter));
   if(!sgdiAuthToken())return;
   if(isOpsEffectifContext()){
@@ -582,6 +670,7 @@ function renderEffectif(view,filter,stableMode){
         if(!zone)return;
         zone.innerHTML=effectifListHTML(filter);
         sgdiApplyActiveEmployeeStyles(zone);
+        hydrateEmployeePhotos(zone);
         applyEffectifSearchInPlace(effectifSearchValue(filter));
       }).catch(()=>{});
     }
@@ -593,12 +682,12 @@ function renderEffectif(view,filter,stableMode){
   effectifListServerHTML(filter).then(html=>{
     if(!html)return;
     const zone=document.getElementById("effectif-list-zone");
-    if(zone){zone.innerHTML=html;sgdiApplyActiveEmployeeStyles(zone);applyEffectifSearchInPlace(effectifSearchValue(filter))}
+    if(zone){zone.innerHTML=html;sgdiApplyActiveEmployeeStyles(zone);hydrateEmployeePhotos(zone);applyEffectifSearchInPlace(effectifSearchValue(filter))}
   }).catch(e=>{
     console.warn("Effectif PostgreSQL paginé indisponible",e);
   });
 }
 
-function setEffectifSort(v){effectifSort=v;if(document.getElementById("effectif-list-zone"))setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");else renderView()}
+function setEffectifSort(v){effectifSort=v;if(document.getElementById("effectif-list-zone"))return setEffectifStableFilter(sgdiOpsEffectifUsesPages()?opsEffectifActiveFilter():(sessionStorage.getItem("effectifStableFilter")||"actifs"));else renderView()}
 
 SGDIModules.registerModule({key: "employees", routes: ["effectif","agents"], dependencies: [], init: function(){}, destroy: function(){}});

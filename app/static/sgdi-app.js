@@ -708,6 +708,113 @@ async function sgdiActionApi(path,options){
   if(requestToken===sgdiAuthToken()&&sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
   return out;
 }
+// Employee portraits: references stay small; protected images are fetched only near
+// the viewport. Never put a bearer token in an image URL or share blobs across users.
+const employeePhotoLoads=new Map();
+let employeePhotoObserver=null,employeePhotoCleanupObserver=null,employeePhotoActive=0;
+const employeePhotoQueue=[];
+function employeePhotoPath(a){
+  const id=String(a?.backendId||"");
+  const path=String(a?.photoUrl||"");
+  return a?.hasPhoto!==false&&/^[1-9]\d*$/.test(id)&&new RegExp("^/api/ops/employees/"+id+"/photo(?:\\?[^#]*)?$").test(path)?path:"";
+}
+function employeeAvatarHTML(a){
+  const initials=((a?.nom||"").slice(0,1)+(a?.prenom||"").slice(0,1)).toUpperCase()||"?";
+  const fallback=`<span class="employee-avatar-initials" aria-hidden="true">${escapeHTML(initials)}</span>`;
+  const protectedPath=employeePhotoPath(a);
+  // A protected DTO is authoritative, including an explicit missing photo.
+  const legacy=a?.hasPhoto!==undefined||a?.photoUrl?"":String(a?.photo||"");
+  const source=protectedPath||legacy;
+  if(!source)return fallback;
+  const attributes=protectedPath?`data-employee-photo="${escapeHTML(protectedPath)}" data-photo-employee-id="${escapeHTML(a.backendId)}"`:`src="${escapeHTML(source)}"`;
+  return `${fallback}<img ${attributes} alt="Photo de ${escapeHTML(((a?.nom||"")+" "+(a?.prenom||"")).trim())}" decoding="async" style="display:none;width:100%;height:100%;object-fit:cover" onload="employeePhotoLoaded(this)" onerror="employeePhotoFailed(this)"/>`;
+}
+function employeePhotoLoaded(img){
+  img.style.display="block";
+  const initials=img.previousElementSibling;
+  if(initials?.classList.contains("employee-avatar-initials"))initials.hidden=true;
+}
+function employeePhotoFailed(img){
+  img.style.display="none";
+  const initials=img.previousElementSibling;
+  if(initials?.classList.contains("employee-avatar-initials"))initials.hidden=false;
+}
+function releaseEmployeePhoto(img,entry){
+  entry.cancelled=true;
+  entry.controller?.abort();
+  employeePhotoObserver?.unobserve(entry.target);
+  if(entry.objectUrl)URL.revokeObjectURL(entry.objectUrl);
+  img.removeAttribute("src");
+  employeePhotoFailed(img);
+  employeePhotoLoads.delete(img);
+}
+function pruneEmployeePhotos(){
+  for(const [img,entry] of employeePhotoLoads){
+    if(!img.isConnected||img.dataset.employeePhoto!==entry.path||!sgdiRaceContextStillValid(entry.context)||!sgdiDrhReadIsCurrent(entry.read))releaseEmployeePhoto(img,entry);
+  }
+}
+function drainEmployeePhotos(){
+  while(employeePhotoActive<6&&employeePhotoQueue.length){
+    const entry=employeePhotoQueue.shift();
+    if(entry.cancelled||!entry.img.isConnected)continue;
+    employeePhotoActive++;
+    loadEmployeePhoto(entry).finally(()=>{employeePhotoActive--;drainEmployeePhotos()});
+  }
+}
+function queueEmployeePhoto(img){
+  const entry=employeePhotoLoads.get(img);
+  if(!entry||entry.queued||entry.cancelled)return;
+  entry.queued=true;
+  employeePhotoObserver?.unobserve(entry.target);
+  employeePhotoQueue.push(entry);
+  drainEmployeePhotos();
+}
+async function loadEmployeePhoto(entry){
+  const {img,path,read,context}=entry;
+  if(!read.token||!sgdiRaceContextStillValid(context)||!sgdiDrhReadIsCurrent(read))return;
+  entry.controller=new AbortController();
+  const timer=setTimeout(()=>entry.controller.abort(),15000);
+  try{
+    const response=await fetch(sgdiApiUrl(path,false),{headers:{authorization:"Bearer "+read.token},cache:"no-cache",signal:entry.controller.signal});
+    if(!response.ok)return;
+    const blob=await response.blob();
+    if(!/^image\/(jpeg|png|gif|webp|avif|bmp)$/i.test(blob.type)||!blob.size)return;
+    if(entry.cancelled||!img.isConnected||img.dataset.employeePhoto!==path||!sgdiRaceContextStillValid(context)||!sgdiDrhReadIsCurrent(read))return;
+    entry.objectUrl=URL.createObjectURL(blob);
+    img.src=entry.objectUrl;
+  }catch(_error){
+    // Missing, forbidden, corrupt and offline portraits all retain their initials.
+    employeePhotoFailed(img);
+  }finally{clearTimeout(timer)}
+}
+function hydrateEmployeePhotos(root){
+  pruneEmployeePhotos();
+  if(!employeePhotoCleanupObserver&&typeof MutationObserver!=="undefined"){
+    employeePhotoCleanupObserver=new MutationObserver(pruneEmployeePhotos);
+    employeePhotoCleanupObserver.observe(document.body,{childList:true,subtree:true});
+  }
+  if(!employeePhotoObserver&&typeof IntersectionObserver!=="undefined"){
+    employeePhotoObserver=new IntersectionObserver(entries=>{
+      entries.forEach(entry=>{if(entry.isIntersecting){
+        const img=entry.target.querySelector("img[data-employee-photo]");
+        if(img)queueEmployeePhoto(img);
+      }});
+    },{rootMargin:"128px"});
+  }
+  (root||document).querySelectorAll("img[data-employee-photo]").forEach(img=>{
+    if(employeePhotoLoads.has(img))return;
+    const path=employeePhotoPath({backendId:img.dataset.photoEmployeeId,photoUrl:img.dataset.employeePhoto});
+    if(!path)return;
+    const entry={img,target:img.parentElement,path,read:sgdiDrhReadContext(),context:sgdiCaptureRaceContext(),queued:false,cancelled:false};
+    employeePhotoLoads.set(img,entry);
+    // addEventListener also works in test environments without inline handlers.
+    img.addEventListener("load",()=>employeePhotoLoaded(img),{once:true});
+    img.addEventListener("error",()=>employeePhotoFailed(img),{once:true});
+    // Observe the visible avatar, not the image hidden until decoding succeeds.
+    if(employeePhotoObserver)employeePhotoObserver.observe(entry.target);
+    else queueEmployeePhoto(img);
+  });
+}
 async function sgdiDownload(path,filename){
   const url=sgdiApiUrl(path,false);
   const res=await fetch(url,{cache:"no-store",headers:sgdiAuthHeaders({})});
@@ -1292,7 +1399,9 @@ function employeeFromApi(emp){
     dateFinEssai:data.dateFinEssai||emp.trial_end_date||"",
     dateNaissance:data.dateNaissance||emp.birth_date||"",
     dateRecrutement:data.dateRecrutement||emp.recruit_date||"",
-    photo:data.photo||"",
+    photo:Object.prototype.hasOwnProperty.call(emp,"has_photo")?"":(data.photo||""),
+    photoUrl:typeof emp.photo_url==="string"?emp.photo_url:"",
+    hasPhoto:typeof emp.has_photo==="boolean"?emp.has_photo:undefined,
     affectationCourante,
     extra:data
   };
@@ -1749,6 +1858,7 @@ function sgdiDisplayActiveEmployees(erpEmp,fallback){
 }
 function sgdiEnsureEmployeesForDisplay(options){
   const opt=options||{};
+  if(sgdiOpsEffectifPageActive())return null;
   if(!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
   const scopeSoc=opt.society||"";
   const context=sgdiDrhReadContext(scopeSoc);
@@ -2670,6 +2780,7 @@ function sgdiSqlSyncTasks(options){
   // sgdiPullCurrentEmployees/sgdiPullEmployees/sgdiEnsureEmployeesForDisplay (fiche employé,
   // formulaires, NIN, contrats…) continue de recevoir la représentation complète, inchangée.
   const ensureEmployees=()=>{
+    if(sgdiOpsEffectifPageActive())return Promise.resolve([]);
     if(!employeesTask)employeesTask=sgdiPullCurrentEmployees({silent:true,light:true});
     return employeesTask;
   };
@@ -12335,6 +12446,14 @@ function openEmployeeStatusActions(event,agentId,actionContext){
 }
 
 
+// L'écran EFFECTIFS OPS charge une page SQL; ses compteurs/bootstrap ne doivent
+// pas déclencher en parallèle le chargement de toute la collection employés.
+function sgdiOpsEffectifUsesPages(){
+  return !!sgdiAuthToken()&&(session?.transverse==="ops"||sgdiModuleHostConfig()?.key==="ops");
+}
+function sgdiOpsEffectifPageActive(){
+  return sgdiOpsEffectifUsesPages()&&/^#\/effectif(?:\/(?:recap|actifs|absents|conge|maladie|suspension|sortant|blacklist|operationnels|instance_affectation))?\/?$/.test(location.hash||"");
+}
 function isOpsEffectifContext(){
   return session?.transverse==="ops"||session?.transverse==="superviseur"||sessionStorage.getItem("ficheContext")==="ops"||sessionStorage.getItem("ficheContext")==="superviseur";
 }

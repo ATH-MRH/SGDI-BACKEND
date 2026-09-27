@@ -209,39 +209,8 @@ def _site_matches_query(site: Site, q: str | None) -> bool:
 
 
 def _ops_employee_rows(db: Session, user: User, society: str | None):
-    from app.core.scope_policy import effective_society_values, society_key, SocietyScopeError
-    from app.modules.irongs.sql_bridge import _live_assignment_map
-    try:
-        allowed = effective_society_values(user, society)
-    except SocietyScopeError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    wanted = None if allowed is None else {society_key(value) for value in allowed}
-    # Only operational fields are returned; never serialize the full RH record/extra.
-    rows = [row for row in db.execute(select(Employee).order_by(Employee.last_name, Employee.id)).scalars()
-            if wanted is None or society_key(row.society) in wanted]
-    site_ids = _authorized_site_ids(user)
-    if site_ids:
-        today = date.today()
-        ids = set(db.scalars(select(Assignment.employee_id).where(
-            Assignment.site_id.in_(site_ids), Assignment.active == 1,
-            Assignment.start_date <= today,
-            (Assignment.end_date.is_(None)) | (Assignment.end_date >= today))))
-        rows = [row for row in rows if row.id in ids]
-    live = _live_assignment_map(db, employee_ids=[row.id for row in rows]) if rows else {}
-    fields = ("id", "code", "first_name", "last_name", "phone", "position", "society", "status",
-              "contract_type", "recruit_date", "contract_end_date", "trial_end_date")
-    result = []
-    for row in rows:
-        data = {key: getattr(row, key) for key in fields}
-        extra = row.extra if isinstance(row.extra, dict) else {}
-        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
-        # Preserve the frontend reference, without copying private profile fields.
-        assignment = live.get(row.id) or {}
-        if site_ids and assignment.get("siteBackendId") not in site_ids:
-            assignment = {}
-        data["extra"] = {"_legacy": {"id": legacy.get("id") or str(row.id), "affectationCourante": assignment}}
-        result.append(data)
-    return result
+    from app.modules.ops.employee_photos import read_operational_employees
+    return read_operational_employees(db, user, society=society)
 
 
 @router.get("/employees")
@@ -252,22 +221,25 @@ def ops_employees(society: str | None = None, db: Session = Depends(get_db), use
 @router.get("/employees/page")
 def ops_employees_page(society: str | None = None, page: int = 1, page_size: int = 25,
                        q: str | None = None, mode: str | None = None,
+                       site_id: str | None = None, sort: str = "nom_asc", poste: str | None = None,
+                       situation: str | None = None, recrut_from: date | None = None, recrut_to: date | None = None,
+                       birth_from: date | None = None, birth_to: date | None = None,
+                       age_min: int | None = None, age_max: int | None = None,
+                       operational_requires_dotation: bool = True, operational_requires_pv: bool = True,
                        db: Session = Depends(get_db), user: User = Depends(current_user)):
-    rows = _ops_employee_rows(db, user, society)
-    if q:
-        needle = q.casefold().strip()
-        rows = [row for row in rows if needle in " ".join(str(row.get(k) or "") for k in ("code", "first_name", "last_name", "position")).casefold()]
-    selected_mode = (mode or "actifs").strip().casefold()
-    modes = {
-        **dict.fromkeys(("actifs", "active", "actif"), {"actif", "active"}),
-        **dict.fromkeys(("absents", "absence", "absent"), {"absent"}),
-        **dict.fromkeys(("suspension", "suspendu", "suspendus"), {"suspendu"}),
-        **dict.fromkeys(("sortant", "sortants"), {"sortant", "demissionne", "licencie"}),
-    }
-    if selected_mode not in {"all", "tous", "recap"}:
-        statuses = modes.get(selected_mode, {selected_mode})
-        rows = [row for row in rows if str(row["status"]).casefold() in statuses]
-    return paginate_list(rows, page=page, page_size=page_size)
+    from app.modules.ops.employee_photos import read_operational_employees
+    return read_operational_employees(db, user, society=society, page=page, page_size=page_size,
+                                     q=q, mode=mode, site_id=site_id, sort=sort, poste=poste,
+                                     situation=situation, recrut_from=recrut_from, recrut_to=recrut_to,
+                                     birth_from=birth_from, birth_to=birth_to, age_min=age_min, age_max=age_max,
+                                     operational_requires_dotation=operational_requires_dotation,
+                                     operational_requires_pv=operational_requires_pv)
+
+
+@router.get("/employees/{employee_id}/photo")
+def ops_employee_photo(employee_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from app.modules.ops.employee_photos import employee_photo_response
+    return employee_photo_response(db, user, employee_id, request)
 
 
 @router.get("/dashboard")
