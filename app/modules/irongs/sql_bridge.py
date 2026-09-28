@@ -609,7 +609,11 @@ def client_to_item(row: Client) -> dict[str, Any]:
 
 
 def upsert_client(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    from app.modules.commercial.billing_units import validate_client_data
+
     row = db.get(Client, as_int(item.get("backendId") or item.get("id")) or 0)
+    # Même règle que l'API Commercial : unité tarifaire obligatoire pour une prestation tarifée.
+    item = validate_client_data(item, client_to_item(row) if row else None)
     if not row:
         row = Client(name=str(item.get("nom") or item.get("raisonSociale") or "Client"))
         db.add(row)
@@ -645,7 +649,7 @@ def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: s
         db.add(row)
     row.external_id = external
     if isinstance(row, Invoice):
-        item = _canonical_invoice_item(row, item)
+        item = _canonical_invoice_item(db, row, item)
         raw_number = str(item.get("numero") or item.get("number") or "").strip()
         # Plusieurs brouillons doivent pouvoir coexister. La colonne number est
         # unique : « BROUILLON » n'est donc pas un numéro comptable et reste NULL
@@ -694,7 +698,64 @@ def _next_invoice_number(db: Session) -> str:
 _INVOICE_SNAPSHOT_FIELDS = ("lignes", "totalHT", "montantHT", "tvaAmt", "montantTTC", "ttc", "numero", "periodeDebut", "periodeFin")
 
 
-def _canonical_invoice_item(row: Invoice, item: dict[str, Any]) -> dict[str, Any]:
+def _contract_client(db: Session, catalog_key: Any, society: Any) -> Client | None:
+    """Client d'une clé de catalogue Facturation ([clientId, chemin]), limité à la société
+    de la facture : une ligne ne peut jamais reprendre le tarif d'un client d'une autre société."""
+    import json
+
+    from app.core.scope_policy import society_key
+
+    try:
+        client_id = str((json.loads(catalog_key) if isinstance(catalog_key, str) else catalog_key)[0])
+    except (ValueError, TypeError, IndexError, KeyError):
+        return None
+    row = db.get(Client, int(client_id)) if client_id.isdigit() else None
+    if row is None or (isinstance(row.data, dict) and row.data.get("id") not in (None, "", client_id)):
+        row = next((c for c in db.execute(select(Client)).scalars().all()
+                    if isinstance(c.data, dict) and str(c.data.get("id") or "") == client_id), None)
+    if row is None or society_key(row.society) != society_key(society):
+        return None
+    return row
+
+
+def _apply_contract_units(db: Session, item: dict[str, Any], stored: dict[str, Any]) -> dict[str, Any]:
+    """Unité tarifaire et prix des lignes issues d'une prestation du contrat.
+
+    Source de vérité : la prestation Commercial. Snapshot pris à la première matérialisation
+    de la ligne (uniteContrat / prixContrat) puis conservé : une modification ultérieure du
+    Commercial ne change pas une ligne déjà créée. Tant qu'aucune unité n'a été définie, la
+    ligne la reprend du Commercial à chaque enregistrement (aucune unité inventée). Les valeurs
+    envoyées par le navigateur pour ces champs sont ignorées (payload forgé sans effet)."""
+    from app.modules.commercial.billing_units import catalog_entry
+
+    lines = item.get("lignes")
+    if not isinstance(lines, list):
+        return item
+    previous = {str(l.get("catalogKey")): l for l in (stored.get("lignes") or [])
+                if isinstance(l, dict) and l.get("catalogKey")}
+    out = []
+    for raw in lines:
+        line = dict(raw) if isinstance(raw, dict) else raw
+        key = line.get("catalogKey") if isinstance(line, dict) and (line.get("type") or "article") == "article" else None
+        if key:
+            before = previous.get(str(key))
+            if before and before.get("uniteContrat"):
+                unit, price = before.get("uniteContrat"), before.get("prixContrat")
+            else:
+                client_row = _contract_client(db, key, item.get("societe"))
+                entry = catalog_entry(client_to_item(client_row), key) if client_row else None
+                unit, price = (entry[0], float(entry[1]) if entry[1] is not None else None) if entry else (None, None)
+                if price is None and before and before.get("prixContrat"):
+                    price = before.get("prixContrat")
+            line["uniteContrat"], line["prixContrat"] = unit, price
+            line["unite"] = unit or ""
+            if price is not None:
+                line["prixUnitHT"] = line["prixUnitaire"] = price
+        out.append(line)
+    return {**item, "lignes": out}
+
+
+def _canonical_invoice_item(db: Session, row: Invoice, item: dict[str, Any]) -> dict[str, Any]:
     """Montants d'une facture = calcul serveur (invoice_lines.compute_invoice), jamais ceux
     envoyés par le navigateur. Une facture déjà validée est un document historique : ses
     lignes (NBR compris) et ses montants restent ceux du snapshot enregistré."""
@@ -715,7 +776,7 @@ def _canonical_invoice_item(row: Invoice, item: dict[str, Any]) -> dict[str, Any
         if str(frozen.get("statut") or "").lower() in ("", "brouillon"):
             frozen["statut"] = row.status
         return frozen
-    return compute_invoice(dict(item))
+    return compute_invoice(_apply_contract_units(db, dict(item), stored))
 
 
 def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
@@ -737,7 +798,7 @@ def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
     from app.modules.irongs.invoice_lines import compute_invoice
     current = dict((row.data or {}).get("_legacy") or {})
     if isinstance(current.get("lignes"), list) and current["lignes"]:
-        current = compute_invoice(current, for_validation=True)
+        current = compute_invoice(_apply_contract_units(db, current, current), for_validation=True)
         row.total_ht = current["totalHT"]
         row.total_ttc = current["ttc"]
         row.data = {**(row.data or {}), "_legacy": current}

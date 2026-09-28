@@ -8,6 +8,7 @@ from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.auth.routes import require_admin
 from app.modules.commercial import service
+from app.modules.commercial.billing_units import validate_client_data
 from app.modules.commercial.models import Client
 from app.modules.irongs.models import Position
 from app.modules.ops.models import Site
@@ -112,6 +113,8 @@ def clients(society: str | None = None, status: str | None = None, db: Session =
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     _validate_portal_slug(db, payload.portal_slug)
+    # Unité tarifaire obligatoire pour toute prestation tarifée (jamais déduite du prix).
+    payload.data = validate_client_data(payload.data)
     return service.create_row(db, Client, payload)
 
 
@@ -121,6 +124,9 @@ def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(g
     _ensure_society_allowed(user, payload.society or existing.society)
     if payload.portal_slug is not None:
         _validate_portal_slug(db, payload.portal_slug, exclude_client_id=client_id)
+    if payload.data is not None:
+        # Les anciennes prestations sans unité restent acceptées tant qu'elles sont inchangées.
+        payload.data = validate_client_data(payload.data, existing.data)
     return service.update_row(db, Client, client_id, payload)
 
 

@@ -93,6 +93,25 @@ def period_quantity(unite: Any, start: Any, end: Any) -> int | None:
     return None
 
 
+# Unités d'une ligne de facture : unités tarifaires Commercial + « Année » déjà proposée par
+# l'éditeur de facture/devis.
+INVOICE_UNITS = ("Heure", "Jour", "Mois", "Année", "Forfait")
+_AUTO_UNITS = {"Jour", "Mois", "Forfait"}
+
+
+def _invoice_unit(value: Any) -> str:
+    """Libellé canonique si l'unité est connue (alias compris), sinon la valeur telle quelle."""
+    from app.modules.commercial.billing_units import normalize_billing_unit
+
+    text = str(value or "").strip()
+    if text.lower() in ("année", "annee", "an", "ans", "années", "annees"):
+        return "Année"
+    try:
+        return normalize_billing_unit(text) or ""
+    except HTTPException:
+        return text
+
+
 def _line_price(line: dict[str, Any]) -> Decimal:
     raw = line.get("prixUnitHT") if line.get("prixUnitHT") not in (None, "") else line.get("prixUnitaire")
     return _decimal(raw, "Prix unitaire", default=Decimal(0))
@@ -138,7 +157,16 @@ def compute_invoice(invoice: dict[str, Any], *, for_validation: bool = False) ->
         kind = line.get("type") or "article"
         if kind == "article":
             nbr = line_nbr(line)
-            if line.get("qteAuto") is True:
+            if "unite" in line:
+                line["unite"] = _invoice_unit(line.get("unite"))
+            if "qteAuto" in line and line.get("unite") and line.get("unite") not in _AUTO_UNITS:
+                # Heure (et toute unité non déductible de la période) : quantité toujours saisie.
+                # Unité encore à définir : le mode est conservé jusqu'à sa définition.
+                line["qteAuto"] = False
+            if line.get("uniteContrat") == "Forfait":
+                # Prestation contractuelle au forfait : quantité 1, jamais multipliée par la période.
+                quantity = Decimal(1)
+            elif line.get("qteAuto") is True:
                 # Ligne issue du contrat en mode automatique : la quantité suit TOUJOURS la
                 # période de la facture (le navigateur ne fait qu'afficher ce calcul).
                 derived = period_quantity(line.get("unite"), invoice.get("periodeDebut"), invoice.get("periodeFin"))
@@ -151,7 +179,9 @@ def compute_invoice(invoice: dict[str, Any], *, for_validation: bool = False) ->
                 if nbr < 1:
                     raise HTTPException(422, detail=f"Ligne {index} : NBR doit être au moins 1 pour valider la facture")
                 if line.get("catalogKey") and not str(line.get("unite") or "").strip():
-                    raise HTTPException(422, detail=f"Ligne {index} : choisissez l'unité de la prestation du contrat")
+                    raise HTTPException(422, detail=f"Ligne {index} : unité tarifaire à définir dans Commercial pour cette prestation")
+                if line.get("unite") not in INVOICE_UNITS:
+                    raise HTTPException(422, detail=f"Ligne {index} : unité inconnue ({line.get('unite') or 'vide'})")
                 if quantity <= 0:
                     raise HTTPException(422, detail=f"Ligne {index} : la quantité doit être positive pour valider la facture")
             line.update({"nbr": nbr, "qte": float(quantity), "quantite": float(quantity),

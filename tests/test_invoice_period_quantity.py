@@ -113,16 +113,26 @@ def _get(client, h, item_id):
     return client.get(f"/api/irongs/collections/factures/items/{item_id}", headers=h).json()
 
 
-def _draft(**kw):
+def _contract_line(client, h):
+    """Ligne issue d'une vraie prestation Commercial : MAGASINIER, 3 070,32 / Jour, effectif 30."""
+    name = f"CLIENT-PERIODE-{uuid.uuid4().hex[:5]}"
+    r = client.post("/api/commercial/clients", headers=h, json={"name": name, "society": SOC, "data": {
+        "nom": name, "societe": SOC, "lignesFacturation": [{"designation": "MAGASINIER", "prixUnitaire": 3070.32, "unite": "Jour"}],
+        "tech_sites": [{"nom": "Site A", "lignesFacturation": [{"designation": "MAGASINIER", "qte": 30}]}]}})
+    assert r.status_code == 200, r.text
+    return _auto(catalogKey=f'["{r.json()['id']}","site:0:0"]')
+
+
+def _draft(line, **kw):
     data = {"id": f"fc_per_{uuid.uuid4().hex[:8]}", "numero": "BROUILLON", "statut": "brouillon", "societe": SOC,
             "client": "CLIENT PERIODE", "date": "2026-09-28", "periodeDebut": "2026-09-01", "periodeFin": "2026-09-30",
-            "lignes": [_auto()]}
+            "lignes": [line]}
     data.update(kw)
     return data
 
 
 def test_period_change_recomputes_saved_draft_and_reopen_is_consistent(client, auth_headers, db):
-    data = _draft()
+    data = _draft(_contract_line(client, auth_headers))
     assert _save(client, auth_headers, data).status_code == 200
     saved = _get(client, auth_headers, data["id"])
     assert (saved["lignes"][0]["qte"], saved["lignes"][0]["qteAuto"], saved["totalHT"]) == (30.0, True, 2763288.0)
@@ -136,7 +146,7 @@ def test_period_change_recomputes_saved_draft_and_reopen_is_consistent(client, a
 
 
 def test_issued_invoice_is_frozen_including_its_period(client, auth_headers, db):
-    data = _draft(periodeFin="2026-09-25")
+    data = _draft(_contract_line(client, auth_headers), periodeFin="2026-09-25")
     _save(client, auth_headers, data)
     r = client.post(f"/api/irongs/factures/{data['id']}/valider", headers=auth_headers)
     assert r.status_code == 200, r.text
