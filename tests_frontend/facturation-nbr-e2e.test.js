@@ -56,6 +56,12 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
       authorized_actions: ['read', 'create', 'update', 'validate'], global_society_access: false, password: PASSWORD, validation_password: PASSWORD } });
     assert.strictEqual(created.status, 200, JSON.stringify(created.data));
     token = (await api('/auth/login', { method: 'POST', body: { username: 'FAC01', password: PASSWORD } })).data.access_token;
+    // Client créé côté Commercial (administrateur) : le compte Facturation doit le voir via le
+    // référentiel client limité, sans module Commercial.
+    const cl = await api('/commercial/clients', { method: 'POST', token: login.data.access_token, body: { name: 'CLIENT NBR E2E', society: SOCIETY, nif: 'NIF-E2E',
+      data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32 }],
+        tech_sites: [{ nom: 'Site A', lignesFacturation: [{ designation: 'MAGASINIER', qte: 30 }] }] } } });
+    assert.strictEqual(cl.status, 200, JSON.stringify(cl.data));
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', userDataDir: path.join(tmp, 'chrome'),
       args: ['--no-first-run', '--no-default-browser-check', `--host-resolver-rules=MAP fac.irongs.com 127.0.0.1:${PORT}`] });
   });
@@ -64,11 +70,10 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-    // Compte volontairement minimal (module « fac » seul) : les 403 attendus des chargements
-    // d'arrière-plan employés/clients de l'application (pré-existants, hors NBR) sont écartés ;
-    // toute autre erreur console ou exception JavaScript fait échouer le test.
-    const expected403 = /Erreur API 403 .*\/api\/(drh\/employees|commercial\/clients)|Impossible de charger les employés backend/;
-    page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text()) && !expected403.test(m.text())) errors.push(m.text()); });
+    // Compte Facturation seul (module « fac ») : aucune requête refusée, aucune erreur
+    // console ni exception JavaScript — l'application ne doit exiger ni DRH ni Commercial.
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('response', (res) => { if (res.status() >= 400 && res.url().includes('/api/')) errors.push(`${res.status()} ${res.request().method()} ${res.url()}`); });
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto('http://fac.irongs.com/#/login', { waitUntil: 'networkidle0' });
     await page.waitForSelector('#login-form [name="username"]', { visible: true });
@@ -144,10 +149,6 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     // Comme un utilisateur : attendre la fin du chargement des données, puis ouvrir la liste
     // par la navigation de l'application (menu), jamais par une simple réécriture de l'URL.
     await page.waitForFunction(() => { try { return sgdiHydrated === true; } catch (e) { return false; } }, { timeout: 30000 });
-    // Pré-existant (reproduit sur origin/main sans NBR) : après rechargement, le chargement
-    // « léger » ne ramène pas les factures SQL pour ce profil local ; on déclenche le
-    // rechargement complet existant de l'application avant d'ouvrir la liste.
-    await page.evaluate(() => sgdiPullState({ force: true }));
     await page.evaluate(() => navigate('facturation/factures'));
     await page.waitForFunction(() => typeof window.factureEditorOpen === 'function', { timeout: 20000 });
     await page.waitForFunction((i) => document.querySelector(`[data-fact-id="${i}"]`), { timeout: 20000 }, id);
@@ -156,6 +157,13 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     assert.strictEqual(await page.$eval(row + ' .fact-ligne-nbr', (el) => el.value), '30');
     s = await screen();
     assert.strictEqual(plain(s.line), '2302740,00DZD');
+    // Référentiel client limité chargé pour ce compte (coordonnées + catalogue, pas de notes).
+    const clients = await page.evaluate(() => db.clients.map((c) => ({ nom: c.nom, nif: c.nif, hasNotes: 'notes' in c, effectif: c.tech_sites?.[0]?.lignesFacturation?.[0]?.qte })));
+    assert.deepStrictEqual(clients, [{ nom: 'CLIENT NBR E2E', nif: 'NIF-E2E', hasNotes: false, effectif: 30 }]);
+    // Validation par le compte Facturation (module + action validate + société) : montants figés.
+    const validated = await api(`/irongs/factures/${encodeURIComponent(id)}/valider`, { method: 'POST', token });
+    assert.strictEqual(validated.status, 200, JSON.stringify(validated.data));
+    assert.deepStrictEqual([validated.data.statut, validated.data.lignes[0].nbr, validated.data.totalHT], ['emise', 30, 2302740]);
     assert.deepStrictEqual(errors, []);
   });
 });

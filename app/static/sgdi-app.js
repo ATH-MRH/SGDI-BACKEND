@@ -2027,6 +2027,10 @@ function sgdiActiveStatsSociety(){
     return (isDrhModuleContext()&&drhActiveSocieteFilter())||(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter())||session?.societe||(typeof mySoc==="function"&&mySoc())||"";
   }catch(e){return session?.societe||""}
 }
+function sgdiServerAllowsApiModule(keys){
+  if(!session?.permissionsFromServer||session.moduleAccessGlobal)return true;
+  return keys.some(k=>(session.effectiveModules||[]).includes(k));
+}
 let sgdiSidebarStatsRequest=0;
 async function sgdiRefreshSidebarStats(society){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
@@ -2042,7 +2046,9 @@ async function sgdiRefreshSidebarStats(society){
     if(!stats||!sgdiDrhReadIsCurrent(context))return null;
     if(activeSociety!==String(sgdiActiveStatsSociety()||"").trim())return stats;
     window.SGDI_SIDEBAR_STATS=stats;
-    sgdiEnsureEmployeesForDisplay({society:activeSociety});
+    // /api/drh/* exige le module DRH côté serveur (effective_modules = même règle) : un compte
+    // sans DRH (ex. Facturation seul) ne déclenche plus de lecture employés refusée (403).
+    if(sgdiServerAllowsApiModule(["drh"]))sgdiEnsureEmployeesForDisplay({society:activeSociety});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
     return stats;
   }catch(error){
@@ -2692,16 +2698,34 @@ function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const bid=c.backendId&&Number.isInteger(Number(c.backendId))&&Number(c.backendId)>0?Number(c.backendId):null;const saved=bid?await SGDI.commercial.updateClient(bid,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
+// Collections SQL de la facturation : absentes du snapshot léger du démarrage
+// (/api/irongs/db?light=1), elles sont chargées ici par leurs endpoints dédiés (module
+// Facturation, société autorisée). Sans ce chargement, un brouillon enregistré disparaissait
+// de la liste après un rechargement complet de la page.
+const SGDI_FACTURATION_SQL_COLLECTIONS=["factures","paiements","avoirs","avances","caisse"];
+async function syncFacturationFromPostgres(options){
+  if(!sgdiAuthToken()||!db)return;
+  const opt=options||{};
+  // Référentiel client limité à la facturation (coordonnées + catalogue) : le module
+  // Commercial complet n'est ni requis ni accordé.
+  const sources=SGDI_FACTURATION_SQL_COLLECTIONS.map(name=>[name,"/api/irongs/collections/"+name+"/items"]);
+  if(opt.clients)sources.push(["clients","/api/irongs/facturation/clients"]);
+  // Séquentiel : la synchro d'arrière-plan s'en tient à ~2 requêtes simultanées par page.
+  let failure=null;
+  for(const [name,url] of sources){
+    try{const rows=await sgdiApi(url,{method:"GET",legacy:false});if(Array.isArray(rows))db[name]=rows}
+    catch(e){failure=failure||e}
+  }
+  if(failure)throw failure;
+}
 let sgdiSqlSyncInProgress=null,sgdiSqlSyncAuthToken="";
 function sgdiCurrentRouteRoot(){
   return String(location.hash||"").replace(/^#\/?/,"").split("/")[0]||"";
 }
 function sgdiSqlSyncScope(options){
   const opt=options||{};
-  const all={drh:true,ops:true,materiel:true,commercial:true};
-  // Attendre la synchronisation ne doit pas élargir les domaines demandés.
-  if(isAdminSystemSession())return all;
-  const scope={drh:false,ops:false,materiel:false,commercial:false,superviseur:false};
+  const admin=isAdminSystemSession();
+  const scope={drh:admin,ops:admin,materiel:admin,commercial:admin,superviseur:false,facturation:false};
   const cfg=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
   const route=sgdiCurrentRouteRoot();
   const add=(key)=>{
@@ -2710,12 +2734,18 @@ function sgdiSqlSyncScope(options){
     if(["drh","recrutement","contrats","fiches","effectif","conges","demandes_personnel","reserve","candidats_archives"].includes(key))scope.drh=true;
     if(["ops","sites","pointage","incidents","missions","mouvement"].includes(key))scope.ops=true;
     if(["materiel","achats"].includes(key))scope.materiel=true;
-    if(["commercial","ventes","facturation","facmod"].includes(key))scope.commercial=true;
+    if(["commercial","ventes"].includes(key))scope.commercial=true;
+    // Facturation : ses propres collections SQL (factures, règlements, avoirs…) et le
+    // référentiel client limité — jamais les modules Commercial/DRH implicitement.
+    if(["facturation","facmod","fac"].includes(key))scope.facturation=true;
     // Bucket dédié : sans ça, "superviseur" ne correspondait à aucune clé ci-dessus et retombait
     // sur le repli générique drh+ops (tout le personnel + tous les sites + toutes les affectations
     // de l'entreprise), disproportionné pour un rôle scopé à quelques sites.
     if(["superviseur"].includes(key))scope.superviseur=true;
   };
+  // Attendre la synchronisation ne doit pas élargir les domaines demandés : l'administration
+  // garde son chargement complet, la facturation n'est ajoutée que sur ses écrans/hôte.
+  if(admin){add(cfg?.key);add(session?.transverse);add(route);scope.superviseur=false;return scope;}
   add(opt.module);
   add(cfg?.key);
   add(session?.transverse);
@@ -2839,6 +2869,7 @@ function sgdiSqlSyncTasks(options){
   }
   if(scope.materiel)tasks.push((async()=>{await ensureEmployees();await syncMaterielFromPostgres({full:!!options?.full})})());
   if(scope.commercial)tasks.push(syncClientsFromPostgres());
+  if(scope.facturation)tasks.push(syncFacturationFromPostgres({clients:!scope.commercial}));
   return tasks.length?tasks:[Promise.resolve(true)];
 }
 async function syncSqlModulesFromPostgres(options){
