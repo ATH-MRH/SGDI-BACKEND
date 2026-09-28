@@ -379,7 +379,7 @@ test('Facturation affiche le même TTC contractuel que Commercial depuis les cli
   w.close();
 });
 
-test('catalogue Commercial : sélection explicite, quantité par site, anti-doublon et facture figée',()=>{
+test('catalogue Commercial : sélection explicite, effectif par site (NBR), anti-doublon et facture figée',()=>{
   const app=loadSgdiApp(['factureCommercialArticles','factureEditorClientChange','factureEditorCatalogRender','factureEditorCatalogAdd','factureEditorLigneHTML','facturationLeaveEditor']);
   assert.strictEqual(app.loadError,null);
   const w=app.window,t=app.T();
@@ -394,7 +394,10 @@ test('catalogue Commercial : sélection explicite, quantité par site, anti-doub
   t.factureEditorCatalogAdd(0);t.factureEditorCatalogAdd(0);
   assert.equal(w.document.querySelectorAll('.fact-ligne-row').length,1);
   let row=w.document.querySelector('.fact-ligne-row');
-  assert.equal(row.querySelector('.fact-ligne-qte').value,'4');
+  // « Effectif par site » (Qté du site = nombre de personnes) ⇒ NBR ; sans période facturée,
+  // la quantité n'est pas inventée (champ vide à saisir).
+  assert.equal(row.querySelector('.fact-ligne-nbr').value,'4');
+  assert.equal(row.querySelector('.fact-ligne-qte').value,'');
   assert.equal(row.querySelector('.fact-ligne-prix').value,'100,00');
   assert.equal(row.dataset.siteNom,'Site A');
   assert.equal(row.dataset.contractQuantity,'4');

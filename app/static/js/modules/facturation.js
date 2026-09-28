@@ -306,22 +306,25 @@ function factureEditorLigneHTML(l){
       DEL+'</tr>';
   }
   // article (default)
-  const qte=parseFloat(l.qte||l.quantite)||1;
+  // Ligne issue du contrat dont la quantité n'est pas déterminée par la période : champ vide
+  // (saisie obligatoire avant validation) plutôt qu'une quantité 1 inventée.
+  const qteUnknown=!!l.catalogKey&&l.qte===null;
+  const qte=qteUnknown?0:(parseFloat(l.qte||l.quantite)||1);
   const prix=parseFloat(l.prixUnitHT||l.prixUnitaire)||0;
   const nbr=factureLineNbr(l);
   const IS="border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:12px;background:#fff;text-align:right;width:100%;box-sizing:border-box;outline:none";
   const TA="width:100%;border:none;border-radius:0;padding:6px 8px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:34px;line-height:1.5;box-sizing:border-box;display:block;outline:none";
   const on="oninput=\"factureEditorCalcRow(this.closest('tr'));factureEditorCalcTotals()\"";
   const unite=l.unite||"Mois";
-  const uniteOpts=DEVIS_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
+  const uniteOpts=FACTURE_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
   const SEL="border:1px solid #e5e7eb;border-radius:4px;padding:5px 6px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
   const total2=factureLineAmount(nbr,qte,prix);
-  return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+Number(l.contractQuantity??l.qte??1)+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
+  return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+(Number(l.contractQuantity??l.qte)||"")+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
     '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" data-previous-unit="'+escapeHTML(unite)+'" onchange="factureEditorUnitChange(this)" style="'+SEL+'">'+uniteOpts+'</select></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:76px"><input type="number" min="0" step="1" inputmode="numeric" class="fact-ligne-nbr" style="'+IS+'" value="'+nbr+'" aria-label="NBR — nombre d\'éléments facturés" title="NBR : nombre d\'éléments facturés (agents, véhicules, équipements…)" '+on+'/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
-    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+qte+'" '+on+'/></td>'+
+    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+(qteUnknown?"":qte)+'" '+(qteUnknown?'placeholder="À saisir" ':'')+on+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
     DEL+
     '</tr>';
@@ -579,25 +582,66 @@ function factureClientPaymentDefaults(c,dateFacture){
   };
 }
 
-function factureCommercialArticles(client){
+// Unités de facturation : celles des devis + « Forfait » (prestation globale, quantité 1).
+const FACTURE_UNITES=DEVIS_UNITES.includes("Forfait")?DEVIS_UNITES:[...DEVIS_UNITES,"Forfait"];
+
+// Quantité préremplie d'une NOUVELLE ligne issue du contrat, selon l'unité et la période
+// facturée — jamais inventée : null (champ vide, saisie obligatoire avant validation) quand
+// la période ne la détermine pas. Forfait = 1 ; Jour = jours de la période (bornes incluses) ;
+// Mois = mois calendaires entiers (du 1er au dernier jour) ; Heure / Année = saisie.
+function factureCatalogQuantity(unite,start,end){
+  if(unite==="Forfait")return 1;
+  const days=factureEditorDayCount(start,end);
+  if(!days)return null;
+  if(unite==="Jour")return days;
+  if(unite==="Mois"){
+    const [y1,m1,d1]=start.split("-").map(Number),[y2,m2,d2]=end.split("-").map(Number);
+    const lastDay=new Date(Date.UTC(y2,m2,0)).getUTCDate();
+    return d1===1&&d2===lastDay?(y2-y1)*12+(m2-m1)+1:null;
+  }
+  return null;
+}
+
+// Prestations du contrat Commercial proposées à la facturation.
+//  « Effectif par site » (tech_sites[].lignesFacturation) : Qté = nombre de personnes du
+//  poste sur le site (Nomenclature des postes, masse salariale) ⇒ NBR prérempli ; la
+//  quantité (jours/mois…) vient de l'unité et de la période facturée.
+//  « Effectif global » (catalogue désignation → prix) : ancien format pouvant porter une Qté
+//  dont le sens (effectif ou quantité) n'est pas établi ⇒ comportement antérieur conservé
+//  (NBR 1, Quantité = Qté du contrat), rien n'est déduit.
+function factureCommercialArticles(client,period){
   const prices=clientCatalogMap(client),items=[],used=new Set();
-  const append=(line,key,siteNom,price)=>{
+  const range=period||{};
+  const append=(line,key,siteNom,price,site)=>{
     const designation=String(line.designation||"").trim();if(!designation)return;
-    const q=Number(line.qte??line.quantite??1);
-    items.push({catalogKey:JSON.stringify([String(client.id),key]),designation,siteNom,
-      prixUnitHT:Number(price)||0,qte:Number.isFinite(q)&&q>0?q:1,
-      unite:line.unite||"Mois"});
+    const unite=line.unite||"Mois";
+    const item={catalogKey:JSON.stringify([String(client.id),key]),designation,siteNom,prixUnitHT:Number(price)||0,unite};
+    if(site){
+      const effectif=Number(line.qte??line.quantite);
+      item.effectif=Number.isInteger(effectif)&&effectif>0?effectif:null;
+      item.nbr=item.effectif||1;
+      item.qte=factureCatalogQuantity(unite,range.start,range.end);
+    }else{
+      const q=Number(line.qte??line.quantite??1);
+      item.nbr=1;
+      item.qte=Number.isFinite(q)&&q>0?q:1;
+      item.contractQuantity=item.qte;
+    }
+    items.push(item);
   };
   (client.tech_sites||[]).forEach((site,i)=>{
     (site.lignesFacturation||[]).forEach((line,j)=>{
       used.add(line.designation);
-      append(line,"site:"+i+":"+j,site.denomination||site.nom||("Site "+(i+1)),prices[line.designation]);
+      append(line,"site:"+i+":"+j,site.denomination||site.nom||("Site "+(i+1)),prices[line.designation],true);
     });
   });
   (client.lignesFacturation||[]).forEach((line,i)=>{
-    if(line.qte!=null||!used.has(line.designation))append(line,"catalogue:"+i,"",line.prixUnitaire);
+    if(line.qte!=null||!used.has(line.designation))append(line,"catalogue:"+i,"",line.prixUnitaire,false);
   });
   return items;
+}
+function factureEditorPeriod(){
+  return {start:document.getElementById("fact-periode-debut")?.value||"",end:document.getElementById("fact-periode-fin")?.value||""};
 }
 
 function factureEditorCatalogRender(){
@@ -606,15 +650,15 @@ function factureEditorCatalogRender(){
   if(invoice&&invoice.statut&&invoice.statut!=="brouillon"){el.hidden=true;return;}
   const client=(db.clients||[]).find(c=>String(c.id)===String(document.getElementById("fact-clientId")?.value));
   if(!client||(mySoc()&&client.societe!==mySoc())){el.innerHTML='<p>Choisissez un client pour afficher ses prestations commerciales.</p>';return;}
-  const items=factureCommercialArticles(client);
+  const items=factureCommercialArticles(client,factureEditorPeriod());
   const current=el.querySelector('select')?.value||"";
   const sites=[...new Set(items.map(x=>x.siteNom).filter(Boolean))];
   const filter=sites.includes(current)?current:"";
   const selected=new Set([...document.querySelectorAll('.fact-ligne-row[data-catalog-key]')].map(r=>r.dataset.catalogKey));
-  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. La quantité contractuelle est préremplie et reste ajustable pour la période facturée.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
+  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. NBR reprend l’effectif du site ; la quantité découle de l’unité et de la période facturée. Tout reste ajustable.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
     items.map((item,i)=>({item,i})).filter(({item})=>!filter||item.siteNom===filter).map(({item,i})=>{
       const added=selected.has(item.catalogKey),missing=item.prixUnitHT<=0;
-      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT / '+escapeHTML(item.unite)+'</b><span>Quantité contrat : '+item.qte+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
+      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT / '+escapeHTML(item.unite)+'</b><span>'+(item.siteNom?'Effectif contrat : '+(item.effectif??"non renseigné"):'Quantité contrat : '+item.contractQuantity)+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
     }).join('')+(items.length?'':'<p>Aucune prestation disponible dans le contrat Commercial.</p>')+'</div>';
 }
 
@@ -628,11 +672,11 @@ function factureEditorCatalogAdd(index){
   if(invoice&&invoice.statut&&invoice.statut!=="brouillon")return;
   const client=(db.clients||[]).find(c=>String(c.id)===String(document.getElementById("fact-clientId")?.value));
   if(!client||(mySoc()&&client.societe!==mySoc()))return;
-  const item=factureCommercialArticles(client)[index];
+  const item=factureCommercialArticles(client,factureEditorPeriod())[index];
   const body=document.getElementById('fact-lignes-body');
   if(!body||!item||item.prixUnitHT<=0||[...body.querySelectorAll('[data-catalog-key]')].some(r=>r.dataset.catalogKey===item.catalogKey))return;
   document.getElementById('fact-lignes-empty')?.remove();
-  body.insertAdjacentHTML('beforeend',factureEditorLigneHTML({...item,contractQuantity:item.qte}));
+  body.insertAdjacentHTML('beforeend',factureEditorLigneHTML({...item,contractQuantity:item.effectif??item.contractQuantity}));
   body.querySelectorAll('.fact-ligne-desig').forEach(devisEditorAutoResize);
   factureEditorCatalogSites();factureEditorCalcTotals();factureEditorCatalogRender();factureEditorScheduleDraft();
 }
