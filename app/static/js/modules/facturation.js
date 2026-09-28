@@ -308,23 +308,27 @@ function factureEditorLigneHTML(l){
   // article (default)
   // Ligne issue du contrat dont la quantité n'est pas déterminée par la période : champ vide
   // (saisie obligatoire avant validation) plutôt qu'une quantité 1 inventée.
-  const qteUnknown=!!l.catalogKey&&l.qte===null;
+  const qteUnknown=!!l.catalogKey&&!(Number(l.qte??l.quantite)>0);
   const qte=qteUnknown?0:(parseFloat(l.qte||l.quantite)||1);
+  const qteAuto=!!l.catalogKey&&l.qteAuto===true;
   const prix=parseFloat(l.prixUnitHT||l.prixUnitaire)||0;
   const nbr=factureLineNbr(l);
   const IS="border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:12px;background:#fff;text-align:right;width:100%;box-sizing:border-box;outline:none";
   const TA="width:100%;border:none;border-radius:0;padding:6px 8px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:34px;line-height:1.5;box-sizing:border-box;display:block;outline:none";
   const on="oninput=\"factureEditorCalcRow(this.closest('tr'));factureEditorCalcTotals()\"";
-  const unite=l.unite||"Mois";
-  const uniteOpts=FACTURE_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
+  // Toute saisie de la quantité la rend « manuelle » : un changement de période ne l'écrase plus.
+  const onQte="oninput=\"this.closest('tr').dataset.qteMode='manual';factureEditorCalcRow(this.closest('tr'));factureEditorCalcTotals()\"";
+  // Ligne du contrat sans unité enregistrée : « à choisir », jamais « Mois » par défaut.
+  const unite=l.unite||(l.catalogKey?"":"Mois");
+  const uniteOpts=(unite?"":'<option value="" selected>— Unité —</option>')+FACTURE_UNITES.map(u=>'<option value="'+escapeHTML(u)+'" '+(unite===u?"selected":"")+'>'+escapeHTML(u)+'</option>').join("");
   const SEL="border:1px solid #e5e7eb;border-radius:4px;padding:5px 6px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
   const total2=factureLineAmount(nbr,qte,prix);
-  return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+(Number(l.contractQuantity??l.qte)||"")+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
+  return '<tr class="fact-ligne-row" data-type="article"'+(l.catalogKey?' data-catalog-key="'+escapeHTML(l.catalogKey)+'" data-contract-quantity="'+(Number(l.contractQuantity)||"")+'" data-qte-mode="'+(qteAuto?"auto":"manual")+'"':'')+(l.siteNom?' data-site-nom="'+escapeHTML(l.siteNom)+'"':'')+' style="border-bottom:1px solid #f1f5f9">'+
     '<td style="padding:0;vertical-align:top;border-right:1px solid #f1f5f9"><textarea class="fact-ligne-desig" style="'+TA+'" rows="1" placeholder="Ajouter / créer un article" oninput="devisEditorAutoResize(this)">'+escapeHTML(l.designation||"")+'</textarea>'+(l.siteNom?'<small style="display:block;padding:0 8px 6px;color:#64748b">'+escapeHTML(l.siteNom)+'</small>':'')+'</td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><select class="fact-ligne-unite" data-previous-unit="'+escapeHTML(unite)+'" onchange="factureEditorUnitChange(this)" style="'+SEL+'">'+uniteOpts+'</select></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:76px"><input type="number" min="0" step="1" inputmode="numeric" class="fact-ligne-nbr" style="'+IS+'" value="'+nbr+'" aria-label="NBR — nombre d\'éléments facturés" title="NBR : nombre d\'éléments facturés (agents, véhicules, équipements…)" '+on+'/></td>'+
     '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:140px"><input type="text" inputmode="decimal" class="fact-ligne-prix" '+(l.catalogKey?'readonly title="Tarif du contrat Commercial" ':'')+'style="'+IS+'" value="'+formatPrixHT(prix)+'" oninput="factureEditorCalcRow(this.closest(\'tr\'));factureEditorCalcTotals()" onblur="this.value=formatPrixHT(parseFrNum(this.value))" placeholder="0,00"/></td>'+
-    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+(qteUnknown?"":qte)+'" '+(qteUnknown?'placeholder="À saisir" ':'')+on+'/></td>'+
+    '<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f1f5f9;width:90px"><input type="number" min="0" step="0.01" class="fact-ligne-qte" style="'+IS+'" value="'+(qteUnknown?"":qte)+'" '+(qteUnknown?'placeholder="'+(qteAuto?'Selon période':'À saisir')+'" ':'')+onQte+'/></td>'+
     '<td style="padding:6px 10px;text-align:right;font-weight:600;white-space:nowrap;color:#0f172a;vertical-align:top;border-right:1px solid #f1f5f9;width:130px" class="fact-ligne-total">'+formatDZD(total2)+'</td>'+
     DEL+
     '</tr>';
@@ -380,14 +384,38 @@ function factureEditorDayCount(start,end){
   return Number.isFinite(a)&&Number.isFinite(b)&&b>=a?(b-a)/86400000+1:0;
 }
 
+// Quantité « auto » d'une ligne du contrat, recalculée depuis la période de la facture.
+function factureEditorApplyAutoQuantity(row){
+  const input=row?.querySelector(".fact-ligne-qte");if(!input||row.dataset.qteMode!=="auto")return;
+  const period=factureEditorPeriod();
+  const q=factureCatalogQuantity(row.querySelector(".fact-ligne-unite")?.value||"",period.start,period.end);
+  input.value=q==null?"":String(q);
+  if(q==null)input.placeholder="Selon période";
+  factureEditorCalcRow(row);
+}
+function factureEditorPeriodChange(){
+  const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
+  if(invoice?.statut&&invoice.statut!=="brouillon")return;
+  document.querySelectorAll('#fact-lignes-body .fact-ligne-row[data-type="article"][data-qte-mode="auto"]').forEach(factureEditorApplyAutoQuantity);
+  factureEditorCalcTotals();
+}
 function factureEditorUnitChange(select){
   const invoice=(db.factures||[]).find(f=>f.id===window.__factureEditId);
   if(select.disabled||(invoice?.statut&&invoice.statut!=="brouillon"))return;
-  if(select.value!=="Jour"){select.dataset.previousUnit=select.value;return;}
   const row=select.closest(".fact-ligne-row");
+  // Ligne du contrat : changer l'unité la remet en quantité automatique (période de la
+  // facture) ; en « Jour » sans période valide, le dialogue existant reste proposé.
+  if(row?.dataset.catalogKey){
+    const period=factureEditorPeriod();
+    if(select.value!=="Jour"||factureEditorDayCount(period.start,period.end)){
+      row.dataset.qteMode="auto";select.dataset.previousUnit=select.value;
+      factureEditorApplyAutoQuantity(row);factureEditorCalcTotals();return;
+    }
+  }
+  if(select.value!=="Jour"){select.dataset.previousUnit=select.value;return;}
   if(!row||row.parentElement!==document.getElementById("fact-lignes-body"))return;
   // Keep the previous unit until confirmation, including when the dialog is dismissed.
-  select.value=select.dataset.previousUnit||"Mois";
+  select.value=select.dataset.previousUnit??"Mois";
   const designation=row.querySelector(".fact-ligne-desig");
   const suffix=/\nPériode du (\d{2})\/(\d{2})\/(\d{4}) au (\d{2})\/(\d{2})\/(\d{4})$/;
   const previous=designation.value.match(suffix);
@@ -416,7 +444,7 @@ function factureEditorUnitChange(select){
     }
     const fmt=value=>value.split("-").reverse().join("/");
     designation.value=designation.value.replace(suffix,"").trimEnd()+"\nPériode du "+fmt(from.value)+" au "+fmt(to.value);
-    row.querySelector(".fact-ligne-qte").value=count;
+    row.querySelector(".fact-ligne-qte").value=count;row.dataset.qteMode="manual";
     select.value="Jour";select.dataset.previousUnit="Jour";
     devisEditorAutoResize(designation);factureEditorCalcTotals();factureEditorUpdateWorkflow();factureEditorScheduleDraft();closeModal();
   });
@@ -608,24 +636,33 @@ function factureCatalogQuantity(unite,start,end){
 //  quantité (jours/mois…) vient de l'unité et de la période facturée.
 //  « Effectif global » (catalogue désignation → prix) : ancien format pouvant porter une Qté
 //  dont le sens (effectif ou quantité) n'est pas établi ⇒ comportement antérieur conservé
-//  (NBR 1, Quantité = Qté du contrat), rien n'est déduit.
+//  (NBR 1, Quantité = Qté du contrat, saisie « manuelle »), rien n'est déduit.
+// Unité : celle enregistrée sur la ligne du contrat si elle existe ; le catalogue client ne
+// stocke aujourd'hui que désignation + prix, donc l'unité est laissée À CHOISIR (aucun
+// « Mois » imposé : le prix du contrat n'a pas de base de temps enregistrée).
+// Quantité « auto » (qteAuto) : dérivée de l'unité et de la période, recalculée à chaque
+// changement de période ou d'unité (et par le serveur) tant que l'utilisateur ne la saisit pas.
 function factureCommercialArticles(client,period){
   const prices=clientCatalogMap(client),items=[],used=new Set();
   const range=period||{};
   const append=(line,key,siteNom,price,site)=>{
     const designation=String(line.designation||"").trim();if(!designation)return;
-    const unite=line.unite||"Mois";
+    const unite=FACTURE_UNITES.includes(line.unite)?line.unite:"";
     const item={catalogKey:JSON.stringify([String(client.id),key]),designation,siteNom,prixUnitHT:Number(price)||0,unite};
+    const auto=()=>{item.qteAuto=true;item.qte=factureCatalogQuantity(unite,range.start,range.end);};
     if(site){
       const effectif=Number(line.qte??line.quantite);
       item.effectif=Number.isInteger(effectif)&&effectif>0?effectif:null;
       item.nbr=item.effectif||1;
-      item.qte=factureCatalogQuantity(unite,range.start,range.end);
-    }else{
-      const q=Number(line.qte??line.quantite??1);
+      auto();
+    }else if(line.qte!=null||line.quantite!=null){
+      const q=Number(line.qte??line.quantite);
       item.nbr=1;
-      item.qte=Number.isFinite(q)&&q>0?q:1;
+      item.qte=Number.isFinite(q)&&q>0?q:null;
       item.contractQuantity=item.qte;
+    }else{
+      item.nbr=1;
+      auto();
     }
     items.push(item);
   };
@@ -655,10 +692,10 @@ function factureEditorCatalogRender(){
   const sites=[...new Set(items.map(x=>x.siteNom).filter(Boolean))];
   const filter=sites.includes(current)?current:"";
   const selected=new Set([...document.querySelectorAll('.fact-ligne-row[data-catalog-key]')].map(r=>r.dataset.catalogKey));
-  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. NBR reprend l’effectif du site ; la quantité découle de l’unité et de la période facturée. Tout reste ajustable.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
+  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. NBR reprend l’effectif du site ; choisissez l’unité correspondant au prix du contrat : la quantité suit alors la période facturée. Tout reste ajustable.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
     items.map((item,i)=>({item,i})).filter(({item})=>!filter||item.siteNom===filter).map(({item,i})=>{
       const added=selected.has(item.catalogKey),missing=item.prixUnitHT<=0;
-      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT / '+escapeHTML(item.unite)+'</b><span>'+(item.siteNom?'Effectif contrat : '+(item.effectif??"non renseigné"):'Quantité contrat : '+item.contractQuantity)+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
+      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT'+(item.unite?' / '+escapeHTML(item.unite):' · unité à choisir')+'</b><span>'+(item.siteNom?'Effectif contrat : '+(item.effectif??"non renseigné"):item.contractQuantity!=null?'Quantité contrat : '+item.contractQuantity:'Quantité selon la période')+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
     }).join('')+(items.length?'':'<p>Aucune prestation disponible dans le contrat Commercial.</p>')+'</div>';
 }
 
@@ -819,6 +856,8 @@ function factureEditorValidate(){
     if(parseFrNum(p?.value)<=0){errors.push("Article "+(i+1)+" : prix unitaire obligatoire.");factureEditorMarkInvalid(p);}
     if((parseFloat(q?.value)||0)<=0){errors.push("Article "+(i+1)+" : quantité obligatoire.");factureEditorMarkInvalid(q);}
     if(n&&!factureNbrValid(n.value)){errors.push("Article "+(i+1)+" : NBR doit être un nombre entier au moins égal à 1.");factureEditorMarkInvalid(n);}
+    const u=tr.querySelector(".fact-ligne-unite");
+    if(u&&!u.value){errors.push("Article "+(i+1)+" : choisissez l’unité correspondant au prix du contrat.");factureEditorMarkInvalid(u);}
   });
   if(errors.length){toast(errors[0],"error");return false;}
   return true;
@@ -894,7 +933,7 @@ async function factureEditorSave(options){
       const nbrField=tr.querySelector(".fact-ligne-nbr")?.value;
       const nbr=nbrField===undefined||nbrField===""?1:Number(nbrField);
       const totalHT=factureLineAmount(nbr,qte,prixUnitHT);
-      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,nbr,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT,siteNom:tr.dataset.siteNom||"",catalogKey:tr.dataset.catalogKey||"",contractQuantity:Number(tr.dataset.contractQuantity)||null});
+      if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,nbr,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT,siteNom:tr.dataset.siteNom||"",catalogKey:tr.dataset.catalogKey||"",contractQuantity:Number(tr.dataset.contractQuantity)||null,...(tr.dataset.catalogKey?{qteAuto:tr.dataset.qteMode==="auto"}:{})});
     }
   });
   const totals=factureComputeLinesTotals(lignes,tvaPct);
@@ -1299,8 +1338,8 @@ function renderFactureEditor(view){
     fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
     fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
     '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="padding:0 4px;font-size:11px;font-weight:800;color:#334155">Période de facturation</legend>'+
-    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeDebut||"")+'">')+
-    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeFin||"")+'">')+'</fieldset>'+
+    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeDebut||"")+'" onchange="factureEditorPeriodChange()">')+
+    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeFin||"")+'" onchange="factureEditorPeriodChange()">')+'</fieldset>'+
     fl('Délai paiement',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
       ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+

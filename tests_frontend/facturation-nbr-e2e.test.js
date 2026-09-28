@@ -36,7 +36,7 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     PYTHONPATH: ROOT, APP_ENV: 'test', LOG_LEVEL: 'ERROR', DATABASE_URL: `sqlite:///${path.join(tmp, 'e2e.db')}`,
     JWT_SECRET: 'facturation-nbr-e2e-secret-000000000000', ADMIN_SYSTEM_USERNAME: 'NBRADMIN', ADMIN_SYSTEM_PASSWORD: PASSWORD,
     SGDI_UPLOADS_DIR: path.join(tmp, 'uploads'), LOGIN_MAX_ATTEMPTS: '1000000', STARTUP_MAINTENANCE_ENABLED: 'false' };
-  let server, browser, token;
+  let server, browser, token, noValidateToken;
   t.after(async () => {
     if (browser) await browser.close().catch(() => {});
     if (server) server.kill();
@@ -62,6 +62,12 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
       data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32 }],
         tech_sites: [{ nom: 'Site A', lignesFacturation: [{ designation: 'MAGASINIER', qte: 30 }] }] } } });
     assert.strictEqual(cl.status, 200, JSON.stringify(cl.data));
+    // Compte Facturation SANS l'action « validate » : la validation doit lui être refusée.
+    const nv = await api('/auth/users', { method: 'POST', token: login.data.access_token, body: { username: 'FAC02', full_name: 'FAC02 NBR', email: 'fac02@example.com',
+      role: 'ops', access_level: 'H3', authorized_modules: ['fac'], authorized_societies: [SOCIETY], authorized_sites: [], authorized_structures: [],
+      authorized_actions: ['read', 'create', 'update'], global_society_access: false, password: PASSWORD, validation_password: PASSWORD } });
+    assert.strictEqual(nv.status, 200, JSON.stringify(nv.data));
+    noValidateToken = (await api('/auth/login', { method: 'POST', body: { username: 'FAC02', password: PASSWORD } })).data.access_token;
     browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', userDataDir: path.join(tmp, 'chrome'),
       args: ['--no-first-run', '--no-default-browser-check', `--host-resolver-rules=MAP fac.irongs.com 127.0.0.1:${PORT}`] });
   });
@@ -165,5 +171,109 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     assert.strictEqual(validated.status, 200, JSON.stringify(validated.data));
     assert.deepStrictEqual([validated.data.statut, validated.data.lignes[0].nbr, validated.data.totalHT], ['emise', 30, 2302740]);
     assert.deepStrictEqual(errors, []);
+    await page.close();
+  });
+
+  await t.test('FAC01 — ligne du contrat : NBR = effectif, unité choisie, quantité selon la période, recalcul, reload, validation', async () => {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    page.on('response', (res) => { if (res.status() >= 400 && res.url().includes('/api/')) errors.push(`${res.status()} ${res.request().method()} ${res.url()}`); });
+    await page.setViewport({ width: 1440, height: 900 });
+    // Nouvel onglet : nouvelle connexion FAC01 (la session est propre à l'onglet).
+    await page.goto('http://fac.irongs.com/#/login', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('#login-form [name="username"]', { visible: true });
+    await page.type('#login-form [name="username"]', 'FAC01');
+    await page.type('#login-form [name="password"]', PASSWORD);
+    await page.click('.sgdi-login-submit');
+    await page.waitForSelector('.module-host-soc-card, #sidebar-nav .nav-link, #sidebar-nav .paie-nav-link', { visible: true, timeout: 20000 });
+    if (await page.$('.module-host-soc-card')) {
+      await page.evaluate((soc) => [...document.querySelectorAll('.module-host-soc-card')].find((c) => c.textContent.includes(soc))?.click(), SOCIETY);
+    }
+    await page.evaluate(() => { location.hash = '#/facturation/factures'; });
+    await page.waitForFunction(() => { try { return sgdiHydrated === true && typeof window.factureEditorOpen === 'function'; } catch (e) { return false; } }, { timeout: 30000 });
+    await page.waitForFunction(() => (db.clients || []).some((c) => c.nom === 'CLIENT NBR E2E'), { timeout: 20000 });
+    await page.evaluate(() => window.factureEditorOpen());
+    await page.waitForSelector('#fact-lignes-body', { timeout: 20000 });
+    const setPeriod = (start, end) => page.evaluate((a, b) => {
+      for (const [id, v] of [['fact-periode-debut', a], ['fact-periode-fin', b]]) {
+        const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, start, end);
+    await setPeriod('2026-09-01', '2026-09-30');
+    await page.evaluate(() => window.factureEditorChooseClient(db.clients.find((c) => c.nom === 'CLIENT NBR E2E').id));
+    await page.waitForSelector('.fact-catalog-card button:not([disabled])');
+    assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /Effectif contrat : 30/);
+    await page.click('.fact-catalog-card button:not([disabled])');
+    const row = '#fact-lignes-body .fact-ligne-row[data-type="article"]';
+    await page.waitForSelector(row + '[data-catalog-key]');
+    const state = () => page.evaluate((r) => { const el = document.querySelector(r);
+      return { unite: el.querySelector('.fact-ligne-unite').value, nbr: el.querySelector('.fact-ligne-nbr').value, qte: el.querySelector('.fact-ligne-qte').value,
+        mode: el.dataset.qteMode, total: el.querySelector('.fact-ligne-total').textContent, ht: document.getElementById('fact-r-ht').textContent,
+        tva: document.getElementById('fact-r-tva').textContent, ttc: document.getElementById('fact-r-ttc').textContent }; }, row);
+    let s = await state();
+    // Le contrat n'enregistre pas d'unité : elle est à choisir (aucun « Mois » imposé).
+    assert.deepStrictEqual([s.unite, s.nbr, s.qte, s.mode], ['', '30', '', 'auto']);
+    await page.select(row + ' .fact-ligne-unite', 'Jour');                        // période valide : aucun dialogue
+    s = await state();
+    assert.deepStrictEqual([s.unite, s.qte, plain(s.total)], ['Jour', '30', '2763288,00DZD']);
+    await setPeriod('2026-09-01', '2026-09-25');                                    // recalcul automatique
+    s = await state();
+    assert.deepStrictEqual([s.qte, s.total, s.ht, s.tva, s.ttc].map(plain), ['25', '2302740,00DZD', '2302740,00DZD', '437520,60DZD', '2740260,60DZD']);
+    await page.click(row + ' .fact-ligne-nbr', { clickCount: 3 }); await page.type(row + ' .fact-ligne-nbr', '31');
+    assert.strictEqual(plain((await state()).total), '2379498,00DZD');
+    await page.click(row + ' .fact-ligne-nbr', { clickCount: 3 }); await page.type(row + ' .fact-ligne-nbr', '30');
+    await Promise.all([
+      page.waitForResponse((res) => res.url().includes('/api/irongs/collections/factures/items') && res.request().method() !== 'GET', { timeout: 15000 }),
+      page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Enregistrer le brouillon').click()),
+    ]);
+    const id = await page.evaluate(() => window.__factureEditId);
+    await delay(300);
+    let stored = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
+    assert.deepStrictEqual([stored.lignes[0].unite, stored.lignes[0].nbr, stored.lignes[0].qte, stored.lignes[0].qteAuto, stored.totalHT, stored.ttc],
+      ['Jour', 30, 25, true, 2302740, 2740260.6]);
+    // Rechargement complet, réouverture, nouveau changement de période.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => { try { return sgdiHydrated === true; } catch (e) { return false; } }, { timeout: 30000 });
+    await page.evaluate(() => navigate('facturation/factures'));
+    await page.waitForFunction((i) => document.querySelector(`[data-fact-id="${i}"]`), { timeout: 20000 }, id);
+    await page.evaluate((i) => window.factureEditorOpen(i), id);
+    await page.waitForSelector(row + ' .fact-ligne-nbr', { timeout: 20000 });
+    s = await state();
+    assert.deepStrictEqual([s.unite, s.nbr, s.qte, s.mode, plain(s.total)], ['Jour', '30', '25', 'auto', '2302740,00DZD']);
+    await setPeriod('2026-09-01', '2026-09-30');
+    assert.strictEqual((await state()).qte, '30');
+    await setPeriod('2026-09-01', '2026-09-25');
+    // Quantité saisie à la main : conservée malgré un changement de période.
+    await page.click(row + ' .fact-ligne-qte', { clickCount: 3 }); await page.type(row + ' .fact-ligne-qte', '20');
+    await setPeriod('2026-09-01', '2026-09-30');
+    s = await state();
+    assert.deepStrictEqual([s.qte, s.mode, plain(s.total)], ['20', 'manual', '1842192,00DZD']);
+    await page.click(row + ' .fact-ligne-qte', { clickCount: 3 }); await page.type(row + ' .fact-ligne-qte', '25');
+    await setPeriod('2026-09-01', '2026-09-25');
+    await Promise.all([
+      page.waitForResponse((res) => res.url().includes('/api/irongs/collections/factures/items') && res.request().method() !== 'GET', { timeout: 15000 }),
+      page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Enregistrer le brouillon').click()),
+    ]);
+    await delay(300);
+    stored = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
+    assert.deepStrictEqual([stored.lignes[0].qte, stored.lignes[0].qteAuto, stored.periodeFin, stored.totalHT], [25, false, '2026-09-25', 2302740]);
+    // RBAC : sans « validate » ⇒ refus ; FAC01 (validate, bonne société) ⇒ facture émise figée.
+    assert.strictEqual((await api(`/irongs/factures/${encodeURIComponent(id)}/valider`, { method: 'POST', token: noValidateToken })).status, 403);
+    const validated = await api(`/irongs/factures/${encodeURIComponent(id)}/valider`, { method: 'POST', token });
+    assert.strictEqual(validated.status, 200, JSON.stringify(validated.data));
+    assert.deepStrictEqual([validated.data.statut, validated.data.lignes[0].nbr, validated.data.lignes[0].qte, validated.data.totalHT, validated.data.ttc],
+      ['emise', 30, 25, 2302740, 2740260.6]);
+    const forged = await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { method: 'PUT', token,
+      body: { data: { ...validated.data, periodeFin: '2026-09-30', lignes: [{ ...validated.data.lignes[0], nbr: 99, qte: 99, prixUnitHT: 1 }] } } });
+    assert.strictEqual(forged.status, 200);
+    const after = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
+    assert.deepStrictEqual([after.periodeFin, after.lignes[0].nbr, after.lignes[0].qte, after.totalHT], ['2026-09-25', 30, 25, 2302740]);
+    // Aucun module implicite : API DRH et Commercial complètes toujours refusées.
+    assert.strictEqual((await api('/drh/employees', { token })).status, 403);
+    assert.strictEqual((await api('/commercial/clients', { token })).status, 403);
+    assert.deepStrictEqual(errors, []);
+    await page.close();
   });
 });
