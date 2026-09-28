@@ -17,6 +17,8 @@ l'affichage ; le total enregistré est TOUJOURS celui recalculé ici.
 """
 from __future__ import annotations
 
+import calendar
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
@@ -65,6 +67,32 @@ def _line_quantity(line: dict[str, Any]) -> Decimal:
     return _decimal(raw, "Quantité", default=Decimal(0))
 
 
+def _parse_day(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(value or "").strip()[:10]) if len(str(value or "").strip()) >= 10 else None
+    except ValueError:
+        return None
+
+
+def period_quantity(unite: Any, start: Any, end: Any) -> int | None:
+    """Quantité d'une ligne issue du contrat, déduite de l'unité et de la période facturée.
+
+    Forfait = 1 ; Jour = jours calendaires, bornes incluses ; Mois = mois calendaires ENTIERS
+    (du 1er au dernier jour du mois) ; toute autre situation (Heure, Année, unité non choisie,
+    mois incomplet, période invalide) = None : non déterminée, jamais de prorata inventé."""
+    unit = str(unite or "").strip()
+    if unit == "Forfait":
+        return 1
+    first, last = _parse_day(start), _parse_day(end)
+    if not first or not last or last < first:
+        return None
+    if unit == "Jour":
+        return (last - first).days + 1
+    if unit == "Mois" and first.day == 1 and last.day == calendar.monthrange(last.year, last.month)[1]:
+        return (last.year - first.year) * 12 + (last.month - first.month) + 1
+    return None
+
+
 def _line_price(line: dict[str, Any]) -> Decimal:
     raw = line.get("prixUnitHT") if line.get("prixUnitHT") not in (None, "") else line.get("prixUnitaire")
     return _decimal(raw, "Prix unitaire", default=Decimal(0))
@@ -110,12 +138,20 @@ def compute_invoice(invoice: dict[str, Any], *, for_validation: bool = False) ->
         kind = line.get("type") or "article"
         if kind == "article":
             nbr = line_nbr(line)
-            quantity = _line_quantity(line)
+            if line.get("qteAuto") is True:
+                # Ligne issue du contrat en mode automatique : la quantité suit TOUJOURS la
+                # période de la facture (le navigateur ne fait qu'afficher ce calcul).
+                derived = period_quantity(line.get("unite"), invoice.get("periodeDebut"), invoice.get("periodeFin"))
+                quantity = Decimal(derived or 0)
+            else:
+                quantity = _line_quantity(line)
             price = _line_price(line)
             total = line_total(nbr, quantity, price)
             if for_validation and (line.get("designation") or price):
                 if nbr < 1:
                     raise HTTPException(422, detail=f"Ligne {index} : NBR doit être au moins 1 pour valider la facture")
+                if line.get("catalogKey") and not str(line.get("unite") or "").strip():
+                    raise HTTPException(422, detail=f"Ligne {index} : choisissez l'unité de la prestation du contrat")
                 if quantity <= 0:
                     raise HTTPException(422, detail=f"Ligne {index} : la quantité doit être positive pour valider la facture")
             line.update({"nbr": nbr, "qte": float(quantity), "quantite": float(quantity),

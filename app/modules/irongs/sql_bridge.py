@@ -689,7 +689,9 @@ def _next_invoice_number(db: Session) -> str:
     return f"FAC{seq + 1:04d}/{mm}/{yy}"
 
 
-_INVOICE_SNAPSHOT_FIELDS = ("lignes", "totalHT", "montantHT", "tvaAmt", "montantTTC", "ttc", "numero")
+# La période facturée détermine les quantités des lignes issues du contrat : elle est figée
+# avec les lignes et les montants dès l'émission.
+_INVOICE_SNAPSHOT_FIELDS = ("lignes", "totalHT", "montantHT", "tvaAmt", "montantTTC", "ttc", "numero", "periodeDebut", "periodeFin")
 
 
 def _canonical_invoice_item(row: Invoice, item: dict[str, Any]) -> dict[str, Any]:
