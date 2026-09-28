@@ -407,7 +407,7 @@ function openClientDetail(id){
   const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);
   const tva=ht*0.19;const ttc=ht+tva;
   const totalQte=(c.lignesFacturation||[]).reduce((s,l)=>s+(parseFloat(l.qte)||1),0);
-  const lignesRows=(c.lignesFacturation||[]).map(l=>`<tr><td style="padding:6px 10px;border:1px solid #e2e8f0">${escapeHTML(l.designation||"")}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:right">${formatDZD(l.prixUnitaire||0)}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:center">${l.qte||1}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:right;font-weight:700">${formatDZD((l.prixUnitaire||0)*(l.qte||1))}</td></tr>`).join("");
+  const lignesRows=(c.lignesFacturation||[]).map(l=>`<tr><td style="padding:6px 10px;border:1px solid #e2e8f0">${escapeHTML(l.designation||"")}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:right">${formatDZD(l.prixUnitaire||0)}${clientBillingUnit(l.unite)?" / "+clientBillingUnit(l.unite):" · Unité à définir"}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:center">${l.qte||1}</td><td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:right;font-weight:700">${formatDZD((l.prixUnitaire||0)*(l.qte||1))}</td></tr>`).join("");
   const row=(label,val)=>val?`<tr><td style="padding:5px 10px;color:#64748b;font-size:12px;font-weight:700;width:160px">${label}</td><td style="padding:5px 10px;font-size:13px;font-weight:600">${val}</td></tr>`:"";
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Fiche Client — ${escapeHTML(c.nom||"")}</title>
   <style>

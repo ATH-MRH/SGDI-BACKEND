@@ -59,8 +59,12 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     // Client créé côté Commercial (administrateur) : le compte Facturation doit le voir via le
     // référentiel client limité, sans module Commercial.
     const cl = await api('/commercial/clients', { method: 'POST', token: login.data.access_token, body: { name: 'CLIENT NBR E2E', society: SOCIETY, nif: 'NIF-E2E',
-      data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32 }],
-        tech_sites: [{ nom: 'Site A', lignesFacturation: [{ designation: 'MAGASINIER', qte: 30 }] }] } } });
+      data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32, unite: 'Jour' },
+        { designation: 'AGENT HEURE', prixUnitaire: 550, unite: 'Heure' }],
+        tech_sites: [{ nom: 'Site A', lignesFacturation: [{ designation: 'MAGASINIER', qte: 30 }, { designation: 'AGENT HEURE', qte: 10 }] }] } } });
+    // Une prestation tarifée sans unité tarifaire est refusée par Commercial.
+    assert.strictEqual((await api('/commercial/clients', { method: 'POST', token: login.data.access_token, body: { name: 'SANS UNITE', society: SOCIETY,
+      data: { nom: 'SANS UNITE', societe: SOCIETY, lignesFacturation: [{ designation: 'X', prixUnitaire: 10 }] } } })).status, 422);
     assert.strictEqual(cl.status, 200, JSON.stringify(cl.data));
     // Compte Facturation SANS l'action « validate » : la validation doit lui être refusée.
     const nv = await api('/auth/users', { method: 'POST', token: login.data.access_token, body: { username: 'FAC02', full_name: 'FAC02 NBR', email: 'fac02@example.com',
@@ -205,6 +209,7 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     await page.evaluate(() => window.factureEditorChooseClient(db.clients.find((c) => c.nom === 'CLIENT NBR E2E').id));
     await page.waitForSelector('.fact-catalog-card button:not([disabled])');
     assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /Effectif contrat : 30/);
+    assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /3\s070,32\sDZD HT \/ Jour/);
     await page.click('.fact-catalog-card button:not([disabled])');
     const row = '#fact-lignes-body .fact-ligne-row[data-type="article"]';
     await page.waitForSelector(row + '[data-catalog-key]');
@@ -213,11 +218,9 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
         mode: el.dataset.qteMode, total: el.querySelector('.fact-ligne-total').textContent, ht: document.getElementById('fact-r-ht').textContent,
         tva: document.getElementById('fact-r-tva').textContent, ttc: document.getElementById('fact-r-ttc').textContent }; }, row);
     let s = await state();
-    // Le contrat n'enregistre pas d'unité : elle est à choisir (aucun « Mois » imposé).
-    assert.deepStrictEqual([s.unite, s.nbr, s.qte, s.mode], ['', '30', '', 'auto']);
-    await page.select(row + ' .fact-ligne-unite', 'Jour');                        // période valide : aucun dialogue
-    s = await state();
-    assert.deepStrictEqual([s.unite, s.qte, plain(s.total)], ['Jour', '30', '2763288,00DZD']);
+    // Unité tarifaire reçue de la prestation Commercial (verrouillée), quantité = jours de la période.
+    assert.deepStrictEqual([s.unite, s.nbr, s.qte, s.mode, plain(s.total)], ['Jour', '30', '30', 'auto', '2763288,00DZD']);
+    assert.strictEqual(await page.$eval(row + ' .fact-ligne-unite', (el) => el.disabled), true);
     await setPeriod('2026-09-01', '2026-09-25');                                    // recalcul automatique
     s = await state();
     assert.deepStrictEqual([s.qte, s.total, s.ht, s.tva, s.ttc].map(plain), ['25', '2302740,00DZD', '2302740,00DZD', '437520,60DZD', '2740260,60DZD']);
@@ -251,25 +254,43 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     s = await state();
     assert.deepStrictEqual([s.qte, s.mode, plain(s.total)], ['20', 'manual', '1842192,00DZD']);
     await page.click(row + ' .fact-ligne-qte', { clickCount: 3 }); await page.type(row + ' .fact-ligne-qte', '25');
+    // Prestation à l'heure : 10 agents × 160 h saisies × 550 = 880 000 ; jamais déduit des dates.
+    await page.click('.fact-catalog-card button:not([disabled])');
+    const hourRow = '#fact-lignes-body .fact-ligne-row[data-type="article"]:nth-child(2)';
+    await page.waitForSelector(hourRow + '[data-catalog-key]');
+    assert.deepStrictEqual(await page.$eval(hourRow, (el) => [el.querySelector('.fact-ligne-unite').value, el.querySelector('.fact-ligne-nbr').value,
+      el.querySelector('.fact-ligne-qte').value]), ['Heure', '10', '']);
+    await page.type(hourRow + ' .fact-ligne-qte', '160');
     await setPeriod('2026-09-01', '2026-09-25');
+    assert.deepStrictEqual(await page.$eval(hourRow, (el) => [el.querySelector('.fact-ligne-qte').value, el.querySelector('.fact-ligne-total').textContent.replace(/[\s  ]/g, '')]),
+      ['160', '880000,00DZD']);
     await Promise.all([
       page.waitForResponse((res) => res.url().includes('/api/irongs/collections/factures/items') && res.request().method() !== 'GET', { timeout: 15000 }),
       page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Enregistrer le brouillon').click()),
     ]);
     await delay(300);
     stored = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
-    assert.deepStrictEqual([stored.lignes[0].qte, stored.lignes[0].qteAuto, stored.periodeFin, stored.totalHT], [25, false, '2026-09-25', 2302740]);
+    assert.deepStrictEqual([stored.lignes[0].qte, stored.lignes[0].qteAuto, stored.periodeFin], [25, false, '2026-09-25']);
+    assert.deepStrictEqual(stored.lignes.map((l) => [l.unite, l.uniteContrat, l.prixUnitHT, l.nbr, l.qte, l.totalHT]),
+      [['Jour', 'Jour', 3070.32, 30, 25, 2302740], ['Heure', 'Heure', 550, 10, 160, 880000]]);
+    assert.strictEqual(stored.totalHT, 3182740);
+    // Payload forgé sur le brouillon : Jour → Mois et prix falsifié ⇒ contrat rétabli par le serveur.
+    const forgedDraft = await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { method: 'PUT', token,
+      body: { data: { ...stored, lignes: [{ ...stored.lignes[0], unite: 'Mois', uniteContrat: 'Mois', prixUnitHT: 92109.6, prixContrat: 92109.6 }, stored.lignes[1]] } } });
+    assert.strictEqual(forgedDraft.status, 200);
+    stored = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
+    assert.deepStrictEqual([stored.lignes[0].unite, stored.lignes[0].prixUnitHT, stored.totalHT], ['Jour', 3070.32, 3182740]);
     // RBAC : sans « validate » ⇒ refus ; FAC01 (validate, bonne société) ⇒ facture émise figée.
     assert.strictEqual((await api(`/irongs/factures/${encodeURIComponent(id)}/valider`, { method: 'POST', token: noValidateToken })).status, 403);
     const validated = await api(`/irongs/factures/${encodeURIComponent(id)}/valider`, { method: 'POST', token });
     assert.strictEqual(validated.status, 200, JSON.stringify(validated.data));
     assert.deepStrictEqual([validated.data.statut, validated.data.lignes[0].nbr, validated.data.lignes[0].qte, validated.data.totalHT, validated.data.ttc],
-      ['emise', 30, 25, 2302740, 2740260.6]);
+      ['emise', 30, 25, 3182740, 3787460.6]);
     const forged = await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { method: 'PUT', token,
       body: { data: { ...validated.data, periodeFin: '2026-09-30', lignes: [{ ...validated.data.lignes[0], nbr: 99, qte: 99, prixUnitHT: 1 }] } } });
     assert.strictEqual(forged.status, 200);
     const after = (await api(`/irongs/collections/factures/items/${encodeURIComponent(id)}`, { token })).data;
-    assert.deepStrictEqual([after.periodeFin, after.lignes[0].nbr, after.lignes[0].qte, after.totalHT], ['2026-09-25', 30, 25, 2302740]);
+    assert.deepStrictEqual([after.periodeFin, after.lignes[0].nbr, after.lignes[0].qte, after.lignes[0].unite, after.totalHT], ['2026-09-25', 30, 25, 'Jour', 3182740]);
     // Aucun module implicite : API DRH et Commercial complètes toujours refusées.
     assert.strictEqual((await api('/drh/employees', { token })).status, 403);
     assert.strictEqual((await api('/commercial/clients', { token })).status, 403);

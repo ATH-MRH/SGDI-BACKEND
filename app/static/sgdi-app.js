@@ -16994,6 +16994,7 @@ function clientLigneAdd(){
   const tr=document.createElement("tr");
   tr.innerHTML=`<td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" oninput="clientLigneUpdate(this)"/></td>
     <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${formatDZD(0)}" oninput="clientLigneUpdate(this)" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px">${clientBillingUnitSelectHTML("",true)}</td>
     <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientLigneRemove(this)">✕</button></td>`;
   tbody.appendChild(tr);clientLigneSyncHidden();
 }
@@ -17003,14 +17004,46 @@ function clientLigneRemove(btn){
 function clientLigneUpdate(inp){
   clientLigneSyncHidden();
 }
-// Catalogue "Effectif global" : Désignation + Prix unitaire uniquement. Les quantités et les
-// totaux se font désormais par site (Effectif par site), qui vient piocher le prix ici par
-// correspondance de désignation.
+// Unité tarifaire d'une prestation : donnée métier explicite, propre à chaque prestation
+// (un même contrat peut mélanger Heure, Jour, Mois et Forfait). Jamais déduite du prix ;
+// une ancienne prestation sans unité reste « Unité à définir », sans conversion.
+const CLIENT_BILLING_UNITS=["Heure","Jour","Mois","Forfait"];
+function clientBillingUnit(value){
+  const key=String(value||"").trim().toLowerCase();
+  return ({heure:"Heure",heures:"Heure",h:"Heure",hr:"Heure",hrs:"Heure",jour:"Jour",jours:"Jour",j:"Jour",mois:"Mois",forfait:"Forfait",forfaits:"Forfait",forfaitaire:"Forfait"})[key]||"";
+}
+function clientBillingUnitSelectHTML(value,isNew){
+  const unit=clientBillingUnit(value);
+  const empty=isNew?"— Choisir —":"Unité à définir";
+  return '<select class="select client-ligne-unite" style="width:100%" aria-label="Unité tarifaire" onchange="clientLigneUpdate(this)"><option value=""'+(unit?"":" selected")+'>'+empty+'</option>'+
+    CLIENT_BILLING_UNITS.map(u=>'<option value="'+u+'"'+(u===unit?" selected":"")+'>'+u+'</option>').join("")+'</select>';
+}
+// Prestations tarifées sans unité : refusées sauf ancienne prestation inchangée (même
+// désignation, même prix, déjà sans unité). Même règle que le serveur (billing_units.py).
+function clientCatalogMissingUnits(lignes,previous){
+  const key=l=>String(l?.designation||"").trim()+"|"+(Math.round((parseFloat(l?.prixUnitaire)||0)*100));
+  const legacy=new Set((previous||[]).filter(l=>!clientBillingUnit(l?.unite)).map(key));
+  return (lignes||[]).filter(l=>String(l?.designation||"").trim()&&(parseFloat(l?.prixUnitaire)||0)>0&&!clientBillingUnit(l?.unite)&&!legacy.has(key(l)));
+}
+function clientCatalogUnit(designation,catalog){
+  const m=(catalog||clientCurrentCatalog()).find(l=>l.designation===designation);
+  return clientBillingUnit(m?.unite);
+}
+function clientCatalogPriceLabel(designation,catalog){
+  const unit=clientCatalogUnit(designation,catalog);
+  return formatDZD(clientCatalogPrice(designation,catalog))+(designation?(unit?" / "+unit:" · Unité à définir"):"");
+}
+// Catalogue "Effectif global" : Désignation + Prix unitaire + Unité tarifaire. Les quantités
+// et les totaux se font par site (Effectif par site), qui vient piocher le prix ici par
+// correspondance de désignation. Les autres champs d'une ligne existante sont conservés.
 function clientLigneSyncHidden(){
   const tbody=document.getElementById("client-lignes-body");
   const hidden=document.querySelector("[name='lignesFacturation']");
   if(!tbody||!hidden)return;
-  const lignes=[...tbody.rows].map(tr=>{const inputs=[...tr.querySelectorAll("input")];return{designation:inputs[0]?.value||"",prixUnitaire:parseDZD(inputs[1]?.value)}});
+  let original=[];try{original=JSON.parse(tbody.dataset.original||"[]")}catch(e){}
+  const lignes=[...tbody.rows].map(tr=>{const inputs=[...tr.querySelectorAll("input")];const base=tr.dataset.idx!==undefined&&original[Number(tr.dataset.idx)]||{};
+    const line={...base,designation:inputs[0]?.value||"",prixUnitaire:parseDZD(inputs[1]?.value)};const unit=clientBillingUnit(tr.querySelector(".client-ligne-unite")?.value);
+    if(unit)line.unite=unit;else delete line.unite;return line});
   hidden.value=JSON.stringify(lignes);
   if(typeof clientCatalogSyncAllSites==="function")clientCatalogSyncAllSites();
 }
@@ -17049,7 +17082,7 @@ function clientCatalogSyncAllSites(){
       const prix=clientCatalogPrice(current);
       const prixCell=tr.querySelector(".site-ligne-prix");
       const totalCell=tr.querySelector(".site-ligne-total");
-      if(prixCell)prixCell.textContent=formatDZD(prix);
+      if(prixCell)prixCell.textContent=clientCatalogPriceLabel(current);
       if(totalCell)totalCell.textContent=formatDZD(prix*qte);
     });
     clientSiteLigneSyncHidden(si,pfx);
@@ -17438,7 +17471,7 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
     const prix=clientCatalogPrice(l.designation,catalog);
     const qte=parseFloat(l.qte)||1;
     return `<tr><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" onchange="clientSiteLigneUpdate(this,${si},'${pfx}')">${clientSiteDesignationOptionsHTML(l.designation||"",catalog)}</select></td>
-    <td class="site-ligne-prix" style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;color:#64748b">${formatDZD(prix)}</td>
+    <td class="site-ligne-prix" style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;color:#64748b">${clientCatalogPriceLabel(l.designation,catalog)}</td>
     <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" step="1" min="0" style="width:100%" value="${escapeHTML(String(qte))}" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')"/></td>
     <td class="site-ligne-total" style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;font-weight:700;color:#043970">${formatDZD(prix*qte)}</td>
     <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientSiteLigneRemove(this,${si},'${pfx}')">✕</button></td></tr>`;
@@ -17468,7 +17501,7 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#f1f5f9">
           <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:170px">Prix unitaire</th>
           <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
           <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
           <th style="border:1px solid #e2e8f0;width:36px"></th>
@@ -18053,11 +18086,13 @@ function openClientModal(id,readOnly=false){
         <thead><tr style="background:#f1f5f9">
           <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
           <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:208px;min-width:208px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:150px;min-width:150px">Unité tarifaire</th>
           <th style="border:1px solid #e2e8f0;width:36px"></th>
         </tr></thead>
-        <tbody id="client-lignes-body">${(c?.lignesFacturation||[]).map((l,i)=>`<tr data-idx="${i}">
+        <tbody id="client-lignes-body" data-original="${escapeHTML(JSON.stringify(c?.lignesFacturation||[]))}">${(c?.lignesFacturation||[]).map((l,i)=>`<tr data-idx="${i}">
           <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(l.designation||"")}" oninput="clientLigneUpdate(this)"/></td>
           <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${escapeHTML(formatDZD(l.prixUnitaire||0))}" oninput="clientLigneUpdate(this)" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
+          <td style="border:1px solid #e2e8f0;padding:4px">${clientBillingUnitSelectHTML(l.unite)}</td>
           <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientLigneRemove(this)">✕</button></td>
         </tr>`).join("")}</tbody>
       </table>
@@ -18175,6 +18210,8 @@ async function confirmClient(id,options={}){
   try{lignesFacturation=JSON.parse(fd.get("lignesFacturation")||"[]")}catch(e){}
   try{champsLibres=JSON.parse(fd.get("champsLibres")||"[]")}catch(e){}
   let c=id?db.clients.find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id)):null;
+  const missingUnits=clientCatalogMissingUnits(lignesFacturation,c?.lignesFacturation);
+  if(missingUnits.length){toast("Choisissez l’unité tarifaire de la prestation « "+missingUnits[0].designation+" » (Heure, Jour, Mois ou Forfait).","error");return false}
   const isEdit=!!c;
   if(options.requireExisting&&!c){toast("Mise à jour refusée : client existant introuvable","error");return false}
   if(!c){c={id:uid("cl"),createdBy:session.username,createdAt:new Date().toISOString()};db.clients.push(c)}
