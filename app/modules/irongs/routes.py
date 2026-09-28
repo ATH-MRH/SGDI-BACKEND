@@ -295,8 +295,48 @@ def delete_item(name: str, item_id: str, request: Request, db: Session = Depends
     return result
 
 
+_BILLING_CLIENT_FIELDS = ("wilaya",)
+_BILLING_SITE_FIELDS = ("id", "nom", "denomination", "adresse", "lignesFacturation")
+
+
+def _billing_client(row) -> dict[str, Any]:
+    """Référentiel client LIMITÉ à la facturation : identité, coordonnées de facturation et
+    catalogue (désignation / prix / effectif par site). Aucune donnée commerciale interne
+    (notes, contrat DC, portail…) — le module Commercial n'est pas accordé."""
+    data = row.data if isinstance(row.data, dict) else {}
+    out = {
+        "id": str(data.get("id") or row.id), "backendId": row.id,
+        "nom": data.get("nom") or row.name or "", "raisonSociale": data.get("raisonSociale") or row.legal_name or "",
+        "societe": data.get("societe") or row.society or "", "statut": data.get("statut") or row.status or "actif",
+        "contact": data.get("contact") or row.contact_name or "", "tel": data.get("tel") or row.phone or "",
+        "email": data.get("email") or row.email or "", "adresse": data.get("adresse") or row.address or "",
+        "nif": data.get("nif") or row.nif or "", "ai": data.get("ai") or row.ai or "",
+        "nis": data.get("nis") or row.nis or "", "rc": data.get("rc") or row.rc or "",
+        "lignesFacturation": data.get("lignesFacturation") if isinstance(data.get("lignesFacturation"), list) else [],
+        "tech_sites": [{k: site[k] for k in _BILLING_SITE_FIELDS if k in site}
+                       for site in (data.get("tech_sites") or []) if isinstance(site, dict)],
+    }
+    out.update({k: data[k] for k in _BILLING_CLIENT_FIELDS if k in data})
+    return out
+
+
+@router.get("/facturation/clients")
+def facturation_clients(request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> list[dict[str, Any]]:
+    # Lecture réservée au module Facturation (même garde que la collection « factures ») et
+    # limitée aux sociétés autorisées du compte.
+    _legacy_gate(db, request, user, "factures")
+    from app.modules.commercial.models import Client
+
+    scope = society_scope(user)
+    rows = db.query(Client).order_by(Client.name).all()
+    return [_billing_client(row) for row in rows if scope.allows(row.society)]
+
+
 @router.post("/factures/{item_id}/valider")
-def valider_facture(item_id: str, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+def valider_facture(item_id: str, request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    # Même garde que toute écriture de la collection « factures » : module Facturation,
+    # société autorisée et action « validate » (déduite du chemin /valider).
+    _legacy_gate(db, request, user, "factures", write=True)
     return service.valider_facture(db, item_id, user)
 
 
