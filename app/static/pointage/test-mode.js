@@ -7,7 +7,7 @@
   const FRAME_COUNT = 3;
   const FRAME_SPACING_MS = 250;
   const DEFAULT_MAX_SIDE = 1280;
-  const F = { running: false, busy: false, stream: null, timer: null, controller: null, devices: [], status: null, maxSide: DEFAULT_MAX_SIDE, lastRequestAt: 0, loaded: false };
+  const F = { session: 0, running: false, busy: false, stream: null, timer: null, controller: null, devices: [], status: null, maxSide: DEFAULT_MAX_SIDE, lastRequestAt: 0, loaded: false };
   const $ = (id) => document.getElementById(id);
   const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -220,26 +220,34 @@
     return F.devices;
   }
 
-  async function openSelectedCamera(initial) {
+  // Session caméra : chaque démarrage/arrêt incrémente F.session. Une suite asynchrone d'une
+  // session arrêtée ou remplacée (autorisation caméra, préchauffage) s'arrête sans toucher à la
+  // session courante — sinon elle pouvait couper le flux d'une session redémarrée entre-temps.
+  const current = (session) => F.running && session === F.session;
+
+  async function openSelectedCamera(initial, session) {
     const media = navigator.mediaDevices;
     let constraints = { audio: false, video: { width: { ideal: DEFAULT_MAX_SIDE }, height: { ideal: 960 } } };
     const selected = $("tm-camera").value;
     if (!initial && selected) constraints.video.deviceId = { exact: selected };
     else constraints.video.facingMode = { ideal: "user" };
     const stream = await media.getUserMedia(constraints);
-    if (!F.running) {
+    if (!current(session)) {
       stream.getTracks().forEach((track) => { try { track.stop(); } catch (_) { /* track déjà arrêté */ } });
-      return;
+      return false;
     }
     await setStream(stream);
     await listDevices();
+    if (!current(session)) return false;
     if (initial && F.devices.length) {
       const activeTrack = stream.getVideoTracks && stream.getVideoTracks()[0];
       const activeId = activeTrack && activeTrack.getSettings ? activeTrack.getSettings().deviceId : "";
       if (activeId && F.devices.some((device) => device.deviceId === activeId)) $("tm-camera").value = activeId;
     }
     await sleep(400);
+    if (!current(session)) return false;
     if (!getVideoSize()) throw new Error("Le navigateur n'a pas encore fourni d'image vidéo.");
+    return true;
   }
 
   function stopTracks() {
@@ -256,6 +264,7 @@
   }
 
   function stop() {
+    F.session++;
     F.running = false;
     clearTimeout(F.timer); F.timer = null;
     if (F.controller) { F.controller.abort(); F.controller = null; }
@@ -267,6 +276,7 @@
 
   async function analyze() {
     if (!F.running || F.busy) return;
+    const session = F.session;
     F.busy = true;
     F.lastRequestAt = Date.now();
     clearError();
@@ -274,10 +284,10 @@
     let pause = MIN_INTERVAL_MS;
     try {
       const frames = await captureBurst();
-      if (!F.running) return;
+      if (!current(session)) return;
       F.controller = new AbortController();
       const result = await request(RECOGNIZE_URL, { method: "POST", body: { site_id: Number($("tm-site").value), frames }, signal: F.controller.signal });
-      if (!F.running) return;
+      if (!current(session)) return;
       if (result.recorded !== false || result.mode !== "TEST") {
         stop();
         statusText("Analyse interrompue : la réponse ne confirme pas le Mode Test sans pointage.", "error");
@@ -286,7 +296,7 @@
       renderResult(result);
       statusText(result.state === "RECOGNIZED" ? "VISAGE RECONNU · TEST UNIQUEMENT" : result.state, result.state === "RECOGNIZED" ? "success" : "result");
     } catch (error) {
-      if (!F.running || error.name === "AbortError") return;
+      if (!current(session) || error.name === "AbortError") return;
       if (error.status === 403 || error.status === 404 || error.status === 503) {
         const message = messageForError(error);
         stop();
@@ -299,6 +309,7 @@
       if (error.status === 413 || error.code === "IMAGE_TOO_LARGE") pause = Math.max(MIN_INTERVAL_MS, 4000);
       if (!error.status && error.message) showError(error.message);
     } finally {
+      if (session !== F.session) return;   // session arrêtée ou remplacée : rien à reprogrammer
       F.busy = false;
       F.controller = null;
       if (F.running) {
@@ -326,11 +337,13 @@
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw Object.assign(new Error("Cette caméra nécessite un contexte sécurisé HTTPS et un navigateur compatible."), { camera: true });
       }
+      const session = ++F.session;
       F.running = true;
       updateControls();
       try {
-        await openSelectedCamera(true);
+        if (!(await openSelectedCamera(true, session))) return;
       } catch (error) {
+        if (!current(session)) return;
         F.running = false;
         stopTracks();
         if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError" || error.name === "SecurityError") statusText("CAMÉRA NON AUTORISÉE — autorisez l'accès caméra dans le navigateur.", "error");
@@ -340,7 +353,7 @@
         updateControls();
         return;
       }
-      if (!F.running) return;
+      if (!current(session)) return;
       statusText("EN ATTENTE D'UN VISAGE", "ready");
       F.timer = setTimeout(analyze, 500);
     } catch (error) {
@@ -352,10 +365,11 @@
   async function changeCamera() {
     if (!F.running || F.busy) return;
     stopTracks();
+    const session = F.session;
     try {
-      await openSelectedCamera(false);
-      statusText("EN ATTENTE D'UN VISAGE", "ready");
+      if (await openSelectedCamera(false, session)) statusText("EN ATTENTE D'UN VISAGE", "ready");
     } catch (error) {
+      if (!current(session)) return;
       stop();
       statusText("CAMÉRA INDISPONIBLE — sélectionnez une autre caméra et réessayez.", "error");
     }

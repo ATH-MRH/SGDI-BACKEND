@@ -143,6 +143,37 @@ test('reconnaissance jamais concurrente et arrêt annule le timer et le flux', a
   ctx.dom.window.close();
 });
 
+test('arrêt puis redémarrage pendant le préchauffage caméra : l’ancienne session ne perturbe jamais la nouvelle', async () => {
+  // Revue finale : une session arrêtée pendant ses 400 ms de préchauffage continuait après l'arrêt ;
+  // sans image vidéo (flux libéré), elle levait une erreur et son traitement arrêtait la NOUVELLE
+  // session (F.running = false, flux coupé, « CAMÉRA INDISPONIBLE ») ou doublait la boucle d'analyse.
+  const ctx = await openMode();
+  for (const prop of ['videoWidth', 'videoHeight']) {
+    Object.defineProperty(ctx.w.HTMLVideoElement.prototype, prop, { configurable: true, get() { return this.srcObject ? (prop === 'videoWidth' ? 1920 : 1080) : 0; } });
+  }
+  ctx.d.getElementById('tm-site').value = '12';
+  const first = ctx.w.ATLASTestMode.start();
+  for (let i = 0; i < 100 && !ctx.w.ATLASTestMode.state.stream; i++) await tick(5);
+  assert.ok(ctx.w.ATLASTestMode.state.stream, 'flux ouvert (préchauffage en cours)');
+  // Autorisation caméra de la nouvelle session plus lente que le préchauffage (cas réel Chrome).
+  const media = ctx.w.navigator.mediaDevices, fast = media.getUserMedia;
+  media.getUserMedia = async (constraints) => { await tick(700); return fast(constraints); };
+  ctx.w.ATLASTestMode.stop();
+  const second = ctx.w.ATLASTestMode.start();
+  await Promise.all([first, second]);
+  const started = ctx.calls.filter((call) => call.path.endsWith('/test-mode/recognize')).length;
+  await tick(5300);
+  assert.equal(ctx.w.ATLASTestMode.state.running, true, 'la nouvelle session tourne toujours');
+  assert.ok(ctx.w.ATLASTestMode.state.stream, 'flux de la nouvelle session conservé');
+  assert.doesNotMatch(ctx.d.getElementById('tm-state').textContent, /INDISPONIBLE/);
+  assert.equal(ctx.tracks[0].stopped, true, 'piste de la session arrêtée libérée');
+  assert.equal(ctx.tracks[ctx.tracks.length - 1].stopped, false, 'piste de la nouvelle session active');
+  const analyses = ctx.calls.filter((call) => call.path.endsWith('/test-mode/recognize')).length - started;
+  assert.ok(analyses <= 3, `une seule boucle d'analyse (${analyses} requêtes en 5,3 s)`);
+  ctx.w.ATLASTestMode.stop();
+  ctx.dom.window.close();
+});
+
 test('changer de caméra utilise le périphérique sélectionné et libère l’ancienne piste', async () => {
   const ctx = await openMode();
   ctx.d.getElementById('tm-site').value = '12';
