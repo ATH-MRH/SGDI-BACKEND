@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
+import time
 from datetime import datetime
 from typing import Any
 
@@ -17,13 +19,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import rate_limit
 from app.core.audit import append_audit
 from app.core.config import settings
 from app.core.granular_permissions import is_global_administrator, load_feature_permissions
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
-from app.modules.biometrics import crypto, service
+from app.modules.biometrics import crypto, service, test_mode
 from app.modules.biometrics.cameras import PROFILES, CameraError, adapter_for
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
@@ -511,3 +514,109 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
     frames = _frames_for(camera, None)
     return service.recognize_and_record(db, camera=camera, frames=frames, actor=user, burst_id=payload.burst_id,
                                         employee_hint=payload.employee_id)
+
+
+# ── Mode Test (caméra du navigateur) — AUCUN POINTAGE ────────────────────────────────────
+# Circuit séparé du pointage réel (docs/biometrics.md, § Mode Test) : image du navigateur
+# acceptée ICI SEULEMENT, jamais par /cameras/{id}/recognize ; aucune écriture de présence.
+TEST_PERMISSION = ("biometric_admin", ("validate", "admin"))
+
+
+def _feature_granted(db: Session, user: User, feature: str, actions: tuple[str, ...]) -> bool:
+    return is_global_administrator(user) or any(
+        g.module_key == "attendance" and g.feature_key == feature and g.action_key in actions
+        for g in load_feature_permissions(db, user.id))
+
+
+async def _test_mode_payload(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Permission explicite, limitation de débit, puis lecture BORNÉE du corps (jamais plus de
+    MAX_BODY_BYTES en mémoire) — avant tout décodage d'image."""
+    feature, actions = TEST_PERMISSION
+    if not _feature_granted(db, user, feature, actions):
+        append_audit(db, action="authorization.biometric", resource="api", resource_id="biometric_test_mode",
+                     result="refused", user=user)
+        db.commit()
+        raise HTTPException(403, detail="Permission biométrique explicite requise (biometric_admin)")
+    if not settings.biometric_test_mode_enabled:
+        raise HTTPException(503, detail={"code": "TEST_MODE_DISABLED",
+                                         "message": "Mode Test biométrique désactivé (BIOMETRIC_TEST_MODE_ENABLED=false)"})
+    key = f"biometric-test:{user.id}"
+    if rate_limit.failure_count(key, 60) >= settings.biometric_test_mode_max_per_minute:
+        raise HTTPException(429, detail={"code": "RATE_LIMITED", "message": "Trop d'essais — patientez une minute"})
+    rate_limit.record_failure(key, 60)
+    started = time.perf_counter()
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > test_mode.MAX_BODY_BYTES:
+        raise HTTPException(413, detail={"code": "IMAGE_TOO_LARGE", "message": "Requête trop volumineuse"})
+    size, chunks = 0, []
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > test_mode.MAX_BODY_BYTES:
+            raise HTTPException(413, detail={"code": "IMAGE_TOO_LARGE", "message": "Requête trop volumineuse"})
+        chunks.append(chunk)
+    try:
+        payload = json.loads(b"".join(chunks) or b"{}")
+    except ValueError:
+        raise HTTPException(422, detail={"code": "INVALID_IMAGE", "message": "Corps JSON invalide"}) from None
+    if not isinstance(payload, dict):
+        raise HTTPException(422, detail={"code": "INVALID_IMAGE", "message": "Corps JSON invalide"})
+    payload["_upload_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    return payload
+
+
+@router.get("/test-mode/status")
+def test_mode_status(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Contrat du Mode Test pour l'interface : état, droits du compte, limites, codes."""
+    return {**test_mode.availability(), "permitted": _feature_granted(db, user, *TEST_PERMISSION),
+            "records_attendance": False, "max_frames": test_mode.MAX_FRAMES, "max_frame_bytes": test_mode.MAX_FRAME_BYTES,
+            "max_side_px": test_mode.MAX_SIDE, "formats": list(test_mode.FORMATS),
+            "max_per_minute": settings.biometric_test_mode_max_per_minute, "states": list(test_mode.STATES),
+            "refusal_reasons": list(test_mode.REFUSAL_REASONS), "error_codes": list(test_mode.UNAVAILABLE_CODES)}
+
+
+@router.post("/test-mode/recognize")
+def test_mode_recognize(payload: dict = Depends(_test_mode_payload), db: Session = Depends(get_db),
+                        user: User = Depends(current_user)) -> dict[str, Any]:
+    """Reconnaissance de TEST : { site_id, frames: [image base64 | data URL, …] } →
+    résultat normalisé. N'écrit AUCUNE présence, anomalie, gabarit ni configuration."""
+    from app.modules.attendance.core import _now_local
+
+    started = time.perf_counter()
+    engine = test_mode.ensure_test_mode()
+    try:
+        site_id = int(payload.get("site_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(422, detail="site_id obligatoire") from None
+    site = db.get(Site, site_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if not site or (allowed is not None and site_id not in set(allowed)):
+        raise HTTPException(404, detail="Site introuvable")
+    audit = {"site_id": site_id, "frames": len(payload.get("frames") or []) if isinstance(payload.get("frames"), list) else 0}
+    try:
+        validation_start = time.perf_counter()
+        frames = test_mode.decode_frames(payload.get("frames"))
+        validation_ms = round((time.perf_counter() - validation_start) * 1000, 1)
+        try:
+            result = test_mode.recognize(db, engine=engine, site=site, frames=frames, today=_now_local().date())
+        finally:
+            # Défense en profondeur : même si une écriture s'était glissée dans le pipeline,
+            # elle ne survivrait pas — seule la trace d'audit ci-dessous est enregistrée.
+            db.rollback()
+    except HTTPException as exc:
+        code = exc.detail.get("code") if isinstance(exc.detail, dict) else None
+        append_audit(db, action="biometrics.test_mode.recognize", resource="site", resource_id=site_id, result="refused",
+                     user=user, society=_site_society(site), new_state={**audit, "error": code or exc.status_code})
+        db.commit()
+        raise
+    result["timings_ms"] = {"upload": payload.get("_upload_ms"), "validation": validation_ms, **result["timings_ms"],
+                            "total": round((time.perf_counter() - started) * 1000 + (payload.get("_upload_ms") or 0), 1)}
+    # Métadonnées seulement : jamais d'image, de gabarit, ni de vecteur.
+    append_audit(db, action="biometrics.test_mode.recognize", resource="site", resource_id=site_id, result="success",
+                 user=user, society=_site_society(site),
+                 new_state={**audit, "state": result["state"], "reason_code": result["reason_code"],
+                            "liveness": result["liveness"]["result"],
+                            "confidence": (result["match"] or {}).get("confidence"),
+                            "employee_id": (result["employee"] or {}).get("employee_id") if result["state"] == "RECOGNIZED" else None,
+                            "duration_ms": result["timings_ms"]["total"], "config_version": result["config_version"]})
+    db.commit()
+    return result

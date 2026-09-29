@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     biometric_enabled: bool = False
     biometric_template_key: str | None = None
     biometric_models_dir: str = "/app/models/biometrics"
+    # Mode Test biométrique (caméra du navigateur : Mac, PC, tablette, smartphone) — DÉSACTIVÉ
+    # par défaut et INDÉPENDANT de biometric_enabled : il peut fonctionner sans activer le vrai
+    # pointage facial et n'écrit JAMAIS de présence (voir docs/biometrics.md, § Mode Test).
+    biometric_test_mode_enabled: bool = False
+    biometric_test_mode_max_per_minute: int = 30
     # À activer SEULEMENT après scripts/rename_public_photos.py --apply : refuse les photos dont
     # le nom est prévisible (ex. matricule.jpg). Désactivé par défaut pour ne casser aucune photo.
     photos_require_unguessable_names: bool = False
