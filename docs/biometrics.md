@@ -295,7 +295,9 @@ serveur choisit la meilleure trame.
   glissante (défaut 30, soit un essai toutes les 2 s en continu) ; au-delà **429
   `RATE_LIMITED`**. Compteur en mémoire, par worker (voir `app/core/rate_limit.py`).
   Le frontend ne doit pas analyser en boucle serrée : un essai à la fois, pas plus d'un
-  toutes les 2 s.
+  toutes les 2 s. La réponse 429 ne porte pas d'en-tête `Retry-After` : l'interface
+  (`app/static/pointage/test-mode.js`) suspend alors l'analyse 60 s. Cadence de l'interface
+  livrée : 3 trames espacées de 250 ms, un essai au plus toutes les 2,5 s (≤ 24/min).
 
 #### Réponse 200 (toujours `recorded: false`)
 
@@ -391,6 +393,25 @@ les essais (§8 : photo imprimée, photo sur smartphone/tablette, vidéo, plusie
 et à en relever les résultats et durées — il ne remplace pas la checklist terrain
 `docs/attendance-hardware-checklist.md` sur caméra Dahua.
 
+Le résultat du liveness sur une photo dépend fortement de la chaîne de capture : le même
+portrait envoyé directement a été accepté (0,87), mais refusé le plus souvent une fois diffusé
+par la caméra virtuelle de Chrome puis ré-encodé par le navigateur (0,11–0,63 ; une fois
+0,81). Aucune de ces mesures ne constitue une certification anti-spoof.
+
 Mesure locale (moteur réel, MacBook, JPEG 1280 px, 1 trame) : analyse ≈ 23 ms (décodage 2,
 détection 15, gabarit 5, liveness 1), comparaison 1:N ≈ 2 ms, total ≈ 25–27 ms côté serveur,
-hors réseau. Seuils inchangés.
+hors réseau. Parcours navigateur réel (3 trames 1280×960) : ≈ 95–110 ms côté serveur pour
+l'ensemble de la rafale. Seuils inchangés.
+
+### 12.6 Tests
+
+- Backend : `tests/test_biometrics_test_mode.py` (moteur simulé ; plus un test sur le vrai
+  moteur si `BIOMETRIC_MODELS_DIR` / `BIOMETRIC_TEST_FACES` sont fournis).
+- Interface (jsdom + Chrome, API simulée) : `npm run test:biometric-test-mode`.
+- E2E hostile de bout en bout (vrai serveur, vrai moteur, caméra virtuelle Chrome) :
+  `ATLAS_E2E_PYTHON=… BIOMETRIC_MODELS_DIR=… BIOMETRIC_TEST_FACES=… npm run test:biometric-test-mode-real-e2e`.
+  Il couvre : décision réelle sans pointage, écrans 1440/1024/768/390, navigation pendant la
+  capture, caméra interrompue, arrêt pendant `getUserMedia`, injection sur la route de
+  production, `recorded` forgé, hors périmètre, image trop grande ou invalide, rafale (429),
+  et le comptage de toutes les tables, fichiers, journaux et audit. Les appareils physiques
+  (iPhone, Android, tablettes) restent à tester manuellement.
