@@ -79,6 +79,18 @@ tr:hover td{background:#fafcff}
 .anomaly-list li{padding:8px 0;border-bottom:1px solid #edf2f7;font-size:13px}
 @media (max-width:900px){.shell{grid-template-columns:minmax(0,1fr);padding:14px}.side{position:static;min-width:0;display:flex;gap:6px;overflow-x:auto}.side nav{display:flex;gap:6px;flex:0 0 auto}.nav-btn{width:auto;white-space:nowrap}.side-title{display:none}.page-head>*{min-width:0}}
 @media (max-width:520px){.top{border-radius:0 0 18px 18px}.brand-title{font-size:15px}.grid2{grid-template-columns:1fr}.kpi strong{font-size:22px}}
+.test-mode-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.7fr);gap:14px;align-items:start}
+.test-mode-card{padding:16px;min-width:0}.test-mode-warning{position:sticky;top:8px;z-index:2;background:var(--atlas-warning-soft);border:2px solid var(--atlas-warning);color:var(--atlas-text);border-radius:14px;padding:13px 16px;margin-bottom:14px;font-weight:900;letter-spacing:.025em}
+.test-mode-warning strong{display:block;font-size:14px}.test-mode-warning span{display:block;font-size:12px;margin-top:3px}
+.test-mode-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.test-mode-controls label{margin-top:2px}.test-mode-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.test-mode-actions button{min-height:46px;min-width:132px}
+.test-mode-video-wrap{position:relative;background:#0b1726;border-radius:14px;overflow:hidden;aspect-ratio:16/10;display:grid;place-items:center;margin:14px 0;color:#e2e8f0}
+.test-mode-video{display:block;width:100%;height:100%;object-fit:contain}.test-mode-video-placeholder{text-align:center;padding:20px;color:#cbd5e1;font-weight:750}
+.test-mode-state{border-radius:12px;padding:12px 14px;background:var(--atlas-primary-soft);color:var(--atlas-primary);font-weight:900;min-height:48px;display:flex;align-items:center}
+.test-mode-state.is-error{background:var(--atlas-danger-soft);color:var(--atlas-danger)}.test-mode-state.is-warning{background:var(--atlas-warning-soft);color:var(--atlas-warning)}.test-mode-state.is-success{background:var(--atlas-success-soft);color:var(--atlas-success)}.test-mode-state.is-busy{background:var(--atlas-info-soft);color:var(--atlas-info)}
+.test-mode-result{margin-top:12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--atlas-surface);overflow-wrap:anywhere}.test-mode-result h3{margin:0;font-size:17px}.test-mode-result-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.test-mode-no-write{padding:10px;border-radius:10px;background:var(--atlas-warning-soft);color:var(--atlas-warning);font-weight:900}
+.test-mode-identity,.test-mode-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.test-mode-identity div,.test-mode-details dl div{min-width:0;background:var(--atlas-surface-secondary);border-radius:9px;padding:8px}.test-mode-identity dt,.test-mode-details dt{color:var(--atlas-text-muted);font-size:11px;font-weight:800}.test-mode-identity dd,.test-mode-details dd{margin:2px 0 0;font-weight:800;overflow-wrap:anywhere}.test-mode-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.test-mode-metrics span{background:var(--atlas-primary-soft);border-radius:999px;padding:6px 10px;font-size:12px}.test-mode-details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.test-mode-details summary{cursor:pointer;color:var(--atlas-primary);font-weight:850;min-height:30px}.test-mode-checklist{padding:16px}.test-mode-checklist label{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;min-height:38px;margin:2px 0}.test-mode-checklist input{width:18px;height:18px;flex:none}
+@media(max-width:900px){.test-mode-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:520px){.test-mode-card,.test-mode-checklist{padding:12px}.test-mode-warning{position:static}.test-mode-video-wrap{aspect-ratio:3/4;max-height:55vh;margin:10px 0}.test-mode-video{object-fit:cover}.test-mode-controls{grid-template-columns:1fr}.test-mode-actions{display:grid;grid-template-columns:1fr 1fr}.test-mode-actions button{height:48px;min-height:48px;min-width:0;width:100%;padding:10px 8px}.test-mode-identity,.test-mode-details dl{grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
@@ -114,6 +126,7 @@ tr:hover td{background:#fafcff}
       </nav><div class="side-title">Biométrie</div><nav>
         <button class="nav-btn" data-view="cameras" type="button">◉ Caméras</button>
         <button class="nav-btn" data-view="duplicates" type="button">⧉ Doublons à revoir</button>
+        <button class="nav-btn hidden" data-view="test-mode" type="button">◎ Mode Test facial</button>
       </nav>
     </aside>
     <main>
@@ -143,6 +156,28 @@ tr:hover td{background:#fafcff}
         <div class="page-head"><div><h2>Doublons biométriques à revoir</h2><p>Un visage proche d'un autre employé n'est jamais activé automatiquement. Décision humaine obligatoire, justifiée et tracée.</p></div></div>
         <div class="card"><div id="dup-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Date</th><th>Employé à enrôler</th><th>Employé déjà enrôlé proche</th><th>Score</th><th>Source</th><th></th></tr></thead><tbody id="dup-rows"></tbody></table></div></div>
+      </section>
+      <section id="view-test-mode" class="hidden" aria-labelledby="tm-title">
+        <div class="page-head"><div><h2 id="tm-title">Mode Test facial</h2><p>Diagnostic caméra, détection, qualité, liveness et reconnaissance — aucun effet sur les présences.</p></div></div>
+        <div class="test-mode-warning" role="note"><strong>MODE TEST</strong><span>AUCUN POINTAGE NE SERA ENREGISTRÉ.</span></div>
+        <div class="test-mode-layout">
+          <div class="card test-mode-card">
+            <div class="test-mode-controls">
+              <div><label for="tm-site">Site autorisé</label><select id="tm-site"><option value="">Chargement des sites…</option></select></div>
+              <div><label for="tm-camera">Caméra</label><select id="tm-camera" disabled aria-describedby="tm-camera-help"><option value="">La liste apparaît après autorisation</option></select><small id="tm-camera-help">Sur mobile, la caméra frontale est sélectionnée par défaut.</small></div>
+            </div>
+            <div class="test-mode-video-wrap"><div id="tm-video-placeholder" class="test-mode-video-placeholder">Le flux caméra apparaîtra ici après démarrage.</div><video id="tm-video" class="test-mode-video hidden" autoplay playsinline muted aria-label="Flux vidéo caméra du Mode Test"></video></div>
+            <canvas id="tm-canvas" class="hidden" aria-hidden="true"></canvas>
+            <div id="tm-state" class="test-mode-state" role="status" aria-live="polite">PRÊT</div>
+            <div id="tm-error" class="state error hidden" role="alert"></div>
+            <div class="test-mode-actions"><button class="primary" id="tm-start" type="button" disabled>Démarrer le test</button><button class="secondary" id="tm-stop" type="button" disabled>Arrêter</button><button class="secondary" id="tm-change-camera" type="button" disabled>Changer de caméra</button></div>
+            <div id="tm-result" class="test-mode-result hidden" aria-live="polite"></div>
+            <p class="test-mode-disclaimer">Le Mode Test ne valide pas la sécurité du liveness sur le matériel de production. Les essais sur caméra de site restent requis.</p>
+          </div>
+          <aside class="card test-mode-checklist"><h3>Scénarios à tester</h3><p>Checklist locale à cette page — aucun résultat n'est transmis.</p>
+            <label><input type="checkbox"> Vrai visage</label><label><input type="checkbox"> Photo imprimée</label><label><input type="checkbox"> Photo sur smartphone</label><label><input type="checkbox"> Photo sur tablette</label><label><input type="checkbox"> Vidéo</label><label><input type="checkbox"> Plusieurs personnes</label><label><input type="checkbox"> Faible lumière</label><label><input type="checkbox"> Contre-jour</label>
+          </aside>
+        </div>
       </section>
       <section id="view-anomalies" class="hidden">
         <div class="page-head"><div><h2>Anomalies</h2><p>Chaque anomalie reste ouverte jusqu'à sa résolution tracée. Une clôture ne les masque jamais.</p></div>
@@ -219,6 +254,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   });
 
   function logout() {
+    if (window.ATLASTestMode) window.ATLASTestMode.stop();
     state.token = ""; state.user = null;
     sessionStorage.removeItem(TOKEN_KEY);
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
@@ -233,7 +269,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "cameras", "duplicates"].includes(initial) ? initial : "board");
+    show(["anomalies", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -246,6 +282,9 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
     $("view-duplicates").classList.toggle("hidden", view !== "duplicates");
+    $("view-test-mode").classList.toggle("hidden", view !== "test-mode");
+    if (view !== "test-mode" && window.ATLASTestMode) window.ATLASTestMode.stop();
+    if (view === "test-mode" && window.ATLASTestMode) return window.ATLASTestMode.load();
     if (view === "cameras") return loadCameras();
     if (view === "duplicates") return loadDuplicates();
     return view === "board" ? loadBoard() : loadAnomalies();
@@ -605,5 +644,6 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   if (state.token) enter().catch(() => logout());
 })();
 </script>
+<script src="/static/pointage/test-mode.js?v=20260929-biometric-test-mode" defer></script>
 </body>
 </html>
