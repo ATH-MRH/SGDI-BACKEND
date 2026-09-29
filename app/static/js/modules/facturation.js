@@ -53,13 +53,17 @@ async function renderFactClients(view){
   view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
   sgdiShowDataLoadingBar("Chargement des clients...");
   let list=[];let result=null;
-  try{
+  const localList=()=>bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  // Compte Facturation sans module Commercial : référentiel client limité déjà chargé
+  // (/api/irongs/facturation/clients) ; l'API Commercial complète lui est refusée.
+  if(!sgdiServerAllowsApiModule(["dc"]))list=localList();
+  else try{
     result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
     list=serverItems(result).map(clientFromApi);
     list.forEach(c=>sgdiUpsertServerItem("clients",c));
   }catch(e){
     console.warn("renderFactClients API error",e);
-    list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+    list=localList();
   }
   try{
     const rows=list.map(c=>{
@@ -775,6 +779,9 @@ function factureEditorClientSearch(input){
   const clients=(db.clients||[]).filter(c=>(!mySoc()||c.societe===mySoc())&&(!q||normalizedSearchText([c.nom,c.rc,c.nif,c.email].join(" ")).includes(q))).slice(0,12);
   factureEditorRenderClientResults(clients);
   clearTimeout(factureClientSearchTimer);
+  // Sans module Commercial : filtrage du référentiel limité ci-dessus, jamais d'appel à
+  // l'API Commercial complète (refusée : 403 à chaque frappe).
+  if(!sgdiServerAllowsApiModule(["dc"]))return;
   factureClientSearchTimer=facturationModuleTimeout(async()=>{try{
     const response=await SGDI.commercial.clientsPage({society:mySoc()||undefined,q:input.value.trim()||undefined,page:1,page_size:20});
     const remote=serverItems(response).map(clientFromApi);

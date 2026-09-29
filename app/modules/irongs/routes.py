@@ -295,14 +295,18 @@ def delete_item(name: str, item_id: str, request: Request, db: Session = Depends
     return result
 
 
-_BILLING_CLIENT_FIELDS = ("wilaya",)
+# Champs optionnels du client, transmis seulement s'ils existent : wilaya et conditions de
+# facturation lues par factureClientPaymentDefaults (conditionsPaiement = ancien libellé de
+# la remarque de facture).
+_BILLING_CLIENT_FIELDS = ("wilaya", "modePaiement", "delaiPaiement", "delaiDepotFacture", "remarqueFacture", "conditionsPaiement")
 _BILLING_SITE_FIELDS = ("id", "nom", "denomination", "adresse", "lignesFacturation")
 
 
 def _billing_client(row) -> dict[str, Any]:
-    """Référentiel client LIMITÉ à la facturation : identité, coordonnées de facturation et
-    catalogue (désignation / prix / effectif par site). Aucune donnée commerciale interne
-    (notes, contrat DC, portail…) — le module Commercial n'est pas accordé."""
+    """Référentiel client LIMITÉ à la facturation : identité, coordonnées et conditions de
+    facturation, activités (objet de la facture) et catalogue (désignation / prix / unité /
+    effectif par site). Aucune donnée commerciale interne (notes, opportunités, contrat DC,
+    portail…) — le module Commercial n'est pas accordé."""
     data = row.data if isinstance(row.data, dict) else {}
     out = {
         "id": str(data.get("id") or row.id), "backendId": row.id,
@@ -312,6 +316,10 @@ def _billing_client(row) -> dict[str, Any]:
         "email": data.get("email") or row.email or "", "adresse": data.get("adresse") or row.address or "",
         "nif": data.get("nif") or row.nif or "", "ai": data.get("ai") or row.ai or "",
         "nis": data.get("nis") or row.nis or "", "rc": data.get("rc") or row.rc or "",
+        # « Prestations et services fournis » : activités proposées comme OBJET de la facture
+        # (distinctes des lignes tarifaires). Format d'origine conservé (texte ou liste) ;
+        # même lecture que clientFromApi : data.prestationsServices, sinon colonne services.
+        "prestationsServices": data.get("prestationsServices") or row.services or "",
         "lignesFacturation": data.get("lignesFacturation") if isinstance(data.get("lignesFacturation"), list) else [],
         "tech_sites": [{k: site[k] for k in _BILLING_SITE_FIELDS if k in site}
                        for site in (data.get("tech_sites") or []) if isinstance(site, dict)],

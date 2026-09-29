@@ -59,7 +59,8 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     // Client créé côté Commercial (administrateur) : le compte Facturation doit le voir via le
     // référentiel client limité, sans module Commercial.
     const cl = await api('/commercial/clients', { method: 'POST', token: login.data.access_token, body: { name: 'CLIENT NBR E2E', society: SOCIETY, nif: 'NIF-E2E',
-      data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32, unite: 'Jour' },
+      data: { nom: 'CLIENT NBR E2E', societe: SOCIETY, notes: 'interne', prestationsServices: 'Gestion logistique entrepôt\nTransport',
+        modePaiement: 'Virement bancaire', delaiPaiement: '30 jours', delaiDepotFacture: '3', remarqueFacture: 'Test conditions facture', lignesFacturation: [{ designation: 'MAGASINIER', prixUnitaire: 3070.32, unite: 'Jour' },
         { designation: 'AGENT HEURE', prixUnitaire: 550, unite: 'Heure' }],
         tech_sites: [{ nom: 'Site A', lignesFacturation: [{ designation: 'MAGASINIER', qte: 30 }, { designation: 'AGENT HEURE', qte: 10 }] }] } } });
     // Une prestation tarifée sans unité tarifaire est refusée par Commercial.
@@ -206,7 +207,27 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
       }
     }, start, end);
     await setPeriod('2026-09-01', '2026-09-30');
-    await page.evaluate(() => window.factureEditorChooseClient(db.clients.find((c) => c.nom === 'CLIENT NBR E2E').id));
+    // Recherche client en tapant son nom (référentiel limité : aucun appel à l'API Commercial).
+    await page.type('#fact-client-search', 'CLIENT NBR');
+    await page.waitForSelector('#fact-client-results button');
+    await delay(400);
+    await page.evaluate(() => [...document.querySelectorAll('#fact-client-results button')].find((b) => b.textContent.includes('CLIENT NBR E2E'))
+      .dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+    // Objet de facture = activités Commercial (≠ articles), conditions de paiement préremplies.
+    const subject = () => page.evaluate(() => ({ choices: [...document.querySelectorAll('.fact-subject-choice')].map((el) => [el.value, el.checked]),
+      objet: document.getElementById('fact-objet').value, text: document.getElementById('fact-subject-picker').textContent,
+      mode: document.getElementById('fact-mode').value, echeance: document.getElementById('fact-echeance').value, date: document.getElementById('fact-date').value,
+      depot: document.getElementById('fact-dateDepot').value, echDate: document.getElementById('fact-echDate').value, remarque: document.getElementById('fact-remarque').value }));
+    let sub = await subject();
+    assert.deepStrictEqual(sub.choices, [['Gestion logistique entrepôt', false], ['Transport', false]]);
+    assert.doesNotMatch(sub.text, /Aucune activité renseignée/);
+    const plusDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+    assert.deepStrictEqual([sub.mode, sub.echeance, sub.depot, sub.echDate, sub.remarque],
+      ['Virement bancaire', '30 jours', plusDays(sub.date, 3), plusDays(sub.date, 30), 'Test conditions facture']);
+    await page.evaluate(() => { const el = [...document.querySelectorAll('.fact-subject-choice')].find((c) => c.value === 'Gestion logistique entrepôt');
+      el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); });
+    assert.strictEqual((await subject()).objet, 'Gestion logistique entrepôt');
+    assert.deepStrictEqual(await page.$$eval('#fact-commercial-catalog .fact-catalog-card strong', (els) => els.map((e) => e.textContent)), ['MAGASINIER', 'AGENT HEURE']);
     await page.waitForSelector('.fact-catalog-card button:not([disabled])');
     assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /Effectif contrat : 30/);
     assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /3\s070,32\sDZD HT \/ Jour/);
@@ -245,6 +266,11 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     await page.waitForSelector(row + ' .fact-ligne-nbr', { timeout: 20000 });
     s = await state();
     assert.deepStrictEqual([s.unite, s.nbr, s.qte, s.mode, plain(s.total)], ['Jour', '30', '25', 'auto', '2302740,00DZD']);
+    // Après rechargement : client, objet, activités et conditions conservés.
+    sub = await subject();
+    assert.deepStrictEqual([sub.objet, sub.choices, sub.mode, sub.echeance, sub.remarque],
+      ['Gestion logistique entrepôt', [['Gestion logistique entrepôt', true], ['Transport', false]], 'Virement bancaire', '30 jours', 'Test conditions facture']);
+    assert.strictEqual(await page.$eval('#fact-client-search', (el) => el.value), 'CLIENT NBR E2E');
     await setPeriod('2026-09-01', '2026-09-30');
     assert.strictEqual((await state()).qte, '30');
     await setPeriod('2026-09-01', '2026-09-25');
