@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import math
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -47,6 +48,9 @@ class FrameAnalysis:
     width: int
     height: int
     faces: list[FaceObservation]
+    # Durées par phase en millisecondes (decode, detection, quality, embedding, liveness) —
+    # mesure seulement, sans effet sur le calcul ; vide pour un moteur non instrumenté.
+    timings: dict[str, float] = field(default_factory=dict, repr=False)
 
 
 class FaceEngine(Protocol):
@@ -118,6 +122,15 @@ class OpenCvFaceEngine:
 
     def analyze(self, image: bytes) -> FrameAnalysis:
         cv2, np = self._cv2, self._np
+        timings = {"decode": 0.0, "detection": 0.0, "quality": 0.0, "embedding": 0.0, "liveness": 0.0}
+        clock = time.perf_counter()
+
+        def lap(phase: str) -> None:
+            nonlocal clock
+            now = time.perf_counter()
+            timings[phase] += (now - clock) * 1000
+            clock = now
+
         img = cv2.imdecode(np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             raise ValueError("Image illisible")
@@ -127,9 +140,11 @@ class OpenCvFaceEngine:
             img = cv2.resize(img, (int(w * factor), int(h * factor)))
             h, w = img.shape[:2]
         faces_out: list[FaceObservation] = []
+        lap("decode")
         with self._lock:
             self._detector.setInputSize((w, h))
             _, faces = self._detector.detect(img)
+            lap("detection")
             for face in (faces if faces is not None else []):
                 x, y, bw, bh = (int(round(v)) for v in face[:4])
                 bbox = (max(0, x), max(0, y), max(1, bw), max(1, bh))
@@ -139,17 +154,20 @@ class OpenCvFaceEngine:
                 gray = cv2.resize(cv2.cvtColor(region, cv2.COLOR_BGR2GRAY), (112, 112))
                 sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
                 signature = (cv2.resize(gray, (16, 16)).astype(np.float32) / 255.0).flatten().tolist()
+                lap("quality")
                 aligned = self._recognizer.alignCrop(img, face)
                 embedding = self._recognizer.feature(aligned).flatten().astype(float).tolist()
+                lap("embedding")
                 self._liveness.setInput(self._liveness_crop(img, bbox))
                 logits = self._liveness.forward()[0].astype(float)
                 probs = np.exp(logits - logits.max()); probs = probs / probs.sum()
+                lap("liveness")
                 faces_out.append(FaceObservation(
                     bbox=bbox, detection_score=float(face[-1]), face_px=min(bbox[2], bbox[3]),
                     sharpness=sharpness, brightness=float(gray.mean()), embedding=embedding,
                     liveness_real=float(probs[1]), signature=signature,
                 ))
-        return FrameAnalysis(width=w, height=h, faces=faces_out)
+        return FrameAnalysis(width=w, height=h, faces=faces_out, timings={k: round(v, 2) for k, v in timings.items()})
 
 
 _engine: FaceEngine | None = None
