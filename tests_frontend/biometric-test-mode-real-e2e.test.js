@@ -186,6 +186,9 @@ print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
     const page = await openApp(video("live"));
     await page.click("#tm-start");
     await page.waitForFunction(() => !document.querySelector("#tm-result").classList.contains("hidden"), { timeout: 45000 });
+    // Le corps de la réponse interceptée est lu de façon asynchrone côté Node : la page peut
+    // afficher le résultat avant que `results` ne soit rempli.
+    for (let i = 0; i < 100 && !results.length; i++) await sleep(50);
     const first = results[0];
     assert.ok(first && first.recorded === false && first.mode === "TEST", JSON.stringify(first));
     assert.ok(["RECOGNIZED", "LIVENESS_FAILED"].includes(first.state), first.state);            // visage réel détecté
