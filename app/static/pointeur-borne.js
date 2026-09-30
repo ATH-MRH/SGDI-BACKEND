@@ -1,0 +1,469 @@
+/* Borne de pointage ATLAS — tablette Samsung / smartphone (circuit B de production).
+ *
+ * Distinct du Mode Test (aucune image de test n'enregistre jamais de présence) et des caméras
+ * Dahua lues par le serveur. Le navigateur ne devient une borne qu'après ASSOCIATION par un
+ * administrateur (code à usage unique) : la page génère alors une clé ECDSA P-256 NON
+ * EXTRACTIBLE (WebCrypto), conservée dans IndexedDB, et signe chaque requête. Aucune session
+ * humaine, aucun mot de passe, aucune administration, aucun lien de navigation.
+ *
+ * Parcours normal, zéro clic : PRÊT → mouvement devant la caméra → défi serveur (usage
+ * unique, quelques secondes) → rafale live → reconnaissance serveur (liveness, 1:N du site,
+ * Attendance Core) → ENTRÉE / SORTIE affichée SEULEMENT après confirmation serveur → pause →
+ * réarmement quand la scène change (la personne s'en va). Hors ligne : FAIL CLOSED — rien
+ * n'est enregistré ni mis en file d'attente localement.
+ */
+(function () {
+  "use strict";
+
+  const TIMING = {
+    SAMPLE_MS: 300,          // échantillon de mouvement 32×24 (quasi gratuit)
+    QR_EVERY: 2,             // lecture QR (BarcodeDetector) un échantillon sur deux
+    MOTION: 7,               // écart moyen de luminance (0–255) : quelqu'un bouge
+    LEAVE: 12,               // écart vs la scène du pointage : la personne est partie / a changé
+    RESULT_MS: 3000,         // confirmation affichée
+    HOLD_MAX_MS: 20000,      // réarmement forcé (le serveur refuse de toute façon un doublon)
+    RETRY_MS: 1500,          // après NO_FACE / qualité : attendre un nouveau mouvement
+    MESSAGE_MS: 3500,        // refus affichés
+    UNAVAILABLE_MS: 5000,    // réseau / serveur indisponible : nouvel essai
+    STATUS_POLL_MS: 30000,   // terminal désactivé / facial coupé : relecture de l'état
+  };
+  const DOMAIN = "ATLAS-TERMINAL-1";
+  const UNAVAILABLE = "SERVICE TEMPORAIREMENT INDISPONIBLE";
+  const FALLBACK = "UTILISEZ LE QR OU LA MÉTHODE DE SECOURS";
+
+  // ── Dépendances (remplaçables par les tests) ────────────────────────────────────────────
+  const idbStore = {
+    open() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open("atlas-borne", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("kv");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    },
+    async run(mode, fn) {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("kv", mode);
+        const req = fn(tx.objectStore("kv"));
+        tx.oncomplete = () => resolve(req && req.result);
+        tx.onerror = () => reject(tx.error);
+      });
+    },
+    get(key) { return this.run("readonly", (s) => s.get(key)); },
+    set(key, value) { return this.run("readwrite", (s) => s.put(value, key)); },
+    clear() { return this.run("readwrite", (s) => s.clear()); },
+  };
+
+  const B = {
+    identity: null,          // { terminal_id, privateKey (CryptoKey non extractible), camera }
+    session: null,
+    clockOffset: 0,
+    state: "BOOT",
+    busy: false,
+    holdScene: null, holdUntil: 0, pauseUntil: 0,
+    lastSample: null, lastAnalyzed: null, tickCount: 0, timer: null, stream: null,
+    deps: {
+      fetch: (...a) => window.fetch(...a),
+      subtle: () => window.crypto.subtle,
+      store: idbStore,
+      now: () => Date.now(),
+      media: () => navigator.mediaDevices,
+      barcode: () => ("BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null),
+      faceDetector: () => ("FaceDetector" in window ? new window.FaceDetector({ fastMode: true, maxDetectedFaces: 2 }) : null),
+    },
+  };
+  window.AtlasBorne = B;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  // ── Affichage ─────────────────────────────────────────────────────────────────────────────
+  function show(state, title, detail, tone) {
+    B.state = state;
+    const box = $("kioskStatus");
+    if (!box) return;
+    box.dataset.state = state;
+    box.className = "kiosk-status tone-" + (tone || "idle");
+    box.innerHTML = `<div class="kiosk-title">${title}</div>${detail ? `<div class="kiosk-detail">${detail}</div>` : ""}`;
+  }
+
+  const SCREENS = {
+    READY: () => show("READY", "PRÉSENTEZ VOTRE VISAGE", "", "idle"),
+    DETECTED: () => show("DETECTED", "VISAGE DÉTECTÉ", "Restez immobile…", "work"),
+    ANALYZING: () => show("ANALYZING", "ANALYSE EN COURS…", "", "work"),
+    NO_FACE: () => show("NO_FACE", "PRÉSENTEZ VOTRE VISAGE", "Placez-vous face à la tablette", "idle"),
+    MULTIPLE_FACES: () => show("MULTIPLE_FACES", "PLUSIEURS VISAGES", "Présentez-vous un par un", "warn"),
+    QUALITY_FAILED: () => show("QUALITY_FAILED", "QUALITÉ INSUFFISANTE", "Approchez-vous, restez immobile, face à la lumière", "warn"),
+    REVIEW_REQUIRED: () => show("REVIEW_REQUIRED", "QUALITÉ INSUFFISANTE", "Reconnaissance incertaine — restez face à la tablette", "warn"),
+    LIVENESS_FAILED: () => show("LIVENESS_FAILED", "LIVENESS REFUSÉ", "Présence réelle non confirmée — aucun pointage", "error"),
+    UNKNOWN_FACE: () => show("UNKNOWN_FACE", "VISAGE NON RECONNU", "Veuillez utiliser votre QR ou contacter un responsable.", "error"),
+    AMBIGUOUS: () => show("AMBIGUOUS", "RÉSULTAT AMBIGU", "Aucun pointage — " + FALLBACK.toLowerCase(), "error"),
+    UNAVAILABLE: () => show("UNAVAILABLE", UNAVAILABLE, FALLBACK, "error"),
+    FACIAL_OFF: (msg) => show("FACIAL_OFF", "POINTAGE FACIAL INDISPONIBLE", esc(msg || "") + (msg ? "<br>" : "") + FALLBACK, "warn"),
+    DISABLED: () => show("DISABLED", "TERMINAL DÉSACTIVÉ", "Contactez un responsable — " + FALLBACK.toLowerCase(), "error"),
+    UNAUTHORIZED: () => show("UNAUTHORIZED", "TERMINAL NON AUTORISÉ", "Association requise par un administrateur", "error"),
+    CAMERA_DENIED: () => show("CAMERA_DENIED", "CAMÉRA REFUSÉE", "Autorisez la caméra pour ce site dans les réglages de la tablette", "error"),
+    CAMERA_LOST: () => show("CAMERA_LOST", "CAMÉRA INTERROMPUE", "Reconnexion…", "error"),
+  };
+
+  function showRecorded(result) {
+    const e = result.employee || {};
+    const already = result.state === "ALREADY_RECORDED";
+    const verb = result.action === "SORTIE" ? "SORTIE ENREGISTRÉE" : "ENTRÉE ENREGISTRÉE";
+    show(already ? "ALREADY_RECORDED" : "RECORDED", already ? "POINTAGE DÉJÀ ENREGISTRÉ" : "✓ " + esc(e.nom) + " " + esc(e.prenom),
+      (already ? esc(e.nom) + " " + esc(e.prenom) + "<br>" : "") + `Matricule ${esc(e.matricule)}` +
+      `<div class="kiosk-verb">${already ? esc(result.action || "") : verb} · ${esc(result.heure || "")}</div>`, "ok");
+  }
+
+  // ── Signature des requêtes ────────────────────────────────────────────────────────────────
+  async function sha256hex(bytes) {
+    const digest = await B.deps.subtle().digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function signedHeaders(method, path, bodyBytes) {
+    const ts = String(Math.round(B.deps.now() + B.clockOffset));
+    const message = [DOMAIN, B.identity.terminal_id, method, path, ts, await sha256hex(bodyBytes)].join("\n");
+    const sig = await B.deps.subtle().sign({ name: "ECDSA", hash: "SHA-256" }, B.identity.privateKey, new TextEncoder().encode(message));
+    return { "X-Atlas-Terminal": B.identity.terminal_id, "X-Atlas-Timestamp": ts, "X-Atlas-Signature": b64url(sig) };
+  }
+
+  class ApiError extends Error {
+    constructor(status, detail) {
+      super((detail && detail.message) || (typeof detail === "string" ? detail : "Erreur " + status));
+      this.status = status; this.code = detail && detail.code; this.detail = detail;
+    }
+  }
+
+  async function call(method, path, body) {
+    const full = "/api/biometrics" + path;
+    const raw = body === undefined ? "" : JSON.stringify(body);
+    const bytes = new TextEncoder().encode(raw);
+    const headers = Object.assign({ "Content-Type": "application/json" }, B.identity ? await signedHeaders(method, full, bytes) : {});
+    let res;
+    try {
+      res = await B.deps.fetch(full, { method, headers, body: raw || undefined, cache: "no-store" });
+    } catch (e) {
+      throw new ApiError(0, { code: "NETWORK", message: UNAVAILABLE });
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) throw new ApiError(res.status, data && data.detail);
+    return data;
+  }
+
+  // ── Association (première installation, par un administrateur) ─────────────────────────
+  async function pair(code, cameraId) {
+    const keys = await B.deps.subtle().generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
+    const jwk = await B.deps.subtle().exportKey("jwk", keys.publicKey);   // la clé PUBLIQUE seulement
+    B.identity = null;
+    const out = await call("POST", "/terminal/pair", { code, public_key: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y },
+      device_label: (navigator.userAgent || "").slice(0, 120) });
+    B.identity = { terminal_id: out.terminal_id, privateKey: keys.privateKey, camera: cameraId || null };
+    await B.deps.store.set("identity", B.identity);
+    return out;
+  }
+
+  function showPairing(message) {
+    B.state = "PAIRING";
+    const panel = $("kioskPairing");
+    if (panel) panel.hidden = false;
+    if ($("pairMessage")) $("pairMessage").textContent = message || "";
+    const code = (location.hash.match(/pair=([A-Za-z0-9-]+)/) || [])[1];
+    if (code && $("pairCode")) {
+      $("pairCode").value = code;
+      history.replaceState(null, "", location.pathname);    // le code ne reste pas dans l'URL
+    }
+    listCameras();
+  }
+
+  async function listCameras() {
+    const select = $("pairCamera");
+    const media = B.deps.media();
+    if (!select || !media || !media.enumerateDevices) return;
+    try {
+      const devices = (await media.enumerateDevices()).filter((d) => d.kind === "videoinput");
+      select.innerHTML = `<option value="">Caméra frontale (par défaut)</option>` +
+        devices.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || "Caméra " + (i + 1))}</option>`).join("");
+    } catch (e) { /* liste facultative */ }
+  }
+
+  async function submitPairing(event) {
+    if (event) event.preventDefault();
+    const code = ($("pairCode").value || "").trim();
+    if (!code) return;
+    $("pairSubmit").disabled = true;
+    try {
+      await pair(code, ($("pairCamera") && $("pairCamera").value) || null);
+      $("kioskPairing").hidden = true;
+      await boot();
+    } catch (e) {
+      $("pairMessage").textContent = e.status === 0 ? UNAVAILABLE : (e.message || "Association impossible");
+    } finally {
+      $("pairSubmit").disabled = false;
+    }
+  }
+
+  // ── Caméra ────────────────────────────────────────────────────────────────────────────────
+  async function startCamera() {
+    const video = $("kioskVideo");
+    const constraints = { audio: false, video: B.identity.camera
+      ? { deviceId: { exact: B.identity.camera }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } };
+    try {
+      B.stream = await B.deps.media().getUserMedia(constraints);
+    } catch (e) {
+      if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) { SCREENS.CAMERA_DENIED(); return false; }
+      SCREENS.CAMERA_LOST(); return false;
+    }
+    B.stream.getVideoTracks().forEach((t) => t.addEventListener("ended", () => { stop(); SCREENS.CAMERA_LOST(); schedule(TIMING.UNAVAILABLE_MS, restartCamera); }));
+    if (video) {
+      video.srcObject = B.stream;
+      try { await video.play(); } catch (e) { /* autoplay muet autorisé */ }
+    }
+    return true;
+  }
+
+  async function restartCamera() {
+    if (B.stream) B.stream.getTracks().forEach((t) => t.stop());
+    B.stream = null;
+    if (await startCamera()) { start(); if (facialOn()) SCREENS.READY(); else SCREENS.FACIAL_OFF(B.session.facial.message); }
+    else schedule(TIMING.UNAVAILABLE_MS, restartCamera);
+  }
+
+  // Échantillon de luminance 32×24 : détection de mouvement sans moteur ML dans le navigateur.
+  B.sample = function () {
+    const video = $("kioskVideo");
+    if (!video || !video.videoWidth) return null;
+    const c = B._small || (B._small = Object.assign(document.createElement("canvas"), { width: 32, height: 24 }));
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(video, 0, 0, 32, 24);
+    const px = ctx.getImageData(0, 0, 32, 24).data;
+    const out = new Uint8Array(32 * 24);
+    for (let i = 0; i < out.length; i++) out[i] = (px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2]) / 10;
+    return out;
+  };
+
+  const diff = (a, b) => {
+    if (!a || !b) return 0;
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+    return s / a.length;
+  };
+
+  B.capture = function (maxSide, quality) {
+    const video = $("kioskVideo");
+    const scale = Math.min(1, maxSide / Math.max(video.videoWidth, video.videoHeight));
+    const c = B._big || (B._big = document.createElement("canvas"));
+    c.width = Math.round(video.videoWidth * scale);
+    c.height = Math.round(video.videoHeight * scale);
+    c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", quality);
+  };
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Attend une NOUVELLE image du capteur (caméra lente, faible lumière) : deux trames d'une
+  // rafale ne sont jamais la même image affichée.
+  function nextVideoFrame() {
+    const video = $("kioskVideo");
+    if (!video || typeof video.requestVideoFrameCallback !== "function") return Promise.resolve();
+    return new Promise((resolve) => { const t = setTimeout(resolve, 500); video.requestVideoFrameCallback(() => { clearTimeout(t); resolve(); }); });
+  }
+
+  async function burst(spec) {
+    const frames = [];
+    for (let i = 0; i < spec.frames; i++) {
+      if (i) { await wait(spec.interval_ms); await nextVideoFrame(); }
+      frames.push(B.capture(spec.max_side, spec.jpeg_quality));
+    }
+    return frames;
+  }
+
+  // ── Boucle ───────────────────────────────────────────────────────────────────────────────
+  function schedule(ms, fn) {
+    clearTimeout(B.timer);
+    B.timer = setTimeout(fn, ms);
+  }
+
+  function poll(ms) {
+    clearTimeout(B.pollTimer);
+    B.pollTimer = setTimeout(refresh, ms);
+  }
+
+  // Relecture de l'état du terminal (facial réactivé/coupé, terminal réactivé) sans clic.
+  async function refresh() {
+    try {
+      B.session = await call("GET", "/terminal/session");
+    } catch (e) {
+      handleError(e);
+      return;
+    }
+    if (!B.running) { boot(); return; }
+    if (facialOn()) { if (B.state === "FACIAL_OFF" || B.state === "UNAVAILABLE") SCREENS.READY(); }
+    else { SCREENS.FACIAL_OFF(B.session.facial.message); poll(TIMING.STATUS_POLL_MS); }
+  }
+
+  function facialOn() { return Boolean(B.session && B.session.facial && B.session.facial.available); }
+
+  // Une itération : échantillon → QR éventuel → mouvement → reconnaissance. Exposée aux tests.
+  B.tick = async function () {
+    if (B.busy) return;
+    const now = B.deps.now();
+    const current = B.sample();
+    const previous = B.lastSample;
+    B.lastSample = current;
+    B.tickCount++;
+    if (now < B.pauseUntil) return;
+    if (B.holdScene) {
+      // Réarmement : la scène doit avoir changé depuis le pointage (personne partie), ou délai max.
+      if (diff(current, B.holdScene) < TIMING.LEAVE && now < B.holdUntil) return;
+      B.holdScene = null;
+      SCREENS.READY();
+    }
+    if (B.tickCount % TIMING.QR_EVERY === 0 && await tryQr()) return;
+    if (!facialOn()) return;
+    // Analyse si la scène bouge OU diffère de la dernière scène analysée : une personne arrivée
+    // pendant une pause puis immobile est analysée ; une scène inchangée ne l'est qu'une fois.
+    const changed = B.lastAnalyzed === null || diff(current, previous) >= TIMING.MOTION || diff(current, B.lastAnalyzed) >= TIMING.MOTION;
+    if (!changed) return;
+    await recognizeOnce();
+  };
+
+  // Boucle unique (tant que la caméra tourne) ; le QR reste actif même si le facial est coupé.
+  async function loop() {
+    try { await B.tick(); } catch (e) { /* une itération ratée ne bloque pas la borne */ }
+    if (B.running) schedule(TIMING.SAMPLE_MS, loop);
+  }
+
+  async function tryQr() {
+    const detector = B._barcode === undefined ? (B._barcode = B.deps.barcode()) : B._barcode;
+    const video = $("kioskVideo");
+    if (!detector || !video) return false;
+    let codes = [];
+    try { codes = await detector.detect(video); } catch (e) { return false; }
+    const token = codes[0] && codes[0].rawValue;
+    if (!token || token === B._lastQr) return false;
+    B._lastQr = token;
+    B.busy = true;
+    SCREENS.ANALYZING();
+    try {
+      handleResult(await call("POST", "/terminal/qr", { token }));
+    } catch (e) {
+      if (!handleError(e)) { show("QR_REFUSED", "QR REFUSÉ", esc(e.message), "error"); pause(TIMING.MESSAGE_MS); }
+    } finally { B.busy = false; }
+    return true;
+  }
+
+  function pause(ms) { B.pauseUntil = B.deps.now() + ms; }
+
+  function hold() {
+    // Même visage resté devant la tablette : aucune nouvelle tentative avant que la scène change.
+    B.holdScene = B.lastSample;
+    B.pauseUntil = B.deps.now() + TIMING.RESULT_MS;
+    B.holdUntil = B.deps.now() + TIMING.HOLD_MAX_MS;
+  }
+
+  async function recognizeOnce() {
+    B.busy = true;
+    B.lastAnalyzed = B.lastSample;
+    try {
+      const detector = B._faces === undefined ? (B._faces = B.deps.faceDetector()) : B._faces;
+      if (detector) {
+        // Pré-filtre local facultatif (API du navigateur) : aucun envoi sans visage apparent.
+        try { if (!(await detector.detect($("kioskVideo"))).length) return; } catch (e) { /* pas de pré-filtre */ }
+        SCREENS.DETECTED();
+      }
+      const challenge = await call("POST", "/terminal/challenge", {});
+      SCREENS.ANALYZING();
+      const frames = await burst(challenge.burst || B.session.burst);
+      handleResult(await call("POST", "/terminal/recognize", { challenge_id: challenge.challenge_id, nonce: challenge.nonce, frames }));
+    } catch (e) {
+      handleError(e);
+    } finally {
+      B.busy = false;
+    }
+  }
+
+  function handleResult(result) {
+    const s = result.state;
+    if (s === "ATTENDANCE_RECORDED" || s === "ALREADY_RECORDED") { showRecorded(result); hold(); return; }
+    (SCREENS[s] || SCREENS.UNAVAILABLE)();
+    if (s === "NO_FACE") { pause(TIMING.RETRY_MS); return; }
+    if (s === "UNKNOWN_FACE" || s === "AMBIGUOUS" || s === "LIVENESS_FAILED") { hold(); B.pauseUntil = B.deps.now() + TIMING.MESSAGE_MS; return; }
+    if (s === "REFUSED") show("REFUSED", "POINTAGE REFUSÉ", esc(result.message) + "<br>" + FALLBACK, "error");
+    pause(TIMING.MESSAGE_MS);
+  }
+
+  // Renvoie true si l'erreur a été affichée. Aucune reconnaissance n'est conservée pour être
+  // rejouée : hors ligne, la borne refuse (fail closed) et oriente vers le QR / la saisie.
+  function handleError(e) {
+    const code = e && e.code;
+    if (e.status === 401) {
+      stop();
+      SCREENS.UNAUTHORIZED();
+      if (code === "TERMINAL_REVOKED" || code === "TERMINAL_UNKNOWN") {
+        B.identity = null;
+        B.deps.store.clear().catch(() => {});
+        showPairing("Terminal non autorisé : une nouvelle association par un administrateur est nécessaire.");
+      } else poll(TIMING.STATUS_POLL_MS);          // signature refusée (horloge ?) : nouvel essai plus tard
+      return true;
+    }
+    if (e.status === 403 && code === "TERMINAL_DISABLED") { stop(); SCREENS.DISABLED(); poll(TIMING.STATUS_POLL_MS); return true; }
+    if (["BIOMETRIC_DISABLED", "ENGINE_UNAVAILABLE", "TERMINAL_FACIAL_DISABLED"].includes(code)) {
+      if (B.session) B.session.facial = { available: false, code, message: e.message };
+      SCREENS.FACIAL_OFF(e.message);
+      poll(TIMING.STATUS_POLL_MS);
+      return true;
+    }
+    if (e.status === 0 || e.status >= 500) { SCREENS.UNAVAILABLE(); pause(TIMING.UNAVAILABLE_MS); poll(TIMING.UNAVAILABLE_MS); return true; }
+    if (e.status === 429) { SCREENS.UNAVAILABLE(); pause(10000); return true; }
+    // Défi expiré / réutilisé / rejeu / rafale invalide : nouvel essai propre, sans bruit.
+    SCREENS.READY();
+    pause(TIMING.RETRY_MS);
+    return ["CHALLENGE_EXPIRED", "CHALLENGE_REUSED", "CHALLENGE_STALE", "CHALLENGE_INVALID", "REPLAY_DETECTED"].includes(code);
+  }
+
+  function stop() { B.running = false; clearTimeout(B.timer); B.timer = null; }
+  function start() { B.running = true; schedule(TIMING.SAMPLE_MS, loop); }
+
+  // ── Démarrage ─────────────────────────────────────────────────────────────────────────────
+  async function boot() {
+    stop();
+    clearTimeout(B.pollTimer);
+    if (!B.identity) {
+      try { B.identity = await B.deps.store.get("identity"); } catch (e) { B.identity = null; }
+    }
+    if (!B.identity || !B.identity.privateKey) { showPairing(); return; }
+    try {
+      B.session = await call("GET", "/terminal/session");
+      B.clockOffset = B.session.server_time ? B.session.server_time - B.deps.now() : 0;
+    } catch (e) {
+      handleError(e);
+      return;
+    }
+    const t = B.session.terminal;
+    if ($("kioskSite")) $("kioskSite").textContent = `${t.name} · ${t.site || ""}`;
+    if (!B.stream && !(await startCamera())) { schedule(TIMING.UNAVAILABLE_MS, boot); return; }
+    if (facialOn()) SCREENS.READY();
+    else { SCREENS.FACIAL_OFF(B.session.facial.message); poll(TIMING.STATUS_POLL_MS); }
+    start();
+    try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) { /* facultatif */ }
+  }
+
+  B.boot = boot;
+  B.pair = pair;
+  B.handleResult = handleResult;
+  B.handleError = handleError;
+  B.TIMING = TIMING;
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = $("pairForm");
+    if (form) form.addEventListener("submit", submitPairing);
+    if (window.__ATLAS_BORNE_NO_AUTOSTART__) return;
+    boot();
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/pointeur-sw.js", { scope: "/" }).catch(() => {});
+  });
+})();

@@ -125,6 +125,7 @@ tr:hover td{background:#fafcff}
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
       </nav><div class="side-title">Biométrie</div><nav>
         <button class="nav-btn" data-view="enrollment" type="button">☺ Enrôlement</button>
+        <button class="nav-btn" data-view="terminals" type="button">▣ Terminaux (tablettes)</button>
         <button class="nav-btn" data-view="cameras" type="button">◉ Caméras</button>
         <button class="nav-btn" data-view="duplicates" type="button">⧉ Doublons à revoir</button>
         <button class="nav-btn hidden" data-view="test-mode" type="button">◎ Mode Test facial</button>
@@ -152,6 +153,12 @@ tr:hover td{background:#fafcff}
         <div class="card"><div class="filters"><input class="grow" id="en-q" type="search" placeholder="Matricule, nom ou prénom" aria-label="Rechercher un employé à enrôler"><button class="secondary" id="en-search" type="button">Rechercher</button></div>
           <div id="en-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Consentement</th><th>Enrôlement</th><th>Photo DRH</th><th></th></tr></thead><tbody id="en-rows"></tbody></table></div></div>
+      </section>
+      <section id="view-terminals" class="hidden">
+        <div class="page-head"><div><h2>Terminaux de pointage (tablettes, smartphones)</h2><p>Un terminal appartient à une société et un site. Il est associé par un code à usage unique ; sa clé ne quitte jamais l'appareil et n'est jamais affichée. Pointage facial désactivé par défaut, activé terminal par terminal.</p></div>
+          <span><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button> <button class="primary" id="terminal-add" type="button">+ Ajouter un terminal</button></span></div>
+        <div class="card"><div id="terminal-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Terminal</th><th>Type</th><th>Site</th><th>Association</th><th>Dernière activité</th><th>État</th><th></th></tr></thead><tbody id="terminal-rows"></tbody></table></div></div>
       </section>
       <section id="view-cameras" class="hidden">
         <div class="page-head"><div><h2>Caméras</h2><p>Une caméra appartient à une société et un site. Les identifiants ne sont jamais réaffichés. Le pointage facial n'est actif que sur les caméras explicitement activées (pilote).</p></div>
@@ -277,7 +284,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "enrollment", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["anomalies", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -289,12 +296,14 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
+    $("view-terminals").classList.toggle("hidden", view !== "terminals");
     $("view-enrollment").classList.toggle("hidden", view !== "enrollment");
     $("view-duplicates").classList.toggle("hidden", view !== "duplicates");
     $("view-test-mode").classList.toggle("hidden", view !== "test-mode");
     if (view !== "test-mode" && window.ATLASTestMode) window.ATLASTestMode.stop();
     if (view === "test-mode" && window.ATLASTestMode) return window.ATLASTestMode.load();
     if (view === "cameras") return loadCameras();
+    if (view === "terminals") return loadTerminals();
     if (view === "enrollment") return loadEnrollment();
     if (view === "duplicates") return loadDuplicates();
     return view === "board" ? loadBoard() : loadAnomalies();
@@ -528,8 +537,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   $("camera-add").addEventListener("click", () => openCameraForm(null));
   $("site-facial-off").addEventListener("click", async () => {
     const site = $("f-site").value;
-    if (!site || !confirm("Couper immédiatement le pointage facial de TOUTES les caméras de ce site ?\nLe QR et la saisie manuelle restent disponibles.")) return;
-    try { const r = await api(`/biometrics/sites/${site}/facial-disable`, { method: "POST" }); toast(`Pointage facial coupé (${r.disabled_cameras} caméra(s))`); loadCameras(); }
+    if (!site || !confirm("Couper immédiatement le pointage facial de TOUTES les caméras et de TOUS les terminaux de ce site ?\nLe QR et la saisie manuelle restent disponibles.")) return;
+    try { const r = await api(`/biometrics/sites/${site}/facial-disable`, { method: "POST" }); toast(`Pointage facial coupé (${r.disabled_cameras} caméra(s), ${r.disabled_terminals || 0} terminal(aux))`); loadCameras(); }
     catch (ex) { toast(permissionMessage(ex), true); }
   });
 
@@ -572,6 +581,113 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       } catch (ex) { const err = m.querySelector("#c-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
     });
   }
+
+  // ── Biométrie : terminaux mobiles (tablettes / smartphones) ─────────────────────────
+  const TERMINAL_TYPE_LABEL = { TABLET_ANDROID: "Tablette Android (Samsung)", SMARTPHONE_ANDROID: "Smartphone Android", IPHONE: "iPhone", IPAD: "iPad" };
+  const when = (v) => v ? esc(v.replace("T", " ").slice(0, 16)) : "—";
+  let terminalCache = [];
+
+  async function loadTerminals() {
+    $("terminal-state").innerHTML = '<div class="state info">Chargement…</div>';
+    try {
+      const q = $("f-site").value ? "?site_id=" + $("f-site").value : "";
+      terminalCache = await api("/biometrics/terminals" + q);
+      $("terminal-state").innerHTML = "";
+      $("terminal-rows").innerHTML = terminalCache.length ? terminalCache.map((t) => {
+        const status = t.revoked_at ? `<span class="pill sev-critical">Révoqué</span><br><small>${esc(t.revoked_reason || "")}</small>`
+          : `<span class="pill ${t.enabled ? "st-present" : "st-repos"}">${t.enabled ? "Actif" : "Désactivé"}</span><br><span class="pill ${t.facial_attendance_enabled ? "sev-critical" : "st-repos"}" title="Pointage facial réel">${t.facial_attendance_enabled ? "Facial actif" : "Facial coupé"}</span>`;
+        const pairing = t.paired ? `Associé ${when(t.paired_at)}<br><small>Clé ${esc(t.key_fingerprint || "")}…${t.device_label ? " · " + esc(t.device_label).slice(0, 40) : ""}</small>`
+          : (t.pairing_pending ? `Code en attente<br><small>expire ${when(t.pairing_expires_at)}</small>` : "Non associé");
+        const actions = t.revoked_at ? `<button class="link" type="button" data-term-audit="${t.id}">Audit</button>` : `
+          <button class="link" type="button" data-term-pair="${t.id}">${t.paired ? "Ré-associer" : "Associer"}</button>
+          <button class="link" type="button" data-term-facial="${t.id}">${t.facial_attendance_enabled ? "Couper le facial" : "Activer le facial"}</button>
+          <button class="link" type="button" data-term-enable="${t.id}">${t.enabled ? "Désactiver" : "Réactiver"}</button>
+          <button class="link" type="button" data-term-rename="${t.id}">Renommer</button>
+          <button class="link" type="button" data-term-audit="${t.id}">Audit</button>
+          <button class="link danger-link" type="button" data-term-revoke="${t.id}">Révoquer</button>`;
+        return `<tr><td class="who"><b>${esc(t.name)}</b><small>${esc(t.location || "")}</small></td><td>${esc(TERMINAL_TYPE_LABEL[t.terminal_type] || t.terminal_type)}</td>
+          <td>${esc(t.site || "")}<br><small>${esc(t.society)}</small></td><td>${pairing}</td><td>${when(t.last_seen_at)}</td><td>${status}</td>
+          <td><div class="row-actions">${actions}</div></td></tr>`;
+      }).join("") : '<tr><td colspan="7" class="empty">Aucun terminal déclaré pour ce périmètre.</td></tr>';
+      $("site-facial-off-terminals").classList.toggle("hidden", !$("f-site").value || !terminalCache.some((t) => t.facial_attendance_enabled));
+      const byId = (id) => terminalCache.find((t) => String(t.id) === String(id));
+      const bind = (attr, fn) => $("terminal-rows").querySelectorAll(`[${attr}]`).forEach((b) => b.addEventListener("click", () => fn(byId(b.getAttribute(attr)))));
+      bind("data-term-pair", pairTerminal);
+      bind("data-term-facial", (t) => patchTerminal(t, { facial_attendance_enabled: !t.facial_attendance_enabled },
+        t.facial_attendance_enabled ? null : `Activer le pointage facial RÉEL sur « ${t.name} » ?\nIl enregistrera des présences dès que la biométrie est activée (BIOMETRIC_ENABLED).`));
+      bind("data-term-enable", (t) => patchTerminal(t, { enabled: !t.enabled }, t.enabled ? `Désactiver « ${t.name} » ? Effet immédiat (facial et QR de la borne).` : null));
+      bind("data-term-rename", (t) => { const name = prompt("Nouveau nom du terminal", t.name); if (name && name.trim() && name.trim() !== t.name) patchTerminal(t, { name: name.trim() }); });
+      bind("data-term-revoke", revokeTerminal);
+      bind("data-term-audit", terminalAudit);
+    } catch (ex) { $("terminal-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
+  }
+
+  async function patchTerminal(t, body, confirmText) {
+    if (confirmText && !confirm(confirmText)) return;
+    try { await api("/biometrics/terminals/" + t.id, { method: "PATCH", body }); toast("Terminal mis à jour"); loadTerminals(); }
+    catch (ex) { toast(permissionMessage(ex), true); }
+  }
+
+  function kioskOrigin() {
+    return location.hostname === "pointage.irongs.com" ? "https://pointeur.irongs.com" : location.origin;
+  }
+
+  async function pairTerminal(t) {
+    if (t.paired && !confirm(`Ré-associer « ${t.name} » ? La clé actuelle restera valable jusqu'à l'association du nouvel appareil.`)) return;
+    try {
+      const r = await api(`/biometrics/terminals/${t.id}/pairing-code`, { method: "POST" });
+      const url = kioskOrigin() + r.pair_path;
+      const m = modal(`<h3>Associer « ${esc(t.name)} »</h3>
+        <div class="sub">Sur la tablette : ouvrez <b>${esc(kioskOrigin())}/borne</b> puis saisissez le code, ou scannez le QR. Usage unique, expire dans ${Math.round(r.expires_in / 60)} min. Ne le transmettez pas.</div>
+        <div class="pair-code" id="pair-code" style="font-size:34px;font-weight:900;letter-spacing:.14em;text-align:center;margin:14px 0">${esc(r.code)}</div>
+        <div id="pair-qr" style="display:flex;justify-content:center"></div>
+        <div class="modal-actions"><button class="primary" type="button" id="pair-close">Fermer</button></div>`);
+      if (window.QRCode) new window.QRCode(m.querySelector("#pair-qr"), { text: url, width: 200, height: 200, correctLevel: window.QRCode.CorrectLevel.M });
+      m.querySelector("#pair-close").addEventListener("click", () => { closeModal(); loadTerminals(); });
+    } catch (ex) { toast(permissionMessage(ex), true); }
+  }
+
+  async function revokeTerminal(t) {
+    const reason = prompt(`Révoquer définitivement « ${t.name} » (tablette perdue, remplacée…) ?\nMotif obligatoire :`);
+    if (!reason || reason.trim().length < 3) return;
+    try { await api(`/biometrics/terminals/${t.id}/revoke`, { method: "POST", body: { reason: reason.trim() } }); toast("Terminal révoqué"); loadTerminals(); }
+    catch (ex) { toast(permissionMessage(ex), true); }
+  }
+
+  async function terminalAudit(t) {
+    try {
+      const rows = await api(`/biometrics/terminals/${t.id}/audit`);
+      const m = modal(`<h3>Audit — ${esc(t.name)}</h3><div class="table-wrap"><table><thead><tr><th>Date</th><th>Action</th><th>Résultat</th><th>État</th><th>Matricule</th><th>Motif</th></tr></thead><tbody>${
+        rows.length ? rows.map((a) => `<tr><td>${when(a.at)}</td><td>${esc(a.action.replace("biometrics.terminal.", ""))}</td><td>${esc(a.result)}</td><td>${esc(a.state || "")}</td><td>${esc(a.matricule || "")}</td><td><small>${esc(a.reason || "")}</small></td></tr>`).join("")
+        : '<tr><td colspan="6" class="empty">Aucun événement.</td></tr>'}</tbody></table></div><div class="modal-actions"><button class="primary" type="button" id="audit-close">Fermer</button></div>`);
+      m.querySelector("#audit-close").addEventListener("click", closeModal);
+    } catch (ex) { toast(permissionMessage(ex), true); }
+  }
+
+  $("terminal-add").addEventListener("click", async () => {
+    let sites = [];
+    try { sites = await api("/attendance/sites"); } catch (ex) { toast(ex.message, true); return; }
+    const m = modal(`<h3>Ajouter un terminal</h3><div class="sub">Tablette ou smartphone dédié à un site. Le pointage facial reste désactivé jusqu'à activation explicite. Une caméra Dahua/RTSP se déclare dans Caméras.</div>
+      <form id="term-form"><div class="grid2"><div><label for="t-name">Nom</label><input id="t-name" required placeholder="TAB-ENTREE-01"></div><div><label for="t-type">Type</label><select id="t-type">${Object.keys(TERMINAL_TYPE_LABEL).map((k) => `<option value="${k}">${TERMINAL_TYPE_LABEL[k]}</option>`).join("")}</select></div></div>
+      <label for="t-site">Site</label><select id="t-site">${sites.map((x) => `<option value="${x.id}">${esc(x.name)} — ${esc(x.society)}</option>`).join("")}</select>
+      <label for="t-loc">Emplacement</label><input id="t-loc" placeholder="Poste de garde, entrée">
+      <div class="error" id="t-error" role="alert"></div><div class="modal-actions"><button class="secondary" type="button" id="t-cancel">Annuler</button><button class="primary" type="submit">Créer</button></div></form>`);
+    m.querySelector("#t-cancel").addEventListener("click", closeModal);
+    m.querySelector("#term-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const t = await api("/biometrics/terminals", { method: "POST", body: { name: m.querySelector("#t-name").value.trim(), terminal_type: m.querySelector("#t-type").value,
+          site_id: Number(m.querySelector("#t-site").value), location: m.querySelector("#t-loc").value.trim() || null } });
+        closeModal(); toast("Terminal créé — générez le code d'association"); await loadTerminals(); pairTerminal(t);
+      } catch (ex) { const err = m.querySelector("#t-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
+    });
+  });
+  $("site-facial-off-terminals").addEventListener("click", async () => {
+    const site = $("f-site").value;
+    if (!site || !confirm("Couper immédiatement le pointage facial de TOUS les terminaux et caméras de ce site ?\nLe QR et la saisie manuelle restent disponibles.")) return;
+    try { const r = await api(`/biometrics/sites/${site}/facial-disable`, { method: "POST" }); toast(`Pointage facial coupé (${r.disabled_terminals} terminal(aux), ${r.disabled_cameras} caméra(s))`); loadTerminals(); }
+    catch (ex) { toast(permissionMessage(ex), true); }
+  });
 
   // ── Biométrie : doublons ──────────────────────────────────────────────────────────
   async function loadDuplicates() {
@@ -715,6 +831,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   if (state.token) enter().catch(() => logout());
 })();
 </script>
+<script src="/static/qrcode.min.js" defer></script>
 <script src="/static/pointage/test-mode.js?v=20260930-shared-test-mode" defer></script>
 </body>
 </html>

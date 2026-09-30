@@ -956,6 +956,26 @@ def pointer_mobile() -> FileResponse:
     )
 
 
+@app.get("/borne", include_in_schema=False, name="facial_kiosk")
+def facial_kiosk() -> FileResponse:
+    # Borne faciale (tablette / smartphone) : identité de TERMINAL (clé de l'appareil), aucune
+    # session humaine, aucune administration. Voir docs/biometric-terminals.md.
+    return FileResponse(
+        STATIC_DIR / "pointeur-borne.html",
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
+@app.get("/pointeur-borne.webmanifest", include_in_schema=False)
+def facial_kiosk_manifest() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "pointeur-borne.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
 @app.get("/supervision", include_in_schema=False, name="attendance_supervision")
 def attendance_supervision() -> FileResponse:
     return FileResponse(

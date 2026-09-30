@@ -1,0 +1,17 @@
+{
+  "id": "/borne",
+  "name": "Borne de pointage ATLAS",
+  "short_name": "Borne ATLAS",
+  "description": "Borne de pointage facial et QR — terminal associé à un site",
+  "start_url": "/borne",
+  "scope": "/borne",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b1d33",
+  "theme_color": "#0b1d33",
+  "lang": "fr",
+  "icons": [
+    { "src": "/static/sgdi-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/sgdi-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
