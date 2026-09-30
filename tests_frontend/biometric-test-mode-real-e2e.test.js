@@ -131,6 +131,9 @@ user("tmburst", ["pointage"], ["${SOC}"], [a.id], BIO)
 user("tmnoperm", ["pointage"], ["${SOC}"], [a.id], [("biometric_status", "read"), ("biometric_enrollment", "create")])
 user("tmnomodule", ["fac"], ["${SOC}"], [a.id], BIO)
 user("tmsiteb", ["pointage"], ["${SOC_B}"], [bb.id], BIO)
+# pointeur.irongs.com n'accepte que les identifiants PTG / OPS / SUP.
+user("PTG77", ["pointage", "pointeur"], ["${SOC}"], [a.id], BIO)
+user("PTG78", ["pointage", "pointeur"], ["${SOC}"], [a.id], [("biometric_status", "read")])
 S.commit()
 print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
 `);
@@ -233,7 +236,9 @@ print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
       navigator.mediaDevices.getUserMedia = async (c) => { await new Promise((r) => setTimeout(r, 1200)); const s = await original(c); window.__tracks.push(...s.getTracks()); return s; };
     });
     await page.click("#tm-start");
-    await page.waitForFunction(() => window.ATLASTestMode.state.running, { timeout: 5000 });   // getUserMedia en cours
+    await page.waitForFunction(() => window.ATLASTestMode.state.running, { timeout: 5000 })   // getUserMedia en cours
+      .catch(async () => assert.fail("démarrage non lancé : " + JSON.stringify(await page.evaluate(() => ({ state: document.querySelector("#tm-state").textContent,
+        site: document.querySelector("#tm-site").value, disabled: document.querySelector("#tm-start").disabled, F: { ...window.ATLASTestMode.state, stream: !!window.ATLASTestMode.state.stream, status: null } })))));
     await page.click("#tm-stop");
     await sleep(2000);
     const late = await page.evaluate(() => ({ states: window.__tracks.map((tr) => tr.readyState), stream: window.ATLASTestMode.state.stream, running: window.ATLASTestMode.state.running }));
@@ -245,6 +250,96 @@ print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
   // Image figée : prouvée au niveau du moteur réel (test_biometrics_engine_real.py) — la
   // caméra virtuelle de Chrome ne garantit pas des trames identiques au pixel près, un scénario
   // navigateur ne serait donc pas déterministe.
+
+  await t.test("pointeur.irongs.com : Mode Test distinct de Facial, décision réelle, 390→1440 px, QR et cycle de vie", async () => {
+    if (browser) await browser.close().catch(() => {});
+    const file = video("live");
+    browser = await puppeteer.launch({ executablePath: CHROME, headless: "new", userDataDir: fs.mkdtempSync(path.join(os.tmpdir(), "atlas_bio_chrome_")),
+      args: ["--no-first-run", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${file}`,
+        `--host-resolver-rules=MAP pointeur.irongs.com 127.0.0.1:${PORT}`, "--unsafely-treat-insecure-origin-as-secure=http://pointeur.irongs.com"] });
+    const pointeurCalls = [];
+    // Laisser démarrer le lecteur QR (html5-qrcode, lancé automatiquement sur mobile) avant de
+    // changer de vue : le quitter pendant son play() provoque un rejet non intercepté DANS la
+    // bibliothèque QR (préexistant, indépendant du Mode Test — vérifié en traçant play()).
+    const qrReady = async (page) => {
+      await page.waitForFunction(() => { const v = document.querySelector("#reader video"); return !v || v.readyState >= 2; }, { timeout: 10000 }).catch(() => {});
+      await sleep(500);
+    };
+    const open = async (ctx, user) => {
+      const page = await ctx.newPage();
+      page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(`[pointeur] ${m.text()}`); });
+      page.on("pageerror", (e) => consoleErrors.push("[pointeur] pageerror: " + e.message));
+      page.on("request", (r) => { if (r.url().includes("/api/")) pointeurCalls.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+      page.on("response", async (r) => {
+        if (!r.url().includes("/api/")) return;
+        if (r.status() >= 400) apiErrors.push(`[pointeur] ${r.status()} ${new URL(r.url()).pathname}`);
+        if (r.url().includes("/test-mode/recognize") && r.ok()) { try { results.push(await r.json()); } catch (e) { /* corps consommé */ } }
+      });
+      await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+      await page.goto("http://pointeur.irongs.com/", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector("#username", { visible: true });
+      await page.type("#username", user);
+      await page.type("#password", user + "-pass");
+      await page.click("#loginBtn");
+      await page.waitForSelector("#appView:not(.hidden)", { timeout: 20000 });
+      await qrReady(page);
+      return page;
+    };
+    // Compte sans permission biométrique : le bouton Mode Test n'apparaît jamais (fail closed).
+    const denied = await open(await browser.createBrowserContext(), "PTG78");
+    await sleep(2500);
+    assert.strictEqual(await denied.$eval("#testModeNav", (el) => el.classList.contains("hidden")), true);
+    await denied.close();
+    const page = await open(await browser.createBrowserContext(), "PTG77");
+    await page.waitForSelector("#testModeNav:not(.hidden)", { timeout: 20000 });
+    const navs = await page.$$eval(".module-nav button", (els) => els.filter((e) => !e.classList.contains("hidden")).map((e) => [e.id, e.textContent.trim()]));
+    assert.deepStrictEqual(navs, [["scanNav", "Scanner"], ["planningNav", "Planning intelligent"], ["faceNav", "Facial"], ["testModeNav", "Mode Test"]]);
+    const before = results.length;
+    await page.click("#testModeNav");
+    await page.waitForSelector("#testModeView:not(.hidden)");
+    await page.waitForFunction((id) => document.querySelector("#ptm-site").value === String(id), { timeout: 10000 }, ids.siteA);
+    await page.click("#ptm-start");
+    await page.waitForFunction(() => !document.querySelector("#ptm-result").classList.contains("hidden"), { timeout: 45000 });
+    for (let i = 0; i < 100 && results.length === before; i++) await sleep(50);
+    const r = results[before];
+    assert.ok(r && r.recorded === false && r.mode === "TEST" && ["RECOGNIZED", "LIVENESS_FAILED"].includes(r.state), JSON.stringify(r));
+    assert.ok(r.quality.face_px > 100, "visage réel détecté par le moteur");
+    assert.match(await page.$eval(".tm-warning", (el) => el.textContent), /AUCUN POINTAGE NE SERA ENREGISTRÉ/);
+    assert.match(await page.$eval(".tm-disclaimer", (el) => el.textContent), /NO-GO POUR LA PRODUCTION/);
+    for (const [width, height] of [[390, 844], [430, 932], [768, 1024], [1024, 768], [1440, 900]]) {
+      // Indicateurs isMobile/hasTouch constants : les modifier fait RECHARGER la page (puppeteer).
+      await page.setViewport({ width, height, isMobile: true, hasTouch: true });
+      await sleep(200);
+      const s = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        video: document.querySelector("#ptm-video").getBoundingClientRect().width, result: !document.querySelector("#ptm-result").classList.contains("hidden"),
+        buttons: ["#ptm-start", "#ptm-stop"].map((sel) => document.querySelector(sel).getBoundingClientRect().height),
+        facial: !!document.querySelector("#faceNav"), test: !document.querySelector("#testModeNav").classList.contains("hidden") }));
+      assert.deepStrictEqual([s.overflow, s.video > 0, s.result, s.buttons.every((h) => h >= 44), s.facial, s.test], [false, true, true, true, true, true], `${width}px ${JSON.stringify(s)}`);
+    }
+    // Cycle de vie : Scanner (QR) arrête le Mode Test et rend la vue QR intacte.
+    await page.click("#scanNav");
+    const scan = await page.evaluate(() => ({ running: window.PointerTestMode.isRunning(), src: document.querySelector("#ptm-video").srcObject,
+      main: !document.querySelector("main.main").classList.contains("hidden"), qr: !!document.querySelector("#reader, #usbReader") }));
+    assert.deepStrictEqual(scan, { running: false, src: null, main: true, qr: true });
+    // Laisser le lecteur QR (html5-qrcode) démarrer : le quitter pendant son play() provoque un
+    // rejet non intercepté DANS la bibliothèque QR (préexistant, hors Mode Test).
+    await qrReady(page);
+    // Facial (production) : circuit distinct — production désactivée, aucun appel au Mode Test.
+    const testCalls = pointeurCalls.filter((c) => c.includes("/test-mode/")).length;
+    await page.click("#faceNav");
+    await page.waitForFunction(() => /POINTAGE FACIAL NON ACTIVÉ/.test(document.querySelector("#faceStatus").textContent), { timeout: 10000 });
+    assert.strictEqual(pointeurCalls.filter((c) => c.includes("/test-mode/")).length, testCalls, "Facial n'appelle jamais le Mode Test");
+    assert.strictEqual(await page.evaluate(() => window.PointerTestMode.isRunning()), false);
+    // Mode Test puis déconnexion : caméra libérée.
+    await page.click("#testModeNav");
+    await page.click("#ptm-start");
+    await page.waitForFunction(() => window.PointerTestMode.state() && window.PointerTestMode.state().stream, { timeout: 15000 });
+    await page.evaluate(() => window.logout());
+    assert.deepStrictEqual(await page.evaluate(() => ({ running: window.PointerTestMode.isRunning(), src: document.querySelector("#ptm-video").srcObject })), { running: false, src: null });
+    // Trafic : aucune route de reconnaissance de production ni d'écriture de présence.
+    assert.ok(!pointeurCalls.some((c) => /\/biometrics\/cameras\/|\/attendance\/(scan|presences|events)|\/portal\/.*scan|POST \/api\/portal/.test(c)), pointeurCalls.join(" | "));
+    await browser.close(); browser = null;
+  });
 
   await t.test("attaques par l'API : production, forge, périmètre, taille, format, rafale", async () => {
     const tiny = execFileSync(PY, ["-c", "import io,base64;from PIL import Image;b=io.BytesIO();Image.new('RGB',(64,48)).save(b,'PNG');print(base64.b64encode(b.getvalue()).decode())"]).toString().trim();
