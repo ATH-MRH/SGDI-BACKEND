@@ -382,7 +382,7 @@ def test_write_paths_are_never_reached(client, auth_headers, db, monkeypatch):
     def boom(*a, **k):
         raise AssertionError("écriture interdite en Mode Test")
     for target, name in ((attendance_core, "record_scan"), (attendance_core, "raise_anomaly"), (service, "recognize_and_record"),
-                         (service, "deactivate_templates"), (service, "invalidate_if_photo_changed"), (service, "active_config"),
+                         (service, "match_and_record"), (service, "deactivate_templates"), (service, "invalidate_if_photo_changed"), (service, "active_config"),
                          (service, "enrollment_preview"), (service, "enrollment_confirm"), (service, "_store_template")):
         monkeypatch.setattr(target, name, boom)
     site = _site(db)
@@ -398,14 +398,14 @@ def test_test_mode_code_has_no_write_dependency():
             {n.attr for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Attribute)} | \
             {a.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ImportFrom) for a in n.names}
     modules = {n.module for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ImportFrom)}
-    forbidden = {"record_scan", "recognize_and_record", "raise_anomaly", "deactivate_templates", "invalidate_if_photo_changed",
+    forbidden = {"record_scan", "recognize_and_record", "match_and_record", "terminals", "raise_anomaly", "deactivate_templates", "invalidate_if_photo_changed",
                  "active_config", "enroll", "enrollment_preview", "enrollment_confirm", "_store_template", "review_duplicate", "new_config_version", "record_consent", "append_audit",
                  "add", "commit", "flush", "delete", "merge", "DailyPresence", "AttendanceEvent", "AttendanceAnomaly"}
     assert not (names & forbidden), names & forbidden
     assert not any(m and m.startswith("app.modules.attendance") for m in modules), modules
     from app.modules.biometrics import routes
     route_source = inspect.getsource(routes.test_mode_recognize)
-    assert "record_scan" not in route_source and "recognize_and_record" not in route_source
+    assert "record_scan" not in route_source and "recognize_and_record" not in route_source and "match_and_record" not in route_source
 
 
 # ── Protection du VRAI pointage (permanente) ─────────────────────────────────────────────
