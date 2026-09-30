@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import secrets
 import time
 from datetime import datetime
 from typing import Any
@@ -26,14 +27,17 @@ from app.core.granular_permissions import is_global_administrator, load_feature_
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
-from app.modules.biometrics import crypto, service, test_mode
+from app.modules.biometrics import crypto, service, terminals, test_mode
 from app.modules.biometrics.cameras import PROFILES, CameraError, adapter_for
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
     CAMERA_ROLES,
     CAMERA_USAGES,
+    MOBILE_TERMINAL_TYPES,
     TEMPLATE_PENDING_REVIEW,
+    TERMINAL_TYPES,
     BiometricConsent,
+    BiometricTerminal,
     BiometricTemplate,
     Camera,
     CameraModel,
@@ -43,6 +47,9 @@ from app.modules.ops.models import Assignment, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids, _ensure_site_allowed, _site_society
 
 router = APIRouter()
+# Circuit B : endpoints des terminaux mobiles (authentifiés par la clé de l'appareil, jamais
+# par une session utilisateur) — app/modules/biometrics/terminals.py.
+router.include_router(terminals.router)
 MAX_FRAMES = 6
 MAX_FRAME_BYTES = 3_000_000
 
@@ -645,17 +652,177 @@ def _audit_recognition(db: Session, user: User, camera: Camera, result: dict[str
 
 @router.post("/sites/{site_id}/facial-disable")
 def disable_site_facial(site_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    """Coupure immédiate du pointage facial d'un site (toutes ses caméras) — sans effet sur
-    le QR ni la saisie manuelle. Réactivation caméra par caméra, explicitement."""
+    """Coupure immédiate du pointage facial d'un site (toutes ses caméras ET tous ses
+    terminaux mobiles) — sans effet sur le QR ni la saisie manuelle. Réactivation caméra par
+    caméra / terminal par terminal, explicitement."""
     require_feature(db, user, "biometric_admin", "admin")
     site = _ensure_site_allowed(db, user, site_id)
     cams = db.execute(select(Camera).where(Camera.site_id == site_id, Camera.facial_attendance_enabled.is_(True))).scalars().all()
     for cam in cams:
         cam.facial_attendance_enabled = False
+    terms = db.execute(select(BiometricTerminal).where(BiometricTerminal.site_id == site_id,
+                                                       BiometricTerminal.facial_attendance_enabled.is_(True))).scalars().all()
+    for term in terms:
+        term.facial_attendance_enabled = False
+        term.config_version += 1          # défis en cours caducs
     append_audit(db, action="biometrics.site.facial_disable", resource="site", resource_id=site_id, result="success",
-                 user=user, society=_site_society(site), new_state={"cameras": [c.id for c in cams]})
+                 user=user, society=_site_society(site), new_state={"cameras": [c.id for c in cams], "terminals": [t.id for t in terms]})
     db.commit()
-    return {"site_id": site_id, "disabled_cameras": len(cams)}
+    return {"site_id": site_id, "disabled_cameras": len(cams), "disabled_terminals": len(terms)}
+
+
+# ── Terminaux mobiles autorisés (administration) ─────────────────────────────────────────
+def _terminal_out(term: BiometricTerminal, site: Site | None = None) -> dict[str, Any]:
+    now = datetime.utcnow()
+    iso = lambda v: v.isoformat() + "Z" if v else None  # noqa: E731
+    return {"id": term.id, "terminal_id": term.public_id, "name": term.name, "terminal_type": term.terminal_type,
+            "society": term.society, "site_id": term.site_id, "site": site.name if site else None, "location": term.location,
+            "enabled": bool(term.enabled), "facial_attendance_enabled": bool(term.facial_attendance_enabled),
+            "paired": bool(term.public_key), "paired_at": iso(term.paired_at),
+            "key_fingerprint": (term.key_fingerprint or "")[:16] or None,
+            "pairing_pending": bool(term.pairing_code_hash and term.pairing_expires_at and term.pairing_expires_at > now),
+            "pairing_expires_at": iso(term.pairing_expires_at) if term.pairing_code_hash else None,
+            "last_seen_at": iso(term.last_seen_at), "revoked_at": iso(term.revoked_at), "revoked_reason": term.revoked_reason,
+            "config_version": term.config_version, "device_label": (term.meta or {}).get("device_label"),
+            "created_by": term.created_by}
+
+
+def _terminal_in_scope(db: Session, user: User, terminal_id: int) -> BiometricTerminal:
+    term = db.get(BiometricTerminal, terminal_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if not term or (allowed is not None and term.site_id not in set(allowed)):
+        raise HTTPException(404, detail="Terminal introuvable")
+    return term
+
+
+@router.get("/terminals")
+def list_terminals(site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    require_feature(db, user, "biometric_status", "read")
+    allowed = _allowed_assignment_site_ids(db, user)
+    stmt = select(BiometricTerminal)
+    if site_id is not None:
+        _ensure_site_allowed(db, user, site_id)
+        stmt = stmt.where(BiometricTerminal.site_id == site_id)
+    elif allowed is not None:
+        stmt = stmt.where(BiometricTerminal.site_id.in_(allowed or [-1]))
+    rows = db.execute(stmt.order_by(BiometricTerminal.site_id, BiometricTerminal.name)).scalars().all()
+    sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows}))).scalars()} if rows else {}
+    return [_terminal_out(r, sites.get(r.site_id)) for r in rows]
+
+
+class TerminalIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    terminal_type: str
+    site_id: int
+    location: str | None = Field(None, max_length=120)
+
+
+class TerminalPatch(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=80)
+    location: str | None = Field(None, max_length=120)
+    enabled: bool | None = None
+    facial_attendance_enabled: bool | None = None
+
+
+class RevokeIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/terminals")
+def add_terminal(payload: TerminalIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    require_feature(db, user, "biometric_admin", "admin")
+    if payload.terminal_type not in TERMINAL_TYPES:
+        raise HTTPException(422, detail="Type de terminal inconnu")
+    if payload.terminal_type not in MOBILE_TERMINAL_TYPES:
+        raise HTTPException(422, detail="Caméra RTSP/Dahua : à déclarer dans Caméras (lue par le serveur)")
+    site = _ensure_site_allowed(db, user, payload.site_id)
+    society = _site_society(site) or ""
+    if not society:
+        raise HTTPException(422, detail="Le site n'a pas de société : un terminal appartient à une société ET un site")
+    if db.execute(select(BiometricTerminal.id).where(BiometricTerminal.site_id == site.id,
+                                                     BiometricTerminal.name == payload.name.strip())).first():
+        raise HTTPException(409, detail="Un terminal porte déjà ce nom sur ce site")
+    term = BiometricTerminal(public_id="trm_" + secrets.token_urlsafe(18), name=payload.name.strip(),
+                             terminal_type=payload.terminal_type, society=society, site_id=site.id, location=payload.location,
+                             enabled=True, facial_attendance_enabled=False, config_version=1, meta={},
+                             created_by=getattr(user, "username", None))
+    db.add(term)
+    db.flush()
+    append_audit(db, action="biometrics.terminal.create", resource="biometric_terminal", resource_id=term.id, result="success",
+                 user=user, society=society, new_state={k: v for k, v in _terminal_out(term, site).items() if k != "created_by"})
+    db.commit()
+    return _terminal_out(term, site)
+
+
+@router.patch("/terminals/{terminal_id}")
+def update_terminal(terminal_id: int, payload: TerminalPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    require_feature(db, user, "biometric_admin", "admin")
+    term = _terminal_in_scope(db, user, terminal_id)
+    if term.revoked_at:
+        raise HTTPException(409, detail="Terminal révoqué")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("facial_attendance_enabled") and not term.public_key:
+        raise HTTPException(422, detail="Associez d'abord le terminal (code d'association) avant d'activer le pointage facial")
+    if "name" in changes:
+        changes["name"] = changes["name"].strip()
+    for key, value in changes.items():
+        setattr(term, key, value)
+    term.config_version += 1              # défis en cours caducs
+    append_audit(db, action="biometrics.terminal.update", resource="biometric_terminal", resource_id=term.id, result="success",
+                 user=user, society=term.society, new_state=changes)
+    db.commit()
+    return _terminal_out(term, db.get(Site, term.site_id))
+
+
+@router.post("/terminals/{terminal_id}/pairing-code")
+def terminal_pairing_code(terminal_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Code d'association à usage unique (10 min). Sur un terminal déjà associé : rotation de
+    la clé (l'ancienne reste valable jusqu'à la nouvelle association)."""
+    require_feature(db, user, "biometric_admin", "admin")
+    term = _terminal_in_scope(db, user, terminal_id)
+    out = terminals.new_pairing_code(db, term, user)
+    db.commit()
+    return {**out, "terminal": _terminal_out(term, db.get(Site, term.site_id))}
+
+
+@router.post("/terminals/{terminal_id}/revoke")
+def revoke_terminal(terminal_id: int, payload: RevokeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Révocation définitive, effet immédiat : clé publique effacée, code annulé."""
+    require_feature(db, user, "biometric_admin", "admin")
+    term = _terminal_in_scope(db, user, terminal_id)
+    if term.revoked_at:
+        raise HTTPException(409, detail="Terminal déjà révoqué")
+    term.revoked_at, term.revoked_reason = datetime.utcnow(), payload.reason.strip()
+    term.enabled = term.facial_attendance_enabled = False
+    term.public_key = term.key_fingerprint = term.pairing_code_hash = term.pairing_expires_at = None
+    term.config_version += 1
+    append_audit(db, action="biometrics.terminal.revoke", resource="biometric_terminal", resource_id=term.id, result="success",
+                 user=user, society=term.society, new_state={"terminal_id": term.public_id, "reason": term.revoked_reason})
+    db.commit()
+    return _terminal_out(term, db.get(Site, term.site_id))
+
+
+@router.get("/terminals/{terminal_id}/audit")
+def terminal_audit(terminal_id: int, limit: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    """Journal du terminal (association, activations, tentatives) — métadonnées seulement."""
+    from app.modules.auth.models import AuditEvent
+
+    if not _feature_granted(db, user, "biometric_admin", ("validate", "admin")):
+        require_feature(db, user, "biometric_admin", "admin")
+    term = _terminal_in_scope(db, user, terminal_id)
+    rows = db.execute(select(AuditEvent).where(AuditEvent.resource == "biometric_terminal", AuditEvent.resource_id == str(term.id))
+                      .order_by(AuditEvent.id.desc()).limit(max(1, min(limit, 200)))).scalars().all()
+    out = []
+    for row in rows:
+        try:
+            state = json.loads(row.new_state) if row.new_state else {}
+        except ValueError:
+            state = {}
+        out.append({"at": row.created_at.isoformat() + "Z" if getattr(row, "created_at", None) else None, "action": row.action,
+                    "result": row.result, "by": row.username, "state": state.get("state"), "matricule": state.get("matricule"),
+                    "recorded": state.get("recorded"), "reason": state.get("reason"), "confidence": state.get("confidence"),
+                    "liveness": state.get("liveness")})
+    return out
 
 
 # ── Mode Test (caméra du navigateur) — AUCUN POINTAGE ────────────────────────────────────

@@ -559,9 +559,18 @@ def review_duplicate(db: Session, *, template: BiometricTemplate, approve: bool,
 
 
 # ── Reconnaissance et pointage automatique ───────────────────────────────────────────────
-def _candidates(db: Session, site_id: int, employee_hint: int | None) -> list[tuple[Employee, BiometricTemplate]]:
+def _society_key(value: Any) -> str:
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode()
+    return " ".join(text.upper().split())
+
+
+def _candidates(db: Session, site_id: int, employee_hint: int | None,
+                society: str | None = None) -> list[tuple[Employee, BiometricTemplate]]:
     """Périmètre 1:N minimal : gabarits ACTIFS des employés affectés (actifs) au site de la
-    caméra. 1:1 si un identifiant préalable (QR/matricule) est fourni."""
+    caméra/du terminal — et de la société de ce site si elle est connue (jamais toute la
+    base). 1:1 si un identifiant préalable (QR/matricule) est fourni."""
     today = attendance_core._now_local().date()
     stmt = select(Assignment.employee_id).where(
         Assignment.site_id == site_id, Assignment.active == 1, Assignment.start_date <= today,
@@ -574,10 +583,13 @@ def _candidates(db: Session, site_id: int, employee_hint: int | None) -> list[tu
     rows = db.execute(select(BiometricTemplate).where(BiometricTemplate.employee_id.in_(employee_ids),
                                                       BiometricTemplate.status == TEMPLATE_ACTIVE)).scalars().all()
     employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({r.employee_id for r in rows}))).scalars()} if rows else {}
+    society_key = _society_key(society) if society else ""
     out = []
     for row in rows:
         employee = employees.get(row.employee_id)
         if employee is None:
+            continue
+        if society_key and _society_key(employee.society) != society_key:
             continue
         # Contrôle sur le gabarit DÉJÀ chargé (aucune requête par candidat) ; invalidation
         # (rare) seulement si la photo de la fiche a réellement changé.
@@ -592,57 +604,62 @@ def _person(employee: Employee) -> dict[str, Any]:
     return {"nom": employee.last_name, "prenom": employee.first_name, "matricule": employee.code}
 
 
-def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], actor: Any,
-                         burst_id: str | None = None, employee_hint: int | None = None) -> dict[str, Any]:
-    """READY → FACE_DETECTED → QUALITY_CHECK → LIVENESS_CHECK → FACE_MATCH → EMPLOYEE_CHECK →
-    SITE/AFFECTATION_CHECK → ATTENDANCE_RULE_CHECK → AUTO_VALIDATE → ATTENDANCE_RECORDED.
-    Toute condition non satisfaite ⇒ AUCUN pointage."""
+@dataclass
+class FacialSource:
+    """Origine d'un pointage facial de production : caméra lue par le serveur (circuit C) ou
+    terminal mobile autorisé (circuit B). Les deux partagent ENTIÈREMENT la suite du pipeline."""
+    label: str                        # « caméra X » / « terminal Y » (messages d'anomalie)
+    key: str                          # préfixe des clés de déduplication d'anomalie : "12" / "T3"
+    site_id: int
+    society: str | None
+    details: dict                     # {"camera_id": …} / {"terminal_id": …}
+    idempotency_key: str | None
+    device_id: int | None             # AttendanceEvent.device_id (caméras) ; None pour un terminal
+    extra: dict
+    society_scoped: bool = False      # 1:N limité aussi à la société (terminaux)
+
+
+def match_and_record(db: Session, *, source: FacialSource, decision: FrameDecision, cfg: BiometricConfig, actor: Any,
+                     employee_hint: int | None = None) -> dict[str, Any]:
+    """Après l'analyse des trames : liveness → 1:N du site → non-ambiguïté → contrôles employé
+    → non-répétition → Attendance Core. Toute condition non satisfaite ⇒ AUCUN pointage."""
     from app.modules.attendance.core import raise_anomaly
     from app.modules.portal.routes import _employee_portal_block_reason
 
-    engine = ensure_enabled()
-    if camera.adapter == "TERMINAL":
-        raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
-    if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
-        raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
-    if not camera.facial_attendance_enabled:
-        # Pilote : BIOMETRIC_ENABLED ne suffit pas, chaque caméra est activée explicitement.
-        raise HTTPException(409, detail="Pointage facial non activé pour cette caméra (activation pilote requise)")
-    cfg = active_config(db)
-    decision = analyze_frames(engine, frames, cfg, require_liveness=True)
     minute = attendance_core._now_local().strftime("%Y%m%d%H%M")
-    base = {"camera_id": camera.id, "site_id": camera.site_id, "config_version": cfg.version,
+    base = {**source.details, "site_id": source.site_id, "config_version": cfg.version,
             "liveness": round(decision.liveness, 3) if decision.liveness is not None else None}
     if decision.state in ("NO_FACE", "MULTIPLE_FACES", "QUALITY_FAILED"):
         return {**base, "state": decision.state, "recorded": False, "message": decision.reasons[0] if decision.reasons else "", "reasons": decision.reasons}
     if decision.state == "LIVENESS_FAILED":
-        raise_anomaly(db, anomaly_type="LIVENESS_FAILED", severity="critical", site_id=camera.site_id,
+        raise_anomaly(db, anomaly_type="LIVENESS_FAILED", severity="critical", site_id=source.site_id,
                       presence_date=attendance_core._now_local().date(), source=SOURCE_FACIAL,
-                      message=f"Échec du contrôle de présence réelle — caméra {camera.name}",
-                      details={"camera_id": camera.id, "reasons": decision.reasons, "liveness": decision.liveness},
-                      dedupe_key=f"LIVENESS:{camera.id}:{minute}")
+                      message=f"Échec du contrôle de présence réelle — {source.label}",
+                      details={**source.details, "reasons": decision.reasons, "liveness": decision.liveness},
+                      dedupe_key=f"LIVENESS:{source.key}:{minute}")
         db.commit()
         return {**base, "state": "LIVENESS_FAILED", "recorded": False, "message": "Pointage refusé : présence réelle non confirmée"}
     embedding = decision.face.embedding
-    scored = sorted(((cosine(embedding, crypto.decrypt_vector(t.embedding_encrypted)), e, t)
-                     for e, t in _candidates(db, camera.site_id, employee_hint)), key=lambda x: x[0], reverse=True)
+    candidates = _candidates(db, source.site_id, employee_hint, source.society if source.society_scoped else None)
+    scored = sorted(((cosine(embedding, crypto.decrypt_vector(t.embedding_encrypted)), e, t) for e, t in candidates),
+                    key=lambda x: x[0], reverse=True)
     top_score = scored[0][0] if scored else -1.0
     if not scored or top_score < cfg.recognition_threshold:
-        raise_anomaly(db, anomaly_type="UNKNOWN_FACE", severity="warning", site_id=camera.site_id,
+        raise_anomaly(db, anomaly_type="UNKNOWN_FACE", severity="warning", site_id=source.site_id,
                       presence_date=attendance_core._now_local().date(), source=SOURCE_FACIAL,
-                      message=f"Visage inconnu — caméra {camera.name}", details={"camera_id": camera.id},
-                      dedupe_key=f"UNKNOWN:{camera.id}:{minute}")
+                      message=f"Visage inconnu — {source.label}", details=dict(source.details),
+                      dedupe_key=f"UNKNOWN:{source.key}:{minute}")
         db.commit()
         return {**base, "state": "UNKNOWN_FACE", "recorded": False, "message": "VISAGE INCONNU"}
     second = scored[1][0] if len(scored) > 1 else -1.0
-    top_employee, top_template = scored[0][1], scored[0][2]
+    top_employee = scored[0][1]
     if second >= cfg.recognition_threshold and top_score - second < cfg.review_margin:
-        raise_anomaly(db, anomaly_type="AMBIGUOUS_MATCH", severity="critical", site_id=camera.site_id,
+        raise_anomaly(db, anomaly_type="AMBIGUOUS_MATCH", severity="critical", site_id=source.site_id,
                       presence_date=attendance_core._now_local().date(), source=SOURCE_FACIAL,
-                      message=f"Reconnaissance ambiguë entre deux employés — caméra {camera.name}",
-                      details={"camera_id": camera.id, "candidates": [scored[0][1].id, scored[1][1].id],
+                      message=f"Reconnaissance ambiguë entre deux employés — {source.label}",
+                      details={**source.details, "candidates": [scored[0][1].id, scored[1][1].id],
                                "scores": [round(top_score, 4), round(second, 4)]},
-                      dedupe_key=f"AMBIGUOUS:{camera.id}:{minute}")
+                      dedupe_key=f"AMBIGUOUS:{source.key}:{minute}")
         db.commit()
         return {**base, "state": "AMBIGUOUS", "recorded": False, "message": "Reconnaissance ambiguë — utilisez le pointage de secours"}
     if top_score < cfg.recognition_threshold + cfg.review_margin:
@@ -656,12 +673,14 @@ def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], ac
     blocked = _employee_portal_block_reason(top_employee)
     if blocked:
         return {**base, "state": "REFUSED", "recorded": False, "message": f"Pointage refusé : {blocked}", "employee": _person(top_employee)}
-    # Non-répétition caméra : le même employé resté devant la caméra ne re-pointe pas.
-    recent = db.execute(select(AttendanceEvent).where(
-        AttendanceEvent.employee_id == top_employee.id, AttendanceEvent.device_id == camera.id,
-        AttendanceEvent.source == SOURCE_FACIAL,
-        AttendanceEvent.occurred_at >= attendance_core.to_utc_naive(attendance_core._now_local() - timedelta(seconds=cfg.cooldown_seconds)),
-    ).order_by(AttendanceEvent.id.desc()).limit(1)).scalar_one_or_none()
+    # Non-répétition : le même employé resté devant la caméra / la tablette ne re-pointe pas.
+    # Caméra : fenêtre par caméra ; terminal : fenêtre sur toute source faciale de l'employé.
+    since = attendance_core.to_utc_naive(attendance_core._now_local() - timedelta(seconds=cfg.cooldown_seconds))
+    stmt = select(AttendanceEvent).where(AttendanceEvent.employee_id == top_employee.id, AttendanceEvent.source == SOURCE_FACIAL,
+                                         AttendanceEvent.occurred_at >= since)
+    if source.device_id is not None:
+        stmt = stmt.where(AttendanceEvent.device_id == source.device_id)
+    recent = db.execute(stmt.order_by(AttendanceEvent.id.desc()).limit(1)).scalar_one_or_none()
     if recent is not None:
         return {**base, "state": "ALREADY_RECORDED", "recorded": False, "message": "Pointage déjà enregistré",
                 "employee": _person(top_employee), "action": "ENTRÉE" if recent.event_type == "ARRIVAL" else "SORTIE",
@@ -669,10 +688,10 @@ def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], ac
     try:
         result = attendance_core.record_scan(
             db, employee=top_employee, source=SOURCE_FACIAL, actor=actor,
-            idempotency_key=f"cam{camera.id}-{burst_id}" if burst_id else None, device_id=camera.id,
+            idempotency_key=source.idempotency_key, device_id=source.device_id,
             confidence=round(top_score, 4), quality_result="OK",
             liveness_result=f"REAL:{decision.liveness:.3f}" if decision.liveness is not None else None,
-            extra={"camera": camera.name, "config_version": cfg.version},
+            extra={**source.extra, "config_version": cfg.version},
         )
     except HTTPException as exc:
         db.rollback()
@@ -681,3 +700,25 @@ def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], ac
             "recorded": not result.get("duplicate"), "message": "POINTAGE ENREGISTRÉ",
             "employee": _person(top_employee), "action": "ENTRÉE" if result["action"] == "arrivee" else "SORTIE",
             "heure": result["heure"][:5], "site": result.get("site"), "confidence": round(top_score, 4)}
+
+
+def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], actor: Any,
+                         burst_id: str | None = None, employee_hint: int | None = None) -> dict[str, Any]:
+    """Caméra lue par le serveur (circuit C). READY → FACE_DETECTED → QUALITY_CHECK →
+    LIVENESS_CHECK → FACE_MATCH → EMPLOYEE_CHECK → SITE/AFFECTATION_CHECK →
+    ATTENDANCE_RULE_CHECK → AUTO_VALIDATE → ATTENDANCE_RECORDED. Toute condition non satisfaite
+    ⇒ AUCUN pointage."""
+    engine = ensure_enabled()
+    if camera.adapter == "TERMINAL":
+        raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
+    if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
+        raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
+    if not camera.facial_attendance_enabled:
+        # Pilote : BIOMETRIC_ENABLED ne suffit pas, chaque caméra est activée explicitement.
+        raise HTTPException(409, detail="Pointage facial non activé pour cette caméra (activation pilote requise)")
+    cfg = active_config(db)
+    decision = analyze_frames(engine, frames, cfg, require_liveness=True)
+    source = FacialSource(label=f"caméra {camera.name}", key=str(camera.id), site_id=camera.site_id, society=camera.society,
+                          details={"camera_id": camera.id}, idempotency_key=f"cam{camera.id}-{burst_id}" if burst_id else None,
+                          device_id=camera.id, extra={"camera": camera.name})
+    return match_and_record(db, source=source, decision=decision, cfg=cfg, actor=actor, employee_hint=employee_hint)

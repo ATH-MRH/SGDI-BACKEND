@@ -141,3 +141,67 @@ class Camera(Base, TimestampMixin):
     facial_attendance_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     credentials_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)   # jamais exposé
     last_check: Mapped[dict | None] = mapped_column(JSON)
+
+
+# ── Terminaux faciaux autorisés (tablette / smartphone) ─────────────────────────────────────
+# Circuit de production distinct du Mode Test et des caméras lues par le serveur : un
+# navigateur ne devient un terminal qu'après association par un administrateur (code à usage
+# unique) ; il s'authentifie ensuite par une clé de signature P-256 NON EXTRACTIBLE générée sur
+# l'appareil (le serveur ne conserve que la clé publique : aucun secret stocké côté serveur).
+TERMINAL_TYPES = frozenset({"TABLET_ANDROID", "SMARTPHONE_ANDROID", "IPHONE", "IPAD", "CAMERA_RTSP"})
+MOBILE_TERMINAL_TYPES = frozenset({"TABLET_ANDROID", "SMARTPHONE_ANDROID", "IPHONE", "IPAD"})
+
+
+class BiometricTerminal(Base, TimestampMixin):
+    __tablename__ = "biometric_terminals"
+    __table_args__ = (UniqueConstraint("site_id", "name", name="uq_biometric_terminals_site_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # identifiant immuable
+    name: Mapped[str] = mapped_column(String(80))
+    terminal_type: Mapped[str] = mapped_column(String(30))
+    society: Mapped[str] = mapped_column(String(150), index=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    location: Mapped[str | None] = mapped_column(String(120))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Pointage facial du terminal : FAUX par défaut, activé explicitement (en plus de
+    # BIOMETRIC_ENABLED) ; le QR du terminal n'en dépend pas.
+    facial_attendance_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    public_key: Mapped[dict | None] = mapped_column(JSON)                  # JWK P-256 public (jamais secret)
+    key_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    pairing_code_hash: Mapped[str | None] = mapped_column(String(64), index=True)   # SHA-256, jamais le code
+    pairing_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
+    paired_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    revoked_reason: Mapped[str | None] = mapped_column(Text)
+    config_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)   # incrémentée à chaque changement
+    meta: Mapped[dict | None] = mapped_column(JSON)                        # non sensible (libellé appareil…)
+    created_by: Mapped[str | None] = mapped_column(String(120))
+
+
+class BiometricTerminalChallenge(Base):
+    """Défi serveur à usage unique : une rafale n'est acceptée que liée à un défi frais de CE
+    terminal, de CE site et de la configuration en vigueur ; consommé à la première utilisation."""
+    __tablename__ = "biometric_terminal_challenges"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    terminal_id: Mapped[int] = mapped_column(ForeignKey("biometric_terminals.id", ondelete="CASCADE"), index=True)
+    site_id: Mapped[int] = mapped_column(Integer)
+    config_version: Mapped[int] = mapped_column(Integer)
+    terminal_config_version: Mapped[int] = mapped_column(Integer)
+    nonce_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class BiometricFrameDigest(Base):
+    """Empreintes SHA-256 des images déjà reçues d'un terminal (jamais l'image) : une trame
+    rejouée à l'octet près est refusée, quel que soit le défi. Purgées après quelques jours."""
+    __tablename__ = "biometric_frame_digests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), unique=True)
+    terminal_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
