@@ -514,7 +514,7 @@ async function sectionBiometrics(e) {
   }
   const c = data.consent;
   const active = data.active_template;
-  return `<div class="dn-error-state-text" style="margin:0 0 10px">${data.enabled ? "" : "Biométrie désactivée sur ce serveur. "}Gestion complète (consentement, caméras, doublons) : centre de contrôle pointage.irongs.com.</div>
+  return `<div class="dn-error-state-text" style="margin:0 0 10px">${data.enabled ? "" : "Pointage facial désactivé sur ce serveur. "}Enrôlement SUPERVISÉ (analyse de la photo DRH, comparaison, confirmation) et gestion complète (consentement, caméras, doublons) : centre de contrôle pointage.irongs.com → Enrôlement.</div>
     <table class="dn-table"><tbody>
       <tr><th>Consentement</th><td>${c ? `${escapeHTML(CONSENT_LABELS[c.status] || c.status)}${c.proof_reference ? " · réf. " + escapeHTML(c.proof_reference) : ""} · texte ${escapeHTML(c.notice_version)}${c.admissible ? "" : " · <b>non admissible</b>"}` : "Aucun"}</td></tr>
       <tr><th>Enrôlement</th><td>${escapeHTML(data.enrollment === "ACTIVE" ? "Actif" : data.enrollment === "PENDING_REVIEW" ? "En revue (doublon possible)" : "Aucun")}</td></tr>
@@ -524,7 +524,6 @@ async function sectionBiometrics(e) {
     ${data.templates?.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Historique des gabarits</h3><table class="dn-table"><thead><tr><th>Créé le</th><th>Source</th><th>Statut</th><th>Motif</th></tr></thead><tbody>
       ${data.templates.map(t => `<tr><td>${escapeHTML((t.created_at || "").slice(0, 16).replace("T", " "))}</td><td>${t.source === "EMPLOYEE_PHOTO" ? "Photo de la fiche" : "Caméra"}</td><td>${escapeHTML(TEMPLATE_LABELS[t.status] || t.status)}</td><td>${escapeHTML(t.status_reason || "—")}</td></tr>`).join("")}</tbody></table>` : ""}
     <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
-      <button type="button" class="dn-btn" data-dn-bio-enroll ${data.photo_available ? "" : "disabled"}>${active ? "Ré-enrôler depuis la photo" : "Enrôler depuis la photo"}</button>
       ${data.enrollment !== "NONE" ? `<button type="button" class="dn-btn" data-dn-bio-deactivate>Désactiver</button>` : ""}
     </div><div class="dn-error-state-text" data-dn-bio-feedback role="status"></div>`;
 }
@@ -535,7 +534,6 @@ function wireBiometricsSection(employee) {
     try { await fn(); invalidate(`drh:employee:${employee.id}:biometrics`); feedback.textContent = okText; loadSection(employee, "biometrie", sectionBiometrics); }
     catch (err) { feedback.textContent = err?.status === 403 ? "Permission biométrique requise pour cette action." : (err?.message || "Action impossible"); }
   };
-  document.querySelector("[data-dn-bio-enroll]")?.addEventListener("click", () => run(() => api.post(`/biometrics/employees/${encodeURIComponent(employee.id)}/enroll`, {}), "Enrôlement enregistré."));
   document.querySelector("[data-dn-bio-deactivate]")?.addEventListener("click", () => {
     const reason = window.prompt("Motif de la désactivation (obligatoire) :");
     if (!reason || reason.trim().length < 3) return;

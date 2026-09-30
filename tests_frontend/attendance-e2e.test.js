@@ -190,7 +190,7 @@ print(a.id, b.id, e1.id, e2.id, e3.id)
     assert.strictEqual(model.status, 200, JSON.stringify(model.data));
     const cam = await api("/biometrics/cameras", { method: "POST", token: tokens.admin, body: {
       name: "CAM-ENTREE-01", camera_model_id: model.data.id, site_id: ids.siteA, host: "127.0.0.1", http_port: cameraServer.address().port,
-      rtsp_port: 1, location: "Entrée principale", usage: "ATTENDANCE_AND_ENROLLMENT", role: "ENTRY", is_default: true, username: CAM.user, password: CAM.pass } });
+      rtsp_port: 1, location: "Entrée principale", usage: "ATTENDANCE_AND_ENROLLMENT", role: "ENTRY", is_default: true, facial_attendance_enabled: true, username: CAM.user, password: CAM.pass } });
     assert.strictEqual(cam.status, 200, JSON.stringify(cam.data));
     assert.ok(!JSON.stringify(cam.data).includes(CAM.pass), "mot de passe caméra jamais renvoyé");
     ids.camA = cam.data.id;
@@ -324,6 +324,9 @@ print(a.id, b.id, e1.id, e2.id, e3.id)
     // La modale se redessine après chaque action : clic sur l'élément présent AU MOMENT du clic.
     await page.waitForFunction(() => document.querySelector("#en-photo") && !document.querySelector("#en-photo").disabled, { timeout: 10000 });
     await page.evaluate(() => document.querySelector("#en-photo").click());
+    // Enrôlement SUPERVISÉ : analyse de la photo DRH, puis confirmation explicite de l'opérateur.
+    await page.waitForFunction(() => document.querySelector("#en-confirm") && !document.querySelector("#en-confirm").disabled, { timeout: 20000 });
+    await page.evaluate(() => document.querySelector("#en-confirm").click());
     await page.waitForFunction(() => /Enrôlement :<\/b> actif|Enrôlement : actif/.test(document.querySelector(".modal")?.innerHTML || "") || /actif/.test(document.querySelector(".modal")?.innerText || ""), { timeout: 20000 });
     const status = await api(`/biometrics/employees/${ids.e2}`, { token: tokens.bioE2E });
     assert.strictEqual(status.data.enrollment, "ACTIVE", JSON.stringify(status.data));

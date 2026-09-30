@@ -124,6 +124,7 @@ tr:hover td{background:#fafcff}
         <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
       </nav><div class="side-title">Biométrie</div><nav>
+        <button class="nav-btn" data-view="enrollment" type="button">☺ Enrôlement</button>
         <button class="nav-btn" data-view="cameras" type="button">◉ Caméras</button>
         <button class="nav-btn" data-view="duplicates" type="button">⧉ Doublons à revoir</button>
         <button class="nav-btn hidden" data-view="test-mode" type="button">◎ Mode Test facial</button>
@@ -146,9 +147,15 @@ tr:hover td{background:#fafcff}
           <div class="pager"><span id="board-count"></span><span><button class="secondary" id="prev-btn" type="button">‹ Précédent</button> <button class="secondary" id="next-btn" type="button">Suivant ›</button></span></div>
         </div>
       </section>
+      <section id="view-enrollment" class="hidden">
+        <div class="page-head"><div><h2>Enrôlement biométrique supervisé</h2><p>Recherche dans votre périmètre. Aucun gabarit n'est créé sans analyse, comparaison avec la photo DRH et confirmation explicite.</p></div></div>
+        <div class="card"><div class="filters"><input class="grow" id="en-q" type="search" placeholder="Matricule, nom ou prénom" aria-label="Rechercher un employé à enrôler"><button class="secondary" id="en-search" type="button">Rechercher</button></div>
+          <div id="en-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Consentement</th><th>Enrôlement</th><th>Photo DRH</th><th></th></tr></thead><tbody id="en-rows"></tbody></table></div></div>
+      </section>
       <section id="view-cameras" class="hidden">
-        <div class="page-head"><div><h2>Caméras</h2><p>Une caméra appartient à une société et un site. Les identifiants ne sont jamais réaffichés.</p></div>
-          <span><button class="secondary" id="model-add" type="button">+ Modèle au catalogue</button> <button class="primary" id="camera-add" type="button">+ Ajouter une caméra</button></span></div>
+        <div class="page-head"><div><h2>Caméras</h2><p>Une caméra appartient à une société et un site. Les identifiants ne sont jamais réaffichés. Le pointage facial n'est actif que sur les caméras explicitement activées (pilote).</p></div>
+          <span><button class="danger hidden" id="site-facial-off" type="button">Couper le pointage facial du site</button> <button class="secondary" id="model-add" type="button">+ Modèle au catalogue</button> <button class="primary" id="camera-add" type="button">+ Ajouter une caméra</button></span></div>
         <div class="card"><div id="camera-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Caméra</th><th>Fabricant / modèle</th><th>Site</th><th>Emplacement</th><th>Usage</th><th>Rôle</th><th>Réseau</th><th>Dernier test</th><th>État</th><th></th></tr></thead><tbody id="camera-rows"></tbody></table></div></div>
       </section>
@@ -224,7 +231,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!res.ok) {
       const detail = data && data.detail;
       const reason = detail && typeof detail === "object" && Array.isArray(detail.reasons) && detail.reasons[0];
-      throw new Error(typeof detail === "string" ? detail : reason || (res.status === 403 ? "Accès refusé pour ce compte." : "Erreur " + res.status));
+      const coded = detail && typeof detail === "object" && typeof detail.message === "string" && detail.message;
+      throw Object.assign(new Error(typeof detail === "string" ? detail : coded || reason || (res.status === 403 ? "Accès refusé pour ce compte." : "Erreur " + res.status)), { status: res.status, detail });
     }
     return data;
   }
@@ -269,7 +277,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["anomalies", "enrollment", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -281,11 +289,13 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
+    $("view-enrollment").classList.toggle("hidden", view !== "enrollment");
     $("view-duplicates").classList.toggle("hidden", view !== "duplicates");
     $("view-test-mode").classList.toggle("hidden", view !== "test-mode");
     if (view !== "test-mode" && window.ATLASTestMode) window.ATLASTestMode.stop();
     if (view === "test-mode" && window.ATLASTestMode) return window.ATLASTestMode.load();
     if (view === "cameras") return loadCameras();
+    if (view === "enrollment") return loadEnrollment();
     if (view === "duplicates") return loadDuplicates();
     return view === "board" ? loadBoard() : loadAnomalies();
   }
@@ -482,9 +492,10 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
           <td>${esc(USAGE_LABEL[c.usage] || c.usage)}</td><td>${esc(ROLE_LABEL[c.role] || c.role)}</td>
           <td><small>${esc(c.host)}${c.http_port ? ":" + esc(c.http_port) : ""} · ${esc(c.connection_type)}<br>${c.credentials_set ? "Identifiants enregistrés" : "Sans identifiants"}</small></td>
           <td><small>Connexion ${ok("connection")} · Image ${ok("snapshot")} · Flux ${ok("stream")}${check.snapshot && check.snapshot.resolution ? "<br>" + esc(check.snapshot.resolution) : ""}${check.checked_at ? "<br>" + esc(check.checked_at.replace("T", " ")) : ""}</small></td>
-          <td><span class="pill ${c.active ? "st-present" : "st-repos"}">${c.active ? "Active" : "Inactive"}</span></td>
+          <td><span class="pill ${c.active ? "st-present" : "st-repos"}">${c.active ? "Active" : "Inactive"}</span><br><span class="pill ${c.facial_attendance_enabled ? "sev-critical" : "st-repos"}" title="Pointage facial réel (pilote)">${c.facial_attendance_enabled ? "Facial actif" : "Facial coupé"}</span></td>
           <td><div class="row-actions"><button class="link" type="button" data-cam-test="${c.id}">Tester</button><button class="link" type="button" data-cam-edit="${c.id}">Modifier</button></div></td></tr>`;
       }).join("") : '<tr><td colspan="10" class="empty">Aucune caméra déclarée pour ce périmètre.</td></tr>';
+      $("site-facial-off").classList.toggle("hidden", !$("f-site").value || !cameraCache.some((c) => c.facial_attendance_enabled));
       $("camera-rows").querySelectorAll("[data-cam-test]").forEach((b) => b.addEventListener("click", () => testCamera(b.dataset.camTest, b)));
       $("camera-rows").querySelectorAll("[data-cam-edit]").forEach((b) => b.addEventListener("click", () => openCameraForm(cameraCache.find((c) => String(c.id) === b.dataset.camEdit))));
     } catch (ex) { $("camera-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
@@ -515,6 +526,12 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     });
   });
   $("camera-add").addEventListener("click", () => openCameraForm(null));
+  $("site-facial-off").addEventListener("click", async () => {
+    const site = $("f-site").value;
+    if (!site || !confirm("Couper immédiatement le pointage facial de TOUTES les caméras de ce site ?\nLe QR et la saisie manuelle restent disponibles.")) return;
+    try { const r = await api(`/biometrics/sites/${site}/facial-disable`, { method: "POST" }); toast(`Pointage facial coupé (${r.disabled_cameras} caméra(s))`); loadCameras(); }
+    catch (ex) { toast(permissionMessage(ex), true); }
+  });
 
   async function openCameraForm(cam) {
     let models = [], sites = [];
@@ -533,6 +550,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <div class="grid2"><div><label for="c-user">Identifiant caméra ${cam && cam.credentials_set ? "(laisser vide = inchangé)" : ""}</label><input id="c-user" autocomplete="off"></div><div><label for="c-pass">Mot de passe caméra ${cam && cam.credentials_set ? "(laisser vide = inchangé)" : ""}</label><input id="c-pass" type="password" autocomplete="new-password"></div></div>
         <label><input type="checkbox" id="c-default" style="width:auto;height:auto"${cam && cam.is_default ? " checked" : ""}> Caméra par défaut pour ce rôle</label>
         <label><input type="checkbox" id="c-active" style="width:auto;height:auto"${!cam || cam.active ? " checked" : ""}> Active</label>
+        <label><input type="checkbox" id="c-facial" style="width:auto;height:auto"${cam && cam.facial_attendance_enabled ? " checked" : ""}> Pointage facial RÉEL actif sur cette caméra (pilote) — enregistre des présences si la biométrie est activée</label>
         <div class="error" id="c-error" role="alert"></div>
         <div class="modal-actions"><button class="secondary" type="button" id="c-cancel">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
       </form>`);
@@ -543,7 +561,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       const num = (id) => v(id) ? Number(v(id)) : null;
       const body = { name: v("#c-name"), location: v("#c-loc") || null, usage: v("#c-usage"), role: v("#c-role"), host: v("#c-host"),
         http_port: num("#c-http"), rtsp_port: num("#c-rtsp"), channel: num("#c-chan") || 1,
-        is_default: m.querySelector("#c-default").checked, active: m.querySelector("#c-active").checked };
+        is_default: m.querySelector("#c-default").checked, active: m.querySelector("#c-active").checked,
+        facial_attendance_enabled: m.querySelector("#c-facial").checked };
       if (v("#c-user")) body.username = v("#c-user");
       if (m.querySelector("#c-pass").value) body.password = m.querySelector("#c-pass").value;
       try {
@@ -587,6 +606,29 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     m.querySelector("#dup-reject").addEventListener("click", () => decide(false));
   }
 
+  // ── Biométrie : recherche des employés à enrôler ─────────────────────────────────
+  async function loadEnrollment() {
+    $("en-state").innerHTML = '<div class="state info">Chargement…</div>';
+    try {
+      const params = new URLSearchParams();
+      if ($("en-q").value.trim()) params.set("q", $("en-q").value.trim());
+      if ($("f-site").value) params.set("site_id", $("f-site").value);
+      const rows = await api("/biometrics/employees?" + params.toString());
+      $("en-state").innerHTML = "";
+      const ENR = { ACTIVE: "Actif", PENDING_REVIEW: "En revue", NONE: "Aucun" };
+      $("en-rows").innerHTML = rows.length ? rows.map((r) => `<tr><td class="who"><b>${esc(r.nom)} ${esc(r.prenom)}</b><small>${esc(r.matricule)}${r.statut && r.statut !== "actif" ? " · " + esc(r.statut) : ""}</small></td>
+        <td>${esc(r.fonction || "—")}</td><td>${esc(r.site || "")}</td><td>${r.consent_admissible ? "Admissible" : "<b>Non admissible</b>"}</td>
+        <td>${esc(ENR[r.enrollment] || r.enrollment)}</td><td>${r.photo_available ? "Disponible" : "Absente"}</td>
+        <td><button class="link" type="button" data-en="${r.employee_id}">Ouvrir</button></td></tr>`).join("") : '<tr><td colspan="7" class="empty">Aucun employé trouvé dans votre périmètre.</td></tr>';
+      $("en-rows").querySelectorAll("[data-en]").forEach((b) => b.addEventListener("click", () => {
+        const r = rows.find((x) => String(x.employee_id) === b.dataset.en);
+        openBiometrics({ employee_id: r.employee_id, nom: `${r.nom} ${r.prenom}`, matricule: r.matricule, site: r.site || "", site_id: r.site_id });
+      }));
+    } catch (ex) { $("en-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
+  }
+  $("en-search").addEventListener("click", loadEnrollment);
+  $("en-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEnrollment(); });
+
   // ── Biométrie : fiche employé (consentement, enrôlement) ──────────────────────────
   const CONSENT_LABEL = { contract_confirmed: "Accord du contrat confirmé", explicit_confirmed: "Accord explicite", pending: "En attente", refused: "Refusé", withdrawn: "Retiré" };
   const SOURCE_CONSENT = { EMPLOYMENT_CONTRACT: "Contrat de travail", HR_DOCUMENT: "Document RH", DIGITAL_ENROLLMENT: "Enrôlement numérique", OTHER_AUTHORIZED_PROCESS: "Autre processus autorisé" };
@@ -600,7 +642,9 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       enrolCams = (await api("/biometrics/cameras?site_id=" + row.site_id)).filter((c) => c.active && c.usage !== "ATTENDANCE");
     } catch (ex) { toast(permissionMessage(ex), true); return; }
     const c = status.consent;
-    const m = modal(`<h3>Biométrie — ${esc(row.nom)}</h3><div class="sub">${esc(row.matricule)} · ${esc(row.site)}${status.enabled ? "" : " · <b>biométrie désactivée sur ce serveur</b>"}</div>
+    const id = status.identity || {};
+    const m = modal(`<h3>Biométrie — ${esc(row.nom)}</h3><div class="sub">${esc(row.matricule)} · ${esc(id.fonction || "")} · ${esc(row.site)}${status.enabled ? "" : " · pointage facial désactivé"}${status.enrollment_enabled ? "" : " · <b>enrôlement désactivé sur ce serveur</b>"}</div>
+      ${status.photo_url ? `<img src="${esc(status.photo_url)}" alt="Photo DRH" style="max-width:120px;max-height:150px;border-radius:10px;border:1px solid var(--line);float:right;margin:0 0 8px 12px">` : ""}
       <p><b>Consentement :</b> ${c ? `${esc(CONSENT_LABEL[c.status] || c.status)} — ${esc(SOURCE_CONSENT[c.source] || c.source)}${c.proof_reference ? " · réf. " + esc(c.proof_reference) : ""} · texte ${esc(c.notice_version)} · ${esc(c.recorded_by || "")}${c.admissible ? "" : " · <b>non admissible</b>"}` : "aucun"}</p>
       <p><b>Enrôlement :</b> ${esc(status.enrollment === "ACTIVE" ? "actif" : status.enrollment === "PENDING_REVIEW" ? "en revue (doublon possible)" : "aucun")} · photo de la fiche ${status.photo_available ? "disponible" : "absente"}</p>
       ${status.templates.length ? `<ul class="anomaly-list">${status.templates.map((t) => `<li>${esc(TEMPLATE_LABEL[t.status] || t.status)} · ${esc(t.source === "EMPLOYEE_PHOTO" ? "photo de la fiche" : "caméra")} · ${esc((t.created_at || "").slice(0, 16).replace("T", " "))}${t.status_reason ? " — " + esc(t.status_reason) : ""}</li>`).join("")}</ul>` : ""}
@@ -610,8 +654,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <div class="grid2"><div><label for="cs-ref">Référence du document / contrat</label><input id="cs-ref" placeholder="Ex. Contrat CDD 2026-041 art. 12"></div><div><label for="cs-date">Date de l'accord</label><input id="cs-date" type="date"></div></div>
         <button class="secondary" type="submit" style="margin-top:10px">Enregistrer le consentement</button></form>
       <div class="modal-actions" style="flex-wrap:wrap">
-        ${enrolCams.length ? `<select id="en-cam" style="width:auto">${enrolCams.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><button class="secondary" type="button" id="en-cam-btn">Enrôler par caméra</button>` : ""}
-        <button class="primary" type="button" id="en-photo"${status.photo_available ? "" : " disabled"}>Enrôler depuis la photo de la fiche</button>
+        ${enrolCams.length ? `<select id="en-cam" style="width:auto">${enrolCams.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><button class="secondary" type="button" id="en-cam-btn"${status.enrollment_enabled ? "" : " disabled"}>Capturer et comparer à la photo DRH</button>` : ""}
+        <button class="primary" type="button" id="en-photo"${status.photo_available && status.enrollment_enabled ? "" : " disabled"}>Analyser la photo DRH</button>
         ${status.enrollment !== "NONE" ? '<button class="danger" type="button" id="en-off">Désactiver</button>' : ""}
         <button class="secondary" type="button" id="bio-close">Fermer</button>
       </div><div class="error" id="bio-error" role="alert"></div>`);
@@ -627,8 +671,11 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       } catch (ex) { fail(ex); }
     });
     const enroll = async (body) => {
-      try { const r = await api(`/biometrics/employees/${row.employee_id}/enroll`, { method: "POST", body }); toast(r.status === "ACTIVE" ? "Enrôlement actif" : "Doublon possible : enrôlement mis en revue", r.status !== "ACTIVE"); openBiometrics(row); }
-      catch (ex) { fail(ex); }
+      try { reviewEnrollment(row, status, await api(`/biometrics/employees/${row.employee_id}/enrollment/preview`, { method: "POST", body })); }
+      catch (ex) {
+        const photo = ex.detail && ex.detail.photo;
+        fail(photo ? { message: `${ex.message} (photo : ${photo.state}${photo.reasons && photo.reasons[0] ? " — " + photo.reasons[0] : ""})` } : ex);
+      }
     };
     m.querySelector("#en-photo").addEventListener("click", () => enroll({}));
     if (m.querySelector("#en-cam-btn")) m.querySelector("#en-cam-btn").addEventListener("click", () => enroll({ camera_id: Number(m.querySelector("#en-cam").value) }));
@@ -637,6 +684,30 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       if (!reason || reason.trim().length < 3) return;
       try { await api(`/biometrics/employees/${row.employee_id}/deactivate`, { method: "POST", body: { reason: reason.trim() } }); toast("Biométrie désactivée"); openBiometrics(row); }
       catch (ex) { fail(ex); }
+    });
+  }
+
+  // Aperçu d'enrôlement : rien n'est créé avant la confirmation explicite de l'opérateur.
+  const CMP_LABEL = { MATCH: "Correspondance", REVIEW_REQUIRED: "Incertain — vérification humaine", NO_MATCH: "Ne correspond pas", NO_REFERENCE: "Pas de photo DRH exploitable", NOT_APPLICABLE: "Source = photo DRH" };
+  function reviewEnrollment(row, status, p) {
+    const c = p.comparison || {}, cap = p.capture, ph = p.photo || {};
+    const img = (src, label) => src ? `<figure style="margin:0;text-align:center"><img src="${esc(src)}" alt="${esc(label)}" style="max-width:200px;max-height:240px;border-radius:10px;border:1px solid var(--line)"><figcaption>${esc(label)}</figcaption></figure>` : `<figure style="margin:0"><div class="state info">${esc(label)} indisponible</div></figure>`;
+    const m = modal(`<h3>Enrôlement — vérification</h3><div class="sub">${esc(row.nom)} · ${esc(row.matricule)} · ${esc(row.site)}</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:10px 0">${img(status.photo_url, "Photo DRH")}${cap ? img(cap.thumbnail, "Capture caméra") : ""}</div>
+      <p><b>Photo DRH :</b> ${esc(ph.state)}${ph.reasons && ph.reasons[0] ? " — " + esc(ph.reasons[0]) : ""}</p>
+      ${cap ? `<p><b>Capture :</b> ${esc(cap.state)}${cap.reasons && cap.reasons[0] ? " — " + esc(cap.reasons[0]) : ""}${cap.liveness != null ? " · liveness " + esc(cap.liveness) : ""}</p>` : ""}
+      ${p.comparison ? `<p><b>Comparaison 1:1 :</b> ${esc(CMP_LABEL[c.result] || c.result)}${c.score != null ? ` · score brut ${esc(c.score)} (seuil ${esc(c.threshold)}, marge ${esc(c.review_margin)})` : ""}</p>` : ""}
+      ${p.duplicate && p.duplicate.suspected ? `<div class="state error">Visage proche d'un autre employé (${esc(p.duplicate.matricule || "")}, score ${esc(p.duplicate.score)}) : le gabarit sera mis en REVUE, jamais activé automatiquement.</div>` : ""}
+      ${p.requires_justification ? '<label for="en-just">Justification obligatoire (résultat incertain)</label><textarea id="en-just" rows="3" maxlength="500"></textarea>' : ""}
+      <div class="error" id="en-error" role="alert"></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="en-cancel">Annuler</button><button class="primary" type="button" id="en-confirm"${p.can_confirm && p.token ? "" : " disabled"}>Confirmer l'enrôlement</button></div>`);
+    m.querySelector("#en-cancel").addEventListener("click", () => openBiometrics(row));
+    m.querySelector("#en-confirm").addEventListener("click", async () => {
+      try {
+        const just = m.querySelector("#en-just");
+        const r = await api(`/biometrics/employees/${row.employee_id}/enrollment/confirm`, { method: "POST", body: { token: p.token, confirm: true, justification: just ? just.value.trim() : null } });
+        toast(r.status === "ACTIVE" ? "Enrôlement actif" : "Doublon possible : enrôlement mis en revue", r.status !== "ACTIVE"); openBiometrics(row);
+      } catch (ex) { const err = m.querySelector("#en-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
     });
   }
 

@@ -203,11 +203,12 @@ test('fiche biométrique : consentement sur la version en vigueur, raison du ref
   const board = { date: '2027-04-05', kpi: {}, total: 1, page: 1, page_size: 25, pages: 1, items: [row({ employee_id: 5 })] };
   const { d, w, calls, dom } = bootBio({
     '/api/attendance/board': [200, board],
-    '/api/biometrics/employees/5': [200, { employee_id: 5, enabled: true, consent: null, consent_history: [], photo_available: true, enrollment: 'NONE', active_template: null, templates: [] }],
+    '/api/biometrics/employees/5': [200, { employee_id: 5, enabled: true, enrollment_enabled: true, consent: null, consent_history: [], photo_available: true, enrollment: 'NONE', active_template: null, templates: [] }],
     '/api/biometrics/notice': [200, { version: '2026-09-v1', text: 'Finalité : contrôler le pointage.' }],
     '/api/biometrics/cameras': [200, []],
     'POST /api/biometrics/employees/5/consent': [200, {}],
-    'POST /api/biometrics/employees/5/enroll': [422, { detail: { state: 'QUALITY_FAILED', reasons: ['Image floue — restez immobile'] } }],
+    'POST /api/biometrics/employees/5/enrollment/preview': [422, { detail: { code: 'PHOTO_UNUSABLE', message: 'Photo DRH non exploitable — enrôlement par capture supervisée nécessaire',
+      photo: { state: 'QUALITY_FAILED', reasons: ['Image floue — restez immobile'] } } }],
   });
   d.querySelector('[data-view="board"]').click();
   await tick(80);
@@ -228,4 +229,88 @@ test('fiche biométrique : consentement sur la version en vigueur, raison du ref
   await tick(80);
   assert.match(denied.d.getElementById('camera-state').textContent, /Permission biométrique explicite requise pour cette action/);
   denied.dom.window.close();
+});
+
+const STATUS5 = { employee_id: 5, enabled: false, enrollment_enabled: true, identity: { fonction: 'Magasinier' }, photo_url: '/uploads/photos/p5.jpg',
+  consent: { status: 'contract_confirmed', source: 'EMPLOYMENT_CONTRACT', notice_version: '2026-09-v1', admissible: true }, consent_history: [],
+  photo_available: true, enrollment: 'NONE', active_template: null, templates: [] };
+
+async function openFiche(routes) {
+  const board = { date: '2027-04-05', kpi: {}, total: 1, page: 1, page_size: 25, pages: 1, items: [row({ employee_id: 5 })] };
+  const ctx = bootBio({ '/api/attendance/board': [200, board], '/api/biometrics/employees/5': [200, STATUS5],
+    '/api/biometrics/notice': [200, { version: '2026-09-v1', text: 'Texte' }],
+    '/api/biometrics/cameras': [200, [{ ...CAM, id: 9, usage: 'ENROLLMENT', name: 'CAM-ENROL' }]], ...routes });
+  ctx.d.querySelector('[data-view="board"]').click();
+  await tick(80);
+  ctx.d.querySelector('[data-bio="5"]').click();
+  await tick(80);
+  return ctx;
+}
+
+test('enrôlement supervisé : photo DRH et capture côte à côte, score brut, confirmation explicite avec le jeton', async () => {
+  const preview = { employee_id: 5, source: 'CAMERA', photo: { state: 'OK', reasons: [] },
+    capture: { state: 'OK', reasons: [], liveness: 0.91, thumbnail: 'data:image/jpeg;base64,AAAA' },
+    comparison: { score: 0.8276, result: 'MATCH', threshold: 0.363, review_margin: 0.07 }, duplicate: { suspected: false },
+    can_confirm: true, requires_justification: false, token: 'tok-preview-123456789012345', expires_in: 300 };
+  const { d, calls, dom } = await openFiche({ 'POST /api/biometrics/employees/5/enrollment/preview': [200, preview],
+    'POST /api/biometrics/employees/5/enrollment/confirm': [200, { status: 'ACTIVE', comparison: 'MATCH' }] });
+  d.getElementById('en-cam-btn').click();
+  await tick(80);
+  assert.deepEqual(calls.find((c) => c.path.endsWith('/enrollment/preview')).body, { camera_id: 9 });
+  const imgs = [...d.querySelectorAll('figure img')].map((i) => i.getAttribute('alt'));
+  assert.deepEqual(imgs, ['Photo DRH', 'Capture caméra']);
+  assert.match(d.body.textContent, /Correspondance · score brut 0\.8276 \(seuil 0\.363, marge 0\.07\)/);
+  assert.doesNotMatch(d.body.textContent, /%/);
+  assert.equal(calls.some((c) => c.path.endsWith('/enrollment/confirm')), false, 'rien n\'est créé avant la confirmation');
+  d.getElementById('en-confirm').click();
+  await tick(80);
+  assert.deepEqual(calls.find((c) => c.path.endsWith('/enrollment/confirm')).body, { token: 'tok-preview-123456789012345', confirm: true, justification: null });
+  dom.window.close();
+});
+
+test('enrôlement supervisé : NO_MATCH non confirmable ; résultat incertain avec justification ; doublon signalé', async () => {
+  const noMatch = { source: 'CAMERA', photo: { state: 'OK' }, capture: { state: 'OK', liveness: 0.9 }, comparison: { score: 0.12, result: 'NO_MATCH', threshold: 0.363, review_margin: 0.07 },
+    duplicate: { suspected: false }, can_confirm: false, requires_justification: false, token: null };
+  let ctx = await openFiche({ 'POST /api/biometrics/employees/5/enrollment/preview': [200, noMatch] });
+  ctx.d.getElementById('en-cam-btn').click();
+  await tick(80);
+  assert.match(ctx.d.body.textContent, /Ne correspond pas/);
+  assert.equal(ctx.d.getElementById('en-confirm').disabled, true);
+  ctx.dom.window.close();
+  const review = { ...noMatch, comparison: { score: 0.39, result: 'REVIEW_REQUIRED', threshold: 0.363, review_margin: 0.07 }, duplicate: { suspected: true, matricule: 'A0099', score: 0.94 },
+    can_confirm: true, requires_justification: true, token: 'tok-review-12345678901234567' };
+  ctx = await openFiche({ 'POST /api/biometrics/employees/5/enrollment/preview': [200, review],
+    'POST /api/biometrics/employees/5/enrollment/confirm': [200, { status: 'PENDING_REVIEW' }] });
+  ctx.d.getElementById('en-cam-btn').click();
+  await tick(80);
+  assert.match(ctx.d.body.textContent, /A0099.*REVUE, jamais activé automatiquement/);
+  ctx.d.getElementById('en-just').value = 'Contrôle visuel : même personne, nouvelle coupe';
+  ctx.d.getElementById('en-confirm').click();
+  await tick(80);
+  assert.equal(ctx.calls.find((c) => c.path.endsWith('/enrollment/confirm')).body.justification, 'Contrôle visuel : même personne, nouvelle coupe');
+  ctx.dom.window.close();
+});
+
+test('caméras : activation pilote explicite et coupure immédiate du pointage facial du site', async () => {
+  const facialCam = { ...CAM, facial_attendance_enabled: true };
+  const { d, w, calls, dom } = bootBio({ '/api/biometrics/cameras': [200, [facialCam]],
+    'PATCH /api/biometrics/cameras/7': [200, facialCam], 'POST /api/biometrics/sites/3/facial-disable': [200, { site_id: 3, disabled_cameras: 1 }] });
+  w.confirm = () => true;
+  await tick(80);
+  assert.match(d.getElementById('camera-rows').textContent, /Facial actif/);
+  d.getElementById('f-site').value = '3';
+  d.getElementById('f-site').dispatchEvent(new w.Event('change'));
+  await tick(80);
+  assert.equal(d.getElementById('site-facial-off').classList.contains('hidden'), false);
+  d.getElementById('site-facial-off').click();
+  await tick(80);
+  assert.ok(calls.some((c) => c.method === 'POST' && c.path === '/api/biometrics/sites/3/facial-disable'));
+  d.querySelector('[data-cam-edit="7"]').click();
+  await tick(80);
+  assert.equal(d.getElementById('c-facial').checked, true);
+  d.getElementById('c-facial').checked = false;
+  d.getElementById('cam-form').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await tick(80);
+  assert.equal(calls.find((c) => c.method === 'PATCH').body.facial_attendance_enabled, false);
+  dom.window.close();
 });
