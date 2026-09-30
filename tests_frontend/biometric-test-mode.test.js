@@ -73,7 +73,10 @@ async function openMode(options) {
   await tick(80);
   ctx.w.eval(SCRIPT);
   await tick(80);
-  assert.equal(ctx.d.querySelector('[data-view="test-mode"]').classList.contains('hidden'), false, 'navigation is shown only to permitted users');
+  const status = options && options.status ? options.status : STATUS;
+  const permitted = options && options.permitted !== undefined ? options.permitted : true;
+  const usable = permitted && status.test_mode_enabled && status.engine_available && status.records_attendance === false;
+  assert.equal(ctx.d.querySelector('[data-view="test-mode"]').classList.contains('hidden'), !usable, 'navigation follows fail-closed backend status');
   ctx.d.querySelector('[data-view="test-mode"]').click();
   await tick(50);
   return ctx;

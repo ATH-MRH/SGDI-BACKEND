@@ -1,0 +1,78 @@
+/* ATLAS — Mode Test biométrique : feuille de style commune (mobile-first).
+ *
+ * Elle habille le markup du terminal (app/static/pointeur.html, ids ptm-*) ET les blocs
+ * générés par le moteur partagé app/static/pointage/test-mode.js (classes test-mode-*).
+ * Le centre de contrôle garde pour l'instant son style inline : ce fichier est le point de
+ * ralliement futur, d'où l'absence de règle dépendante d'une page précise.
+ *
+ * Cible prioritaire : smartphone (390/430 px), puis tablette (768), puis poste (1024/1440).
+ * Contraintes tenues : aucun overflow horizontal, cibles tactives ≥ 44 px, résultat
+ * immédiatement visible, aucune largeur fixe.
+ */
+.tm-view{padding:14px 14px 40px;max-width:1180px;margin:auto;overflow-x:hidden}
+.tm-card{background:#fff;border:1px solid var(--line,#dbe5f0);border-radius:20px;padding:16px;box-shadow:0 12px 34px rgba(4,57,112,.09);min-width:0}
+.tm-card+.tm-card{margin-top:12px}
+.tm-title{font-size:20px;font-weight:950;letter-spacing:.04em;margin:0}
+.tm-subtitle{margin:5px 0 0;font-size:13px;font-weight:700;color:var(--muted,#64748b)}
+.tm-warning{position:sticky;top:8px;z-index:5;background:var(--amber-soft,#fef3c7);border:2px solid var(--amber,#d97706);border-radius:14px;padding:12px 14px;margin:12px 0}
+.tm-warning strong{display:block;font-size:15px;letter-spacing:.05em;color:#7c2d12}
+.tm-warning span{display:block;font-size:13px;font-weight:800;margin-top:3px;color:#7c2d12}
+.tm-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:4px}
+.tm-controls label{display:block;font-size:11px;font-weight:900;letter-spacing:.06em;color:#42566f;margin:0 0 5px;text-transform:uppercase}
+.tm-controls select{width:100%;min-height:46px;border:1px solid var(--line,#dbe5f0);border-radius:12px;padding:0 12px;font:inherit;font-weight:750;color:var(--ink,#10243e);background:#fff}
+.tm-controls select:disabled{background:#f1f5f9;color:#64748b}
+.tm-help{display:block;font-size:12px;font-weight:700;color:var(--muted,#64748b);margin-top:5px}
+.tm-video-wrap{position:relative;background:#0b1726;border-radius:16px;overflow:hidden;aspect-ratio:3/4;max-height:56vh;display:grid;place-items:center;margin:14px 0;color:#e2e8f0}
+.tm-video{display:block;width:100%;height:100%;object-fit:cover}
+.tm-video-placeholder{text-align:center;padding:18px;font-size:14px;font-weight:800;color:#cbd5e1}
+.test-mode-state{border-radius:14px;padding:14px;background:#eff6ff;color:var(--navy,#043970);font-weight:900;font-size:16px;min-height:52px;display:flex;align-items:center;text-align:center;justify-content:center}
+.test-mode-state.is-busy{background:#e0f2fe;color:#075985}
+.test-mode-state.is-success{background:#dcfce7;color:#166534}
+.test-mode-state.is-warning{background:#fef3c7;color:#92400e}
+.test-mode-state.is-error{background:#fee2e2;color:#991b1b}
+.state.error,.tm-error{margin-top:10px;border-radius:12px;padding:11px 13px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:800}
+.tm-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.tm-actions button{flex:1 1 150px;min-height:48px;min-width:0;border:0;border-radius:13px;padding:12px 14px;font:inherit;font-size:14px;font-weight:900;letter-spacing:.03em;cursor:pointer}
+.tm-actions button.primary{background:var(--navy,#043970);color:#fff}
+.tm-actions button.secondary{background:#eef4fb;color:var(--navy,#043970);border:1px solid var(--line,#dbe5f0)}
+.tm-actions button:disabled{opacity:.45;cursor:not-allowed}
+.tm-actions button:focus-visible,.tm-controls select:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+
+/* Blocs générés par le moteur partagé (renderResult / statusText). */
+.test-mode-result{margin-top:12px;padding:14px;border:1px solid var(--line,#dbe5f0);border-radius:16px;background:#fff;overflow-wrap:anywhere;min-width:0}
+.test-mode-result h3{margin:0;font-size:18px;line-height:1.25}
+.test-mode-result-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.test-mode-result ul{margin:10px 0 0;padding-left:20px;font-size:13px;font-weight:700}
+.test-mode-no-write{margin:12px 0 0;padding:11px 13px;border-radius:12px;background:#dcfce7;color:#166534;font-size:13px}
+.test-mode-identity,.test-mode-details dl{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:12px 0}
+.test-mode-identity div,.test-mode-details dl div{min-width:0;background:#f4f8fd;border-radius:11px;padding:9px 11px}
+.test-mode-identity dt,.test-mode-details dt{font-size:10px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#64748b)}
+.test-mode-identity dd,.test-mode-details dd{margin:3px 0 0;font-size:15px;font-weight:800;overflow-wrap:anywhere}
+.test-mode-metrics{display:grid;gap:7px;margin-top:12px;font-size:13px;font-weight:700;color:#334155}
+.test-mode-details{margin-top:12px}
+.test-mode-details summary{cursor:pointer;font-size:13px;font-weight:900;letter-spacing:.04em;color:var(--navy,#043970);min-height:44px;display:flex;align-items:center}
+.test-mode-disclaimer,.tm-disclaimer{margin:12px 0 0;padding:11px 13px;border-radius:12px;background:#f1f5f9;color:#334155;font-size:12.5px;font-weight:750}
+.pill{display:inline-block;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:900;letter-spacing:.05em}
+.pill.st-present{background:#dcfce7;color:#166534}
+.pill.st-absent{background:#fee2e2;color:#991b1b}
+.pill.sev-warning{background:#fef3c7;color:#92400e}
+.tm-checklist summary{cursor:pointer;font-size:13px;font-weight:900;letter-spacing:.04em;color:var(--navy,#043970);min-height:44px;display:flex;align-items:center}
+.tm-checklist ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px}
+.tm-checklist li{display:flex;align-items:center;gap:10px;padding:6px 2px;font-size:14px;font-weight:750}
+.tm-checklist input{width:22px;height:22px;flex-shrink:0}
+
+/* Tablette : deux colonnes de réglages, flux vidéo en 4/3. */
+@media(min-width:640px){
+  .tm-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tm-video-wrap{aspect-ratio:4/3;max-height:62vh}
+  .tm-video{object-fit:contain}
+  .test-mode-identity,.test-mode-details dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .test-mode-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* Poste de travail : mise en page aérée, colonne latérale pour la checklist. */
+@media(min-width:1024px){
+  .tm-view{padding:22px 22px 48px}
+  .tm-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr);gap:14px;align-items:start}
+  .tm-video-wrap{aspect-ratio:16/10;max-height:none}
+  .tm-actions button{flex:0 1 auto;min-width:180px}
+}

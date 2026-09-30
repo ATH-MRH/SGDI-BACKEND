@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="/static/responsive-baseline.css?v=20260906">
+<link rel="stylesheet" href="/static/biometrics/test-mode.css?v=20260930-shared-test-mode">
 <meta name="theme-color" content="#043970">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -198,6 +199,9 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script defer src="/static/pointeur-facial.js?v=1"></script>
+<!-- Mode Test facial : moteur partagé du centre de contrôle + adaptateur terminal (§ séparation des modes). -->
+<script defer src="/static/pointage/test-mode.js?v=20260930-shared-test-mode"></script>
+<script defer src="/static/pointeur-test-mode.js?v=20260930-shared-test-mode"></script>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
@@ -225,7 +229,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
         <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
-        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
+        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button><button id="testModeNav" class="hidden" onclick="showPointerSection('testmode')" title="Laboratoire biométrique — aucun pointage enregistré">Mode Test</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> SCANNER ACTIF</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
@@ -294,6 +298,46 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
       <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
       <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
+    </div>
+  </section>
+  <!-- MODE TEST FACIAL — laboratoire biométrique. Vue distincte de « Facial » (pointage
+       automatique de production) : elle n'écrit jamais de présence, aucun scan, aucun QR. -->
+  <section id="testModeView" class="tm-view hidden" aria-labelledby="ptm-title">
+    <div class="tm-layout">
+      <div class="tm-card">
+        <h2 id="ptm-title" class="tm-title">MODE TEST FACIAL</h2>
+        <p class="tm-subtitle">Diagnostic caméra, détection, qualité, liveness et reconnaissance — aucun effet sur les présences.</p>
+        <div class="tm-warning" role="note"><strong>MODE TEST</strong><span>AUCUN POINTAGE NE SERA ENREGISTRÉ.</span></div>
+        <div class="tm-controls">
+          <div><label for="ptm-site">Site autorisé</label><select id="ptm-site"><option value="">Chargement des sites…</option></select></div>
+          <div><label for="ptm-camera">Caméra</label><select id="ptm-camera" disabled aria-describedby="ptm-camera-help"><option value="">La liste apparaît après autorisation</option></select><small id="ptm-camera-help">Sur smartphone, la caméra frontale est choisie automatiquement.</small></div>
+        </div>
+        <div class="tm-video-wrap"><div id="ptm-video-placeholder" class="tm-video-placeholder">Le flux caméra apparaîtra ici après démarrage.</div><video id="ptm-video" class="tm-video hidden" autoplay playsinline muted aria-label="Flux caméra du mode test"></video></div>
+        <canvas id="ptm-canvas" class="hidden" aria-hidden="true"></canvas>
+        <div id="ptm-state" class="test-mode-state" role="status" aria-live="polite">PRÊT</div>
+        <div id="ptm-error" class="tm-error hidden" role="alert"></div>
+        <div class="tm-actions">
+          <button class="primary" id="ptm-start" type="button" disabled>DÉMARRER LE TEST</button>
+          <button class="secondary" id="ptm-stop" type="button" disabled>ARRÊTER</button>
+          <button class="secondary" id="ptm-change-camera" type="button" disabled>CHANGER DE CAMÉRA</button>
+        </div>
+        <div id="ptm-result" class="test-mode-result hidden" aria-live="polite"></div>
+        <p class="tm-disclaimer">LE LIVENESS RESTE NO-GO POUR LA PRODUCTION. LE MODE TEST NE CONSTITUE PAS UNE VALIDATION DE SÉCURITÉ SUR LE MATÉRIEL DE PRODUCTION.</p>
+      </div>
+      <aside class="tm-card tm-checklist">
+        <details><summary>SCÉNARIOS DE TEST</summary><p class="tm-subtitle">Checklist locale : rien n'est enregistré ni transmis.</p>
+          <ul>
+            <li><label><input type="checkbox"> Vrai visage</label></li>
+            <li><label><input type="checkbox"> Photo imprimée</label></li>
+            <li><label><input type="checkbox"> Photo affichée sur smartphone</label></li>
+            <li><label><input type="checkbox"> Photo affichée sur tablette</label></li>
+            <li><label><input type="checkbox"> Vidéo</label></li>
+            <li><label><input type="checkbox"> Plusieurs personnes</label></li>
+            <li><label><input type="checkbox"> Faible lumière</label></li>
+            <li><label><input type="checkbox"> Contre-jour</label></li>
+          </ul>
+        </details>
+      </aside>
     </div>
   </section>
 </section>
@@ -477,6 +521,9 @@ async function loadAttendanceSites(){
   select.disabled=sites.length===0;
   select.dataset.sites=JSON.stringify(sites);
   updateSelectedSiteLabel();
+  // Mode Test : les sites autorisés du terminal sont exactement ceux du sélecteur courant ;
+  // on rafraîchit le statut (bouton + liste) dès qu'ils sont connus, jamais avant.
+  window.PointerTestMode&&PointerTestMode.load();
 }
 function updateSelectedSiteLabel(){
   const select=document.getElementById("siteSelector"),societyEl=document.getElementById("usbReaderSociety");
@@ -486,11 +533,16 @@ function updateSelectedSiteLabel(){
   societyEl.classList.toggle("hidden",!siteName);
 }
 async function changeAttendanceSite(value){
-  selectedSiteId=String(value||"");localStorage.setItem("atlas_pointer_site",selectedSiteId);
+  const nextSiteId=String(value||"");
+  if(nextSiteId!==selectedSiteId&&window.PointerTestMode&&PointerTestMode.isRunning())PointerTestMode.stop();
+  selectedSiteId=nextSiteId;localStorage.setItem("atlas_pointer_site",selectedSiteId);
   liveFeedFilter="";updateSelectedSiteLabel();resetManualPanel();
+  window.PointerTestMode&&PointerTestMode.syncSites();
   await Promise.all([loadHistory(),loadAttendanceAlerts(),loadShiftStaffing()]);
   if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
-  requestAnimationFrame(setupScanMode);
+  // Un changement de site ne doit pas rallumer la caméra QR derrière Planning,
+  // Facial ou Mode Test (ces vues utilisent leurs propres cycles caméra).
+  if(!document.querySelector("main.main").classList.contains("hidden"))requestAnimationFrame(setupScanMode);
 }
 async function enterApp(){
   document.getElementById("loginView").classList.add("hidden");
@@ -540,11 +592,17 @@ function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.g
 function eventTime(value){return String(value||"").slice(11,16)}
 function eventMinutes(value){const m=String(value||"").match(/(\d{2}):(\d{2})/);return m?+m[1]*60 + +m[2]:null}
 function showPointerSection(section){
-  const planning=section==="planning",facial=section==="facial";document.querySelector("main.main").classList.toggle("hidden",planning||facial);document.getElementById("planningView").classList.toggle("hidden",!planning);
-  document.getElementById("faceView").classList.toggle("hidden",!facial);document.getElementById("faceNav").classList.toggle("active",facial);
-  document.getElementById("scanNav").classList.toggle("active",!planning&&!facial);document.getElementById("planningNav").classList.toggle("active",planning);
-  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.start();return}
+  // Cycle de vie strict (§ changement de vue) : une seule vue active, aucune caméra
+  // laissée ouverte — scanner QR, facial de production et Mode Test s'excluent mutuellement.
+  const planning=section==="planning",facial=section==="facial",testmode=section==="testmode";
+  document.querySelector("main.main").classList.toggle("hidden",planning||facial||testmode);document.getElementById("planningView").classList.toggle("hidden",!planning);
+  document.getElementById("faceView").classList.toggle("hidden",!facial);document.getElementById("testModeView").classList.toggle("hidden",!testmode);
+  document.getElementById("faceNav").classList.toggle("active",facial);document.getElementById("testModeNav").classList.toggle("active",testmode);
+  document.getElementById("scanNav").classList.toggle("active",!planning&&!facial&&!testmode);document.getElementById("planningNav").classList.toggle("active",planning);
+  if(testmode){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.stop();window.PointerTestMode&&PointerTestMode.load();return}
+  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointerTestMode&&PointerTestMode.stop();window.PointeurFacial&&PointeurFacial.start();return}
   window.PointeurFacial&&PointeurFacial.stop();
+  window.PointerTestMode&&PointerTestMode.stop();
   if(planning){stopScanner();loadPlanning();clearInterval(planningRefreshTimer);planningRefreshTimer=setInterval(loadPlanning,30000)}else{clearInterval(planningRefreshTimer);planningRefreshTimer=null;setupScanMode()}
 }
 async function loadPlanning(){
@@ -572,6 +630,7 @@ async function logout(){
     stopIdleWatch();
     await stopScanner();
     window.PointeurFacial&&PointeurFacial.stop();
+    window.PointerTestMode&&PointerTestMode.stop();
     clearInterval(headerClockTimer);headerClockTimer=null;
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
@@ -920,7 +979,7 @@ document.addEventListener("click",event=>{
   if(event.target?.closest?.("button,input,select,textarea,a,label,.site-control"))return;
   document.getElementById("wedgeInput")?.focus({preventScroll:true});
 });
-document.addEventListener("visibilitychange",()=>{if(document.hidden)stopScanner();else if(pointerSession)setupScanMode()});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){stopScanner();window.PointerTestMode&&PointerTestMode.stop();}else if(pointerSession&&!document.querySelector("main.main").classList.contains("hidden"))setupScanMode()});
 window.addEventListener("beforeunload",stopScanner);
 document.addEventListener("DOMContentLoaded",()=>{
   try{pointerSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){pointerSession=null}
