@@ -160,8 +160,12 @@ se mesure sur la vraie caméra (`docs/attendance-hardware-checklist.md`, critèr
 checklist terrain `docs/attendance-hardware-checklist.md` signée GO (liveness **À VALIDER SUR
 VRAIE CAMÉRA DAHUA**) ; décision sur le mode kiosque (§11).
 
-1. Installer `requirements-biometric.txt` dans l'image.
-2. Copier les trois modèles dans `BIOMETRIC_MODELS_DIR` (empreintes du §2).
+1. Dépendances : `requirements-biometric.txt` (versions figées) est installé par le
+   `Dockerfile`.
+2. Modèles : téléchargés au build par `scripts/fetch_biometric_models.py` depuis des commits
+   figés de leurs dépôts d'origine, SHA-256 vérifiés (build en échec sinon), copiés dans
+   `/app/models/biometrics` (= `BIOMETRIC_MODELS_DIR` par défaut) ; le build charge ensuite le
+   moteur pour le vérifier. Aucun binaire dans Git. (Nixpacks : dépendances seulement.)
 3. Générer une clé : `python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"`,
    la placer dans `BIOMETRIC_TEMPLATE_KEY` (coffre de secrets, jamais dans Git).
 4. `BIOMETRIC_ENABLED=true`.
@@ -241,6 +245,11 @@ modifié, aucune configuration créée, aucun impact planning/paie.
 - Prérequis moteur identiques : `requirements-biometric.txt`, modèles dans
   `BIOMETRIC_MODELS_DIR` (empreintes du §2), `BIOMETRIC_TEMPLATE_KEY` (lecture des gabarits).
 - `BIOMETRIC_TEST_MODE_MAX_PER_MINUTE` (défaut **30**) : limite par compte.
+- **Limite actuelle** : l'enrôlement (`POST /employees/{id}/enroll`) exige
+  `BIOMETRIC_ENABLED=true`. Tant que le pointage facial reste désactivé, aucun gabarit ne peut
+  être créé : le Mode Test évalue détection, qualité et liveness, et répond `UNKNOWN_FACE` pour
+  tout visage bien capté — jamais `RECOGNIZED`. Tester la reconnaissance suppose une décision
+  séparée (enrôlement de test sans activer le pointage facial).
 
 ### 12.2 État — `GET /api/biometrics/test-mode/status`
 
