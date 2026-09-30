@@ -75,6 +75,7 @@ Conséquences :
 | Photo sur tablette | 20 | | | ☐ |
 | Vidéo sur écran | 20 | | | ☐ |
 | Masque papier découpé | 10 | | | ☐ |
+| Rejeu d'une vidéo enregistrée de l'employé (replay) | 20 | | | ☐ |
 
 **Critère de décision** : une seule acceptation sur une attaque ⇒ NO-GO sur ce modèle/configuration.
 
@@ -99,3 +100,25 @@ provenance « calibration site X, date, N passages » ; ne jamais modifier la ve
 | Décision | Signataire | Date |
 |---|---|---|
 | GO / NO-GO activation site : | | |
+
+## 9. Pilote contrôlé — DHL FORWARDING / HAMOUL 01 (40K)
+
+Procédure détaillée : `docs/biometrics.md` § 13. Consigner **uniquement des métadonnées** :
+aucune photo, capture, vidéo ni gabarit dans ce document ou ses annexes.
+
+| Étape | Attendu | Résultat | OK |
+|---|---|---|---|
+| Essais préalables en Mode Test (pointeur.irongs.com) | Détection, qualité, liveness observés ; aucune présence créée | | ☐ |
+| `BIOMETRIC_ENROLLMENT_ENABLED=true`, `BIOMETRIC_ENABLED` absent | `/api/biometrics/status` : `enrollment_enabled` vrai, `enabled` faux | | ☐ |
+| Consentement enregistré pour chaque employé du pilote | Admissible, version du texte en vigueur, référence du document | | ☐ |
+| Enrôlement supervisé de chaque employé | Photo DRH analysée ; si capture : comparaison MATCH, ou justification écrite | | ☐ |
+| Doublons signalés | Tous revus et tranchés (Pointage → Doublons) | | ☐ |
+| Caméra du site : créée, testée, identifiants chiffrés | « Tester la caméra » OK ; `credentials_set` vrai, jamais réaffiché | | ☐ |
+| Activation de la SEULE caméra du site pilote | « Pointage facial RÉEL actif » coché sur cette caméra uniquement | | ☐ |
+| Coupure de site testée | « Couper le pointage facial du site » : plus aucun pointage facial ; QR / saisie OK | | ☐ |
+
+### Registre des essais (métadonnées seulement)
+
+| Date/heure | Essai (vrai visage / photo / écran / vidéo / replay…) | Employé (matricule) | État renvoyé | Score | Liveness | Pointage créé | Opérateur |
+|---|---|---|---|---|---|---|---|
+| | | | | | | | |

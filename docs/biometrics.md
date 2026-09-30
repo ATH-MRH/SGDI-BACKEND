@@ -424,3 +424,94 @@ l'ensemble de la rafale. Seuils inchangés.
   production, `recorded` forgé, hors périmètre, image trop grande ou invalide, rafale (429),
   et le comptage de toutes les tables, fichiers, journaux et audit. Les appareils physiques
   (iPhone, Android, tablettes) restent à tester manuellement.
+
+## 13. Pointage facial réel — pilote contrôlé
+
+### 13.1 Trois interrupteurs indépendants (défaut : tout fermé)
+
+| Réglage | Portée | Effet |
+|---|---|---|
+| `BIOMETRIC_ENROLLMENT_ENABLED` (env) | global | autorise l'**enrôlement supervisé** sans ouvrir le pointage facial |
+| `BIOMETRIC_ENABLED` (env) | global | ouvre le circuit de pointage facial (et l'enrôlement) |
+| `cameras.facial_attendance_enabled` (base, défaut **faux**) | **par caméra** | une caméra ne pointe QUE si elle est explicitement activée (Pointage → Caméras) |
+
+`BIOMETRIC_ENABLED=true` seul ne fait donc pointer **aucune** caméra : chaque caméra du pilote est
+activée à la main, audité (`biometrics.camera.update`). Seule une caméra **lue par le serveur**
+et d'usage pointage peut être activée (jamais une caméra « terminal » ni d'enrôlement seul).
+
+**Coupures (kill switch)** — toutes sans effet sur le QR ni la saisie manuelle :
+- **caméra** : décocher « Pointage facial RÉEL actif » (ou désactiver la caméra) — effet immédiat ;
+- **site** : « Couper le pointage facial du site » → `POST /api/biometrics/sites/{site_id}/facial-disable`
+  (toutes les caméras du site, audité `biometrics.site.facial_disable`) — effet immédiat ;
+- **global** : retirer `BIOMETRIC_ENABLED` (redémarrage de l'application).
+
+### 13.2 Enrôlement supervisé (deux étapes, confirmation humaine)
+
+`POST /api/biometrics/employees/{id}/enroll` (ancien enrôlement en un clic) répond **410** : un
+gabarit n'est plus jamais activé sans comparaison ni confirmation.
+
+1. **Recherche** : `GET /api/biometrics/employees?q=<matricule|nom|prénom>&site_id=` — permission
+   `biometric_status × read`, limitée aux sites/société du compte (hors périmètre ⇒ 404).
+2. **Aperçu** : `POST /api/biometrics/employees/{id}/enrollment/preview`, permission
+   `biometric_enrollment × create`, corps `{}` (source = photo DRH) ou `{ "camera_id": … }`
+   (capture ; `frames` seulement pour une caméra « terminal » d'enrôlement). **Aucune écriture de
+   gabarit.** Contrôles : consentement admissible (`409 CONSENT_REQUIRED`), employé actif
+   (`409 EMPLOYEE_INACTIVE`), photo DRH analysée (visage unique, qualité) :
+   - source photo : photo inexploitable ⇒ `422 PHOTO_UNUSABLE` (capture supervisée nécessaire) ;
+   - source caméra : capture analysée **avec liveness** ; comparaison **1:1 capture ↔ photo DRH** :
+     `MATCH` (score ≥ seuil + marge), `REVIEW_REQUIRED` (bande [seuil ; seuil + marge)),
+     `NO_MATCH` (< seuil), `NO_REFERENCE` (pas de photo DRH exploitable). Score cosinus **brut**,
+     jamais converti en pourcentage.
+   - recherche de doublon sur tous les gabarits actifs/en revue des autres employés.
+   Réponse : états photo/capture, vignette de la capture (affichage seulement, jamais stockée),
+   comparaison, doublon, `can_confirm`, `requires_justification`, `token` (chiffré avec la clé des
+   gabarits, **lié à l'employé et à l'opérateur**, valable 5 min) — `NO_MATCH` ⇒ aucun jeton.
+3. **Confirmation** : `POST /api/biometrics/employees/{id}/enrollment/confirm`
+   `{ token, confirm: true, justification }` par **le même opérateur**. Tout est recontrôlé
+   (consentement, statut, photo inchangée ⇒ sinon `409 PHOTO_CHANGED`) ; `NO_MATCH` refusé ;
+   `REVIEW_REQUIRED` / `NO_REFERENCE` ⇒ justification écrite obligatoire (≥ 10 caractères).
+   Doublon suspecté ⇒ gabarit `PENDING_REVIEW` (revue humaine), sinon `ACTIVE` et l'ancien gabarit
+   passe `INACTIVE`. Le gabarit porte : employé, société, site, moteur, version de configuration,
+   consentement, résultat et score de la comparaison — jamais d'image.
+
+Ré-enrôlement : nouvel aperçu + confirmation (l'ancien gabarit est désactivé). Photo DRH changée
+⇒ gabarit issu de l'ancienne photo invalidé (§5). Retrait du consentement ⇒ désactivation immédiate.
+Écran : Pointage → **Enrôlement** (recherche) → fiche biométrique → « Analyser la photo DRH » ou
+« Capturer et comparer à la photo DRH » → vérification côte à côte → « Confirmer l'enrôlement ».
+DRH Next affiche l'état et renvoie vers ce parcours.
+
+### 13.3 Reconnaissance, entrée/sortie, anti-doublon
+
+`POST /api/biometrics/cameras/{camera_id}/recognize` : caméra dans le périmètre (sinon 404), lue
+par le serveur (terminal ⇒ 409), active, d'usage pointage, **activée pour le pilote** (sinon 409),
+`BIOMETRIC_ENABLED` + clé + moteur (sinon 503). Toute image envoyée par le client est ignorée. 1:N
+limité aux employés affectés au site de la caméra. Refus sans pointage : inconnu, plusieurs
+visages, qualité, liveness, ambigu, incertain, consentement, employé inactif.
+
+**Entrée / sortie** : décidée par `attendance_core.record_scan`, la même règle que le QR, jamais par
+la biométrie — sous verrou par employé : idempotence (`cam{id}-{burst_id}`), anti-rebond
+`ATTENDANCE_MIN_EVENT_GAP_SECONDS` (300 s), **SORTIE** si la dernière arrivée est encore ouverte
+(≤ 16 h, 30 h sur un site en rotation 24 h), sinon **ENTRÉE** ; nouvelle arrivée refusée moins de
+8 h après la précédente. Anti-doublon facial supplémentaire : fenêtre de non-répétition par caméra
+(`cooldown_seconds`, 60 s) ⇒ `ALREADY_RECORDED`.
+
+**Audit** (`biometrics.recognize`, une ligne par tentative) : caméra, site, matricule reconnu,
+état, confiance, liveness, version de configuration, pointage créé ou non, motif — aucune image,
+aucun gabarit. Aperçus et confirmations d'enrôlement : `biometrics.enrollment.preview`,
+`biometrics.enroll` (opérateur, comparaison, justification).
+
+**HENEX HC-666** : lecteur QR uniquement (douchette), jamais caméra faciale. QR et facial coexistent.
+
+### 13.4 Procédure du pilote — DHL FORWARDING / HAMOUL 01 (40K)
+
+1. Essais en Mode Test (pointeur.irongs.com) : observer détection, qualité, liveness.
+2. `BIOMETRIC_ENROLLMENT_ENABLED=true` (secret/env Coolify), **`BIOMETRIC_ENABLED` absent**.
+   Migration `20260930_0001` appliquée (colonnes additives).
+3. Permissions : `biometric_status × read` + `biometric_enrollment × create/update` aux seuls
+   opérateurs d'enrôlement ; `biometric_admin × admin` à l'administrateur caméras. Un pointeur
+   ordinaire n'a aucune de ces permissions.
+4. Consentements, puis enrôlement supervisé des employés du pilote ; revue des doublons.
+5. Caméra Dahua du site : catalogue, création, identifiants (chiffrés), « Tester la caméra ».
+6. Checklist terrain `docs/attendance-hardware-checklist.md` (§ 4, 5 et 9) avec la vraie caméra.
+7. **Seulement après GO signé** : `BIOMETRIC_ENABLED=true`, puis activer **la seule caméra du site
+   pilote**. Surveiller l'audit et les anomalies ; coupure immédiate par caméra ou par site.
