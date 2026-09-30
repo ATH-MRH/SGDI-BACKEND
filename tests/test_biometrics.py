@@ -73,9 +73,11 @@ def _burst(who, **kw):
 def _camera(client, h, site, *, usage="ATTENDANCE_AND_ENROLLMENT", name=None, adapter="DAHUA"):
     model = client.post("/api/biometrics/camera-models", headers=h, json={
         "manufacturer": "DAHUA" if adapter == "DAHUA" else "Terminal", "model": f"Réf {_tag()}", "adapter": adapter}).json()
+    # Pilote : une caméra de pointage lue par le serveur est activée explicitement.
+    facial = adapter != "TERMINAL" and usage != "ENROLLMENT"
     r = client.post("/api/biometrics/cameras", headers=h, json={
         "name": name or f"CAM-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "10.0.0.20",
-        "usage": usage, "role": "ENTRY"})
+        "usage": usage, "role": "ENTRY", "facial_attendance_enabled": facial})
     assert r.status_code == 200, r.text
     return r.json()["id"]
 
@@ -90,14 +92,32 @@ def _consent(client, h, emp, **over):
     return client.post(f"/api/biometrics/employees/{emp.id}/consent", headers=h, json=body)
 
 
+def _preview(client, h, emp, body):
+    return client.post(f"/api/biometrics/employees/{emp.id}/enrollment/preview", headers=h, json=body)
+
+
+def _confirm(client, h, emp, preview_json, justification="Enrôlement supervisé — contrôle visuel opérateur (test)"):
+    return client.post(f"/api/biometrics/employees/{emp.id}/enrollment/confirm", headers=h,
+                       json={"token": preview_json["token"], "confirm": True, "justification": justification})
+
+
+def _enroll_body(client, h, emp, body):
+    """Enrôlement supervisé complet : aperçu puis confirmation explicite. Renvoie la réponse
+    de l'aperçu si celui-ci échoue ou ne peut être confirmé, sinon celle de la confirmation."""
+    preview = _preview(client, h, emp, body)
+    if preview.status_code != 200 or not preview.json().get("token"):
+        return preview
+    return _confirm(client, h, emp, preview.json())
+
+
 def _enroll(client, h, emp, cam, who, **kw):
     _capture(_burst(who, **kw))
-    return client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=h, json={"camera_id": cam})
+    return _enroll_body(client, h, emp, {"camera_id": cam})
 
 
 def _enroll_frames(client, h, emp, cam, frames_b64):
     _capture(frames_b64)
-    return client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=h, json={"camera_id": cam})
+    return _enroll_body(client, h, emp, {"camera_id": cam})
 
 
 def _recognize(client, h, cam, frames, **extra):
@@ -148,15 +168,19 @@ def test_no_admissible_consent_no_enrollment(client, auth_headers, db):
 # ── Enrôlement : qualité, visages multiples, image figée ────────────────────────────────
 def test_enrollment_rejects_bad_captures(client, auth_headers, db):
     site = _site(db); emp = _employee(db, site); cam = _camera(client, auth_headers, site); _consent(client, auth_headers, emp)
+    # L'aperçu refuse toute capture non conforme : aucun jeton, donc aucune confirmation possible.
+    def capture_state(r):
+        body = r.json()
+        assert r.status_code == 200 and body["can_confirm"] is False and body["token"] is None, body
+        return body["capture"]
     many = _b64(*(frame(face("A"), face("B")) for _ in range(3)))
-    r = _enroll_frames(client, auth_headers, emp, cam, many)
-    assert r.status_code == 422 and r.json()["detail"]["state"] == "MULTIPLE_FACES"
-    assert _enroll(client, auth_headers, emp, cam, "A", sharp=5).json()["detail"]["state"] == "QUALITY_FAILED"
-    assert _enroll(client, auth_headers, emp, cam, "A", px=40).json()["detail"]["state"] == "QUALITY_FAILED"
-    assert _enroll(client, auth_headers, emp, cam, "A", live=0.2).json()["detail"]["state"] == "LIVENESS_FAILED"
+    assert capture_state(_enroll_frames(client, auth_headers, emp, cam, many))["state"] == "MULTIPLE_FACES"
+    assert capture_state(_enroll(client, auth_headers, emp, cam, "A", sharp=5))["state"] == "QUALITY_FAILED"
+    assert capture_state(_enroll(client, auth_headers, emp, cam, "A", px=40))["state"] == "QUALITY_FAILED"
+    assert capture_state(_enroll(client, auth_headers, emp, cam, "A", live=0.2))["state"] == "LIVENESS_FAILED"
     frozen = _b64(*(frame(face("A"), noise=0.5) for _ in range(3)))
-    r = _enroll_frames(client, auth_headers, emp, cam, frozen)
-    assert r.json()["detail"]["state"] == "LIVENESS_FAILED" and "figée" in r.json()["detail"]["reasons"][0]
+    state = capture_state(_enroll_frames(client, auth_headers, emp, cam, frozen))
+    assert state["state"] == "LIVENESS_FAILED" and "figée" in state["reasons"][0]
     assert db.scalar(select(func.count(BiometricTemplate.id)).where(BiometricTemplate.employee_id == emp.id)) == 0
 
 
@@ -167,7 +191,7 @@ def test_enrollment_prefers_the_employee_file_photo_and_tracks_photo_changes(cli
     photo = PHOTOS_DIR / f"{emp.code}.jpg"
     photo.write_bytes(frame(face("PHOTO-PERSON"), noise=1))
     emp.extra = {"photo": f"/uploads/photos/{emp.code}.jpg"}; db.commit()
-    r = client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=auth_headers, json={})
+    r = _enroll_body(client, auth_headers, emp, {})
     assert r.status_code == 200 and r.json()["source"] == "EMPLOYEE_PHOTO", r.text
     photo.write_bytes(frame(face("PHOTO-PERSON"), noise=2))   # photo remplacée dans la fiche
     status = client.get(f"/api/biometrics/employees/{emp.id}", headers=auth_headers).json()
@@ -359,7 +383,7 @@ def test_terminal_camera_is_enrollment_only(client, auth_headers, db):
     emp = _employee(db, site); _consent(client, auth_headers, emp)
     who = f"TAB-{_tag()}"
     # Enrôlement supervisé : images fournies par le terminal, liveness exigé.
-    r = client.post(f"/api/biometrics/employees/{emp.id}/enroll", headers=auth_headers, json={"camera_id": tab, "frames": _burst(who)})
+    r = _enroll_body(client, auth_headers, emp, {"camera_id": tab, "frames": _burst(who)})
     assert r.status_code == 200 and r.json()["status"] == "ACTIVE", r.text
     assert client.post(f"/api/biometrics/cameras/{tab}/recognize", headers=auth_headers, json={}).status_code == 409
 
@@ -372,7 +396,7 @@ def test_client_images_are_never_used_to_record_attendance(client, auth_headers,
     assert r.json()["state"] == "UNKNOWN_FACE", r.json()
     assert _facial_events(db, emp) == []
     other = _employee(db, site); _consent(client, auth_headers, other)
-    r = client.post(f"/api/biometrics/employees/{other.id}/enroll", headers=auth_headers, json={"camera_id": cam, "frames": forged})
+    r = _preview(client, auth_headers, other, {"camera_id": cam, "frames": forged})
     assert r.status_code == 422 and "lue par le serveur" in r.json()["detail"]
 
 

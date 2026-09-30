@@ -45,3 +45,17 @@ def decrypt_secret(token: bytes | None) -> dict:
         return json.loads(_fernet().decrypt(token))
     except InvalidToken:
         raise HTTPException(500, detail="Secret caméra illisible (clé changée ?)") from None
+
+
+def seal(data: dict) -> str:
+    """Jeton opaque chiffré et authentifié (Fernet, horodaté) : l'aperçu d'enrôlement y place
+    le gabarit calculé, jamais lisible ni modifiable par le navigateur."""
+    return _fernet().encrypt(json.dumps(data).encode()).decode()
+
+
+def unseal(token: str, ttl_seconds: int) -> dict:
+    try:
+        return json.loads(_fernet().decrypt(str(token or "").encode(), ttl=ttl_seconds))
+    except (InvalidToken, ValueError):
+        raise HTTPException(409, detail={"code": "ENROLLMENT_EXPIRED",
+                                         "message": "Aperçu d'enrôlement expiré ou invalide — recommencez l'analyse"}) from None

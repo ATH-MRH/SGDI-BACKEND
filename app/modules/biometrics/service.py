@@ -121,13 +121,37 @@ def new_config_version(db: Session, *, values: dict[str, Any], provenance: str, 
     return row
 
 
-def ensure_enabled() -> FaceEngine:
-    if not settings.biometric_enabled:
-        raise HTTPException(503, detail="Biométrie désactivée (BIOMETRIC_ENABLED=false)")
+def key_configured() -> bool:
+    return bool((settings.biometric_template_key or "").strip())
+
+
+def _engine_with_key() -> FaceEngine:
+    # Fail closed explicite : sans clé, aucun gabarit ne peut être lu ni écrit.
+    if not key_configured():
+        raise HTTPException(503, detail="Biométrie : clé de chiffrement non configurée (BIOMETRIC_TEMPLATE_KEY)")
     try:
         return get_engine()
     except EngineUnavailable as exc:
         raise HTTPException(503, detail=f"Moteur biométrique indisponible : {exc}") from None
+
+
+def ensure_enabled() -> FaceEngine:
+    """Pointage facial de production : BIOMETRIC_ENABLED + clé + moteur."""
+    if not settings.biometric_enabled:
+        raise HTTPException(503, detail="Biométrie désactivée (BIOMETRIC_ENABLED=false)")
+    return _engine_with_key()
+
+
+def enrollment_enabled() -> bool:
+    return bool(settings.biometric_enabled or settings.biometric_enrollment_enabled)
+
+
+def ensure_enrollment_enabled() -> FaceEngine:
+    """Enrôlement supervisé : autorisé par BIOMETRIC_ENROLLMENT_ENABLED SANS activer le
+    pointage facial (préparation d'un pilote), ou par BIOMETRIC_ENABLED."""
+    if not enrollment_enabled():
+        raise HTTPException(503, detail="Enrôlement biométrique désactivé (BIOMETRIC_ENROLLMENT_ENABLED=false)")
+    return _engine_with_key()
 
 
 # ── Consentement ─────────────────────────────────────────────────────────────────────────
@@ -328,43 +352,154 @@ def _duplicate_candidates(db: Session, employee_id: int, embedding: list[float],
     return (best_id, best_score) if best_score >= cfg.duplicate_threshold else (None, best_score)
 
 
-def enroll(db: Session, *, employee: Employee, actor: Any, frames: list[bytes] | None = None,
-           camera: Camera | None = None) -> dict[str, Any]:
-    """Enrôlement : photo de la fiche en priorité (frames=None), sinon trames caméra (liveness
-    exigé). Activation automatique si tout est conforme ; doublon ⇒ revue humaine."""
-    from app.modules.attendance.core import raise_anomaly
+# ── Enrôlement supervisé : aperçu (analyse + comparaison 1:1) puis confirmation humaine ──
+ENROLLMENT_TTL_SECONDS = 300
+MATCH_RESULTS = ("MATCH", "REVIEW_REQUIRED", "NO_MATCH", "NO_REFERENCE", "NOT_APPLICABLE")
+
+
+def _thumbnail(image: bytes) -> str | None:
+    """Vignette ≤ 320 px de la capture, pour l'affichage côte à côte de l'opérateur :
+    renvoyée une fois, jamais enregistrée."""
+    import base64
+    import io
+
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(image)) as im:
+            im = im.convert("RGB")
+            im.thumbnail((320, 320))
+            out = io.BytesIO()
+            im.save(out, format="JPEG", quality=80)
+        return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
+    except Exception:
+        return None
+
+
+def compare_one_to_one(score: float | None, cfg: Any) -> str:
+    """Capture ↔ photo DRH. Score cosinus brut, jamais converti en « pourcentage »."""
+    if score is None:
+        return "NO_REFERENCE"
+    if score >= cfg.recognition_threshold + cfg.review_margin:
+        return "MATCH"
+    if score >= cfg.recognition_threshold:
+        return "REVIEW_REQUIRED"
+    return "NO_MATCH"
+
+
+def _employee_site_id(db: Session, employee: Employee) -> int | None:
+    today = attendance_core._now_local().date()
+    row = db.execute(select(Assignment.site_id).where(
+        Assignment.employee_id == employee.id, Assignment.active == 1, Assignment.start_date <= today,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= today)).order_by(Assignment.id.desc()).limit(1)).scalar_one_or_none()
+    return row
+
+
+def enrollment_preview(db: Session, *, employee: Employee, actor: Any, frames: list[bytes] | None = None,
+                       camera: Camera | None = None) -> dict[str, Any]:
+    """Étape 1 — AUCUNE écriture de gabarit. Analyse la photo DRH (référence) et, si une
+    caméra est utilisée, la capture (liveness exigé) ; comparaison 1:1 capture ↔ photo ;
+    recherche de doublon. Renvoie un jeton chiffré (5 min, lié à l'opérateur) à confirmer."""
     from app.modules.portal.routes import _employee_portal_block_reason
 
-    engine = ensure_enabled()
+    engine = ensure_enrollment_enabled()
     cfg = active_config(db)
     if not consent_admissible(db, employee.id):
-        raise HTTPException(409, detail="Consentement biométrique non admissible : enrôlement impossible")
+        raise HTTPException(409, detail={"code": "CONSENT_REQUIRED", "message": "Consentement biométrique non admissible : enrôlement impossible"})
     blocked = _employee_portal_block_reason(employee)
     if blocked:
-        raise HTTPException(409, detail=f"Employé non actif : {blocked}")
+        raise HTTPException(409, detail={"code": "EMPLOYEE_INACTIVE", "message": f"Employé non actif : {blocked}"})
+    path = _employee_photo_path(employee)
+    photo_bytes = path.read_bytes() if path else None
+    photo = analyze_frames(engine, [photo_bytes], cfg, require_liveness=False) if photo_bytes else None
+    photo_out = {"state": photo.state if photo else "ABSENT", "reasons": photo.reasons if photo else ["Aucune photo dans la fiche"],
+                 "quality": photo.quality if photo else None}
+    photo_ok = bool(photo and photo.state == "OK")
     if frames is None:
-        path = _employee_photo_path(employee)
-        if path is None:
-            raise HTTPException(422, detail="Aucune photo exploitable dans la fiche — enrôlement par caméra nécessaire")
-        photo = path.read_bytes()
-        decision = analyze_frames(engine, [photo], cfg, require_liveness=False)
-        source, source_ref = "EMPLOYEE_PHOTO", str(path.name)
-        extra_quality = {"photo_sha256": hashlib.sha256(photo).hexdigest()}
+        # Source = photo DRH : exploitable seulement si un seul visage de qualité suffisante.
+        if not photo_ok:
+            raise HTTPException(422, detail={"code": "PHOTO_UNUSABLE", "photo": photo_out,
+                                             "message": "Photo DRH non exploitable — enrôlement par capture supervisée nécessaire"})
+        decision, source, source_ref = photo, "EMPLOYEE_PHOTO", str(path.name)
+        capture_out, comparison = None, {"score": None, "result": "NOT_APPLICABLE"}
     else:
         if camera is None:
             raise HTTPException(422, detail="Caméra d'enrôlement obligatoire")
         decision = analyze_frames(engine, frames, cfg, require_liveness=True)
-        source, source_ref, extra_quality = "CAMERA", f"camera:{camera.id}", {}
-    if decision.state != "OK":
-        raise HTTPException(422, detail={"state": decision.state, "reasons": decision.reasons, "quality": decision.quality})
-    embedding = decision.face.embedding
+        source, source_ref = "CAMERA", f"camera:{camera.id}"
+        capture_out = {"state": decision.state, "reasons": decision.reasons, "quality": decision.quality,
+                       "liveness": round(decision.liveness, 3) if decision.liveness is not None else None,
+                       "thumbnail": _thumbnail(frames[0]) if frames else None}
+        if decision.state != "OK":
+            return {"employee_id": employee.id, "source": source, "photo": photo_out, "capture": capture_out,
+                    "comparison": None, "duplicate": None, "can_confirm": False, "requires_justification": False, "token": None}
+        score = cosine(decision.face.embedding, photo.face.embedding) if photo_ok else None
+        comparison = {"score": round(score, 4) if score is not None else None, "result": compare_one_to_one(score, cfg)}
+    comparison.update({"threshold": cfg.recognition_threshold, "review_margin": cfg.review_margin})
+    duplicate_of, dup_score = _duplicate_candidates(db, employee.id, decision.face.embedding, cfg)
+    other = db.get(Employee, duplicate_of) if duplicate_of else None
+    duplicate = {"suspected": bool(duplicate_of), "score": round(dup_score, 4) if duplicate_of else None,
+                 "matricule": other.code if other else None}
+    can_confirm = comparison["result"] != "NO_MATCH"
+    requires_justification = comparison["result"] in ("REVIEW_REQUIRED", "NO_REFERENCE")
+    quality = {**(decision.quality or {})}
+    if source == "EMPLOYEE_PHOTO":
+        quality["photo_sha256"] = hashlib.sha256(photo_bytes).hexdigest()
+    token = crypto.seal({
+        "employee_id": employee.id, "actor_id": getattr(actor, "id", None), "embedding": decision.face.embedding,
+        "source": source, "source_ref": source_ref, "camera_id": camera.id if camera else None, "quality": quality,
+        "comparison": comparison, "config_version": cfg.version, "engine": engine.engine_id,
+    }) if can_confirm else None
+    append_audit(db, action="biometrics.enrollment.preview", resource="employee", resource_id=employee.id, result="success",
+                 user=actor, society=employee.society,
+                 new_state={"source": source, "camera_id": camera.id if camera else None, "photo": photo_out["state"],
+                            "comparison": comparison["result"], "score": comparison["score"], "duplicate": duplicate["suspected"]})
+    return {"employee_id": employee.id, "source": source, "photo": photo_out, "capture": capture_out, "comparison": comparison,
+            "duplicate": duplicate, "can_confirm": can_confirm, "requires_justification": requires_justification,
+            "token": token, "expires_in": ENROLLMENT_TTL_SECONDS if token else None}
+
+
+def enrollment_confirm(db: Session, *, employee: Employee, actor: Any, token: str, justification: str | None = None) -> dict[str, Any]:
+    """Étape 2 — confirmation EXPLICITE de l'opérateur qui a vu l'aperçu. Recontrôle tout
+    (consentement, statut, comparaison) : un NO_MATCH n'est jamais enrôlé ; un résultat
+    incertain exige une justification écrite, tracée."""
+    from app.modules.portal.routes import _employee_portal_block_reason
+
+    ensure_enrollment_enabled()
+    data = crypto.unseal(token, ENROLLMENT_TTL_SECONDS)
+    if data.get("employee_id") != employee.id or data.get("actor_id") != getattr(actor, "id", None):
+        raise HTTPException(409, detail={"code": "ENROLLMENT_MISMATCH", "message": "Aperçu d'un autre employé ou d'un autre opérateur"})
+    comparison = data.get("comparison") or {}
+    if comparison.get("result") == "NO_MATCH":
+        raise HTTPException(409, detail={"code": "NO_MATCH", "message": "La capture ne correspond pas à la photo DRH : enrôlement refusé"})
+    note = str(justification or "").strip()
+    if comparison.get("result") in ("REVIEW_REQUIRED", "NO_REFERENCE") and len(note) < 10:
+        raise HTTPException(422, detail={"code": "JUSTIFICATION_REQUIRED", "message": "Résultat incertain : justification écrite obligatoire (10 caractères minimum)"})
+    if not consent_admissible(db, employee.id):
+        raise HTTPException(409, detail={"code": "CONSENT_REQUIRED", "message": "Consentement biométrique non admissible : enrôlement impossible"})
+    blocked = _employee_portal_block_reason(employee)
+    if blocked:
+        raise HTTPException(409, detail={"code": "EMPLOYEE_INACTIVE", "message": f"Employé non actif : {blocked}"})
+    if data.get("source") == "EMPLOYEE_PHOTO" and (data.get("quality") or {}).get("photo_sha256") != photo_fingerprint(employee):
+        raise HTTPException(409, detail={"code": "PHOTO_CHANGED", "message": "La photo de la fiche a changé depuis l'analyse — recommencez"})
+    return _store_template(db, employee=employee, actor=actor, embedding=data["embedding"], source=data["source"],
+                           source_ref=data["source_ref"], quality=data.get("quality") or {}, engine_id=data["engine"],
+                           config_version=data["config_version"], comparison=comparison, justification=note or None)
+
+
+def _store_template(db: Session, *, employee: Employee, actor: Any, embedding: list[float], source: str, source_ref: str,
+                    quality: dict, engine_id: str, config_version: int, comparison: dict, justification: str | None) -> dict[str, Any]:
+    from app.modules.attendance.core import raise_anomaly
+
+    cfg = active_config(db)
     duplicate_of, score = _duplicate_candidates(db, employee.id, embedding, cfg)
     consent = current_consent(db, employee.id)
     template = BiometricTemplate(
         employee_id=employee.id, status=TEMPLATE_PENDING_REVIEW if duplicate_of else TEMPLATE_ACTIVE,
-        embedding_encrypted=crypto.encrypt_vector(embedding), engine=engine.engine_id, config_version=cfg.version,
-        source=source, source_ref=source_ref, quality={**(decision.quality or {}), **extra_quality},
+        embedding_encrypted=crypto.encrypt_vector(embedding), engine=engine_id, config_version=config_version,
+        source=source, source_ref=source_ref, quality={**quality, "comparison": comparison.get("result"), "comparison_score": comparison.get("score")},
         consent_id=consent.id if consent else None, created_by=getattr(actor, "username", None),
+        society=employee.society, site_id=_employee_site_id(db, employee),
         duplicate_of_employee_id=duplicate_of, duplicate_score=round(score, 4) if duplicate_of else None,
     )
     if duplicate_of:
@@ -385,10 +520,12 @@ def enroll(db: Session, *, employee: Employee, actor: Any, frames: list[bytes] |
         db.flush()
     append_audit(db, action="biometrics.enroll", resource="employee", resource_id=employee.id, result="success",
                  user=actor, society=employee.society,
-                 new_state={"template_id": template.id, "status": template.status, "source": source,
-                            "config_version": cfg.version, "duplicate_of": duplicate_of})
+                 new_state={"template_id": template.id, "status": template.status, "source": source, "config_version": config_version,
+                            "duplicate_of": duplicate_of, "comparison": comparison.get("result"), "score": comparison.get("score"),
+                            "justification": justification, "confirmed_by": getattr(actor, "username", None)})
     return {"template_id": template.id, "status": template.status, "source": source,
-            "quality": decision.quality, "duplicate": bool(duplicate_of)}
+            "quality": {k: v for k, v in (quality or {}).items() if k != "photo_sha256"}, "duplicate": bool(duplicate_of),
+            "comparison": comparison.get("result")}
 
 
 def review_duplicate(db: Session, *, template: BiometricTemplate, approve: bool, comment: str, actor: Any) -> BiometricTemplate:
@@ -468,10 +605,14 @@ def recognize_and_record(db: Session, *, camera: Camera, frames: list[bytes], ac
         raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
     if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
         raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
+    if not camera.facial_attendance_enabled:
+        # Pilote : BIOMETRIC_ENABLED ne suffit pas, chaque caméra est activée explicitement.
+        raise HTTPException(409, detail="Pointage facial non activé pour cette caméra (activation pilote requise)")
     cfg = active_config(db)
     decision = analyze_frames(engine, frames, cfg, require_liveness=True)
     minute = attendance_core._now_local().strftime("%Y%m%d%H%M")
-    base = {"camera_id": camera.id, "site_id": camera.site_id, "config_version": cfg.version}
+    base = {"camera_id": camera.id, "site_id": camera.site_id, "config_version": cfg.version,
+            "liveness": round(decision.liveness, 3) if decision.liveness is not None else None}
     if decision.state in ("NO_FACE", "MULTIPLE_FACES", "QUALITY_FAILED"):
         return {**base, "state": decision.state, "recorded": False, "message": decision.reasons[0] if decision.reasons else "", "reasons": decision.reasons}
     if decision.state == "LIVENESS_FAILED":

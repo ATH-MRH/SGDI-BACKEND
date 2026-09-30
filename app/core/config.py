@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # par défaut et INDÉPENDANT de biometric_enabled : il peut fonctionner sans activer le vrai
     # pointage facial et n'écrit JAMAIS de présence (voir docs/biometrics.md, § Mode Test).
     biometric_test_mode_enabled: bool = False
+    # Enrôlement supervisé (aperçu + confirmation humaine) SANS activer le pointage facial :
+    # prépare un pilote. Faux par défaut ; BIOMETRIC_ENABLED l'autorise aussi.
+    biometric_enrollment_enabled: bool = False
     biometric_test_mode_max_per_minute: int = 30
     # À activer SEULEMENT après scripts/rename_public_photos.py --apply : refuse les photos dont
     # le nom est prévisible (ex. matricule.jpg). Désactivé par défaut pour ne casser aucune photo.

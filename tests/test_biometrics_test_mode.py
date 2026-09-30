@@ -383,7 +383,7 @@ def test_write_paths_are_never_reached(client, auth_headers, db, monkeypatch):
         raise AssertionError("écriture interdite en Mode Test")
     for target, name in ((attendance_core, "record_scan"), (attendance_core, "raise_anomaly"), (service, "recognize_and_record"),
                          (service, "deactivate_templates"), (service, "invalidate_if_photo_changed"), (service, "active_config"),
-                         (service, "enroll")):
+                         (service, "enrollment_preview"), (service, "enrollment_confirm"), (service, "_store_template")):
         monkeypatch.setattr(target, name, boom)
     site = _site(db)
     _enrolled(db, site, "GUARD")
@@ -399,7 +399,7 @@ def test_test_mode_code_has_no_write_dependency():
             {a.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ImportFrom) for a in n.names}
     modules = {n.module for n in ast.walk(ast.parse(source)) if isinstance(n, ast.ImportFrom)}
     forbidden = {"record_scan", "recognize_and_record", "raise_anomaly", "deactivate_templates", "invalidate_if_photo_changed",
-                 "active_config", "enroll", "review_duplicate", "new_config_version", "record_consent", "append_audit",
+                 "active_config", "enroll", "enrollment_preview", "enrollment_confirm", "_store_template", "review_duplicate", "new_config_version", "record_consent", "append_audit",
                  "add", "commit", "flush", "delete", "merge", "DailyPresence", "AttendanceEvent", "AttendanceAnomaly"}
     assert not (names & forbidden), names & forbidden
     assert not any(m and m.startswith("app.modules.attendance") for m in modules), modules
@@ -425,6 +425,9 @@ def test_production_recognition_still_refuses_browser_images(client, auth_header
         "name": f"CAM-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "10.0.0.20",
         "usage": "ATTENDANCE", "role": "ENTRY"}).json()["id"]
     injected = [base64.b64encode(frame(face("PROD"))).decode() for _ in range(3)]
+    # Caméra non activée pour le pilote : refus avant toute capture.
+    assert client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=auth_headers, json={"frames": injected}).status_code == 409
+    assert client.patch(f"/api/biometrics/cameras/{cam}", headers=auth_headers, json={"facial_attendance_enabled": True}).status_code == 200
     before = db.execute(select(func.count()).select_from(AttendanceEvent)).scalar_one()
     r = client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=auth_headers, json={"frames": injected})
     assert r.status_code == 200 and r.json()["state"] == "NO_FACE" and r.json()["recorded"] is False   # capture serveur, pas le client

@@ -108,7 +108,8 @@ def status(user: User = Depends(current_user)) -> dict[str, Any]:
         except EngineUnavailable as exc:
             detail = str(exc)
     return {"enabled": settings.biometric_enabled, "engine_available": available, "engine": detail,
-            "key_configured": bool((settings.biometric_template_key or "").strip()), "notice_version": service.NOTICE_VERSION}
+            "key_configured": bool((settings.biometric_template_key or "").strip()), "notice_version": service.NOTICE_VERSION,
+            "enrollment_enabled": service.enrollment_enabled()}
 
 
 @router.get("/notice")
@@ -137,6 +138,59 @@ def _template_out(row: BiometricTemplate) -> dict[str, Any]:
             "duplicate_score": row.duplicate_score}
 
 
+def _photo_url(employee: Employee) -> str | None:
+    """URL de la photo DRH (fiche) pour l'affichage côte à côte ; jamais copiée ici."""
+    from app.core.photo_storage import PUBLIC_PHOTO_PREFIX
+
+    path = service._employee_photo_path(employee)
+    return f"{PUBLIC_PHOTO_PREFIX}/{path.name}" if path else None
+
+
+@router.get("/employees")
+def search_employees(q: str = "", site_id: int | None = None, db: Session = Depends(get_db),
+                     user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    """Recherche d'employés à enrôler (matricule, nom, prénom), limitée aux sites du compte."""
+    require_feature(db, user, "biometric_status", "read")
+    today = attendance_core_now().date()
+    allowed = _allowed_assignment_site_ids(db, user)
+    stmt = select(Assignment.employee_id, Assignment.site_id).where(
+        Assignment.active == 1, Assignment.start_date <= today,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= today))
+    if site_id is not None:
+        if allowed is not None and site_id not in set(allowed):
+            raise HTTPException(404, detail="Site introuvable")
+        stmt = stmt.where(Assignment.site_id == site_id)
+    elif allowed is not None:
+        stmt = stmt.where(Assignment.site_id.in_(allowed or [-1]))
+    site_of = {emp: site for emp, site in db.execute(stmt).all()}
+    if not site_of:
+        return []
+    query = select(Employee).where(Employee.id.in_(site_of))
+    term = q.strip()
+    if term:
+        like = f"%{term}%"
+        query = query.where(Employee.code.ilike(like) | Employee.last_name.ilike(like) | Employee.first_name.ilike(like))
+    employees = db.execute(query.order_by(Employee.last_name, Employee.first_name).limit(25)).scalars().all()
+    ids = [e.id for e in employees]
+    sites = {s.id: s.name for s in db.execute(select(Site).where(Site.id.in_(set(site_of.values())))).scalars()}
+    templates = db.execute(select(BiometricTemplate.employee_id, BiometricTemplate.status).where(BiometricTemplate.employee_id.in_(ids or [-1]))).all()
+    out = []
+    for e in employees:
+        statuses = {st for emp, st in templates if emp == e.id}
+        out.append({"employee_id": e.id, "matricule": e.code, "nom": e.last_name, "prenom": e.first_name, "fonction": e.position,
+                    "site_id": site_of[e.id], "site": sites.get(site_of[e.id]), "statut": e.status,
+                    "consent_admissible": service.consent_admissible(db, e.id),
+                    "enrollment": "ACTIVE" if "ACTIVE" in statuses else ("PENDING_REVIEW" if TEMPLATE_PENDING_REVIEW in statuses else "NONE"),
+                    "photo_available": service._employee_photo_path(e) is not None})
+    return out
+
+
+def attendance_core_now():
+    from app.modules.attendance.core import _now_local
+
+    return _now_local()
+
+
 @router.get("/employees/{employee_id}")
 def employee_status(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     require_feature(db, user, "biometric_status", "read")
@@ -149,7 +203,10 @@ def employee_status(employee_id: int, db: Session = Depends(get_db), user: User 
                           .order_by(BiometricConsent.id.desc())).scalars().all()
     active = next((t for t in templates if t.status == "ACTIVE"), None)
     return {
-        "employee_id": employee_id, "enabled": settings.biometric_enabled,
+        "employee_id": employee_id, "enabled": settings.biometric_enabled, "enrollment_enabled": service.enrollment_enabled(),
+        "identity": {"matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name,
+                     "fonction": employee.position, "societe": employee.society},
+        "photo_url": _photo_url(employee),
         "consent": _consent_out(consents[0] if consents else None),
         "consent_history": [_consent_out(c) for c in consents],
         "photo_available": service._employee_photo_path(employee) is not None,
@@ -186,17 +243,50 @@ class EnrollIn(BaseModel):
 
 @router.post("/employees/{employee_id}/enroll")
 def enroll(employee_id: int, payload: EnrollIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    """Sans caméra : photo de la fiche (source prioritaire). Avec caméra : capture automatique
-    (rafale serveur, ou trames du terminal pour une caméra TERMINAL), liveness exigé."""
+    """Remplacé par l'enrôlement SUPERVISÉ en deux étapes (aperçu + confirmation humaine) :
+    un gabarit n'est plus jamais activé sans comparaison ni confirmation explicite."""
+    require_feature(db, user, "biometric_enrollment", "create")
+    _employee_in_scope(db, user, employee_id)
+    raise HTTPException(410, detail={"code": "SUPERVISED_ENROLLMENT_REQUIRED",
+                                     "message": "Enrôlement supervisé : /enrollment/preview puis /enrollment/confirm"})
+
+
+def _enrollment_frames(db: Session, user: User, payload: EnrollIn) -> tuple[Camera | None, list[bytes] | None]:
+    if payload.camera_id is None:
+        if payload.frames:
+            raise HTTPException(422, detail="Images refusées sans caméra d'enrôlement déclarée")
+        return None, None
+    camera = _camera_in_scope(db, user, payload.camera_id)
+    if camera.usage not in ("ENROLLMENT", "ATTENDANCE_AND_ENROLLMENT") or not camera.active:
+        raise HTTPException(409, detail="Caméra non autorisée pour l'enrôlement")
+    return camera, _frames_for(camera, payload.frames)
+
+
+@router.post("/employees/{employee_id}/enrollment/preview")
+def enrollment_preview(employee_id: int, payload: EnrollIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Étape 1 : analyse photo DRH / capture, comparaison 1:1, doublons — AUCUN gabarit créé."""
     require_feature(db, user, "biometric_enrollment", "create")
     employee = _employee_in_scope(db, user, employee_id)
-    camera = frames = None
-    if payload.camera_id is not None:
-        camera = _camera_in_scope(db, user, payload.camera_id)
-        if camera.usage not in ("ENROLLMENT", "ATTENDANCE_AND_ENROLLMENT") or not camera.active:
-            raise HTTPException(409, detail="Caméra non autorisée pour l'enrôlement")
-        frames = _frames_for(camera, payload.frames)
-    result = service.enroll(db, employee=employee, actor=user, frames=frames, camera=camera)
+    camera, frames = _enrollment_frames(db, user, payload)
+    result = service.enrollment_preview(db, employee=employee, actor=user, frames=frames, camera=camera)
+    db.commit()
+    return result
+
+
+class EnrollConfirmIn(BaseModel):
+    token: str = Field(min_length=20, max_length=20000)
+    confirm: bool
+    justification: str | None = Field(None, max_length=500)
+
+
+@router.post("/employees/{employee_id}/enrollment/confirm")
+def enrollment_confirm(employee_id: int, payload: EnrollConfirmIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Étape 2 : confirmation explicite par l'opérateur habilité qui a vu l'aperçu."""
+    require_feature(db, user, "biometric_enrollment", "create")
+    employee = _employee_in_scope(db, user, employee_id)
+    if payload.confirm is not True:
+        raise HTTPException(422, detail="Confirmation explicite requise")
+    result = service.enrollment_confirm(db, employee=employee, actor=user, token=payload.token, justification=payload.justification)
     db.commit()
     return result
 
@@ -296,7 +386,8 @@ def _camera_out(cam: Camera, site: Site | None = None) -> dict[str, Any]:
             "host": cam.host, "http_port": cam.http_port, "rtsp_port": cam.rtsp_port, "connection_type": cam.connection_type,
             "channel": cam.channel, "resolution": cam.resolution, "fps": cam.fps, "profiles": cam.profiles or {},
             "capabilities": cam.capabilities or {}, "usage": cam.usage, "role": cam.role, "is_default": cam.is_default,
-            "active": cam.active, "credentials_set": bool(cam.credentials_encrypted), "last_check": cam.last_check}
+            "active": cam.active, "facial_attendance_enabled": bool(cam.facial_attendance_enabled),
+            "credentials_set": bool(cam.credentials_encrypted), "last_check": cam.last_check}
 
 
 @router.get("/camera-models")
@@ -361,6 +452,7 @@ class CameraIn(BaseModel):
     role: str = "ENTRY"
     is_default: bool = False
     active: bool = True
+    facial_attendance_enabled: bool = False
     username: str | None = Field(None, max_length=120)
     password: str | None = Field(None, max_length=200)
 
@@ -379,6 +471,7 @@ class CameraPatch(BaseModel):
     role: str | None = None
     is_default: bool | None = None
     active: bool | None = None
+    facial_attendance_enabled: bool | None = None
     username: str | None = Field(None, max_length=120)
     password: str | None = Field(None, max_length=200)
 
@@ -392,6 +485,12 @@ def _validate_usage_role(usage: str | None, role: str | None, adapter: str | Non
         raise HTTPException(422, detail="Caméra du terminal : enrôlement supervisé uniquement — le pointage exige une caméra lue par le serveur")
     if role is not None and role not in CAMERA_ROLES:
         raise HTTPException(422, detail="Rôle de caméra invalide")
+
+
+def _check_facial_activation(enabled: bool | None, usage: str | None, adapter: str | None) -> None:
+    """Seule une caméra lue par le serveur et dédiée au pointage peut être activée."""
+    if enabled and (adapter == "TERMINAL" or usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT")):
+        raise HTTPException(422, detail="Pointage facial activable uniquement sur une caméra de pointage lue par le serveur")
 
 
 def _single_default(db: Session, camera: Camera) -> None:
@@ -409,6 +508,7 @@ def add_camera(payload: CameraIn, db: Session = Depends(get_db), user: User = De
     if not model or not model.active:
         raise HTTPException(422, detail="Modèle de caméra inconnu — l'ajouter d'abord au catalogue")
     _validate_usage_role(payload.usage, payload.role, model.adapter)
+    _check_facial_activation(payload.facial_attendance_enabled, payload.usage, model.adapter)
     society = _site_society(site) or ""
     if not society:
         raise HTTPException(422, detail="Le site n'a pas de société : une caméra appartient à une société ET un site")
@@ -418,7 +518,8 @@ def add_camera(payload: CameraIn, db: Session = Depends(get_db), user: User = De
                     rtsp_port=payload.rtsp_port, connection_type=payload.connection_type, channel=payload.channel,
                     resolution=payload.resolution or model.resolution, fps=payload.fps, profiles=payload.profiles or {},
                     capabilities=model.capabilities or {}, usage=payload.usage, role=payload.role,
-                    is_default=payload.is_default, active=payload.active)
+                    is_default=payload.is_default, active=payload.active,
+                    facial_attendance_enabled=payload.facial_attendance_enabled)
     if payload.username or payload.password:
         camera.credentials_encrypted = crypto.encrypt_secret({"username": payload.username or "", "password": payload.password or ""})
     db.add(camera)
@@ -436,6 +537,8 @@ def update_camera(camera_id: int, payload: CameraPatch, db: Session = Depends(ge
     camera = _camera_in_scope(db, user, camera_id)
     changes = payload.model_dump(exclude_unset=True)
     _validate_usage_role(changes.get("usage"), changes.get("role"), camera.adapter)
+    _check_facial_activation(changes.get("facial_attendance_enabled", camera.facial_attendance_enabled),
+                             changes.get("usage", camera.usage), camera.adapter)
     secret_changed = "username" in changes or "password" in changes
     if secret_changed:
         current = crypto.decrypt_secret(camera.credentials_encrypted)
@@ -509,11 +612,50 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
     # Vérifié AVANT toute capture : une caméra désactivée n'est plus jamais interrogée.
     if not camera.active or camera.usage not in ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT"):
         raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
+    if not camera.facial_attendance_enabled:
+        raise HTTPException(409, detail="Pointage facial non activé pour cette caméra (activation pilote requise)")
     # Les images sont TOUJOURS lues par le serveur sur la caméra : aucune image fournie par
     # le client n'est acceptée pour pointer (voir docs/biometrics.md, injection numérique).
     frames = _frames_for(camera, None)
-    return service.recognize_and_record(db, camera=camera, frames=frames, actor=user, burst_id=payload.burst_id,
-                                        employee_hint=payload.employee_id)
+    try:
+        result = service.recognize_and_record(db, camera=camera, frames=frames, actor=user, burst_id=payload.burst_id,
+                                              employee_hint=payload.employee_id)
+    except HTTPException as exc:
+        db.rollback()
+        _audit_recognition(db, user, camera, {"state": "ERROR", "recorded": False, "reason": str(exc.detail)[:200]})
+        raise
+    _audit_recognition(db, user, camera, result)
+    return result
+
+
+def _audit_recognition(db: Session, user: User, camera: Camera, result: dict[str, Any]) -> None:
+    """Chaque tentative de pointage facial est tracée — métadonnées seulement (jamais
+    d'image ni de gabarit) : caméra, site, employé reconnu, état, score, liveness, config,
+    pointage créé ou non, motif de refus."""
+    employee = result.get("employee") or {}
+    append_audit(db, action="biometrics.recognize", resource="camera", resource_id=camera.id,
+                 result="success" if result.get("recorded") else "refused", user=user, society=camera.society,
+                 new_state={"camera_id": camera.id, "site_id": camera.site_id, "state": result.get("state"),
+                            "matricule": employee.get("matricule"), "confidence": result.get("confidence"),
+                            "liveness": result.get("liveness"), "config_version": result.get("config_version"),
+                            "recorded": bool(result.get("recorded")), "action": result.get("action"),
+                            "reason": result.get("reason") or (None if result.get("recorded") else result.get("message"))})
+    db.commit()
+
+
+@router.post("/sites/{site_id}/facial-disable")
+def disable_site_facial(site_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Coupure immédiate du pointage facial d'un site (toutes ses caméras) — sans effet sur
+    le QR ni la saisie manuelle. Réactivation caméra par caméra, explicitement."""
+    require_feature(db, user, "biometric_admin", "admin")
+    site = _ensure_site_allowed(db, user, site_id)
+    cams = db.execute(select(Camera).where(Camera.site_id == site_id, Camera.facial_attendance_enabled.is_(True))).scalars().all()
+    for cam in cams:
+        cam.facial_attendance_enabled = False
+    append_audit(db, action="biometrics.site.facial_disable", resource="site", resource_id=site_id, result="success",
+                 user=user, society=_site_society(site), new_state={"cameras": [c.id for c in cams]})
+    db.commit()
+    return {"site_id": site_id, "disabled_cameras": len(cams)}
 
 
 # ── Mode Test (caméra du navigateur) — AUCUN POINTAGE ────────────────────────────────────

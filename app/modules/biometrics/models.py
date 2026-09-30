@@ -62,6 +62,8 @@ class BiometricTemplate(Base, TimestampMixin):
     source_ref: Mapped[str | None] = mapped_column(String(200))       # chemin photo / caméra, sans image
     quality: Mapped[dict | None] = mapped_column(JSON)                # scores (jamais l'image)
     consent_id: Mapped[int | None] = mapped_column(ForeignKey("biometric_consents.id", ondelete="SET NULL"))
+    society: Mapped[str | None] = mapped_column(String(150), index=True)   # société de l'employé à l'enrôlement
+    site_id: Mapped[int | None] = mapped_column(Integer, index=True)       # site d'affectation à l'enrôlement
     duplicate_of_employee_id: Mapped[int | None] = mapped_column(Integer)
     duplicate_score: Mapped[float | None] = mapped_column(Float)
     created_by: Mapped[str | None] = mapped_column(String(120))
@@ -134,5 +136,8 @@ class Camera(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(20), default="ENTRY")
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Pilote : une caméra ne pointe QUE si elle est explicitement activée ici (en plus de
+    # BIOMETRIC_ENABLED). Faux par défaut ; coupure immédiate par caméra ou par site.
+    facial_attendance_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
     credentials_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)   # jamais exposé
     last_check: Mapped[dict | None] = mapped_column(JSON)
