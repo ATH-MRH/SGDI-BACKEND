@@ -1,5 +1,6 @@
-# Dépendances OPTIONNELLES de la biométrie faciale (docs/biometrics.md).
-# Non installées dans l'image de production par défaut : sans elles, la biométrie reste
-# indisponible (réponse 503 explicite), le reste d'ATLAS est inchangé.
-opencv-python-headless>=4.10
-numpy>=1.26
+# Dépendances du moteur biométrique (docs/biometrics.md) — installées dans l'image Docker.
+# Installer le moteur ne l'active pas : le pointage facial reste soumis à BIOMETRIC_ENABLED
+# (faux par défaut), le Mode Test à BIOMETRIC_TEST_MODE_ENABLED. Versions figées = celles
+# des tests moteur réels (tests/test_biometrics_engine_real.py).
+opencv-python-headless==5.0.0.93
+numpy==2.5.3

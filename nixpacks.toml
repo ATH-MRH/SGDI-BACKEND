@@ -6,7 +6,9 @@ PIP_DISABLE_PIP_VERSION_CHECK = "1"
 
 [phases.install]
 cmds = [
-  "python -m venv /opt/venv && . /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt"
+  # Dépendances du moteur biométrique incluses ; les modèles ne sont fournis que par le
+  # Dockerfile (build de production) — sans eux, le moteur reste « indisponible » (503).
+  "python -m venv /opt/venv && . /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt -r requirements-biometric.txt"
 ]
 
 [start]
