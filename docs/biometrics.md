@@ -202,24 +202,13 @@ n'est écrit en base. Références manquantes : listées dans `missing_files`, j
 renommer chaque `nouveau → ancien` du journal puis restaurer la base ; remettre
 `PHOTOS_REQUIRE_UNGUESSABLE_NAMES=false`.
 
-## 11. Chantier séparé « KIOSK DEVICE IDENTITY » (non implémenté)
+## 11. Identité de borne (« KIOSK DEVICE IDENTITY ») — livrée, voir § 14
 
-Aujourd'hui une borne faciale fonctionne avec une session utilisateur ordinaire (pointeur),
-déconnectée après 30 s sans passage. Une borne sans surveillance exige une **identité
-d'équipement**, distincte d'un compte humain. Cahier des charges, à traiter comme un chantier
-à part (conception + revue sécurité) :
-
-| Exigence | Contenu |
-|---|---|
-| Terminal enregistré | enrôlement explicite par un administrateur, identifiant unique, état actif/révoqué |
-| Rattachement | une société, un site, une (ou des) caméra(s) déclarée(s) ; aucun autre périmètre |
-| Credential technique | secret propre à l'équipement, révocable, jamais un mot de passe humain ; stocké haché/chiffré |
-| Permissions minimales | reconnaissance sur ses caméras + flux de passages de son site ; **aucun accès aux autres API** (DRH, paie, OPS, administration) |
-| Rotation | durée de vie limitée, renouvellement sans intervention sur la borne |
-| Révocation | immédiate, effective sur la requête suivante |
-| Audit | chaque appel rattaché à l'équipement (et non à un humain) ; enregistrement, rotation, révocation audités |
-
-Tant que ce chantier n'est pas livré : pas de borne faciale sans surveillance.
+Le cahier des charges initial (terminal enregistré, rattachement société + site, credential
+propre à l'équipement, permissions minimales, rotation, révocation immédiate, audit par
+équipement) est implémenté par les **terminaux faciaux autorisés** (§ 14). Une borne ne dépend
+plus d'une session humaine : la déconnexion après 30 s d'inactivité des utilisateurs du pointeur
+est inchangée et ne concerne pas la borne.
 
 ## 12. BIOMETRIC TEST MODE — FRONTEND CONTRACT
 
@@ -434,6 +423,7 @@ l'ensemble de la rafale. Seuils inchangés.
 | `BIOMETRIC_ENROLLMENT_ENABLED` (env) | global | autorise l'**enrôlement supervisé** sans ouvrir le pointage facial |
 | `BIOMETRIC_ENABLED` (env) | global | ouvre le circuit de pointage facial (et l'enrôlement) |
 | `cameras.facial_attendance_enabled` (base, défaut **faux**) | **par caméra** | une caméra ne pointe QUE si elle est explicitement activée (Pointage → Caméras) |
+| `biometric_terminals.facial_attendance_enabled` (base, défaut **faux**) | **par terminal** | une tablette/un smartphone associé ne pointe QUE s'il est explicitement activé (Pointage → Terminaux) ; le QR de la borne n'en dépend pas |
 
 `BIOMETRIC_ENABLED=true` seul ne fait donc pointer **aucune** caméra : chaque caméra du pilote est
 activée à la main, audité (`biometrics.camera.update`). Seule une caméra **lue par le serveur**
@@ -441,8 +431,10 @@ et d'usage pointage peut être activée (jamais une caméra « terminal » ni d'
 
 **Coupures (kill switch)** — toutes sans effet sur le QR ni la saisie manuelle :
 - **caméra** : décocher « Pointage facial RÉEL actif » (ou désactiver la caméra) — effet immédiat ;
+- **terminal** : « Couper le facial » / « Désactiver » / « Révoquer » (Pointage → Terminaux) — effet
+  sur la requête suivante (défis en cours invalidés) ;
 - **site** : « Couper le pointage facial du site » → `POST /api/biometrics/sites/{site_id}/facial-disable`
-  (toutes les caméras du site, audité `biometrics.site.facial_disable`) — effet immédiat ;
+  (toutes les caméras **et tous les terminaux** du site, audité `biometrics.site.facial_disable`) — effet immédiat ;
 - **global** : retirer `BIOMETRIC_ENABLED` (redémarrage de l'application).
 
 ### 13.2 Enrôlement supervisé (deux étapes, confirmation humaine)
@@ -504,14 +496,176 @@ aucun gabarit. Aperçus et confirmations d'enrôlement : `biometrics.enrollment.
 
 ### 13.4 Procédure du pilote — DHL FORWARDING / HAMOUL 01 (40K)
 
+Terminal principal : **une tablette Samsung** (§ 14). La caméra Dahua est une source
+supplémentaire facultative : son absence ne bloque pas le pilote.
+
 1. Essais en Mode Test (pointeur.irongs.com) : observer détection, qualité, liveness.
 2. `BIOMETRIC_ENROLLMENT_ENABLED=true` (secret/env Coolify), **`BIOMETRIC_ENABLED` absent**.
-   Migration `20260930_0001` appliquée (colonnes additives).
+   Migrations `20260930_0001` et `20260930_0002` appliquées au démarrage (additives).
 3. Permissions : `biometric_status × read` + `biometric_enrollment × create/update` aux seuls
-   opérateurs d'enrôlement ; `biometric_admin × admin` à l'administrateur caméras. Un pointeur
-   ordinaire n'a aucune de ces permissions.
-4. Consentements, puis enrôlement supervisé des employés du pilote ; revue des doublons.
-5. Caméra Dahua du site : catalogue, création, identifiants (chiffrés), « Tester la caméra ».
-6. Checklist terrain `docs/attendance-hardware-checklist.md` (§ 4, 5 et 9) avec la vraie caméra.
-7. **Seulement après GO signé** : `BIOMETRIC_ENABLED=true`, puis activer **la seule caméra du site
-   pilote**. Surveiller l'audit et les anomalies ; coupure immédiate par caméra ou par site.
+   opérateurs d'enrôlement ; `biometric_admin × admin` à l'administrateur des terminaux/caméras.
+   Un pointeur ordinaire n'a aucune de ces permissions.
+4. Consentements, puis enrôlement supervisé de **quelques employés explicitement choisis** ;
+   revue des doublons.
+5. Terminal : Pointage → Terminaux → « + Ajouter un terminal » (TAB-HAMOUL-01, Tablette Android,
+   site HAMOUL 01) → code d'association → installation de la tablette
+   (`docs/biometric-terminals.md`). Facial **désactivé**.
+6. Essais physiques sur la tablette (`docs/attendance-hardware-checklist.md` § 10) — le terminal
+   reste coupé pour le pointage réel tant que `BIOMETRIC_ENABLED` est absent.
+7. **Seulement après GO signé** : `BIOMETRIC_ENABLED=true`, puis « Activer le facial » sur **ce
+   seul terminal**. Aucun autre site, aucun autre terminal. Surveiller l'audit du terminal et les
+   anomalies ; coupure immédiate par terminal ou par site.
+8. (Facultatif) Caméra Dahua : catalogue, création, test, checklist § 1-9, activation séparée.
+
+## 14. Terminaux faciaux mobiles (tablette Samsung, smartphone) — circuit B
+
+### 14.1 Trois circuits séparés
+
+| Circuit | Chemin | Présence |
+|---|---|---|
+| A. Mode Test | navigateur → `/api/biometrics/test-mode/*` → moteur | **jamais** (`recorded: false`) |
+| B. Terminal mobile | terminal associé → défi → rafale signée → `/api/biometrics/terminal/recognize` → moteur → Attendance Core | oui, après toutes les gardes |
+| C. Caméra RTSP/Dahua | serveur → caméra → `/api/biometrics/cameras/{id}/recognize` → moteur → Attendance Core | oui, après toutes les gardes |
+
+Mêmes moteur, gabarits, consentements, seuils versionnés, Attendance Core et audit. Le Mode
+Test n'importe ni `terminals` ni `match_and_record` (test permanent) ; les routes du terminal
+n'acceptent aucune session utilisateur ; les routes d'administration n'acceptent aucune identité
+de terminal (tests dans les deux sens). Une image fournie par un navigateur **non associé** ne
+crée jamais de présence.
+
+### 14.2 Modèle de données (migration `20260930_0002`, additive)
+
+- `biometric_terminals` : `public_id` immuable (`trm_…`, aléatoire), nom, type
+  (`TABLET_ANDROID`, `SMARTPHONE_ANDROID`, `IPHONE`, `IPAD` ; `CAMERA_RTSP` renvoyé vers
+  Caméras), société (celle du site), site, emplacement, `enabled`, `facial_attendance_enabled`
+  (**faux**), clé **publique** P-256 (JWK) + empreinte, empreinte SHA-256 du code d'association +
+  expiration (jamais le code), `paired_at`, `last_seen_at`, `revoked_at` + motif, `config_version`
+  (incrémentée à chaque changement ⇒ défis antérieurs caducs), métadonnées non sensibles.
+- `biometric_terminal_challenges` : défis (empreinte du nonce, terminal, site, versions,
+  émission, expiration, consommation).
+- `biometric_frame_digests` : empreintes SHA-256 des images reçues (jamais l'image).
+
+### 14.3 Association et credential
+
+1. L'administrateur crée le terminal (`POST /api/biometrics/terminals`, `biometric_admin × admin`).
+2. `POST /api/biometrics/terminals/{id}/pairing-code` : code de 10 caractères (alphabet sans
+   0/O/1/I/L, ≈ 49 bits, `secrets`), **10 min**, usage unique, stocké haché, audité ; affiché une
+   fois avec un QR vers `https://pointeur.irongs.com/borne#pair=CODE` (le fragment `#` n'est jamais
+   envoyé au serveur ni journalisé ; la page l'efface de l'URL).
+3. La tablette ouvre `/borne`, génère une paire **ECDSA P-256** WebCrypto **non extractible**
+   (`extractable: false`), conservée dans IndexedDB (clé de l'origine pointeur.irongs.com), et
+   envoie la **clé publique** avec le code : `POST /api/biometrics/terminal/pair`. Le code est
+   invalidé à la première utilisation (succès) ; code invalide ou expiré ⇒ 401 `PAIRING_CODE_INVALID` ;
+   10 échecs / IP / 10 min ⇒ 429.
+4. Rotation : nouveau code sur un terminal associé ; l'ancienne clé reste valable jusqu'à
+   l'association du nouvel appareil, puis est remplacée (identifiant inchangé).
+5. Révocation : `POST /api/biometrics/terminals/{id}/revoke` (motif) — clé effacée, définitif ;
+   la borne affiche « TERMINAL NON AUTORISÉ » et efface son identité locale.
+
+**Aucun secret n'est stocké côté serveur** (clé publique seulement) : une fuite de la base ne
+permet pas d'usurper un terminal. Ni compte admin, ni mot de passe, ni identifiant d'appareil,
+ni User-Agent ne servent d'authentification.
+
+### 14.4 Signature des requêtes
+
+En-têtes `X-Atlas-Terminal` (identifiant public), `X-Atlas-Timestamp` (ms), `X-Atlas-Signature`
+(ECDSA P-256 / SHA-256, format brut r‖s 64 octets, base64url) sur le message canonique :
+
+```
+ATLAS-TERMINAL-1 \n terminal_id \n MÉTHODE \n chemin?requête \n horodatage \n SHA-256(corps exact)
+```
+
+Le corps contient le défi (id + nonce) et les images : aucune partie de la requête ne peut être
+substituée (autre terminal, autre route, autre corps, autre défi) sans invalider la signature.
+Horodatage : ± 300 s (horloge de tablette ; la borne corrige son décalage avec `server_time`).
+Le site n'est pas signé par le client : il est **imposé par le serveur** (celui du terminal) et
+lié au défi.
+
+### 14.5 Défi, anti-rejeu, limitation de débit
+
+- `POST /api/biometrics/terminal/challenge` (signé) : fail closed (`BIOMETRIC_ENABLED`, clé,
+  moteur, type, activation du terminal), nonce 256 bits, **10 s**, lié au terminal, au site, à la
+  version de configuration biométrique et à celle du terminal.
+- `POST /api/biometrics/terminal/recognize` (signé) `{challenge_id, nonce, frames[2..5]}` : défi
+  consommé **atomiquement** avant toute analyse (`UPDATE … WHERE consumed_at IS NULL`) ;
+  refus `CHALLENGE_INVALID` (absent, faux, autre terminal), `CHALLENGE_REUSED`,
+  `CHALLENGE_EXPIRED`, `CHALLENGE_STALE` (site ou configuration modifiés depuis le défi).
+- Images : JPEG/PNG/WebP validés avant décodage (mêmes contrôles que le Mode Test) ; empreinte
+  SHA-256 de chaque trame : trame déjà reçue ou trames identiques dans la rafale ⇒
+  `REPLAY_DETECTED`. Index unique ; **rétention 7 jours** (purge à chaque défi) ; une empreinte ne
+  permet pas de reconstituer l'image (collision SHA-256 : non praticable).
+- Limitation : 120 requêtes / min / terminal (défis + reconnaissances + QR — la borne en émet au
+  plus ~2 par seconde pendant une relève), 30 échecs d'authentification / IP / 5 min. Compteurs en
+  mémoire, par worker.
+
+**Limite assumée** : un navigateur ne fournit pas de preuve cryptographique que chaque pixel vient
+du capteur (pas d'attestation matérielle de la caméra sur le web). Un attaquant qui contrôle
+physiquement la tablette associée (ou y injecte une caméra virtuelle, ce qui exige un appareil
+rooté / débogage activé) peut soumettre des images. La sécurité repose sur l'empilement :
+terminal enregistré + clé non extractible + défi 10 s à usage unique + rafale multi-trames +
+liveness + empreintes anti-rejeu + limitation + audit + coupures. Le liveness passif n'est **pas
+validé** contre photo/écran/vidéo : essais physiques obligatoires (checklist § 10).
+
+### 14.6 Rafale (mesurée)
+
+3 trames, 200 ms d'intervalle, 800 px de grand côté, JPEG 0,85 (chaque trame attend une nouvelle
+image du capteur, `requestVideoFrameCallback`). Mesures (moteur réel, Apple M4) : analyse
+9 ms/trame à 480 px (visage 87 px, trop près du minimum de 80 px), 11 ms à 640 px, **14 ms à
+800 px (visage 151 px)**, 23 ms à 1280 px ; ≈ 50–70 KB/trame, ≈ 200 KB/rafale (< 0,5 s en 4G). E2E
+réel (Chrome, caméra virtuelle) : 50–68 ms serveur par reconnaissance complète. À re-mesurer sur le
+serveur de production et la tablette réelle (latence réseau, éclairage).
+
+### 14.7 Borne (`/borne`, PWA « Borne de pointage ATLAS »)
+
+Plein écran, aucune navigation, aucune administration, aucun lien, bandeau « PRODUCTION »
+(le Mode Test, lui, affiche « MODE TEST — AUCUN POINTAGE »). Caméra frontale (`facingMode: user`)
+ou capteur choisi par l'administrateur à l'association (non modifiable ensuite par l'utilisateur).
+
+Boucle sans clic : échantillon de luminance 32×24 toutes les 300 ms (aucun moteur ML dans le
+navigateur ; `FaceDetector` utilisé seulement s'il existe) → analyse seulement si la scène bouge ou
+diffère de la dernière scène analysée → défi → rafale → résultat. États : PRÊT, VISAGE DÉTECTÉ,
+ANALYSE EN COURS, NOM PRÉNOM + matricule + ENTRÉE/SORTIE ENREGISTRÉE HH:MM (affichés **seulement**
+après la réponse d'Attendance Core), POINTAGE DÉJÀ ENREGISTRÉ, VISAGE NON RECONNU (« Veuillez
+utiliser votre QR ou contacter un responsable », aucun candidat, aucune proposition
+d'enrôlement), PLUSIEURS VISAGES, QUALITÉ INSUFFISANTE, LIVENESS REFUSÉ, RÉSULTAT AMBIGU, TERMINAL
+NON AUTORISÉ, TERMINAL DÉSACTIVÉ, POINTAGE FACIAL INDISPONIBLE, SERVICE TEMPORAIREMENT INDISPONIBLE,
+CAMÉRA REFUSÉE / INTERROMPUE.
+
+Réarmement : après un pointage, confirmation 3 s puis **attente d'un changement de scène** (la
+personne s'en va) avant toute nouvelle analyse (réarmement forcé à 20 s ; le serveur répond de
+toute façon `ALREADY_RECORDED`). Anti-doublon serveur : défi à usage unique + fenêtre de
+non-répétition faciale de l'employé (`cooldown_seconds`, toutes sources faciales) + anti-rebond
+Attendance Core (300 s) + idempotence `term{id}-ch{challenge}`.
+
+QR : si le navigateur fournit `BarcodeDetector` (Chrome Android), la borne lit le QR employé du
+Portail RH : `POST /api/biometrics/terminal/qr` (signé) → même contrôle que le scan superviseur
+(QR signé, usage unique, employé affecté au site de la borne) → `attendance_core.record_scan`
+(source QR). **Indépendant de `BIOMETRIC_ENABLED`** et du facial du terminal. HENEX HC-666 :
+lecteur QR uniquement, inchangé.
+
+### 14.8 Hors ligne — FAIL CLOSED
+
+Serveur injoignable (réseau, 5xx) : la borne affiche « SERVICE TEMPORAIREMENT INDISPONIBLE —
+UTILISEZ LE QR OU LA MÉTHODE DE SECOURS ». **Rien n'est enregistré localement, rien n'est mis en
+file d'attente, aucune rafale n'est rejouée** (le défi serveur rend d'ailleurs tout rejeu
+impossible). Nouvel essai automatique toutes les 5 s. Le QR de la borne utilise le même serveur :
+hors ligne, il est aussi indisponible ; le HENEX et la saisie manuelle du pointeur restent la
+méthode de secours selon les règles existantes.
+
+### 14.9 Audit et confidentialité
+
+`biometrics.terminal.{create,update,pairing_code,pair,auth,recognize,qr,revoke}` : terminal
+(identifiant public), site, société, horodatage, état, matricule reconnu, confiance, liveness,
+identifiant du défi, nombre de trames, version de configuration, pointage créé ou non, motif,
+durée. **Jamais** : image, base64, gabarit, embedding, clé, code d'association. La réponse de
+reconnaissance ne contient que nom, prénom, matricule, action, heure, site, confiance, liveness.
+Consultable : Pointage → Terminaux → « Audit ».
+
+### 14.10 Tests
+
+`tests/test_biometrics_terminals.py` (20), `tests_frontend/pointeur-borne.test.js` (10, WebCrypto
+réel), `tests_frontend/pointage-control-center.test.js` (administration des terminaux),
+`npm run test:biometric-terminal-real-e2e` (vrai serveur, vrai moteur, vrai Chrome : enrôlement
+supervisé → association → activation → ENTRÉE → SORTIE en base ; E2E hostile : JPEG sans
+terminal, session humaine, signature, rejeux, ancienne configuration, révocation ⇒ aucun
+pointage).

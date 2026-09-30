@@ -1,4 +1,4 @@
-# Checklist terrain — pointage facial (caméra Dahua 5 MP)
+# Checklist terrain — pointage facial (tablette Samsung, smartphone, caméra Dahua 5 MP)
 
 À exécuter **avant toute activation** de `BIOMETRIC_ENABLED` en production. Aucun de ces points ne
 peut être déclaré « PASS » sans la vraie caméra, sur le vrai site, avec de vraies personnes.
@@ -113,8 +113,9 @@ aucune photo, capture, vidéo ni gabarit dans ce document ou ses annexes.
 | Consentement enregistré pour chaque employé du pilote | Admissible, version du texte en vigueur, référence du document | | ☐ |
 | Enrôlement supervisé de chaque employé | Photo DRH analysée ; si capture : comparaison MATCH, ou justification écrite | | ☐ |
 | Doublons signalés | Tous revus et tranchés (Pointage → Doublons) | | ☐ |
-| Caméra du site : créée, testée, identifiants chiffrés | « Tester la caméra » OK ; `credentials_set` vrai, jamais réaffiché | | ☐ |
-| Activation de la SEULE caméra du site pilote | « Pointage facial RÉEL actif » coché sur cette caméra uniquement | | ☐ |
+| Terminal tablette : créé, associé (code à usage unique), facial **coupé** | Terminaux : « Associé », empreinte de clé, « Facial coupé » | | ☐ |
+| (Facultatif) Caméra du site : créée, testée, identifiants chiffrés | « Tester la caméra » OK ; `credentials_set` vrai, jamais réaffiché | | ☐ |
+| Activation du SEUL terminal du site pilote (après GO § 10) | « Activer le facial » sur ce terminal uniquement ; aucun autre site | | ☐ |
 | Coupure de site testée | « Couper le pointage facial du site » : plus aucun pointage facial ; QR / saisie OK | | ☐ |
 
 ### Registre des essais (métadonnées seulement)
@@ -122,3 +123,40 @@ aucune photo, capture, vidéo ni gabarit dans ce document ou ses annexes.
 | Date/heure | Essai (vrai visage / photo / écran / vidéo / replay…) | Employé (matricule) | État renvoyé | Score | Liveness | Pointage créé | Opérateur |
 |---|---|---|---|---|---|---|---|
 | | | | | | | | |
+
+## 10. Tablette Samsung — essais physiques (obligatoires avant activation)
+
+Liveness passif **non validé** à ce jour : ces essais décident du GO. Borne associée, facial
+activé **dans un environnement de test** (ou en production seulement après décision explicite,
+sur le seul terminal pilote, employés pilotes consentants). Aucune image conservée : consigner
+l'état renvoyé (écran de la borne + Audit du terminal).
+
+| # | Essai | Attendu | Résultat (état, liveness) | OK |
+|---|---|---|---|---|
+| 1 | Vrai visage, employé enrôlé, lumière de face | ENTRÉE puis (après départ/retour) SORTIE | | ☐ |
+| 2 | Même personne immobile 30 s après un pointage | aucun 2e pointage (réarmement au départ) | | ☐ |
+| 3 | Photo imprimée A4 couleur de l'employé | aucun pointage (LIVENESS REFUSÉ / refus) | | ☐ |
+| 4 | Photo affichée sur smartphone | aucun pointage | | ☐ |
+| 5 | Photo affichée sur une autre tablette | aucun pointage | | ☐ |
+| 6 | Vidéo de l'employé (smartphone / tablette) | aucun pointage | | ☐ |
+| 7 | Rejeu : même vidéo relancée plusieurs fois | aucun pointage | | ☐ |
+| 8 | Deux personnes devant la tablette | PLUSIEURS VISAGES, aucun pointage | | ☐ |
+| 9 | Faible lumière (éclairage réduit) | pointage ou refus qualité, jamais d'erreur d'identité | | ☐ |
+| 10 | Contre-jour (fenêtre derrière la personne) | idem | | ☐ |
+| 11 | Personne non enrôlée | VISAGE NON RECONNU, aucun candidat affiché | | ☐ |
+| 12 | Coupure réseau (Wi-Fi coupé) | SERVICE TEMPORAIREMENT INDISPONIBLE ; rien d'enregistré au retour | | ☐ |
+| 13 | QR Portail RH présenté à la caméra (Chrome Android) | pointage QR, même avec facial coupé | | ☐ |
+| 14 | Terminal désactivé puis révoqué depuis ATLAS | TERMINAL DÉSACTIVÉ puis TERMINAL NON AUTORISÉ, immédiatement | | ☐ |
+| 15 | Latence ressentie (présentation → confirmation) | mesurée : ____ s | | ☐ |
+
+Critère : **tout** essai 3 à 8 doit être refusé. Un seul pointage obtenu avec une photo, un écran
+ou une vidéo ⇒ NO-GO (ou calibration documentée puis nouvelle campagne complète).
+
+### 10.3 Smartphone (si des smartphones doivent être autorisés)
+
+Même tableau, sur chaque modèle de smartphone visé. Le GO tablette ne vaut pas GO smartphone.
+
+| Décision | Appareil | Signataire | Date |
+|---|---|---|---|
+| GO / NO-GO tablette : | | | |
+| GO / NO-GO smartphone : | | | |
