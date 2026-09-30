@@ -492,3 +492,14 @@ test('§36 séparation UI : le bouton Facial conserve sa vue production et Mode 
 });
 // Fin des gardes de séparation du terminal.
 
+test('revue : les deux interfaces chargent le module commun avec la même version de cache', () => {
+  // Le moteur commun a changé : une version de cache différente laisserait le centre de
+  // contrôle sur l'ancien script (deux logiques divergentes selon l'interface).
+  const version = (file) => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', ...file.split('/')), 'utf8');
+    const m = html.match(/\/static\/pointage\/test-mode\.js\?v=([^"'\s]+)/);
+    assert.ok(m, `${file} charge le module commun`);
+    return m[1];
+  };
+  assert.equal(version('pointage/index.html'), version('pointeur.html'));
+});
