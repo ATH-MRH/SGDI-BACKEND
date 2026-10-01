@@ -265,7 +265,7 @@ def test_consent_inactive_employee_and_photo_changed_are_rechecked_at_confirmati
     _photo(db, emp, face(who), noise=2)                                                     # photo remplacée entre-temps
     assert _confirm(client, auth_headers, emp, token).json()["detail"]["code"] == "PHOTO_CHANGED"
     token = _preview(client, auth_headers, emp, {}).json()["token"]
-    emp.status = "suspendu"; db.commit()
+    emp.status = "sortant"; db.commit()                                                     # sortie : refus
     assert _confirm(client, auth_headers, emp, token).json()["detail"]["code"] == "EMPLOYEE_INACTIVE"
     assert _active(db, emp) == []
 
@@ -385,3 +385,20 @@ class _NoCooldown:
 
     def __getattr__(self, name):
         return 0 if name == "cooldown_seconds" else getattr(self._cfg, name)
+
+
+def test_suspended_employee_can_be_enrolled_but_left_employees_cannot(client, auth_headers, db):
+    """Règle métier : un salarié SUSPENDU reste admissible à l'enrôlement (aperçu ET confirmation) ;
+    un salarié sorti / licencié / démissionnaire / archivé / inactif ne l'est pas."""
+    site = _site(db)
+    who = f"SUSP-{_tag()}"
+    emp = _employee(db, site, status="suspendu")
+    _photo(db, emp, face(who)); _consent(client, auth_headers, emp)
+    body = _preview(client, auth_headers, emp, {}).json()
+    assert body.get("token"), body
+    assert _confirm(client, auth_headers, emp, body["token"]).json()["status"] == "ACTIVE"
+    for status in ("sortant", "licencie", "demissionne", "archive", "inactif"):
+        other = _employee(db, site, status=status)
+        _photo(db, other, face(f"{status}-{_tag()}")); _consent(client, auth_headers, other)
+        r = _preview(client, auth_headers, other, {})
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "EMPLOYEE_INACTIVE", status

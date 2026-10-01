@@ -266,6 +266,9 @@ test('bouton Filtres : ouvre / ferme le panneau (clic, Échap), options issues d
   assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-site option')).map((o) => o.textContent), ['Tous les sites autorisés', 'HAMOUL 01']);
   assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-function option')).map((o) => o.textContent), ['Toutes', 'AGENT', 'CHEF DE POSTE']);
   assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-enrollment option')).map((o) => o.value), ['', 'none', 'active', 'review', 'inactive']);
+  // État RH : population admissible = actifs et suspendus (jamais « inactifs »).
+  assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-status option')).map((o) => [o.value, o.textContent]),
+    [['', 'Tous (actifs et suspendus)'], ['actif', 'Actifs'], ['suspendu', 'Suspendus']]);
   t.d.getElementById('en-panel').dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(t.d.getElementById('en-panel').classList.contains('hidden'), true);
   assert.equal(btn.getAttribute('aria-expanded'), 'false');

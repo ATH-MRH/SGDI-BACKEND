@@ -165,8 +165,8 @@ def test_filters_combine_with_text_and_stay_inside_the_scope(client, db, tmp_pat
     site, other = _site(db), _site(db)
     tag = _tag()
     a = _emp(db, site, last=f"FLT{tag}", first="Actif")
-    b = _emp(db, site, last=f"FLT{tag}", first="Inactif")
-    b.status = "inactif"; b.position = "CARISTE"
+    b = _emp(db, site, last=f"FLT{tag}", first="Suspendu")
+    b.status = "suspendu"; b.position = "CARISTE"
     c = _emp(db, site, last=f"FLT{tag}", first="Enrole")
     hidden = _emp(db, other, last=f"FLT{tag}", first="AutreSite")
     db.add(BiometricConsent(employee_id=a.id, status="contract_confirmed", source="EMPLOYMENT_CONTRACT", proof_reference="C",
@@ -178,7 +178,7 @@ def test_filters_combine_with_text_and_stay_inside_the_scope(client, db, tmp_pat
     q = f"flt{tag}"
     assert _codes(client, h, q=q) == {a.code, b.code, c.code}                       # jamais hidden
     assert _codes(client, h, q=q, status="actif") == {a.code, c.code}
-    assert _codes(client, h, q=q, status="inactif") == {b.code}
+    assert _codes(client, h, q=q, status="suspendu") == {b.code}
     assert _codes(client, h, q=q, function="CARISTE") == {b.code}
     assert _codes(client, h, q=q, consent="admissible") == {a.code}
     assert _codes(client, h, q=q, consent="non_admissible") == {b.code, c.code}
@@ -187,8 +187,8 @@ def test_filters_combine_with_text_and_stay_inside_the_scope(client, db, tmp_pat
     assert _codes(client, h, q=q, photo="available") == {a.code}
     assert _codes(client, h, q=q, photo="missing", status="actif") == {c.code}
     assert _codes(client, h, q=q, site_id=site.id, consent="admissible", photo="available", enrollment="none") == {a.code}
-    assert hidden.code not in _codes(client, h, q=q, status="inactif", consent="non_admissible")
-    for bad in ({"status": "tous"}, {"consent": "oui"}, {"enrollment": "x"}, {"photo": "1"}):
+    assert hidden.code not in _codes(client, h, q=q, status="suspendu", consent="non_admissible")
+    for bad in ({"status": "inactif"}, {"status": "tous"}, {"consent": "oui"}, {"enrollment": "x"}, {"photo": "1"}):
         assert client.get(URL, headers=h, params={"q": q, **bad}).status_code == 422
     assert client.get(URL, headers=h, params={"q": q, "site_id": other.id}).status_code == 404     # site hors périmètre
 
@@ -205,3 +205,53 @@ def test_facets_only_list_the_scope(client, db):
     assert a.position in facets["functions"] and o.position not in facets["functions"] and f.position not in facets["functions"]
     assert client.get(URL + "/facets", headers=h, params={"site_id": other.id}).status_code == 404
     assert client.get(URL + "/facets", headers=_user(client, db, sites=[site.id], features=())).status_code == 403
+
+
+
+# ── Règle métier : statut RH ACTIF ou SUSPENDU, toujours dans le périmètre ────────────────
+def _emp_status(db, site, *, status, last, code=None, extra=None):
+    emp = Employee(code=code or f"ST{_tag()}", first_name="Statut", last_name=last, society=SOC, status=status, extra=extra or {})
+    db.add(emp); db.flush()
+    db.add(Assignment(employee_id=emp.id, site_id=site.id, group_code="A", start_date=date(2026, 1, 1), active=1))
+    db.commit()
+    return emp
+
+
+def test_active_and_suspended_are_searchable_only_inside_the_scope(client, db):
+    site, outside = _site(db), _site(db)
+    tag = _tag()
+    act = _emp_status(db, site, status="actif", last=f"RH{tag}")
+    sus = _emp_status(db, site, status="suspendu", last=f"RH{tag}")
+    sus_variant = _emp_status(db, site, status=" Suspendu ", last=f"RH{tag}")            # variante historique
+    act_out = _emp_status(db, outside, status="actif", last=f"RH{tag}")
+    sus_out = _emp_status(db, outside, status="suspendu", last=f"RH{tag}")
+    h = _user(client, db, sites=[site.id])
+    assert _codes(client, h, q=f"rh{tag}") == {act.code, sus.code, sus_variant.code}     # hors périmètre : jamais
+    assert _codes(client, h, q=f"rh{tag}", status="actif") == {act.code}
+    assert _codes(client, h, q=f"rh{tag}", status="suspendu") == {sus.code, sus_variant.code}
+    assert act_out.code not in _codes(client, h, q=act_out.code) and sus_out.code not in _codes(client, h, q=sus_out.code)
+    rows = {r["matricule"]: r["statut"] for r in client.get(URL, headers=h, params={"q": f"rh{tag}"}).json()}
+    assert rows[sus.code] == "suspendu"                                                    # statut affiché tel quel
+
+
+def test_left_or_archived_employees_are_not_admissible(client, db):
+    site = _site(db)
+    tag = _tag()
+    ok = _emp_status(db, site, status="actif", last=f"OUT{tag}")
+    for status in ("sortant", "demissionne", "licencie", "archive", "inactif", "blacklist", "absent", "conge", "maladie"):
+        _emp_status(db, site, status=status, last=f"OUT{tag}")
+    h = _user(client, db, sites=[site.id])
+    assert _codes(client, h, q=f"out{tag}") == {ok.code}
+
+
+def test_exact_and_historical_matricule_for_active_and_suspended(client, db):
+    site = _site(db)
+    n = uuid.uuid4().int % 10**5
+    exact_act = _emp_status(db, site, status="actif", last="EXACT", code=f"X{n:05d}A")
+    exact_sus = _emp_status(db, site, status="suspendu", last="EXACT", code=f"X{n:05d}S")
+    histo_act = _emp_status(db, site, status="actif", last="HISTO", extra={"matricule": f"H{n:05d}A"})
+    histo_sus = _emp_status(db, site, status="suspendu", last="HISTO", extra={"matricule": f"H{n:05d}S"})
+    h = _user(client, db, sites=[site.id])
+    for term, emp in ((exact_act.code, exact_act), (exact_sus.code, exact_sus), (f"H{n:05d}A", histo_act), (f"H{n:05d}S", histo_sus)):
+        rows = client.get(URL, headers=h, params={"q": term.lower()}).json()
+        assert rows and rows[0]["employee_id"] == emp.id, term

@@ -21,6 +21,7 @@ from app.db.session import SessionLocal
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, Site
+from app.modules.biometrics.service import enrollment_status_block
 from app.modules.ops.routes import _allowed_assignment_site_ids, _site_society
 
 LIMIT = 25
@@ -51,6 +52,8 @@ def diagnose(db, user: User, matricule: str) -> None:
         extra = emp.extra if isinstance(emp.extra, dict) else {}
         print(f"EXISTE DRH : OUI · id={emp.id} · code={emp.code!r} · matricule historique={extra.get('matricule')!r}")
         print(f"  {emp.last_name} {emp.first_name} · statut={emp.status!r} · société={emp.society!r} · fonction={emp.position!r}")
+        status_block = enrollment_status_block(emp)
+        print(f"  STATUT RH : {'admissible (actif ou suspendu)' if not status_block else 'NON admissible — ' + status_block}")
         rows = db.execute(select(Assignment, Site).join(Site, Site.id == Assignment.site_id, isouter=True)
                           .where(Assignment.employee_id == emp.id).order_by(Assignment.id)).all()
         if not rows:
@@ -86,7 +89,7 @@ def diagnose(db, user: User, matricule: str) -> None:
                   "RÈGLE ACTUELLE : correspondance exacte classée en premier")
         elif pos is not None:
             print(f"  ANCIENNE RÈGLE : trouvé (rang {pos + 1}/{len(old)})")
-        print("  RÈGLE ACTUELLE : visible dans le périmètre du compte")
+        print("  RÈGLE ACTUELLE : " + ("ÉLIMINÉ PAR LE STATUT RH (ni actif ni suspendu)" if status_block else "visible dans le périmètre du compte"))
 
 
 def main() -> None:

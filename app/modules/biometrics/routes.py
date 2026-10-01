@@ -156,7 +156,7 @@ def _photo_url(employee: Employee) -> str | None:
 # Recherche des employés à enrôler — bornée, filtrée et TOUJOURS limitée au périmètre côté serveur.
 SEARCH_LIMIT = 25
 SEARCH_FILTERS: dict[str, frozenset[str]] = {
-    "status": frozenset({"actif", "inactif"}),
+    "status": frozenset({"actif", "suspendu"}),
     "consent": frozenset({"admissible", "non_admissible"}),
     "enrollment": frozenset({"none", "active", "review", "inactive"}),
     "photo": frozenset({"available", "missing"}),
@@ -204,7 +204,10 @@ def search_employees(q: str = "", site_id: int | None = None, function: str | No
     enrollment, photo = _search_filter("enrollment", enrollment), _search_filter("photo", photo)
     function = (function or "").strip()[:120] or None
     scope = _scoped_assignments(db, user, site_id).subquery()
-    query = select(Employee).where(Employee.id.in_(select(scope.c.employee_id)))
+    # Population admissible : statut RH ACTIF ou SUSPENDU (service.ENROLLMENT_STATUSES) —
+    # jamais les sortants, licenciés, démissionnaires, archivés, inactifs.
+    status_key = func.lower(func.trim(func.coalesce(Employee.status, "")))
+    query = select(Employee).where(Employee.id.in_(select(scope.c.employee_id)), status_key.in_(service.ENROLLMENT_STATUSES))
     term = q.strip()[:80]
     extra_matricule = Employee.extra["matricule"].as_string()
     order = [Employee.last_name, Employee.first_name, Employee.id]
@@ -218,8 +221,7 @@ def search_employees(q: str = "", site_id: int | None = None, function: str | No
     if function:
         query = query.where(Employee.position == function)
     if status:
-        is_active = func.lower(func.trim(func.coalesce(Employee.status, ""))) == "actif"
-        query = query.where(is_active if status == "actif" else not_(is_active))
+        query = query.where(status_key.in_(service.ENROLLMENT_ACTIVE_STATUSES if status == "actif" else service.ENROLLMENT_SUSPENDED_STATUSES))
     if consent:
         latest = select(BiometricConsent.employee_id, func.max(BiometricConsent.id).label("cid")) \
             .group_by(BiometricConsent.employee_id).subquery()
@@ -271,7 +273,7 @@ def search_facets(site_id: int | None = None, db: Session = Depends(get_db), use
     functions = db.execute(select(Employee.position).where(Employee.id.in_(select(scope.c.employee_id)), Employee.position.is_not(None),
                                                            Employee.position != "").distinct().order_by(Employee.position).limit(200)).scalars().all()
     return {"sites": [{"id": i, "name": n} for i, n in site_rows], "functions": list(functions),
-            "statuses": ["actif", "inactif"], "consent": sorted(SEARCH_FILTERS["consent"]),
+            "statuses": ["actif", "suspendu"], "consent": sorted(SEARCH_FILTERS["consent"]),
             "enrollment": ["none", "active", "review", "inactive"], "photo": ["available", "missing"]}
 
 

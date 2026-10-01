@@ -395,18 +395,30 @@ def _employee_site_id(db: Session, employee: Employee) -> int | None:
     return row
 
 
+# Statut RH admissible à l'ENRÔLEMENT (recherche, fiche, aperçu, confirmation) : ACTIF ou
+# SUSPENDU — un salarié suspendu reste salarié et peut être enrôlé. Distinct du POINTAGE, qui
+# refuse toujours un suspendu ou une mise à pied (_employee_portal_block_reason, inchangé).
+# Exclus : sortant, démissionnaire, licencié, archivé, inactif, blacklisté, absences.
+ENROLLMENT_ACTIVE_STATUSES = ("actif", "active")
+ENROLLMENT_SUSPENDED_STATUSES = ("suspendu", "suspendue", "suspended")
+ENROLLMENT_STATUSES = ENROLLMENT_ACTIVE_STATUSES + ENROLLMENT_SUSPENDED_STATUSES
+
+
+def enrollment_status_block(employee: Employee) -> str:
+    status = " ".join(str(getattr(employee, "status", "") or "").strip().lower().split())
+    return "" if status in ENROLLMENT_STATUSES else f"statut RH « {employee.status or 'inconnu'} » non admissible à l'enrôlement"
+
+
 def enrollment_preview(db: Session, *, employee: Employee, actor: Any, frames: list[bytes] | None = None,
                        camera: Camera | None = None) -> dict[str, Any]:
     """Étape 1 — AUCUNE écriture de gabarit. Analyse la photo DRH (référence) et, si une
     caméra est utilisée, la capture (liveness exigé) ; comparaison 1:1 capture ↔ photo ;
     recherche de doublon. Renvoie un jeton chiffré (5 min, lié à l'opérateur) à confirmer."""
-    from app.modules.portal.routes import _employee_portal_block_reason
-
     engine = ensure_enrollment_enabled()
     cfg = active_config(db)
     if not consent_admissible(db, employee.id):
         raise HTTPException(409, detail={"code": "CONSENT_REQUIRED", "message": "Consentement biométrique non admissible : enrôlement impossible"})
-    blocked = _employee_portal_block_reason(employee)
+    blocked = enrollment_status_block(employee)
     if blocked:
         raise HTTPException(409, detail={"code": "EMPLOYEE_INACTIVE", "message": f"Employé non actif : {blocked}"})
     path = _employee_photo_path(employee)
@@ -463,8 +475,6 @@ def enrollment_confirm(db: Session, *, employee: Employee, actor: Any, token: st
     """Étape 2 — confirmation EXPLICITE de l'opérateur qui a vu l'aperçu. Recontrôle tout
     (consentement, statut, comparaison) : un NO_MATCH n'est jamais enrôlé ; un résultat
     incertain exige une justification écrite, tracée."""
-    from app.modules.portal.routes import _employee_portal_block_reason
-
     ensure_enrollment_enabled()
     data = crypto.unseal(token, ENROLLMENT_TTL_SECONDS)
     if data.get("employee_id") != employee.id or data.get("actor_id") != getattr(actor, "id", None):
@@ -477,7 +487,7 @@ def enrollment_confirm(db: Session, *, employee: Employee, actor: Any, token: st
         raise HTTPException(422, detail={"code": "JUSTIFICATION_REQUIRED", "message": "Résultat incertain : justification écrite obligatoire (10 caractères minimum)"})
     if not consent_admissible(db, employee.id):
         raise HTTPException(409, detail={"code": "CONSENT_REQUIRED", "message": "Consentement biométrique non admissible : enrôlement impossible"})
-    blocked = _employee_portal_block_reason(employee)
+    blocked = enrollment_status_block(employee)
     if blocked:
         raise HTTPException(409, detail={"code": "EMPLOYEE_INACTIVE", "message": f"Employé non actif : {blocked}"})
     if data.get("source") == "EMPLOYEE_PHOTO" and (data.get("quality") or {}).get("photo_sha256") != photo_fingerprint(employee):
