@@ -153,43 +153,126 @@ def _photo_url(employee: Employee) -> str | None:
     return f"{PUBLIC_PHOTO_PREFIX}/{path.name}" if path else None
 
 
-@router.get("/employees")
-def search_employees(q: str = "", site_id: int | None = None, db: Session = Depends(get_db),
-                     user: User = Depends(current_user)) -> list[dict[str, Any]]:
-    """Recherche d'employés à enrôler (matricule, nom, prénom), limitée aux sites du compte."""
-    require_feature(db, user, "biometric_status", "read")
+# Recherche des employés à enrôler — bornée, filtrée et TOUJOURS limitée au périmètre côté serveur.
+SEARCH_LIMIT = 25
+SEARCH_FILTERS: dict[str, frozenset[str]] = {
+    "status": frozenset({"actif", "inactif"}),
+    "consent": frozenset({"admissible", "non_admissible"}),
+    "enrollment": frozenset({"none", "active", "review", "inactive"}),
+    "photo": frozenset({"available", "missing"}),
+}
+
+
+def _search_filter(name: str, value: str | None) -> str | None:
+    value = (value or "").strip().lower() or None
+    if value is not None and value not in SEARCH_FILTERS[name]:
+        raise HTTPException(422, detail=f"Filtre {name} invalide")
+    return value
+
+
+def _scoped_assignments(db: Session, user: User, site_id: int | None):
+    """Affectations ACTIVES dans le périmètre du compte. Même définition que la DRH
+    (sql_bridge._live_assignment_map) : active et non terminée — une affectation dont la date
+    de début est à venir compte (l'employé figure déjà sur ce site dans la DRH)."""
+    from sqlalchemy import or_
+
     today = attendance_core_now().date()
     allowed = _allowed_assignment_site_ids(db, user)
     stmt = select(Assignment.employee_id, Assignment.site_id).where(
-        Assignment.active == 1, Assignment.start_date <= today,
-        (Assignment.end_date.is_(None)) | (Assignment.end_date >= today))
+        Assignment.active == 1, or_(Assignment.end_date.is_(None), Assignment.end_date >= today))
     if site_id is not None:
         if allowed is not None and site_id not in set(allowed):
             raise HTTPException(404, detail="Site introuvable")
         stmt = stmt.where(Assignment.site_id == site_id)
     elif allowed is not None:
         stmt = stmt.where(Assignment.site_id.in_(allowed or [-1]))
-    site_of = {emp: site for emp, site in db.execute(stmt).all()}
-    if not site_of:
-        return []
-    query = select(Employee).where(Employee.id.in_(site_of))
-    term = q.strip()
+    return stmt
+
+
+@router.get("/employees")
+def search_employees(q: str = "", site_id: int | None = None, function: str | None = None, status: str | None = None,
+                     consent: str | None = None, enrollment: str | None = None, photo: str | None = None,
+                     db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    """Recherche d'employés à enrôler (matricule — fiche ou matricule DRH historique —, nom,
+    prénom), limitée aux sites du compte. Filtres optionnels combinables, appliqués en SQL après
+    le périmètre ; correspondance EXACTE du matricule classée en premier (jamais écartée par la
+    limite de 25)."""
+    from sqlalchemy import case, exists, func, not_, or_
+
+    require_feature(db, user, "biometric_status", "read")
+    status, consent = _search_filter("status", status), _search_filter("consent", consent)
+    enrollment, photo = _search_filter("enrollment", enrollment), _search_filter("photo", photo)
+    function = (function or "").strip()[:120] or None
+    scope = _scoped_assignments(db, user, site_id).subquery()
+    query = select(Employee).where(Employee.id.in_(select(scope.c.employee_id)))
+    term = q.strip()[:80]
+    extra_matricule = Employee.extra["matricule"].as_string()
+    order = [Employee.last_name, Employee.first_name, Employee.id]
     if term:
-        like = f"%{term}%"
-        query = query.where(Employee.code.ilike(like) | Employee.last_name.ilike(like) | Employee.first_name.ilike(like))
-    employees = db.execute(query.order_by(Employee.last_name, Employee.first_name).limit(25)).scalars().all()
+        like, upper = f"%{term}%", term.upper()
+        query = query.where(or_(Employee.code.ilike(like), Employee.last_name.ilike(like), Employee.first_name.ilike(like),
+                                extra_matricule.ilike(like)))
+        rank = case((func.upper(Employee.code) == upper, 0), (func.upper(extra_matricule) == upper, 0),
+                    (func.upper(Employee.code).like(f"{upper}%"), 1), (func.upper(extra_matricule).like(f"{upper}%"), 1), else_=2)
+        order = [rank, *order]
+    if function:
+        query = query.where(Employee.position == function)
+    if status:
+        is_active = func.lower(func.trim(func.coalesce(Employee.status, ""))) == "actif"
+        query = query.where(is_active if status == "actif" else not_(is_active))
+    if consent:
+        latest = select(BiometricConsent.employee_id, func.max(BiometricConsent.id).label("cid")) \
+            .group_by(BiometricConsent.employee_id).subquery()
+        admissible_ids = select(latest.c.employee_id).join(BiometricConsent, BiometricConsent.id == latest.c.cid).where(
+            BiometricConsent.status.in_(("contract_confirmed", "explicit_confirmed")),
+            BiometricConsent.notice_version == service.NOTICE_VERSION)
+        query = query.where(Employee.id.in_(admissible_ids) if consent == "admissible" else Employee.id.not_in(admissible_ids))
+    if enrollment:
+        def has(*states):
+            return exists().where(BiometricTemplate.employee_id == Employee.id, BiometricTemplate.status.in_(states))
+        enrolled = has("ACTIVE", TEMPLATE_PENDING_REVIEW)
+        query = query.where({"active": has("ACTIVE"), "review": has(TEMPLATE_PENDING_REVIEW) & not_(has("ACTIVE")),
+                             "none": not_(enrolled), "inactive": not_(enrolled) & has("INACTIVE", "REJECTED")}[enrollment])
+    query = query.order_by(*order)
+    if photo:
+        # Présence RÉELLE du fichier (comme l'affichage) : parcours borné, arrêt à 25.
+        employees = []
+        for e in db.execute(query.execution_options(yield_per=200)).scalars():
+            if (service._employee_photo_path(e) is not None) == (photo == "available"):
+                employees.append(e)
+                if len(employees) >= SEARCH_LIMIT:
+                    break
+    else:
+        employees = db.execute(query.limit(SEARCH_LIMIT)).scalars().all()
+    if not employees:
+        return []
     ids = [e.id for e in employees]
+    site_of = {emp: site for emp, site in db.execute(select(scope.c.employee_id, scope.c.site_id)
+                                                     .where(scope.c.employee_id.in_(ids))).all()}
     sites = {s.id: s.name for s in db.execute(select(Site).where(Site.id.in_(set(site_of.values())))).scalars()}
-    templates = db.execute(select(BiometricTemplate.employee_id, BiometricTemplate.status).where(BiometricTemplate.employee_id.in_(ids or [-1]))).all()
+    templates = db.execute(select(BiometricTemplate.employee_id, BiometricTemplate.status).where(BiometricTemplate.employee_id.in_(ids))).all()
     out = []
     for e in employees:
         statuses = {st for emp, st in templates if emp == e.id}
         out.append({"employee_id": e.id, "matricule": e.code, "nom": e.last_name, "prenom": e.first_name, "fonction": e.position,
-                    "site_id": site_of[e.id], "site": sites.get(site_of[e.id]), "statut": e.status,
+                    "site_id": site_of.get(e.id), "site": sites.get(site_of.get(e.id)), "statut": e.status,
                     "consent_admissible": service.consent_admissible(db, e.id),
                     "enrollment": "ACTIVE" if "ACTIVE" in statuses else ("PENDING_REVIEW" if TEMPLATE_PENDING_REVIEW in statuses else "NONE"),
                     "photo_available": service._employee_photo_path(e) is not None})
     return out
+
+
+@router.get("/employees/facets")
+def search_facets(site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Valeurs proposées par les filtres : sites et fonctions PRÉSENTS dans le périmètre."""
+    require_feature(db, user, "biometric_status", "read")
+    scope = _scoped_assignments(db, user, site_id).subquery()
+    site_rows = db.execute(select(Site.id, Site.name).where(Site.id.in_(select(scope.c.site_id))).order_by(Site.name)).all()
+    functions = db.execute(select(Employee.position).where(Employee.id.in_(select(scope.c.employee_id)), Employee.position.is_not(None),
+                                                           Employee.position != "").distinct().order_by(Employee.position).limit(200)).scalars().all()
+    return {"sites": [{"id": i, "name": n} for i, n in site_rows], "functions": list(functions),
+            "statuses": ["actif", "inactif"], "consent": sorted(SEARCH_FILTERS["consent"]),
+            "enrollment": ["none", "active", "review", "inactive"], "photo": ["available", "missing"]}
 
 
 def attendance_core_now():

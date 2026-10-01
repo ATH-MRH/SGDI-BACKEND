@@ -18,10 +18,15 @@ const PEOPLE = [
   { employee_id: 3, matricule: 'OUA003', nom: 'OUALI', prenom: 'Amine', fonction: 'AGENT', site_id: 3, site: 'HAMOUL 01', statut: 'actif', consent_admissible: true, enrollment: 'PENDING_REVIEW', photo_available: true },
 ];
 const OUTSIDE = { employee_id: 9, matricule: 'EXT001', nom: 'ABDOU', prenom: 'Hors', site_id: 8, site: 'AUTRE SITE' };
-const serverSearch = (q) => {
+const serverSearch = (q, params = {}) => {
   const t = (q || '').trim().toLowerCase();
-  return PEOPLE.filter((p) => !t || [p.matricule, p.nom, p.prenom].some((v) => v.toLowerCase().includes(t)));
+  return PEOPLE.filter((p) => !t || [p.matricule, p.nom, p.prenom].some((v) => v.toLowerCase().includes(t)))
+    .filter((p) => !params.function || p.fonction === params.function)
+    .filter((p) => !params.consent || (params.consent === 'admissible') === p.consent_admissible)
+    .filter((p) => !params.photo || (params.photo === 'available') === p.photo_available)
+    .filter((p) => !params.enrollment || ({ none: 'NONE', active: 'ACTIVE', review: 'PENDING_REVIEW' })[params.enrollment] === p.enrollment);
 };
+const FACETS = { sites: [{ id: 3, name: 'HAMOUL 01' }], functions: ['AGENT', 'CHEF DE POSTE'] };
 
 function boot({ delays = {}, fail = null, ignoreAbort = false } = {}) {
   const searches = [];        // requêtes de recherche réellement envoyées
@@ -39,6 +44,7 @@ function boot({ delays = {}, fail = null, ignoreAbort = false } = {}) {
         const ok = (data) => ({ ok: true, status: 200, text: async () => JSON.stringify(data) });
         if (u.pathname === '/api/auth/me') return Promise.resolve(ok({ username: 'PTG01', full_name: 'POINTEUR 01' }));
         if (u.pathname === '/api/attendance/sites') return Promise.resolve(ok([{ id: 3, name: 'HAMOUL 01', society: 'IRON GLOBAL SOLUTION' }]));
+        if (u.pathname === '/api/biometrics/employees/facets') return Promise.resolve(ok(FACETS));
         if (u.pathname !== '/api/biometrics/employees') return Promise.resolve(ok({}));
         const q = u.searchParams.get('q') || '';
         const call = { q, params: Object.fromEntries(u.searchParams), signal: opts.signal };
@@ -52,7 +58,7 @@ function boot({ delays = {}, fail = null, ignoreAbort = false } = {}) {
           setTimeout(() => {
             if (opts.signal && opts.signal.aborted && !ignoreAbort) return;
             if (fail && fail(q)) return resolve({ ok: false, status: 500, text: async () => JSON.stringify({ detail: 'Erreur serveur' }) });
-            resolve(ok(serverSearch(q)));
+            resolve(ok(serverSearch(q, Object.fromEntries(u.searchParams))));
           }, delays[q] != null ? delays[q] : 5);
         });
       };
@@ -64,7 +70,8 @@ function boot({ delays = {}, fail = null, ignoreAbort = false } = {}) {
   const key = (k) => input().dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
   const rows = () => Array.from(d.querySelectorAll('#en-rows tr')).map((tr) => tr.textContent.replace(/\s+/g, ' ').trim());
   const ready = async () => { for (let i = 0; i < 50 && !searches.length; i++) await sleep(10); await sleep(30); };
-  return { dom, w, d, searches, aborted, errors, input, type, key, rows, ready };
+  const pick = (id, value) => { const sel = d.getElementById(id); sel.value = value; sel.dispatchEvent(new w.Event('change', { bubbles: true })); };
+  return { dom, w, d, searches, aborted, errors, input, type, key, rows, ready, pick };
 }
 
 test('barre de recherche : pleine largeur, icône, × accessible, plus aucun bouton « Rechercher »', async () => {
@@ -220,12 +227,105 @@ test('périmètre : seul le serveur filtre — la page n\'affiche que ses résul
   assert.match(shown, /ABDELLI/);
   assert.doesNotMatch(shown, new RegExp(OUTSIDE.matricule));
   // Une seule source : l'endpoint borné par le serveur, avec le texte saisi (et le site filtré).
-  assert.ok(t.searches.every((s) => Object.keys(s.params).every((k) => ['q', 'site_id'].includes(k))));
+  assert.ok(t.searches.every((s) => Object.keys(s.params).every((k) => ['q', 'site_id', 'function', 'status', 'consent', 'enrollment', 'photo'].includes(k))));
   t.d.getElementById('f-site').value = '3';
   t.d.getElementById('f-site').dispatchEvent(new t.w.Event('change'));
   await sleep(60);
   assert.equal(t.searches.at(-1).params.site_id, '3');
   // Ouvrir conserve son comportement (fiche biométrique de l'employé choisi).
   assert.ok(t.d.querySelector('[data-en="1"]'));
+  t.dom.window.close();
+});
+
+// ── Barre unique + filtres ─────────────────────────────────────────────────────────────
+test('barre : UN seul cadre — le champ n\'a ni bordure, ni ombre, ni contour propre (Design System neutralisé)', async () => {
+  const t = boot();
+  await t.ready();
+  const bar = t.d.querySelector('.en-searchbar');
+  assert.deepEqual(Array.from(bar.children).map((c) => c.id || c.className), ['sr-only', 'en-icon', 'en-q', 'en-spinner', 'en-filters', 'en-clear']);
+  const style = t.w.getComputedStyle(t.input());
+  assert.equal(style.borderTopWidth === '0px' || style.borderTopStyle === 'none' || style.borderStyle === 'none' || /^0/.test(style.borderWidth || '0'), true);
+  assert.equal(style.boxShadow === 'none' || style.boxShadow === '', true);
+  const css = Array.from(t.d.querySelectorAll('style')).map((x) => x.textContent).join('');
+  // Les règles du Design System (body.atlas-ui … input[type=search], :focus-visible !important) sont surchargées.
+  assert.match(css, /body\.atlas-ui \.en-searchbar input#en-q:focus-visible/);
+  assert.match(css, /outline:none!important;box-shadow:none!important;background:transparent!important/);
+  assert.match(css, /\.en-searchbar:focus-within\{border-color/);              // focus porté par le conteneur
+  t.dom.window.close();
+});
+
+test('bouton Filtres : ouvre / ferme le panneau (clic, Échap), options issues du périmètre serveur', async () => {
+  const t = boot();
+  await t.ready();
+  const btn = t.d.getElementById('en-filters');
+  assert.match(btn.textContent, /Filtres/);
+  assert.equal(btn.getAttribute('aria-expanded'), 'false');
+  btn.click();
+  assert.equal(t.d.getElementById('en-panel').classList.contains('hidden'), false);
+  assert.equal(btn.getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-site option')).map((o) => o.textContent), ['Tous les sites autorisés', 'HAMOUL 01']);
+  assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-function option')).map((o) => o.textContent), ['Toutes', 'AGENT', 'CHEF DE POSTE']);
+  assert.deepEqual(Array.from(t.d.querySelectorAll('#en-f-enrollment option')).map((o) => o.value), ['', 'none', 'active', 'review', 'inactive']);
+  t.d.getElementById('en-panel').dispatchEvent(new t.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(t.d.getElementById('en-panel').classList.contains('hidden'), true);
+  assert.equal(btn.getAttribute('aria-expanded'), 'false');
+  t.dom.window.close();
+});
+
+test('chaque filtre est envoyé au serveur, combiné au texte, et relance immédiatement la recherche', async () => {
+  const t = boot();
+  await t.ready();
+  t.type('a'); await sleep(DEBOUNCE + 60);
+  const cases = [['en-f-site', 'site_id', '3'], ['en-f-function', 'function', 'AGENT'], ['en-f-status', 'status', 'actif'],
+    ['en-f-consent', 'consent', 'admissible'], ['en-f-enrollment', 'enrollment', 'none'], ['en-f-photo', 'photo', 'available']];
+  for (const [id, param, value] of cases) {
+    const before = t.searches.length;
+    t.pick(id, value);
+    await sleep(30);                                            // immédiat, sans attendre le debounce
+    assert.equal(t.searches.length, before + 1, id);
+    assert.equal(t.searches.at(-1).params[param], value);
+    assert.equal(t.searches.at(-1).q, 'a');                     // texte conservé
+  }
+  // Intersection renvoyée par le serveur : AGENT + admissible + non enrôlé + photo disponible.
+  assert.deepEqual(t.rows().map((r) => r.split(' ')[0]), ['ABDELLI']);
+  assert.equal(t.d.getElementById('en-filter-count').textContent, '6');
+  t.dom.window.close();
+});
+
+test('chips : × retire un seul filtre, « Tout effacer » les retire tous ; message dédié sans résultat', async () => {
+  const t = boot();
+  await t.ready();
+  t.pick('en-f-photo', 'missing');
+  t.pick('en-f-consent', 'admissible');
+  await sleep(40);
+  assert.deepEqual(t.rows(), ['Aucun employé ne correspond à cette recherche et aux filtres sélectionnés.']);
+  const chips = () => Array.from(t.d.querySelectorAll('.en-chip > span')).map((c) => c.textContent);
+  assert.deepEqual(chips(), ['Consentement : Admissible', 'Photo : Absente']);
+  t.d.querySelector('[data-chip="en-f-photo"]').click();
+  await sleep(40);
+  assert.deepEqual(chips(), ['Consentement : Admissible']);
+  assert.equal(t.d.getElementById('en-f-consent').value, 'admissible');
+  assert.equal(t.searches.at(-1).params.photo, undefined);
+  assert.deepEqual(t.rows().map((r) => r.split(' ')[0]), ['ABDELLI', 'OUALI']);
+  t.pick('en-f-function', 'AGENT');
+  await sleep(40);
+  t.d.getElementById('en-clear-all').click();
+  await sleep(40);
+  assert.deepEqual(chips(), []);
+  assert.ok(t.d.getElementById('en-chips').classList.contains('hidden'));
+  assert.deepEqual(Object.keys(t.searches.at(-1).params), []);
+  assert.equal(t.rows().length, 3);
+  t.dom.window.close();
+});
+
+test('changement de filtre pendant une recherche : la précédente est annulée et sa réponse ignorée', async () => {
+  const t = boot({ delays: { lent: 400 }, ignoreAbort: true });
+  await t.ready();
+  t.type('lent'); t.key('Enter');
+  await sleep(20);
+  t.type(''); t.pick('en-f-enrollment', 'active');
+  await sleep(500);
+  assert.deepEqual(t.rows().map((r) => r.split(' ')[0]), ['BENALI']);
+  assert.equal(t.d.getElementById('en-state').textContent, '');
   t.dom.window.close();
 });

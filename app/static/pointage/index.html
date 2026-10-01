@@ -67,15 +67,27 @@ tr:hover td{background:#fafcff}
 .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .empty{padding:36px;text-align:center;color:var(--muted)}
 .state{padding:16px;border-radius:12px;margin:12px;font-weight:700}
-.en-searchbar{position:relative;display:flex;align-items:center;margin:12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
+.en-searchbar{position:relative;display:flex;align-items:center;gap:2px;margin:12px 12px 6px;height:46px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
 .en-searchbar:focus-within{border-color:var(--navy);box-shadow:0 0 0 3px rgba(4,57,112,.15)}
-.en-searchbar .en-icon{flex:0 0 auto;padding:0 4px 0 13px;color:#64748b;font-size:15px}
-.en-searchbar input,.en-searchbar input:focus{flex:1 1 auto;min-width:0;width:100%;border:0;border-radius:0;outline:0;box-shadow:none;background:transparent;height:46px;padding:0 8px;font-size:16px}
-.en-searchbar input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
-.en-spinner{flex:0 0 auto;width:16px;height:16px;margin-right:6px;border:2px solid #cbd5e1;border-top-color:var(--navy);border-radius:50%;animation:en-spin .8s linear infinite}
+.en-searchbar .en-icon{flex:0 0 auto;padding:0 2px 0 13px;color:#64748b;font-size:15px}
+/* Le focus est porté par la BARRE (:focus-within) : aucun cadre propre au champ, y compris
+   ceux du Design System (.atlas-ui … input[type=search] et :focus-visible !important). */
+body.atlas-ui .en-searchbar input#en-q,body.atlas-ui .en-searchbar input#en-q:focus,body.atlas-ui .en-searchbar input#en-q:focus-visible,
+.en-searchbar input#en-q,.en-searchbar input#en-q:focus{flex:1 1 auto;min-width:0;width:100%;height:44px;padding:0 8px;border:0!important;border-radius:0!important;outline:none!important;box-shadow:none!important;background:transparent!important;font-size:16px;-webkit-appearance:none;appearance:none}
+.en-searchbar input#en-q::-webkit-search-cancel-button,.en-searchbar input#en-q::-webkit-search-decoration{-webkit-appearance:none;appearance:none}
+.en-spinner{flex:0 0 auto;width:16px;height:16px;margin:0 6px;border:2px solid #cbd5e1;border-top-color:var(--navy);border-radius:50%;animation:en-spin .8s linear infinite}
 @keyframes en-spin{to{transform:rotate(360deg)}}
-.en-clear{flex:0 0 auto;width:40px;height:40px;margin-right:3px;border:0;border-radius:10px;background:transparent;color:#475569;font-size:22px;line-height:1;cursor:pointer}
-.en-clear:hover{background:#f1f5f9}.en-clear:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+.en-filters-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:9px;background:#eef4fb;color:var(--navy);font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap}
+.en-filters-btn[aria-expanded="true"]{background:#dbeafe}.en-filters-btn .en-count{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--navy);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.en-clear{flex:0 0 auto;width:38px;height:38px;margin-right:4px;border:0;border-radius:10px;background:transparent;color:#475569;font-size:22px;line-height:1;cursor:pointer}
+.en-clear:hover{background:#f1f5f9}
+.en-panel{margin:0 12px 8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.en-panel label{display:block;font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.en-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 12px 6px}
+.en-chip{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 4px 3px 10px;border:1px solid #bfdbfe;border-radius:999px;background:#eff6ff;color:var(--navy);font-size:12px;font-weight:700}
+.en-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.en-chip button{border:0;background:transparent;color:inherit;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:15px;line-height:1}
+.en-chip button:hover{background:#dbeafe}.en-chips .en-clear-all{border:0;background:transparent;color:#475569;font-size:12px;font-weight:800;text-decoration:underline;cursor:pointer}
+@media (max-width:520px){.en-filters-btn .en-label{display:none}.en-filters-btn{padding:0 9px}}
 .en-status{margin:-4px 14px 8px;min-height:16px;font-size:12px;color:#64748b}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .state.error{display:block;background:#fee2e2;color:#991b1b}.state.info{background:#eff6ff;color:var(--navy)}
@@ -161,7 +173,16 @@ tr:hover td{background:#fafcff}
       </section>
       <section id="view-enrollment" class="hidden">
         <div class="page-head"><div><h2>Enrôlement biométrique supervisé</h2><p>Recherche dans votre périmètre. Aucun gabarit n'est créé sans analyse, comparaison avec la photo DRH et confirmation explicite.</p></div></div>
-        <div class="card"><div class="en-searchbar" role="search"><label class="sr-only" for="en-q">Rechercher un employé à enrôler par matricule, nom ou prénom</label><span class="en-icon" aria-hidden="true">🔍</span><input id="en-q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Rechercher un employé par matricule, nom ou prénom…" aria-describedby="en-status"><span class="en-spinner hidden" id="en-spinner" aria-hidden="true"></span><button class="en-clear hidden" id="en-clear" type="button" aria-label="Effacer la recherche">×</button></div>
+        <div class="card"><div class="en-searchbar" role="search"><label class="sr-only" for="en-q">Rechercher un employé à enrôler par matricule, nom ou prénom</label><span class="en-icon" aria-hidden="true">🔍</span><input id="en-q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Rechercher un employé par matricule, nom ou prénom…" aria-describedby="en-status"><span class="en-spinner hidden" id="en-spinner" aria-hidden="true"></span><button class="en-filters-btn" id="en-filters" type="button" aria-expanded="false" aria-controls="en-panel"><span aria-hidden="true">⚙</span><span class="en-label">Filtres</span><span class="en-count hidden" id="en-filter-count"></span></button><button class="en-clear hidden" id="en-clear" type="button" aria-label="Effacer la recherche">×</button></div>
+          <div class="en-panel hidden" id="en-panel" role="group" aria-label="Filtres de recherche">
+            <div><label for="en-f-site">Site</label><select id="en-f-site" data-filter="site_id"><option value="">Tous les sites autorisés</option></select></div>
+            <div><label for="en-f-function">Fonction</label><select id="en-f-function" data-filter="function"><option value="">Toutes</option></select></div>
+            <div><label for="en-f-status">État employé</label><select id="en-f-status" data-filter="status"><option value="">Tous</option><option value="actif">Actifs</option><option value="inactif">Inactifs</option></select></div>
+            <div><label for="en-f-consent">Consentement</label><select id="en-f-consent" data-filter="consent"><option value="">Tous</option><option value="admissible">Admissible</option><option value="non_admissible">Non admissible</option></select></div>
+            <div><label for="en-f-enrollment">Enrôlement</label><select id="en-f-enrollment" data-filter="enrollment"><option value="">Tous</option><option value="none">Non enrôlé</option><option value="active">Enrôlé actif</option><option value="review">Revue requise</option><option value="inactive">Désactivé</option></select></div>
+            <div><label for="en-f-photo">Photo DRH</label><select id="en-f-photo" data-filter="photo"><option value="">Toutes</option><option value="available">Disponible</option><option value="missing">Absente</option></select></div>
+          </div>
+          <div class="en-chips hidden" id="en-chips" aria-label="Filtres actifs"></div>
           <div class="en-status" id="en-status" role="status" aria-live="polite"></div>
           <div id="en-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Consentement</th><th>Enrôlement</th><th>Photo DRH</th><th></th></tr></thead><tbody id="en-rows"></tbody></table></div></div>
@@ -744,14 +765,14 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   const EN_DEBOUNCE_MS = 280;
   const enSearch = { timer: null, seq: 0, controller: null, lastRows: [] };
 
-  function enRenderRows(rows, query) {
+  function enRenderRows(rows, query, filtered) {
     const ENR = { ACTIVE: "Actif", PENDING_REVIEW: "En revue", NONE: "Aucun" };
     enSearch.lastRows = rows;
     $("en-rows").innerHTML = rows.length ? rows.map((r) => `<tr><td class="who"><b>${esc(r.nom)} ${esc(r.prenom)}</b><small>${esc(r.matricule)}${r.statut && r.statut !== "actif" ? " · " + esc(r.statut) : ""}</small></td>
       <td>${esc(r.fonction || "—")}</td><td>${esc(r.site || "")}</td><td>${r.consent_admissible ? "Admissible" : "<b>Non admissible</b>"}</td>
       <td>${esc(ENR[r.enrollment] || r.enrollment)}</td><td>${r.photo_available ? "Disponible" : "Absente"}</td>
       <td><button class="link" type="button" data-en="${r.employee_id}">Ouvrir</button></td></tr>`).join("")
-      : `<tr><td colspan="7" class="empty">${query ? "Aucun employé correspondant dans votre périmètre." : "Aucun employé dans votre périmètre."}</td></tr>`;
+      : `<tr><td colspan="7" class="empty">${filtered ? "Aucun employé ne correspond à cette recherche et aux filtres sélectionnés." : query ? "Aucun employé correspondant dans votre périmètre." : "Aucun employé dans votre périmètre."}</td></tr>`;
     $("en-rows").querySelectorAll("[data-en]").forEach((b) => b.addEventListener("click", () => {
       const r = rows.find((x) => String(x.employee_id) === b.dataset.en);
       openBiometrics({ employee_id: r.employee_id, nom: `${r.nom} ${r.prenom}`, matricule: r.matricule, site: r.site || "", site_id: r.site_id });
@@ -776,10 +797,12 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     try {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
-      if ($("f-site").value) params.set("site_id", $("f-site").value);
+      const filters = enActiveFilters();
+      Object.entries(filters).forEach(([k, v]) => params.set(k, v));
+      if (!filters.site_id && $("f-site").value) params.set("site_id", $("f-site").value);
       const rows = await api("/biometrics/employees?" + params.toString(), { signal: controller ? controller.signal : undefined });
       if (seq !== enSearch.seq) return;                            // réponse obsolète : ignorée
-      enRenderRows(rows || [], query);
+      enRenderRows(rows || [], query, Object.keys(filters).length > 0);
       $("en-status").textContent = rows && rows.length ? `${rows.length} employé(s)${rows.length >= 25 ? " — affinez la recherche pour voir les autres" : ""}` : "";
     } catch (ex) {
       if (seq !== enSearch.seq || (ex && ex.name === "AbortError")) return;
@@ -804,13 +827,54 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("en-q").focus();
   }
 
-  function loadEnrollment() { return runEnrollmentSearch(); }
+  // ── Filtres : valeurs proposées par le serveur (périmètre du compte), appliqués par le
+  // serveur ; la page ne filtre jamais elle-même une liste.
+  const EN_FILTER_LABEL = { site_id: "Site", function: "Fonction", status: "État", consent: "Consentement", enrollment: "Enrôlement", photo: "Photo" };
+  const enFilterSelects = () => Array.from(document.querySelectorAll("#en-panel select[data-filter]"));
+  function enActiveFilters() {
+    const out = {};
+    enFilterSelects().forEach((sel) => { if (sel.value) out[sel.dataset.filter] = sel.value; });
+    return out;
+  }
+  function enRenderChips() {
+    const active = enFilterSelects().filter((sel) => sel.value);
+    $("en-filter-count").textContent = active.length || "";
+    $("en-filter-count").classList.toggle("hidden", !active.length);
+    $("en-filters").setAttribute("aria-label", active.length ? `Filtres (${active.length} actif${active.length > 1 ? "s" : ""})` : "Filtres");
+    $("en-chips").classList.toggle("hidden", !active.length);
+    $("en-chips").innerHTML = active.map((sel) => `<span class="en-chip"><span>${esc(EN_FILTER_LABEL[sel.dataset.filter])} : ${esc(sel.options[sel.selectedIndex].text)}</span><button type="button" data-chip="${esc(sel.id)}" aria-label="Retirer le filtre ${esc(EN_FILTER_LABEL[sel.dataset.filter])}">×</button></span>`).join("")
+      + (active.length ? '<button type="button" class="en-clear-all" id="en-clear-all">Tout effacer</button>' : "");
+    $("en-chips").querySelectorAll("[data-chip]").forEach((b) => b.addEventListener("click", () => { $(b.dataset.chip).value = ""; enFiltersChanged(); }));
+    if (active.length) $("en-clear-all").addEventListener("click", () => { enFilterSelects().forEach((sel) => { sel.value = ""; }); enFiltersChanged(); });
+  }
+  function enFiltersChanged() { enRenderChips(); runEnrollmentSearch(); }      // relance immédiate (annulation + séquence)
+  function enTogglePanel(open) {
+    const show = open === undefined ? $("en-panel").classList.contains("hidden") : open;
+    $("en-panel").classList.toggle("hidden", !show);
+    $("en-filters").setAttribute("aria-expanded", String(show));
+    if (show) enFilterSelects()[0].focus();
+  }
+  async function loadEnrollmentFacets() {
+    try {
+      const f = await api("/biometrics/employees/facets");
+      const keep = (id) => $(id).value;
+      const site = keep("en-f-site"), fn = keep("en-f-function");
+      $("en-f-site").innerHTML = '<option value="">Tous les sites autorisés</option>' + (f.sites || []).map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
+      $("en-f-function").innerHTML = '<option value="">Toutes</option>' + (f.functions || []).map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
+      $("en-f-site").value = site; $("en-f-function").value = fn;
+    } catch (ex) { /* filtres facultatifs : la recherche reste disponible */ }
+  }
+
+  function loadEnrollment() { loadEnrollmentFacets(); return runEnrollmentSearch(); }
   $("en-q").addEventListener("input", scheduleEnrollmentSearch);
   $("en-q").addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); runEnrollmentSearch(); }   // facultatif : lance tout de suite
     else if (e.key === "Escape" && $("en-q").value) { e.preventDefault(); clearEnrollmentSearch(); }
   });
   $("en-clear").addEventListener("click", clearEnrollmentSearch);
+  $("en-filters").addEventListener("click", () => enTogglePanel());
+  enFilterSelects().forEach((sel) => sel.addEventListener("change", enFiltersChanged));
+  $("en-panel").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); enTogglePanel(false); $("en-filters").focus(); } });
 
   // ── Biométrie : fiche employé (consentement, enrôlement) ──────────────────────────
   const CONSENT_LABEL = { contract_confirmed: "Accord du contrat confirmé", explicit_confirmed: "Accord explicite", pending: "En attente", refused: "Refusé", withdrawn: "Retiré" };
