@@ -85,7 +85,17 @@ FEATURE_CATALOG: dict[str, dict] = {
         "events": ("Incidents et événements", "Main courante opérationnelle", ("read", "create", "validate")),
         "movements": ("Mouvements", "Mouvements opérationnels", ("read", "create", "execute")),
     }},
-    "attendance": {"label": "Pointage", "domain": "pointage.irongs.com", "description": "Présences, absences et pointage", "features": {
+    # Domaine métier Pointage : DEUX applications distinctes, chacune ouverte par sa propre clé
+    # de module (users.authorized_modules, vérifiée à la connexion ET à chaque requête sur son
+    # sous-domaine) ; les fonctionnalités fines ci-dessous sont COMMUNES aux deux (jamais
+    # dupliquées). La borne faciale (/borne) n'utilise aucune de ces clés : identité de
+    # terminal cryptographique (app/modules/biometrics/terminals.py), jamais un compte.
+    "attendance": {"label": "Pointage", "domain": "pointage.irongs.com", "description": "Présences, absences et pointage", "applications": (
+        {"module_key": "pointage", "label": "Pointage", "domain": "pointage.irongs.com",
+         "description": "Gestion des présences et du pointage"},
+        {"module_key": "pointeur", "label": "Pointeur terrain", "domain": "pointeur.irongs.com",
+         "description": "Scanner QR, terminal terrain et pointage facial"},
+    ), "features": {
         "daily_sheets": ("Feuilles quotidiennes", "Pointages et états journaliers", ("read", "create", "update", "validate")),
         "generation": ("Génération et clôture", "Génération par rotation et clôture", ("validate", "execute")),
         "qr_scanning": ("Pointage QR", "Lecture et validation QR", ("read", "create", "execute")),
@@ -94,9 +104,9 @@ FEATURE_CATALOG: dict[str, dict] = {
         "statistics": ("Statistiques et alertes", "Indicateurs et anomalies de pointage", ("read", "export")),
         # Biométrie : permissions EXPLICITES uniquement (jamais accordées par défaut au DRH) —
         # appliquées par app/modules/biometrics/routes.py, seul endroit où elles sont actives.
-        "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé", ("read",)),
-        "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement, ré-enrôlement, désactivation", ("create", "update")),
-        "biometric_admin": ("Biométrie — administration", "Doublons, seuils, caméras", ("validate", "admin")),
+        "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
+        "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
+        "biometric_admin": ("Biométrie — administration", "Valider : doublons et Mode Test facial (pointage.irongs.com et pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux", ("validate", "admin")),
     }},
     "material": {"label": "Matériel", "domain": "materiel.irongs.com", "description": "Équipements, stocks et dotations", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs et alertes matériel", ("read",)),
@@ -231,6 +241,7 @@ def feature_catalog_payload() -> dict:
                 "label": module["label"],
                 "domain": module["domain"],
                 "description": module["description"],
+                "applications": [dict(app) for app in module.get("applications", ())],
                 "features": [
                     {
                         "feature_key": feature_key,

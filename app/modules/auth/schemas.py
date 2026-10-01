@@ -113,11 +113,20 @@ class FeatureCatalogItemOut(BaseModel):
     applicable_actions: list[str]
 
 
+class FeatureCatalogApplicationOut(BaseModel):
+    """Application (sous-domaine) d'un domaine métier, ouverte par sa clé de module."""
+    module_key: str
+    label: str
+    domain: str
+    description: str
+
+
 class FeatureCatalogModuleOut(BaseModel):
     module_key: str
     label: str
     domain: str
     description: str
+    applications: list[FeatureCatalogApplicationOut] = []
     features: list[FeatureCatalogItemOut]
 
 

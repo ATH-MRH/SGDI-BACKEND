@@ -155,6 +155,21 @@ def enforce_module_access(db: Session, request: Request, user: User) -> None:
         )
 
 
+# Applications dont l'accès est revérifié à CHAQUE requête servie sur leur sous-domaine (pas
+# seulement à la connexion) : un jeton obtenu sur pointage.irongs.com ne vaut pas accès au
+# terminal terrain pointeur.irongs.com sans la clé de module « pointeur ».
+HOST_ENFORCED_APPLICATIONS = frozenset({"pointeur"})
+
+
+def enforce_application_host(request: Request, user: User) -> None:
+    from app.modules.auth.routes import _host_subdomain, enforce_subdomain_login_scope, is_admin_role
+
+    # Même règle que la connexion sur ce sous-domaine ; les rôles Administration gardent leur
+    # accès transversal (comme enforce_module_access ; /admin-system-login ne filtre pas l'hôte).
+    if _host_subdomain(request) in HOST_ENFORCED_APPLICATIONS and not is_admin_role(user.role):
+        enforce_subdomain_login_scope(request, user)
+
+
 def request_action(request: Request) -> str:
     """Traduit une opération HTTP en action métier administrable par utilisateur."""
     method = request.method.upper()
@@ -198,6 +213,7 @@ def current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur inactif")
     enforce_module_access(db, request, user)
+    enforce_application_host(request, user)
     if request.url.path.lower().startswith(SOCIETY_SCOPED_PREFIXES) and society_scope(user).kind is ScopeKind.NONE:
         append_audit(db, action="authorization.no_society_scope", resource="api",
                      resource_id=request.url.path, result="refused", user=user, request=request)
