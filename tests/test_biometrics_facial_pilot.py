@@ -402,3 +402,12 @@ def test_suspended_employee_can_be_enrolled_but_left_employees_cannot(client, au
         _photo(db, other, face(f"{status}-{_tag()}")); _consent(client, auth_headers, other)
         r = _preview(client, auth_headers, other, {})
         assert r.status_code == 409 and r.json()["detail"]["code"] == "EMPLOYEE_INACTIVE", status
+
+
+def test_employee_biometric_status_exposes_rh_status_for_the_enrollment_window(client, auth_headers, db):
+    """La fenêtre d'enrôlement affiche le statut RH réel (Actif / Suspendu) : simple lecture."""
+    site = _site(db)
+    for status in ("actif", "suspendu"):
+        emp = _employee(db, site, status=status)
+        body = client.get(f"/api/biometrics/employees/{emp.id}", headers=auth_headers).json()
+        assert body["identity"]["statut"] == status

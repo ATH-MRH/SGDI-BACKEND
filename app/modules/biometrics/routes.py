@@ -297,7 +297,7 @@ def employee_status(employee_id: int, db: Session = Depends(get_db), user: User 
     return {
         "employee_id": employee_id, "enabled": settings.biometric_enabled, "enrollment_enabled": service.enrollment_enabled(),
         "identity": {"matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name,
-                     "fonction": employee.position, "societe": employee.society},
+                     "fonction": employee.position, "societe": employee.society, "statut": employee.status},
         "photo_url": _photo_url(employee),
         "consent": _consent_out(consents[0] if consents else None),
         "consent_history": [_consent_out(c) for c in consents],

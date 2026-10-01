@@ -201,12 +201,13 @@ test('doublons : décision impossible sans justification ; rejet tracé', async 
 
 test('fiche biométrique : consentement sur la version en vigueur, raison du refus d\'enrôlement affichée, permission manquante expliquée', async () => {
   const board = { date: '2027-04-05', kpi: {}, total: 1, page: 1, page_size: 25, pages: 1, items: [row({ employee_id: 5 })] };
+  let consentSaved = null;                                   // l'état renvoyé par le serveur suit l'enregistrement
   const { d, w, calls, dom } = bootBio({
     '/api/attendance/board': [200, board],
-    '/api/biometrics/employees/5': [200, { employee_id: 5, enabled: true, enrollment_enabled: true, consent: null, consent_history: [], photo_available: true, enrollment: 'NONE', active_template: null, templates: [] }],
+    '/api/biometrics/employees/5': () => [200, { employee_id: 5, enabled: true, enrollment_enabled: true, consent: consentSaved, consent_history: [], photo_available: true, enrollment: 'NONE', active_template: null, templates: [] }],
     '/api/biometrics/notice': [200, { version: '2026-09-v1', text: 'Finalité : contrôler le pointage.' }],
     '/api/biometrics/cameras': [200, []],
-    'POST /api/biometrics/employees/5/consent': [200, {}],
+    'POST /api/biometrics/employees/5/consent': (call) => { consentSaved = { ...call.body, admissible: true }; return [200, consentSaved]; },
     'POST /api/biometrics/employees/5/enrollment/preview': [422, { detail: { code: 'PHOTO_UNUSABLE', message: 'Photo DRH non exploitable — enrôlement par capture supervisée nécessaire',
       photo: { state: 'QUALITY_FAILED', reasons: ['Image floue — restez immobile'] } } }],
   });
@@ -214,6 +215,7 @@ test('fiche biométrique : consentement sur la version en vigueur, raison du ref
   await tick(80);
   d.querySelector('[data-bio="5"]').click();
   await tick(80);
+  assert.equal(d.getElementById('en-photo').disabled, true, 'sans consentement admissible, aucune analyse');
   d.getElementById('cs-status').value = 'contract_confirmed';
   d.getElementById('cs-ref').value = 'Contrat CDD 2026-041 art. 12';
   d.getElementById('consent-form').dispatchEvent(new w.Event('submit', { cancelable: true }));

@@ -95,6 +95,53 @@ body.atlas-ui .en-searchbar input#en-q,body.atlas-ui .en-searchbar input#en-q:fo
 .modal{background:#fff;border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.3)}
 .modal h3{margin:0 0 6px;font-size:18px}.modal .sub{color:var(--muted);font-size:13px;margin-bottom:6px}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+body.modal-open{overflow:hidden}
+/* Centrée sur la zone VISIBLE même si un élément de la page déborde (mobile). */
+.modal-bg{width:100vw;max-width:100vw}
+/* Enrôlement biométrique : grande fenêtre, défilement INTERNE, en-tête et pied fixes. */
+.modal.modal-xl{max-width:min(1120px,calc(100vw - 40px));max-height:92vh;padding:0;display:flex;flex-direction:column;overflow:hidden;border-radius:18px;box-shadow:0 18px 50px rgba(6,24,48,.22)}
+.bio-head{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)}
+.bio-head .bio-icon{flex:0 0 40px;height:40px;border-radius:12px;background:#eaf2fd;color:var(--navy);display:grid;place-items:center}
+.bio-head h3{margin:0;font-size:18px;letter-spacing:.01em}.bio-head p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.bio-x{margin-left:auto;width:38px;height:38px;border:0;border-radius:10px;background:transparent;font-size:24px;line-height:1;color:#475569;cursor:pointer}.bio-x:hover{background:#f1f5f9}
+.bio-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:18px 22px;background:#f6f8fb;display:grid;gap:14px}
+.bio-top{display:grid;grid-template-columns:minmax(0,55fr) minmax(0,45fr);gap:14px}
+.bio-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0}
+.bio-card h4{margin:0;font-size:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bio-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.bio-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin:0}
+.bio-info div{min-width:0}.bio-info dt{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+.bio-info dd{margin:3px 0 0;font-size:14px;font-weight:700;color:var(--ink);overflow-wrap:anywhere}.bio-info .wide{grid-column:1 / -1}
+.bio-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid transparent;white-space:nowrap}
+.bio-badge.ok{background:#e8f7ee;color:#166534;border-color:#bbf7d0}.bio-badge.warn{background:#fff4e5;color:#9a3412;border-color:#fed7aa}
+.bio-badge.err{background:#fdecec;color:#991b1b;border-color:#fecaca}.bio-badge.info{background:#eaf2fd;color:var(--navy);border-color:#cfe0f5}.bio-badge.muted{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+.bio-photo-wrap{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.bio-photo-frame{width:150px;height:188px;border-radius:12px;border:1px solid var(--line);background:#f1f5f9;overflow:hidden;display:grid;place-items:center;flex:0 0 auto}
+.bio-photo-frame img{width:100%;height:100%;object-fit:cover}.bio-photo-frame span{color:#94a3b8;font-size:13px;font-weight:700;text-align:center;padding:8px}
+.bio-photo-meta{display:grid;gap:8px;min-width:150px;flex:1 1 150px}.bio-photo-meta small{color:var(--muted);font-size:12px}
+.bio-banner{display:flex;gap:10px;padding:11px 13px;border-radius:12px;font-size:13px;margin-bottom:12px;border:1px solid}
+.bio-banner b{display:block}.bio-banner.info{background:#eff6ff;border-color:#cfe0f5;color:#0b3d75}.bio-banner.warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}.bio-banner.err{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.bio-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 12px;padding:12px;border-radius:12px;background:#f8fafc;border:1px solid var(--line)}
+.bio-meta dt{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase}.bio-meta dd{margin:2px 0 0;font-size:13px;font-weight:700;overflow-wrap:anywhere}
+.bio-card details{margin-bottom:12px}.bio-card summary{cursor:pointer;color:var(--navy);font-weight:800;font-size:13px}
+.bio-card pre{white-space:pre-wrap;font-size:12px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0}
+.bio-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.bio-form label{display:block;font-size:12px;font-weight:800;color:#334155;margin-bottom:4px}
+.bio-form-actions{grid-column:1 / -1;display:flex;justify-content:flex-end}
+.bio-checks{list-style:none;margin:0 0 12px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px;font-size:13px}
+.bio-checks li{display:flex;gap:7px;align-items:baseline}.bio-checks li b{font-size:13px}.bio-checks .yes b{color:#15803d}.bio-checks .no b{color:#b45309}
+.bio-cam{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.bio-cam label{font-size:12px;font-weight:800;color:#334155}.bio-cam select{width:auto;min-width:200px}
+.bio-templates{margin:0 0 10px;padding-left:18px;font-size:13px;color:#334155}
+.bio-result{border-top:1px dashed var(--line);margin-top:10px;padding-top:12px}.bio-result:empty{display:none}
+.bio-figs{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:6px 0 10px}.bio-figs img{max-width:200px;max-height:240px;border-radius:10px;border:1px solid var(--line)}
+.bio-foot{display:flex;align-items:center;gap:10px;padding:13px 22px;border-top:1px solid var(--line);background:#fff}
+.bio-foot-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.bio-foot button[disabled]{opacity:.55;cursor:not-allowed}
+.bio-lightbox{position:fixed;inset:0;z-index:60;background:rgba(6,24,48,.8);display:grid;place-items:center;padding:20px}.bio-lightbox img{max-width:min(92vw,700px);max-height:86vh;border-radius:12px;background:#fff}
+.bio-lightbox button{position:absolute;top:14px;right:14px;width:42px;height:42px;border:0;border-radius:12px;background:#fff;font-size:24px;cursor:pointer}
+@media (max-width:900px){.bio-top{grid-template-columns:1fr}.bio-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.modal.modal-xl{max-width:calc(100vw - 16px);max-height:96vh;border-radius:14px}.bio-head,.bio-foot{padding-left:14px;padding-right:14px}.bio-body{padding:12px}
+  .bio-info,.bio-form{grid-template-columns:1fr}.bio-foot{flex-wrap:wrap}.bio-foot-actions{width:100%;margin-left:0}.bio-foot-actions button,.bio-foot>button{flex:1 1 auto}.bio-photo-frame{width:120px;height:150px}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:800;z-index:60;box-shadow:0 12px 30px rgba(0,0,0,.25)}
 .toast.err{background:var(--red)}
@@ -418,8 +465,32 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   // ── Correction ──────────────────────────────────────────────────────────────────────
-  function modal(html) { $("modal-host").innerHTML = `<div class="modal-bg" role="dialog" aria-modal="true"><div class="modal">${html}</div></div>`; return $("modal-host").querySelector(".modal"); }
-  function closeModal() { $("modal-host").innerHTML = ""; }
+  // Fenêtre modale commune. Option { wide, labelledBy } : grande fenêtre (enrôlement). Le focus
+  // revient à l'élément qui l'a ouverte, la page derrière ne défile pas, Tab reste dans la fenêtre.
+  let modalOpener = null;
+  function modal(html, opts) {
+    const o = opts || {};
+    if (!$("modal-host").firstElementChild) modalOpener = document.activeElement;
+    $("modal-host").innerHTML = `<div class="modal-bg" role="dialog" aria-modal="true"${o.labelledBy ? ` aria-labelledby="${o.labelledBy}"` : ""}><div class="modal${o.wide ? " modal-xl" : ""}">${html}</div></div>`;
+    document.body.classList.add("modal-open");
+    return $("modal-host").querySelector(".modal");
+  }
+  function closeModal() {
+    const wasOpen = !!$("modal-host").firstElementChild;
+    $("modal-host").innerHTML = "";
+    document.body.classList.remove("modal-open");
+    if (wasOpen && modalOpener && document.contains(modalOpener) && typeof modalOpener.focus === "function") modalOpener.focus();
+    modalOpener = null;
+  }
+  $("modal-host").addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const box = $("modal-host").querySelector(".modal");
+    const items = box ? Array.from(box.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])')).filter((el) => el.offsetParent !== null || el === document.activeElement) : [];
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   function openCorrection(row) {
     if (!row) return;
@@ -881,6 +952,29 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   const SOURCE_CONSENT = { EMPLOYMENT_CONTRACT: "Contrat de travail", HR_DOCUMENT: "Document RH", DIGITAL_ENROLLMENT: "Enrôlement numérique", OTHER_AUTHORIZED_PROCESS: "Autre processus autorisé" };
   const TEMPLATE_LABEL = { ACTIVE: "Actif", PENDING_REVIEW: "En revue (doublon possible)", INACTIVE: "Inactif", REJECTED: "Rejeté" };
 
+  const ENROLLMENT_BADGE = { ACTIVE: ["ok", "Gabarit actif"], PENDING_REVIEW: ["warn", "Revue requise (doublon possible)"], NONE: ["muted", "Aucun gabarit"] };
+  const FINGERPRINT_ICON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 11c0 3.5-1 6.5-3 9"/><path d="M8.5 7.6A5 5 0 0 1 17 11c0 2.4-.4 4.7-1.2 6.8"/><path d="M5.6 9.6A7 7 0 0 1 19 11c0 1.3-.1 2.6-.3 3.8"/><path d="M12 15c.2 2-.3 4-1.4 5.8"/><path d="M3.5 12c.3-1.9 1.1-3.6 2.4-5"/><path d="M8 3.5A9.9 9.9 0 0 1 21 9"/></svg>';
+  const CAMERA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  const badge = (kind, text) => `<span class="bio-badge ${kind}">${esc(text)}</span>`;
+
+  function rhStatusBadge(statut) {
+    const key = String(statut || "").trim().toLowerCase();
+    if (["actif", "active"].includes(key)) return badge("ok", "Actif");
+    if (["suspendu", "suspendue", "suspended"].includes(key)) return badge("warn", "Suspendu");
+    return statut ? badge("muted", statut.charAt(0).toUpperCase() + statut.slice(1)) : badge("muted", "Non renseigné");
+  }
+
+  function consentBadge(c) {
+    if (!c) return badge("err", "Non enregistré");
+    if (c.admissible) return badge("ok", "Enregistré");
+    if (c.status === "refused") return badge("err", "Refusé");
+    if (c.status === "withdrawn") return badge("err", "Retiré");
+    if (c.status === "pending") return badge("warn", "En attente");
+    return badge("warn", "Non admissible (version du texte)");
+  }
+
+  // Fiche biométrique : informations, photo DRH, consentement, enrôlement facial. Mêmes appels
+  // et même workflow qu'avant ; seuls l'affichage et l'enchaînement visuel changent.
   async function openBiometrics(row) {
     if (!row) return;
     let status, notice, enrolCams = [];
@@ -890,42 +984,108 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     } catch (ex) { toast(permissionMessage(ex), true); return; }
     const c = status.consent;
     const id = status.identity || {};
-    const m = modal(`<h3>Biométrie — ${esc(row.nom)}</h3><div class="sub">${esc(row.matricule)} · ${esc(id.fonction || "")} · ${esc(row.site)}${status.enabled ? "" : " · pointage facial désactivé"}${status.enrollment_enabled ? "" : " · <b>enrôlement désactivé sur ce serveur</b>"}</div>
-      ${status.photo_url ? `<img src="${esc(status.photo_url)}" alt="Photo DRH" style="max-width:120px;max-height:150px;border-radius:10px;border:1px solid var(--line);float:right;margin:0 0 8px 12px">` : ""}
-      <p><b>Consentement :</b> ${c ? `${esc(CONSENT_LABEL[c.status] || c.status)} — ${esc(SOURCE_CONSENT[c.source] || c.source)}${c.proof_reference ? " · réf. " + esc(c.proof_reference) : ""} · texte ${esc(c.notice_version)} · ${esc(c.recorded_by || "")}${c.admissible ? "" : " · <b>non admissible</b>"}` : "aucun"}</p>
-      <p><b>Enrôlement :</b> ${esc(status.enrollment === "ACTIVE" ? "actif" : status.enrollment === "PENDING_REVIEW" ? "en revue (doublon possible)" : "aucun")} · photo de la fiche ${status.photo_available ? "disponible" : "absente"}</p>
-      ${status.templates.length ? `<ul class="anomaly-list">${status.templates.map((t) => `<li>${esc(TEMPLATE_LABEL[t.status] || t.status)} · ${esc(t.source === "EMPLOYEE_PHOTO" ? "photo de la fiche" : "caméra")} · ${esc((t.created_at || "").slice(0, 16).replace("T", " "))}${t.status_reason ? " — " + esc(t.status_reason) : ""}</li>`).join("")}</ul>` : ""}
-      <details><summary>Texte d'information employé (${esc(notice.version)})</summary><pre style="white-space:pre-wrap;font-size:12px">${esc(notice.text)}</pre></details>
-      <form id="consent-form"><div class="grid2"><div><label for="cs-status">Nouvel état du consentement</label><select id="cs-status">${Object.keys(CONSENT_LABEL).map((k) => `<option value="${k}">${CONSENT_LABEL[k]}</option>`).join("")}</select></div>
-        <div><label for="cs-source">Source</label><select id="cs-source">${Object.keys(SOURCE_CONSENT).map((k) => `<option value="${k}">${SOURCE_CONSENT[k]}</option>`).join("")}</select></div></div>
-        <div class="grid2"><div><label for="cs-ref">Référence du document / contrat</label><input id="cs-ref" placeholder="Ex. Contrat CDD 2026-041 art. 12"></div><div><label for="cs-date">Date de l'accord</label><input id="cs-date" type="date"></div></div>
-        <button class="secondary" type="submit" style="margin-top:10px">Enregistrer le consentement</button></form>
-      <div class="modal-actions" style="flex-wrap:wrap">
-        ${enrolCams.length ? `<select id="en-cam" style="width:auto">${enrolCams.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select><button class="secondary" type="button" id="en-cam-btn"${status.enrollment_enabled ? "" : " disabled"}>Capturer et comparer à la photo DRH</button>` : ""}
-        <button class="primary" type="button" id="en-photo"${status.photo_available && status.enrollment_enabled ? "" : " disabled"}>Analyser la photo DRH</button>
-        ${status.enrollment !== "NONE" ? '<button class="danger" type="button" id="en-off">Désactiver</button>' : ""}
-        <button class="secondary" type="button" id="bio-close">Fermer</button>
-      </div><div class="error" id="bio-error" role="alert"></div>`);
-    const fail = (ex) => { const err = m.querySelector("#bio-error"); const d = ex.message; err.textContent = permissionMessage({ message: d }); err.classList.add("show"); };
+    const fullName = [id.nom, id.prenom].filter(Boolean).join(" ") || row.nom || "";
+    const consentOk = Boolean(c && c.admissible);
+    const enrollOn = Boolean(status.enrollment_enabled);
+    const canAnalyse = enrollOn && consentOk && Boolean(status.photo_available);
+    const canCapture = enrollOn && consentOk && enrolCams.length > 0;
+    const [enrKind, enrText] = ENROLLMENT_BADGE[status.enrollment] || ["muted", status.enrollment];
+    const check = (ok, label, detail) => `<li class="${ok ? "yes" : "no"}"><b aria-hidden="true">${ok ? "✓" : "!"}</b><span>${esc(label)}${detail ? ` — <span>${esc(detail)}</span>` : ""}</span><span class="sr-only">${ok ? "condition remplie" : "condition non remplie"}</span></li>`;
+    const formHTML = `<form id="consent-form" class="bio-form" aria-label="Consentement biométrique">
+        <div><label for="cs-status">Nouveau statut du consentement *</label><select id="cs-status" required>${Object.keys(CONSENT_LABEL).map((k) => `<option value="${k}">${CONSENT_LABEL[k]}</option>`).join("")}</select></div>
+        <div><label for="cs-source">Source *</label><select id="cs-source" required>${Object.keys(SOURCE_CONSENT).map((k) => `<option value="${k}">${SOURCE_CONSENT[k]}</option>`).join("")}</select></div>
+        <div><label for="cs-ref">Référence du document / contrat</label><input id="cs-ref" placeholder="Ex. Contrat CDD 2026-041 art. 12"></div>
+        <div><label for="cs-date">Date de l'accord</label><input id="cs-date" type="date"></div>
+        <div class="bio-form-actions"><button class="primary" type="submit">Enregistrer le consentement</button></div></form>`;
+    const m = modal(`<header class="bio-head"><span class="bio-icon">${FINGERPRINT_ICON}</span><div><h3 id="bio-title">Enrôlement biométrique</h3><p>Gestion du consentement et création du gabarit facial</p></div>
+        <button class="bio-x" type="button" id="bio-x" aria-label="Fermer la fenêtre">×</button></header>
+      <div class="bio-body">
+        <div class="bio-top">
+          <section class="bio-card" aria-labelledby="bio-info-title"><div class="bio-card-head"><h4 id="bio-info-title">Informations employé</h4></div>
+            <dl class="bio-info">
+              <div class="wide"><dt>Nom complet</dt><dd id="bio-name">${esc(fullName)}</dd></div>
+              <div><dt>Matricule</dt><dd>${esc(id.matricule || row.matricule || "—")}</dd></div>
+              <div><dt>Fonction</dt><dd>${esc(id.fonction || "—")}</dd></div>
+              <div class="wide"><dt>Site</dt><dd>${esc(row.site || "—")}</dd></div>
+              <div><dt>Statut</dt><dd id="bio-rh-status">${rhStatusBadge(id.statut)}</dd></div>
+              <div><dt>Mode de pointage</dt><dd id="bio-mode">${status.enabled ? badge("info", "Facial activé") : badge("muted", "Facial désactivé")}</dd></div>
+            </dl></section>
+          <section class="bio-card" aria-labelledby="bio-photo-title"><div class="bio-card-head"><h4 id="bio-photo-title">Photo DRH</h4></div>
+            <div class="bio-photo-wrap">
+              <div class="bio-photo-frame">${status.photo_url && status.photo_available ? `<img id="bio-photo-img" src="${esc(status.photo_url)}" alt="Photo DRH de ${esc(fullName)}">` : '<span id="bio-photo-missing">Photo absente</span>'}</div>
+              <div class="bio-photo-meta">
+                ${status.photo_available ? badge("ok", "✓ Photo disponible") : badge("err", "Photo absente")}
+                <small>${status.photo_available ? "Photo issue de la fiche employé" : "Aucune photo dans la fiche employé : l'enrôlement passera par une capture supervisée."}</small>
+                ${status.photo_url && status.photo_available ? '<button class="secondary" type="button" id="bio-photo-zoom">Aperçu pleine taille</button>' : ""}
+              </div></div></section>
+        </div>
+
+        <section class="bio-card" id="bio-consent" aria-labelledby="bio-consent-title">
+          <div class="bio-card-head"><h4 id="bio-consent-title">Consentement biométrique <span id="bio-consent-badge">${consentBadge(c)}</span></h4></div>
+          ${consentOk ? "" : `<div class="bio-banner info" role="note"><span aria-hidden="true">ℹ</span><div><b>Le consentement de l'employé est obligatoire avant tout enrôlement biométrique.</b>Ce consentement est généralement recueilli lors de la signature du contrat de travail.</div></div>`}
+          ${c ? `<dl class="bio-meta" id="bio-consent-meta"><div><dt>Type</dt><dd>${esc(CONSENT_LABEL[c.status] || c.status)}</dd></div><div><dt>Source</dt><dd>${esc(SOURCE_CONSENT[c.source] || c.source)}</dd></div>
+            <div><dt>Référence</dt><dd>${esc(c.proof_reference || "—")}</dd></div><div><dt>Date de l'accord</dt><dd>${esc(c.consent_date ? c.consent_date.slice(0, 10).split("-").reverse().join("/") : "—")}</dd></div>
+            <div><dt>Version du texte</dt><dd>${esc(c.notice_version)}</dd></div><div><dt>Enregistré par</dt><dd>${esc(c.recorded_by || "—")}</dd></div></dl>` : ""}
+          <details><summary>Voir le texte d'information employé (${esc(notice.version)})</summary><pre>${esc(notice.text)}</pre></details>
+          ${c ? `<details id="bio-consent-update"><summary>Mettre à jour le consentement (nouvel accord, refus, retrait)</summary>${formHTML}</details>` : formHTML}
+        </section>
+
+        <section class="bio-card" id="bio-enroll" aria-labelledby="bio-enroll-title">
+          <div class="bio-card-head"><h4 id="bio-enroll-title">Enrôlement facial <span id="bio-enroll-badge">${badge(enrKind, enrText)}</span></h4>
+            ${status.enrollment !== "NONE" ? '<button class="danger" type="button" id="en-off">Désactiver le gabarit</button>' : ""}</div>
+          ${!enrollOn ? '<div class="bio-banner err" role="note"><span aria-hidden="true">⛔</span><div><b>Enrôlement désactivé sur ce serveur.</b>Aucun gabarit ne peut être créé tant qu\'il n\'est pas autorisé.</div></div>' : ""}
+          ${enrollOn && !consentOk ? '<div class="bio-banner warn" role="note" id="bio-need-consent"><span aria-hidden="true">⚠</span><div><b>Enregistrez d\'abord le consentement pour pouvoir procéder à l\'enrôlement.</b></div></div>' : ""}
+          <ul class="bio-checks" aria-label="Conditions d'enrôlement">
+            ${check(consentOk, "Consentement admissible")}${check(Boolean(status.photo_available), "Photo DRH", status.photo_available ? "disponible" : "absente")}
+            ${check(enrollOn, "Enrôlement autorisé sur ce serveur")}${check(enrolCams.length > 0, "Caméra d'enrôlement du site", enrolCams.length ? "" : "aucune déclarée")}
+          </ul>
+          ${status.templates.length ? `<ul class="bio-templates" aria-label="Historique des gabarits">${status.templates.map((t) => `<li>${esc(TEMPLATE_LABEL[t.status] || t.status)} · ${esc(t.source === "EMPLOYEE_PHOTO" ? "photo de la fiche" : "caméra")} · ${esc((t.created_at || "").slice(0, 16).replace("T", " "))}${t.status_reason ? " — " + esc(t.status_reason) : ""}</li>`).join("")}</ul>` : ""}
+          ${enrolCams.length ? `<div class="bio-cam"><label for="en-cam">Caméra d'enrôlement</label><select id="en-cam">${enrolCams.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select></div>` : ""}
+          <div class="error" id="bio-error" role="alert"></div>
+          <div class="bio-result" id="bio-result" aria-live="polite"></div>
+        </section>
+      </div>
+      <footer class="bio-foot"><button class="secondary" type="button" id="bio-close">Fermer</button>
+        <div class="bio-foot-actions">
+          <button class="secondary" type="button" id="en-photo"${canAnalyse ? "" : " disabled"}>Analyser la photo DRH</button>
+          <button class="primary" type="button" id="en-cam-btn"${canCapture ? "" : " disabled"}>${CAMERA_ICON} Démarrer l'enrôlement</button>
+        </div></footer>`, { wide: true, labelledBy: "bio-title" });
+    const fail = (ex) => { const err = m.querySelector("#bio-error"); err.textContent = permissionMessage({ message: ex.message }); err.classList.add("show"); };
     m.querySelector("#bio-close").addEventListener("click", closeModal);
+    m.querySelector("#bio-x").addEventListener("click", closeModal);
+    m.querySelector("#bio-x").focus();
+    if (m.querySelector("#bio-photo-zoom")) m.querySelector("#bio-photo-zoom").addEventListener("click", () => {
+      const box = document.createElement("div");
+      box.className = "bio-lightbox"; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Photo DRH en pleine taille");
+      box.innerHTML = `<img src="${esc(status.photo_url)}" alt="Photo DRH de ${esc(fullName)}"><button type="button" aria-label="Fermer l'aperçu">×</button>`;
+      const close = () => { box.remove(); m.querySelector("#bio-photo-zoom").focus(); };
+      box.addEventListener("click", (e) => { if (e.target === box || e.target.tagName === "BUTTON") close(); });
+      box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
+      m.appendChild(box); box.querySelector("button").focus();
+    });
     m.querySelector("#consent-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const date = m.querySelector("#cs-date").value;
       try {
         await api(`/biometrics/employees/${row.employee_id}/consent`, { method: "POST", body: { status: m.querySelector("#cs-status").value, source: m.querySelector("#cs-source").value,
           proof_reference: m.querySelector("#cs-ref").value.trim() || null, consent_date: date ? date + "T00:00:00" : null, notice_version: notice.version } });
-        toast("Consentement enregistré"); openBiometrics(row);
+        toast("Consentement enregistré"); openBiometrics(row);     // badge, conditions et boutons réévalués
       } catch (ex) { fail(ex); }
     });
-    const enroll = async (body) => {
-      try { reviewEnrollment(row, status, await api(`/biometrics/employees/${row.employee_id}/enrollment/preview`, { method: "POST", body })); }
+    const busy = (on) => { ["en-photo", "en-cam-btn"].forEach((k) => { const b = m.querySelector("#" + k); if (b && on) { b.dataset.wasDisabled = b.disabled ? "1" : ""; b.disabled = true; } else if (b) b.disabled = b.dataset.wasDisabled === "1"; }); };
+    const enroll = async (body, button) => {
+      if (m.dataset.busy) return;                                    // protection double clic
+      m.dataset.busy = "1"; busy(true);
+      const label = button.innerHTML; button.innerHTML = '<span class="en-spinner" aria-hidden="true"></span> Analyse…';
+      m.querySelector("#bio-error").classList.remove("show");
+      try { reviewEnrollment(row, status, await api(`/biometrics/employees/${row.employee_id}/enrollment/preview`, { method: "POST", body }), m); }
       catch (ex) {
         const photo = ex.detail && ex.detail.photo;
         fail(photo ? { message: `${ex.message} (photo : ${photo.state}${photo.reasons && photo.reasons[0] ? " — " + photo.reasons[0] : ""})` } : ex);
-      }
+      } finally { delete m.dataset.busy; button.innerHTML = label; busy(false); }
     };
-    m.querySelector("#en-photo").addEventListener("click", () => enroll({}));
-    if (m.querySelector("#en-cam-btn")) m.querySelector("#en-cam-btn").addEventListener("click", () => enroll({ camera_id: Number(m.querySelector("#en-cam").value) }));
+    m.querySelector("#en-photo").addEventListener("click", (e) => enroll({}, e.currentTarget));
+    m.querySelector("#en-cam-btn").addEventListener("click", (e) => enroll({ camera_id: Number(m.querySelector("#en-cam").value) }, e.currentTarget));
     if (m.querySelector("#en-off")) m.querySelector("#en-off").addEventListener("click", async () => {
       const reason = prompt("Motif de la désactivation (obligatoire) :");
       if (!reason || reason.trim().length < 3) return;
@@ -934,27 +1094,32 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     });
   }
 
-  // Aperçu d'enrôlement : rien n'est créé avant la confirmation explicite de l'opérateur.
+  // Résultat de l'analyse, DANS la section Enrôlement facial : rien n'est créé avant la
+  // confirmation explicite de l'opérateur (jeton serveur).
   const CMP_LABEL = { MATCH: "Correspondance", REVIEW_REQUIRED: "Incertain — vérification humaine", NO_MATCH: "Ne correspond pas", NO_REFERENCE: "Pas de photo DRH exploitable", NOT_APPLICABLE: "Source = photo DRH" };
-  function reviewEnrollment(row, status, p) {
+  const STATE_LABEL = { OK: "Visage exploitable", NO_FACE: "Aucun visage détecté", MULTIPLE_FACES: "Plusieurs visages", QUALITY_FAILED: "Qualité insuffisante", LIVENESS_FAILED: "Présence réelle non confirmée", ABSENT: "Photo absente" };
+  function reviewEnrollment(row, status, p, m) {
     const c = p.comparison || {}, cap = p.capture, ph = p.photo || {};
-    const img = (src, label) => src ? `<figure style="margin:0;text-align:center"><img src="${esc(src)}" alt="${esc(label)}" style="max-width:200px;max-height:240px;border-radius:10px;border:1px solid var(--line)"><figcaption>${esc(label)}</figcaption></figure>` : `<figure style="margin:0"><div class="state info">${esc(label)} indisponible</div></figure>`;
-    const m = modal(`<h3>Enrôlement — vérification</h3><div class="sub">${esc(row.nom)} · ${esc(row.matricule)} · ${esc(row.site)}</div>
-      <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:10px 0">${img(status.photo_url, "Photo DRH")}${cap ? img(cap.thumbnail, "Capture caméra") : ""}</div>
-      <p><b>Photo DRH :</b> ${esc(ph.state)}${ph.reasons && ph.reasons[0] ? " — " + esc(ph.reasons[0]) : ""}</p>
-      ${cap ? `<p><b>Capture :</b> ${esc(cap.state)}${cap.reasons && cap.reasons[0] ? " — " + esc(cap.reasons[0]) : ""}${cap.liveness != null ? " · liveness " + esc(cap.liveness) : ""}</p>` : ""}
+    const q = (x) => x && x.quality ? ` · qualité : détection ${esc(x.quality.detection_score)}, visage ${esc(x.quality.face_px)} px, netteté ${esc(x.quality.sharpness)}` : "";
+    const img = (src, label) => src ? `<figure style="margin:0;text-align:center"><img src="${esc(src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : `<figure style="margin:0"><div class="state info">${esc(label)} indisponible</div></figure>`;
+    const box = m.querySelector("#bio-result");
+    box.innerHTML = `<h4 style="margin:0 0 6px">Résultat de l'analyse ${p.can_confirm && p.token ? badge("ok", "Prêt à confirmer") : badge("err", "Enrôlement impossible")}</h4>
+      <div class="bio-figs">${img(status.photo_url, "Photo DRH")}${cap ? img(cap.thumbnail, "Capture caméra") : ""}</div>
+      <p><b>Photo DRH :</b> ${esc(STATE_LABEL[ph.state] || ph.state)}${ph.reasons && ph.reasons[0] ? " — " + esc(ph.reasons[0]) : ""}${q(ph)}</p>
+      ${cap ? `<p><b>Capture :</b> ${esc(STATE_LABEL[cap.state] || cap.state)}${cap.reasons && cap.reasons[0] ? " — " + esc(cap.reasons[0]) : ""}${cap.liveness != null ? " · liveness " + esc(cap.liveness) : ""}${q(cap)}</p>` : ""}
       ${p.comparison ? `<p><b>Comparaison 1:1 :</b> ${esc(CMP_LABEL[c.result] || c.result)}${c.score != null ? ` · score brut ${esc(c.score)} (seuil ${esc(c.threshold)}, marge ${esc(c.review_margin)})` : ""}</p>` : ""}
       ${p.duplicate && p.duplicate.suspected ? `<div class="state error">Visage proche d'un autre employé (${esc(p.duplicate.matricule || "")}, score ${esc(p.duplicate.score)}) : le gabarit sera mis en REVUE, jamais activé automatiquement.</div>` : ""}
       ${p.requires_justification ? '<label for="en-just">Justification obligatoire (résultat incertain)</label><textarea id="en-just" rows="3" maxlength="500"></textarea>' : ""}
       <div class="error" id="en-error" role="alert"></div>
-      <div class="modal-actions"><button class="secondary" type="button" id="en-cancel">Annuler</button><button class="primary" type="button" id="en-confirm"${p.can_confirm && p.token ? "" : " disabled"}>Confirmer l'enrôlement</button></div>`);
-    m.querySelector("#en-cancel").addEventListener("click", () => openBiometrics(row));
-    m.querySelector("#en-confirm").addEventListener("click", async () => {
+      <div class="modal-actions"><button class="secondary" type="button" id="en-cancel">Annuler</button><button class="primary" type="button" id="en-confirm"${p.can_confirm && p.token ? "" : " disabled"}>Confirmer l'enrôlement</button></div>`;
+    box.scrollIntoView && box.scrollIntoView({ block: "nearest" });
+    box.querySelector("#en-cancel").addEventListener("click", () => { box.innerHTML = ""; });
+    box.querySelector("#en-confirm").addEventListener("click", async () => {
       try {
-        const just = m.querySelector("#en-just");
+        const just = box.querySelector("#en-just");
         const r = await api(`/biometrics/employees/${row.employee_id}/enrollment/confirm`, { method: "POST", body: { token: p.token, confirm: true, justification: just ? just.value.trim() : null } });
         toast(r.status === "ACTIVE" ? "Enrôlement actif" : "Doublon possible : enrôlement mis en revue", r.status !== "ACTIVE"); openBiometrics(row);
-      } catch (ex) { const err = m.querySelector("#en-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
+      } catch (ex) { const err = box.querySelector("#en-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
     });
   }
 
