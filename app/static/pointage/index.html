@@ -67,6 +67,17 @@ tr:hover td{background:#fafcff}
 .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .empty{padding:36px;text-align:center;color:var(--muted)}
 .state{padding:16px;border-radius:12px;margin:12px;font-weight:700}
+.en-searchbar{position:relative;display:flex;align-items:center;margin:12px;border:1px solid var(--line);border-radius:12px;background:#fff;min-width:0}
+.en-searchbar:focus-within{border-color:var(--navy);box-shadow:0 0 0 3px rgba(4,57,112,.15)}
+.en-searchbar .en-icon{flex:0 0 auto;padding:0 4px 0 13px;color:#64748b;font-size:15px}
+.en-searchbar input,.en-searchbar input:focus{flex:1 1 auto;min-width:0;width:100%;border:0;border-radius:0;outline:0;box-shadow:none;background:transparent;height:46px;padding:0 8px;font-size:16px}
+.en-searchbar input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.en-spinner{flex:0 0 auto;width:16px;height:16px;margin-right:6px;border:2px solid #cbd5e1;border-top-color:var(--navy);border-radius:50%;animation:en-spin .8s linear infinite}
+@keyframes en-spin{to{transform:rotate(360deg)}}
+.en-clear{flex:0 0 auto;width:40px;height:40px;margin-right:3px;border:0;border-radius:10px;background:transparent;color:#475569;font-size:22px;line-height:1;cursor:pointer}
+.en-clear:hover{background:#f1f5f9}.en-clear:focus-visible{outline:2px solid var(--navy);outline-offset:1px}
+.en-status{margin:-4px 14px 8px;min-height:16px;font-size:12px;color:#64748b}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .state.error{display:block;background:#fee2e2;color:#991b1b}.state.info{background:#eff6ff;color:var(--navy)}
 .modal-bg{position:fixed;inset:0;background:rgba(6,24,48,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
 .modal{background:#fff;border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.3)}
@@ -150,7 +161,8 @@ tr:hover td{background:#fafcff}
       </section>
       <section id="view-enrollment" class="hidden">
         <div class="page-head"><div><h2>Enrôlement biométrique supervisé</h2><p>Recherche dans votre périmètre. Aucun gabarit n'est créé sans analyse, comparaison avec la photo DRH et confirmation explicite.</p></div></div>
-        <div class="card"><div class="filters"><input class="grow" id="en-q" type="search" placeholder="Matricule, nom ou prénom" aria-label="Rechercher un employé à enrôler"><button class="secondary" id="en-search" type="button">Rechercher</button></div>
+        <div class="card"><div class="en-searchbar" role="search"><label class="sr-only" for="en-q">Rechercher un employé à enrôler par matricule, nom ou prénom</label><span class="en-icon" aria-hidden="true">🔍</span><input id="en-q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Rechercher un employé par matricule, nom ou prénom…" aria-describedby="en-status"><span class="en-spinner hidden" id="en-spinner" aria-hidden="true"></span><button class="en-clear hidden" id="en-clear" type="button" aria-label="Effacer la recherche">×</button></div>
+          <div class="en-status" id="en-status" role="status" aria-live="polite"></div>
           <div id="en-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Consentement</th><th>Enrôlement</th><th>Photo DRH</th><th></th></tr></thead><tbody id="en-rows"></tbody></table></div></div>
       </section>
@@ -230,6 +242,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       method: opts.method || "GET",
       headers: Object.assign({ "Content-Type": "application/json" }, state.token ? { Authorization: "Bearer " + state.token } : {}),
       body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: opts.signal,
     });
     const text = await res.text();
     let data = null;
@@ -722,28 +735,82 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     m.querySelector("#dup-reject").addEventListener("click", () => decide(false));
   }
 
-  // ── Biométrie : recherche des employés à enrôler ─────────────────────────────────
-  async function loadEnrollment() {
-    $("en-state").innerHTML = '<div class="state info">Chargement…</div>';
+  // ── Biométrie : recherche des employés à enrôler (dynamique) ─────────────────────
+  // Le SERVEUR filtre (périmètre société/site du compte, permission biometric_status, 25
+  // résultats max) : la page n'envoie que le texte saisi, jamais un filtrage local d'une liste.
+  // Dès 1 caractère (endpoint déjà borné). Debounce 280 ms ; la requête précédente est annulée
+  // (AbortController) et toute réponse d'une recherche plus ancienne est ignorée (numéro de
+  // séquence) : la dernière saisie gagne toujours.
+  const EN_DEBOUNCE_MS = 280;
+  const enSearch = { timer: null, seq: 0, controller: null, lastRows: [] };
+
+  function enRenderRows(rows, query) {
+    const ENR = { ACTIVE: "Actif", PENDING_REVIEW: "En revue", NONE: "Aucun" };
+    enSearch.lastRows = rows;
+    $("en-rows").innerHTML = rows.length ? rows.map((r) => `<tr><td class="who"><b>${esc(r.nom)} ${esc(r.prenom)}</b><small>${esc(r.matricule)}${r.statut && r.statut !== "actif" ? " · " + esc(r.statut) : ""}</small></td>
+      <td>${esc(r.fonction || "—")}</td><td>${esc(r.site || "")}</td><td>${r.consent_admissible ? "Admissible" : "<b>Non admissible</b>"}</td>
+      <td>${esc(ENR[r.enrollment] || r.enrollment)}</td><td>${r.photo_available ? "Disponible" : "Absente"}</td>
+      <td><button class="link" type="button" data-en="${r.employee_id}">Ouvrir</button></td></tr>`).join("")
+      : `<tr><td colspan="7" class="empty">${query ? "Aucun employé correspondant dans votre périmètre." : "Aucun employé dans votre périmètre."}</td></tr>`;
+    $("en-rows").querySelectorAll("[data-en]").forEach((b) => b.addEventListener("click", () => {
+      const r = rows.find((x) => String(x.employee_id) === b.dataset.en);
+      openBiometrics({ employee_id: r.employee_id, nom: `${r.nom} ${r.prenom}`, matricule: r.matricule, site: r.site || "", site_id: r.site_id });
+    }));
+  }
+
+  function enSetBusy(busy) {
+    $("en-spinner").classList.toggle("hidden", !busy);
+    if (busy) $("en-status").textContent = "Recherche…";
+  }
+
+  async function runEnrollmentSearch() {
+    clearTimeout(enSearch.timer);
+    enSearch.timer = null;
+    if (enSearch.controller) enSearch.controller.abort();          // annulation volontaire : jamais une erreur
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    enSearch.controller = controller;
+    const seq = ++enSearch.seq;
+    const query = $("en-q").value.trim();
+    $("en-state").innerHTML = "";
+    enSetBusy(true);
     try {
       const params = new URLSearchParams();
-      if ($("en-q").value.trim()) params.set("q", $("en-q").value.trim());
+      if (query) params.set("q", query);
       if ($("f-site").value) params.set("site_id", $("f-site").value);
-      const rows = await api("/biometrics/employees?" + params.toString());
-      $("en-state").innerHTML = "";
-      const ENR = { ACTIVE: "Actif", PENDING_REVIEW: "En revue", NONE: "Aucun" };
-      $("en-rows").innerHTML = rows.length ? rows.map((r) => `<tr><td class="who"><b>${esc(r.nom)} ${esc(r.prenom)}</b><small>${esc(r.matricule)}${r.statut && r.statut !== "actif" ? " · " + esc(r.statut) : ""}</small></td>
-        <td>${esc(r.fonction || "—")}</td><td>${esc(r.site || "")}</td><td>${r.consent_admissible ? "Admissible" : "<b>Non admissible</b>"}</td>
-        <td>${esc(ENR[r.enrollment] || r.enrollment)}</td><td>${r.photo_available ? "Disponible" : "Absente"}</td>
-        <td><button class="link" type="button" data-en="${r.employee_id}">Ouvrir</button></td></tr>`).join("") : '<tr><td colspan="7" class="empty">Aucun employé trouvé dans votre périmètre.</td></tr>';
-      $("en-rows").querySelectorAll("[data-en]").forEach((b) => b.addEventListener("click", () => {
-        const r = rows.find((x) => String(x.employee_id) === b.dataset.en);
-        openBiometrics({ employee_id: r.employee_id, nom: `${r.nom} ${r.prenom}`, matricule: r.matricule, site: r.site || "", site_id: r.site_id });
-      }));
-    } catch (ex) { $("en-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))}</div>`; }
+      const rows = await api("/biometrics/employees?" + params.toString(), { signal: controller ? controller.signal : undefined });
+      if (seq !== enSearch.seq) return;                            // réponse obsolète : ignorée
+      enRenderRows(rows || [], query);
+      $("en-status").textContent = rows && rows.length ? `${rows.length} employé(s)${rows.length >= 25 ? " — affinez la recherche pour voir les autres" : ""}` : "";
+    } catch (ex) {
+      if (seq !== enSearch.seq || (ex && ex.name === "AbortError")) return;
+      $("en-status").textContent = "";
+      $("en-state").innerHTML = `<div class="state error" role="alert">${esc(permissionMessage(ex))} <button class="link" type="button" id="en-retry">Réessayer</button></div>`;
+      $("en-retry").addEventListener("click", runEnrollmentSearch);
+    } finally {
+      if (seq === enSearch.seq) { enSetBusy(false); enSearch.controller = null; }
+    }
   }
-  $("en-search").addEventListener("click", loadEnrollment);
-  $("en-q").addEventListener("keydown", (e) => { if (e.key === "Enter") loadEnrollment(); });
+
+  function scheduleEnrollmentSearch() {
+    $("en-clear").classList.toggle("hidden", !$("en-q").value);
+    clearTimeout(enSearch.timer);
+    enSearch.timer = setTimeout(runEnrollmentSearch, EN_DEBOUNCE_MS);
+  }
+
+  function clearEnrollmentSearch() {
+    $("en-q").value = "";
+    $("en-clear").classList.add("hidden");
+    runEnrollmentSearch();                                         // état initial : premiers employés du périmètre
+    $("en-q").focus();
+  }
+
+  function loadEnrollment() { return runEnrollmentSearch(); }
+  $("en-q").addEventListener("input", scheduleEnrollmentSearch);
+  $("en-q").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); runEnrollmentSearch(); }   // facultatif : lance tout de suite
+    else if (e.key === "Escape" && $("en-q").value) { e.preventDefault(); clearEnrollmentSearch(); }
+  });
+  $("en-clear").addEventListener("click", clearEnrollmentSearch);
 
   // ── Biométrie : fiche employé (consentement, enrôlement) ──────────────────────────
   const CONSENT_LABEL = { contract_confirmed: "Accord du contrat confirmé", explicit_confirmed: "Accord explicite", pending: "En attente", refused: "Refusé", withdrawn: "Retiré" };
