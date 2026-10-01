@@ -1,7 +1,7 @@
 {
-  "name": "Pointeur ATLAS",
-  "short_name": "Pointeur",
-  "description": "Pointage des agents par scan QR ou badge",
+  "name": "Pointage ATLAS",
+  "short_name": "Pointage",
+  "description": "Pointage terrain : QR, tablette, smartphone et pointage facial",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -422,8 +422,8 @@ l'ensemble de la rafale. Seuils inchangés.
 |---|---|---|
 | `BIOMETRIC_ENROLLMENT_ENABLED` (env) | global | autorise l'**enrôlement supervisé** sans ouvrir le pointage facial |
 | `BIOMETRIC_ENABLED` (env) | global | ouvre le circuit de pointage facial (et l'enrôlement) |
-| `cameras.facial_attendance_enabled` (base, défaut **faux**) | **par caméra** | une caméra ne pointe QUE si elle est explicitement activée (Pointage → Caméras) |
-| `biometric_terminals.facial_attendance_enabled` (base, défaut **faux**) | **par terminal** | une tablette/un smartphone associé ne pointe QUE s'il est explicitement activé (Pointage → Terminaux) ; le QR de la borne n'en dépend pas |
+| `cameras.facial_attendance_enabled` (base, défaut **faux**) | **par caméra** | une caméra ne pointe QUE si elle est explicitement activée (Gestion du pointage → Caméras) |
+| `biometric_terminals.facial_attendance_enabled` (base, défaut **faux**) | **par terminal** | une tablette/un smartphone associé ne pointe QUE s'il est explicitement activé (Gestion du pointage → Terminaux) ; le QR de la borne n'en dépend pas |
 
 `BIOMETRIC_ENABLED=true` seul ne fait donc pointer **aucune** caméra : chaque caméra du pilote est
 activée à la main, audité (`biometrics.camera.update`). Seule une caméra **lue par le serveur**
@@ -431,7 +431,7 @@ et d'usage pointage peut être activée (jamais une caméra « terminal » ni d'
 
 **Coupures (kill switch)** — toutes sans effet sur le QR ni la saisie manuelle :
 - **caméra** : décocher « Pointage facial RÉEL actif » (ou désactiver la caméra) — effet immédiat ;
-- **terminal** : « Couper le facial » / « Désactiver » / « Révoquer » (Pointage → Terminaux) — effet
+- **terminal** : « Couper le facial » / « Désactiver » / « Révoquer » (Gestion du pointage → Terminaux) — effet
   sur la requête suivante (défis en cours invalidés) ;
 - **site** : « Couper le pointage facial du site » → `POST /api/biometrics/sites/{site_id}/facial-disable`
   (toutes les caméras **et tous les terminaux** du site, audité `biometrics.site.facial_disable`) — effet immédiat ;
@@ -468,7 +468,7 @@ gabarit n'est plus jamais activé sans comparaison ni confirmation.
 
 Ré-enrôlement : nouvel aperçu + confirmation (l'ancien gabarit est désactivé). Photo DRH changée
 ⇒ gabarit issu de l'ancienne photo invalidé (§5). Retrait du consentement ⇒ désactivation immédiate.
-Écran : Pointage → **Enrôlement** (recherche) → fiche biométrique → « Analyser la photo DRH » ou
+Écran : Gestion du pointage → **Enrôlement** (recherche) → fiche biométrique → « Analyser la photo DRH » ou
 « Capturer et comparer à la photo DRH » → vérification côte à côte → « Confirmer l'enrôlement ».
 DRH Next affiche l'état et renvoie vers ce parcours.
 
@@ -507,7 +507,7 @@ supplémentaire facultative : son absence ne bloque pas le pilote.
    Un pointeur ordinaire n'a aucune de ces permissions.
 4. Consentements, puis enrôlement supervisé de **quelques employés explicitement choisis** ;
    revue des doublons.
-5. Terminal : Pointage → Terminaux → « + Ajouter un terminal » (TAB-HAMOUL-01, Tablette Android,
+5. Terminal : Gestion du pointage → Terminaux → « + Ajouter un terminal » (TAB-HAMOUL-01, Tablette Android,
    site HAMOUL 01) → code d'association → installation de la tablette
    (`docs/biometric-terminals.md`). Facial **désactivé**.
 6. Essais physiques sur la tablette (`docs/attendance-hardware-checklist.md` § 10) — le terminal
@@ -520,6 +520,14 @@ supplémentaire facultative : son absence ne bloque pas le pilote.
 ## 14. Terminaux faciaux mobiles (tablette Samsung, smartphone) — circuit B
 
 ### 14.1 Trois circuits séparés
+
+Applications métier : **Gestion du pointage** = pointage.irongs.com (clé de module `pointage` :
+présences, contrôle, enrôlement, terminaux, caméras, seuils) ; **Pointage** = pointeur.irongs.com
+(clé `pointeur` : QR, pointeur, tablette, smartphone, pointage facial, `/borne`). Permissions
+biométriques fines (`attendance × biometric_*`) : fonctions de gestion, présentées sous Gestion du
+pointage ; l'exécution du pointage facial n'exige aucune permission utilisateur (identité de
+terminal). `biometric_admin × validate` ouvre aussi le Mode Test dans Pointage.
+
 
 | Circuit | Chemin | Présence |
 |---|---|---|
@@ -659,7 +667,7 @@ méthode de secours selon les règles existantes.
 identifiant du défi, nombre de trames, version de configuration, pointage créé ou non, motif,
 durée. **Jamais** : image, base64, gabarit, embedding, clé, code d'association. La réponse de
 reconnaissance ne contient que nom, prénom, matricule, action, heure, site, confiance, liveness.
-Consultable : Pointage → Terminaux → « Audit ».
+Consultable : Gestion du pointage → Terminaux → « Audit ».
 
 ### 14.10 Tests
 

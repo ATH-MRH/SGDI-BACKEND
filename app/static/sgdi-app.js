@@ -18501,8 +18501,8 @@ const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_LOGIN_MODULES=[
   {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
   {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
-  {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Pointage",host:"pointage.irongs.com",description:"Gestion des présences et du pointage"},
-  {key:"pointeur",label:"Pointeur terrain",host:"pointeur.irongs.com",description:"Scanner QR, terminal terrain et pointage facial"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
+  {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Gestion du pointage",host:"pointage.irongs.com",description:"Gestion des présences, contrôle, statistiques et administration du pointage"},
+  {key:"pointeur",label:"Pointage",host:"pointeur.irongs.com",description:"Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
   {key:"caisse",label:"Caisse",host:"caisse.irongs.com"},{key:"conges",label:"Congés",host:"conges.irongs.com"},{key:"portail",label:"Portail RH",host:"portail-rh.irongs.com"},
   // Clé canonique déjà en vigueur côté backend (API_MODULE_PREFIXES, auth/dependencies.py)
   // depuis l'intégration Site Workforce. "Bureau des Effectifs Ouest"/BEO et

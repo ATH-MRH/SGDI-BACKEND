@@ -2,6 +2,12 @@
 
 Référence technique : `docs/biometrics.md` § 14. Ce guide décrit les gestes d'exploitation.
 
+Terminologie : la tablette (ou le smartphone) de production appartient à l'application
+**Pointage** (pointeur.irongs.com, clé de module `pointeur`, page `/borne`). Elle est créée,
+associée, activée et révoquée depuis **Gestion du pointage** (pointage.irongs.com, clé
+`pointage`). La borne ne dépend d'aucune session utilisateur : elle s'authentifie par sa clé
+d'appareil.
+
 ## 1. Pré-requis
 
 - `BIOMETRIC_ENABLED` **absent** tant que le GO du pilote n'est pas signé (la borne s'installe et
@@ -27,7 +33,7 @@ caméra sur Safari (`BarcodeDetector` absent) → QR par HENEX ou pointeur.
 
 ## 3. Association (≈ 5 minutes, administrateur sur place)
 
-1. ATLAS → Pointage (pointage.irongs.com) → **Terminaux (tablettes)** → « + Ajouter un terminal » :
+1. ATLAS → Gestion du pointage (pointage.irongs.com) → **Terminaux (tablettes)** → « + Ajouter un terminal » :
    nom (ex. `TAB-HAMOUL-01`), type « Tablette Android (Samsung) », site, emplacement.
 2. Le code d'association s'affiche (10 caractères + QR), **valable 10 minutes, une seule fois**.
    Ne pas le photographier ni le transmettre par messagerie.
@@ -57,7 +63,7 @@ données de Chrome, réinitialiser la tablette ou changer de profil ⇒ nouvelle
 ## 5. Mise en service du facial (après GO signé)
 
 1. `BIOMETRIC_ENABLED=true` (décision explicite, variable Coolify, redéploiement).
-2. Pointage → Terminaux → « Activer le facial » sur **le seul terminal du pilote** (confirmation).
+2. Gestion du pointage → Terminaux → « Activer le facial » sur **le seul terminal du pilote** (confirmation).
 3. La borne passe à « PRÉSENTEZ VOTRE VISAGE » dans les 30 s (ou au redémarrage de l'app).
 
 ## 6. Utilisation (aucun clic)

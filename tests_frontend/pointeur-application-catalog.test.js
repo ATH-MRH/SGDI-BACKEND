@@ -20,10 +20,10 @@ const CATALOG = {
   modules: [
     { module_key: 'drh', label: 'DRH', domain: 'drh.irongs.com', description: 'Ressources humaines', applications: [],
       features: [{ feature_key: 'employees', label: 'Employés', description: 'Fiches', applicable_actions: ['read'] }] },
-    { module_key: 'attendance', label: 'Pointage', domain: 'pointage.irongs.com', description: 'Présences, absences et pointage',
+    { module_key: 'attendance', label: 'Gestion du pointage', domain: 'pointage.irongs.com', description: 'Présences, contrôle et administration du pointage',
       applications: [
-        { module_key: 'pointage', label: 'Pointage', domain: 'pointage.irongs.com', description: 'Gestion des présences et du pointage' },
-        { module_key: 'pointeur', label: 'Pointeur terrain', domain: 'pointeur.irongs.com', description: 'Scanner QR, terminal terrain et pointage facial' },
+        { module_key: 'pointage', label: 'Gestion du pointage', domain: 'pointage.irongs.com', description: 'Gestion des présences, contrôle, statistiques et administration du pointage' },
+        { module_key: 'pointeur', label: 'Pointage', domain: 'pointeur.irongs.com', description: 'Pointage terrain : QR, tablette, smartphone, pointage facial et borne' },
       ],
       features: [{ feature_key: 'qr_scanning', label: 'Pointage QR', description: 'QR', applicable_actions: ['read', 'create'] }, ...BIO] },
   ],
@@ -60,38 +60,40 @@ async function boot() {
   return { dom, window, T, d: window.document };
 }
 
-test('modules accessibles : Pointage et Pointeur terrain sont deux applications distinctes, libellés explicites', async () => {
+test('modules accessibles : « Gestion du pointage » (pointage.irongs.com) et « Pointage » (pointeur.irongs.com), mêmes clés', async () => {
   const { dom, T, d } = await boot();
   try {
   const byKey = Object.fromEntries(T.modules.map((m) => [m.key, m]));
   assert.deepStrictEqual([byKey.pointage.label, byKey.pointage.host, byKey.pointage.description],
-    ['Pointage', 'pointage.irongs.com', 'Gestion des présences et du pointage']);
+    ['Gestion du pointage', 'pointage.irongs.com', 'Gestion des présences, contrôle, statistiques et administration du pointage']);
   assert.deepStrictEqual([byKey.pointeur.label, byKey.pointeur.host, byKey.pointeur.description],
-    ['Pointeur terrain', 'pointeur.irongs.com', 'Scanner QR, terminal terrain et pointage facial']);
+    ['Pointage', 'pointeur.irongs.com', 'Pointage terrain : QR, tablette, smartphone, pointage facial et borne']);
+  assert.ok(!T.modules.some((m) => /Pointeur terrain/.test(m.label)));
   assert.strictEqual(T.modules.filter((m) => m.key === 'pointeur').length, 1);       // aucune seconde clé
   await T.openUser('');
   const label = (key) => d.querySelector(`input[name="module_${key}"]`).closest('label').textContent.replace(/\s+/g, ' ');
-  assert.match(label('pointage'), /Pointage.*pointage\.irongs\.com.*Gestion des présences et du pointage/);
-  assert.match(label('pointeur'), /Pointeur terrain.*pointeur\.irongs\.com.*Scanner QR, terminal terrain et pointage facial/);
+  assert.match(label('pointage'), /^\s*Gestion du pointage\s*pointage\.irongs\.com/);
+  assert.match(label('pointeur'), /^\s*Pointage\s*pointeur\.irongs\.com.*tablette, smartphone, pointage facial et borne/);
   // Nouveau compte : aucune application cochée par défaut (fail closed), cases indépendantes.
   assert.strictEqual(d.querySelector('input[name="module_pointage"]').checked, false);
   assert.strictEqual(d.querySelector('input[name="module_pointeur"]').checked, false);
   } finally { dom.window.close(); }
 });
 
-test('permissions granulaires : domaine Pointage avec ses deux applications, permissions biométriques uniques', async () => {
+test('permissions granulaires : Gestion du pointage et Pointage, permissions biométriques uniques', async () => {
   const { dom, T, d } = await boot();
   try {
   T.render(d.getElementById('view'));
   const button = Array.from(d.querySelectorAll('.admin-user-actions button')).find((b) => b.textContent === 'Permissions');
   button.click();
   await new Promise((r) => setTimeout(r, 0));
-  const pointageButton = Array.from(d.querySelectorAll('.granular-module-list button')).find((b) => /Pointage/.test(b.textContent));
+  const pointageButton = Array.from(d.querySelectorAll('.granular-module-list button')).find((b) => /Gestion du pointage/.test(b.textContent));
   assert.match(pointageButton.textContent, /pointage\.irongs\.com · pointeur\.irongs\.com/);
   T.selectModule('attendance');
   const head = d.querySelector('.granular-module-head').textContent.replace(/\s+/g, ' ');
-  assert.match(head, /Pointage · pointage\.irongs\.com\s*Gestion des présences et du pointage/);
-  assert.match(head, /Pointeur terrain · pointeur\.irongs\.com\s*Scanner QR, terminal terrain et pointage facial/);
+  assert.match(head, /Gestion du pointage · pointage\.irongs\.com\s*Gestion des présences/);
+  assert.match(head, /(^|[^ ])Pointage · pointeur\.irongs\.com\s*Pointage terrain/);
+  assert.doesNotMatch(head, /Pointeur terrain/);
   assert.match(head, /Modules accessibles/);
   const rows = Array.from(d.querySelectorAll('.granular-table tbody tr b')).map((b) => b.textContent);
   assert.deepStrictEqual(rows.filter((t) => t.startsWith('Biométrie')), ['Biométrie — état', 'Biométrie — enrôlement', 'Biométrie — administration']);

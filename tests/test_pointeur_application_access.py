@@ -73,8 +73,13 @@ def test_catalog_declares_both_applications_without_duplicating_permissions(clie
     assert payload.status_code == 200, payload.text
     body = payload.json()
     module = next(m for m in body["modules"] if m["module_key"] == "attendance")
-    assert [a["label"] for a in module["applications"]] == ["Pointage", "Pointeur terrain"]
-    assert module["applications"][1]["description"] == "Scanner QR, terminal terrain et pointage facial"
+    # Terminologie métier : « Gestion du pointage » = pointage.irongs.com, « Pointage » = pointeur.irongs.com.
+    assert module["label"] == "Gestion du pointage"
+    assert [(a["module_key"], a["label"], a["domain"]) for a in module["applications"]] == [
+        ("pointage", "Gestion du pointage", "pointage.irongs.com"), ("pointeur", "Pointage", "pointeur.irongs.com")]
+    assert "tablette" in module["applications"][1]["description"] and "borne" in module["applications"][1]["description"]
+    bio = {f["feature_key"]: f["description"] for f in module["features"] if f["feature_key"].startswith("biometric_")}
+    assert all(d.startswith("Gestion du pointage") for d in bio.values())   # fonctions de gestion
     assert all("applications" in m for m in body["modules"])          # champ toujours présent (liste vide sinon)
 
 

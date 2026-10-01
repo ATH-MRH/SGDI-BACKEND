@@ -2,7 +2,7 @@
   "id": "/borne",
   "name": "Borne de pointage ATLAS",
   "short_name": "Borne ATLAS",
-  "description": "Borne de pointage facial et QR — terminal associé à un site",
+  "description": "Pointage — borne de pointage facial et QR, terminal associé à un site",
   "start_url": "/borne",
   "scope": "/borne",
   "display": "fullscreen",

@@ -39,7 +39,7 @@ Conséquences :
 | Numéro de série | | ☐ |
 | Résolution flux principal / sous-flux | | ☐ |
 | Capacités anti-fraude matérielles annoncées par le fabricant (IR, 3D…) | | ☐ |
-| Modèle ajouté au catalogue ATLAS (Pointage → Caméras → Modèle) | | ☐ |
+| Modèle ajouté au catalogue ATLAS (Gestion du pointage → Caméras → Modèle) | | ☐ |
 
 ## 3. Réseau et sécurité
 
@@ -92,7 +92,7 @@ Conséquences :
 
 ## 7. Calibration
 
-Après les §4–5, créer une **nouvelle version** de configuration (Pointage → seuils) avec la
+Après les §4–5, créer une **nouvelle version** de configuration (Gestion du pointage → seuils) avec la
 provenance « calibration site X, date, N passages » ; ne jamais modifier la version 1.
 
 ## 8. Décision
@@ -112,7 +112,7 @@ aucune photo, capture, vidéo ni gabarit dans ce document ou ses annexes.
 | `BIOMETRIC_ENROLLMENT_ENABLED=true`, `BIOMETRIC_ENABLED` absent | `/api/biometrics/status` : `enrollment_enabled` vrai, `enabled` faux | | ☐ |
 | Consentement enregistré pour chaque employé du pilote | Admissible, version du texte en vigueur, référence du document | | ☐ |
 | Enrôlement supervisé de chaque employé | Photo DRH analysée ; si capture : comparaison MATCH, ou justification écrite | | ☐ |
-| Doublons signalés | Tous revus et tranchés (Pointage → Doublons) | | ☐ |
+| Doublons signalés | Tous revus et tranchés (Gestion du pointage → Doublons) | | ☐ |
 | Terminal tablette : créé, associé (code à usage unique), facial **coupé** | Terminaux : « Associé », empreinte de clé, « Facial coupé » | | ☐ |
 | (Facultatif) Caméra du site : créée, testée, identifiants chiffrés | « Tester la caméra » OK ; `credentials_set` vrai, jamais réaffiché | | ☐ |
 | Activation du SEUL terminal du site pilote (après GO § 10) | « Activer le facial » sur ce terminal uniquement ; aucun autre site | | ☐ |

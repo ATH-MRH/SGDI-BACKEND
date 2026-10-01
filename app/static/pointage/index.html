@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#043970">
-<title>POINTAGE — Centre de contrôle ATLAS</title>
+<title>GESTION DU POINTAGE — Centre de contrôle ATLAS</title>
 <link rel="icon" href="/static/sgdi-icon-192.png">
 <style>
 :root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8;--card:#fff}
@@ -110,7 +110,7 @@ tr:hover td{background:#fafcff}
 <section id="app" class="hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand"><div class="brand-logo">PTG</div><div><div class="brand-title">POINTAGE — CENTRE DE CONTRÔLE</div><div class="brand-user" id="brand-user"></div></div></div>
+      <div class="brand"><div class="brand-logo">PTG</div><div><div class="brand-title">GESTION DU POINTAGE — CENTRE DE CONTRÔLE</div><div class="brand-user" id="brand-user"></div></div></div>
       <div class="top-actions">
         <select id="f-site" aria-label="Site"><option value="">Tous les sites autorisés</option></select>
         <input id="f-date" type="date" aria-label="Date">
@@ -155,7 +155,7 @@ tr:hover td{background:#fafcff}
           <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Fonction</th><th>Site</th><th>Consentement</th><th>Enrôlement</th><th>Photo DRH</th><th></th></tr></thead><tbody id="en-rows"></tbody></table></div></div>
       </section>
       <section id="view-terminals" class="hidden">
-        <div class="page-head"><div><h2>Terminaux de pointage (tablettes, smartphones)</h2><p>Un terminal appartient à une société et un site. Il est associé par un code à usage unique ; sa clé ne quitte jamais l'appareil et n'est jamais affichée. Pointage facial désactivé par défaut, activé terminal par terminal.</p></div>
+        <div class="page-head"><div><h2>Terminaux de pointage (tablettes, smartphones)</h2><p>Les terminaux exécutent le Pointage (pointeur.irongs.com, page /borne) ; ils s'administrent ici. Un terminal appartient à une société et un site. Il est associé par un code à usage unique ; sa clé ne quitte jamais l'appareil et n'est jamais affichée. Pointage facial désactivé par défaut, activé terminal par terminal.</p></div>
           <span><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button> <button class="primary" id="terminal-add" type="button">+ Ajouter un terminal</button></span></div>
         <div class="card"><div id="terminal-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Terminal</th><th>Type</th><th>Site</th><th>Association</th><th>Dernière activité</th><th>État</th><th></th></tr></thead><tbody id="terminal-rows"></tbody></table></div></div>

@@ -85,28 +85,34 @@ FEATURE_CATALOG: dict[str, dict] = {
         "events": ("Incidents et événements", "Main courante opérationnelle", ("read", "create", "validate")),
         "movements": ("Mouvements", "Mouvements opérationnels", ("read", "create", "execute")),
     }},
-    # Domaine métier Pointage : DEUX applications distinctes, chacune ouverte par sa propre clé
-    # de module (users.authorized_modules, vérifiée à la connexion ET à chaque requête sur son
-    # sous-domaine) ; les fonctionnalités fines ci-dessous sont COMMUNES aux deux (jamais
-    # dupliquées). La borne faciale (/borne) n'utilise aucune de ces clés : identité de
-    # terminal cryptographique (app/modules/biometrics/terminals.py), jamais un compte.
-    "attendance": {"label": "Pointage", "domain": "pointage.irongs.com", "description": "Présences, absences et pointage", "applications": (
-        {"module_key": "pointage", "label": "Pointage", "domain": "pointage.irongs.com",
-         "description": "Gestion des présences et du pointage"},
-        {"module_key": "pointeur", "label": "Pointeur terrain", "domain": "pointeur.irongs.com",
-         "description": "Scanner QR, terminal terrain et pointage facial"},
+    # Domaine technique attendance = DEUX applications métier, chacune ouverte par sa clé de
+    # module existante (users.authorized_modules, vérifiée à la connexion ET, pour pointeur, à
+    # chaque requête) : « Gestion du pointage » (clé pointage, pointage.irongs.com) et
+    # « Pointage » (clé pointeur, pointeur.irongs.com, pointage terrain). Les fonctionnalités
+    # fines ci-dessous ne sont jamais dupliquées par application. La borne /borne (Pointage)
+    # n'utilise aucune clé utilisateur : identité de terminal cryptographique.
+    "attendance": {"label": "Gestion du pointage", "domain": "pointage.irongs.com",
+                   "description": "Présences, contrôle, corrections, feuilles, statistiques, paramétrage et administration biométrique ; le pointage terrain relève de l'application Pointage (pointeur.irongs.com)",
+                   "applications": (
+        {"module_key": "pointage", "label": "Gestion du pointage", "domain": "pointage.irongs.com",
+         "description": "Gestion des présences, contrôle, statistiques et administration du pointage"},
+        {"module_key": "pointeur", "label": "Pointage", "domain": "pointeur.irongs.com",
+         "description": "Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},
     ), "features": {
         "daily_sheets": ("Feuilles quotidiennes", "Pointages et états journaliers", ("read", "create", "update", "validate")),
         "generation": ("Génération et clôture", "Génération par rotation et clôture", ("validate", "execute")),
-        "qr_scanning": ("Pointage QR", "Lecture et validation QR", ("read", "create", "execute")),
-        "manual_entry": ("Saisie manuelle", "Recherche et saisie par le pointeur", ("read", "create")),
+        "qr_scanning": ("Pointage QR", "Pointage (pointeur.irongs.com) — lecture et validation QR", ("read", "create", "execute")),
+        "manual_entry": ("Saisie manuelle", "Pointage (pointeur.irongs.com) — recherche et saisie par le pointeur", ("read", "create")),
         "staffing": ("Effectifs par shift", "Effectifs contractuels et présence", ("read", "export")),
         "statistics": ("Statistiques et alertes", "Indicateurs et anomalies de pointage", ("read", "export")),
         # Biométrie : permissions EXPLICITES uniquement (jamais accordées par défaut au DRH) —
         # appliquées par app/modules/biometrics/routes.py, seul endroit où elles sont actives.
-        "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
-        "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
-        "biometric_admin": ("Biométrie — administration", "Valider : doublons et Mode Test facial (pointage.irongs.com et pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux", ("validate", "admin")),
+        # Fonctions de GESTION (Gestion du pointage) : l'exécution du pointage facial (Pointage,
+        # borne) n'exige aucune permission utilisateur — identité de terminal. Seule exception
+        # d'usage : biometric_admin × validate ouvre aussi le Mode Test dans Pointage.
+        "biometric_status": ("Biométrie — état", "Gestion du pointage — consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
+        "biometric_enrollment": ("Biométrie — enrôlement", "Gestion du pointage — consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
+        "biometric_admin": ("Biométrie — administration", "Gestion du pointage — Valider : doublons et Mode Test facial (aussi dans Pointage, pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux", ("validate", "admin")),
     }},
     "material": {"label": "Matériel", "domain": "materiel.irongs.com", "description": "Équipements, stocks et dotations", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs et alertes matériel", ("read",)),
