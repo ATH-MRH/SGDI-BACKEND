@@ -71,7 +71,11 @@ def test_profitability_margin_from_real_invoice_and_achat(client, auth_headers):
     client.post(f"/api/ventes/devis/{devis['id']}/valider", headers=auth_headers)
     client.post(f"/api/ventes/devis/{devis['id']}/convertir", headers=auth_headers)
 
-    margin = client.get("/api/profitability/margin", headers=auth_headers, params={"society": SOC, "period": "2026-09", "client": "Client Rentabilite"}).json()
+    # La facture issue de la conversion est datée du jour (ventes.service) : période courante,
+    # jamais un mois figé (le test cessait de passer au changement de mois).
+    from datetime import date
+    period = date.today().strftime("%Y-%m")
+    margin = client.get("/api/profitability/margin", headers=auth_headers, params={"society": SOC, "period": period, "client": "Client Rentabilite"}).json()
     assert float(margin["ca"]) >= 10000.0
     assert "note" in margin
 

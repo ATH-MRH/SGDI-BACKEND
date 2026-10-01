@@ -168,10 +168,13 @@ def test_pointage_gps_updates_feuille_presence(client, auth_headers):
         "position": {"lat": 36.7, "lng": 3.0},
     })
     assert resp.status_code in (200, 201)
+    # Date imposée par le SERVEUR (fuseau Africa/Algiers), jamais celle du client ni de la machine
+    # de test : entre 23 h et minuit UTC, date.today() d'un runner UTC est encore la veille.
+    server_day = resp.json()["date"]
 
     presence = client.get("/api/irongs/collections/feuillePresence", headers=auth_headers)
     today_rows = [
         r for r in presence.json().get("data", [])
-        if r.get("date") == str(date.today()) and (r.get("matricule") == matricule or r.get("agentName", "").strip())
+        if r.get("date") == server_day and r.get("matricule") == matricule
     ]
     assert len(today_rows) >= 1

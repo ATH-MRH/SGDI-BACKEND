@@ -237,12 +237,22 @@ def test_roundtrip_incident(client, auth_headers):
 
 
 def test_roundtrip_ops_movement(client, auth_headers):
+    # Contrat produit : la liste ne renvoie que les mouvements des 180 derniers jours
+    # (sql_bridge.list_collection). Date relative : une date fixe finit par sortir de la fenêtre.
+    from datetime import date, timedelta
+    recent = (date.today() - timedelta(days=30)).isoformat()
+    old = (date.today() - timedelta(days=200)).isoformat()
     _post_item(client, auth_headers, "opsMouvements", {
-        "id": "mv_rt1", "date": "2026-04-01", "societe": SOC,
+        "id": "mv_rt1", "date": recent, "societe": SOC,
         "mouvementType": "affectation", "mouvementMotif": "Renfort",
     })
+    _post_item(client, auth_headers, "opsMouvements", {
+        "id": "mv_rt_old", "date": old, "societe": SOC,
+        "mouvementType": "affectation", "mouvementMotif": "Ancien",
+    })
     rows = _collection(client, auth_headers, "opsMouvements")
-    assert any(x.get("backendId") for x in rows)
+    assert any(x.get("backendId") and x.get("date") == recent and x.get("mouvementMotif") == "Renfort" for x in rows)
+    assert not any(x.get("date") == old for x in rows)       # hors de la fenêtre de 180 jours
 
 
 def test_unsupported_sql_collection_returns_400(client, auth_headers):
