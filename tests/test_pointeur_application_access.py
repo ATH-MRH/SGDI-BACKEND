@@ -62,25 +62,29 @@ def _token(client, username, host):
 
 
 # ── Catalogue : un domaine, deux applications, permissions biométriques uniques ──────────
-def test_catalog_declares_both_applications_without_duplicating_permissions(client, auth_headers):
-    attendance = FEATURE_CATALOG["attendance"]
-    assert [a["module_key"] for a in attendance["applications"]] == ["pointage", "pointeur"]
-    assert {a["domain"] for a in attendance["applications"]} == {"pointage.irongs.com", "pointeur.irongs.com"}
-    assert "pointeur" not in CANONICAL_MODULES                         # pas de second domaine concurrent
-    biometric = [k for m in FEATURE_CATALOG.values() for k in m["features"] if k.startswith("biometric_")]
-    assert sorted(biometric) == ["biometric_admin", "biometric_enrollment", "biometric_status"]
+def test_catalog_presents_two_distinct_modules_without_new_keys_or_duplicates(client, auth_headers):
+    """Administration : « Gestion du pointage » (pointage.irongs.com) et « Pointage »
+    (pointeur.irongs.com) = DEUX entrées distinctes ; stockage inchangé (attendance)."""
+    assert "pointeur" not in CANONICAL_MODULES and "pointage" not in CANONICAL_MODULES   # aucune nouvelle clé de stockage
     payload = client.get("/api/auth/granular-permissions/feature-catalog", headers=auth_headers)
     assert payload.status_code == 200, payload.text
-    body = payload.json()
-    module = next(m for m in body["modules"] if m["module_key"] == "attendance")
-    # Terminologie métier : « Gestion du pointage » = pointage.irongs.com, « Pointage » = pointeur.irongs.com.
-    assert module["label"] == "Gestion du pointage"
-    assert [(a["module_key"], a["label"], a["domain"]) for a in module["applications"]] == [
-        ("pointage", "Gestion du pointage", "pointage.irongs.com"), ("pointeur", "Pointage", "pointeur.irongs.com")]
-    assert "tablette" in module["applications"][1]["description"] and "borne" in module["applications"][1]["description"]
-    bio = {f["feature_key"]: f["description"] for f in module["features"] if f["feature_key"].startswith("biometric_")}
-    assert all(d.startswith("Gestion du pointage") for d in bio.values())   # fonctions de gestion
-    assert all("applications" in m for m in body["modules"])          # champ toujours présent (liste vide sinon)
+    modules = payload.json()["modules"]
+    keys = [m["entry_key"] for m in modules]
+    i = keys.index("pointage")
+    assert keys[i - 1] == "ops" and keys[i + 1] == "pointeur" and keys[i + 2] == "material"
+    gestion, pointage = modules[i], modules[i + 1]
+    assert (gestion["label"], gestion["domain"], gestion["module_key"]) == ("Gestion du pointage", "pointage.irongs.com", "attendance")
+    assert (pointage["label"], pointage["domain"], pointage["module_key"]) == ("Pointage", "pointeur.irongs.com", "attendance")
+    assert not any("·" in m["domain"] for m in modules)                       # jamais deux domaines dans une entrée
+    g = [f["feature_key"] for f in gestion["features"]]
+    p = [f["feature_key"] for f in pointage["features"]]
+    assert {"daily_sheets", "generation", "staffing", "statistics", "biometric_status", "biometric_enrollment", "biometric_admin"} == set(g)
+    assert set(p) == {"qr_scanning", "manual_entry"}                         # opérations de pointage seulement
+    assert not set(g) & set(p) and sorted(g + p) == sorted(FEATURE_CATALOG["attendance"]["features"])   # partition exacte
+    enrollment = next(f for f in gestion["features"] if f["feature_key"] == "biometric_enrollment")
+    assert "create" in enrollment["applicable_actions"]                     # Gestion du pointage → Biométrie — enrôlement → Créer
+    assert "Mode Test" in pointage["note"] and "terminal" in pointage["note"]  # Mode Test et borne expliqués
+    assert not any("borne" in f["feature_key"] or "kiosk" in f["feature_key"] for f in pointage["features"])
 
 
 # ── Accès applicatif : quatre profils ────────────────────────────────────────────────────

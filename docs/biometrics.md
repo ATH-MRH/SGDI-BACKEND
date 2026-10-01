@@ -527,6 +527,11 @@ présences, contrôle, enrôlement, terminaux, caméras, seuils) ; **Pointage** 
 biométriques fines (`attendance × biometric_*`) : fonctions de gestion, présentées sous Gestion du
 pointage ; l'exécution du pointage facial n'exige aucune permission utilisateur (identité de
 terminal). `biometric_admin × validate` ouvre aussi le Mode Test dans Pointage.
+Administration → Permissions granulaires : deux modules distincts dans la colonne de gauche,
+« Gestion du pointage » (pointage.irongs.com : feuilles, génération/clôture, effectifs,
+statistiques, biométrie — état / enrôlement / administration) et « Pointage »
+(pointeur.irongs.com : pointage QR, saisie manuelle). Présentation seulement : toutes ces
+permissions restent stockées sous `attendance` (aucune migration, droits existants conservés).
 
 
 | Circuit | Chemin | Présence |

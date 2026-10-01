@@ -113,20 +113,15 @@ class FeatureCatalogItemOut(BaseModel):
     applicable_actions: list[str]
 
 
-class FeatureCatalogApplicationOut(BaseModel):
-    """Application (sous-domaine) d'un domaine métier, ouverte par sa clé de module."""
-    module_key: str
-    label: str
-    domain: str
-    description: str
-
-
 class FeatureCatalogModuleOut(BaseModel):
+    """Module présenté dans l'administration. `entry_key` identifie l'entrée affichée (clé de
+    module ou clé d'application existante) ; `module_key` est la clé de stockage."""
+    entry_key: str
     module_key: str
     label: str
     domain: str
     description: str
-    applications: list[FeatureCatalogApplicationOut] = []
+    note: str | None = None
     features: list[FeatureCatalogItemOut]
 
 

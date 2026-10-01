@@ -85,34 +85,40 @@ FEATURE_CATALOG: dict[str, dict] = {
         "events": ("Incidents et événements", "Main courante opérationnelle", ("read", "create", "validate")),
         "movements": ("Mouvements", "Mouvements opérationnels", ("read", "create", "execute")),
     }},
-    # Domaine technique attendance = DEUX applications métier, chacune ouverte par sa clé de
-    # module existante (users.authorized_modules, vérifiée à la connexion ET, pour pointeur, à
-    # chaque requête) : « Gestion du pointage » (clé pointage, pointage.irongs.com) et
-    # « Pointage » (clé pointeur, pointeur.irongs.com, pointage terrain). Les fonctionnalités
-    # fines ci-dessous ne sont jamais dupliquées par application. La borne /borne (Pointage)
-    # n'utilise aucune clé utilisateur : identité de terminal cryptographique.
+    # Stockage : un seul module canonique « attendance » (contraintes CHECK de
+    # user_feature_permissions — aucune migration). Présentation : DEUX modules distincts dans
+    # l'administration, identifiés par les clés d'application EXISTANTES (aucune nouvelle clé) :
+    # « Gestion du pointage » (pointage, pointage.irongs.com, back-office) et « Pointage »
+    # (pointeur, pointeur.irongs.com, opérations de pointage). Chaque fonctionnalité appartient
+    # à UNE entrée (partition vérifiée au chargement). La borne /borne (Pointage) n'utilise
+    # aucune permission utilisateur : identité de terminal cryptographique.
     "attendance": {"label": "Gestion du pointage", "domain": "pointage.irongs.com",
-                   "description": "Présences, contrôle, corrections, feuilles, statistiques, paramétrage et administration biométrique ; le pointage terrain relève de l'application Pointage (pointeur.irongs.com)",
-                   "applications": (
-        {"module_key": "pointage", "label": "Gestion du pointage", "domain": "pointage.irongs.com",
-         "description": "Gestion des présences, contrôle, statistiques et administration du pointage"},
-        {"module_key": "pointeur", "label": "Pointage", "domain": "pointeur.irongs.com",
-         "description": "Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},
+                   "description": "Back-office de gestion du pointage",
+                   "entries": (
+        {"entry_key": "pointage", "label": "Gestion du pointage", "domain": "pointage.irongs.com",
+         "description": "Présences, contrôle, corrections, feuilles, statistiques, paramétrage, supervision et administration biométrique",
+         "features": ("daily_sheets", "generation", "staffing", "statistics",
+                      "biometric_status", "biometric_enrollment", "biometric_admin")},
+        {"entry_key": "pointeur", "label": "Pointage", "domain": "pointeur.irongs.com",
+         "description": "Opérations de pointage : QR, scanner, saisie terrain, tablette, smartphone, pointage facial et borne",
+         "features": ("qr_scanning", "manual_entry"),
+         "note": "Mode Test facial : accordé par Gestion du pointage → Biométrie — administration → Valider. "
+                 "Pointage facial de la borne (/borne) : identité de terminal, aucune permission utilisateur."},
     ), "features": {
         "daily_sheets": ("Feuilles quotidiennes", "Pointages et états journaliers", ("read", "create", "update", "validate")),
         "generation": ("Génération et clôture", "Génération par rotation et clôture", ("validate", "execute")),
-        "qr_scanning": ("Pointage QR", "Pointage (pointeur.irongs.com) — lecture et validation QR", ("read", "create", "execute")),
-        "manual_entry": ("Saisie manuelle", "Pointage (pointeur.irongs.com) — recherche et saisie par le pointeur", ("read", "create")),
+        "qr_scanning": ("Pointage QR", "Lecture et validation QR (scanner, caméra, HENEX)", ("read", "create", "execute")),
+        "manual_entry": ("Saisie manuelle", "Recherche et saisie terrain par le pointeur", ("read", "create")),
         "staffing": ("Effectifs par shift", "Effectifs contractuels et présence", ("read", "export")),
         "statistics": ("Statistiques et alertes", "Indicateurs et anomalies de pointage", ("read", "export")),
         # Biométrie : permissions EXPLICITES uniquement (jamais accordées par défaut au DRH) —
         # appliquées par app/modules/biometrics/routes.py, seul endroit où elles sont actives.
-        # Fonctions de GESTION (Gestion du pointage) : l'exécution du pointage facial (Pointage,
-        # borne) n'exige aucune permission utilisateur — identité de terminal. Seule exception
-        # d'usage : biometric_admin × validate ouvre aussi le Mode Test dans Pointage.
-        "biometric_status": ("Biométrie — état", "Gestion du pointage — consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
-        "biometric_enrollment": ("Biométrie — enrôlement", "Gestion du pointage — consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
-        "biometric_admin": ("Biométrie — administration", "Gestion du pointage — Valider : doublons et Mode Test facial (aussi dans Pointage, pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux", ("validate", "admin")),
+        # Fonctions de GESTION (entrée Gestion du pointage) : l'exécution du pointage facial
+        # (Pointage, borne) n'exige aucune permission utilisateur — identité de terminal.
+        # biometric_admin × validate ouvre aussi le Mode Test, y compris dans Pointage.
+        "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
+        "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
+        "biometric_admin": ("Biométrie — administration", "Valider : doublons et Mode Test facial (aussi depuis Pointage, pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux, coupures", ("validate", "admin")),
     }},
     "material": {"label": "Matériel", "domain": "materiel.irongs.com", "description": "Équipements, stocks et dotations", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs et alertes matériel", ("read",)),
@@ -239,27 +245,42 @@ def applicable_actions(module_key: str, feature_key: str) -> tuple[str, ...]:
     return feature[2] if feature else ()
 
 
+def _check_catalog_entries() -> None:
+    """Une entrée de présentation = un sous-ensemble des fonctionnalités de SON module ; les
+    entrées d'un module en forment une partition exacte (aucun doublon, aucune perte)."""
+    for module_key, module in FEATURE_CATALOG.items():
+        entries = module.get("entries")
+        if not entries:
+            continue
+        listed = [feature for entry in entries for feature in entry["features"]]
+        if sorted(listed) != sorted(module["features"]) or len(listed) != len(set(listed)):
+            raise RuntimeError(f"Catalogue {module_key} : les entrées doivent partitionner exactement les fonctionnalités")
+
+
+_check_catalog_entries()
+
+
+def _feature_items(module: dict, keys) -> list[dict]:
+    return [{"feature_key": key, "label": module["features"][key][0], "description": module["features"][key][1],
+             "applicable_actions": list(module["features"][key][2])} for key in keys]
+
+
+def catalog_entries() -> list[dict]:
+    """Modules présentés dans l'administration, dans l'ordre canonique. `entry_key` identifie
+    l'entrée affichée ; `module_key` reste la clé de STOCKAGE des permissions."""
+    out = []
+    for module_key, module in FEATURE_CATALOG.items():
+        for entry in module.get("entries") or ({"entry_key": module_key, "label": module["label"], "domain": module["domain"],
+                                                  "description": module["description"], "features": tuple(module["features"])},):
+            out.append({"entry_key": entry["entry_key"], "module_key": module_key, "label": entry["label"],
+                        "domain": entry["domain"], "description": entry["description"], "note": entry.get("note"),
+                        "features": _feature_items(module, entry["features"])})
+    return out
+
+
 def feature_catalog_payload() -> dict:
     return {
-        "modules": [
-            {
-                "module_key": module_key,
-                "label": module["label"],
-                "domain": module["domain"],
-                "description": module["description"],
-                "applications": [dict(app) for app in module.get("applications", ())],
-                "features": [
-                    {
-                        "feature_key": feature_key,
-                        "label": feature[0],
-                        "description": feature[1],
-                        "applicable_actions": list(feature[2]),
-                    }
-                    for feature_key, feature in module["features"].items()
-                ],
-            }
-            for module_key, module in FEATURE_CATALOG.items()
-        ],
+        "modules": catalog_entries(),
         "actions": list(CANONICAL_ACTIONS),
         "granular_permissions_active": False,
     }
