@@ -1794,7 +1794,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:(params)=>sgdiApi(sgdiEmployeeReadPath()+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi(sgdiEmployeeReadPath()+"/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),flattenExtra:()=>sgdiApi("/drh/employees/flatten-extra",{method:"POST",legacy:false})},
+  employees:{list:(params)=>sgdiApi(sgdiEmployeeReadPath()+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi(sgdiEmployeeReadPath()+"/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload,query)=>sgdiApi("/drh/employees"+(query||""),{method:"POST",body:payload,legacy:false}),update:(id,payload,query)=>sgdiApi("/drh/employees/"+encodeURIComponent(id)+(query||""),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),flattenExtra:()=>sgdiApi("/drh/employees/flatten-extra",{method:"POST",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -9079,6 +9079,8 @@ function openAgentPhotoUpload(agentId){
       const hidden=document.querySelector("#agent-form [name='photo']");
       if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
       employeePhotoPanelSync(agentId,true);
+      employeePhotoSource[agentId]="DRH_UPLOAD";
+      markAgentFormDirty();                                              // la photo seule rend la fiche enregistrable
       employeePhotoCheck(agentId,src);
     };
     reader.readAsDataURL(file);
@@ -9094,8 +9096,27 @@ window.openAgentPhotoUpload=openAgentPhotoUpload;
  * aucun gabarit : il affiche l'état, propose import / caméra / aperçu, et fait analyser la photo
  * retenue (une seule requête, à la validation — jamais de flux continu vers le serveur). */
 const FACIAL_REFERENCE_UI={
-  READY:{icon:"✓",cls:"is-ok"},PHOTO_TO_UPDATE:{icon:"⚠",cls:"is-warn"},REVIEW_REQUIRED:{icon:"⚠",cls:"is-warn"},NONE:{icon:"✕",cls:"is-none"}
+  READY:{icon:"✓",cls:"is-ok"},PHOTO_TO_UPDATE:{icon:"⚠",cls:"is-warn"},REVIEW_REQUIRED:{icon:"⚠",cls:"is-warn"},NONE:{icon:"✕",cls:"is-none"},
+  // LOT B — synchronisation automatique après l'enregistrement d'une nouvelle photo.
+  PROCESSING:{icon:"…",cls:"is-busy"},PREVIOUS_KEPT:{icon:"⚠",cls:"is-warn"},UNAVAILABLE:{icon:"⚠",cls:"is-warn"},BLOCKED:{icon:"✕",cls:"is-none"}
 };
+// LOT B — provenance de la photo retenue dans le formulaire (import ou caméra) : transmise au
+// serveur à l'enregistrement de la fiche, qui prépare alors seul la référence faciale. Aucun
+// bouton d'enrôlement : l'opérateur RH enregistre la fiche, puis l'état se met à jour.
+const employeePhotoSource={};
+const employeeFacialPoll={};
+const EMPLOYEE_FACIAL_POLL_MS=2000,EMPLOYEE_FACIAL_POLL_MAX=20;
+function employeePhotoSaveQuery(agentId,previousPhoto,nextPhoto){
+  const changed=/^data:image\//.test(String(nextPhoto||""))&&nextPhoto!==previousPhoto;
+  return changed?"?photo_source="+encodeURIComponent(employeePhotoSource[agentId]||"DRH_UPLOAD"):"";
+}
+function employeePhotoSaved(agentId){
+  delete employeePhotoSource[agentId];
+  delete employeeFacialPoll[agentId];
+  const box=document.getElementById("rh-photo-check-"+agentId);
+  if(box){box.className="rh-photo-check";box.textContent=""}
+  return loadEmployeeFacialReference(agentId);
+}
 function employeePhotoEditGuard(){
   if(sgdiViewModeActive){toast("Fiche verrouillée : déverrouillez la page pour modifier la photo.","error");return false}
   if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification photo non autorisée.","error");return false}
@@ -9167,6 +9188,12 @@ async function loadEmployeeFacialReference(agentId){
   try{
     const data=await sgdiApi("/drh/employees/"+encodeURIComponent(backendId)+"/facial-reference",{legacy:false});
     renderEmployeeFacialReference(agentId,data);
+    // « Traitement en cours… » : l'état est relu jusqu'au résultat (borné ; s'arrête si la fiche est quittée).
+    if(data&&data.reference&&data.reference.state==="PROCESSING"){
+      const n=(employeeFacialPoll[agentId]||0)+1;
+      employeeFacialPoll[agentId]=n;
+      if(n<=EMPLOYEE_FACIAL_POLL_MAX)setTimeout(()=>{if(employeeFacialPoll[agentId]===n)loadEmployeeFacialReference(agentId)},EMPLOYEE_FACIAL_POLL_MS);
+    }else delete employeeFacialPoll[agentId];
     return data;
   }catch(e){renderEmployeeFacialReference(agentId,{unavailable:"État indisponible"});return null}
 }
@@ -9277,6 +9304,8 @@ function useAgentPhoto(){
   if(!src)return;
   closeAgentPhotoCamera();
   applyAgentPhotoToForm(agentId,src);
+  employeePhotoSource[agentId]="DRH_CAMERA";
+  markAgentFormDirty();
   employeePhotoCheck(agentId,src);                                     // seule la photo RETENUE part au serveur
 }
 window.openAgentPhotoCamera=openAgentPhotoCamera;window.openAgentPhotoPreview=openAgentPhotoPreview;
@@ -14234,14 +14263,16 @@ async function saveAgent(id,options){
   const historyLabels={nom:"Nom",prenom:"Prénom",dateNaissance:"Date de naissance",lieuNaissance:"Lieu de naissance",sexe:"Sexe",situation:"Situation familiale",nin:"NIN",numeroCnas:"N° sécurité sociale",nationalite:"Nationalité",civilite:"Civilité",numeroPasseport:"Passeport",telephone:"Téléphone",email:"Email",adresse:"Adresse",commune:"Commune",wilaya:"Wilaya",contactUrgenceNom:"Contact d'urgence",contactUrgenceLien:"Lien du contact",contactUrgenceTel:"Téléphone d'urgence",noteUrgence:"Notes d'urgence",nombreEnfants:"Nombre d'enfants",genreFamille:"Genre familial",typeContrat:"Type de contrat",salaireNet:"Salaire",dateRecrutement:"Date de recrutement",dureeContrat:"Durée du contrat",dateFinContrat:"Fin du contrat",banque:"Compte bancaire",numeroCompte:"N° de compte",iban:"IBAN",fonction:"Fonction",famille:"Composition familiale",habilitations:"Habilitations"};
   const changedFields=Object.keys(historyLabels).filter(key=>JSON.stringify(a[key]??null)!==JSON.stringify(draft[key]??null)).map(key=>historyLabels[key]);
   if(changedFields.length)draft.modificationHistory=[{at:new Date().toISOString(),user:session?.username||"Utilisateur",fields:changedFields},...(a.modificationHistory||[])].slice(0,30);
+  const photoQuery=employeePhotoSaveQuery(id,a.photo,draft.photo);
   try{
     const payload=employeeApiPayload(draft);
-    const saved=draft.backendId?await SGDI.employees.update(draft.backendId,payload):await SGDI.employees.create(payload);
+    const saved=draft.backendId?await SGDI.employees.update(draft.backendId,payload,photoQuery):await SGDI.employees.create(payload,photoQuery);
     Object.assign(a,employeeFromApi(saved),draft,{backendId:saved?.id||draft.backendId});
   }catch(e){
     toast("Fiche employé non enregistrée : "+(e.message||e),"error");
     return false;
   }
+  if(photoQuery)employeePhotoSaved(id);
   if(!(await saveDBAndWaitToast("Fiche employé non confirmée")))return false;
   f.dataset.dirty="false";
   const saveState=document.getElementById("agent-save-state");

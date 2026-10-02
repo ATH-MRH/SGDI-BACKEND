@@ -188,6 +188,33 @@ def consent_admissible(db: Session, employee_id: int) -> bool:
     return bool(consent and consent.status in CONSENT_ADMISSIBLE and consent.notice_version == NOTICE_VERSION)
 
 
+# Réglage de transition (LOT B) : FACIAL_REFERENCE_CONSENT_MODE.
+# - "explicit" (défaut) : règle historique, un accord admissible est exigé ;
+# - "no_objection" : aucun accord manuel n'est exigé, mais un REFUS ou un RETRAIT enregistré
+#   bloque toujours. Aucun consentement n'est jamais créé ni supprimé par ce réglage.
+# Portée : préparation de la référence depuis la photo DRH et décision de revue. La
+# RECONNAISSANCE (pointage) continue d'exiger consent_admissible — inchangée.
+CONSENT_MODE_EXPLICIT = "explicit"
+CONSENT_MODE_NO_OBJECTION = "no_objection"
+
+
+def consent_mode() -> str:
+    value = str(settings.facial_reference_consent_mode or "").strip().lower()
+    return CONSENT_MODE_NO_OBJECTION if value == CONSENT_MODE_NO_OBJECTION else CONSENT_MODE_EXPLICIT   # inconnu ⇒ strict
+
+
+def consent_block(db: Session, employee_id: int) -> str | None:
+    """None si une référence faciale peut être activée pour cet employé, sinon le code du blocage."""
+    consent = current_consent(db, employee_id)
+    if consent and consent.status == CONSENT_REFUSED:
+        return "CONSENT_REFUSED"
+    if consent and consent.status == CONSENT_WITHDRAWN:
+        return "CONSENT_WITHDRAWN"
+    if consent_mode() == CONSENT_MODE_NO_OBJECTION:
+        return None
+    return None if consent_admissible(db, employee_id) else "CONSENT_REQUIRED"
+
+
 # ── Analyse d'images ─────────────────────────────────────────────────────────────────────
 @dataclass
 class FrameDecision:
@@ -273,8 +300,9 @@ def templates_of(db: Session, employee_id: int, statuses: tuple[str, ...] = (TEM
 
 
 def deactivate_templates(db: Session, *, employee_id: int, reason: str, actor: Any,
-                         statuses: tuple[str, ...] = (TEMPLATE_ACTIVE, TEMPLATE_PENDING_REVIEW)) -> int:
-    rows = templates_of(db, employee_id, statuses)
+                         statuses: tuple[str, ...] = (TEMPLATE_ACTIVE, TEMPLATE_PENDING_REVIEW),
+                         exclude_id: int | None = None) -> int:
+    rows = [row for row in templates_of(db, employee_id, statuses) if row.id != exclude_id]
     now = datetime.utcnow()
     for row in rows:
         row.status = TEMPLATE_INACTIVE
@@ -322,8 +350,20 @@ def photo_fingerprint(employee: Employee) -> str | None:
     return digest
 
 
+def photo_change_supervised(db: Session, employee: Employee) -> bool:
+    """LOT B — vrai si la synchronisation automatique a pris en charge la photo ACTUELLE de la
+    fiche : c'est alors elle qui décide du sort de la référence précédente (conservée tant que
+    la nouvelle photo n'a pas produit une référence valide). Faux si le réglage est désactivé
+    ou si cette photo n'a jamais été soumise à la synchronisation : règle historique."""
+    from app.modules.biometrics import photo_sync
+
+    return photo_sync.supervises(db, employee)
+
+
 def invalidate_if_photo_changed(db: Session, employee: Employee, actor: Any = None) -> bool:
     """Photo de la fiche remplacée/supprimée ⇒ gabarit issu de l'ancienne photo invalidé."""
+    if photo_change_supervised(db, employee):
+        return False
     current = photo_fingerprint(employee)
     changed = False
     for row in templates_of(db, employee.id, (TEMPLATE_ACTIVE, TEMPLATE_PENDING_REVIEW)):
@@ -498,14 +538,17 @@ def enrollment_confirm(db: Session, *, employee: Employee, actor: Any, token: st
 
 
 def _store_template(db: Session, *, employee: Employee, actor: Any, embedding: list[float], source: str, source_ref: str,
-                    quality: dict, engine_id: str, config_version: int, comparison: dict, justification: str | None) -> dict[str, Any]:
+                    quality: dict, engine_id: str, config_version: int, comparison: dict, justification: str | None,
+                    identity_review: bool = False) -> dict[str, Any]:
+    """`identity_review` (LOT B) : le visage ne correspond pas avec certitude à la référence
+    active — le gabarit est gardé EN REVUE, la référence active n'est pas touchée."""
     from app.modules.attendance.core import raise_anomaly
 
     cfg = active_config(db)
     duplicate_of, score = _duplicate_candidates(db, employee.id, embedding, cfg)
     consent = current_consent(db, employee.id)
     template = BiometricTemplate(
-        employee_id=employee.id, status=TEMPLATE_PENDING_REVIEW if duplicate_of else TEMPLATE_ACTIVE,
+        employee_id=employee.id, status=TEMPLATE_PENDING_REVIEW if (duplicate_of or identity_review) else TEMPLATE_ACTIVE,
         embedding_encrypted=crypto.encrypt_vector(embedding), engine=engine_id, config_version=config_version,
         source=source, source_ref=source_ref, quality={**quality, "comparison": comparison.get("result"), "comparison_score": comparison.get("score")},
         consent_id=consent.id if consent else None, created_by=getattr(actor, "username", None),
@@ -522,12 +565,22 @@ def _store_template(db: Session, *, employee: Employee, actor: Any, embedding: l
                                "candidate_employee_id": duplicate_of, "candidate_matricule": other.code if other else None,
                                "score": round(score, 4), "source": source},
                       dedupe_key=f"DUPLICATE:{template.id}")
+    elif identity_review:
+        db.add(template)
+        db.flush()
+        raise_anomaly(db, anomaly_type="FACE_REFERENCE_MISMATCH", severity="critical", employee=employee,
+                      source=SOURCE_FACIAL, message="La nouvelle photo ne correspond pas avec certitude à la référence faciale — vérification nécessaire",
+                      details={"template_id": template.id, "target_employee_id": employee.id,
+                               "comparison": comparison.get("result"), "source": source},
+                      dedupe_key=f"DUPLICATE:{template.id}")
     else:
-        deactivate_templates(db, employee_id=employee.id, reason="Remplacé par un nouvel enrôlement", actor=actor,
-                             statuses=(TEMPLATE_ACTIVE,))
+        # La nouvelle référence est activée AVANT que l'ancienne soit désactivée (même
+        # transaction : un échec intermédiaire laisse l'ancienne référence active).
         template.activated_at = datetime.utcnow()
         db.add(template)
         db.flush()
+        deactivate_templates(db, employee_id=employee.id, reason="Remplacé par un nouvel enrôlement", actor=actor,
+                             statuses=(TEMPLATE_ACTIVE,), exclude_id=template.id)
     append_audit(db, action="biometrics.enroll", resource="employee", resource_id=employee.id, result="success",
                  user=actor, society=employee.society,
                  new_state={"template_id": template.id, "status": template.status, "source": source, "config_version": config_version,
@@ -546,7 +599,7 @@ def review_duplicate(db: Session, *, template: BiometricTemplate, approve: bool,
     if not str(comment or "").strip():
         raise HTTPException(422, detail="Justification obligatoire")
     if approve:
-        if not consent_admissible(db, template.employee_id):
+        if consent_block(db, template.employee_id):
             raise HTTPException(409, detail="Consentement non admissible")
         deactivate_templates(db, employee_id=template.employee_id, reason="Remplacé après revue", actor=actor,
                              statuses=(TEMPLATE_ACTIVE,))
@@ -603,7 +656,8 @@ def _candidates(db: Session, site_id: int, employee_hint: int | None,
             continue
         # Contrôle sur le gabarit DÉJÀ chargé (aucune requête par candidat) ; invalidation
         # (rare) seulement si la photo de la fiche a réellement changé.
-        if row.source == "EMPLOYEE_PHOTO" and (row.quality or {}).get("photo_sha256") != photo_fingerprint(employee):
+        if row.source == "EMPLOYEE_PHOTO" and (row.quality or {}).get("photo_sha256") != photo_fingerprint(employee) \
+                and not photo_change_supervised(db, employee):
             invalidate_if_photo_changed(db, employee)
             continue
         out.append((employee, row))

@@ -682,3 +682,68 @@ réel), `tests_frontend/pointage-control-center.test.js` (administration des ter
 supervisé → association → activation → ENTRÉE → SORTIE en base ; E2E hostile : JPEG sans
 terminal, session humaine, signature, rejeux, ancienne configuration, révocation ⇒ aucun
 pointage).
+
+## 15. Référence faciale depuis la photo DRH (Fiche de position)
+
+Parcours cible : **DRH → Fiche de position → Photo employé → référence faciale**. L'opérateur RH
+ne voit ni gabarit ni score : seulement un état (« Prête », « Photo à actualiser », « Revue
+requise », « Aucune référence disponible », « Traitement temporairement indisponible »…).
+
+### 15.1 LOT A — état et analyse (lecture seule)
+
+`GET /api/drh/employees/{id}/facial-reference` (état) et
+`POST /api/drh/employees/{id}/facial-reference/analyze` (analyse en mémoire d'une photo
+candidate). Aucun gabarit créé, remplacé ou désactivé (`app/modules/biometrics/photo_reference.py`).
+
+### 15.2 LOT B — synchronisation automatique (`app/modules/biometrics/photo_sync.py`)
+
+| Réglage serveur | Défaut | Effet |
+|---|---|---|
+| `DRH_FACIAL_REFERENCE_AUTO_SYNC_ENABLED` | `false` | `true` : une photo ajoutée/actualisée depuis la Fiche de position prépare automatiquement la référence faciale. Exige aussi `BIOMETRIC_ENROLLMENT_ENABLED` (ou `BIOMETRIC_ENABLED`) et `BIOMETRIC_TEMPLATE_KEY`. |
+| `FACIAL_REFERENCE_CONSENT_MODE` | `explicit` | `explicit` : accord admissible exigé (règle historique). `no_objection` : aucun accord manuel exigé ; un **refus** ou un **retrait** enregistré bloque toujours. Aucun consentement n'est créé ni supprimé. |
+
+`BIOMETRIC_ENABLED` n'est **pas** utilisé par ce lot : préparer une référence n'active pas le
+pointage facial. Retour arrière : remettre `DRH_FACIAL_REFERENCE_AUTO_SYNC_ENABLED=false`
+(comportement antérieur, y compris l'invalidation d'une référence dont la photo a changé).
+
+**Déclenchement.** Uniquement par l'enregistrement de la fiche (`PUT`/`POST /api/drh/employees`)
+portant `?photo_source=DRH_CAMERA` ou `DRH_UPLOAD` **et** si l'empreinte SHA-256 de la photo a
+réellement changé. Sources exclues : import, synchronisation historique (`upsert_employee`),
+appel sans provenance. Aucun traitement au démarrage, aucune tâche planifiée, aucune migration
+de données : les photos déjà présentes ne sont pas traitées (LOT F).
+
+**Fiche prioritaire.** La demande est enregistrée après la validation de la fiche, dans une
+transaction distincte, puis traitée en arrière-plan (`BackgroundTasks`). Un échec du moteur ne
+modifie jamais la fiche ni la photo.
+
+**Pipeline** (`sync_facial_reference_from_employee_photo`) : statut RH → consentement → clé →
+moteur → un seul visage → qualité → comparaison avec la référence active → doublons (moteur
+existant) → chiffrement → activation → audit.
+
+| Situation | État (`biometric_photo_syncs.status`) | Référence précédente |
+|---|---|---|
+| Photo exploitable, aucune référence | `READY` | — |
+| Même personne | `READY` (nouvelle activée, puis ancienne désactivée, même transaction) | remplacée |
+| Visage différent / ambigu | `REVIEW_REQUIRED` (`FACE_MISMATCH` / `FACE_AMBIGUOUS`), anomalie `FACE_REFERENCE_MISMATCH` | **conservée active** |
+| Proche d'un autre salarié | `REVIEW_REQUIRED` (`POSSIBLE_DUPLICATE`), anomalie existante | conservée |
+| Aucun visage / plusieurs / qualité | `PHOTO_INVALID` | conservée |
+| Moteur, clé ou erreur technique | `ENGINE_UNAVAILABLE` (reprise à la consultation de la fiche, 3 au plus) | conservée |
+| Refus, retrait, accord requis, statut RH | `BLOCKED` | — |
+
+Une référence en revue se décide dans Gestion du pointage → « Doublons à revoir ».
+
+**Idempotence et concurrence.** Une ligne d'état par employé, liée à l'empreinte : la même
+photo n'est traitée qu'une fois ; une tâche portant une ancienne empreinte n'écrit rien ; la
+ligne est verrouillée pendant le traitement (`SELECT … FOR UPDATE`).
+
+**Données.** Table `biometric_photo_syncs` (migration additive `20261002_0001`) : empreinte,
+état, code de raison, source, dates. Ni image, ni gabarit, ni score. Audit
+`drh.facial_reference.{requested,ready,photo_invalid,review_required,blocked,unavailable}`.
+
+**Limite connue.** La reconnaissance au pointage exige toujours un accord admissible
+(`consent_admissible`) : une référence préparée en mode `no_objection` n'est pas encore
+utilisable par la borne. Ce point relève des lots suivants.
+
+Tests : `tests/test_drh_facial_reference_sync.py`,
+`tests_frontend/employee-facial-reference-sync.test.js`,
+`npm run test:drh-facial-reference-sync-e2e`.

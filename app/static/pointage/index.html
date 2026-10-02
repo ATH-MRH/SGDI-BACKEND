@@ -298,7 +298,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   const TOKEN_KEY = "atlas_pointage_token";
   const STATUS_LABEL = { present: "Présent", absent: "Absent", non_pointe: "Non pointé", conge: "Congé", maladie: "Maladie", repos: "Repos", mission: "Mission" };
   const SOURCE_LABEL = { QR: "QR", MANUAL: "Manuel", FACIAL: "Facial", SITE_WORKFORCE: "BEO", PORTAL_GPS: "Portail GPS", IMPORT: "Import", SYSTEM: "Système" };
-  const ANOMALY_LABEL = { LATE: "Retard", ABSENT: "Absence", MANUAL_POINTAGE: "Pointage manuel", OFF_SCHEDULE: "Hors planning", OVERTIME: "Dépassement", CORRECTION: "Correction", POSSIBLE_DUPLICATE_FACE: "Doublon facial possible", UNKNOWN_FACE: "Visage inconnu", LIVENESS_FAILED: "Échec liveness" };
+  const ANOMALY_LABEL = { LATE: "Retard", ABSENT: "Absence", MANUAL_POINTAGE: "Pointage manuel", OFF_SCHEDULE: "Hors planning", OVERTIME: "Dépassement", CORRECTION: "Correction", POSSIBLE_DUPLICATE_FACE: "Doublon facial possible", FACE_REFERENCE_MISMATCH: "Photo à vérifier (référence faciale)", UNKNOWN_FACE: "Visage inconnu", LIVENESS_FAILED: "Échec liveness" };
   const state = { token: sessionStorage.getItem(TOKEN_KEY) || "", user: null, view: "board", page: 1, aPage: 1, board: null, seq: 0 };
   const $ = (id) => document.getElementById(id);
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -811,8 +811,13 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   function reviewDuplicate(d) {
-    const m = modal(`<h3>Revue de doublon</h3><div class="sub">Le visage enrôlé pour <b>${esc(d.target.nom)}</b> (${esc(d.target.matricule)}) ressemble à celui de <b>${esc(d.candidate ? d.candidate.nom : "—")}</b> (score ${esc(Number(d.score).toFixed(3))}).</div>
-      <p>Activer ne doit se faire qu'après vérification d'identité (deux personnes distinctes, ex. jumeaux). Rejeter si c'est la même personne.</p>
+    // Sans autre salarié concerné : la nouvelle photo de la fiche ne correspond pas avec certitude à la référence active.
+    const intro = d.candidate
+      ? `<h3>Revue de doublon</h3><div class="sub">Le visage enrôlé pour <b>${esc(d.target.nom)}</b> (${esc(d.target.matricule)}) ressemble à celui de <b>${esc(d.candidate.nom)}</b> (score ${esc(Number(d.score).toFixed(3))}).</div>
+      <p>Activer ne doit se faire qu'après vérification d'identité (deux personnes distinctes, ex. jumeaux). Rejeter si c'est la même personne.</p>`
+      : `<h3>Revue d'identité</h3><div class="sub">La nouvelle photo de la fiche de <b>${esc(d.target.nom)}</b> (${esc(d.target.matricule)}) ne correspond pas avec certitude à sa référence faciale active, qui reste utilisée.</div>
+      <p>Activer remplace la référence actuelle : seulement après vérification que la photo est bien celle de ce salarié. Rejeter conserve la référence actuelle.</p>`;
+    const m = modal(`${intro}
       <form id="dup-form"><label for="dup-comment">Justification (obligatoire)</label><textarea id="dup-comment" required minlength="3"></textarea>
       <div class="error" id="dup-error" role="alert"></div>
       <div class="modal-actions"><button class="secondary" type="button" id="dup-cancel">Annuler</button><button class="danger" type="button" id="dup-reject">Rejeter</button><button class="primary" type="button" id="dup-approve">Activer après vérification</button></div></form>`);

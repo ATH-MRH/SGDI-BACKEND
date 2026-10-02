@@ -29,7 +29,7 @@ from app.core.config import settings
 from app.modules.biometrics import crypto
 from app.modules.biometrics.engine import EngineUnavailable, FaceEngine, FrameAnalysis, cosine, get_engine
 from app.modules.biometrics.models import TEMPLATE_ACTIVE, BiometricConfig, BiometricTemplate
-from app.modules.biometrics.service import DEFAULT_CONFIG, analyze_frames, consent_admissible, photo_fingerprint
+from app.modules.biometrics.service import DEFAULT_CONFIG, analyze_frames, consent_admissible, photo_change_supervised, photo_fingerprint
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment
 
@@ -186,7 +186,8 @@ def readonly_candidates(db: Session, site_id: int, today: date) -> list[tuple[Em
         employee = employees.get(row.employee_id)
         if employee is None:
             continue
-        if row.source == "EMPLOYEE_PHOTO" and (row.quality or {}).get("photo_sha256") != photo_fingerprint(employee):
+        if row.source == "EMPLOYEE_PHOTO" and (row.quality or {}).get("photo_sha256") != photo_fingerprint(employee) \
+                and not photo_change_supervised(db, employee):                    # même règle que le pointage réel
             continue
         out.append((employee, row))
     return out

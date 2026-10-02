@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from datetime import datetime
@@ -56,6 +58,7 @@ from app.modules.drh.schemas import (
 )
 
 
+logger = logging.getLogger("sgdi.drh.routes")
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
@@ -386,15 +389,53 @@ def rename_poste_agent_securite_route(db: Session = Depends(get_db), user: User 
     return rename_poste_agent_securite(db)
 
 
+def _photo_fingerprint_before(employee: Employee | None, photo_source: str | None) -> tuple[bool, str | None]:
+    """LOT B — empreinte de la photo AVANT l'enregistrement, seulement si la fiche déclare une
+    provenance déclenchante (caméra / import depuis la Fiche de position) et que le réglage
+    serveur est actif. Jamais d'erreur : la fiche reste prioritaire."""
+    try:
+        from app.modules.biometrics import photo_sync, service as biometrics
+
+        if photo_sync.trigger_source(photo_source) is None or not photo_sync.auto_sync_enabled():
+            return False, None
+        return True, biometrics.photo_fingerprint(employee) if employee is not None else None
+    except Exception:
+        logger.exception("Synchronisation référence faciale : empreinte initiale indisponible")
+        return False, None
+
+
+def _sync_facial_reference_after_save(db: Session, employee: Employee, user: User, photo_source: str | None,
+                                      previous_fingerprint: str | None, background_tasks: BackgroundTasks) -> None:
+    """LOT B — APRÈS l'enregistrement réussi de la fiche : si la photo vient de changer, la
+    préparation de la référence faciale est demandée puis traitée en arrière-plan. Un échec
+    ici n'annule ni ne retarde jamais l'enregistrement de la fiche."""
+    try:
+        from app.modules.biometrics import photo_sync
+
+        fingerprint = photo_sync.request_sync(db, employee=employee, source=photo_source, actor=user,
+                                              previous_fingerprint=previous_fingerprint)
+        if fingerprint:
+            background_tasks.add_task(photo_sync.run_sync_task, employee.id, fingerprint, user.id)
+    except Exception:
+        db.rollback()
+        logger.exception("Synchronisation référence faciale non demandée (employé %s)", getattr(employee, "id", None))
+
+
 @router.post("/employees", response_model=EmployeeOut)
-def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def create_employee(payload: EmployeeCreate, background_tasks: BackgroundTasks, photo_source: str | None = Query(None, max_length=30),
+                    db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
+    sync, _ = _photo_fingerprint_before(None, photo_source)
     code = (payload.code or "").strip().upper() or service.next_employee_code(db, payload.society)
     for attempt in range(200):
         values = payload.model_dump()
         values["code"] = code
         try:
-            return service.create_row(db, Employee, EmployeeCreate(**values))
+            created = service.create_row(db, Employee, EmployeeCreate(**values))
+            if sync:
+                _sync_facial_reference_after_save(db, created, user, photo_source, None, background_tasks)
+                db.refresh(created)
+            return created
         except HTTPException as exc:
             if "ix_employees_code" not in str(exc.detail) or attempt >= 199:
                 raise
@@ -412,10 +453,19 @@ def get_employee(employee_id: int, db: Session = Depends(get_db), user: User = D
 # ces deux routes ne crée, ne remplace ni ne désactive un gabarit ; aucune ne modifie la photo,
 # l'employé, le consentement ou Attendance Core (app/modules/biometrics/photo_reference.py).
 @router.get("/employees/{employee_id}/facial-reference")
-def employee_facial_reference(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    from app.modules.biometrics import photo_reference
+def employee_facial_reference(employee_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db),
+                              user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import photo_reference, photo_sync
 
     employee = _ensure_employee_allowed(db, user, employee_id)
+    try:
+        # LOT B — reprise d'une synchronisation perdue ou différée, pour CET employé seulement.
+        fingerprint = photo_sync.retry_if_due(db, employee)
+        if fingerprint:
+            background_tasks.add_task(photo_sync.run_sync_task, employee.id, fingerprint, user.id)
+    except Exception:
+        db.rollback()
+        logger.exception("Reprise de synchronisation faciale impossible (employé %s)", employee_id)
     return photo_reference.reference_state(db, employee)
 
 
@@ -441,8 +491,11 @@ def analyze_employee_photo(employee_id: int, payload: dict, db: Session = Depend
 
 
 @router.put("/employees/{employee_id}", response_model=EmployeeOut)
-def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def update_employee(employee_id: int, payload: EmployeeUpdate, background_tasks: BackgroundTasks,
+                    photo_source: str | None = Query(None, max_length=30),
+                    db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = _ensure_employee_allowed(db, user, employee_id)
+    sync, previous_fingerprint = _photo_fingerprint_before(existing, photo_source)
     _ensure_society_allowed(user, payload.society or existing.society)
     if payload.code:
         new_code = payload.code.strip().upper()
@@ -451,7 +504,11 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Dep
             if conflict:
                 raise HTTPException(status_code=409, detail=f"ix_employees_code: Code {new_code} déjà utilisé par l'employé #{conflict.id}")
         payload = payload.model_copy(update={"code": new_code})
-    return service.update_row(db, Employee, employee_id, payload)
+    updated = service.update_row(db, Employee, employee_id, payload)
+    if sync:
+        _sync_facial_reference_after_save(db, updated, user, photo_source, previous_fingerprint, background_tasks)
+        db.refresh(updated)
+    return updated
 
 
 @router.delete("/employees/{employee_id}")

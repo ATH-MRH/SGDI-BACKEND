@@ -72,6 +72,38 @@ class BiometricTemplate(Base, TimestampMixin):
     status_reason: Mapped[str | None] = mapped_column(Text)
 
 
+# Synchronisation automatique photo DRH → référence faciale (LOT B)
+SYNC_PROCESSING = "PROCESSING"                  # demande enregistrée, analyse en cours
+SYNC_READY = "READY"                            # référence active issue de cette photo
+SYNC_PHOTO_INVALID = "PHOTO_INVALID"            # photo inexploitable (visage, qualité)
+SYNC_REVIEW_REQUIRED = "REVIEW_REQUIRED"        # visage différent / ambigu / doublon possible
+SYNC_ENGINE_UNAVAILABLE = "ENGINE_UNAVAILABLE"  # moteur, clé ou erreur technique : à reprendre
+SYNC_BLOCKED = "BLOCKED"                        # refus / retrait / accord requis / statut RH
+SYNC_STATUSES = frozenset({SYNC_PROCESSING, SYNC_READY, SYNC_PHOTO_INVALID, SYNC_REVIEW_REQUIRED,
+                           SYNC_ENGINE_UNAVAILABLE, SYNC_BLOCKED})
+
+
+class BiometricPhotoSync(Base, TimestampMixin):
+    """État de la DERNIÈRE synchronisation demandée pour un employé (une ligne par employé ;
+    l'historique est dans l'audit). Ne contient ni image, ni gabarit, ni score : seulement
+    l'empreinte SHA-256 de la photo traitée, l'état et un code de raison."""
+    __tablename__ = "biometric_photo_syncs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), unique=True, index=True)
+    photo_fingerprint: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    reason_code: Mapped[str | None] = mapped_column(String(40))
+    reason_detail: Mapped[str | None] = mapped_column(String(200))    # motif lisible (ex. « Image floue »)
+    source: Mapped[str] = mapped_column(String(30))                   # DRH_CAMERA | DRH_UPLOAD
+    requested_by: Mapped[str | None] = mapped_column(String(120))
+    requested_at: Mapped[datetime] = mapped_column(DateTime)
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    template_id: Mapped[int | None] = mapped_column(Integer)          # référence produite (active ou en revue)
+    previous_reference_kept: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
 class BiometricConfig(Base):
     """Seuils versionnés : chaque modification crée une nouvelle version (jamais d'écrasement)."""
     __tablename__ = "biometric_configs"

@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # prépare un pilote. Faux par défaut ; BIOMETRIC_ENABLED l'autorise aussi.
     biometric_enrollment_enabled: bool = False
     biometric_test_mode_max_per_minute: int = 30
+    # LOT B — DRH → Fiche de position → Photo employé : préparation automatique de la référence
+    # faciale lorsqu'une photo est ajoutée/actualisée (caméra ou import) depuis la fiche. FAUX par
+    # défaut : comportement inchangé. N'active PAS le pointage facial (biometric_enabled) et ne
+    # traite jamais les photos déjà présentes. Exige aussi l'enrôlement autorisé et la clé.
+    drh_facial_reference_auto_sync_enabled: bool = False
+    # Règle de consentement pour cette préparation : "explicit" (défaut, accord admissible exigé)
+    # ou "no_objection" (aucun accord manuel exigé ; un REFUS ou un RETRAIT enregistré bloque).
+    facial_reference_consent_mode: str = "explicit"
     # À activer SEULEMENT après scripts/rename_public_photos.py --apply : refuse les photos dont
     # le nom est prévisible (ex. matricule.jpg). Désactivé par défaut pour ne casser aucune photo.
     photos_require_unguessable_names: bool = False

@@ -10607,7 +10607,7 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .rh-photo-title{font-size:11px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:6px}
 .rh-photo-state,.rh-facial-ref-label{font-size:14px;font-weight:800}
 .rh-photo-state.is-ok,.rh-facial-ref.is-ok .rh-facial-ref-label{color:#166534}.rh-photo-state.is-none,.rh-facial-ref.is-none .rh-facial-ref-label{color:#64748b}
-.rh-facial-ref.is-warn .rh-facial-ref-label{color:#9a3412}.rh-facial-ref small{display:block;margin-top:3px;font-size:12px;color:#64748b}
+.rh-facial-ref.is-warn .rh-facial-ref-label{color:#9a3412}.rh-facial-ref.is-busy .rh-facial-ref-label{color:#1d4ed8}.rh-facial-ref small{display:block;margin-top:3px;font-size:12px;color:#64748b}
 .rh-photo-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .rh-photo-check{margin-top:8px;font-size:12px;font-weight:700;color:#64748b}.rh-photo-check:empty{display:none}
 .rh-photo-check.is-ok{color:#166534}.rh-photo-check.is-warn{color:#9a3412}
