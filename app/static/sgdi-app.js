@@ -9078,6 +9078,8 @@ function openAgentPhotoUpload(agentId){
       if(zone)zone.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:cover;display:block;"><div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
       const hidden=document.querySelector("#agent-form [name='photo']");
       if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
+      employeePhotoPanelSync(agentId,true);
+      employeePhotoCheck(agentId,src);
     };
     reader.readAsDataURL(file);
     document.body.removeChild(inp);
@@ -9085,6 +9087,200 @@ function openAgentPhotoUpload(agentId){
   document.body.appendChild(inp);inp.click();
 }
 window.openAgentPhotoUpload=openAgentPhotoUpload;
+
+/* ── LOT A — Fiche de position : photo employé et référence faciale ──────────────────────────
+ * La PHOTO (fiche DRH) et la RÉFÉRENCE FACIALE (état calculé par le serveur) sont deux choses
+ * distinctes : « Prête » n'est jamais déduit de la seule présence d'une photo. Ce lot n'écrit
+ * aucun gabarit : il affiche l'état, propose import / caméra / aperçu, et fait analyser la photo
+ * retenue (une seule requête, à la validation — jamais de flux continu vers le serveur). */
+const FACIAL_REFERENCE_UI={
+  READY:{icon:"✓",cls:"is-ok"},PHOTO_TO_UPDATE:{icon:"⚠",cls:"is-warn"},REVIEW_REQUIRED:{icon:"⚠",cls:"is-warn"},NONE:{icon:"✕",cls:"is-none"}
+};
+function employeePhotoEditGuard(){
+  if(sgdiViewModeActive){toast("Fiche verrouillée : déverrouillez la page pour modifier la photo.","error");return false}
+  if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification photo non autorisée.","error");return false}
+  if(!isAdminFichePositionContext()&&!isDrhFicheContext()){toast("Fiche verrouillée : déverrouillez la fiche pour modifier la photo.","error");return false}
+  return true;
+}
+function employeePhotoPanelHTML(a,photoEditable){
+  const id=escapeHTML(a.id);
+  const has=!!a.photo;
+  return `<div class="rh-photo-panel" id="rh-photo-panel-${id}" data-agent="${id}">
+    <div class="rh-photo-block">
+      <div class="rh-photo-title">Photo employé</div>
+      <div class="rh-photo-state ${has?"is-ok":"is-none"}" id="rh-photo-state-${id}">${has?"✓ Photo disponible":"✕ Aucune photo"}</div>
+      <div class="rh-photo-actions">
+        ${photoEditable?`<button type="button" class="btn btn-secondary text-xs" id="rh-photo-import-${id}" onclick="openAgentPhotoUpload('${id}')">${has?"Actualiser la photo":"Ajouter une photo"}</button>
+        <button type="button" class="btn btn-secondary text-xs" id="rh-photo-camera-${id}" onclick="openAgentPhotoCamera('${id}')">Prendre la photo</button>`:""}
+        <button type="button" class="btn btn-ghost text-xs" id="rh-photo-preview-${id}" onclick="openAgentPhotoPreview('${id}')" ${has?"":"hidden"}>Aperçu</button>
+      </div>
+      <div class="rh-photo-check" id="rh-photo-check-${id}" role="status" aria-live="polite"></div>
+    </div>
+    <div class="rh-photo-block">
+      <div class="rh-photo-title">Référence faciale</div>
+      <div class="rh-facial-ref" id="rh-facial-ref-${id}" role="status" aria-live="polite"><span class="rh-facial-ref-label">Chargement…</span></div>
+    </div>
+  </div>`;
+}
+function employeeCurrentPhotoSrc(agentId){
+  const hidden=document.querySelector("#agent-form [name='photo']");
+  if(hidden&&hidden.value)return hidden.value;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  return a?.photo||"";
+}
+// Après import / capture : l'état « Photo disponible » et les libellés suivent la photo retenue.
+function employeePhotoPanelSync(agentId,has){
+  const state=document.getElementById("rh-photo-state-"+agentId);
+  if(state){state.textContent=has?"✓ Photo disponible":"✕ Aucune photo";state.className="rh-photo-state "+(has?"is-ok":"is-none")}
+  const imp=document.getElementById("rh-photo-import-"+agentId);
+  if(imp)imp.textContent=has?"Actualiser la photo":"Ajouter une photo";
+  const prev=document.getElementById("rh-photo-preview-"+agentId);
+  if(prev)prev.hidden=!has;
+}
+function applyAgentPhotoToForm(agentId,src){
+  const zone=document.getElementById("rh-erp-photo-"+agentId);
+  if(zone){
+    const img=document.createElement("img");
+    img.src=src;img.alt="";img.style.cssText="width:100%;height:100%;object-fit:cover;display:block;";
+    const overlay=zone.querySelector(".photo-cam-overlay");
+    zone.innerHTML="";zone.appendChild(img);if(overlay)zone.appendChild(overlay);
+  }
+  const hidden=document.querySelector("#agent-form [name='photo']");
+  if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
+  employeePhotoPanelSync(agentId,true);
+}
+function renderEmployeeFacialReference(agentId,data){
+  const host=document.getElementById("rh-facial-ref-"+agentId);
+  if(!host)return;
+  const ref=data&&data.reference;
+  if(!ref){host.className="rh-facial-ref is-none";delete host.dataset.state;host.innerHTML=`<span class="rh-facial-ref-label">${escapeHTML(data&&data.unavailable||"État indisponible")}</span>`;return}
+  const ui=FACIAL_REFERENCE_UI[ref.state]||FACIAL_REFERENCE_UI.NONE;
+  host.className="rh-facial-ref "+ui.cls;
+  host.dataset.state=ref.state;
+  host.innerHTML=`<span class="rh-facial-ref-label"><span aria-hidden="true">${ui.icon}</span> ${escapeHTML(ref.label)}</span><small>${escapeHTML(ref.message||"")}</small>`;
+}
+async function loadEmployeeFacialReference(agentId){
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  const backendId=a&&a.backendId;
+  if(!document.getElementById("rh-facial-ref-"+agentId))return null;
+  if(!backendId||!sgdiAuthToken()){renderEmployeeFacialReference(agentId,{unavailable:"Disponible après l'enregistrement de la fiche"});return null}
+  try{
+    const data=await sgdiApi("/drh/employees/"+encodeURIComponent(backendId)+"/facial-reference",{legacy:false});
+    renderEmployeeFacialReference(agentId,data);
+    return data;
+  }catch(e){renderEmployeeFacialReference(agentId,{unavailable:"État indisponible"});return null}
+}
+// Analyse de LA photo retenue (import ou capture validée) : verdict compréhensible, rien n'est créé.
+async function employeePhotoCheck(agentId,src){
+  const box=document.getElementById("rh-photo-check-"+agentId);
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  if(!box||!a||!a.backendId||!sgdiAuthToken()||!/^data:image\//.test(String(src||""))){if(box){box.className="rh-photo-check";box.textContent=""}return null}
+  box.className="rh-photo-check is-busy";box.textContent="Analyse de la photo…";
+  try{
+    // Appel direct : une analyse ne modifie aucune donnée (pas de signal « données modifiées »
+    // qui re-rendrait la fiche et perdrait la photo non encore enregistrée).
+    const res=await fetch(sgdiApiUrl("/drh/employees/"+encodeURIComponent(a.backendId)+"/facial-reference/analyze",false),
+      {method:"POST",cache:"no-store",headers:sgdiAuthHeaders(),body:JSON.stringify({photo:src})});
+    if(!res.ok){
+      box.className="rh-photo-check";
+      box.textContent=res.status===503?"Analyse faciale indisponible pour le moment — la photo peut être enregistrée."
+        :res.status===422||res.status===413?"Photo non analysable (format JPG, PNG ou WebP attendu) — elle peut être enregistrée.":"";
+      return null;
+    }
+    const r=await res.json();
+    box.className="rh-photo-check "+(r.usable?"is-ok":"is-warn");
+    box.textContent=r.usable?"✓ "+r.message+" Enregistrez la fiche pour conserver la photo."
+      :"⚠ "+r.message+(r.reasons&&r.reasons[0]?" — "+r.reasons[0]:"")+" Vous pouvez reprendre la photo.";
+    return r;
+  }catch(e){
+    box.className="rh-photo-check";box.textContent="";
+    return null;
+  }
+}
+function openAgentPhotoPreview(agentId){
+  const src=employeeCurrentPhotoSrc(agentId);
+  if(!src){toast("Aucune photo à afficher","error");return}
+  openModal(`<div class="photo-preview-modal"><h3 class="font-bold mb-3">Photo employé</h3><img id="photo-preview-img" src="${escapeHTML(src)}" alt="Photo de l'employé" style="max-width:min(80vw,520px);max-height:70vh;border-radius:12px;display:block;margin:0 auto"><div class="flex justify-end mt-4"><button type="button" class="btn btn-secondary" onclick="closeModal()">Fermer</button></div></div>`);
+}
+// Caméra locale de l'appareil qui ouvre la fiche. Le flux vidéo reste dans le navigateur.
+const agentPhotoCam={stream:null,agentId:null,shot:"",observer:null};
+function stopAgentPhotoCamera(){
+  if(agentPhotoCam.stream){try{agentPhotoCam.stream.getTracks().forEach(t=>t.stop())}catch(e){}}
+  if(agentPhotoCam.observer){agentPhotoCam.observer.disconnect();agentPhotoCam.observer=null}
+  agentPhotoCam.stream=null;agentPhotoCam.shot="";                    // aucune capture conservée
+}
+function closeAgentPhotoCamera(){stopAgentPhotoCamera();closeModal()}
+function agentPhotoCamMessage(text,isError){
+  const el=document.getElementById("photo-cam-msg");
+  if(el){el.textContent=text||"";el.className="photo-cam-msg"+(isError?" is-error":"")}
+}
+function agentPhotoCamStep(step){
+  const show=(id,on)=>{const el=document.getElementById(id);if(el)el.hidden=!on};
+  show("photo-cam-video",step==="live");show("photo-cam-guide",step==="live");show("photo-cam-shot",step==="shot");
+  show("photo-cam-capture",step==="live");show("photo-cam-retake",step==="shot");show("photo-cam-use",step==="shot");
+}
+async function openAgentPhotoCamera(agentId){
+  if(!employeePhotoEditGuard())return;
+  stopAgentPhotoCamera();
+  agentPhotoCam.agentId=agentId;
+  openModal(`<div class="photo-cam" role="dialog" aria-modal="true" aria-labelledby="photo-cam-title">
+    <h3 id="photo-cam-title" class="font-bold">Prendre la photo</h3>
+    <p class="text-xs text-slate-500 mb-3">Placez le visage dans le cadre, de face, bien éclairé, sans autre personne.</p>
+    <div class="photo-cam-stage"><video id="photo-cam-video" autoplay playsinline muted hidden></video><div class="photo-cam-guide" id="photo-cam-guide" hidden aria-hidden="true"></div><img id="photo-cam-shot" alt="Photo capturée" hidden></div>
+    <div class="photo-cam-msg" id="photo-cam-msg" role="status" aria-live="polite">Ouverture de la caméra…</div>
+    <div class="flex justify-end gap-2 mt-4 flex-wrap">
+      <button type="button" class="btn btn-secondary" id="photo-cam-close" onclick="closeAgentPhotoCamera()">Fermer</button>
+      <button type="button" class="btn btn-primary" id="photo-cam-capture" onclick="captureAgentPhoto()" hidden>Capturer</button>
+      <button type="button" class="btn btn-secondary" id="photo-cam-retake" onclick="retakeAgentPhoto()" hidden>Reprendre</button>
+      <button type="button" class="btn btn-primary" id="photo-cam-use" onclick="useAgentPhoto()" hidden>Utiliser cette photo</button>
+    </div></div>`);
+  // Fenêtre fermée autrement (Échap, autre écran) : la caméra est toujours libérée.
+  const host=document.getElementById("modal-host");
+  if(host&&typeof MutationObserver==="function"){
+    agentPhotoCam.observer=new MutationObserver(()=>{if(!document.getElementById("photo-cam-video"))stopAgentPhotoCamera()});
+    agentPhotoCam.observer.observe(host,{childList:true});
+  }
+  const media=navigator.mediaDevices;
+  if(!media||typeof media.getUserMedia!=="function"){agentPhotoCamMessage("Aucune caméra disponible sur cet appareil. Utilisez « Ajouter une photo ».",true);return}
+  try{
+    const stream=await media.getUserMedia({audio:false,video:{facingMode:"user",width:{ideal:1280},height:{ideal:960}}});
+    const video=document.getElementById("photo-cam-video");
+    if(!video){stream.getTracks().forEach(t=>t.stop());return}          // fenêtre fermée entre-temps
+    agentPhotoCam.stream=stream;
+    video.srcObject=stream;
+    try{await video.play()}catch(e){}
+    agentPhotoCamStep("live");
+    agentPhotoCamMessage("");
+  }catch(e){
+    const name=e&&e.name;
+    agentPhotoCamMessage(name==="NotAllowedError"||name==="SecurityError"?"Accès à la caméra refusé. Autorisez la caméra pour ce site dans le navigateur, ou utilisez « Ajouter une photo »."
+      :name==="NotFoundError"||name==="OverconstrainedError"?"Aucune caméra détectée sur cet appareil. Utilisez « Ajouter une photo »."
+      :"Caméra indisponible. Utilisez « Ajouter une photo ».",true);
+  }
+}
+function captureAgentPhoto(){
+  const video=document.getElementById("photo-cam-video");
+  if(!video||!video.videoWidth){agentPhotoCamMessage("La caméra n'est pas encore prête.",true);return}
+  const scale=Math.min(1,1000/Math.max(video.videoWidth,video.videoHeight));
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
+  canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);
+  agentPhotoCam.shot=canvas.toDataURL("image/jpeg",0.9);
+  const img=document.getElementById("photo-cam-shot");
+  if(img)img.src=agentPhotoCam.shot;
+  agentPhotoCamStep("shot");
+  agentPhotoCamMessage("Vérifiez la photo : visage net, de face, seul dans le cadre.");
+}
+function retakeAgentPhoto(){agentPhotoCam.shot="";agentPhotoCamStep("live");agentPhotoCamMessage("")}
+function useAgentPhoto(){
+  const src=agentPhotoCam.shot,agentId=agentPhotoCam.agentId;
+  if(!src)return;
+  closeAgentPhotoCamera();
+  applyAgentPhotoToForm(agentId,src);
+  employeePhotoCheck(agentId,src);                                     // seule la photo RETENUE part au serveur
+}
+window.openAgentPhotoCamera=openAgentPhotoCamera;window.openAgentPhotoPreview=openAgentPhotoPreview;
+window.captureAgentPhoto=captureAgentPhoto;window.retakeAgentPhoto=retakeAgentPhoto;window.useAgentPhoto=useAgentPhoto;window.closeAgentPhotoCamera=closeAgentPhotoCamera;
 function candidatePhotoFieldCanEdit(element){
   const form=element?.closest?.("#candidat-form");
   const section=element?.closest?.("[data-candidat-section]");
@@ -12969,6 +13165,7 @@ function renderAgentForm(view,id){
         <div><div class="rh-erp-side-label">Groupe de rotation</div>${aff.assignmentBackendId&&!opsFicheReadOnly&&!locked?`<select class="select" style="height:32px;font-size:12px;font-weight:800;width:auto" onchange="updateAgentAssignmentGroup('${jsString(aff.assignmentBackendId)}',this.value)">${["A","B","C","D","E","F"].map(g=>`<option value="${g}" ${aff.groupe===g?"selected":""}>Groupe ${g}</option>`).join("")}</select>`:`<div class="rh-erp-side-value">${aff.groupe?"Groupe "+escapeHTML(aff.groupe):"—"}</div>`}</div>
       </div>
     </div>
+    ${adminFicheContext||isDrhFicheContext()?employeePhotoPanelHTML(a,photoEditable):""}
     <div class="rh-erp-chips">
       ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${isSortantDotation72hAlert(a)?'<span class="pill" style="background:#dc2626;color:#fff;font-weight:900;padding:6px 16px;letter-spacing:.06em;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ALERTE — DOTATION NON REVERSÉE +72H</span>':''}${(isDrhFicheContext()||adminFicheContext)&&!agentHasPortailAccount(a)?'<span class="pill" style="background:#f59e0b;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.04em">⚠ SANS COMPTE PORTAIL</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
@@ -13064,6 +13261,7 @@ function renderAgentForm(view,id){
   </div>`;
   setTimeout(()=>{bindAgentDuplicateFieldSync();bindAgentFormDirtyState()},0);
   loadEmployeeSituationAlerts(a);
+  loadEmployeeFacialReference(a.id);
 }
 // DOSSIER EMPLOYÉ 360° — "Situation à traiter" : consomme EXCLUSIVEMENT le moteur
 // d'alertes déterministe existant (Lot 0.6-A, GET /api/alerts?employee_id=…).

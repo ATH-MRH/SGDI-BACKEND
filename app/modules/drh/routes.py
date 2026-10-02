@@ -407,6 +407,39 @@ def get_employee(employee_id: int, db: Session = Depends(get_db), user: User = D
     return _ensure_employee_allowed(db, user, employee_id)
 
 
+# ── Référence faciale (LOT A — lecture et analyse seulement) ──────────────────────────────────
+# Fiche de position → Photo employé. Périmètre DRH habituel (société de l'employé). Aucune de
+# ces deux routes ne crée, ne remplace ni ne désactive un gabarit ; aucune ne modifie la photo,
+# l'employé, le consentement ou Attendance Core (app/modules/biometrics/photo_reference.py).
+@router.get("/employees/{employee_id}/facial-reference")
+def employee_facial_reference(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import photo_reference
+
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    return photo_reference.reference_state(db, employee)
+
+
+@router.post("/employees/{employee_id}/facial-reference/analyze")
+def analyze_employee_photo(employee_id: int, payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """Analyse d'une photo candidate (visage unique, qualité) avant de l'utiliser. La photo
+    n'est ni stockée ni rattachée à l'employé ; seule une trace d'audit (sans image) est écrite."""
+    from app.core import rate_limit
+    from app.core.audit import append_audit
+    from app.modules.biometrics import photo_reference
+
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    key = f"facial-photo-analysis:{user.id}"
+    if rate_limit.failure_count(key, 60) >= 30:
+        raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": "Trop d'analyses — patientez une minute"})
+    rate_limit.record_failure(key, 60)
+    result = photo_reference.analyze_photo(db, payload.get("photo") if isinstance(payload, dict) else None)
+    db.rollback()                                            # défense en profondeur : rien d'autre que l'audit
+    append_audit(db, action="drh.photo.facial_analysis", resource="employee", resource_id=employee.id, result="success",
+                 user=user, society=employee.society, new_state={"state": result["state"], "usable": result["usable"]})
+    db.commit()
+    return result
+
+
 @router.put("/employees/{employee_id}", response_model=EmployeeOut)
 def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = _ensure_employee_allowed(db, user, employee_id)
