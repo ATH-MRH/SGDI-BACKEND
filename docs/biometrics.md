@@ -747,3 +747,82 @@ utilisable par la borne. Ce point relève des lots suivants.
 Tests : `tests/test_drh_facial_reference_sync.py`,
 `tests_frontend/employee-facial-reference-sync.test.js`,
 `npm run test:drh-facial-reference-sync-e2e`.
+
+## 16. Prise de photo distante supervisée (LOT C1)
+
+**DRH → Fiche de position → « Prendre la photo »** peut utiliser, à la place de la caméra de
+l'ordinateur, un terminal de pointage autorisé (tablette ou smartphone) comme caméra distante.
+Code : `app/modules/biometrics/remote_capture.py`, routes DRH `…/remote-photo/…`, borne `/borne`.
+
+| Réglage serveur | Défaut | Effet |
+|---|---|---|
+| `DRH_REMOTE_PHOTO_CAPTURE_ENABLED` | `false` | `true` : la fiche propose les terminaux en ligne et les bornes relèvent les commandes. Exige `BIOMETRIC_TEMPLATE_KEY` (photo candidate chiffrée). Indépendant de `BIOMETRIC_ENABLED`. |
+
+Retour arrière : `false` — seule la caméra de l'ordinateur est proposée, la borne ne relève plus
+aucune commande. Une borne déjà ouverte prend le réglage en compte à sa prochaine relecture
+d'état (redémarrage du serveur, rechargement, ou relecture périodique quand le facial est coupé).
+
+### 16.1 Canal
+
+Aucun canal poussé n'existe (terminal authentifié par signature à chaque requête, plusieurs
+workers sans mémoire partagée). La borne **interroge** donc le serveur : `GET
+/api/biometrics/terminal/command` (requête signée) toutes les 2 s au repos, chaque seconde
+pendant une prise. Cet appel sert de battement de cœur : un terminal est « En ligne » s'il a été
+vu depuis moins de 20 s. Le PC ne parle jamais au terminal.
+
+### 16.2 Session
+
+Table `biometric_remote_capture_sessions` (migration additive `20261003_0001`) : identifiant
+aléatoire, employé, terminal, opérateur, société, site, état, échéance. Une seule session active
+par terminal et par employé (colonnes `active_*` uniques).
+
+```
+REQUESTED ──(terminal : prise en compte)──► WAITING_FOR_FACE ──(photo exploitable)──► PREVIEW_READY
+                                                  ▲                                      │
+                                                  └──(terminal)── RETAKE_REQUESTED ◄──(opérateur : Reprendre)
+PREVIEW_READY ──(opérateur : Utiliser cette photo)──► ACCEPTED
+toute session active ──► CANCELLED (opérateur, PC disparu) | EXPIRED (échéance) | FAILED (terminal muet, désactivé, révoqué)
+```
+
+Toutes les transitions sont validées par le serveur. Échéances : 120 s par prise, 90 s pour
+décider après la photo, 15 s sans prise en compte par le terminal (`TERMINAL_UNREACHABLE`),
+20 s sans signe de vie du PC (`OPERATOR_GONE`), 5 reprises au plus. La borne revient au pointage
+dès que la session n'est plus active, quelle qu'en soit la cause.
+
+### 16.3 Terminal
+
+- Requêtes signées comme les autres (`authenticated_terminal`) : aucun mot de passe, aucun jeton
+  permanent propre à C1. La photo n'est acceptée que pour la session en attente de CE terminal,
+  avec le **jeton de capture à usage unique** remis à la prise en compte (renouvelé à chaque essai).
+- Pendant la prise, le terminal est réservé : bandeau « PRISE DE PHOTO EN COURS », ni
+  reconnaissance, ni QR, ni pointage (le serveur refuse aussi : `CAPTURE_IN_PROGRESS`). Un
+  pointage déjà engagé se termine avant la prise.
+- La vidéo reste sur le terminal. Scène stable ⇒ une photo fixe est proposée (1 par 1,5 s au
+  plus) ; le serveur l'analyse (un visage, qualité) et renvoie une consigne simple (« Regardez
+  la caméra », « Approchez-vous », « Restez immobile », « Une seule personne… ») ; une photo
+  refusée n'est pas conservée. Le terminal ne reçoit que le nom et le prénom du salarié.
+- Après la prise, aucun pointage n'est tenté tant que la personne n'a pas quitté le champ.
+
+### 16.4 Opérateur RH
+
+`GET /api/drh/employees/{id}/remote-photo/terminals`, `PUT …/remote-photo/session`,
+`GET /api/drh/remote-photo/sessions/{sid}`, `GET …/preview`, `PATCH …` (`retake` / `accept` /
+`cancel`). Droits : module DRH, périmètre société de l'employé, et méthodes PUT / PATCH — donc
+l'action « update », la même que pour modifier la fiche. La session n'est visible que de
+l'opérateur qui l'a créée. **Périmètre terminal** : même société que l'employé (le périmètre DRH
+est par société, sans filtre de site ; le site d'affectation n'ordonne que la liste). Le poste
+de sécurité (`pointeur.irongs.com`) n'a aucun accès à ces routes.
+
+« Utiliser cette photo » place la photo dans le formulaire ; **« Enregistrer »** la conserve et
+déclenche le LOT B avec la provenance `DRH_REMOTE_TERMINAL` (vérifiée : l'empreinte doit
+correspondre à une prise acceptée pour cet employé, sinon `DRH_UPLOAD`).
+
+### 16.5 Photo candidate et audit
+
+La photo candidate vit **chiffrée** dans la session (jamais dans `/uploads`, jamais dans les
+journaux) et est effacée à l'acceptation, la reprise, l'annulation ou l'expiration ; il ne reste
+que son empreinte. Audit `drh.remote_photo.{requested,acknowledged,captured,retake,accepted,
+cancelled,expired,failed}` : opérateur, employé, terminal, site, session (tronquée), état, raison.
+
+Tests : `tests/test_drh_remote_photo_capture.py`, `tests_frontend/employee-remote-photo.test.js`,
+`tests_frontend/pointeur-borne-remote-capture.test.js`, `npm run test:drh-remote-photo-e2e`.

@@ -8,7 +8,8 @@ défaut : comportement inchangé). N'active JAMAIS le pointage facial (BIOMETRIC
 Garanties :
 - l'enregistrement de la fiche est prioritaire : cette synchronisation s'exécute APRÈS la
   validation de la fiche, dans sa propre transaction ; aucun échec ne remonte à la fiche ;
-- déclenchement uniquement par un événement photo (sources DRH_CAMERA / DRH_UPLOAD) : aucun
+- déclenchement uniquement par un événement photo (sources DRH_CAMERA / DRH_UPLOAD /
+  DRH_REMOTE_TERMINAL) : aucun
   balayage de la base, aucun traitement au démarrage, aucune photo historique traitée ;
 - une ligne d'état par employé, liée à l'EMPREINTE de la photo : même photo ⇒ aucun nouveau
   traitement ; une tâche portant une ancienne empreinte n'écrit jamais rien ;
@@ -55,7 +56,8 @@ logger = logging.getLogger("sgdi.biometrics.photo_sync")
 # rien tant qu'une décision séparée ne les a pas ouvertes.
 SOURCE_DRH_CAMERA = "DRH_CAMERA"
 SOURCE_DRH_UPLOAD = "DRH_UPLOAD"
-TRIGGER_SOURCES = frozenset({SOURCE_DRH_CAMERA, SOURCE_DRH_UPLOAD})
+SOURCE_DRH_REMOTE_TERMINAL = "DRH_REMOTE_TERMINAL"     # LOT C1 : photo prise par un terminal de pointage, supervisée
+TRIGGER_SOURCES = frozenset({SOURCE_DRH_CAMERA, SOURCE_DRH_UPLOAD, SOURCE_DRH_REMOTE_TERMINAL})
 EXCLUDED_SOURCES = frozenset({"IMPORT", "LEGACY_SYNC", "DRH_API"})
 
 RETRYABLE = frozenset({SYNC_ENGINE_UNAVAILABLE, SYNC_BLOCKED})   # même photo : nouvelle tentative admise
@@ -105,6 +107,13 @@ def request_sync(db: Session, *, employee: Employee, source: Any, actor: Any, pr
     fingerprint = service.photo_fingerprint(employee)
     if fingerprint is None:
         return None
+    if origin == SOURCE_DRH_REMOTE_TERMINAL:
+        # Provenance vérifiée : cette photo doit avoir été retenue lors d'une prise distante de
+        # CET employé ; sinon elle est tracée comme un import ordinaire.
+        from app.modules.biometrics import remote_capture
+
+        if not remote_capture.accepted_photo(db, employee.id, fingerprint):
+            origin = SOURCE_DRH_UPLOAD
     now = datetime.utcnow()
     for _ in range(2):
         row = _state(db, employee.id, lock=True)

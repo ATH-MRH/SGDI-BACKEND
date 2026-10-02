@@ -490,6 +490,49 @@ def analyze_employee_photo(employee_id: int, payload: dict, db: Session = Depend
     return result
 
 
+# ── Prise de photo distante supervisée (LOT C1) ───────────────────────────────────────────────
+# Fiche de position → « Prendre la photo » avec un terminal de pointage autorisé. Mêmes droits
+# que la modification de la fiche : périmètre société de l'employé, et méthodes PUT / PATCH
+# (action « update », comme PUT /employees/{id}) pour commander le terminal. La session
+# n'est visible que de l'opérateur qui l'a créée. Rien n'est enregistré dans la fiche ici.
+@router.get("/employees/{employee_id}/remote-photo/terminals")
+def remote_photo_terminals(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import remote_capture
+
+    return remote_capture.terminals_for(db, _ensure_employee_allowed(db, user, employee_id))
+
+
+@router.put("/employees/{employee_id}/remote-photo/session")
+def remote_photo_start(employee_id: int, payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import remote_capture
+
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    return remote_capture.start(db, employee=employee, terminal_id=payload.get("terminal_id") if isinstance(payload, dict) else None, user=user)
+
+
+@router.get("/remote-photo/sessions/{session_id}")
+def remote_photo_status(session_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import remote_capture
+
+    return remote_capture.status(db, session_id=session_id, user=user)
+
+
+@router.get("/remote-photo/sessions/{session_id}/preview")
+def remote_photo_preview(session_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
+    from app.modules.biometrics import remote_capture
+
+    image = remote_capture.preview(db, session_id=session_id, user=user)
+    return Response(content=image, media_type=remote_capture.mime(image),
+                    headers={"Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff"})
+
+
+@router.patch("/remote-photo/sessions/{session_id}")
+def remote_photo_decide(session_id: str, payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    from app.modules.biometrics import remote_capture
+
+    return remote_capture.decide(db, session_id=session_id, action=str((payload or {}).get("action") or "") if isinstance(payload, dict) else "", user=user)
+
+
 @router.put("/employees/{employee_id}", response_model=EmployeeOut)
 def update_employee(employee_id: int, payload: EmployeeUpdate, background_tasks: BackgroundTasks,
                     photo_source: str | None = Query(None, max_length=30),

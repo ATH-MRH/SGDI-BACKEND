@@ -552,7 +552,7 @@ def test_migration_is_additive_and_reversible(tmp_path):
     counts = lambda: {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("employees", "biometric_templates", "biometric_consents")}  # noqa: E731
     existing, rows = tables(), counts()
 
-    up = alembic("upgrade", "head")
+    up = alembic("upgrade", "20261002_0001")
     assert up.returncode == 0, up.stderr
     assert tables() - existing == {"biometric_photo_syncs"} and existing <= tables()
     assert con.execute("SELECT COUNT(*) FROM biometric_photo_syncs").fetchone()[0] == 0     # aucune photo historique traitée
@@ -564,6 +564,6 @@ def test_migration_is_additive_and_reversible(tmp_path):
     down = alembic("downgrade", "20260930_0002")
     assert down.returncode == 0, down.stderr
     assert tables() == existing and counts() == rows
-    assert alembic("upgrade", "head").returncode == 0
+    assert alembic("upgrade", "20261002_0001").returncode == 0
     assert "biometric_photo_syncs" in tables()
     con.close()

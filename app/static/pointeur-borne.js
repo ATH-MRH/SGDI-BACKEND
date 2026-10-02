@@ -26,6 +26,10 @@
     MESSAGE_MS: 3500,        // refus affichés
     UNAVAILABLE_MS: 5000,    // réseau / serveur indisponible : nouvel essai
     STATUS_POLL_MS: 30000,   // terminal désactivé / facial coupé : relecture de l'état
+    COMMAND_POLL_MS: 2000,   // « ai-je une commande ? » (prise de photo distante) — au repos
+    CAPTURE_POLL_MS: 1000,   // pendant une prise de photo
+    CAPTURE_STABLE: 2,       // échantillons consécutifs sans mouvement avant de proposer une photo
+    CAPTURE_RETRY_MS: 1500,  // délai minimal entre deux photos proposées
   };
   const DOMAIN = "ATLAS-TERMINAL-1";
   const UNAVAILABLE = "SERVICE TEMPORAIREMENT INDISPONIBLE";
@@ -63,6 +67,8 @@
     busy: false,
     holdScene: null, holdUntil: 0, pauseUntil: 0,
     lastSample: null, lastAnalyzed: null, tickCount: 0, timer: null, stream: null,
+    remote: null,            // prise de photo distante en cours { session_id, status, nonce, … } — sinon null
+    commandAt: 0,
     deps: {
       fetch: (...a) => window.fetch(...a),
       subtle: () => window.crypto.subtle,
@@ -107,6 +113,99 @@
     CAMERA_DENIED: () => show("CAMERA_DENIED", "CAMÉRA REFUSÉE", "Autorisez la caméra pour ce site dans les réglages de la tablette", "error"),
     CAMERA_LOST: () => show("CAMERA_LOST", "CAMÉRA INTERROMPUE", "Reconnexion…", "error"),
   };
+
+  // ── Prise de photo distante supervisée (commandée depuis DRH → Fiche de position) ────────
+  // Le terminal reste un terminal de POINTAGE : il interroge le serveur (requête signée) et,
+  // sur commande, sert quelques instants de caméra. Pendant ce temps il ne reconnaît personne,
+  // ne lit aucun QR et n'enregistre aucun pointage. La vidéo ne quitte jamais l'appareil :
+  // seules des photos fixes sont proposées au serveur. Fin, annulation, expiration ou
+  // serveur muet : retour automatique au pointage.
+  function captureBanner(on) {
+    const el = $("kioskMode");
+    if (el) { el.hidden = !on; el.textContent = on ? "PRISE DE PHOTO EN COURS" : ""; }
+    document.body.classList.toggle("kiosk-capturing", Boolean(on));
+  }
+
+  function showCapture(detail, tone) {
+    const who = B.remote && B.remote.employee ? `${esc(B.remote.employee.nom)} ${esc(B.remote.employee.prenom)}` : "";
+    show("CAPTURE", "PRISE DE PHOTO", (who ? who + "<br>" : "") + esc(detail), tone || "work");
+  }
+
+  function leaveCapture() {
+    if (!B.remote) return;
+    B.remote = null;
+    captureBanner(false);
+    // La personne photographiée est encore devant la borne : aucun pointage tant que la scène
+    // n'a pas changé (même réarmement qu'après un pointage).
+    B.holdScene = B.lastAnalyzed = B.lastSample;
+    B.holdUntil = B.deps.now() + TIMING.HOLD_MAX_MS;
+    B._lastQr = null;
+    if (facialOn()) SCREENS.READY(); else SCREENS.FACIAL_OFF(B.session && B.session.facial && B.session.facial.message);
+  }
+
+  async function enterCapture(command) {
+    B.remote = { session_id: command.session_id, status: command.status, employee: command.employee, capture: command.capture || {},
+      nonce: null, stable: 0, lastTry: 0, attempt: command.attempt };
+    captureBanner(true);
+    showCapture("Veuillez vous placer devant la caméra.");
+    await acknowledgeCapture();
+  }
+
+  async function acknowledgeCapture() {
+    try {
+      const out = await call("POST", "/terminal/capture/ack", { session_id: B.remote.session_id });
+      if (!B.remote) return;
+      B.remote.status = out.status; B.remote.nonce = out.nonce; B.remote.attempt = out.attempt; B.remote.stable = 0;
+      showCapture("Veuillez vous placer devant la caméra.");
+    } catch (e) {
+      if (e.status === 409 || e.status === 503) leaveCapture(); else handleError(e);
+    }
+  }
+
+  // Relève des commandes : au repos toutes les 2 s, pendant une prise chaque seconde.
+  async function pollCommand() {
+    B.commandAt = B.deps.now();
+    let out;
+    try { out = await call("GET", "/terminal/command"); } catch (e) {
+      if (B.remote && (e.status === 401 || e.status === 403)) leaveCapture();
+      if (e.status === 401 || e.status === 403) handleError(e);
+      return;                                         // réseau : la session expire seule côté serveur
+    }
+    if (!out || out.command !== "CAPTURE_PHOTO") { leaveCapture(); return; }
+    if (!B.remote || B.remote.session_id !== out.session_id) { await enterCapture(out); return; }
+    B.remote.employee = out.employee;
+    if (out.status === "RETAKE_REQUESTED" || (out.status === "REQUESTED")) { B.remote.status = out.status; await acknowledgeCapture(); return; }
+    if (out.status === "PREVIEW_READY" && B.remote.status !== "PREVIEW_READY") { B.remote.status = out.status; showCapture("Photo prise — vérification en cours…", "ok"); }
+  }
+
+  function commandDue() {
+    if (!B.session || !B.session.remote_capture || !B.session.remote_capture.enabled) return Boolean(B.remote);
+    return B.deps.now() - B.commandAt >= (B.remote ? TIMING.CAPTURE_POLL_MS : TIMING.COMMAND_POLL_MS);
+  }
+
+  // Une itération en mode prise de photo : scène stable ⇒ UNE photo fixe proposée au serveur.
+  async function captureTick(current, previous) {
+    const r = B.remote;
+    if (!r || r.status !== "WAITING_FOR_FACE" || !r.nonce || !current) return;
+    r.stable = previous && diff(current, previous) < TIMING.MOTION ? r.stable + 1 : 0;
+    const now = B.deps.now();
+    if (r.stable < TIMING.CAPTURE_STABLE || now - r.lastTry < (r.capture.min_interval_ms || TIMING.CAPTURE_RETRY_MS)) return;
+    r.lastTry = now; r.stable = 0;
+    const nonce = r.nonce; r.nonce = null;            // jeton à usage unique
+    try {
+      const out = await call("POST", "/terminal/capture/photo", { session_id: r.session_id, nonce,
+        photo: B.capture(r.capture.max_side || 1000, r.capture.jpeg_quality || 0.9) });
+      if (B.remote !== r) return;
+      if (out.accepted) { r.status = "PREVIEW_READY"; showCapture("Photo prise — vérification en cours…", "ok"); return; }
+      r.nonce = out.nonce;
+      showCapture(out.instruction || "Regardez la caméra", "warn");
+    } catch (e) {
+      if (e.status === 409 || e.status === 503) { B.commandAt = 0; return; }   // session close ou reprise : la relève tranchera
+      if (e.status === 401 || e.status === 403) { leaveCapture(); handleError(e); return; }
+      if (B.remote === r) showCapture("Connexion interrompue — nouvel essai…", "warn");
+      B.commandAt = 0;
+    }
+  }
 
   function showRecorded(result) {
     const e = result.employee || {};
@@ -302,6 +401,7 @@
       return;
     }
     if (!B.running) { boot(); return; }
+    if (B.remote) { if (!facialOn()) poll(TIMING.STATUS_POLL_MS); return; }   // prise de photo : l'écran lui est réservé
     if (facialOn()) { if (B.state === "FACIAL_OFF" || B.state === "UNAVAILABLE") SCREENS.READY(); }
     else { SCREENS.FACIAL_OFF(B.session.facial.message); poll(TIMING.STATUS_POLL_MS); }
   }
@@ -310,12 +410,21 @@
 
   // Une itération : échantillon → QR éventuel → mouvement → reconnaissance. Exposée aux tests.
   B.tick = async function () {
-    if (B.busy) return;
+    if (B.busy) return;                              // un pointage engagé se termine toujours d'abord
     const now = B.deps.now();
     const current = B.sample();
     const previous = B.lastSample;
     B.lastSample = current;
     B.tickCount++;
+    if (commandDue()) {
+      B.busy = true;
+      try { await pollCommand(); } finally { B.busy = false; }
+    }
+    if (B.remote) {                                  // terminal réservé : ni QR, ni reconnaissance, ni pointage
+      B.busy = true;
+      try { await captureTick(current, previous); } finally { B.busy = false; }
+      return;
+    }
     if (now < B.pauseUntil) return;
     if (B.holdScene) {
       // Réarmement : la scène doit avoir changé depuis le pointage (personne partie), ou délai max.
@@ -457,6 +566,7 @@
   B.pair = pair;
   B.handleResult = handleResult;
   B.handleError = handleError;
+  B.pollCommand = pollCommand;
   B.TIMING = TIMING;
 
   document.addEventListener("DOMContentLoaded", () => {

@@ -212,6 +212,51 @@ class BiometricTerminal(Base, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(120))
 
 
+# Prise de photo distante supervisée (LOT C1) : DRH → terminal de pointage → photo candidate.
+CAPTURE_REQUESTED = "REQUESTED"                # commande créée par l'opérateur RH
+CAPTURE_WAITING_FOR_FACE = "WAITING_FOR_FACE"  # terminal en mode prise de photo
+CAPTURE_PREVIEW_READY = "PREVIEW_READY"        # photo candidate disponible pour l'opérateur
+CAPTURE_RETAKE_REQUESTED = "RETAKE_REQUESTED"  # l'opérateur demande une nouvelle prise
+CAPTURE_ACCEPTED = "ACCEPTED"
+CAPTURE_CANCELLED = "CANCELLED"
+CAPTURE_EXPIRED = "EXPIRED"
+CAPTURE_FAILED = "FAILED"
+CAPTURE_ACTIVE = frozenset({CAPTURE_REQUESTED, CAPTURE_WAITING_FOR_FACE, CAPTURE_PREVIEW_READY, CAPTURE_RETAKE_REQUESTED})
+CAPTURE_STATUSES = CAPTURE_ACTIVE | {CAPTURE_ACCEPTED, CAPTURE_CANCELLED, CAPTURE_EXPIRED, CAPTURE_FAILED}
+
+
+class BiometricRemoteCaptureSession(Base, TimestampMixin):
+    """Session temporaire liée à UN employé, UN terminal et UN opérateur. `active_terminal_id`
+    et `active_employee_id` (uniques, NULL une fois la session close) garantissent une seule
+    session active par terminal et par employé. La photo candidate n'existe que chiffrée, le
+    temps de la session ; à la clôture il ne reste que son empreinte (jamais l'image)."""
+    __tablename__ = "biometric_remote_capture_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)      # aléatoire, non prédictible
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    terminal_id: Mapped[int] = mapped_column(ForeignKey("biometric_terminals.id", ondelete="CASCADE"), index=True)
+    requested_by_user_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    requested_by: Mapped[str | None] = mapped_column(String(120))
+    society: Mapped[str | None] = mapped_column(String(150))
+    site_id: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    reason_code: Mapped[str | None] = mapped_column(String(40))
+    attempt: Mapped[int] = mapped_column(Integer, default=0)                         # nombre de reprises
+    nonce_hash: Mapped[str | None] = mapped_column(String(64))                       # jeton de capture à usage unique
+    photo_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)               # candidate, chiffrée, temporaire
+    photo_sha256: Mapped[str | None] = mapped_column(String(64))
+    checks: Mapped[dict | None] = mapped_column(JSON)                                # contrôles lisibles, sans score
+    active_terminal_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    active_employee_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    command_at: Mapped[datetime] = mapped_column(DateTime)                           # dernière commande envoyée au terminal
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime)
+    captured_at: Mapped[datetime | None] = mapped_column(DateTime)
+    operator_seen_at: Mapped[datetime | None] = mapped_column(DateTime)              # dernier signe de vie du PC
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class BiometricTerminalChallenge(Base):
     """Défi serveur à usage unique : une rafale n'est acceptée que liée à un défi frais de CE
     terminal, de CE site et de la configuration en vigueur ; consommé à la première utilisation."""

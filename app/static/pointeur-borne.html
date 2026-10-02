@@ -38,11 +38,15 @@
   .kiosk-pairing input { letter-spacing: .18em; text-transform: uppercase; text-align: center; }
   .kiosk-pairing button { background: var(--work); border: 0; font-weight: 700; }
   #pairMessage { color: #ffb3b3; min-height: 1.2em; }
+  /* Prise de photo distante supervisée : le terminal indique clairement qu'il n'est pas en pointage. */
+  .kiosk-mode { background: var(--warn); color: #1b1300; border-radius: 999px; padding: 3px 12px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+  .kiosk-mode[hidden] { display: none; }
+  body.kiosk-capturing .kiosk-frame { border-color: var(--warn); }
 </style>
 </head>
 <body>
 <main class="kiosk" aria-live="polite">
-  <header class="kiosk-bar"><span><b>ATLAS</b> · Borne de pointage</span><span id="kioskSite"></span><span class="kiosk-prod">PRODUCTION</span></header>
+  <header class="kiosk-bar"><span><b>ATLAS</b> · Borne de pointage</span><span id="kioskSite"></span><span id="kioskMode" class="kiosk-mode" hidden></span><span class="kiosk-prod">PRODUCTION</span></header>
   <section class="kiosk-stage">
     <video id="kioskVideo" autoplay playsinline muted></video>
     <div class="kiosk-frame" aria-hidden="true"></div>
@@ -59,6 +63,6 @@
     <div id="pairMessage" role="alert"></div>
   </form>
 </div>
-<script src="/static/pointeur-borne.js?v=20260930-1"></script>
+<script src="/static/pointeur-borne.js?v=20261003-c1"></script>
 </body>
 </html>

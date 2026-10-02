@@ -27,7 +27,7 @@ from app.core.granular_permissions import is_global_administrator, load_feature_
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
-from app.modules.biometrics import crypto, service, terminals, test_mode
+from app.modules.biometrics import crypto, remote_capture, service, terminals, test_mode
 from app.modules.biometrics.cameras import PROFILES, CameraError, adapter_for
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
@@ -50,6 +50,8 @@ router = APIRouter()
 # Circuit B : endpoints des terminaux mobiles (authentifiés par la clé de l'appareil, jamais
 # par une session utilisateur) — app/modules/biometrics/terminals.py.
 router.include_router(terminals.router)
+# Prise de photo distante supervisée (LOT C1) : commandes lues par le terminal, requêtes signées.
+router.include_router(remote_capture.router)
 MAX_FRAMES = 6
 MAX_FRAME_BYTES = 3_000_000
 

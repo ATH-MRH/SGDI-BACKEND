@@ -9132,7 +9132,7 @@ function employeePhotoPanelHTML(a,photoEditable){
       <div class="rh-photo-state ${has?"is-ok":"is-none"}" id="rh-photo-state-${id}">${has?"✓ Photo disponible":"✕ Aucune photo"}</div>
       <div class="rh-photo-actions">
         ${photoEditable?`<button type="button" class="btn btn-secondary text-xs" id="rh-photo-import-${id}" onclick="openAgentPhotoUpload('${id}')">${has?"Actualiser la photo":"Ajouter une photo"}</button>
-        <button type="button" class="btn btn-secondary text-xs" id="rh-photo-camera-${id}" onclick="openAgentPhotoCamera('${id}')">Prendre la photo</button>`:""}
+        <button type="button" class="btn btn-secondary text-xs" id="rh-photo-camera-${id}" onclick="openAgentPhotoSource('${id}')">Prendre la photo</button>`:""}
         <button type="button" class="btn btn-ghost text-xs" id="rh-photo-preview-${id}" onclick="openAgentPhotoPreview('${id}')" ${has?"":"hidden"}>Aperçu</button>
       </div>
       <div class="rh-photo-check" id="rh-photo-check-${id}" role="status" aria-live="polite"></div>
@@ -9308,6 +9308,182 @@ function useAgentPhoto(){
   markAgentFormDirty();
   employeePhotoCheck(agentId,src);                                     // seule la photo RETENUE part au serveur
 }
+/* ── LOT C1 — Prise de photo distante supervisée ────────────────────────────────────────────
+ * « Prendre la photo » propose l'appareil : la caméra de cet ordinateur (LOT A, inchangée) ou
+ * un terminal de pointage autorisé et EN LIGNE. Le PC ne parle jamais au terminal : il crée
+ * une session courte sur le serveur, en suit l'état, puis reçoit seulement LA photo prise
+ * (aucune vidéo). « Utiliser cette photo » la place dans le formulaire ; c'est « Enregistrer »
+ * qui la conserve. Fenêtre fermée, fiche quittée, page fermée : la session est annulée. */
+const agentRemotePhoto={agentId:null,sessionId:null,timer:null,observer:null,previewUrl:"",previewAttempt:-1,busy:false};
+const AGENT_REMOTE_POLL_MS=1000;
+async function agentRemoteCall(method,path,body,keepalive){
+  const res=await fetch(sgdiApiUrl(path,false),{method,cache:"no-store",headers:sgdiAuthHeaders(),body:body?JSON.stringify(body):undefined,keepalive:Boolean(keepalive)});
+  let data=null;try{data=await res.json()}catch(e){data=null}
+  return {ok:res.ok,status:res.status,data,message:(data&&data.detail&&(data.detail.message||(typeof data.detail==="string"?data.detail:"")))||""};
+}
+function agentRemoteLastSeen(value){
+  if(!value)return "jamais connecté";
+  const d=new Date(value);if(isNaN(d))return "inconnue";
+  return d.toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+}
+async function openAgentPhotoSource(agentId){
+  if(!employeePhotoEditGuard())return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  let info=null;
+  if(a&&a.backendId&&sgdiAuthToken()){
+    try{const r=await agentRemoteCall("GET","/drh/employees/"+encodeURIComponent(a.backendId)+"/remote-photo/terminals");info=r.ok?r.data:null}catch(e){info=null}
+  }
+  // Prise distante non activée, aucun terminal, ou liste indisponible : caméra de l'ordinateur, comme avant.
+  if(!info||!info.enabled||!Array.isArray(info.terminals)||!info.terminals.length){return openAgentPhotoCamera(agentId)}
+  if(!employeePhotoEditGuard())return;
+  const rows=info.terminals.map(t=>{
+    const selectable=t.online&&!t.busy;
+    const state=!t.online?`○ Hors ligne <small>Dernière activité : ${escapeHTML(agentRemoteLastSeen(t.last_seen_at))}</small>`:t.busy?"● Occupé par une autre prise de photo":"● En ligne";
+    return `<label class="photo-source-option${selectable?"":" is-disabled"}"><input type="radio" name="photo-source" value="${escapeHTML(String(t.id))}" ${selectable?"":"disabled"}>
+      <span><strong>${escapeHTML(t.type||"Terminal")} ${escapeHTML(t.name||"")}</strong><span class="photo-source-site">${escapeHTML(t.site||"")}${t.location?" · "+escapeHTML(t.location):""}</span>
+      <span class="photo-source-state ${selectable?"is-online":t.online?"is-busy":"is-offline"}">${state}</span></span></label>`}).join("");
+  openModal(`<div class="photo-source" role="dialog" aria-modal="true" aria-labelledby="photo-source-title">
+    <h3 id="photo-source-title" class="font-bold">Prendre une nouvelle photo</h3>
+    <p class="text-xs text-slate-500 mb-3">Choisissez l'appareil de capture</p>
+    <div class="photo-source-list" role="radiogroup" aria-labelledby="photo-source-title">
+      <label class="photo-source-option"><input type="radio" name="photo-source" value="local" checked><span><strong>Caméra de cet ordinateur</strong></span></label>
+      ${rows}
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button type="button" class="btn btn-primary" id="photo-source-continue" onclick="continueAgentPhotoSource('${escapeHTML(String(agentId))}')">Continuer</button></div></div>`);
+}
+function continueAgentPhotoSource(agentId){
+  const picked=document.querySelector('#modal-host input[name="photo-source"]:checked');
+  const value=picked?picked.value:"local";
+  if(value==="local"){closeModal();return openAgentPhotoCamera(agentId)}
+  return startAgentRemotePhoto(agentId,value);
+}
+function agentRemoteReset(){
+  clearTimeout(agentRemotePhoto.timer);agentRemotePhoto.timer=null;
+  if(agentRemotePhoto.observer){agentRemotePhoto.observer.disconnect();agentRemotePhoto.observer=null}
+  if(agentRemotePhoto.previewUrl){try{URL.revokeObjectURL(agentRemotePhoto.previewUrl)}catch(e){}}
+  agentRemotePhoto.previewUrl="";agentRemotePhoto.previewAttempt=-1;agentRemotePhoto.sessionId=null;agentRemotePhoto.agentId=null;agentRemotePhoto.busy=false;
+}
+// Annulation « quoi qu'il arrive » : ne dépend d'aucun rendu (keepalive pour la fermeture de page).
+function abandonAgentRemotePhoto(){
+  const sid=agentRemotePhoto.sessionId;
+  agentRemoteReset();
+  if(sid){try{agentRemoteCall("PATCH","/drh/remote-photo/sessions/"+encodeURIComponent(sid),{action:"cancel"},true).catch(()=>{})}catch(e){}}
+}
+function agentRemoteShow(id,on){const el=document.getElementById(id);if(el)el.hidden=!on}
+function agentRemoteRender(session){
+  const msg=document.getElementById("photo-remote-msg");
+  if(!msg)return;
+  const active=Boolean(session.active),ready=session.status==="PREVIEW_READY";
+  msg.textContent=session.message||"";
+  msg.className="photo-remote-msg"+(active?"":" is-closed")+(ready?" is-ready":"");
+  agentRemoteShow("photo-remote-wait",active&&!ready);
+  agentRemoteShow("photo-remote-shot",ready&&Boolean(agentRemotePhoto.previewUrl));
+  agentRemoteShow("photo-remote-checks",ready);
+  agentRemoteShow("photo-remote-retake",ready);agentRemoteShow("photo-remote-use",ready);
+  agentRemoteShow("photo-remote-cancel",active);agentRemoteShow("photo-remote-close",!active);
+  const checks=document.getElementById("photo-remote-checks");
+  if(checks&&ready)checks.innerHTML=session.checks?`<span>✓ Visage détecté</span><span>✓ Qualité suffisante</span>`:`<span>Contrôle automatique indisponible — vérifiez la photo.</span>`;
+}
+async function agentRemoteTick(){
+  const sid=agentRemotePhoto.sessionId;
+  if(!sid)return;
+  let r;
+  try{r=await agentRemoteCall("GET","/drh/remote-photo/sessions/"+encodeURIComponent(sid))}catch(e){r=null}
+  if(agentRemotePhoto.sessionId!==sid)return;                             // fermée entre-temps
+  if(r&&r.ok){
+    const session=r.data;
+    if(session.status==="PREVIEW_READY"&&agentRemotePhoto.previewAttempt!==session.attempt){
+      try{
+        const res=await fetch(sgdiApiUrl("/drh/remote-photo/sessions/"+encodeURIComponent(sid)+"/preview",false),{cache:"no-store",headers:sgdiAuthHeaders()});
+        if(res.ok&&agentRemotePhoto.sessionId===sid){
+          if(agentRemotePhoto.previewUrl)URL.revokeObjectURL(agentRemotePhoto.previewUrl);
+          agentRemotePhoto.previewUrl=URL.createObjectURL(await res.blob());agentRemotePhoto.previewAttempt=session.attempt;
+          const img=document.getElementById("photo-remote-shot");if(img)img.src=agentRemotePhoto.previewUrl;
+        }
+      }catch(e){}
+    }else if(session.status!=="PREVIEW_READY"&&agentRemotePhoto.previewUrl){
+      URL.revokeObjectURL(agentRemotePhoto.previewUrl);agentRemotePhoto.previewUrl="";agentRemotePhoto.previewAttempt=-1;
+    }
+    agentRemoteRender(session);
+    if(!session.active){clearTimeout(agentRemotePhoto.timer);agentRemotePhoto.timer=null;agentRemotePhoto.sessionId=null;return}   // close : plus rien à annuler
+  }else if(r&&r.status===404){
+    agentRemoteRender({active:false,status:"FAILED",message:"Session de prise de photo introuvable."});agentRemotePhoto.sessionId=null;return;
+  }
+  agentRemotePhoto.timer=setTimeout(agentRemoteTick,AGENT_REMOTE_POLL_MS);
+}
+async function startAgentRemotePhoto(agentId,terminalId){
+  if(!employeePhotoEditGuard())return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  if(!a||!a.backendId)return;
+  abandonAgentRemotePhoto();
+  const btn=document.getElementById("photo-source-continue");if(btn)btn.disabled=true;
+  let r;
+  try{r=await agentRemoteCall("PUT","/drh/employees/"+encodeURIComponent(a.backendId)+"/remote-photo/session",{terminal_id:Number(terminalId)})}catch(e){r=null}
+  if(!r||!r.ok){
+    if(btn)btn.disabled=false;
+    toast((r&&r.message)||"Prise de photo distante indisponible. Utilisez la caméra de cet ordinateur.","error");
+    return;
+  }
+  const session=r.data,t=session.terminal||{};
+  agentRemotePhoto.agentId=agentId;agentRemotePhoto.sessionId=session.session_id;
+  openModal(`<div class="photo-remote" role="dialog" aria-modal="true" aria-labelledby="photo-remote-title">
+    <h3 id="photo-remote-title" class="font-bold">Photo prise avec ${escapeHTML(t.type||"le terminal")} ${escapeHTML(t.name||"")}</h3>
+    <p class="text-xs text-slate-500 mb-3">${escapeHTML(t.site||"")}</p>
+    <div class="photo-remote-stage"><div class="photo-remote-wait" id="photo-remote-wait"><span class="photo-remote-spinner" aria-hidden="true"></span>Demandez au salarié de se placer devant le terminal.</div>
+      <img id="photo-remote-shot" alt="Photo prise par le terminal" hidden></div>
+    <div class="photo-remote-checks" id="photo-remote-checks" hidden></div>
+    <div class="photo-remote-msg" id="photo-remote-msg" role="status" aria-live="polite"></div>
+    <div class="flex justify-end gap-2 mt-4 flex-wrap">
+      <button type="button" class="btn btn-secondary" id="photo-remote-cancel" onclick="cancelAgentRemotePhoto()">Annuler la prise</button>
+      <button type="button" class="btn btn-secondary" id="photo-remote-close" onclick="closeModal()" hidden>Fermer</button>
+      <button type="button" class="btn btn-secondary" id="photo-remote-retake" onclick="decideAgentRemotePhoto('retake')" hidden>Reprendre</button>
+      <button type="button" class="btn btn-primary" id="photo-remote-use" onclick="decideAgentRemotePhoto('accept')" hidden>Utiliser cette photo</button>
+    </div></div>`);
+  agentRemoteRender(session);
+  // Fenêtre fermée autrement (Échap, navigation, autre écran) : la session est annulée, le terminal libéré.
+  const host=document.getElementById("modal-host");
+  if(host&&typeof MutationObserver==="function"){
+    agentRemotePhoto.observer=new MutationObserver(()=>{if(!document.getElementById("photo-remote-msg"))abandonAgentRemotePhoto()});
+    agentRemotePhoto.observer.observe(host,{childList:true});
+  }
+  agentRemotePhoto.timer=setTimeout(agentRemoteTick,AGENT_REMOTE_POLL_MS);
+}
+function cancelAgentRemotePhoto(){abandonAgentRemotePhoto();closeModal()}
+async function decideAgentRemotePhoto(action){
+  const sid=agentRemotePhoto.sessionId,agentId=agentRemotePhoto.agentId;
+  if(!sid||agentRemotePhoto.busy)return;
+  agentRemotePhoto.busy=true;
+  clearTimeout(agentRemotePhoto.timer);
+  let r;
+  try{r=await agentRemoteCall("PATCH","/drh/remote-photo/sessions/"+encodeURIComponent(sid),{action})}catch(e){r=null}
+  agentRemotePhoto.busy=false;
+  if(agentRemotePhoto.sessionId!==sid)return;
+  if(!r||!r.ok){
+    toast((r&&r.message)||"Action impossible pour le moment.","error");
+    agentRemotePhoto.timer=setTimeout(agentRemoteTick,AGENT_REMOTE_POLL_MS);
+    return;
+  }
+  if(action==="accept"&&r.data.photo){
+    const checked=Boolean(document.querySelector("#photo-remote-checks span")&&/Visage détecté/.test(document.getElementById("photo-remote-checks").textContent));
+    agentRemoteReset();                                                // session close côté serveur : rien à annuler
+    closeModal();
+    if(!employeePhotoEditGuard())return;
+    applyAgentPhotoToForm(agentId,r.data.photo);
+    employeePhotoSource[agentId]="DRH_REMOTE_TERMINAL";
+    markAgentFormDirty();
+    const box=document.getElementById("rh-photo-check-"+agentId);
+    if(box){box.className="rh-photo-check is-ok";box.textContent=(checked?"✓ Photo exploitable pour la reconnaissance faciale.":"✓ Photo prise par le terminal.")+" Enregistrez la fiche pour conserver la photo."}
+    return;
+  }
+  if(agentRemotePhoto.previewUrl){URL.revokeObjectURL(agentRemotePhoto.previewUrl);agentRemotePhoto.previewUrl="";agentRemotePhoto.previewAttempt=-1}
+  agentRemoteRender(r.data);
+  agentRemotePhoto.timer=setTimeout(agentRemoteTick,AGENT_REMOTE_POLL_MS);
+}
+window.addEventListener("pagehide",abandonAgentRemotePhoto);
+window.addEventListener("hashchange",()=>{if(agentRemotePhoto.sessionId){abandonAgentRemotePhoto();if(document.getElementById("photo-remote-msg"))closeModal()}});
+window.openAgentPhotoSource=openAgentPhotoSource;window.continueAgentPhotoSource=continueAgentPhotoSource;
+window.cancelAgentRemotePhoto=cancelAgentRemotePhoto;window.decideAgentRemotePhoto=decideAgentRemotePhoto;
 window.openAgentPhotoCamera=openAgentPhotoCamera;window.openAgentPhotoPreview=openAgentPhotoPreview;
 window.captureAgentPhoto=captureAgentPhoto;window.retakeAgentPhoto=retakeAgentPhoto;window.useAgentPhoto=useAgentPhoto;window.closeAgentPhotoCamera=closeAgentPhotoCamera;
 function candidatePhotoFieldCanEdit(element){

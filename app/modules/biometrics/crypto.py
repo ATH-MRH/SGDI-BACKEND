@@ -34,6 +34,18 @@ def decrypt_vector(token: bytes) -> list[float]:
     return list(struct.unpack(f"<{len(raw) // 4}f", raw))
 
 
+def encrypt_bytes(data: bytes) -> bytes:
+    """Chiffrement d'un contenu binaire temporaire (photo candidate d'une prise distante)."""
+    return _fernet().encrypt(data)
+
+
+def decrypt_bytes(token: bytes) -> bytes:
+    try:
+        return _fernet().decrypt(token)
+    except InvalidToken:
+        raise HTTPException(500, detail="Contenu chiffré illisible (clé changée ?)") from None
+
+
 def encrypt_secret(data: dict) -> bytes:
     return _fernet().encrypt(json.dumps(data).encode())
 

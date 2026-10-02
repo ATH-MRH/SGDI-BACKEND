@@ -10618,3 +10618,25 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .photo-cam-guide{position:absolute;top:8%;height:84%;aspect-ratio:3/4;border:3px solid rgba(255,255,255,.7);border-radius:50%/42%;pointer-events:none}
 .photo-cam-msg{margin-top:8px;font-size:13px;color:#475569;min-height:18px}.photo-cam-msg.is-error{color:#b91c1c;font-weight:700}
 @media(max-width:700px){.rh-photo-panel{grid-template-columns:1fr}}
+/* LOT C1 — Fiche de position : choix de l'appareil de capture et prise de photo distante */
+.photo-source,.photo-remote{width:min(520px,88vw)}
+.photo-source-list{display:grid;gap:8px;max-height:52vh;overflow:auto}
+.photo-source-option{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer}
+.photo-source-option:has(input:checked){border-color:#043970;background:#f0f6fc}
+.photo-source-option.is-disabled{opacity:.55;cursor:not-allowed;background:#f8fafc}
+.photo-source-option input{margin-top:3px}
+.photo-source-option span{display:block}
+.photo-source-site{font-size:12px;color:#64748b}
+.photo-source-state{font-size:12px;font-weight:700;margin-top:2px}
+.photo-source-state small{display:block;font-weight:400;color:#64748b}
+.photo-source-state.is-online{color:#166534}.photo-source-state.is-offline{color:#64748b}.photo-source-state.is-busy{color:#9a3412}
+.photo-remote-stage{position:relative;background:#0f172a;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center;color:#e2e8f0;text-align:center;padding:12px}
+.photo-remote-stage img{width:100%;height:100%;object-fit:contain;display:block}
+.photo-remote-stage [hidden],.photo-remote-checks[hidden]{display:none}
+.photo-remote-wait{display:grid;gap:12px;justify-items:center;font-size:14px}
+.photo-remote-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:photo-remote-spin 1s linear infinite}
+@keyframes photo-remote-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.photo-remote-spinner{animation:none}}
+.photo-remote-checks{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;font-weight:700;color:#166534}
+.photo-remote-msg{margin-top:8px;font-size:13px;color:#475569;min-height:18px}
+.photo-remote-msg.is-ready{color:#166534;font-weight:700}.photo-remote-msg.is-closed{color:#b91c1c;font-weight:700}

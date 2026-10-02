@@ -307,6 +307,13 @@ async def pair_terminal(request: Request, db: Session = Depends(get_db)) -> dict
             "site": site.name if site else None, "society": terminal.society}
 
 
+def _remote_capture():
+    """Prise de photo distante (LOT C1) — import tardif : ce module-là dépend de celui-ci."""
+    from app.modules.biometrics import remote_capture
+
+    return remote_capture
+
+
 @router.get("/terminal/session")
 def terminal_session(req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
     """État du terminal pour l'écran de borne : identité, disponibilité du facial / du QR,
@@ -317,6 +324,7 @@ def terminal_session(req: TerminalRequest = Depends(authenticated_terminal), db:
                          "site_id": terminal.site_id, "site": site.name if site else None, "society": terminal.society,
                          "location": terminal.location},
             "facial": facial_availability(terminal), "qr": {"available": True},
+            "remote_capture": _remote_capture().session_info(),
             "burst": BURST, "challenge_ttl": CHALLENGE_TTL_SECONDS, "server_time": int(time.time() * 1000)}
 
 
@@ -324,6 +332,7 @@ def terminal_session(req: TerminalRequest = Depends(authenticated_terminal), db:
 def terminal_challenge(req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
     terminal = req.terminal
     _ensure_facial(terminal)
+    _remote_capture().ensure_not_capturing(db, terminal)     # terminal réservé à une prise de photo
     _rate_limit(terminal)
     cfg = service.active_config(db)
     nonce = secrets.token_urlsafe(32)
@@ -404,6 +413,7 @@ def terminal_recognize(req: TerminalRequest = Depends(authenticated_terminal), d
     try:
         _ensure_facial(terminal)
         engine = service.ensure_enabled()
+        _remote_capture().ensure_not_capturing(db, terminal)
         _rate_limit(terminal)
         cfg = service.active_config(db)
         challenge = consume_challenge(db, terminal, body.get("challenge_id"), body.get("nonce"), cfg.version)
@@ -439,6 +449,7 @@ def terminal_qr(req: TerminalRequest = Depends(authenticated_terminal), db: Sess
     terminal = req.terminal
     audit: dict[str, Any] = {}
     try:
+        _remote_capture().ensure_not_capturing(db, terminal)
         _rate_limit(terminal)
         token = str(req.body.get("token") or "").strip()
         try:

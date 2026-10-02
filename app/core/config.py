@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # Règle de consentement pour cette préparation : "explicit" (défaut, accord admissible exigé)
     # ou "no_objection" (aucun accord manuel exigé ; un REFUS ou un RETRAIT enregistré bloque).
     facial_reference_consent_mode: str = "explicit"
+    # LOT C1 — DRH → Fiche de position → « Prendre la photo » avec une tablette / un smartphone
+    # de pointage autorisé comme caméra distante (session courte, supervisée, auditée). FAUX par
+    # défaut : seule la caméra de l'ordinateur est proposée et la borne n'interroge aucune commande.
+    # Exige la clé de chiffrement (photo candidate chiffrée). N'active PAS le pointage facial.
+    drh_remote_photo_capture_enabled: bool = False
     # À activer SEULEMENT après scripts/rename_public_photos.py --apply : refuse les photos dont
     # le nom est prévisible (ex. matricule.jpg). Désactivé par défaut pour ne casser aucune photo.
     photos_require_unguessable_names: bool = False
