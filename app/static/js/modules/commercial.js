@@ -2,6 +2,7 @@
  * État et helpers synchrones partagés conservés dans sgdi-app.js.
  * Inventaire : docs/frontend-phase2h-inventory.json. */
 function commTabs(active){return ""}
+window.__ATLAS_COMM_DASHBOARD_RANGE__=window.__ATLAS_COMM_DASHBOARD_RANGE__||30;
 
 function statutProspectPill(s){return{"nouveau":"pill-blue","contacte":"pill-indigo","interesse":"pill-amber","rdv_planifie":"pill-amber","rdv_realise":"pill-amber","converti":"pill-green","perdu":"pill-red"}[s]||"pill-gray"}
 
@@ -163,6 +164,21 @@ function commercialContractFinancePanel(){
 
 function refreshCommercialFinancePanel(){
   if(!["#/commercial", "#/commercial/dashboard"].includes(location.hash))return;
+  const view=document.getElementById("view");
+  if(view?.querySelector(".comm-modern-dashboard")){
+    // The dashboard shares the sidebar's server counters. Build outside the live
+    // view and update only their regions, preserving the chart, period and focus.
+    const next=document.createElement("div");
+    renderCommDashboard(next);
+    for(const selector of [".comm-dashboard-kpis",".comm-status-content",".comm-dashboard-summary",".comm-contract-finance"]){
+      const current=view.querySelector(selector),replacement=next.querySelector(selector);
+      if(!current||!replacement||current.isEqualNode(replacement))continue;
+      const focusedIndex=Array.from(current.querySelectorAll("button")).indexOf(document.activeElement);
+      current.replaceWith(replacement);
+      if(focusedIndex>=0)replacement.querySelectorAll("button")[focusedIndex]?.focus({preventScroll:true});
+    }
+    return;
+  }
   const panel=document.querySelector("#view .comm-contract-finance");
   if(!panel)return;
   const markup=commercialContractFinancePanel();
@@ -173,48 +189,157 @@ function refreshCommercialFinancePanel(){
   panel.replaceWith(replacement);
 }
 
+function commDashboardDate(value){
+  const text=String(value||"").slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return null;
+  const date=new Date(text+"T12:00:00Z");
+  return Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==text?null:date;
+}
+
+function commDashboardTrendSvg(series,rangeDays){
+  const width=640,height=248,left=38,right=12,top=14,bottom=35,plotW=width-left-right,plotH=height-top-bottom,buckets=6;
+  const todayDate=commDashboardDate(today())||new Date();
+  const start=new Date(todayDate);start.setUTCDate(start.getUTCDate()-rangeDays+1);
+  const bucketDays=rangeDays/buckets;
+  const bucketDates=Array.from({length:buckets},(_,i)=>{
+    const first=new Date(start),last=new Date(start);
+    first.setUTCDate(first.getUTCDate()+Math.ceil(i*bucketDays));
+    last.setUTCDate(last.getUTCDate()+Math.ceil((i+1)*bucketDays)-1);
+    const format=date=>date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",timeZone:"UTC"});
+    return {label:format(first),interval:`${format(first)} – ${format(last)}`};
+  });
+  const points=series.map(item=>{
+    const counts=Array(buckets).fill(0);
+    item.rows.forEach(row=>{
+      const date=commDashboardDate(item.getDate(row));
+      if(!date||date<start||date>todayDate)return;
+      const day=Math.floor((date-start)/86400000);
+      counts[Math.min(buckets-1,Math.floor(day/bucketDays))]++;
+    });
+    return {...item,counts};
+  });
+  const max=Math.max(3,Math.ceil(Math.max(0,...points.flatMap(item=>item.counts))/3)*3);
+  const x=i=>left+(plotW/(buckets-1))*i;
+  const y=value=>top+plotH-(value/max)*plotH;
+  const grid=Array.from({length:4},(_,i)=>{
+    const value=max*(3-i)/3,gy=top+(plotH/3)*i;
+    return `<g><line x1="${left}" y1="${gy}" x2="${width-right}" y2="${gy}" class="comm-chart-grid"/><text x="${left-8}" y="${gy+3}" text-anchor="end" class="comm-chart-axis">${value}</text></g>`;
+  }).join("");
+  const labels=bucketDates.map((period,i)=>`<text x="${x(i)}" y="${height-10}" text-anchor="middle" class="comm-chart-axis">${escapeHTML(period.label)}<title>${escapeHTML(period.interval)}</title></text>`).join("");
+  const lines=points.map(item=>{
+    const coords=item.counts.map((value,i)=>`${x(i)},${y(value)}`).join(" ");
+    return `<g class="comm-chart-series ${item.key}"><polyline points="${coords}"/><g>${item.counts.map((value,i)=>`<circle cx="${x(i)}" cy="${y(value)}" r="3.5"><title>${escapeHTML(item.label)} · ${escapeHTML(bucketDates[i].interval)} · ${escapeHTML(String(value))}</title></circle>`).join("")}</g></g>`;
+  }).join("");
+  const legend=points.map(item=>`<span class="comm-chart-legend ${item.key}"><i></i>${escapeHTML(item.label)}</span>`).join("");
+  const hasData=points.some(item=>item.counts.some(Boolean));
+  return `<div class="comm-chart-legend-row">${legend}</div><div class="comm-chart-frame ${hasData?"":"is-empty"}"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Activité commerciale réellement datée sur ${rangeDays} jours">${grid}${labels}${lines}</svg>${hasData?"":'<div class="comm-chart-empty">Aucune activité datée sur cette période</div>'}</div>`;
+}
+
+function commDashboardDonut(stats){
+  const values=[
+    {label:"Clients actifs",value:stats.clients_active,color:"#18a073"},
+    {label:"Prospects",value:stats.prospects,color:"#4389e8"},
+    {label:"Opportunités",value:stats.opportunities_open,color:"#8059df"},
+    {label:"Contrats actifs",value:stats.contracts_active,color:"#f28a74"}
+  ].filter(item=>item.value!==null&&item.value!==undefined&&item.value!=="").map(item=>({...item,value:Number.isFinite(Number(item.value))?Math.max(0,Number(item.value)):0}));
+  const total=values.reduce((sum,item)=>sum+item.value,0);
+  let angle=0;
+  const stops=values.map(item=>{
+    const start=angle;angle+=total?item.value/total*360:0;
+    return `${item.color} ${start}deg ${angle}deg`;
+  });
+  const legend=values.map(item=>`<div class="comm-status-legend-row"><i style="--legend-color:${item.color}"></i><span>${item.label}</span><b>${item.value}</b><small>${total?Math.round(item.value/total*100):0}%</small></div>`).join("");
+  return `<div class="comm-status-content"><div class="comm-status-donut ${total?"":"is-empty"}" style="--donut-stops:${total?stops.join(",") : "#e7edf4 0deg 360deg"}" role="img" aria-label="${total} éléments commerciaux répartis par statut"><span><strong>${total}</strong><small>Éléments</small></span></div><div class="comm-status-legend">${legend}</div></div>`;
+}
+
+function commDashboardIcon(name){
+  const paths={
+    search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    users:'<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 21v-2a6 6 0 0 0-4-5.65"/>',
+    building:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1"/>',
+    user:'<circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
+    briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a20 20 0 0 0 18 0M12 11v4"/>',
+    file:'<path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8M8 16h6"/>',
+    tag:'<path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="7.5" cy="7.5" r="1"/>',
+    target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    trend:'<path d="M3 17 9 11l4 4 8-10M15 5h6v6"/>'
+  };
+  return `<svg class="comm-dashboard-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name]||paths.file}</svg>`;
+}
+
+function commDashboardKpi({icon,label,value,detail,route,tone}){
+  return `<button type="button" class="comm-dashboard-kpi tone-${tone}" onclick="navigate('${route}')"><span class="comm-dashboard-kpi-icon" aria-hidden="true">${commDashboardIcon(icon)}</span><span class="comm-dashboard-kpi-copy"><small>${label}</small><strong>${value}</strong><em>${detail}</em></span></button>`;
+}
+
 function renderCommDashboard(view){
-  const prospects=bySoc(db.prospects||[]);const clients=bySoc(db.clients||[]);const opps=bySoc(db.opportunites||[]);const visites=bySoc(db.visites||[]);
+  const prospects=bySoc(db.prospects||[]);const clients=bySoc(db.clients||[]);const opps=bySoc(db.opportunites||[]);
   const oppsActives=opps.filter(o=>!["gagnee","perdue"].includes(o.etape));
   const ca=opps.filter(o=>o.etape==="gagnee").reduce((s,o)=>s+(o.montant||0),0);
   const pipeline=oppsActives.reduce((s,o)=>s+((o.montant||0)*((o.probabilite||0)/100)),0);
-  const tauxConv=prospects.length>0?Math.round((prospects.filter(p=>p.statut==="converti").length/prospects.length)*100):0;
   const contratsExpires=clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<0);
   const contratsFin30=clients.filter(c=>{if(!c.dateFinContrat)return false;const d=daysBetween(today(),c.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  const upcomingVisits=visites.filter(v=>v.date>=today()).sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
-  const priorities=[
-    ...contratsAlerte.map(c=>({title:`Contrat · ${c.nom||c.raisonSociale||"Client"}`,meta:`Échéance ${formatDate(c.dateFinContrat)}`,status:daysBetween(today(),c.dateFinContrat)<0?"Expiré":"Prioritaire",tone:"warning"})),
-    ...upcomingVisits.map(v=>({title:`Visite · ${v.client||v.clientNom||v.objet||"Client"}`,meta:`${formatDate(v.date)}${v.heure?` · ${v.heure}`:""}`,status:"Planifiée",tone:"info"})),
-    ...oppsActives.map(o=>({title:o.nom||o.titre||o.client||"Opportunité commerciale",meta:`${String(o.etape||"nouveau").replaceAll("_"," ")} · ${money(o.montant||0)}`,status:"À suivre",tone:"info"}))
-  ].slice(0,4);
+  const stats=sgdiBackendModuleCounters("commercial",mySoc())||{};
+  const count=(key,fallback)=>stats[key]!==null&&stats[key]!==undefined&&stats[key]!==""&&Number.isFinite(Number(stats[key]))?Number(stats[key]):fallback;
+  const activeClients=clients.filter(c=>!['inactif','inactive','archive','archivé'].includes(String(c.statut||c.status||'').toLowerCase())).length;
+  const kpis=[
+    {icon:"search",label:"Prospects",value:count("prospects",prospects.length),detail:"dans le portefeuille",route:"commercial/prospects",tone:"blue"},
+    {icon:"users",label:"Clients actifs",value:count("clients_active",activeClients),detail:"relation commerciale",route:"commercial/clients",tone:"green"},
+    {icon:"building",label:"Sites",value:count("sites_total",null)??"—",detail:"sites clients actifs",route:"commercial/clients",tone:"cyan"},
+    {icon:"user",label:"Total employés",value:count("employees_total",null)??"—",detail:"effectif contractuel",route:"commercial/clients",tone:"purple"},
+    {icon:"briefcase",label:"Opportunités",value:count("opportunities_open",oppsActives.length),detail:"ouvertes",route:"commercial/opportunites",tone:"violet"},
+    {icon:"file",label:"Contrats 30J",value:count("contracts_30d",contratsFin30.length),detail:"à échéance",route:"commercial/clients",tone:"rose"},
+    {icon:"tag",label:"Tarifs actifs",value:count("tarifs_total",null)??"—",detail:"référentiel tarifaire",route:"commercial/tarifs",tone:"sky"}
+  ];
+  const rangeOptions=[30,90,365],storedRange=Number(window.__ATLAS_COMM_DASHBOARD_RANGE__),range=rangeOptions.includes(storedRange)?storedRange:30;
+  const rangeDays=range;
+  const chart=commDashboardTrendSvg([
+    {key:"clients",label:"Clients créés",rows:clients,getDate:r=>r.createdAt||r.created_at||r.dateCreation},
+    {key:"contracts",label:"Contrats démarrés",rows:clients,getDate:r=>r.dateDebutContrat||r.contract_start},
+    {key:"opportunities",label:"Opportunités créées",rows:opps,getDate:r=>r.createdAt||r.created_at||r.dateCreation}
+  ],rangeDays);
+  const donut=commDashboardDonut({
+    clients_active:count("clients_active",activeClients),prospects:count("prospects",prospects.length),
+    opportunities_open:count("opportunities_open",oppsActives.length),contracts_active:count("contracts_active",null)
+  });
+  const objectiveTarget=Number(db.settings?.commercialMonthlyTarget);
+  const objectiveConfigured=Number.isFinite(objectiveTarget)&&objectiveTarget>0;
+  const urgentContracts=contratsAlerte.slice(0,3);
   const wonCount=opps.filter(o=>o.etape==="gagnee").length;
-  const avgWon=wonCount?ca/wonCount:0;
-  view.innerHTML=`<div class="comm-modern-dashboard">
-    <header class="comm-modern-head">
+  const todayLabel=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+  view.innerHTML=`<header class="comm-modern-head">
       <div><div class="comm-modern-eyebrow">Pilotage commercial</div><h1>Tableau de bord commercial</h1><p>${escapeHTML(mySoc()||"Toutes sociétés")} · clients, opportunités et performance</p></div>
-      <div class="comm-modern-actions"><button type="button" class="btn btn-secondary" onclick="window.print()">Exporter</button><button type="button" class="btn btn-primary" onclick="openOpportuniteModal()">+ Nouvelle opportunité</button></div>
+      <div class="comm-dashboard-head-tools"><span class="comm-dashboard-date"><small>AUJOURD’HUI</small><strong>${escapeHTML(todayLabel)}</strong></span><label class="comm-dashboard-period"><span>Période du graphique</span><select aria-label="Période du graphique" onchange="setCommDashboardRange(this.value)">${rangeOptions.map(days=>`<option value="${days}"${range===days?" selected":""}>${days===30?"30 jours":days===90?"90 jours":"12 mois"}</option>`).join("")}</select></label></div>
     </header>
-    <section class="comm-modern-alert ${contratsAlerte.length?"is-warning":"is-ok"}">
-      <div><strong>Suivi des contrats clients</strong><span>${contratsAlerte.length?`${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} échéance(s) dans les 30 jours.`:"Aucune échéance critique dans les 30 prochains jours."}</span></div>
-      <button type="button" onclick="navigate('commercial/clients')">${contratsAlerte.length?`${contratsAlerte.length} à traiter`:"Situation conforme"}</button>
+  <div class="comm-modern-dashboard">
+    <section class="comm-dashboard-kpis" aria-label="Indicateurs commerciaux">${kpis.map(commDashboardKpi).join("")}</section>
+    <section class="comm-dashboard-analytics">
+      <article class="comm-modern-panel comm-dashboard-trend"><div class="comm-dashboard-panel-head"><div><h2>Évolution commerciale</h2><p>Flux réellement datés sur la période</p></div></div>${chart}</article>
+      <article class="comm-modern-panel comm-dashboard-status"><div class="comm-dashboard-panel-head"><div><h2>Répartition par statut</h2><p>Portefeuille actuel · source ATLAS</p></div></div>${donut}</article>
+      <article class="comm-dashboard-objective"><div class="comm-dashboard-objective-top"><span class="comm-dashboard-target-icon" aria-hidden="true">${commDashboardIcon("target")}</span><span>OBJECTIF DU MOIS</span></div><h2>${objectiveConfigured?"Développez votre portefeuille clients":"Objectif mensuel non configuré"}</h2><p>${objectiveConfigured?`Cible mensuelle enregistrée : ${money(objectiveTarget)}.`:"Aucun objectif commercial n’est défini dans ATLAS. Les montants restent basés sur les affaires enregistrées."}</p>${objectiveConfigured?"<small>Progression indisponible : la date réelle de gain des affaires n’est pas renseignée.</small>":`<small>${oppsActives.length} opportunité(s) ouverte(s)</small>`}<button type="button" onclick="navigate('commercial/${objectiveConfigured?"opportunites":"stats"}')">${objectiveConfigured?"Voir les opportunités":"Voir les statistiques"}<span>→</span></button></article>
     </section>
-    <section class="comm-modern-kpis">
-      <button type="button" class="comm-modern-kpi tone-blue" onclick="navigate('commercial/prospects')"><span>Prospects actifs</span><strong>${prospects.length}</strong><small>${prospects.filter(p=>p.statut==="nouveau").length} nouveau(x)</small></button>
-      <button type="button" class="comm-modern-kpi tone-green" onclick="navigate('commercial/clients')"><span>Clients actifs</span><strong>${clients.filter(c=>c.statut!=="inactif").length}</strong><small>${contratsFin30.length} contrat(s) à surveiller</small></button>
-      <button type="button" class="comm-modern-kpi tone-purple" onclick="navigate('commercial/opportunites')"><span>Pipeline pondéré</span><strong>${money(pipeline)}</strong><small>${oppsActives.length} opportunité(s) ouverte(s)</small></button>
-      <button type="button" class="comm-modern-kpi tone-amber" onclick="navigate('commercial/opportunites')"><span>Chiffre d'affaires gagné</span><strong>${money(ca)}</strong><small>${wonCount} affaire(s) conclue(s)</small></button>
+    <section class="comm-dashboard-summary" aria-label="Synthèse commerciale">
+      <button type="button" onclick="navigate('commercial/prospects')"><span class="comm-dashboard-summary-icon tone-blue" aria-hidden="true">${commDashboardIcon("search")}</span><span class="comm-dashboard-summary-copy"><small>Prospects actifs</small><strong>${count("prospects",prospects.length)}</strong><em>${prospects.filter(p=>p.statut==="nouveau").length} nouveau(x)</em></span><b>→</b></button>
+      <button type="button" onclick="navigate('commercial/clients')"><span class="comm-dashboard-summary-icon tone-green" aria-hidden="true">${commDashboardIcon("users")}</span><span class="comm-dashboard-summary-copy"><small>Clients actifs</small><strong>${count("clients_active",activeClients)}</strong><em>${contratsFin30.length} contrat(s) à surveiller</em></span><b>→</b></button>
+      <button type="button" onclick="navigate('commercial/opportunites')"><span class="comm-dashboard-summary-icon tone-purple" aria-hidden="true">${commDashboardIcon("briefcase")}</span><span class="comm-dashboard-summary-copy"><small>Pipeline pondéré</small><strong>${money(pipeline)}</strong><em>${oppsActives.length} opportunité(s) ouverte(s)</em></span><b>→</b></button>
+      <button type="button" onclick="navigate('commercial/opportunites')"><span class="comm-dashboard-summary-icon tone-amber" aria-hidden="true">${commDashboardIcon("trend")}</span><span class="comm-dashboard-summary-copy"><small>Chiffre d’affaires gagné</small><strong>${money(ca)}</strong><em>${wonCount} affaire(s) conclue(s)</em></span><b>→</b></button>
     </section>
-    <section class="comm-modern-content">
+    <section class="comm-dashboard-bottom">
       ${commercialContractFinancePanel()}
-      <article class="comm-modern-panel"><div class="comm-modern-panel-head"><h2>Priorités</h2><span>${priorities.length} action(s)</span></div><div class="comm-modern-priorities">${priorities.length?priorities.map(p=>`<div class="comm-modern-priority"><div><strong>${escapeHTML(p.title)}</strong><small>${escapeHTML(p.meta)}</small></div><span class="${p.tone}">${escapeHTML(p.status)}</span></div>`).join(""):`<div class="comm-modern-empty">Aucune priorité commerciale en attente.</div>`}</div></article>
-    </section>
-    <section class="comm-modern-secondary">
-      <button type="button" onclick="navigate('commercial/prospects')"><span>Taux de conversion</span><strong>${tauxConv}%</strong><small>Prospects transformés en clients</small></button>
-      <button type="button" onclick="navigate('commercial/visites')"><span>Visites planifiées</span><strong>${upcomingVisits.length}</strong><small>${visites.length} visite(s) enregistrée(s)</small></button>
-      <button type="button" onclick="navigate('commercial/opportunites')"><span>Valeur moyenne gagnée</span><strong>${money(avgWon)}</strong><small>Par affaire conclue</small></button>
+      <article class="comm-modern-panel comm-dashboard-contracts"><div class="comm-dashboard-panel-head"><div><h2>Suivi des contrats clients</h2><p>Échéances enregistrées</p></div><span class="comm-dashboard-alert-count">${contratsAlerte.length} à traiter</span></div>${urgentContracts.length?`<div class="comm-dashboard-contract-list">${urgentContracts.map(client=>`<button type="button" onclick="navigate('commercial/clients')"><span class="comm-dashboard-contract-icon" aria-hidden="true">${commDashboardIcon("file")}</span><span class="comm-dashboard-contract-copy"><strong>Contrat · ${escapeHTML(client.nom||client.raisonSociale||"Client")}</strong><small>Échéance : ${escapeHTML(formatDate(client.dateFinContrat))}</small></span><span class="comm-dashboard-contract-priority">${daysBetween(today(),client.dateFinContrat)<0?"Expiré":"Prioritaire"} ›</span></button>`).join("")}</div>`:`<div class="comm-dashboard-contract-empty">Aucune échéance critique dans les 30 prochains jours.</div>`}<button class="comm-dashboard-all-contracts" type="button" onclick="navigate('commercial/clients')">${commDashboardIcon("file")} <span>Voir tous les contrats</span> →</button></article>
     </section>
   </div>`;
+}
+
+function setCommDashboardRange(value){
+  const view=document.getElementById("view");
+  if(!view)return;
+  const periodFocused=document.activeElement===view.querySelector(".comm-dashboard-period select");
+  const range=Number(value);
+  window.__ATLAS_COMM_DASHBOARD_RANGE__=[30,90,365].includes(range)?range:30;
+  renderCommDashboard(view);
+  if(typeof normalizeCentralPage==="function")normalizeCentralPage(view);
+  if(periodFocused)view.querySelector(".comm-dashboard-period select")?.focus({preventScroll:true});
 }
 
 function renderCommProspects(view){
