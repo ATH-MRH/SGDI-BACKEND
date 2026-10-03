@@ -53,10 +53,76 @@ function congeOrigineBadgeHTML(c){
   return `<span class="cg-origin-pill ${isAttrib?"drh":"self"}">${isAttrib?"Attribution DRH":"Auto-demande"}</span>`;
 }
 
+/* Cockpit: agrégats du snapshot déjà chargé, sans requêtes supplémentaires.
+   Catégories de présentation: seuil existant, positif sous seuil, épuisé/négatif,
+   inconnu. Aucun nouveau seuil légal ni calcul de droits. */
+function drhLeaveCockpitData(agents, conges, balances, date, weekDate, typeYear){
+  const ids=new Set(agents.map(a=>String(a.id)));
+  const list=conges.filter(c=>ids.has(String(c.agentId))&&c.type!=="Maladie");
+  const validDate=v=>drhLeaveCalendarDate(String(v||"").slice(0,10));
+  const covering=iso=>list.filter(c=>c.statut==="approuve"&&validDate(c.du)&&validDate(c.au)&&c.du.slice(0,10)<=iso&&c.au.slice(0,10)>=iso);
+  const distinct=rows=>new Set(rows.map(c=>String(c.agentId))).size;
+  const pending=list.filter(c=>c.statut==="en_attente").sort((a,b)=>String(a.createdAt||a.du||"").localeCompare(String(b.createdAt||b.du||""))||String(a.id).localeCompare(String(b.id)));
+  const current=covering(date);
+  const start=validDate(weekDate)||validDate(date);
+  start.setUTCDate(start.getUTCDate()-((start.getUTCDay()+6)%7));
+  const week=Array.from({length:7},(_,i)=>{const d=new Date(start.getTime()+i*86400000),iso=d.toISOString().slice(0,10),items=covering(iso);return {d,iso,items,count:distinct(items)}});
+  const categories=[{label:`Solde élevé (≥ ${DRH_CONGE_SOLDE_ELEVE_SEUIL} j)`,color:"#ef4444",count:0},{label:`Solde positif (< ${DRH_CONGE_SOLDE_ELEVE_SEUIL} j)`,color:"#268fff",count:0},{label:"Solde épuisé ou négatif",color:"#f59e0b",count:0},{label:"Solde indisponible",color:"#94a3b8",count:0}];
+  balances.forEach(x=>categories[x.solde===null?3:x.solde>=DRH_CONGE_SOLDE_ELEVE_SEUIL?0:x.solde>0?1:2].count++);
+  const base=validDate(date), year=Number(typeYear)||base.getUTCFullYear();
+  const months=Array.from({length:6},(_,i)=>{const d=new Date(Date.UTC(base.getUTCFullYear(),base.getUTCMonth()-5+i,1));return {key:d.toISOString().slice(0,7),label:d.toLocaleDateString("fr-FR",{month:"short",timeZone:"UTC"}),approuve:0,en_attente:0,refuse:0}});
+  let undated=0;
+  list.forEach(c=>{if(!validDate(c.createdAt)){undated++;return}const m=months.find(m=>m.key===String(c.createdAt).slice(0,7));if(m&&Object.hasOwn(m,c.statut))m[c.statut]++});
+  const types=new Map();
+  list.filter(c=>c.statut==="approuve"&&validDate(c.du)&&validDate(c.au)).forEach(c=>{
+    const from=c.du.slice(0,10)>`${year}-01-01`?c.du.slice(0,10):`${year}-01-01`,to=c.au.slice(0,10)<`${year}-12-31`?c.au.slice(0,10):`${year}-12-31`;
+    const days=drhCongeDureeJours({du:from,au:to});if(days)types.set(c.type||"Type non renseigné",(types.get(c.type||"Type non renseigné")||0)+days);
+  });
+  const typeRows=[...types].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),typeTotal=typeRows.reduce((sum,x)=>sum+x[1],0);
+  const latest=list.slice().sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||""))||String(b.du||"").localeCompare(String(a.du||""))||String(a.id).localeCompare(String(b.id))).slice(0,5);
+  const high=balances.filter(x=>x.solde!==null&&x.solde>=DRH_CONGE_SOLDE_ELEVE_SEUIL).sort((a,b)=>b.solde-a.solde||a.name.localeCompare(b.name)||String(a.a.id).localeCompare(String(b.a.id)));
+  return {list,pending,current,currentCount:distinct(current),week,categories,months,undated,typeRows,typeTotal,year,latest,high};
+}
+function drhLeaveCockpitCan(action){
+  if(isOpsSupervisorReadOnlySession())return false;
+  const actions=Array.isArray(session?.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
+  return !actions.length||actions.includes(action)||actions.includes("admin");
+}
+function drhLeaveCockpitSetWeek(iso){sessionStorage.setItem("drhLeaveCockpitWeek",iso);renderView()}
+function drhLeaveCockpitSetYear(year){sessionStorage.setItem("drhLeaveCockpitYear",year);renderView()}
+function openDrhLeaveCockpitDetail(id){
+  const isDrh=session?.transverse==="drh",agents=congesModuleScopeAgents(isDrh).filter(agentInSupervisorScope);
+  const c=(db.conges||[]).find(c=>String(c.id)===String(id)&&agents.some(a=>String(a.id)===String(c.agentId)));
+  if(!c)return;
+  openModal(`<h3>Détail de la demande</h3><p><strong>${escapeHTML(drhCongeAgentName(c))}</strong></p><dl class="leave-detail"><dt>Type</dt><dd>${escapeHTML(c.type||"—")}</dd><dt>Période</dt><dd>${formatDate(c.du)} — ${formatDate(c.au)}</dd><dt>Statut</dt><dd>${drhCongeStatutBadgeHTML(c.statut)}</dd><dt>Création</dt><dd>${c.createdAt?formatDate(String(c.createdAt).slice(0,10)):"Date non enregistrée"}</dd><dt>Motif</dt><dd>${escapeHTML(c.motif||"—")}</dd></dl><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>`);
+}
+function drhLeaveCockpitHTML(data,balances,agents){
+  const esc=escapeHTML,num=n=>Number(n).toLocaleString("fr-FR",{maximumFractionDigits:2});
+  const call=id=>`openDrhLeaveCockpitDetail(decodeURIComponent('${encodeURIComponent(String(id)).replace(/'/g,"%27")}'))`;
+  const head=(title,sub,action="")=>`<header><div><h3>${title}</h3><p>${sub}</p></div>${action}</header>`;
+  const empty=msg=>`<div class="drh-leave-empty">${msg}</div>`;
+  const queue=[...data.pending.map(c=>({kind:"Demande en attente",name:drhCongeAgentName(c),meta:`${formatDate(c.du)} — ${formatDate(c.au)}`,action:call(c.id)})),...data.high.map(x=>({kind:"Solde élevé",name:x.name,meta:`${num(x.solde)} jours disponibles`,action:`navigate('agents/${employeeRouteId(x.a)}')`}))].slice(0,5);
+  let offset=0;
+  const gradient=data.categories.map(x=>{const begin=offset;offset+=balances.length?x.count/balances.length*100:0;return `${x.color} ${begin}% ${offset}%`}).join(",");
+  const max=Math.max(1,...data.months.flatMap(m=>[m.approuve,m.en_attente,m.refuse]));
+  const historyTotal=data.months.reduce((sum,m)=>sum+m.approuve+m.en_attente+m.refuse,0);
+  const currentYear=Number(today().slice(0,4));
+  const years=[...new Set([currentYear,data.year,...data.list.flatMap(c=>[c.du,c.au]).filter(v=>drhLeaveCalendarDate(v)).map(v=>Number(v.slice(0,4)))])].sort((a,b)=>b-a);
+  return `<section class="leave-cockpit-grid">
+    <article class="leave-modern-card leave-week-card">${head("Planning de la semaine","Congés approuvés · employés distincts",`<button type="button" onclick="setDrhCongesDashboardTab('planning')">Ouvrir le planning →</button>`)}<div class="leave-week-controls"><button type="button" aria-label="Semaine précédente" onclick="drhLeaveCockpitSetWeek('${congeAttribAddDays(data.week[0].iso,-7)}')">←</button><span>${formatDate(data.week[0].iso)} — ${formatDate(data.week[6].iso)}</span><button type="button" aria-label="Semaine suivante" onclick="drhLeaveCockpitSetWeek('${congeAttribAddDays(data.week[0].iso,7)}')">→</button><button type="button" onclick="drhLeaveCockpitSetWeek('${today()}')">Aujourd’hui</button></div><div class="leave-week-strip">${data.week.map(x=>`<button type="button" class="${x.iso===today()?"today":""}" onclick="setDrhCongesDashboardTab('planning')" title="${esc(x.items.map(c=>drhCongeAgentName(c)).join(', ')||'Aucun congé approuvé')}"><span>${x.d.toLocaleDateString('fr-FR',{weekday:'short',timeZone:'UTC'})}</span><b>${x.d.getUTCDate()}</b><em>${x.count} absent${x.count>1?'s':''}</em></button>`).join('')}</div><details class="leave-current"><summary>En congé aujourd’hui · ${data.currentCount}</summary>${data.current.length?data.current.map(c=>`<button type="button" onclick="${call(c.id)}">${esc(drhCongeAgentName(c))} · ${esc(c.type)} · retour ${formatDate(c.au)}</button>`).join(''):empty('Aucun employé en congé aujourd’hui.')}</details><details class="leave-current"><summary>Qui sera absent cette semaine ?</summary>${data.week.some(x=>x.count)?data.week.filter(x=>x.count).map(x=>`<p>${formatDate(x.iso)} · ${esc([...new Set(x.items.map(c=>drhCongeAgentName(c)))].join(', '))}</p>`).join(''):empty('Aucun congé approuvé cette semaine.')}</details></article>
+    <article class="leave-modern-card leave-actions">${head("À faire maintenant","Demandes les plus anciennes, puis soldes décroissants",`<button type="button" onclick="setDrhCongesDashboardTab('requests')">Toutes les demandes →</button>`)}${queue.length?queue.map((x,i)=>`<button type="button" onclick="${x.action}"><i>${i+1}</i><span><b>${esc(x.kind)} · ${esc(x.name)}</b><small>${esc(x.meta)}</small></span><em>Ouvrir</em></button>`).join(''):empty('Aucune priorité à traiter.')}</article>
+    <article class="leave-modern-card leave-balances-chart">${head("Répartition des soldes de congés","Seuil existant · droits acquis moins jours annuels approuvés")}${balances.length?`<div class="leave-donut-layout"><div class="leave-donut" role="img" aria-label="${esc(data.categories.map(x=>`${x.label}: ${x.count}`).join(', '))}" style="background:conic-gradient(${gradient})"><div><b>${balances.length}</b><span>employés</span></div></div><ul class="leave-legend">${data.categories.map(x=>`<li><i style="background:${x.color}"></i><span>${esc(x.label)}</span><b>${x.count} (${Math.round(x.count/balances.length*100)}%)</b></li>`).join('')}</ul></div>`:empty('Aucun solde disponible dans ce périmètre.')}</article>
+    <article class="leave-modern-card leave-trend">${head("Évolution des demandes","6 derniers mois · date de création · statut actuel")}${historyTotal?`<div class="leave-month-chart" role="img" aria-label="Demandes créées sur les six derniers mois">${data.months.map(m=>`<div class="leave-month"><div class="leave-month-bars">${['approuve','en_attente','refuse'].map(status=>`<span class="${status}" style="height:${m[status]/max*100}%" title="${esc(m.key)} · ${esc(status)}: ${m[status]}"><small>${m[status]||''}</small></span>`).join('')}</div><label>${esc(m.label)}</label></div>`).join('')}</div><div class="leave-series"><span>● Approuvées</span><span>● En attente</span><span>● Refusées</span></div>`:empty('Aucune demande datée sur les six derniers mois.')}${data.undated?`<p class="leave-data-note">${data.undated} demande(s) sans date de création exclue(s) du graphique.</p>`:''}</article>
+    <article class="leave-modern-card leave-latest">${head("Dernières demandes","Dates de création enregistrées en premier",`<button type="button" onclick="setDrhCongesDashboardTab('requests')">Voir les demandes →</button>`)}<div class="leave-table-scroll"><table><thead><tr><th>Date</th><th>Employé</th><th>Type</th><th>Période</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${data.latest.map(c=>`<tr><td>${c.createdAt?formatDate(String(c.createdAt).slice(0,10)):'Non enregistrée'}</td><td>${esc(drhCongeAgentName(c))}</td><td>${esc(c.type||'—')}</td><td>${formatDate(c.du)} → ${formatDate(c.au)}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td><button type="button" onclick="${call(c.id)}">Voir</button></td></tr>`).join('')||'<tr><td colspan="6">Aucune demande enregistrée.</td></tr>'}</tbody></table></div></article>
+    <article class="leave-modern-card leave-types">${head("Répartition par type de congé","Jours calendaires approuvés dans l’année sélectionnée",`<select aria-label="Année des types de congé" onchange="drhLeaveCockpitSetYear(this.value)">${years.map(y=>`<option value="${y}" ${y===data.year?'selected':''}>${y===currentYear?'Année en cours':y}</option>`).join('')}</select>`)}${data.typeTotal?`<div class="leave-type-bars">${data.typeRows.map(([type,days])=>`<div><span>${esc(type)}</span><i><em style="width:${days/data.typeTotal*100}%"></em></i><b>${num(days)} j · ${Math.round(days/data.typeTotal*100)}%</b></div>`).join('')}</div>`:empty('Aucun jour de congé approuvé pour cette année.')}</article>
+  </section>`;
+}
+
 function renderCongesModule(view,isDrh){
   const soc=isDrh?drhActiveSocieteFilter():(effectifSocieteFilter&&effectifSocieteFilter());
-  const canAttribuer=congesModuleCanAttribuer(isDrh);
-  const agents=congesModuleScopeAgents(isDrh).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+  const canAttribuer=congesModuleCanAttribuer(isDrh)&&drhLeaveCockpitCan("create")&&drhLeaveCockpitCan("validate");
+  const canCreate=drhLeaveCockpitCan("create"),canValidate=drhLeaveCockpitCan("validate"),canExport=congesModuleCanAttribuer(isDrh)&&drhLeaveCockpitCan("export");
+  const agents=congesModuleScopeAgents(isDrh).filter(agentInSupervisorScope).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
   drhCongesSoldeEleveOnly=false;
   let soldeEleveCount=0;
   const balances=[];
@@ -73,37 +139,27 @@ function renderCongesModule(view,isDrh){
     const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
     const suspended=a.statut==="suspendu";
     const hasTaken=pris>0;
-    const rowAction=canAttribuer?`openCongeAttributionModal('${escapeHTML(String(a.id))}')`:`openCongeModal('${escapeHTML(String(a.id))}')`;
+    const rowAction=!canCreate?`navigate('agents/${employeeRouteId(a)}')`:canAttribuer?`openCongeAttributionModal('${escapeHTML(String(a.id))}')`:`openCongeModal('${escapeHTML(String(a.id))}')`;
     balances.push({a,name,code,recruited,contractEnd,entitlement,pris,solde,soldeEleve});
-    return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row${hasTaken?" drh-conge-row-taken":""}" onclick="if(!event.target.closest('a,button'))${rowAction}"><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(name)}</span><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a>${suspended?` <span class="pill pill-red">Suspendu</span>`:""}</div></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jours</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td><td><button type="button" class="btn ${canAttribuer?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();${rowAction}">${canAttribuer?"Attribuer":"Demander"}</button></td></tr>`;
+    return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row${hasTaken?" drh-conge-row-taken":""}" onclick="if(!event.target.closest('a,button'))${rowAction}"><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(name)}</span><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a>${suspended?` <span class="pill pill-red">Suspendu</span>`:""}</div></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jours</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td><td><button type="button" class="btn ${canAttribuer?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();${rowAction}">${!canCreate?"Voir":canAttribuer?"Attribuer":"Demander"}</button></td></tr>`;
   }).join("");
   const tab=drhCongesDashboardTab();
   const scopedIds=new Set(agents.map(a=>String(a.id)));
   const conges=(db.conges||[]).filter(c=>c.type!=="Maladie"&&scopedIds.has(String(c.agentId)));
-  const enCours=conges.filter(c=>c.statut==="approuve"&&c.du<=today()&&(!c.au||c.au>=today()));
   const pending=conges.filter(c=>c.statut==="en_attente");
-  const priority=balances.filter(x=>x.soldeEleve).sort((a,b)=>(b.solde||0)-(a.solde||0)).slice(0,4);
   const latest=conges.slice().sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
   const history=latest.filter(c=>["approuve","refuse"].includes(c.statut));
   const tabButton=(key,label,count)=>`<button type="button" class="drh-leave-tab${tab===key?" is-active":""}" onclick="setDrhCongesDashboardTab('${key}')">${label}${count?` <b>${count}</b>`:""}</button>`;
-  const requestRows=pending.map(c=>{const a=agents.find(x=>String(x.id)===String(c.agentId));return`<tr><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(drhCongeAgentName(c))}</span>${escapeHTML(drhCongeAgentName(c))}</div></td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeDureeJours(c)} j</td><td>${congeOrigineBadgeHTML(c)}</td><td class="flex gap-1"><button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>${a?`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir</a>`:""}</td></tr>`}).join("");
+  const requestRows=pending.map(c=>{const a=agents.find(x=>String(x.id)===String(c.agentId));return`<tr><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(drhCongeAgentName(c))}</span>${escapeHTML(drhCongeAgentName(c))}</div></td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeDureeJours(c)} j</td><td>${congeOrigineBadgeHTML(c)}</td><td class="flex gap-1">${canValidate?`<button class="btn btn-success text-xs" onclick="approuverConge('${escapeHTML(String(c.id))}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${escapeHTML(String(c.id))}')">Refuser</button>`:""}${a?`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir</a>`:""}</td></tr>`}).join("");
   const historyRows=history.map(c=>`<tr><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(drhCongeAgentName(c))}</span>${escapeHTML(drhCongeAgentName(c))}</div></td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td>${congeOrigineBadgeHTML(c)}</td><td>${drhCongeDureeJours(c)} j</td></tr>`).join("");
-  const weekStart=new Date();weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
-  const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);const dayLeaves=conges.filter(c=>c.statut==="approuve"&&c.du<=iso&&(!c.au||c.au>=iso));return{d,iso,items:dayLeaves}});
-  const consumed=balances.reduce((sum,x)=>sum+x.pris,0),allocated=balances.reduce((sum,x)=>sum+(x.entitlement||0),0),planned=conges.filter(c=>c.statut==="approuve"&&c.du>today()).reduce((sum,c)=>sum+drhCongeDureeJours(c),0);
-  const pct=(n,d)=>d?Math.min(100,Math.round(n/d*100)):0;
-  const health=Math.max(0,100-Math.round((pending.length*3+soldeEleveCount)*100/Math.max(agents.length*2,1)));
-  const queue=[...pending.slice(0,3).map(c=>({kind:"Demande",name:drhCongeAgentName(c),meta:`${formatDate(c.du)} — ${formatDate(c.au)}`,action:`setDrhCongesDashboardTab('requests')`})),...priority.slice(0,3).map(x=>({kind:"Solde élevé",name:x.name,meta:`${Number(x.solde||0).toLocaleString("fr-FR",{maximumFractionDigits:2})} jours disponibles`,action:canAttribuer?`openCongeAttributionModal('${escapeHTML(String(x.a.id))}')`:`openCongeModal('${escapeHTML(String(x.a.id))}')`}))].slice(0,5);
-  const dashboard=`<section class="leave-modern-grid"><article class="leave-modern-card leave-week-card"><header><div><h3>Planning de la semaine</h3><p>Présences et absences approuvées</p></div><button onclick="setDrhCongesDashboardTab('planning')">Ouvrir le planning →</button></header><div class="leave-week-strip">${weekDays.map(x=>`<button class="${x.iso===today()?"today":""}" onclick="setDrhCongesDashboardTab('planning')"><span>${x.d.toLocaleDateString("fr-FR",{weekday:"short"})}</span><b>${x.d.getDate()}</b><em>${x.items.length} absent${x.items.length>1?"s":""}</em></button>`).join("")}</div></article>
-    <article class="leave-modern-card leave-actions"><header><div><h3>À faire maintenant</h3><p>Priorités calculées automatiquement</p></div></header>${queue.length?queue.slice(0,3).map((x,i)=>`<button onclick="${x.action}"><i>${i+1}</i><span><b>${escapeHTML(x.kind)} · ${escapeHTML(x.name)}</b><small>${escapeHTML(x.meta)}</small></span><em>Ouvrir</em></button>`).join(""):`<div class="drh-leave-empty">Aucune action urgente.</div>`}</article></section>
-    <section class="leave-modern-grid lower"><article class="leave-modern-card"><header><div><h3>File de traitement intelligente</h3><p>Demandes et soldes classés par priorité</p></div><button onclick="setDrhCongesDashboardTab('requests')">Tout afficher →</button></header><div class="leave-queue">${queue.length?queue.map(x=>`<button onclick="${x.action}"><span class="leave-dot"></span><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.kind)} · ${escapeHTML(x.meta)}</small><em>›</em></button>`).join(""):`<div class="drh-leave-empty">La file est à jour.</div>`}</div></article>
-    <article class="leave-modern-card"><header><div><h3>Allocation annuelle</h3><p>Consommation réelle des droits acquis</p></div></header><div class="leave-bars"><label><span>Droits acquis <b>${allocated.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em style="width:100%"></em></i></label><label><span>Congés consommés <b>${consumed.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em class="blue" style="width:${pct(consumed,allocated)}%"></em></i></label><label><span>Congés planifiés <b>${planned.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em class="amber" style="width:${pct(planned,allocated)}%"></em></i></label></div></article></section>`;
+  const cockpit=drhLeaveCockpitData(agents,conges,balances,today(),sessionStorage.getItem("drhLeaveCockpitWeek"),sessionStorage.getItem("drhLeaveCockpitYear"));
+  const dashboard=drhLeaveCockpitHTML(cockpit,balances,agents);
   const balancesView=`${soldeEleveCount?`<button type="button" class="drh-leave-balance-alert" onclick="toggleDrhCongesSoldeEleve()"><b>${soldeEleveCount} employé(s) avec un solde élevé non pris</b><span>Congés à planifier avant une nouvelle accumulation.</span></button>`:""}<div class="card p-4 mb-4"><input id="drh-conges-search" class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div><div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th><th>CONGÉ CONSOMMÉ</th><th>SOLDE RESTANT</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="8" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
   const tableView=(title,subtitle,thead,body,empty,extra)=>`<section class="card drh-leave-panel"><header><div><h3>${title}</h3><p>${subtitle}</p></div>${extra||""}</header><div class="overflow-x-auto"><table><thead>${thead}</thead><tbody>${body||`<tr><td colspan="6" class="text-center text-slate-500 p-8">${empty}</td></tr>`}</tbody></table></div></section>`;
   let content=dashboard;
   if(tab==="balances")content=balancesView;
-  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div>${canAttribuer?`<button class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Planifier</button>`:`<button class="btn btn-primary" onclick="openCongeModal()">+ Nouvelle demande</button>`}</header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
-  else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde — auto-demandes et attributions réunies","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ORIGINE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.",canAttribuer?`<button type="button" class="btn btn-primary text-xs" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`:`<button type="button" class="btn btn-primary text-xs" onclick="openCongeModal()">+ Nouvelle demande</button>`);
+  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div>${canAttribuer?`<button class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Planifier</button>`:canCreate?`<button class="btn btn-primary" onclick="openCongeModal()">+ Nouvelle demande</button>`:""}</header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
+  else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde — auto-demandes et attributions réunies","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ORIGINE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.",canAttribuer?`<button type="button" class="btn btn-primary text-xs" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`:canCreate?`<button type="button" class="btn btn-primary text-xs" onclick="openCongeModal()">+ Nouvelle demande</button>`:"");
   else if(tab==="documents"){
     const docFiltre=drhCongesDocFiltre();
     const seg=(key,label)=>`<button type="button" class="${docFiltre===key?"active":""}" onclick="setDrhCongesDocFiltre('${key}')">${label}</button>`;
@@ -115,23 +171,23 @@ function renderCongesModule(view,isDrh){
   }
   const heroLabel=isDrh?"Direction des ressources humaines":"Pilotage opérationnel";
   const heroActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${canAttribuer?`<button type="button" class="ops-dash-refresh" onclick="exportCongesRecapCSV()">⇩ Exporter</button>`:""}
+        ${canExport?`<button type="button" class="ops-dash-refresh" onclick="exportCongesRecapCSV()">⇩ Exporter</button>`:""}
         <button type="button" class="ops-dash-refresh" onclick="setDrhCongesDashboardTab('planning')">▦ Planning</button>
         ${canAttribuer?`<button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`:""}
-        <button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="openCongeModal()">+ Nouvelle demande</button>
+        ${canCreate?`<button type="button" class="ops-dash-refresh leave-primary" onclick="openCongeModal()">+ Nouvelle demande</button>`:""}
       </div>`;
   view.innerHTML=`<div class="drh-leave-page is-dashboard">
-    <div class="ops-dash-hero"><div class="ops-dash-hero-row">
-      <div><div class="ops-dash-eyebrow">${heroLabel}</div><h1>Congés &amp; planification</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(isDrh?drhSocieteLabel(soc):soc):"Toutes sociétés"} · ${pending.length} demande(s) en attente · ${enCours.length} en congé aujourd'hui</span></div></div>
+    <div class="leave-cockpit-hero"><div class="leave-cockpit-hero-row">
+      <div><div class="ops-dash-eyebrow">${heroLabel}</div><h1>Congés &amp; planification</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(isDrh?drhSocieteLabel(soc):soc):"Toutes sociétés"} · ${pending.length} demande(s) en attente · ${cockpit.currentCount} en congé aujourd'hui</span></div></div>
       ${heroActions}
     </div></div>
-    <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="leave-cockpit-kpis">
       <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('requests')"><div class="ops-dash-lbl">Demandes en attente</div><div class="ops-dash-val">${pending.length}</div><div class="ops-dash-sub">${pending.length?"Décisions requises":"File à jour"}</div></div>
       <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('balances')"><div class="ops-dash-lbl">Soldes prioritaires</div><div class="ops-dash-val">${soldeEleveCount}</div><div class="ops-dash-sub">Seuil ${DRH_CONGE_SOLDE_ELEVE_SEUIL} jours</div></div>
-      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('planning')"><div class="ops-dash-lbl">En congé aujourd'hui</div><div class="ops-dash-val">${enCours.length}</div><div class="ops-dash-sub">Absences planifiées</div></div>
-      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('dashboard')"><div class="ops-dash-lbl">Santé du planning</div><div class="ops-dash-val">${health}%</div><div class="ops-dash-sub">${pending.length} demande(s) · ${soldeEleveCount} solde(s) élevé(s)</div></div>
+      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('planning')"><div class="ops-dash-lbl">En congé aujourd'hui</div><div class="ops-dash-val">${cockpit.currentCount}</div><div class="ops-dash-sub">Absences planifiées</div></div>
+      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('dashboard')"><div class="ops-dash-lbl">Santé du planning</div><div class="ops-dash-val">${pending.length?"À décider":"À jour"}</div><div class="ops-dash-sub">${pending.length} décision(s) en attente · suivi des demandes</div></div>
     </div>
-    <nav class="drh-leave-tabs">${tabButton("dashboard","Tableau de bord")}${tabButton("balances","Soldes",soldeEleveCount)}${tabButton("requests","Demandes",pending.length)}${tabButton("planning","Planning")}${tabButton("documents","Documents")}</nav>
+    <nav class="drh-leave-tabs" aria-label="Navigation congés">${tabButton("dashboard","Tableau de bord")}${tabButton("balances","Soldes",soldeEleveCount)}${tabButton("requests","Demandes",pending.length)}${tabButton("planning","Planning")}${tabButton("documents","Documents")}</nav>
     ${content}
   </div>`;
 }
@@ -142,8 +198,9 @@ function toggleDrhCongesSoldeEleve(){
 }
 
 function exportCongesRecapCSV(){
+  if(!drhLeaveCockpitCan("export")||!congesModuleCanAttribuer(session?.transverse==="drh"))return;
   const soc=drhActiveSocieteFilter();
-  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||"")));
+  const agents=congesModuleScopeAgents(session?.transverse==="drh").filter(agentInSupervisorScope).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||"")));
   const rows=[["Nom Prénom","Code","Société","Date de recrutement","Droit acquis (j)","Jours pris (j)","Solde restant (j)"]];
   agents.forEach(a=>{
     const recruited=a.dateRecrutement||a.dateEntree||"";
@@ -258,12 +315,13 @@ function updateCongeAttribJours(){
 }
 
 function openCongeAttributionPicker(){
+  if(!drhLeaveCockpitCan("create")||!drhLeaveCockpitCan("validate")||!congesModuleCanAttribuer(session?.transverse==="drh"))return;
   // Point d'entrée générique (bouton "+ Attribuer un congé" du bandeau, "+ Planifier" du
   // planning) : on choisit d'abord l'employé, puis on enchaîne sur le même parcours complet
   // (solde, couverture site, confirmation, aperçu, impression) que le clic sur une ligne du
   // tableau "Soldes individuels" — pour ne pas avoir deux façons différentes d'attribuer un
   // congé, l'une contrôlée et l'autre non.
-  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+  const agents=congesModuleScopeAgents(session?.transverse==="drh").filter(agentInSupervisorScope).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
   openModal(`<h3 class="font-bold text-lg mb-4">Attribuer un congé</h3>
     <div class="mb-3"><label class="label">Employé</label><select class="select" id="conge-picker-agent">
       <option value="">— Choisir un employé —</option>
@@ -273,6 +331,7 @@ function openCongeAttributionPicker(){
 }
 
 function openCongeAttributionModal(agentId){
+  if(!drhLeaveCockpitCan("create")||!drhLeaveCockpitCan("validate")||!congesModuleCanAttribuer(session?.transverse==="drh")||!congesModuleScopeAgents(session?.transverse==="drh").filter(agentInSupervisorScope).some(a=>String(a.id)===String(agentId)))return;
   const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
   if(!a){toast("Employé introuvable","error");return}
   const name=((a.nom||"")+" "+(a.prenom||"")).trim();

@@ -25,7 +25,9 @@
     "test:drh-employee-portrait-e2e": "node --test tests_frontend/drh-employee-portrait-e2e.test.js",
     "test:pointage-terminals-e2e": "node --test tests_frontend/pointage-terminals-e2e.test.js",
     "test:commercial-sidebar-e2e": "node --test tests_frontend/commercial-sidebar-e2e.test.js",
-    "test:commercial-dashboard": "node --test tests_frontend/commercial-dashboard.test.js"
+    "test:commercial-dashboard": "node --test tests_frontend/commercial-dashboard.test.js",
+    "test:drh-leave-cockpit": "node --test tests_frontend/drh-leave-cockpit-v2.test.js",
+    "test:drh-leave-cockpit-chrome": "node --test tests_frontend/drh-leave-cockpit-v2-chrome.test.js"
   },
   "devDependencies": {
     "jsdom": "29.1.1",

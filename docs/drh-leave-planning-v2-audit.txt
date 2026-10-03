@@ -1,0 +1,90 @@
+ATLAS / SGDI — CONGÉS & PLANIFICATION V2
+Audit et validation — 03/10/2026
+
+BASE GIT
+ORIGIN/MAIN : 8b9bbaee2727d85eee82582e63247f1629da0739 (git fetch origin effectué)
+BRANCHE : refactor/drh-leave-planning-v2
+WORKTREE : /Users/ath/Downloads/ATLAS 1/.worktrees/drh-leave-planning-v2
+BASE HEAD : 8b9bbaee2727d85eee82582e63247f1629da0739
+Le HEAD final et le hash du commit sont fournis dans le rapport de livraison.
+Worktree initial préservé : feat/attendance-intelligent-rotations-v3, df272326802b521fabd43dff09d23392a65131a5, 0 derrière / 1 devant origin/main.
+Modifications Attendance déjà présentes non touchées : config.py, models.py, sheets.py et migration rotation_learning.
+AUCUN PUSH. AUCUN DÉPLOIEMENT.
+
+AUDIT AVANT CODE
+ROUTES : #/drh/conges et #/conges ; rendu par renderCongesModule dans js/modules/leaves.js, appelé par le module DRH. Onglets existants dashboard/balances/requests/planning/documents dans sessionStorage, sans changement de route.
+COMPOSANTS : module classique chargé à la demande ; modules-v3/drh/leaves.mjs et drh-next/modules/leaves.mjs concernent le dossier salarié, pas ce cockpit. Global Shell V4 rendu par renderInternal, inchangé.
+API : snapshot réel /api/irongs/db et bootstrap existant. API native /api/drh/leaves séparée, non substituée au legacy pour éviter de mélanger deux référentiels. Aucun nouvel appel API pour les cartes.
+TABLES : employés SQL (employees) adaptés vers db.agents ; congés legacy dans sgdi_records, collection conges ; table leaves utilisée par l’API native, non fusionnée dans cette mission.
+SOLDES : drhLeaveEntitlement depuis dateRecrutement/dateEntree, acquisition existante à 2,5 jours par mois et prorata du mois entamé ; moins drhCongesAnnuelsPris (Annuel approuvé, durée calendaire inclusive). Pas de date de recrutement = solde indisponible. Seuil élevé existant DRH_CONGE_SOLDE_ELEVE_SEUIL = 20, inclusif (>=).
+DEMANDES : agentId, type, du, au, motif, statut, origine et éventuellement createdAt. Statuts existants en_attente/approuve/refuse. Types du formulaire existant Annuel/Sans solde/Exceptionnel/Maternité/Paternité, graphique fondé sur les types réellement présents.
+PLANNING : planning mensuel existant et liste approuvée conservés ; nouvelle synthèse hebdomadaire UTC. La Maladie reste exclue selon la séparation existante congé/absence maladie, sans changement de nomenclature.
+DOCUMENTS : titres approuvés, références congeDocumentRef, printCongeOrder et historique existants conservés. État vide conservé. Pas de nouvelle action de messagerie.
+VALIDATION : approuverConge/refuserConge et attribution directe existantes conservées. Garde de visibilité validate sur décisions ; create sur création ; create + validate et contrôle historique DRH/admin pour attribution directe. Voir les limites de persistance ci-dessous.
+EXPORT : exportCongesRecapCSV existant conservé, filtré sur les mêmes agents actifs et le même périmètre que le cockpit ; garde export aussi lors d’un appel direct.
+PERMISSIONS : actions canoniques read/create/update/validate/delete/export/admin définies côté authentification. Le cockpit utilise create/validate/export pour les actions correspondantes ; une liste historique vide conserve le comportement autorisé existant. Lecture seule superviseur interdit les mutations. Le backend et ses permissions granulaires restent l’autorité ; aucun changement de permission ni de route.
+DONNÉES DISPONIBLES : snapshot chargé, salariés actifs, société, affectation/site, dates, statut, type, solde calculé, titre, motif, createdAt si enregistré.
+DONNÉES MANQUANTES : définition métier santé/couverture/conflits, journal historique des changements de statut et createdAt pour certaines demandes anciennes, justificatifs manquants déterminables sans ambiguïté. Aucun indicateur de conflit, présence effective ou document manquant n’est inventé.
+SOURCE PROBABLE : futurs agrégats RH/scopés et journal de décisions.
+API NÉCESSAIRE : aucune pour les indicateurs livrés ; pour une vraie santé du planning, API d’agrégats dont la définition métier doit être validée. Pour une évolution historique des décisions, dates de décision/statut à exposer. Backend non modifié.
+
+INDICATEURS LIVRÉS
+DONNÉES UTILISÉES : db.agents et db.conges déjà hydratés, mêmes fonctions de droits et de périmètre. Aucun mock de production ni chiffre repris de la maquette.
+DEMANDES EN ATTENTE : nombre réel en_attente dans le périmètre, badge et file de traitement.
+SOLDES PRIORITAIRES : nombre réel des soldes >=20 jours, seuil déjà existant.
+EN CONGÉ AUJOURD’HUI : employés distincts couverts par un congé approuvé avec dates valides et bornes inclusives ; plusieurs congés du même salarié ne le comptent pas deux fois. Liste des personnes accessible dans la carte semaine.
+SANTÉ DU PLANNING : score arbitraire supprimé. Indicateur de suivi des décisions « À jour » si aucune demande en attente, « À décider » sinon, avec nombre réel. Ne mesure ni couverture ni conflits et n’affiche aucun pourcentage inventé.
+PLANNING SEMAINE : sept dates réelles, lundi à dimanche, changement de semaine, retour à aujourd’hui, jour courant bleu, employés distincts approuvés uniquement. Liste nominative hebdomadaire accessible. Dates calculées en UTC pour éviter le décalage lié à toISOString d’un minuit local.
+À FAIRE MAINTENANT : demandes en attente triées par createdAt, ou début de congé si création non enregistrée, puis identifiant ; viennent ensuite les soldes élevés triés par solde décroissant, nom et identifiant. Maximum cinq éléments. Les demandes ouvrent leur détail exact, les soldes ouvrent la fiche du salarié concerné.
+RÉPARTITION SOLDES : donut effectif réel, catégories >=20, positif sous 20, épuisé/négatif, indisponible. Tous les salariés du périmètre sont représentés, y compris les dates de recrutement manquantes.
+ÉVOLUTION DEMANDES : six mois de création réels, statuts actuels approuve/en_attente/refuse. createdAt absent ou invalide = demande exclue avec nombre explicite. Aucune substitution de la date de début à une date de création dans le graphique. Ce graphique n’est pas un historique des décisions.
+DERNIÈRES DEMANDES : cinq demandes, créations connues les plus récentes puis dates de début/identifiant ; sans createdAt, date affichée « Non enregistrée ». Détail modal read-only avec type, période, statut, création, motif ; vérification de scope à l’ouverture.
+RÉPARTITION TYPES : nomenclature réellement enregistrée ; jours calendaires approuvés bornés à l’année choisie, volume et pourcentage calculés ; année courante par défaut, sélection d’années présentes. Sans données, état vide.
+DONNÉES INVENTÉES : NON. Les captures et tests utilisent uniquement des fixtures locales de test identifiées ALPHA/BETA, jamais ajoutées à la production.
+SEUILS UTILISÉS : 20 jours existant ; 0 pour distinguer solde positif et épuisé/négatif ; null pour indisponible.
+JUSTIFICATION : aucune classification 1–5/6–20 ajoutée, aucune nouvelle règle légale, aucun calcul d’acquisition/report/ancienneté changé. Des soldes importants peuvent provenir de l’acquisition cumulée depuis le recrutement sans plafonnement annuel dans la fonction existante ; les données ne sont pas corrigées.
+
+PÉRIMÈTRES ET NON-RÉGRESSION
+PERMISSIONS : DRH complet, lecture seule, sans validation, sans export, appels directs export/attribution, scope société et site testés. Les handlers historiques d’écriture restent inchangés, les gardes frontend ne remplacent pas les contrôles serveur. L’attribution directe exige create + validate car elle accorde directement un congé.
+MULTI-SOCIÉTÉS : drhActiveSocieteFilter, drhAgentsList/congesModuleScopeAgents ; jointure agentId uniquement sur l’ensemble autorisé pour tous les agrégats et détails.
+PÉRIMÈTRE SITE : agentInSupervisorScope ajouté aux agents utilisés et appliqué au détail/export/picker. Scope superviseur canonique basé sur sitesAutorises/supervisorScopes et affectation ; autres profils héritent du snapshot serveur autorisé. Aucune permission de site inventée.
+GLOBAL SHELL V4 MODIFIÉ : NON. Aucun fichier du design system, du header ou de la sidebar modifié. CSS ajouté borné au contenu drh-leave-page.
+ATTENDANCE MODIFIÉ : NON.
+PLANNING INTELLIGENT ROTATIONS MODIFIÉ : NON.
+BIOMÉTRIE MODIFIÉE : NON.
+BACKEND MODIFIÉ : NON.
+MIGRATION : AUCUNE.
+
+VALIDATION
+NPM TEST : 829/829, 0 échec ; commande npm test, log /tmp/leave-v2-npm.log.
+DRH : 114/114 DRH Next, log /tmp/leave-v2-drh-next.log ; tests DRH historiques dans npm test et relancés avec les checks finaux.
+CONGÉS : 13/13 tests dédiés ; soldes/temps/priorités/graphiques/types/scopes/permissions/vides ; tests congés existants DRH et DRH Next réussis.
+DESIGN SYSTEM : suite existante réussie dans npm test et relancée en vérification finale ; fichiers design system inchangés.
+GLOBAL SHELL : tests atlas-shell et atlas-global-shell-v4 réussis ; Chrome confirme sidebar rgb(5,33,79), header rgb(255,255,255).
+CHECKS FINAUX : 100/100 (DRH historique, cockpit, shell, design system, permissions core-v3), log /tmp/leave-v2-final-checks.log.
+PERMISSIONS : tests dédiés et core-v3 permissions, listes canoniques et comportements lecture seule/sans export/sans validation/scope.
+CHROME : test réel passé, 1440/1280/1024/768/430/390 ; document et view sans débordement horizontal global, 4/2/1 colonnes KPI, détail réel, lecture seule et états vides ; aucune erreur JavaScript. Réseau backend neutralisé exclusivement dans le banc, assets/CSS et shell de production. Ne prétend pas valider les écritures sur une API réelle.
+CAPTURE 1440 : /tmp/atlas-leave-cockpit-v2/conges-1440.png
+CAPTURE 1024 : /tmp/atlas-leave-cockpit-v2/conges-1024.png
+CAPTURE 768 : /tmp/atlas-leave-cockpit-v2/conges-768.png
+CAPTURE 390 : /tmp/atlas-leave-cockpit-v2/conges-390.png
+Captures intégrales prises avec hauteur de viewport augmentée après assertions du layout à hauteur 1024 ; largeurs inchangées. Les quatre captures ont été inspectées visuellement. Scroll local autorisé pour onglets/semaine/table sur mobile.
+Environnement : le lien puppeteer-core préexistant du dépôt pointe vers un dossier temporaire disparu. Dépendance de test installée dans /tmp/atlas-leave-browser-deps, aucun lockfile ni dépendance produit changé ; utiliser NODE_PATH=/tmp/atlas-leave-browser-deps/node_modules pour rejouer Chrome dans cet environnement.
+COMMANDES : npm run test:drh-leave-cockpit ; npm run test:drh-leave-cockpit-chrome.
+
+FICHIERS MODIFIÉS
+app/static/js/modules/leaves.js
+app/static/sgdi-app.css (ajout de règles de contenu uniquement)
+package.json (deux commandes de test dédiées)
+tests_frontend/drh-leave-cockpit-v2.test.js
+tests_frontend/drh-leave-cockpit-v2-chrome.test.js
+docs/drh-leave-planning-v2-audit.txt
+DIFF : git diff --check passé ; diff limité aux fichiers ci-dessus, aucune modification Attendance ou backend.
+COMMIT : refactor(drh): moderniser le cockpit congés et planification ; unique commit local, hash dans la réponse finale.
+COMMITS DEVANT ORIGIN/MAIN : 1 attendu après commit, 0 derrière.
+
+RISQUES ET GO/NO-GO
+Risque préexistant important : sgdiBackendSave retourne une confirmation « scoped-postgres » sans écrire le snapshot pour les comptes non administrateurs, alors que saveConge/approuverConge/refuserConge utilisent saveDBAndWaitToast. La persistance durable du workflow legacy n’est donc pas garantie par cette refonte UI. Les routes natives /api/drh/leaves existent mais constituent un autre référentiel ; aucun basculement automatique ni correctif backend hors périmètre effectué.
+Les soldes restent ceux de l’algorithme existant et ne constituent pas une nouvelle certification de conformité légale. Historique des créations incomplet explicitement signalé. La Maladie reste dans son workflow d’absence existant, hors module congés.
+GO : revue UI/frontend locale, tests et responsive.
+NO-GO : validation d’un workflow de création/décision en production tant que sa persistance réelle pour les comptes non administrateurs n’a pas été vérifiée/corrigée séparément. Aucun push/déploiement réalisé.

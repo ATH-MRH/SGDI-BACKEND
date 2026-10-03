@@ -10746,3 +10746,69 @@ body.sgdi-view-mode #view .rh-erp-photo.has-photo{opacity:1}
 @media(max-width:1250px){.comm-dashboard-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.comm-dashboard-analytics{grid-template-columns:minmax(0,1.3fr) minmax(220px,.8fr)}.comm-dashboard-objective{grid-column:1/-1;min-height:170px}.comm-dashboard-objective h2{max-width:420px}}
 @media(max-width:900px){.comm-dashboard-analytics{grid-template-columns:1fr 1fr}.comm-dashboard-trend{grid-column:1/-1}.comm-dashboard-objective{grid-column:auto}.comm-dashboard-bottom{grid-template-columns:1fr}.comm-dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.comm-dashboard-head-tools{width:100%}.comm-dashboard-date,.comm-dashboard-period{flex:1;min-width:0}.comm-dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.comm-dashboard-kpi{min-height:70px;padding:8px;gap:7px}.comm-dashboard-kpi-icon,.comm-dashboard-summary-icon{flex-basis:32px;width:32px;height:32px;border-radius:10px;font-size:17px}.comm-dashboard-kpi-copy strong{font-size:17px}.comm-dashboard-analytics{grid-template-columns:1fr}.comm-dashboard-trend,.comm-dashboard-objective{grid-column:auto}.comm-dashboard-objective{min-height:190px}.comm-dashboard-summary{grid-template-columns:1fr 1fr;gap:7px}.comm-dashboard-summary>button{padding:8px;gap:7px}.comm-dashboard-summary-copy strong{font-size:15px}.comm-chart-frame{height:170px}.comm-dashboard-panel-head{flex-wrap:wrap}.comm-chart-legend-row{gap:7px;font-size:7px}.comm-dashboard-contract-priority{font-size:7px}}
+
+/* Congés cockpit V2 — styles bornés au contenu, Global Shell V4 inchangé. */
+#view .drh-leave-page.is-dashboard{min-width:0;color:#102b4c;background:#f4f8fd}
+.drh-leave-page .leave-cockpit-hero{padding:12px 0 20px;border-bottom:1px solid #e2ebf6;margin-bottom:16px}
+.drh-leave-page .leave-cockpit-hero-row{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.drh-leave-page .leave-cockpit-hero h1{font-size:28px;letter-spacing:-.6px;margin:5px 0 7px;color:#102b4c}
+.drh-leave-page .ops-dash-eyebrow{color:#536f90;font-size:10px;letter-spacing:.1em}
+.drh-leave-page .ops-dash-hero-sub{color:#536f90;font-size:12px}
+.drh-leave-page .leave-cockpit-hero .ops-dash-refresh{background:#fff;color:#0560c5;border:1px solid #a8c6ed;border-radius:9px;min-height:40px;padding:9px 13px;font-size:12px}
+.drh-leave-page .leave-cockpit-hero .leave-primary{background:#0560c5;color:white;border-color:#0560c5}
+.drh-leave-page .leave-cockpit-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.drh-leave-page .leave-cockpit-kpis .ops-dash-kpi{background:#fff;border:1px solid #deE8f5;border-radius:14px;padding:19px 20px;box-shadow:0 3px 12px #173d6605;min-width:0}
+.drh-leave-page .leave-cockpit-kpis .ops-dash-lbl{color:#536f90;font-size:11px;letter-spacing:.025em}
+.drh-leave-page .leave-cockpit-kpis .ops-dash-val{font-size:28px;color:#102b4c;line-height:1.3;margin:4px 0}
+.drh-leave-page .leave-cockpit-kpis .ops-dash-sub{font-size:11px;color:#536f90;white-space:normal}
+.drh-leave-page .drh-leave-tabs{background:#fff;border:1px solid #dee8f5;border-radius:12px;padding:5px;margin-bottom:14px;display:flex;gap:5px;overflow-x:auto}
+.drh-leave-page .drh-leave-tab{border:0;color:#29496d;white-space:nowrap;background:transparent}
+.drh-leave-page .drh-leave-tab.is-active{background:#0560c5;color:#fff;border-radius:8px}
+#view .drh-leave-page>.leave-cockpit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) minmax(0,1.25fr);gap:14px;max-width:100%;width:100%}
+.drh-leave-page .leave-week-card{grid-column:1/3;grid-row:1}
+.drh-leave-page .leave-actions{grid-column:3;grid-row:1/3}
+.drh-leave-page .leave-latest{grid-column:1/3;grid-row:3}
+.drh-leave-page .leave-types{grid-column:3;grid-row:3}
+.drh-leave-page .leave-modern-card{border-color:#dee8f5;box-shadow:0 3px 12px #173d6605}
+.drh-leave-page .leave-modern-card>header{padding:15px 17px;min-height:66px}
+.drh-leave-page .leave-modern-card h3{font-size:16px;line-height:1.35;color:#102b4c}
+.drh-leave-page .leave-modern-card p{font-size:11px;line-height:1.5;color:#536f90}
+.drh-leave-page .leave-modern-card header button{font-size:11px;color:#0064dd;flex-shrink:0}
+.drh-leave-page .leave-actions b{font-size:12px;overflow-wrap:anywhere}
+.drh-leave-page .leave-actions small{font-size:11px}
+.drh-leave-page .leave-actions>button{padding:16px 17px}
+.drh-leave-page .leave-week-strip{padding:12px 17px;gap:8px;overflow-x:auto}
+.drh-leave-page .leave-week-strip button{min-height:100px}
+.drh-leave-page .leave-week-controls{display:flex;align-items:center;gap:10px;padding:12px 17px 0;font-size:11px;flex-wrap:wrap}
+.drh-leave-page .leave-week-controls button,.drh-leave-page .leave-current button{border:1px solid #dee8f5;border-radius:6px;background:#f6faff;color:#0560c5;padding:5px 8px;cursor:pointer}
+.drh-leave-page .leave-current{margin:0 17px 12px;font-size:11px;color:#536f90}
+.drh-leave-page .leave-current summary{cursor:pointer;color:#0560c5;font-weight:700}
+.drh-leave-page .leave-current button{display:block;text-align:left;margin-top:7px;width:100%}
+.drh-leave-page .leave-donut-layout{display:flex;align-items:center;justify-content:center;gap:14px;padding:20px 14px;flex-wrap:wrap}
+.drh-leave-page .leave-donut{width:134px;height:134px;flex-shrink:0;border-radius:50%;display:grid;place-items:center}
+.drh-leave-page .leave-donut>div{width:94px;height:94px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.drh-leave-page .leave-donut b{font-size:24px}.drh-leave-page .leave-donut span{font-size:11px}
+.drh-leave-page .leave-legend{list-style:none;margin:0;padding:0;flex:1;min-width:180px}
+.drh-leave-page .leave-legend li{display:flex;align-items:center;gap:7px;font-size:10px;margin:13px 0}
+.drh-leave-page .leave-legend i{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.drh-leave-page .leave-legend b{margin-left:auto;white-space:nowrap}
+.drh-leave-page .leave-month-chart{height:170px;display:flex;gap:12px;align-items:stretch;margin:25px 18px 8px;border-bottom:1px solid #e5edf7}
+.drh-leave-page .leave-month{flex:1;min-width:0;text-align:center;font-size:10px}
+.drh-leave-page .leave-month-bars{height:145px;display:flex;align-items:flex-end;justify-content:center;gap:3px;background:repeating-linear-gradient(to top,#eaf0f7 0,#eaf0f7 1px,transparent 1px,transparent 36px)}
+.drh-leave-page .leave-month-bars>span{width:12px;position:relative;min-width:4px;border-radius:3px 3px 0 0}
+.drh-leave-page .leave-month-bars small{position:absolute;top:-17px;left:0;font-size:9px}
+.drh-leave-page .approuve{background:#3bb16b}.drh-leave-page .en_attente{background:#268fff}.drh-leave-page .refuse{background:#ef4444}
+.drh-leave-page .leave-series{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;font-size:10px;padding:10px}
+.drh-leave-page .leave-series span:nth-child(1){color:#23854a}.drh-leave-page .leave-series span:nth-child(2){color:#0560c5}.drh-leave-page .leave-series span:nth-child(3){color:#c93232}
+.drh-leave-page .leave-data-note{padding:0 17px 12px}
+.drh-leave-page .leave-table-scroll{overflow-x:auto;padding:0 17px 14px;max-width:100%}
+.drh-leave-page .leave-table-scroll table{width:100%;min-width:620px;border-collapse:collapse;font-size:11px}
+.drh-leave-page .leave-table-scroll th{background:#f5f8fc;color:#102b4c;text-align:left}
+.drh-leave-page .leave-table-scroll td,.drh-leave-page .leave-table-scroll th{padding:9px 7px;border-bottom:1px solid #e8eff7}
+.drh-leave-page .leave-table-scroll button{border:0;border-radius:5px;background:#eff6ff;color:#0560c5;padding:5px 9px;cursor:pointer}
+.drh-leave-page .leave-types select{max-width:140px;border:1px solid #dee8f5;border-radius:7px;background:#fff;padding:7px;font-size:11px}
+.drh-leave-page .leave-type-bars{padding:20px 17px}.drh-leave-page .leave-type-bars>div{display:grid;grid-template-columns:minmax(80px,1fr) minmax(60px,1.3fr) auto;align-items:center;gap:9px;margin:0 0 16px;font-size:11px}
+.drh-leave-page .leave-type-bars i{display:block;height:20px;border-radius:3px;overflow:hidden;background:#eaf1f9}.drh-leave-page .leave-type-bars em{display:block;height:100%;background:#268fff}
+.drh-leave-page .leave-type-bars b{font-size:10px}.leave-detail{display:grid;grid-template-columns:auto 1fr;gap:12px}.leave-detail dd{margin:0}
+@media(max-width:1100px){#view .drh-leave-page>.leave-cockpit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.drh-leave-page .leave-week-card{grid-column:1/3;grid-row:auto}.drh-leave-page .leave-actions{grid-column:1/3;grid-row:auto}.drh-leave-page .leave-latest{grid-column:1/3;grid-row:auto}.drh-leave-page .leave-types{grid-column:1/3;grid-row:auto}.drh-leave-page .leave-cockpit-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#view .drh-leave-page>.leave-cockpit-grid{display:flex;flex-direction:column}.drh-leave-page .leave-actions{order:0}.drh-leave-page .leave-week-card{order:1}.drh-leave-page .leave-latest{order:2}.drh-leave-page .leave-balances-chart{order:3}.drh-leave-page .leave-trend{order:4}.drh-leave-page .leave-types{order:5}.drh-leave-page .leave-cockpit-kpis{grid-template-columns:1fr;gap:9px}.drh-leave-page .leave-cockpit-hero h1{font-size:25px}.drh-leave-page .leave-week-strip{grid-template-columns:repeat(7,minmax(64px,1fr))}.drh-leave-page .leave-cockpit-hero-row{gap:14px}.drh-leave-page .leave-modern-card>header{flex-wrap:wrap}.drh-leave-page .leave-type-bars>div{grid-template-columns:minmax(70px,1fr) minmax(55px,1fr) auto}}
