@@ -80,7 +80,7 @@ async function sidebarVisible(page) {
   return page.$eval(SIDEBAR, el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.right > 10 && r.left < innerWidth && s.display !== 'none' && s.visibility !== 'hidden'; });
 }
 
-test('Commercial — sidebar claire, navigation, permissions et responsive dans Chrome', {
+test('Commercial — Sidebar V3 marine, navigation, permissions et responsive dans Chrome', {
   timeout: 300000,
   skip: !CHROME ? 'Chrome absent: set PUPPETEER_EXECUTABLE_PATH' : !puppeteer ? 'puppeteer-core absent' : false,
 }, async t => {
@@ -135,9 +135,12 @@ test('Commercial — sidebar claire, navigation, permissions et responsive dans 
     assert.ok(state.main.width >= 280 && state.main.height > 0, 'work area collapsed');
     if (state.viewport >= 768 || state.mobileOpen) {
       assert.ok(state.sidebar.left >= -2 && state.sidebar.right <= state.viewport, 'sidebar outside viewport');
-      const channels=(state.sidebar.background.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
-      const rgb=state.sidebar.background.startsWith('color(srgb')?channels.map(n=>n*255):channels;
-      assert.ok(rgb.length===3&&rgb.every(n=>n>=240),'sidebar should be very light: '+state.sidebar.background);
+      if(state.sidebar.width>0){
+        // Sidebar V3 : même bleu marine que tous les modules du shell commun.
+        const channels=(state.sidebar.background.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
+        const [r,g,b]=state.sidebar.background.startsWith('color(srgb')?channels.map(n=>n*255):channels;
+        assert.ok(r<=30&&g<=70&&b>=40&&b<=140,'sidebar should be navy: '+state.sidebar.background);
+      }
       for (const item of state.items) assert.ok(item.left >= state.sidebar.left - 2 && item.right <= state.sidebar.right + 2, 'navigation escapes sidebar: ' + JSON.stringify(item));
     }
     return state;
@@ -204,24 +207,25 @@ s.commit();s.close()
     await page.waitForSelector(routeSelector('commercial/opportunites')+'.active');
     assert.equal(await page.$eval(routeSelector('commercial/opportunites'),el=>el.closest('details').open),true);
     assert.equal(await page.$eval(routeSelector('commercial/opportunites'),el=>el.closest('details').querySelector('summary').getAttribute('aria-expanded')),'true');
+    // Sidebar V3 : sans icônes, le mode réduit masque la navigation derrière une languette
+    // (pas de colonne d'icônes vide). Préférence persistante, clavier, focus et retour inchangés.
+    const tab='.sgdi-commercial-shell .atlas-sidebar-tab';
+    const tabWidth=()=>page.$eval(tab,el=>{const r=el.getBoundingClientRect();return getComputedStyle(el).display==='none'?0:r.width;});
     await page.locator('.commercial-sidebar-collapse').click();await settled(page);
-    const compact=await capture(page,'commercial-sidebar-compact');assert.ok(compact.sidebar.width>=60&&compact.sidebar.width<=90);
+    await capture(page,'commercial-sidebar-compact');
+    assert.equal(await sidebarVisible(page),false,'collapsed navigation is hidden');
+    assert.ok(await tabWidth()>0&&await tabWidth()<=24,'thin reopen tab');
+    assert.equal(await page.evaluate(sel=>document.activeElement===document.querySelector(sel),tab),true,'focus moves to the reopen tab');
     await page.reload({waitUntil:'domcontentloaded'});await page.waitForSelector(SIDEBAR);await settled(page);
-    assert.ok(await page.$eval(SIDEBAR,el=>el.getBoundingClientRect().width<=90),'compact preference survives F5');
-    await page.focus('[data-commercial-group="commercial"] > summary');await page.keyboard.press('Enter');await settled(page);
-    assert.ok(await page.$eval(SIDEBAR,el=>el.getBoundingClientRect().width>=220),'keyboard group activation reveals its submenu from the rail');
-    assert.equal(await page.$eval('[data-commercial-group="commercial"]',el=>el.open),true);
-    await page.locator('.commercial-sidebar-collapse').click();await settled(page);
-    await page.hover(routeSelector('commercial/clients'));
-    assert.equal(await page.$eval('#commercial-sidebar-tooltip',el=>el.textContent),'Clients','compact pointer tooltip');
+    assert.equal(await sidebarVisible(page),false,'compact preference survives F5');
+    await page.focus(tab);await page.keyboard.press('Enter');await settled(page);
+    assert.ok(await page.$eval(SIDEBAR,el=>el.getBoundingClientRect().width>=240),'keyboard reopens the navigation from the tab');
+    assert.equal(await page.evaluate(()=>document.activeElement?.matches('.commercial-sidebar-collapse')),true,'focus returns to the collapse control');
+    assert.equal(await page.$eval('[data-commercial-group="commercial"]',el=>el.open),true,'active group stays open');
+    assert.equal(await page.$eval(routeSelector('commercial/clients'),el=>el.getAttribute('title')),'Clients','one-line label keeps a full-text tooltip');
     const client=await page.$(routeSelector('commercial/clients'));await client.focus();
-    assert.ok(await client.evaluate(el=>{
-      const tooltip=document.getElementById(el.getAttribute('aria-describedby'));
-      return el.getAttribute('aria-label')&&tooltip?.getAttribute('role')==='tooltip'&&tooltip.textContent.includes('Clients')&&tooltip.getBoundingClientRect().width>0;
-    }),'compact accessible label and visible keyboard tooltip');
     await page.keyboard.press('Enter');await page.waitForFunction(()=>location.hash==='#/commercial/clients');
-    await page.locator('.commercial-sidebar-collapse').click();await settled(page);
-    assert.ok(await page.$eval(SIDEBAR,el=>el.getBoundingClientRect().width>=220));
+    assert.ok(await page.$eval(SIDEBAR,el=>el.getBoundingClientRect().width>=240));
     await navigate(page,'commercial/dashboard','Tableau de bord');
   });
 
@@ -231,8 +235,8 @@ s.commit();s.close()
     for(const width of [1440,1280,1024,800,768,430,390]) {
       await page.setViewport({width,height:1000});await page.reload({waitUntil:'domcontentloaded'});await page.waitForSelector(SIDEBAR);
       const state=await capture(page,'commercial-sidebar-responsive');
-      if(width>1024)assert.ok(state.sidebar.width>=220&&state.sidebar.width<=250,'desktop width');
-      else if(width>=768)assert.ok(state.sidebar.width>=60&&state.sidebar.width<=90,'tablet auto compact');
+      if(width>1024)assert.ok(state.sidebar.width>=240&&state.sidebar.width<=270,'desktop width');
+      else if(width>=768)assert.ok(state.collapsed&&state.sidebar.width===0,'tablet auto compact: content first, navigation behind the tab');
       else assert.equal(await sidebarVisible(page),false,'mobile starts closed');
     }
   });

@@ -6253,10 +6253,13 @@ function applyLanguagePreference(root){
     const original=el.dataset.atlasNavLabel;
     el.textContent=mode==='ar'?sgdiTranslateText(original,translations):(original==='GRH'?original:sgdiTitleCaseText(original));
     if(el.parentElement?.hasAttribute('aria-label'))el.parentElement.setAttribute('aria-label',el.textContent);
+    // Sidebar V3 : l'info-bulle d'un libellé tronqué suit la langue affichée.
+    if(el.parentElement?.hasAttribute('title'))el.parentElement.setAttribute('title',el.textContent);
   });
   scope.querySelectorAll('[data-commercial-label]').forEach(el=>{
     el.textContent=commercialSidebarLocalizedLabel(el.dataset.commercialLabel);
     el.parentElement?.setAttribute('aria-label',el.textContent);
+    if(el.parentElement?.hasAttribute('title'))el.parentElement.setAttribute('title',el.textContent);
   });
   scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
@@ -6265,7 +6268,7 @@ function applyLanguagePreference(root){
    It deliberately owns no routes, counters, company scope or business actions. */
 function commercialSidebarIcon(name){
   const paths={
-    collapse:'<path d="m14 6-6 6 6 6m6-12-6 6 6 6"/>',
+    collapse:'<path d="m15 5-7 7 7 7"/>',
     close:'<path d="m6 6 12 12M18 6 6 18"/>',
     back:'<path d="M20 12H4m6-6-6 6 6 6"/>',
     logout:'<path d="M10 4H5v16h5m4-13 5 5-5 5m-5-5h10"/>',
@@ -6275,12 +6278,8 @@ function commercialSidebarIcon(name){
   return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]||paths.more}</svg>`;
 }
 function commercialSidebarIdentityHTML(){
-  const name=String(session.nom||session.username||"Utilisateur");
-  const parts=name.trim().split(/\s+/);
-  const initials=(parts.length>1?parts.slice(0,2).map(part=>part[0]).join(""):name.replace(/[^\p{L}]/gu,"").slice(0,2)).toUpperCase();
-  const role=typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role;
   return `<div class="commercial-sidebar-brand">${atlasBrandHTML()}<button type="button" class="commercial-sidebar-collapse" onclick="toggleSgdiSidebar()" aria-controls="commercial-sidebar" aria-label="Réduire le menu latéral">${commercialSidebarIcon("collapse")}</button><button type="button" class="commercial-sidebar-close" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu latéral">${commercialSidebarIcon("close")}</button></div>
-    <div class="commercial-sidebar-user" data-no-lang="1" aria-label="Compte connecté"><span class="commercial-sidebar-avatar" aria-hidden="true">${escapeHTML(initials)}</span><div class="commercial-sidebar-identity"><div class="sidebar-current-user-name">${escapeHTML(name)}</div><div class="sidebar-user-role">${escapeHTML(role||"")}</div></div></div>`;
+    <div class="commercial-sidebar-user" data-no-lang="1">${atlasSidebarProfileHTML(" commercial-sidebar-identity")}</div>`;
 }
 function commercialSidebarFooterHTML(){
   return `<div class="commercial-sidebar-footer"><div id="commercial-sidebar-settings"></div><div id="sidebar-back-slot"></div><button type="button" class="commercial-sidebar-logout" onclick="logout()" aria-label="Déconnexion"><span class="nav-ico" aria-hidden="true">${commercialSidebarIcon("logout")}</span><span class="nav-label" data-no-lang="1" data-commercial-label="Déconnexion">Déconnexion</span></button><div class="commercial-sidebar-signature">IRON GLOBAL</div></div>`;
@@ -6401,7 +6400,9 @@ function syncCommercialSidebarState(restoreFocus=false){
     button.setAttribute("aria-controls","commercial-sidebar");
   });
   if(!mobile&&document.activeElement?.matches?.(".commercial-sidebar-close"))sidebar.querySelector(".commercial-sidebar-collapse")?.focus({preventScroll:true});
-  if(!mobile&&collapsed&&document.activeElement?.closest?.(".commercial-submenu"))document.activeElement.closest(".commercial-nav-group")?.querySelector("summary")?.focus({preventScroll:true});
+  // Sidebar V3 : réduite = masquée derrière la languette ; le focus suit le contrôle visible.
+  if(!mobile&&collapsed&&sidebar.contains(document.activeElement))shell.querySelector(".atlas-sidebar-tab")?.focus({preventScroll:true});
+  else if(!mobile&&!collapsed&&document.activeElement?.matches?.(".atlas-sidebar-tab"))sidebar.querySelector(".commercial-sidebar-collapse")?.focus({preventScroll:true});
   if(open&&!sidebar.contains(document.activeElement)){
     if(!commercialSidebarReturnFocus?.isConnected)commercialSidebarReturnFocus=document.activeElement;
     sidebar.querySelector(".commercial-sidebar-close")?.focus({preventScroll:true});
@@ -6482,7 +6483,9 @@ function sgdiSidebarCollapsed(){
   if(sgdiIsMobileViewport())return !sgdiMobileSidebarOpen();
   try{
     const saved=localStorage.getItem("sgdiSidebarCollapsed");
-    if(saved===null&&session?.transverse==="commercial")return !!window.matchMedia?.("(max-width: 1024px)").matches;
+    // Sidebar V3 : sur tablette (768–1024 px), le contenu reste prioritaire tant que
+    // l'utilisateur n'a pas choisi ; la languette rouvre la navigation.
+    if(saved===null)return !!window.matchMedia?.("(max-width: 1024px)").matches;
     return saved==="1";
   }catch(e){return false}
 }
@@ -6510,6 +6513,7 @@ function toggleSgdiSidebar(){
     return;
   }
   const next=!sgdiSidebarCollapsed();
+  const focusInNavigation=!!document.activeElement?.closest?.(".sgdi-shell .sidebar,.atlas-sidebar-tab");
   try{localStorage.setItem("sgdiSidebarCollapsed",next?"1":"0")}catch(e){}
   document.querySelectorAll(".sgdi-shell").forEach(el=>el.classList.toggle("sgdi-sidebar-collapsed",next));
   document.querySelectorAll(".sgdi-sidebar-toggle").forEach(btn=>{
@@ -6517,7 +6521,31 @@ function toggleSgdiSidebar(){
     btn.setAttribute("aria-label",sgdiSidebarToggleTitle());
     btn.classList.toggle("is-collapsed",next);
   });
+  // Le contrôle qui a reçu le clic disparaît : garder le focus clavier sur son pendant.
+  if(focusInNavigation)document.querySelector(next?".sgdi-shell .atlas-sidebar-tab":".sgdi-shell .atlas-sidebar-collapse")?.focus({preventScroll:true});
 }
+// Sidebar V3 : l'état réduit/tiroir suit la largeur réelle (rotation tablette, fenêtre
+// redimensionnée) pour tous les modules ; Commercial garde sa synchronisation dédiée.
+function syncSgdiSidebarViewport(){
+  const shell=document.querySelector(".sgdi-shell.atlas-sidebar-v3:not(.sgdi-commercial-shell)");
+  if(!shell)return;
+  const mobile=sgdiIsMobileViewport(),open=mobile&&sgdiMobileSidebarOpen();
+  shell.classList.toggle("sgdi-mobile-sidebar-open",open);
+  shell.classList.toggle("sgdi-sidebar-collapsed",mobile?!open:sgdiSidebarCollapsed());
+  shell.querySelectorAll(".sgdi-sidebar-toggle").forEach(btn=>{
+    btn.title=sgdiSidebarToggleTitle();
+    btn.setAttribute("aria-label",sgdiSidebarToggleTitle());
+    btn.classList.toggle("is-collapsed",shell.classList.contains("sgdi-sidebar-collapsed"));
+  });
+}
+window.addEventListener("resize",()=>syncSgdiSidebarViewport());
+document.addEventListener("keydown",event=>{
+  if(event.key!=="Escape"||!sgdiIsMobileViewport()||!sgdiMobileSidebarOpen())return;
+  if(!document.querySelector(".sgdi-shell.atlas-sidebar-v3:not(.sgdi-commercial-shell)"))return;
+  event.preventDefault();
+  closeSgdiMobileSidebar();
+  document.querySelector(".sgdi-shell .sgdi-sidebar-toggle")?.focus({preventScroll:true});
+});
 window.toggleSgdiSidebar=toggleSgdiSidebar;
 function closeSgdiMobileSidebar(){
   if(!sgdiIsMobileViewport())return;
@@ -6544,6 +6572,17 @@ document.addEventListener("click",(event)=>{
 });
 function atlasBrandHTML(){
   return '<div class="atlas-brand admin-users-brand"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M5 6.5h14M5 17.5h14"/></svg><span>IRON GLOBAL<small>UN MONDE DE SOLUTIONS</small></span></div>';
+}
+// Sidebar V3 : identité sur une ligne (code utilisateur + rôle), nom complet en info-bulle.
+function atlasSidebarProfileHTML(extraClass=""){
+  const code=String(session?.username||session?.nom||"Utilisateur");
+  const fullName=String(session?.nom||code);
+  const role=typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session?.role):session?.role;
+  return `<div class="atlas-sidebar-profile${extraClass}" data-no-lang="1" aria-label="Compte connecté : ${escapeHTML(fullName)}" title="${escapeHTML(fullName)}"><span class="sidebar-current-user-name">${escapeHTML(code)}</span><span class="sidebar-user-role">${escapeHTML(role||"")}</span></div>`;
+}
+// Contrôles structurels de la sidebar (autorisés sans libellé d'icône de menu) : réduire / fermer le tiroir.
+function atlasSidebarControlsHTML(){
+  return '<button type="button" class="atlas-sidebar-collapse" onclick="toggleSgdiSidebar()" title="Masquer le menu latéral" aria-label="Masquer le menu latéral"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button><button type="button" class="atlas-sidebar-close" onclick="closeSgdiMobileSidebar()" title="Fermer le menu latéral" aria-label="Fermer le menu latéral"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
 }
 function atlasAccountHTML(){
   if(!session)return"";
@@ -6630,14 +6669,14 @@ function renderInternal(options={}){
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   const commercialShell=session.transverse==="commercial";
-  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
+  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">
       <aside class="sidebar w-72 flex flex-col shrink-0"${commercialShell?' id="commercial-sidebar" aria-label="Navigation Commercial"':''}>
         ${commercialShell?commercialSidebarIdentityHTML():`<div class="sidebar-user sidebar-user-identity sidebar-user-profile-large px-4 py-5 text-xs">
-          ${atlasBrandHTML()}
-          <div class="atlas-sidebar-profile" aria-label="Compte connecté"><div class="sidebar-atlas-brand sidebar-current-user-name">${escapeHTML(session.nom||session.username)}</div><div class="sidebar-user-role">${escapeHTML(typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role)}</div></div>
+          <div class="atlas-sidebar-brandrow">${atlasBrandHTML()}${atlasSidebarControlsHTML()}</div>
+          ${atlasSidebarProfileHTML()}
         </div>
         `}
         <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"${commercialShell?' aria-label="Navigation principale"':""}></nav>
@@ -6646,6 +6685,7 @@ function renderInternal(options={}){
           <button class="btn btn-ghost w-full justify-center" onclick="logout()">Se déconnecter</button>
         </div>`}
       </aside>
+      <button type="button" class="atlas-sidebar-tab no-print" onclick="toggleSgdiSidebar()" title="Afficher le menu latéral" aria-label="Afficher le menu latéral"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
       <button type="button" class="sgdi-sidebar-backdrop no-print" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu"></button>
       <main class="flex-1 flex flex-col overflow-hidden min-w-0">
         ${moduleCountersRibbonHTML()}
@@ -7218,9 +7258,9 @@ function renderSidebar(){
     const gapClass=item.gapBefore?" nav-gap-before":"";
     if(session?.transverse==="commercial"){
       const iconItem=item.route==="commercial/dashboard"?{route:"dashboard"}:item.route==="commercial/clients"?{route:"agents"}:item;
-      return `<a class="nav-link ${active?"active":""}" href="#/${escapeHTML(item.route)}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" aria-label="${escapeHTML(label)}"${active?' aria-current="page"':''} onclick="if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey)sidebarNavigate(event,this.dataset.route)"><span class="nav-ico" aria-hidden="true">${navIcon(iconItem)}</span><span class="nav-label" data-no-lang="1" data-commercial-label="${escapeHTML(label)}">${escapeHTML(label)}</span>${badge}</a>`;
+      return `<a class="nav-link ${active?"active":""}" href="#/${escapeHTML(item.route)}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" aria-label="${escapeHTML(label)}" title="${escapeHTML(label)}"${active?' aria-current="page"':''} onclick="if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey)sidebarNavigate(event,this.dataset.route)"><span class="nav-ico" aria-hidden="true">${navIcon(iconItem)}</span><span class="nav-label" data-no-lang="1" data-commercial-label="${escapeHTML(label)}">${escapeHTML(label)}</span>${badge}</a>`;
     }
-    return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label"${item.custom?"":` data-atlas-nav-label="${escapeHTML(item.label)}"`}>${escapeHTML(label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
+    return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" title="${escapeHTML(label)}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label"${item.custom?"":` data-atlas-nav-label="${escapeHTML(item.label)}"`}>${escapeHTML(label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
     const groupItemsHTML=rows=>{
@@ -8722,7 +8762,8 @@ function syncAdminUsersShell(){
   if(identity&&active&&!identity.__adminUsersOriginal){
     identity.__adminUsersOriginal=document.createDocumentFragment();
     while(identity.firstChild)identity.__adminUsersOriginal.appendChild(identity.firstChild);
-    identity.innerHTML=atlasBrandHTML();
+    // Sidebar V3 : même en-tête que partout (marque, réduire/fermer, code + rôle).
+    identity.innerHTML=`<div class="atlas-sidebar-brandrow">${atlasBrandHTML()}${atlasSidebarControlsHTML()}</div>${atlasSidebarProfileHTML()}`;
   }else if(identity&&!active&&identity.__adminUsersOriginal){
     identity.replaceChildren(identity.__adminUsersOriginal);delete identity.__adminUsersOriginal;
   }

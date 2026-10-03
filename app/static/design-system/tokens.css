@@ -37,6 +37,25 @@
   --atlas-space-7: 32px;
   --atlas-space-8: 40px;
   --atlas-sidebar-width: 224px;
+  /* Sidebar V3 — one navy navigation for every module of the shared shell. */
+  --atlas-sidebar-bg-start: #0a2d6b;
+  --atlas-sidebar-bg-mid: #05214f;
+  --atlas-sidebar-bg-end: #021738;
+  --atlas-sidebar-fg: #ffffff;
+  --atlas-sidebar-muted: #9ec3f7;
+  --atlas-sidebar-subtle: #c3d7f4;
+  --atlas-sidebar-hover: #ffffff14;
+  --atlas-sidebar-active: #1a55c2;
+  --atlas-sidebar-active-end: #1f68dc;
+  --atlas-sidebar-active-border: #4fd8f5;
+  --atlas-sidebar-divider: #9ec3f726;
+  --atlas-sidebar-badge: #2b62c4;
+  --atlas-sidebar-focus: #7fdcff;
+  --atlas-sidebar-scroll: #9ec3f740;
+  --atlas-sidebar-overlay: #04112999;
+  --atlas-navigation-width: 256px;
+  --atlas-navigation-drawer-width: 280px;
+  --atlas-navigation-tab-width: 18px;
   --atlas-header-height: 56px;
   --atlas-font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }

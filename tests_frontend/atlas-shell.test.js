@@ -49,7 +49,13 @@ test('Atlas shell renders one shared brand, module context and compact account',
   assert.match(brand.textContent, /IRON GLOBAL/);
   assert.match(shell.querySelector('.sgdi-topbar-left .atlas-context').textContent, /DIRECTION OPS.*Société active : Société Test/);
   assert.match(shell.querySelector('.sgdi-topbar-actions .atlas-account').textContent, /Amel Test/);
-  assert.match(shell.querySelector('.atlas-sidebar-profile').textContent, /Amel Test/);
+  // Sidebar V3 : code utilisateur et rôle sur une ligne ; le nom complet reste en info-bulle.
+  const profile = shell.querySelector('.atlas-sidebar-profile');
+  assert.match(profile.textContent, /ADM01/);
+  assert.equal(profile.getAttribute('title'), 'Amel Test');
+  assert.equal(shell.classList.contains('atlas-sidebar-v3'), true);
+  assert.equal(shell.querySelector('.atlas-sidebar-tab').getAttribute('onclick'), 'toggleSgdiSidebar()');
+  assert.equal(shell.querySelector('.sidebar .atlas-sidebar-close').getAttribute('onclick'), 'closeSgdiMobileSidebar()');
   assert.equal(shell.querySelector('.sgdi-sidebar-toggle').getAttribute('onclick'), 'toggleSgdiSidebar()');
   assert.equal(shell.querySelector('.topbar-back-btn').getAttribute('onclick'), 'goBackSmart()');
   assert.equal(shell.querySelector('.sidebar-user-logout button').getAttribute('onclick'), 'logout()');
@@ -314,4 +320,34 @@ test('modifier clicks keep new-tab behavior and the current mobile menu; desktop
   clickSidebarLink(r, 'effectif/recap');
   assert.equal(r.w.location.hash, '#/effectif/recap');
   assert.equal(shell.classList.contains('sgdi-sidebar-collapsed'), false);
+});
+
+test('Sidebar V3: tablet starts behind the tab, focus swaps between tab and collapse, Escape closes the phone drawer', t => {
+  const r = boot(t);
+  let query = '';
+  // 1024 px: no saved preference ⇒ content first, navigation behind the thin tab.
+  r.w.matchMedia = q => ({ matches: q === '(max-width: 1024px)' ? query !== 'desktop' : q === '(max-width: 767px)' ? query === 'phone' : false });
+  query = 'tablet';
+  let shell = renderShell(r);
+  assert.equal(shell.classList.contains('sgdi-sidebar-collapsed'), true, 'tablet default is collapsed');
+  const tab = shell.querySelector('.atlas-sidebar-tab');
+  tab.focus();
+  r.T().toggleSgdiSidebar();
+  assert.equal(shell.classList.contains('sgdi-sidebar-collapsed'), false);
+  assert.equal(r.w.document.activeElement, shell.querySelector('.sidebar .atlas-sidebar-collapse'), 'focus moves to the visible collapse control');
+  r.T().toggleSgdiSidebar();
+  assert.equal(shell.classList.contains('sgdi-sidebar-collapsed'), true);
+  assert.equal(r.w.document.activeElement, tab, 'focus returns to the reopen tab');
+  assert.equal(r.w.localStorage.getItem('sgdiSidebarCollapsed'), '1', 'explicit choice persists');
+  // Phone drawer: Escape closes it and gives focus back to the hamburger.
+  query = 'phone';
+  r.w.localStorage.removeItem('sgdiSidebarCollapsed');
+  shell = renderShell(r);
+  r.T().toggleSgdiSidebar();
+  assert.equal(shell.classList.contains('sgdi-mobile-sidebar-open'), true);
+  r.w.document.dispatchEvent(new r.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(shell.classList.contains('sgdi-mobile-sidebar-open'), false);
+  assert.equal(r.w.document.activeElement, shell.querySelector('.sgdi-topbar .sgdi-sidebar-toggle'));
+  // Every entry keeps its full label as a tooltip (one-line labels may be truncated).
+  for (const link of shell.querySelectorAll('#sidebar-nav .nav-link')) assert.equal(link.getAttribute('title'), link.querySelector('.nav-label').textContent);
 });

@@ -24,6 +24,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const rgb = color => (String(color).match(/[\d.]+/g) || []).map(Number);
 const isLight = color => { const c = rgb(color); return c.length >= 3 && c.slice(0, 3).every(n => n >= 240) && (c.length < 4 || c[3] > .9); };
 const isBlue = color => { const [r, g, b] = rgb(color); return b > r + 20 && b >= 80 && g < b + 15; };
+// Sidebar V3 du shell commun : bleu marine foncé (fond peint en background-color sous le dégradé).
+const isNavy = color => { const [r, g, b] = rgb(color); return r <= 30 && g <= 70 && b >= 40 && b <= 140 && b > r + 25; };
 
 async function api(endpoint, { method = 'GET', token, body } = {}) {
   const response = await fetch(BASE + '/api' + endpoint, {
@@ -99,7 +101,8 @@ async function visualContract(page, surface, name, artifacts, measurements, side
       `${name}: legacy shell must scroll inside its main area, not beyond the viewport: ${JSON.stringify({ document:state.documentHeight, body:state.bodyHeight, viewport:state.viewportHeight })}`);
   }
   if (state.sidebar && state.viewport >= 1024) {
-    assert.ok(isLight(state.sidebar.background), `${name}: sidebar must be white: ${state.sidebar.background}`);
+    if (surface === 'legacy') assert.ok(isNavy(state.sidebar.background), `${name}: shared-shell Sidebar V3 must be navy: ${state.sidebar.background}`);
+    else assert.ok(isLight(state.sidebar.background), `${name}: sidebar must be white: ${state.sidebar.background}`);
     assert.ok(state.sidebar.width >= 180 && state.sidebar.width <= 340, `${name}: sidebar width ${state.sidebar.width}`);
     assert.ok(state.sidebar.x >= -2 && state.sidebar.right < state.viewport, `${name}: sidebar outside viewport`);
     assert.ok(state.active && (isBlue(state.active.color) || isBlue(state.active.background)), `${name}: active navigation lacks blue accent`);
@@ -280,7 +283,7 @@ s.close()
       args: ['--no-first-run','--no-default-browser-check','--disable-background-networking', `--host-resolver-rules=${hosts.map(host => `MAP ${host}.irongs.com 127.0.0.1:${PORT}`).join(', ')}`] });
   });
 
-  await t.test('admin: white/blue sidebar, filters, real mobile navigation, read-only drawer', async () => {
+  await t.test('admin: navy Sidebar V3, filters, real mobile navigation, read-only drawer', async () => {
     const page = await newPage();
     await page.goto(BASE + '/#/login', { waitUntil: 'networkidle0' });
     await page.waitForSelector('.login-admin-system-shortcut');
