@@ -30,7 +30,7 @@ function buildHtml() {
   setSession: (s) => { pointerSession = s; },
   getIdleCheckTimer: () => idleCheckTimer,
   clearIdleInterval: () => { clearInterval(idleCheckTimer); idleCheckTimer = null; },
-  INACTIVITY_TIMEOUT_MS, INACTIVITY_WARNING_MS,
+  INACTIVITY_TIMEOUT_MS, INACTIVITY_WARNING_MS, IDLE_LOGOUT_ENABLED, getIdleTimer: () => idleCheckTimer,
   pollLive, startLivePolling, stopLivePolling, showLastScan, renderPlanning, changeAttendanceSite,
   getLive: () => ({ liveCursor, liveRefusalCursor, serverSummary, lastScanShownId, liveTimer }),
   setPlanningEvents: (v) => { planningEvents = v; },

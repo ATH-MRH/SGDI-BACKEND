@@ -66,7 +66,7 @@ test('loadShiftStaffing : source dc, contexte de shift et compteurs par poste af
   assert.deepEqual(values.sort(), ['1', '19', '2']);
 });
 
-test('loadShiftStaffing : DC non configuré -> alerte claire "non configuré dans DC.IRONGS.COM", aucun quota OPS affiché', async () => {
+test('loadShiftStaffing : DC non configuré -> aucune alerte sur le poste de sécurité, bloc masqué, aucun quota OPS', async () => {
   const { window: w } = bootPointeur();
   w.fetch = async () => ({
     ok: true, status: 200,
@@ -79,13 +79,16 @@ test('loadShiftStaffing : DC non configuré -> alerte claire "non configuré dan
   });
   await w.loadShiftStaffing();
   const host = w.document.getElementById('shiftStaffing');
-  assert.match(host.textContent, /non configuré dans DC\.IRONGS\.COM/i);
+  assert.doesNotMatch(w.document.body.textContent, /Effectif contractuel non configuré/i);
+  assert.equal(host.hidden, true);
+  assert.equal(host.closest('.status-row').classList.contains('no-staffing'), true);
+  assert.equal(w.document.querySelectorAll('.presence-summary button').length, 4, 'compteurs conservés');
   assert.doesNotMatch(host.innerHTML, /SOURCE OPS TRANSITOIRE/);
   assert.doesNotMatch(host.innerHTML, /STOCK CONTROLLER/);
   assert.equal(host.querySelectorAll('.shift-staffing-counter').length, 0, 'aucun compteur ne doit être affiché quand rien n\'est configuré côté DC');
 });
 
-test('loadShiftStaffing : cas DHL site_id=27 (item 10 du lot) -> CONTRAT DC NON CONFIGURÉ, jamais SOURCE OPS TRANSITOIRE', async () => {
+test('loadShiftStaffing : cas DHL site_id=27 -> pas d\'alerte DC, jamais SOURCE OPS TRANSITOIRE', async () => {
   const { window: w } = bootPointeur();
   w.fetch = async () => ({
     ok: true, status: 200,
@@ -101,7 +104,7 @@ test('loadShiftStaffing : cas DHL site_id=27 (item 10 du lot) -> CONTRAT DC NON 
   });
   await w.loadShiftStaffing();
   const text = w.document.getElementById('shiftStaffing').textContent;
-  assert.match(text, /non configuré dans DC\.IRONGS\.COM/i);
+  assert.doesNotMatch(w.document.body.textContent, /non configuré dans DC\.IRONGS\.COM/i);
   assert.doesNotMatch(text, /OPS TRANSITOIRE/);
   assert.doesNotMatch(text, /STOCK CONTROLLER|TEAM LEADER|WAREHOUSE KEEPER/);
 });
@@ -126,14 +129,33 @@ test('loadShiftStaffing : source partielle (plusieurs sites, un seul configuré 
   assert.match(host.textContent, /CARISTE/);
   assert.match(host.textContent, /Site Non Configuré/, 'le site non configuré doit être nommé pour guider la configuration DC');
   assert.doesNotMatch(host.innerHTML, /OPS TRANSITOIRE/);
+  assert.equal(host.hidden, false);
 });
 
-test('loadShiftStaffing : aucun site autorisé -> message explicite, pas de compteur vide', async () => {
+test('loadShiftStaffing : DC configuré après un site non configuré -> bloc réaffiché', async () => {
+  const { window: w } = bootPointeur();
+  const unconfigured = { source: 'dc-unconfigured', sites: [{ site_id: 27, site: 'X', configured: false, requirements: {} }], requirements: {}, contractual: { source: 'dc-unconfigured', configured: false, requirements: {} } };
+  const configured = { source: 'dc', sites: [{ site_id: 1, site: 'Y', group: 'A', shift: '06:00–14:00', configured: true, requirements: { 'Cariste': 3 } }], requirements: { 'Cariste': 3 }, contractual: { source: 'dc', configured: true, requirements: { 'Cariste': 3 } } };
+  let payload = unconfigured;
+  w.fetch = async () => ({ ok: true, status: 200, json: async () => payload });
+  await w.loadShiftStaffing();
+  const host = w.document.getElementById('shiftStaffing');
+  assert.equal(host.hidden, true);
+  payload = configured;
+  w.__test.setSession({ token: 'test-token' });   // le démarrage asynchrone de la page réinitialise la session de test
+  await w.loadShiftStaffing();
+  assert.equal(host.hidden, false);
+  assert.equal(host.closest('.status-row').classList.contains('no-staffing'), false);
+  assert.match(host.textContent, /CARISTE/);
+});
+
+test('loadShiftStaffing : aucun site autorisé -> bloc masqué, pas de compteur vide', async () => {
   const { window: w } = bootPointeur();
   w.fetch = async () => ({ ok: true, status: 200, json: async () => ({ source: 'dc-unconfigured', sites: [], requirements: {}, contractual: { source: 'dc-unconfigured', configured: false, requirements: {} } }) });
   await w.loadShiftStaffing();
   const host = w.document.getElementById('shiftStaffing');
-  assert.match(host.textContent, /non configuré/i);
+  assert.equal(host.hidden, true);
+  assert.equal(host.textContent, '');
   assert.equal(host.querySelectorAll('.shift-staffing-counter').length, 0);
 });
 

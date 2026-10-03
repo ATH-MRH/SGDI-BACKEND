@@ -1,7 +1,7 @@
 // LOT SÉCURITÉ — AUTO-DÉCONNEXION APRÈS 30 SECONDES D'INACTIVITÉ
-// (pointage.irongs.com / pointeur.irongs.com uniquement — les deux domaines
-// servent le même app/static/pointeur.html, cf. _is_pointer_host dans
-// app/main.py). Ce fichier teste directement les fonctions réelles de la
+// (pointeur.html servi hors poste de sécurité, ex. pointage.irongs.com/pointeur ;
+// sur pointeur.irongs.com la règle est désactivée — voir
+// pointeur-security-post-no-idle.test.js). Ce fichier teste directement les fonctions réelles de la
 // page (aucune réimplémentation), en pilotant lastUserActivityAt via les
 // hooks de test plutôt que d'attendre 20-30 secondes réelles par cas — la
 // fonction testée (idleTick) repose déjà sur un horodatage absolu
@@ -177,10 +177,11 @@ test('aucune reconnexion automatique : après logout, aucune session résiduelle
   w.close();
 });
 
-test('P/Q. la règle est bien présente et centralisée sur pointeur.html (portée pointage.irongs.com / pointeur.irongs.com)', async () => {
-  const { w, t } = await bootLoggedIn({ url: 'https://pointeur.irongs.com/' });
+test('P/Q. la règle est bien présente et centralisée sur pointeur.html (active hors poste de sécurité pointeur.irongs.com)', async () => {
+  const { w, t } = await bootLoggedIn();
   assert.equal(typeof t.startIdleWatch, 'function');
   assert.equal(t.INACTIVITY_TIMEOUT_MS, 30000);
   assert.equal(t.INACTIVITY_WARNING_MS, 20000);
+  assert.equal(t.IDLE_LOGOUT_ENABLED, true, 'pointage.irongs.com : règle des 30 s inchangée');
   await teardown(t, w);
 });

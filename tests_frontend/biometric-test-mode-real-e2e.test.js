@@ -284,14 +284,26 @@ print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
     assert.deepStrictEqual(await page.evaluate(() => [!!document.querySelector("#testModeNav"), !!document.querySelector("#testModeView"), typeof window.PointerTestMode]),
       [false, false, "undefined"], "aucun Mode Test sur l'écran du poste de sécurité");
     assert.ok(await page.$("#lastScanCard"), "fiche « Dernier pointage » présente");
+    assert.ok(!/Effectif contractuel non configuré/i.test(await page.evaluate(() => document.body.innerText)), "aucune alerte effectif contractuel");
     for (const [width, height] of [[390, 844], [430, 932], [768, 1024], [1024, 768], [1440, 900]]) {
       // Indicateurs isMobile/hasTouch constants : les modifier fait RECHARGER la page (puppeteer).
       await page.setViewport({ width, height, isMobile: true, hasTouch: true });
-      await sleep(200);
+      await sleep(600);                                                         // transitions CSS des compteurs (0,18 s) terminées
       const s = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-        card: document.querySelector("#lastScanCard").getBoundingClientRect().width, facial: !!document.querySelector("#faceNav") }));
-      assert.deepStrictEqual([s.overflow, s.card > 0, s.facial], [false, true, true], `${width}px ${JSON.stringify(s)}`);
+        card: document.querySelector("#lastScanCard").getBoundingClientRect().width, facial: !!document.querySelector("#faceNav"),
+        counters: [...document.querySelectorAll(".presence-summary button")].map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }) }));
+      // 4 compteurs visibles, sans débordement ; alignés sur une ligne (≥ 768 px) ou une grille 2×2.
+      const rows = new Set(s.counters.map(([top]) => top)).size;
+      assert.deepStrictEqual([s.overflow, s.card > 0, s.facial, s.counters.length, s.counters.every(([, w]) => w > 0), width >= 768 ? rows === 1 : rows <= 2],
+        [false, true, true, 4, true, true], `${width}px ${JSON.stringify(s)}`);
     }
+    // Poste de sécurité permanent : 31 s sans aucun geste, puis F5 — toujours connecté.
+    await sleep(31000);
+    assert.deepStrictEqual(await page.evaluate(() => [!document.querySelector("#appView").classList.contains("hidden"), !!document.querySelector("#idleWarning.show")]),
+      [true, false], "aucune déconnexion ni avertissement pour inactivité sur pointeur.irongs.com");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#appView:not(.hidden)", { timeout: 20000 });
+    await qrReady(page);
     // Facial (production) : circuit distinct — aucun appel au Mode Test.
     await page.click("#faceNav");
     await page.waitForFunction(() => /POINTAGE FACIAL NON ACTIVÉ/.test(document.querySelector("#faceStatus").textContent), { timeout: 10000 });
