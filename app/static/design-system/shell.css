@@ -1,0 +1,115 @@
+/* ATLAS Global Shell V4 — one visual standard for every module of the shared ERP shell.
+   Scope: .sgdi-shell.atlas-shell-v4 (same modules as Sidebar V3, see sidebar.css).
+   Navy sidebar (sidebar.css) + WHITE header + FLOATING navy KPI bar + very light content.
+   Each module keeps its own counters, data, routes and permissions: this file only owns
+   the look. Counter accents come from data-tone (semantic), never from a raw colour. */
+@media screen {
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 { background:var(--atlas-shell-bg)!important; }
+
+  /* Header: white, compact, constant */
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar {
+    min-height:var(--atlas-header-height)!important; padding:9px 16px!important;
+    background:var(--atlas-header-bg)!important; color:var(--atlas-header-text)!important;
+    border:1px solid var(--atlas-card-border)!important; border-radius:var(--atlas-radius-lg)!important;
+    box-shadow:var(--atlas-shadow-sm)!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar :is(.sgdi-topbar-title-right,.sgdi-topbar-module-title,.sgdi-topbar-module-title-active,.atlas-context strong,.admin-users-global-context strong) {
+    color:var(--atlas-header-text)!important; font-size:14px!important; font-weight:750!important; line-height:1.25!important;
+    letter-spacing:.045em!important; text-transform:uppercase!important;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar .atlas-context { min-width:0; }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar .atlas-context-label {
+    color:var(--atlas-header-muted)!important; font-size:11px!important; font-weight:500!important; line-height:1.3!important; letter-spacing:.01em!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar .atlas-account { gap:10px; color:var(--atlas-header-text)!important; }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar .atlas-account-name {
+    color:var(--atlas-header-text)!important; font-size:12.5px!important; font-weight:700!important; line-height:1.25!important; letter-spacing:.03em!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar .atlas-account :is(small,.atlas-account-role) {
+    color:var(--atlas-header-muted)!important; font-size:10.5px!important; font-weight:500!important; letter-spacing:.02em!important; margin-top:1px; text-transform:capitalize;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar :is(button,summary,a,input):focus-visible {
+    outline:2px solid var(--atlas-primary)!important; outline-offset:2px!important;
+  }
+
+  /* KPI bar: a floating navy card between the header and the content */
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counters-ribbon {
+    flex:0 0 auto; display:grid!important; grid-auto-flow:column!important; grid-template-columns:none!important;
+    grid-auto-columns:minmax(104px,1fr)!important; gap:0!important;
+    height:auto!important; min-height:0!important; margin:0 0 14px!important; padding:8px!important;
+    background-color:var(--atlas-kpi-bg-mid)!important;
+    background-image:linear-gradient(90deg,var(--atlas-kpi-bg-start) 0%,var(--atlas-kpi-bg-mid) 50%,var(--atlas-kpi-bg-end) 100%)!important;
+    color:var(--atlas-kpi-text)!important;
+    border:0!important; border-radius:var(--atlas-radius-lg)!important; box-shadow:var(--atlas-kpi-shadow)!important;
+    overflow-x:auto!important; overflow-y:hidden!important; overscroll-behavior-x:contain;
+    scrollbar-width:thin; scrollbar-color:var(--atlas-kpi-divider) transparent;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item {
+    position:relative; display:grid!important; grid-template-columns:auto minmax(0,1fr) auto!important; grid-template-rows:auto auto!important;
+    grid-template-areas:"dot value pct" "label label label";
+    align-items:center!important; align-content:start!important; column-gap:7px!important; row-gap:5px!important;
+    min-width:0!important; height:auto!important; min-height:60px!important; margin:0!important; padding:9px 12px 9px 14px!important;
+    color:var(--atlas-kpi-text)!important; background:transparent!important;
+    border:0!important; border-radius:var(--atlas-radius-md)!important; box-shadow:none!important;
+    text-decoration:none!important; line-height:1.1!important; transition:background-color .16s ease;
+  }
+  /* Thin vertical separator between counters (not on the first one) */
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item+.module-counter-item::before {
+    content:""; position:absolute; inset-inline-start:0; inset-block:12px; width:1px; background:var(--atlas-kpi-divider);
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item:hover { background:var(--atlas-kpi-hover)!important; box-shadow:none!important; }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item:focus-visible { outline:2px solid var(--atlas-sidebar-focus)!important; outline-offset:-2px!important; }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-dot {
+    grid-area:dot!important; display:block!important; width:8px!important; height:8px!important; border-radius:50%!important;
+    background:var(--kpi-accent,var(--atlas-kpi-muted))!important; box-shadow:none!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-value {
+    grid-area:value!important; min-width:0;
+    color:var(--atlas-kpi-text)!important; font-size:22px!important; font-weight:800!important; line-height:1!important;
+    letter-spacing:-.01em!important; font-variant-numeric:tabular-nums; white-space:nowrap; text-align:start!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-label {
+    grid-area:label!important; display:-webkit-box!important; -webkit-box-orient:vertical; -webkit-line-clamp:2; min-width:0; overflow:hidden!important; white-space:normal!important; align-self:start;
+    color:var(--atlas-kpi-muted)!important; font-size:10.5px!important; font-weight:650!important; line-height:1.25!important;
+    letter-spacing:.045em!important; text-transform:uppercase!important;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-pct {
+    grid-area:pct!important; justify-self:end; max-width:100%; padding:3px 7px!important; border-radius:999px!important;
+    background:var(--atlas-kpi-chip)!important; color:var(--kpi-accent,var(--atlas-kpi-muted))!important;
+    font-size:10.5px!important; font-weight:700!important; line-height:1!important; white-space:nowrap!important;
+    overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;
+  }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-pct:empty { display:none!important; }
+  /* Semantic accents — the bar itself always stays blue */
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item[data-tone="success"] { --kpi-accent:var(--atlas-kpi-success); }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item[data-tone="warning"] { --kpi-accent:var(--atlas-kpi-warning); }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item[data-tone="danger"] { --kpi-accent:var(--atlas-kpi-danger); }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item[data-tone="info"] { --kpi-accent:var(--atlas-kpi-info); }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item[data-tone="violet"] { --kpi-accent:var(--atlas-kpi-violet); }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item.is-zero .module-counter-value { color:var(--atlas-kpi-muted)!important; }
+
+  /* Content: very light ground, white cards */
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 .sgdi-shell-body>main { background:transparent!important; }
+  body.atlas-ui .sgdi-shell.atlas-shell-v4 #view { background:transparent!important; }
+
+  /* Tablet: one line with a local, contained horizontal scroll */
+  @media(max-width:1180px) {
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counters-ribbon { grid-auto-columns:minmax(132px,1fr)!important; }
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-value { font-size:20px!important; }
+  }
+  /* Phone: floating blue card, local carousel; the page never scrolls sideways */
+  @media(max-width:767px) {
+    body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar { border-radius:var(--atlas-radius-md)!important; }
+    body.atlas-ui .sgdi-shell.atlas-shell-v4>.sgdi-topbar :is(.sgdi-topbar-title-right,.sgdi-topbar-module-title,.sgdi-topbar-module-title-active) { font-size:12.5px!important; letter-spacing:.03em!important; }
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counters-ribbon {
+      grid-auto-columns:minmax(128px,44vw)!important; margin:0 0 10px!important; padding:6px!important;
+      border-radius:var(--atlas-radius-md)!important; scroll-snap-type:x proximity;
+    }
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item { min-height:56px!important; padding:8px 12px!important; scroll-snap-align:start; }
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-value { font-size:19px!important; }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    body.atlas-ui .sgdi-shell.atlas-shell-v4 .module-counter-item { transition:none!important; }
+  }
+}

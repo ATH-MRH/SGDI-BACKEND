@@ -83,6 +83,17 @@ async function visualContract(page, surface, name, artifacts, measurements, side
       sidebar: side ? { background: getComputedStyle(side).backgroundColor, ...rect(side) } : null,
       workArea: workArea ? rect(workArea) : null,
       active: active ? { color: getComputedStyle(active).color, background: getComputedStyle(active).backgroundColor } : null,
+      // Global Shell V4 (shell commun) : header, bandeau KPI flottant, barre latérale.
+      shellV4: (() => {
+        const shell = document.querySelector('.sgdi-shell.atlas-shell-v4'); if (!shell) return null;
+        const top = shell.querySelector(':scope > .sgdi-topbar'), bar = [...shell.querySelectorAll('.module-counters-ribbon')].find(visible), view = shell.querySelector('#view');
+        const aside = shell.querySelector('.sidebar');
+        return { header: top ? { background: getComputedStyle(top).backgroundColor, ...rect(top) } : null,
+          kpi: bar ? { background: getComputedStyle(bar).backgroundColor, radius: parseFloat(getComputedStyle(bar).borderTopLeftRadius), shadow: getComputedStyle(bar).boxShadow,
+            value: getComputedStyle(bar.querySelector('.module-counter-value')).color, viewTop: view.getBoundingClientRect().top, ...rect(bar) } : null,
+          sidebarRight: aside && visible(aside) ? aside.getBoundingClientRect().right : null,
+          fiche: /fiches?\s+de\s+position/i.test(aside ? aside.textContent : '') };
+      })(),
       primary: primary ? { color: getComputedStyle(primary).color, background: getComputedStyle(primary).backgroundColor, backgroundImage: getComputedStyle(primary).backgroundImage, ...rect(primary) } : null,
       oversized,
     };
@@ -106,6 +117,22 @@ async function visualContract(page, surface, name, artifacts, measurements, side
     assert.ok(state.sidebar.width >= 180 && state.sidebar.width <= 340, `${name}: sidebar width ${state.sidebar.width}`);
     assert.ok(state.sidebar.x >= -2 && state.sidebar.right < state.viewport, `${name}: sidebar outside viewport`);
     assert.ok(state.active && (isBlue(state.active.color) || isBlue(state.active.background)), `${name}: active navigation lacks blue accent`);
+  }
+  if (surface === 'legacy') {
+    const v4 = state.shellV4;
+    assert.ok(v4, `${name}: shared shell must be Global Shell V4`);
+    assert.ok(isLight(v4.header.background), `${name}: header must be white: ${v4.header.background}`);
+    assert.equal(v4.fiche, false, `${name}: « Fiche de position » must not be a sidebar entry`);
+    if (v4.kpi) {
+      assert.ok(isNavy(v4.kpi.background) || isBlue(v4.kpi.background), `${name}: KPI bar must be navy: ${v4.kpi.background}`);
+      assert.ok(v4.kpi.radius >= 10 && v4.kpi.radius <= 16 && v4.kpi.shadow !== 'none', `${name}: KPI bar is a rounded floating card ${JSON.stringify(v4.kpi)}`);
+      assert.ok(isLight(v4.kpi.value) || rgb(v4.kpi.value).slice(0, 3).every(n => n >= 190), `${name}: KPI value must be light on navy: ${v4.kpi.value}`);
+      // Flottant : espace visible avec le header, le contenu, le bord droit et la barre latérale.
+      assert.ok(v4.kpi.y - v4.header.bottom >= 6, `${name}: KPI bar touches the header`);
+      assert.ok(v4.kpi.viewTop - v4.kpi.bottom >= 6, `${name}: KPI bar touches the content`);
+      assert.ok(state.viewport - v4.kpi.right >= 6 && v4.kpi.x >= 6, `${name}: KPI bar touches the screen edge`);
+      if (v4.sidebarRight !== null && state.viewport >= 768) assert.ok(v4.kpi.x - v4.sidebarRight >= 6, `${name}: KPI bar touches the sidebar`);
+    }
   }
   if (state.primary) {
     assert.ok(isBlue(state.primary.background) || (isLight(state.primary.background) && isBlue(state.primary.color)), `${name}: primary action lacks blue accent ${JSON.stringify(state.primary)}`);

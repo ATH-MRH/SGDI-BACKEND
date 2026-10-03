@@ -31,7 +31,7 @@ test('every independently served frontend loads one shared screen theme after it
 });
 
 test('shared styles parse, reference real tokens and keep colors in the canonical palette', () => {
-  const files = ['tokens.css','components.css','legacy.css','specialized.css','sidebar.css'];
+  const files = ['tokens.css','components.css','legacy.css','specialized.css','sidebar.css','shell.css'];
   const tokens = new Set([...fs.readFileSync(path.join(ds,'tokens.css'),'utf8').matchAll(/(--atlas-[\w-]+)\s*:/g)].map(m=>m[1]));
   for (const file of files) {
     const source = fs.readFileSync(path.join(ds,file),'utf8');
@@ -58,7 +58,7 @@ test('shared styles parse, reference real tokens and keep colors in the canonica
 test('shared imports are local and versioned together; no external font or image download added', () => {
   const source=fs.readFileSync(path.join(ds,'atlas.css'),'utf8');
   const imports=[...source.matchAll(/@import url\('\.\/([^']+)'\)/g)].map(m=>m[1]);
-  assert.deepEqual(imports.map(s=>s.split('?')[0]),['tokens.css','components.css','legacy.css','specialized.css','sidebar.css']);
+  assert.deepEqual(imports.map(s=>s.split('?')[0]),['tokens.css','components.css','legacy.css','specialized.css','sidebar.css','shell.css']);
   assert.equal(new Set(imports.map(s=>s.split('?')[1])).size,1);
   for(const file of fs.readdirSync(ds).filter(f=>f.endsWith('.css'))) {
     assert.doesNotMatch(fs.readFileSync(path.join(ds,file),'utf8'),/https?:|data:|@font-face/);
@@ -81,7 +81,11 @@ test('canonical light theme text and semantic badges meet WCAG AA contrast', () 
   // Sidebar V3 (bleu marine) : texte, titres de section, badges et entrée active lisibles
   // sur chaque point du dégradé.
   for (const [ink,paper] of [['sidebar-fg','sidebar-bg-start'],['sidebar-fg','sidebar-bg-end'],['sidebar-muted','sidebar-bg-start'],['sidebar-muted','sidebar-bg-end'],
-    ['sidebar-subtle','sidebar-bg-start'],['sidebar-fg','sidebar-active'],['sidebar-fg','sidebar-active-end'],['sidebar-fg','sidebar-badge']]) {
+    ['sidebar-subtle','sidebar-bg-start'],['sidebar-fg','sidebar-active'],['sidebar-fg','sidebar-active-end'],['sidebar-fg','sidebar-badge'],
+    // Global Shell V4 : header blanc et bandeau KPI marine.
+    ['header-text','header-bg'],['header-muted','header-bg'],
+    ['kpi-text','kpi-bg-start'],['kpi-text','kpi-bg-mid'],['kpi-muted','kpi-bg-start'],['kpi-muted','kpi-bg-mid'],
+    ['kpi-success','kpi-bg-mid'],['kpi-warning','kpi-bg-mid'],['kpi-danger','kpi-bg-mid'],['kpi-info','kpi-bg-mid'],['kpi-violet','kpi-bg-mid']]) {
     const a=luminance(palette[ink]), b=luminance(palette[paper]);
     const ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
     assert.ok(ratio>=4.5,`${ink} / ${paper}: ${ratio.toFixed(2)}`);

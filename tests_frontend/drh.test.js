@@ -362,18 +362,30 @@ test('sidebar DRH : un ancien ordre enregistré contenant fiches ne réintroduit
   assert.deepEqual(f.db.settings.sidebarOrder.drh,previous,'rendre le menu ne doit pas réécrire les préférences existantes');
 });
 
-for (const module of ['ops','superviseur','admin']) {
-  test(`sidebar ${module} : conserve son entrée Fiche de position`, ctx=>{
+// Global Shell V4 : « Fiche de position » disparaît de TOUTES les barres latérales du shell.
+// La fonctionnalité reste : routes inchangées, tuiles du portail, liens depuis les listes.
+for (const module of ['ops','superviseur','admin','materiel','global']) {
+  test(`sidebar ${module} : « Fiche de position » absente, y compris en entrée personnalisée ou ancien ordre`, ctx=>{
     const f=bootDrhSidebarReview(ctx,module);
+    f.db.settings.sidebarCustom={[module]:[{label:'Fiche de position',route:'fiches',group:'PERSONNEL'}]};
+    f.db.settings.sidebarOrder={[module]:['fiches','admin/fiches','materiel/fiches']};
     f.t.renderSidebar();
-    const route=module==='admin'?'admin/fiches':'fiches';
-    const item=f.nav.querySelector(`[data-route="${route}"]`);
-    assert.ok(item,route);
-    assert.equal(item.querySelector('.nav-label').textContent,'Fiche de position');
-    assert.ok(item.querySelector('.nav-ico svg'));
-    assert.ok(f.t.adminSidebarOrganizerDefaults()[module].some(([,value])=>value===route));
+    assert.doesNotMatch(f.nav.textContent,/fiches?\s+de\s+position/i);
+    for(const route of ['fiches','admin/fiches','materiel/fiches'])assert.equal(f.nav.querySelector(`[data-route="${route}"]`),null,route);
+    assert.ok(f.nav.querySelectorAll('.nav-link').length>0,'les autres entrées restent');
+    const defaults=f.t.adminSidebarOrganizerDefaults()[module]||[];
+    assert.ok(!defaults.some(([label])=>/FICHES?\s+DE\s+POSITION/i.test(label)),'organisation du menu sans entrée retirée');
   });
 }
+test('Fiche de position : la fonctionnalité reste accessible hors barre latérale', ctx=>{
+  const f=bootDrhSidebarReview(ctx,'ops');
+  const tiles=f.t.sgdiModuleHostConfigs();
+  assert.ok(tiles.superviseur.sections.some(item=>item.route==='fiches'),'tuile du portail Superviseur conservée');
+  assert.ok(tiles.admin.sections.some(item=>item.route==='admin/fiches'),'tuile du portail Administration conservée');
+  f.t.renderSidebar();
+  const effectifs=f.nav.querySelector('[data-route="effectif/recap"]');
+  assert.match(effectifs.dataset.aliases,/fiches/,'sur une fiche, « Effectifs » devient l\'entrée active');
+});
 
 test('sidebar DRH : GRH ouvre la liste, le dossier Employé 360 et conserve son enregistrement', async ctx=>{
   const f=bootDrhSidebarReview(ctx);

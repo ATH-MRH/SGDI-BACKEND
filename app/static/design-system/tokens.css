@@ -53,6 +53,28 @@
   --atlas-sidebar-focus: #7fdcff;
   --atlas-sidebar-scroll: #9ec3f740;
   --atlas-sidebar-overlay: #04112999;
+  /* Global Shell V4 — white header, floating navy KPI bar, very light content. */
+  --atlas-shell-bg: #f3f7fc;
+  --atlas-header-bg: #ffffff;
+  --atlas-header-text: #12284c;
+  --atlas-header-muted: #5a6d89;
+  --atlas-kpi-bg-start: #0a3577;
+  --atlas-kpi-bg-mid: #0e4691;
+  --atlas-kpi-bg-end: #0a3577;
+  --atlas-kpi-text: #ffffff;
+  --atlas-kpi-muted: #c6dbf8;
+  --atlas-kpi-divider: #c6dbf733;
+  --atlas-kpi-hover: #ffffff14;
+  --atlas-kpi-chip: #ffffff1f;
+  --atlas-kpi-success: #6fe3a8;
+  --atlas-kpi-warning: #ffc56b;
+  --atlas-kpi-danger: #ffa3ad;
+  --atlas-kpi-info: #86dcff;
+  --atlas-kpi-violet: #cdb9ff;
+  --atlas-kpi-shadow: 0 10px 26px #0a357733;
+  --atlas-content-bg: #f3f7fc;
+  --atlas-card-bg: #ffffff;
+  --atlas-card-border: #dde7f3;
   --atlas-navigation-width: 256px;
   --atlas-navigation-drawer-width: 280px;
   --atlas-navigation-tab-width: 18px;

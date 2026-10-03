@@ -5539,6 +5539,23 @@ function counterNumericValue(value){
   const n=Number(raw);
   return Number.isFinite(n)?n:0;
 }
+// Global Shell V4 : sur le bandeau marine, la couleur métier d'un compteur devient un
+// accent sémantique lisible (pastille + indicateur), jamais la couleur du chiffre.
+function moduleCounterTone(color){
+  const m=/^#?([0-9a-f]{6})$/i.exec(String(color||"").trim());
+  if(!m)return"neutral";
+  const [r,g,b]=[0,2,4].map(i=>parseInt(m[1].slice(i,i+2),16)/255);
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/2,d=max-min;
+  const sat=d===0?0:d/(1-Math.abs(2*l-1));
+  if(sat<.25||l<.14)return"neutral";                    // gris, noir : pas un accent
+  const h=((max===r?((g-b)/d)%6:max===g?(b-r)/d+2:(r-g)/d+4)*60+360)%360;
+  if(h>=195&&h<250&&l<.3)return"neutral";               // marine de marque : couleur du bandeau lui-même
+  if(h<12||h>=335)return"danger";
+  if(h<65)return"warning";
+  if(h<170)return"success";
+  if(h<250)return"info";
+  return"violet";
+}
 function moduleCounterItemHTML(item,total){
   const numericValue=counterNumericValue(item.value);
   const base=Math.max(1,counterNumericValue(item.pctBase??total??0));
@@ -5549,7 +5566,7 @@ function moduleCounterItemHTML(item,total){
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(item.pct!==undefined||item.pctBase!==undefined?pct+"%":""));
   const iconBg=hexToIconBg(item.color||"#043970");
   const click=item.showAllPeriods?` onclick="sessionStorage.setItem('stkPeriode','all');if(location.hash===this.hash){event.preventDefault();renderView()}"`:"";
-  return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};--counter-soft:${iconBg}" title="${escapeHTML(item.label)}">
+  return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" data-tone="${moduleCounterTone(item.color||"#043970")}" style="--drh-color:${escapeHTML(item.color||"#043970")};--counter-soft:${iconBg}" title="${escapeHTML(item.label)}">
     <i class="module-counter-dot" aria-hidden="true"></i>
     <strong class="module-counter-value drh-workforce-value">${escapeHTML(String(item.value??0))}</strong>
     <span class="module-counter-label drh-workforce-label">${escapeHTML(label.replace(/^EFF\.\s*/i,""))}</span>
@@ -6589,7 +6606,9 @@ function atlasAccountHTML(){
   const name=String(session.nom||session.username||"Utilisateur");
   const role=typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role;
   const initials=name.trim().split(/\s+/).slice(0,2).map(part=>part.charAt(0)).join("").toUpperCase();
-  return `<div class="atlas-account" aria-label="Compte connecté"><span class="atlas-account-initials" aria-hidden="true">${escapeHTML(initials)}</span><span class="atlas-account-name" title="${escapeHTML(name)}">${escapeHTML(name)}<small>${escapeHTML(role||"")}</small></span></div>`;
+  // Global Shell V4 : code utilisateur + rôle dans le header ; nom complet en info-bulle.
+  const code=String(session.username||name);
+  return `<div class="atlas-account" aria-label="Compte connecté : ${escapeHTML(name)}"><span class="atlas-account-initials" aria-hidden="true">${escapeHTML(initials)}</span><span class="atlas-account-name" title="${escapeHTML(name)}">${escapeHTML(code)}<small>${escapeHTML(role||"")}</small></span></div>`;
 }
 function atlasLegacyTopbarHTML(title,context,isTrans){
   return `<div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print">
@@ -6669,7 +6688,7 @@ function renderInternal(options={}){
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   const commercialShell=session.transverse==="commercial";
-  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
+  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">
@@ -7101,13 +7120,13 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["ARCHIVES","effectif/archives_sortants"]
     ],
     ops:[
-      ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["POINTAGE MENSUEL","pointage/feuille"],["FEUILLE QUOTIDIENNE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["POINTAGE MENSUEL","pointage/feuille"],["FEUILLE QUOTIDIENNE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
-      ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
+      ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"]
     ],
     facturation:[
       ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["PRESTATIONS À FACTURER","facturation/missions"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
@@ -7128,7 +7147,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["ALERTES","alerts"],["CONFIGURATION RECRUTEMENT","admin/sections_candidat"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["ALERTES","alerts"],["CONFIGURATION RECRUTEMENT","admin/sections_candidat"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -7263,6 +7282,9 @@ function renderSidebar(){
     return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" title="${escapeHTML(label)}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label"${item.custom?"":` data-atlas-nav-label="${escapeHTML(item.label)}"`}>${escapeHTML(label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
+    // Global Shell V4 : « Fiche de position » n'est plus une entrée de la barre latérale
+    // (y compris en entrée personnalisée). La fiche reste ouverte depuis les listes d'employés.
+    items=(items||[]).filter(item=>!/^FICHES?\s+DE\s+POSITION$/i.test(String(item?.label||"").trim()));
     const groupItemsHTML=rows=>{
       let prevGroup=null;
       return rows.map(item=>{
@@ -7380,8 +7402,7 @@ function renderSidebar(){
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
-        {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif"],group:"PERSONNEL"},
-        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches","agents"],group:"PERSONNEL"},
+        {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif","fiches","agents"],group:"PERSONNEL"},
         {label:"CONGÉS",route:"conges",aliases:["conges"],group:"PERSONNEL"},
         {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],group:"PERSONNEL",count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length})()},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="suspendu").length},
@@ -7399,8 +7420,7 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"],group:"PILOTAGE"},
         {label:"POINTAGE MENSUEL",route:"pointage/feuille",aliases:["pointage"],group:"POINTAGE"},
         {label:"FEUILLE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"],group:"POINTAGE"},
-        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"],group:"PERSONNEL"},
-        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"],group:"PERSONNEL"},
+        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents","fiches"],group:"PERSONNEL"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length}
       ],
       materiel:[
@@ -7410,7 +7430,6 @@ function renderSidebar(){
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",group:"STOCK",count:matFournisseurs},
         {label:"ALERTES",route:"materiel/alertes",group:"STOCK",count:matAlertes},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"TERRAIN"},
-        {label:"FICHES DE POSITION",route:"materiel/fiches",group:"TERRAIN"},
         {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",group:"DOTATIONS",count:siteDotationCount},
         {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",group:"DOTATIONS",count:dotationCount},
         {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",group:"DOTATIONS",count:reversementCount}
@@ -7483,9 +7502,8 @@ function renderSidebar(){
       ],
       global:[
         {label:"SITUATION GÉNÉRALE",route:"global-dashboard",group:"PILOTAGE"},
-        {label:"EFFECTIF GLOBAL",route:"effectif/recap",aliases:["effectif","agents"],group:"VUE CONSOLIDÉE"},
+        {label:"EFFECTIF GLOBAL",route:"effectif/recap",aliases:["effectif","agents","fiches"],group:"VUE CONSOLIDÉE"},
         {label:"CONTRATS",route:"contrats/situation",aliases:["contrats"],group:"VUE CONSOLIDÉE"},
-        {label:"FICHE DE POSITION",route:"fiches",group:"VUE CONSOLIDÉE"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"VUE CONSOLIDÉE"},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"VUE CONSOLIDÉE",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"DRH",route:"drh/dashboard",aliases:["drh"],group:"MODULES"},
@@ -7517,8 +7535,7 @@ function renderSidebar(){
         {label:"STOCKAGE POSTGRESQL",route:"admin/storage",group:"PARAMÈTRES"},
         {label:"ALERTES",route:"alerts",group:"PILOTAGE"},
         {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",secondary:true,count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length},
-        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",secondary:true,count:drhAgents.length},
-        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",secondary:true,count:drhAgents.length},
+        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",aliases:["admin/fiches"],group:"RH",secondary:true,count:drhAgents.length},
         {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",secondary:true,count:(db.pointages||[]).length},
         {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",secondary:true,count:POSTES.length},
         {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",secondary:true,count:adminMagasinsCount},

@@ -1,6 +1,7 @@
 /* One entrypoint for every ATLAS frontend. Version all imports together. */
-@import url('./tokens.css?v=20261003-sidebar-v3');
-@import url('./components.css?v=20261003-sidebar-v3');
-@import url('./legacy.css?v=20261003-sidebar-v3');
-@import url('./specialized.css?v=20261003-sidebar-v3');
-@import url('./sidebar.css?v=20261003-sidebar-v3');
+@import url('./tokens.css?v=20261003-shell-v4');
+@import url('./components.css?v=20261003-shell-v4');
+@import url('./legacy.css?v=20261003-shell-v4');
+@import url('./specialized.css?v=20261003-shell-v4');
+@import url('./sidebar.css?v=20261003-shell-v4');
+@import url('./shell.css?v=20261003-shell-v4');

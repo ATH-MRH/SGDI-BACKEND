@@ -48,7 +48,11 @@ test('Atlas shell renders one shared brand, module context and compact account',
   assert.equal(brand.querySelector('svg').getAttribute('aria-hidden'), 'true');
   assert.match(brand.textContent, /IRON GLOBAL/);
   assert.match(shell.querySelector('.sgdi-topbar-left .atlas-context').textContent, /DIRECTION OPS.*Société active : Société Test/);
-  assert.match(shell.querySelector('.sgdi-topbar-actions .atlas-account').textContent, /Amel Test/);
+  // Global Shell V4 : code utilisateur + rôle dans le header ; nom complet en info-bulle.
+  const account = shell.querySelector('.sgdi-topbar-actions .atlas-account');
+  assert.match(account.textContent, /ADM01/);
+  assert.equal(account.querySelector('.atlas-account-name').getAttribute('title'), 'Amel Test');
+  assert.equal(shell.classList.contains('atlas-shell-v4'), true);
   // Sidebar V3 : code utilisateur et rôle sur une ligne ; le nom complet reste en info-bulle.
   const profile = shell.querySelector('.atlas-sidebar-profile');
   assert.match(profile.textContent, /ADM01/);
@@ -169,13 +173,14 @@ test('header and account escape user-supplied identity and company text', t => {
   assert.equal(host.querySelector('img,script'), null);
   assert.equal(host.querySelector('.sgdi-topbar-module-title').textContent, '<script>bad()</script>');
   assert.equal(host.querySelector('.atlas-context-label').textContent, 'A & B <img src=x>');
-  assert.match(host.querySelector('.atlas-account').textContent, /<img src=x onerror=alert\(1\)>/);
+  assert.match(host.querySelector('.atlas-account').textContent, /TEST/);
+  assert.equal(host.querySelector('.atlas-account-name').getAttribute('title'), '<img src=x onerror=alert(1)>', 'nom complet échappé en info-bulle');
   r.T().setSession(null);
   assert.equal(r.T().atlasAccountHTML(), '');
 });
 
 const adminSecondaryRoutes = [
-  'admin/recrutement', 'admin/effectifs', 'admin/fiches', 'admin/pointages', 'admin/postes',
+  'admin/recrutement', 'admin/effectifs', 'admin/pointages', 'admin/postes',
   'admin/magasins', 'admin/articles', 'admin/document-models', 'admin/contrats',
   'admin/commercial-dc', 'admin/loans'
 ];
@@ -202,6 +207,7 @@ test('Administration groups its existing business settings without removing admi
   assert.equal(section.firstElementChild.hasAttribute('onkeydown'), false);
   const links = [...section.querySelectorAll('.nav-link')];
   assert.deepEqual(links.map(el => el.dataset.route).sort(), [...adminSecondaryRoutes].sort());
+  assert.equal(nav.querySelector('[data-route="admin/fiches"]'), null, 'Global Shell V4 : « Fiche de position » n\'est plus une entrée de menu');
   for (const route of adminSecondaryRoutes) {
     const el = section.querySelector(`[data-route="${route}"]`);
     assert.equal(nav.querySelectorAll(`[data-route="${route}"]`).length, 1);
@@ -237,10 +243,14 @@ test('secondary Administration destinations open on initial render and in-place 
   r.T().renderSidebar();
   const section = shell.querySelector('.atlas-admin-secondary');
   assert.equal(section.open, false);
-  r.go('admin/fiches/local-test-employee');
-  r.T().syncSidebarActiveState();
-  assert.equal(section.open, true, 'existing sidebar reveals its active nested destination');
-  assert.equal(section.querySelector('.nav-link.active').dataset.route, 'admin/fiches');
+  // La page des fiches reste atteignable (tableau de bord, liens) : son entrée parente s'active.
+  for (const route of ['admin/fiches', 'admin/fiches/local-test-employee']) {
+    r.go('admin/users'); r.T().syncSidebarActiveState();
+    r.go(route);
+    r.T().syncSidebarActiveState();
+    assert.equal(section.open, true, 'existing sidebar reveals its active nested destination');
+    assert.equal(section.querySelector('.nav-link.active').dataset.route, 'admin/effectifs', route);
+  }
 });
 
 test('secondary Admin grouping does not alter general-administrator or DRH navigation', t => {
