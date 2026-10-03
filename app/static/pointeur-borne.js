@@ -107,7 +107,7 @@
     QUALITY_FAILED: () => show("QUALITY_FAILED", "QUALITÉ INSUFFISANTE", "Approchez-vous, restez immobile, face à la lumière", "warn"),
     REVIEW_REQUIRED: () => show("REVIEW_REQUIRED", "QUALITÉ INSUFFISANTE", "Reconnaissance incertaine — restez face à la tablette", "warn"),
     LIVENESS_FAILED: () => show("LIVENESS_FAILED", "LIVENESS REFUSÉ", "Présence réelle non confirmée — aucun pointage", "error"),
-    UNKNOWN_FACE: () => show("UNKNOWN_FACE", "VISAGE NON RECONNU", "Veuillez utiliser votre QR ou contacter un responsable.", "error"),
+    UNKNOWN_FACE: () => show("UNKNOWN_FACE", "EMPLOYÉ NON IDENTIFIÉ", "Présentez-vous au bureau pour actualiser votre photo.", "error"),
     AMBIGUOUS: () => show("AMBIGUOUS", "RÉSULTAT AMBIGU", "Aucun pointage — " + FALLBACK.toLowerCase(), "error"),
     UNAVAILABLE: () => show("UNAVAILABLE", UNAVAILABLE, FALLBACK, "error"),
     FACIAL_OFF: (msg) => show("FACIAL_OFF", "POINTAGE FACIAL INDISPONIBLE", esc(msg || "") + (msg ? "<br>" : "") + FALLBACK, "warn"),

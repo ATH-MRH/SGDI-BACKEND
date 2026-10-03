@@ -143,7 +143,7 @@ l'état renvoyé (écran de la borne + Audit du terminal).
 | 8 | Deux personnes devant la tablette | PLUSIEURS VISAGES, aucun pointage | | ☐ |
 | 9 | Faible lumière (éclairage réduit) | pointage ou refus qualité, jamais d'erreur d'identité | | ☐ |
 | 10 | Contre-jour (fenêtre derrière la personne) | idem | | ☐ |
-| 11 | Personne non enrôlée | VISAGE NON RECONNU, aucun candidat affiché | | ☐ |
+| 11 | Personne non enrôlée | EMPLOYÉ NON IDENTIFIÉ — Présentez-vous au bureau pour actualiser votre photo ; aucun candidat affiché | | ☐ |
 | 12 | Coupure réseau (Wi-Fi coupé) | SERVICE TEMPORAIREMENT INDISPONIBLE ; rien d'enregistré au retour | | ☐ |
 | 13 | QR Portail RH présenté à la caméra (Chrome Android) | pointage QR, même avec facial coupé | | ☐ |
 | 14 | Terminal désactivé puis révoqué depuis ATLAS | TERMINAL DÉSACTIVÉ puis TERMINAL NON AUTORISÉ, immédiatement | | ☐ |
@@ -160,3 +160,24 @@ Même tableau, sur chaque modèle de smartphone visé. Le GO tablette ne vaut pa
 |---|---|---|---|
 | GO / NO-GO tablette : | | | |
 | GO / NO-GO smartphone : | | | |
+
+## 11. Pointage réel V2 — protocole K162 / TABLETTE HAMOUL 01 (à exécuter, résultats à consigner)
+
+Le pointage facial réel est actif : **ces essais décident si l'anti-usurpation est validé**. Un
+score de liveness présent dans le code ne vaut pas validation. Noter pour chaque essai l'état de
+la tablette, l'écran du PC (`pointeur.irongs.com`) et le Journal des passages ; aucune image.
+
+| # | Essai | Attendu tablette | Attendu PC | Attendu Attendance Core | Résultat | OK |
+|---|---|---|---|---|---|---|
+| 1 | K162 réel, état « absent » | ✓ IDENTIFIÉ, ENTRÉE ENREGISTRÉE | fiche verte, ÉTAT : PRÉSENT, en ≤ 3 s | 1 ENTRÉE | | ☐ |
+| 2 | K162 reste 1 min devant la tablette | POINTAGE DÉJÀ ENREGISTRÉ | aucune nouvelle fiche | aucun nouvel événement | | ☐ |
+| 3 | K162 sur le smartphone 1 min après | déjà enregistré | rien | aucun nouvel événement | | ☐ |
+| 4 | K162 après > 5 min (fin de poste) | SORTIE ENREGISTRÉE | fiche bleue, ÉTAT : SORTI | 1 SORTIE | | ☐ |
+| 5 | Personne sans référence | EMPLOYÉ NON IDENTIFIÉ — Présentez-vous au bureau pour actualiser votre photo | rien | aucun pointage, aucune référence créée, aucun nom proposé | | ☐ |
+| 6 | Photo papier de K162 | refus | rien | **aucun pointage** | | ☐ |
+| 7 | Photo de K162 plein écran sur smartphone | refus | rien | **aucun pointage** | | ☐ |
+| 8 | Vidéo de K162 sur un autre écran | refus | rien | **aucun pointage** | | ☐ |
+| 9 | Employé suspendu enrôlé (test) | refus générique | POINTAGE REFUSÉ — EMPLOYÉ SUSPENDU | aucun mouvement | | ☐ |
+
+**Critère** : un seul pointage obtenu aux essais 6, 7 ou 8 ⇒ **NO-GO anti-usurpation** (rapporter
+précisément, ne pas baisser de seuil sans calibration documentée).

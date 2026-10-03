@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import Response
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -746,6 +747,52 @@ def attendance_sites(db: Session = Depends(get_db), user: User = Depends(current
     if selected is not None:
         query = query.where(Site.id.in_(selected))
     return [{"id": site.id, "name": site.name, "indicatif": site.indicatif or ""} for site in db.execute(query).scalars().all()]
+
+
+@router.get("/attendance-live")
+def attendance_live(
+    site_id: int | None = None,
+    after_id: int | None = None,
+    after_refusal_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Poste de sécurité : passages ACCEPTÉS par Attendance Core depuis `after_id` (sans curseur :
+    le dernier), refus récents des terminaux, compteurs canoniques. Lecture seule, même
+    périmètre sites que le flux de pointage. Interrogée toutes les ~2 s par le PC."""
+    from app.modules.attendance import live
+
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    return live.live(db, allowed_site_ids, after_id=after_id, after_refusal_id=after_refusal_id)
+
+
+@router.get("/attendance-employee/{employee_id}/portrait")
+def attendance_employee_portrait(employee_id: int, site_id: int | None = None, db: Session = Depends(get_db),
+                                 user: User = Depends(current_user)) -> Response:
+    """Portrait de présentation (visage agrandi, fond blanc) d'un employé du périmètre du poste :
+    affecté à un site autorisé, ou ayant pointé sur un site autorisé. Jamais d'URL publique."""
+    from app.modules.attendance.models import AttendanceEvent
+    from app.modules.drh import portrait
+    from app.modules.ops.models import Assignment
+
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    if allowed_site_ids is not None:
+        allowed = list(allowed_site_ids) or [-1]
+        visible = db.execute(select(Assignment.id).where(Assignment.employee_id == employee_id, Assignment.site_id.in_(allowed)).limit(1)).first() \
+            or db.execute(select(AttendanceEvent.id).where(AttendanceEvent.employee_id == employee_id, AttendanceEvent.site_id.in_(allowed)).limit(1)).first()
+        if not visible:
+            raise HTTPException(status_code=404, detail="Employé introuvable")
+    try:
+        result = portrait.portrait_for(db, employee)
+    except ValueError:
+        result = None
+    if result is None:
+        raise HTTPException(status_code=404, detail="Aucun portrait disponible")
+    return Response(content=result.image, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Portrait-Method": result.method})
 
 
 @router.get("/attendance-feed")

@@ -1,5 +1,9 @@
 # ATLAS — Essais physiques du Mode Test facial sur le pointeur
 
+> **Obsolète (Pointage réel V2)** : le Mode Test a été retiré de l'écran du poste de sécurité
+> (`pointeur.irongs.com`). Il reste disponible dans **Gestion du pointage** pour les utilisateurs
+> autorisés ; les essais ci-dessous s'y appliquent. Voir `docs/attendance-security-post.md`.
+
 ## Préconditions
 
 - Utiliser l’URL HTTPS de `pointeur.irongs.com` et un compte ATLAS autorisé sur le site, avec la permission `attendance × biometric_admin × validate` (ou `admin`).

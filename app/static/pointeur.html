@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="/static/responsive-baseline.css?v=20260906">
-<link rel="stylesheet" href="/static/biometrics/test-mode.css?v=20260930-shared-test-mode">
 <meta name="theme-color" content="#043970">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,6 +19,27 @@
 html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 button,input{font:inherit}
 .hidden{display:none!important}
+/* Poste de sécurité — dernier pointage (Design System ATLAS : navy, vert entrée, bleu sortie, rouge refus) */
+.last-scan{border:2px solid var(--line);border-radius:20px;background:#fff;padding:18px;margin-bottom:14px;min-height:260px;transition:border-color .2s,background .2s}
+.last-scan.is-idle{display:grid;place-items:center;background:#f8fbfe;border-style:dashed}
+.last-scan-idle{text-align:center;color:var(--muted)}.last-scan-idle-title{font-weight:900;letter-spacing:.06em;color:var(--navy);font-size:18px;margin-top:10px}
+.last-scan-idle-hint{font-size:13px;margin-top:6px}.last-scan-idle-dot{width:14px;height:14px;border-radius:50%;background:var(--blue);margin:0 auto;animation:lsPulse 1.6s infinite}
+@keyframes lsPulse{0%,100%{opacity:.35;transform:scale(.9)}50%{opacity:1;transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.last-scan-idle-dot{animation:none}}
+.last-scan-body{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+.last-scan-photo{width:168px;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:#fff;border:1px solid var(--line);display:grid;place-items:center}
+.last-scan-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.last-scan-initials{font-size:46px;font-weight:900;color:var(--navy)}
+.last-scan-badge{display:inline-block;border-radius:999px;padding:5px 14px;font-weight:900;letter-spacing:.08em;font-size:13px;color:#fff;background:var(--green)}
+.last-scan-name{font-size:28px;font-weight:900;line-height:1.1;margin:10px 0 8px;overflow-wrap:anywhere}
+.last-scan-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:14px}.last-scan-meta dt{color:var(--muted);font-weight:700}.last-scan-meta dd{margin:0;font-weight:800;overflow-wrap:anywhere}
+.last-scan-move{margin-top:14px;padding:12px 14px;border-radius:14px;font-weight:900}
+.last-scan-move b{display:block;font-size:22px;letter-spacing:.02em}.last-scan-move span{font-size:30px;font-variant-numeric:tabular-nums}
+.last-scan-state{margin-top:8px;font-weight:900;font-size:16px}
+.last-scan.is-entry{border-color:var(--green);background:#f0fdf4}.last-scan.is-entry .last-scan-move{background:#dcfce7;color:#14532d}
+.last-scan.is-exit{border-color:var(--blue);background:#eff6ff}.last-scan.is-exit .last-scan-badge{background:var(--blue)}.last-scan.is-exit .last-scan-move{background:#dbeafe;color:#1e3a8a}
+.last-scan.is-refused{border-color:var(--red);background:#fef2f2}.last-scan.is-refused .last-scan-badge{background:var(--red)}.last-scan.is-refused .last-scan-move{background:#fee2e2;color:#7f1d1d}
+@media (max-width:759px){.last-scan-body{grid-template-columns:1fr;justify-items:center;text-align:center}.last-scan-photo{width:140px}.last-scan-name{font-size:22px}.last-scan-meta{text-align:left}}
 .login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
 .login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
 .logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900}
@@ -199,9 +219,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script defer src="/static/pointeur-facial.js?v=1"></script>
-<!-- Mode Test facial : moteur partagé du centre de contrôle + adaptateur terminal (§ séparation des modes). -->
-<script defer src="/static/pointage/test-mode.js?v=20260930-shared-test-mode"></script>
-<script defer src="/static/pointeur-test-mode.js?v=20260930-shared-test-mode"></script>
+<!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
@@ -229,7 +247,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
         <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
-        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button><button id="testModeNav" class="hidden" onclick="showPointerSection('testmode')" title="Laboratoire biométrique — aucun pointage enregistré">Mode Test</button></nav>
+        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> SCANNER ACTIF</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
@@ -249,6 +267,12 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
     <div class="work-grid">
       <section id="scannerCard" class="scanner-card">
+        <!-- POSTE DE SÉCURITÉ : dernier passage ACCEPTÉ par Attendance Core (facial, QR, saisie),
+             affiché automatiquement — aucun clic, aucune recherche. -->
+        <div id="lastScanCard" class="last-scan is-idle" role="status" aria-live="polite" aria-atomic="true">
+          <div class="last-scan-idle"><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>
+            <div class="last-scan-idle-hint">Reconnaissance faciale, QR ou saisie manuelle : la fiche s'affiche ici automatiquement.</div></div>
+        </div>
         <div class="scanner-title" id="scannerTitle">Scannez le QR employé</div>
         <p class="scanner-hint" id="scannerHint">La validation est automatique.</p>
         <div id="usbReader" class="usb-reader hidden">
@@ -300,46 +324,6 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
     </div>
   </section>
-  <!-- MODE TEST FACIAL — laboratoire biométrique. Vue distincte de « Facial » (pointage
-       automatique de production) : elle n'écrit jamais de présence, aucun scan, aucun QR. -->
-  <section id="testModeView" class="tm-view hidden" aria-labelledby="ptm-title">
-    <div class="tm-layout">
-      <div class="tm-card">
-        <h2 id="ptm-title" class="tm-title">MODE TEST FACIAL</h2>
-        <p class="tm-subtitle">Diagnostic caméra, détection, qualité, liveness et reconnaissance — aucun effet sur les présences.</p>
-        <div class="tm-warning" role="note"><strong>MODE TEST</strong><span>AUCUN POINTAGE NE SERA ENREGISTRÉ.</span></div>
-        <div class="tm-controls">
-          <div><label for="ptm-site">Site autorisé</label><select id="ptm-site"><option value="">Chargement des sites…</option></select></div>
-          <div><label for="ptm-camera">Caméra</label><select id="ptm-camera" disabled aria-describedby="ptm-camera-help"><option value="">La liste apparaît après autorisation</option></select><small id="ptm-camera-help">Sur smartphone, la caméra frontale est choisie automatiquement.</small></div>
-        </div>
-        <div class="tm-video-wrap"><div id="ptm-video-placeholder" class="tm-video-placeholder">Le flux caméra apparaîtra ici après démarrage.</div><video id="ptm-video" class="tm-video hidden" autoplay playsinline muted aria-label="Flux caméra du mode test"></video></div>
-        <canvas id="ptm-canvas" class="hidden" aria-hidden="true"></canvas>
-        <div id="ptm-state" class="test-mode-state" role="status" aria-live="polite">PRÊT</div>
-        <div id="ptm-error" class="tm-error hidden" role="alert"></div>
-        <div class="tm-actions">
-          <button class="primary" id="ptm-start" type="button" disabled>DÉMARRER LE TEST</button>
-          <button class="secondary" id="ptm-stop" type="button" disabled>ARRÊTER</button>
-          <button class="secondary" id="ptm-change-camera" type="button" disabled>CHANGER DE CAMÉRA</button>
-        </div>
-        <div id="ptm-result" class="test-mode-result hidden" aria-live="polite"></div>
-        <p class="tm-disclaimer">LE LIVENESS RESTE NO-GO POUR LA PRODUCTION. LE MODE TEST NE CONSTITUE PAS UNE VALIDATION DE SÉCURITÉ SUR LE MATÉRIEL DE PRODUCTION.</p>
-      </div>
-      <aside class="tm-card tm-checklist">
-        <details><summary>SCÉNARIOS DE TEST</summary><p class="tm-subtitle">Checklist locale : rien n'est enregistré ni transmis.</p>
-          <ul>
-            <li><label><input type="checkbox"> Vrai visage</label></li>
-            <li><label><input type="checkbox"> Photo imprimée</label></li>
-            <li><label><input type="checkbox"> Photo affichée sur smartphone</label></li>
-            <li><label><input type="checkbox"> Photo affichée sur tablette</label></li>
-            <li><label><input type="checkbox"> Vidéo</label></li>
-            <li><label><input type="checkbox"> Plusieurs personnes</label></li>
-            <li><label><input type="checkbox"> Faible lumière</label></li>
-            <li><label><input type="checkbox"> Contre-jour</label></li>
-          </ul>
-        </details>
-      </aside>
-    </div>
-  </section>
 </section>
 
 <script>
@@ -358,6 +342,10 @@ let historyRefreshTimer=null;
 let planningEvents=[];
 let planningRefreshTimer=null;
 let isLoggingOut=false;
+// Poste de sécurité : relève des passages acceptés (~2 s), affichage du dernier pendant 12 s.
+const LIVE_POLL_MS=2000,LAST_SCAN_DISPLAY_MS=12000;
+let liveTimer=null,liveCursor=null,liveRefusalCursor=null,liveBusy=false,serverSummary=null,lastScanTimer=null,lastScanShownId="";
+const portraitUrls={};
 
 // ==================== LOT SÉCURITÉ — AUTO-DÉCONNEXION 30S D'INACTIVITÉ ====================
 // Portée stricte : ce fichier sert UNIQUEMENT pointage.irongs.com et pointeur.irongs.com
@@ -521,9 +509,6 @@ async function loadAttendanceSites(){
   select.disabled=sites.length===0;
   select.dataset.sites=JSON.stringify(sites);
   updateSelectedSiteLabel();
-  // Mode Test : les sites autorisés du terminal sont exactement ceux du sélecteur courant ;
-  // on rafraîchit le statut (bouton + liste) dès qu'ils sont connus, jamais avant.
-  window.PointerTestMode&&PointerTestMode.load();
 }
 function updateSelectedSiteLabel(){
   const select=document.getElementById("siteSelector"),societyEl=document.getElementById("usbReaderSociety");
@@ -534,14 +519,13 @@ function updateSelectedSiteLabel(){
 }
 async function changeAttendanceSite(value){
   const nextSiteId=String(value||"");
-  if(nextSiteId!==selectedSiteId&&window.PointerTestMode&&PointerTestMode.isRunning())PointerTestMode.stop();
   selectedSiteId=nextSiteId;localStorage.setItem("atlas_pointer_site",selectedSiteId);
   liveFeedFilter="";updateSelectedSiteLabel();resetManualPanel();
-  window.PointerTestMode&&PointerTestMode.syncSites();
   await Promise.all([loadHistory(),loadAttendanceAlerts(),loadShiftStaffing()]);
+  if(pointerSession)startLivePolling();
   if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
-  // Un changement de site ne doit pas rallumer la caméra QR derrière Planning,
-  // Facial ou Mode Test (ces vues utilisent leurs propres cycles caméra).
+  // Un changement de site ne doit pas rallumer la caméra QR derrière Planning ou Facial
+  // (ces vues utilisent leurs propres cycles caméra).
   if(!document.querySelector("main.main").classList.contains("hidden"))requestAnimationFrame(setupScanMode);
 }
 async function enterApp(){
@@ -556,6 +540,7 @@ async function enterApp(){
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
   historyRefreshTimer=setInterval(refreshPointeurData,15000);
+  startLivePolling();
   requestAnimationFrame(setupScanMode);
 }
 function refreshPointeurData(){loadHistory();loadAttendanceAlerts();loadShiftStaffing()}
@@ -587,22 +572,123 @@ async function loadShiftStaffing(){
       :`<span class="shift-staffing-empty">Effectif contractuel par fonction non configuré pour ce site.</span>`;
   }catch(error){host.innerHTML=`<span class="shift-staffing-empty">${esc(error.message||"Effectif contractuel indisponible")}</span>`}
 }
+// ── Poste de sécurité : temps réel ─────────────────────────────────────────────────────
+// Seul le passage ACCEPTÉ par Attendance Core déclenche l'affichage (pas une simple détection).
+function startLivePolling(){
+  clearInterval(liveTimer);liveCursor=null;liveRefusalCursor=null;serverSummary=null;
+  pollLive();liveTimer=setInterval(pollLive,LIVE_POLL_MS);
+}
+function stopLivePolling(){clearInterval(liveTimer);liveTimer=null;clearTimeout(lastScanTimer)}
+async function pollLive(){
+  if(!pointerSession?.token||liveBusy)return;
+  liveBusy=true;
+  try{
+    const params=new URLSearchParams();
+    if(selectedSiteId)params.set("site_id",selectedSiteId);
+    if(liveCursor!==null)params.set("after_id",String(liveCursor));
+    if(liveRefusalCursor!==null)params.set("after_refusal_id",String(liveRefusalCursor));
+    const response=await fetch("/api/portal/attendance-live?"+params.toString(),{cache:"no-store",headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}
+    if(!response.ok)return;
+    const data=await response.json();
+    serverSummary=data.summary||null;
+    const first=liveCursor===null;
+    liveCursor=data.latest_event_id||0;liveRefusalCursor=data.latest_refusal_id||0;
+    renderCounters();
+    if(first)return;                                             // au démarrage : on n'affiche pas un ancien passage
+    const events=Array.isArray(data.events)?data.events:[],refusals=Array.isArray(data.refusals)?data.refusals:[];
+    if(events.length){loadHistory();showLastScan(events[events.length-1])}
+    else if(refusals.length)showLastRefusal(refusals[refusals.length-1]);
+  }catch(e){/* réseau : la pastille de connexion l'indique ; nouvel essai au prochain tour */}
+  finally{liveBusy=false}
+}
+function initialsOf(name){return String(name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase()}
+// Portrait de présentation DRH (visage agrandi, fond blanc) ; repli : photo de la fiche, puis initiales.
+async function portraitFor(employee){
+  const id=employee&&employee.id;if(!id)return employee&&employee.photo||"";
+  const key=id+"|"+(employee.photo||"");
+  if(portraitUrls[key]!==undefined)return portraitUrls[key];
+  try{
+    const params=selectedSiteId?"?site_id="+encodeURIComponent(selectedSiteId):"";
+    const response=await fetch("/api/portal/attendance-employee/"+encodeURIComponent(id)+"/portrait"+params,{cache:"no-store",headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(!response.ok)throw new Error(String(response.status));
+    portraitUrls[key]=URL.createObjectURL(await response.blob());
+  }catch(e){portraitUrls[key]=employee.photo||""}
+  return portraitUrls[key];
+}
+function lastScanPhotoHTML(name){
+  return `<div class="last-scan-photo" id="lastScanPhoto"><span class="last-scan-initials">${esc(initialsOf(name))}</span></div>`;
+}
+async function fillLastScanPhoto(employee,token){
+  const src=await portraitFor(employee);
+  const box=document.getElementById("lastScanPhoto");
+  if(!src||!box||lastScanShownId!==token)return;
+  const img=new Image();img.alt="Photo de "+[employee.nom,employee.prenom].filter(Boolean).join(" ");
+  img.onload=()=>{if(lastScanShownId===token&&document.getElementById("lastScanPhoto")===box){box.innerHTML="";box.appendChild(img)}};
+  img.onerror=()=>{};                                            // jamais d'image cassée : les initiales restent
+  img.src=src;
+}
+function scheduleLastScanIdle(){
+  clearTimeout(lastScanTimer);
+  lastScanTimer=setTimeout(()=>{
+    const card=document.getElementById("lastScanCard");if(!card)return;
+    lastScanShownId="";card.className="last-scan is-idle";
+    card.innerHTML='<div class="last-scan-idle"><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div><div class="last-scan-idle-hint">Reconnaissance faciale, QR ou saisie manuelle : la fiche s\'affiche ici automatiquement.</div></div>';
+  },LAST_SCAN_DISPLAY_MS);
+}
+function showLastScan(event){
+  const card=document.getElementById("lastScanCard");if(!card||!event)return;
+  const token="e"+event.id;if(lastScanShownId===token){scheduleLastScanIdle();return}
+  lastScanShownId=token;
+  const e=event.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",entry=event.type==="ENTREE";
+  const badge=event.source==="FACIAL"?"IDENTIFIÉ":event.source==="QR"?"QR VALIDÉ":event.source==="MANUAL"?"SAISIE MANUELLE":String(event.source_label||"POINTAGE").toUpperCase();
+  const state=event.state==="PRESENT"?"PRÉSENT":"SORTI";
+  card.className="last-scan "+(entry?"is-entry":"is-exit");
+  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
+    <span class="last-scan-badge">${esc(badge)}</span>
+    <div class="last-scan-name">${esc(name)}</div>
+    <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>
+      <dt>Site</dt><dd>${esc(event.site||e.site||"—")}</dd><dt>Société</dt><dd>${esc(e.societe||"—")}</dd>${event.terminal?`<dt>Terminal</dt><dd>${esc(event.terminal)}</dd>`:""}</dl>
+    <div class="last-scan-move"><b>${entry?"ENTRÉE ENREGISTRÉE":"SORTIE ENREGISTRÉE"}</b><span>${esc(event.heure||"")}</span></div>
+    <div class="last-scan-state">ÉTAT ACTUEL : ${state}</div></div></div>`;
+  fillLastScanPhoto(e,token);
+  scheduleLastScanIdle();
+}
+function showLastRefusal(refusal){
+  const card=document.getElementById("lastScanCard");if(!card||!refusal)return;
+  const token="r"+refusal.id;lastScanShownId=token;
+  const e=refusal.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
+  card.className="last-scan is-refused";
+  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
+    <span class="last-scan-badge">POINTAGE REFUSÉ</span>
+    <div class="last-scan-name">${esc(name)}</div>
+    <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>${refusal.terminal?`<dt>Terminal</dt><dd>${esc(refusal.terminal)}</dd>`:""}</dl>
+    <div class="last-scan-move"><b>${esc(refusal.label||"POINTAGE REFUSÉ")}</b><span>${esc(refusal.heure||"")}</span></div>
+    <div class="last-scan-state">AUCUN MOUVEMENT ENREGISTRÉ</div></div></div>`;
+  fillLastScanPhoto(e,token);
+  scheduleLastScanIdle();
+}
+function renderCounters(){
+  if(!serverSummary)return false;
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=String(Number(v)||0).padStart(2,"0")};
+  set("entrantCount",serverSummary.entries_today);set("sortantCount",serverSummary.exits_today);
+  set("presentCount",serverSummary.present_now);set("absentCount",serverSummary.absent_today);
+  return true;
+}
 function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
 function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
 function eventTime(value){return String(value||"").slice(11,16)}
 function eventMinutes(value){const m=String(value||"").match(/(\d{2}):(\d{2})/);return m?+m[1]*60 + +m[2]:null}
 function showPointerSection(section){
   // Cycle de vie strict (§ changement de vue) : une seule vue active, aucune caméra
-  // laissée ouverte — scanner QR, facial de production et Mode Test s'excluent mutuellement.
-  const planning=section==="planning",facial=section==="facial",testmode=section==="testmode";
-  document.querySelector("main.main").classList.toggle("hidden",planning||facial||testmode);document.getElementById("planningView").classList.toggle("hidden",!planning);
-  document.getElementById("faceView").classList.toggle("hidden",!facial);document.getElementById("testModeView").classList.toggle("hidden",!testmode);
-  document.getElementById("faceNav").classList.toggle("active",facial);document.getElementById("testModeNav").classList.toggle("active",testmode);
-  document.getElementById("scanNav").classList.toggle("active",!planning&&!facial&&!testmode);document.getElementById("planningNav").classList.toggle("active",planning);
-  if(testmode){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.stop();window.PointerTestMode&&PointerTestMode.load();return}
-  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointerTestMode&&PointerTestMode.stop();window.PointeurFacial&&PointeurFacial.start();return}
+  // laissée ouverte — scanner QR et facial de production s'excluent mutuellement.
+  const planning=section==="planning",facial=section==="facial";
+  document.querySelector("main.main").classList.toggle("hidden",planning||facial);document.getElementById("planningView").classList.toggle("hidden",!planning);
+  document.getElementById("faceView").classList.toggle("hidden",!facial);
+  document.getElementById("faceNav").classList.toggle("active",facial);
+  document.getElementById("scanNav").classList.toggle("active",!planning&&!facial);document.getElementById("planningNav").classList.toggle("active",planning);
+  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.start();return}
   window.PointeurFacial&&PointeurFacial.stop();
-  window.PointerTestMode&&PointerTestMode.stop();
   if(planning){stopScanner();loadPlanning();clearInterval(planningRefreshTimer);planningRefreshTimer=setInterval(loadPlanning,30000)}else{clearInterval(planningRefreshTimer);planningRefreshTimer=null;setupScanMode()}
 }
 async function loadPlanning(){
@@ -615,7 +701,11 @@ function groupPlanningEvents(date){
 function renderPlanning(date){
   const sourceDate=shiftDate(date,-7),expected=groupPlanningEvents(sourceDate),actual=groupPlanningEvents(date),used=new Set(),now=new Date();
   const rows=expected.map(exp=>{const real=actual.find(a=>a.key===exp.key);if(real)used.add(real.key);let state="attendu",note=`Prévu à ${exp.arrival||"—"}`,severity="attendu";if(real?.absent){state="absent";severity="absent";note=`Absence confirmée${real.scannedBy?" par "+real.scannedBy:""}.${real.observation?" "+real.observation:""}`}else if(real?.arrival){state="present";severity="present";note="Conforme au planning appris.";const delta=Math.abs((eventMinutes(real.arrival)||0)-(eventMinutes(exp.arrival)||0));if(exp.arrival&&delta>30){state="anomalie";severity="anomalie";note=`Horaire prévu ${exp.arrival}, constaté ${real.arrival}.`}if(String(real.siteId||real.site)!==String(exp.siteId||exp.site)){state="permutation";severity="permutation";note=`Site prévu ${exp.site}, constaté ${real.site}.`}}else if(now>new Date(date+"T"+(exp.arrival||"23:59")+":00")){state="absent";severity="absent";note="Aucune arrivée enregistrée après l'heure prévue."}return{exp,real,state,severity,note}});
-  actual.filter(a=>!used.has(a.key)).forEach(real=>rows.push({exp:null,real,state:real.absent?"absent":"anomalie",severity:real.absent?"absent":"anomalie",note:real.absent?`Absence confirmée${real.scannedBy?" par "+real.scannedBy:""}.${real.observation?" "+real.observation:""}`:"Présence non prévue par le planning appris."}));
+  // Le FAIT (présence enregistrée par Attendance Core) n'est jamais une anomalie tant que le
+  // planning appris n'a pas de référence pour ce jour (apprentissage < 7 jours) : on le
+  // qualifie « présence constatée », pas « non prévue ».
+  const referenceKnown=planningEvents.some(e=>String(e.scanned_at||"").slice(0,10)===sourceDate);
+  actual.filter(a=>!used.has(a.key)).forEach(real=>rows.push({exp:null,real,state:real.absent?"absent":(referenceKnown?"anomalie":"present"),severity:real.absent?"absent":(referenceKnown?"anomalie":"present"),note:real.absent?`Absence confirmée${real.scannedBy?" par "+real.scannedBy:""}.${real.observation?" "+real.observation:""}`:(referenceKnown?"Présence non prévue par le planning appris.":"Présence constatée — planning en apprentissage (aucune référence pour ce jour).")}));
   const sites=[...new Set(rows.map(r=>(r.real||r.exp)?.site).filter(Boolean))].sort(),site=document.getElementById("planningSite")?.value||"",status=document.getElementById("planningStatus")?.value||"";const visible=rows.filter(r=>(!site||(r.real||r.exp).site===site)&&(!status||r.state===status));
   const counts={present:rows.filter(r=>r.real?.arrival&&!r.real?.absent).length,absent:rows.filter(r=>r.state==="absent").length,anomalie:rows.filter(r=>r.state==="anomalie").length,permutation:rows.filter(r=>r.state==="permutation").length};
   const learnedDates=new Set(planningEvents.map(e=>String(e.scanned_at||"").slice(0,10)).filter(Boolean));const learning=Math.min(7,learnedDates.size);
@@ -630,10 +720,12 @@ async function logout(){
     stopIdleWatch();
     await stopScanner();
     window.PointeurFacial&&PointeurFacial.stop();
-    window.PointerTestMode&&PointerTestMode.stop();
-    clearInterval(headerClockTimer);headerClockTimer=null;
+      clearInterval(headerClockTimer);headerClockTimer=null;
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
+    stopLivePolling();
+    Object.values(portraitUrls).forEach(u=>{if(String(u).startsWith("blob:"))try{URL.revokeObjectURL(u)}catch(e){}});
+    Object.keys(portraitUrls).forEach(k=>delete portraitUrls[k]);
     localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
     closeManualPanel();resetManualPanel();
     document.getElementById("appView").classList.add("hidden");
@@ -793,7 +885,8 @@ async function onQr(token){
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
     const entry=recordScanEntry(data);
-    showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
+    showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);
+    pollLive();                                                   // la fiche « Dernier pointage » suit sans attendrenavigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
@@ -820,6 +913,8 @@ function showResult(data,type){
 }
 function renderHistory(){
   const todayRows=sessionScans.filter(row=>row.date===localDate());
+  // Compteurs canoniques (Attendance Core, poste de nuit compris) dès qu'ils sont connus.
+  if(renderCounters()){renderLiveFeed();return}
   document.getElementById("entrantCount").textContent=String(todayRows.filter(row=>row.arrivee&&!row.absent).length).padStart(2,"0");
   document.getElementById("sortantCount").textContent=String(todayRows.filter(row=>row.depart).length).padStart(2,"0");
   document.getElementById("presentCount").textContent=String(todayRows.filter(row=>row.arrivee&&!row.depart&&!row.absent).length).padStart(2,"0");
@@ -979,7 +1074,7 @@ document.addEventListener("click",event=>{
   if(event.target?.closest?.("button,input,select,textarea,a,label,.site-control"))return;
   document.getElementById("wedgeInput")?.focus({preventScroll:true});
 });
-document.addEventListener("visibilitychange",()=>{if(document.hidden){stopScanner();window.PointerTestMode&&PointerTestMode.stop();}else if(pointerSession&&!document.querySelector("main.main").classList.contains("hidden"))setupScanMode()});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){stopScanner();}else if(pointerSession&&!document.querySelector("main.main").classList.contains("hidden"))setupScanMode()});
 window.addEventListener("beforeunload",stopScanner);
 document.addEventListener("DOMContentLoaded",()=>{
   try{pointerSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){pointerSession=null}

@@ -49,6 +49,13 @@ OPEN_24H_CYCLE_MAX = timedelta(hours=30)
 LEGACY_ACTION = {EVENT_ARRIVAL: "arrivee", EVENT_DEPARTURE: "depart"}
 
 
+def open_cycle_window(site: Site | None) -> timedelta:
+    """Durée pendant laquelle une ARRIVÉE reste un cycle ouvert (présence en cours) : même règle
+    pour la décision ENTRÉE/SORTIE et pour l'état « présent » affiché (traverse minuit)."""
+    rotation = str(getattr(site, "rotation_system", "") or "") if site else ""
+    return OPEN_24H_CYCLE_MAX if "24" in rotation else OPEN_CYCLE_MAX
+
+
 # ── Temps ────────────────────────────────────────────────────────────────────────────────
 def to_utc_naive(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -320,8 +327,7 @@ def record_scan(
 
     last_arrival = next((e for e in reversed(events) if e.event_type == EVENT_ARRIVAL), None)
     last_arrival_at = to_local(last_arrival.occurred_at) if last_arrival else None
-    rotation = str(getattr(site, "rotation_system", "") or "") if site else ""
-    open_cycle_max = OPEN_24H_CYCLE_MAX if "24" in rotation else OPEN_CYCLE_MAX
+    open_cycle_max = open_cycle_window(site)
     open_arrival = (
         last_arrival if last_event is last_arrival and last_arrival_at is not None
         and timedelta(0) <= now - last_arrival_at <= open_cycle_max else None

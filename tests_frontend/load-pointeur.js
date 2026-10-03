@@ -31,6 +31,10 @@ function buildHtml() {
   getIdleCheckTimer: () => idleCheckTimer,
   clearIdleInterval: () => { clearInterval(idleCheckTimer); idleCheckTimer = null; },
   INACTIVITY_TIMEOUT_MS, INACTIVITY_WARNING_MS,
+  pollLive, startLivePolling, stopLivePolling, showLastScan, renderPlanning, changeAttendanceSite,
+  getLive: () => ({ liveCursor, liveRefusalCursor, serverSummary, lastScanShownId, liveTimer }),
+  setPlanningEvents: (v) => { planningEvents = v; },
+  LIVE_POLL_MS, LAST_SCAN_DISPLAY_MS,
 };
 `;
   return RAW_HTML.replace(/(<script>)([\s\S]*?)(<\/script>)/, (match, open, body, close) => open + body + suffix + close);

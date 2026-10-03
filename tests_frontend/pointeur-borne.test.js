@@ -171,7 +171,7 @@ test('refus : inconnu (message générique, aucune proposition d\'enrôlement), 
     { state: 'ALREADY_RECORDED', recorded: false, action: 'ENTRÉE', heure: '08:03', employee: { nom: 'OUALI', prenom: 'Amine', matricule: 'A0001' } },
   ];
   const ctx = await started({ routes: facialRoutes(() => [200, answers.shift()]) });
-  const expect = [/VISAGE NON RECONNU Veuillez utiliser votre QR ou contacter un responsable/, /LIVENESS REFUSÉ/, /RÉSULTAT AMBIGU/, /POINTAGE DÉJÀ ENREGISTRÉ/];
+  const expect = [/EMPLOYÉ NON IDENTIFIÉ Présentez-vous au bureau pour actualiser votre photo/, /LIVENESS REFUSÉ/, /RÉSULTAT AMBIGU/, /POINTAGE DÉJÀ ENREGISTRÉ/];
   for (const re of expect) {
     ctx.advance(60000);
     ctx.B.holdScene = null;
