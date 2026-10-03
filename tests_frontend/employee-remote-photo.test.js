@@ -21,7 +21,7 @@ const BUSY = { id: 9, name: 'Sortie', type: 'Tablette', site: 'HAMOUL 02', locat
 const state = (status, extra = {}) => ({ session_id: 'sess-1', status, active: ['REQUESTED', 'WAITING_FOR_FACE', 'PREVIEW_READY', 'RETAKE_REQUESTED'].includes(status), reason: null,
   message: { REQUESTED: 'Commande envoyée au terminal…', WAITING_FOR_FACE: 'Le terminal attend que le salarié se place devant la caméra.', PREVIEW_READY: 'Photo prise. Vérifiez-la avant de l\'utiliser.',
     RETAKE_REQUESTED: 'Nouvelle prise demandée au terminal…', EXPIRED: 'La prise de photo a expiré. Le terminal est revenu au pointage.', FAILED: 'Le terminal ne répond pas. Vérifiez qu\'il est allumé et connecté.' }[status] || '',
-  attempt: 0, expires_in: 100, preview: status === 'PREVIEW_READY', checks: status === 'PREVIEW_READY' ? { face: true, quality: true } : null,
+  attempt: 0, expires_in: 100, preview: status === 'PREVIEW_READY', checks: status === 'PREVIEW_READY' ? { face: true, framing: true, quality: true } : null,
   terminal: { name: 'Entrée principale', site: 'HAMOUL 01 (40K)', type: 'Tablette' }, ...extra });
 
 function boot({ routes = {}, editable = true } = {}) {
@@ -128,7 +128,8 @@ test('terminal choisi : session créée, état suivi, AUCUNE vidéo ; aperçu de
   assert.equal(t.sent(PREVIEW).length, 1);
   assert.equal(t.d.getElementById('photo-remote-shot').getAttribute('src'), 'blob:preview-1');
   assert.equal(t.visible('photo-remote-shot'), true); assert.equal(t.visible('photo-remote-wait'), false);
-  assert.equal(t.d.getElementById('photo-remote-checks').textContent, '✓ Visage détecté✓ Qualité suffisante');
+  assert.equal(t.d.getElementById('photo-remote-checks').textContent, '✓ Visage détecté✓ Cadrage conforme✓ Qualité suffisante');
+  assert.ok(t.d.querySelector('.photo-remote-stage').classList.contains('is-square'), 'aperçu carré : la photo recadrée selon le cercle');
   assert.deepEqual(['photo-remote-retake', 'photo-remote-use', 'photo-remote-cancel'].map(t.visible), [true, true, true]);
   await t.poll(); await t.poll();
   assert.equal(t.sent(PREVIEW).length, 1, 'la photo n\'est demandée qu\'une fois par prise');
@@ -224,4 +225,19 @@ test('refus du serveur (terminal occupé, hors ligne, droits) : message, aucune 
   await locked.T.openAgentPhotoSource('ag1'); await tick();
   assert.equal(locked.sent(TERMINALS).length, 0); assert.equal(locked.sent(START).length, 0);
   locked.dom.window.close();
+});
+
+test('photo non validée par le serveur (cadrage absent) : « Utiliser cette photo » jamais proposé', async () => {
+  let current = state('PREVIEW_READY', { checks: { face: true, quality: true } });
+  const t = boot({ routes: { [TERMINALS]: [200, { enabled: true, terminals: [TABLET] }], [START]: [200, state('REQUESTED')], [SESSION]: () => [200, current], [DECIDE]: [200, state('CANCELLED')] } });
+  await openRemote(t);
+  await t.poll();
+  assert.equal(t.visible('photo-remote-use'), false);
+  assert.equal(t.visible('photo-remote-retake'), true);
+  assert.match(t.d.getElementById('photo-remote-checks').textContent, /Photo non validée — reprenez la photo/);
+  current = state('PREVIEW_READY', { checks: null });
+  await t.poll();
+  assert.equal(t.visible('photo-remote-use'), false);
+  t.T.cancelAgentRemotePhoto(); await tick();
+  t.dom.window.close();
 });

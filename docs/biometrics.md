@@ -797,10 +797,12 @@ dès que la session n'est plus active, quelle qu'en soit la cause.
 - Pendant la prise, le terminal est réservé : bandeau « PRISE DE PHOTO EN COURS », ni
   reconnaissance, ni QR, ni pointage (le serveur refuse aussi : `CAPTURE_IN_PROGRESS`). Un
   pointage déjà engagé se termine avant la prise.
-- La vidéo reste sur le terminal. Scène stable ⇒ une photo fixe est proposée (1 par 1,5 s au
-  plus) ; le serveur l'analyse (un visage, qualité) et renvoie une consigne simple (« Regardez
-  la caméra », « Approchez-vous », « Restez immobile », « Une seule personne… ») ; une photo
-  refusée n'est pas conservée. Le terminal ne reçoit que le nom et le prénom du salarié.
+- La vidéo reste sur le terminal. Le terminal n'envoie que le **carré du cercle de capture**
+  (jamais l'image complète) : contrôles de cadrage en direct (`POST /terminal/capture/check`,
+  480 px, toutes les 400 ms, rien n'est conservé, aucun jeton consommé), puis la photo candidate
+  (640 px au plus, jamais agrandie) quand le cadrage est resté correct et immobile 0,8 s. Le
+  serveur revalide la photo candidate elle-même (voir § 16.6). Le terminal ne reçoit que le nom
+  et le prénom du salarié.
 - Après la prise, aucun pointage n'est tenté tant que la personne n'a pas quitté le champ.
 
 ### 16.4 Opérateur RH
@@ -817,6 +819,36 @@ de sécurité (`pointeur.irongs.com`) n'a aucun accès à ces routes.
 déclenche le LOT B avec la provenance `DRH_REMOTE_TERMINAL` (vérifiée : l'empreinte doit
 correspondre à une prise acceptée pour cet employé, sinon `DRH_UPLOAD`).
 
+### 16.6 Cercle de capture (correctif)
+
+Le cercle affiché sur le terminal est la **zone officielle de capture** : la tête entière doit
+y tenir. Une seule géométrie (`guideGeometry`, `pointeur-borne.js`) sert à dessiner le cercle,
+à recadrer et — côté serveur, par construction — à contrôler :
+
+- élément `#kioskVideo` (`object-fit: cover`, aperçu miroir `scaleX(-1)`) ; cercle de diamètre
+  84 % du plus petit côté de la zone vidéo **visible**, centré ; conversion écran → pixels de la
+  vidéo source par l'échelle et le décalage d'`object-fit`, miroir annulé une seule fois ;
+- le carré englobant le cercle est recadré dans la vidéo source (image non miroir) ; c'est la
+  photo candidate, la photo de la fiche et l'image traitée par le LOT B ;
+- pendant la prise, la zone de texte a une hauteur fixe et le cercle est recalé à chaque
+  itération (rotation, redimensionnement) : cercle dessiné = zone recadrée à tout instant.
+
+Règle serveur (`app/modules/biometrics/framing.py`), sur l'image reçue (qui doit être carrée,
+sinon `NOT_CROPPED`) : cercle inscrit, **zone sûre = 90 % du rayon**. Le détecteur ne donne
+qu'une boîte de visage (du haut du front au menton — mesuré sur de vrais portraits) ; la tête
+est estimée de façon conservatrice : +40 % de la hauteur au-dessus (cheveux), +12 % de la
+largeur de chaque côté (oreilles), +8 % sous le menton. L'ellipse de la tête doit être
+**entièrement** dans la zone sûre (le centre seul ne suffit jamais) et occuper au moins 50 % de
+son diamètre. Consignes : « Placez votre visage dans le cercle », « Approchez-vous »,
+« Reculez-vous », « Déplacez-vous légèrement vers la droite / la gauche » (formulées pour
+l'aperçu miroir), « Descendez légèrement », « Montez légèrement », « Une seule personne devant
+la caméra », « Restez immobile », « Position correcte — restez immobile ». Cercle jaune :
+ajustement ; vert : cadrage correct ; rouge : plusieurs personnes.
+
+« Utiliser cette photo » n'est possible que si le serveur a validé visage, cadrage et qualité
+(`checks = {face, framing, quality}`) ; sans analyse faciale disponible, aucune prise distante
+ne démarre. Valeurs (90 %, marges de tête, 0,8 s) à confirmer par le test physique sur la tablette.
+
 ### 16.5 Photo candidate et audit
 
 La photo candidate vit **chiffrée** dans la session (jamais dans `/uploads`, jamais dans les
@@ -824,5 +856,7 @@ journaux) et est effacée à l'acceptation, la reprise, l'annulation ou l'expira
 que son empreinte. Audit `drh.remote_photo.{requested,acknowledged,captured,retake,accepted,
 cancelled,expired,failed}` : opérateur, employé, terminal, site, session (tronquée), état, raison.
 
-Tests : `tests/test_drh_remote_photo_capture.py`, `tests_frontend/employee-remote-photo.test.js`,
-`tests_frontend/pointeur-borne-remote-capture.test.js`, `npm run test:drh-remote-photo-e2e`.
+Tests : `tests/test_drh_remote_photo_capture.py`, `tests/test_remote_capture_framing.py`,
+`tests_frontend/employee-remote-photo.test.js`, `tests_frontend/pointeur-borne-remote-capture.test.js`,
+`tests_frontend/borne-guide-geometry.test.js`, `npm run test:borne-guide-crop` (vrai Chrome, au
+pixel), `npm run test:drh-remote-photo-e2e`.

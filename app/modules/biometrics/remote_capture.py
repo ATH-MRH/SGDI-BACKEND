@@ -38,7 +38,7 @@ from app.core import rate_limit
 from app.core.audit import append_audit
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.biometrics import crypto, service, terminals, test_mode
+from app.modules.biometrics import crypto, framing, service, terminals, test_mode
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
     CAPTURE_ACCEPTED,
@@ -69,8 +69,12 @@ MAX_RETAKES = 5
 IDLE_POLL_MS = 2000                # terminal au repos : « ai-je une commande ? »
 ACTIVE_POLL_MS = 1000              # pendant une prise
 MAX_SUBMISSIONS_PER_MINUTE = 40    # photos fixes proposées par un terminal
+MAX_CHECKS_PER_MINUTE = 240        # contrôles de cadrage (images réduites, jamais conservées)
 MAX_STARTS_PER_MINUTE = 10         # demandes par opérateur
-CAPTURE = {"max_side": 1000, "jpeg_quality": 0.9, "min_interval_ms": 1500}
+# Le terminal n'envoie que le CARRÉ du cercle de capture (jamais l'image complète) : contrôles
+# de cadrage fréquents en basse définition, puis la photo candidate, une fois le cadrage resté
+# correct pendant `stable_ms`. Aucune image n'est agrandie au-delà de la source.
+CAPTURE = {"max_side": 640, "check_side": 480, "jpeg_quality": 0.9, "check_interval_ms": 400, "stable_ms": 800, "min_interval_ms": 1500}
 RETENTION = timedelta(days=30)     # lignes closes (sans photo) conservées pour la traçabilité
 ACCEPTED_SOURCE_WINDOW = timedelta(hours=24)
 
@@ -91,15 +95,10 @@ REASONS = {
     "OPERATOR_GONE": "La fenêtre de prise de photo a été fermée.",
     "SUPERSEDED": "Une nouvelle prise a été demandée.",
 }
-# Consignes affichées sur le terminal (jamais de score).
-INSTRUCTIONS = {
-    "NO_FACE": "Regardez la caméra",
-    "MULTIPLE_FACES": "Une seule personne devant la caméra",
-    "TOO_SMALL": "Approchez-vous",
-    "BLURRED": "Restez immobile",
-    "QUALITY_FAILED": "Placez-vous face à la caméra, bien éclairé",
-    "INVALID_IMAGE": "Restez immobile",
-}
+# Consignes affichées sur le terminal (jamais de score) : celles du cadrage, plus l'image illisible.
+INSTRUCTIONS = {**framing.INSTRUCTIONS, "INVALID_IMAGE": "Restez immobile",
+                "ANALYSIS_UNAVAILABLE": "Service temporairement indisponible"}
+CHECKS_PASSED = {"face": True, "framing": True, "quality": True}
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:
@@ -117,6 +116,17 @@ def enabled() -> bool:
 def _ensure_enabled() -> None:
     if not enabled():
         raise _error(503, "REMOTE_CAPTURE_DISABLED", "Prise de photo distante non activée sur ce serveur")
+
+
+def analysis_available() -> bool:
+    """La prise distante n'a de sens que si le serveur peut contrôler visage, cadrage et qualité."""
+    if not service.enrollment_enabled():
+        return False
+    try:
+        get_engine()
+    except EngineUnavailable:
+        return False
+    return True
 
 
 def online(terminal: BiometricTerminal, now: datetime | None = None) -> bool:
@@ -214,6 +224,8 @@ def terminals_for(db: Session, employee: Employee) -> dict[str, Any]:
 
 def start(db: Session, *, employee: Employee, terminal_id: Any, user: Any) -> dict[str, Any]:
     _ensure_enabled()
+    if not analysis_available():
+        raise _error(503, "FACIAL_ANALYSIS_UNAVAILABLE", "Analyse faciale indisponible : prise de photo distante impossible pour le moment")
     limiter = f"remote-photo-start:{getattr(user, 'id', None)}"
     if rate_limit.failure_count(limiter, 60) >= MAX_STARTS_PER_MINUTE:
         raise _error(429, "RATE_LIMITED", "Trop de demandes — patientez une minute")
@@ -300,7 +312,8 @@ def decide(db: Session, *, session_id: str, action: str, user: Any) -> dict[str,
     if action == "cancel":
         if not closed and row.status in CAPTURE_ACTIVE:
             _close(db, row, CAPTURE_CANCELLED, "OPERATOR", actor=user)
-    elif closed or row.status != CAPTURE_PREVIEW_READY or not row.photo_encrypted:
+    elif closed or row.status != CAPTURE_PREVIEW_READY or not row.photo_encrypted or (action == "accept" and row.checks != CHECKS_PASSED):
+        # « Utiliser cette photo » seulement pour une photo validée par le serveur (visage, cadrage, qualité).
         db.commit()
         raise _error(409, "INVALID_TRANSITION", "Cette action n'est pas possible dans l'état actuel de la prise de photo")
     elif action == "retake":
@@ -424,12 +437,57 @@ def terminal_capture_ack(req: terminals.TerminalRequest = Depends(terminals.auth
     return {**_command(row, db), "nonce": nonce}
 
 
-def _instruction(decision: Any) -> tuple[str, str]:
-    code = decision.state
-    if code == "QUALITY_FAILED":
-        text = " ".join(decision.reasons or [])
-        code = "TOO_SMALL" if "trop petit" in text else "BLURRED" if "floue" in text else "QUALITY_FAILED"
-    return code, INSTRUCTIONS.get(code, INSTRUCTIONS["QUALITY_FAILED"])
+def evaluate(db: Session, image: bytes) -> str:
+    """Contrôle serveur d'une image reçue du terminal : LE carré du cercle de capture, un seul
+    visage, tête entière dans la zone sûre, qualité. Renvoie l'état (« OK » ou la cause) ; la
+    même règle sert aux contrôles de cadrage et à la photo candidate (jamais la frame complète)."""
+    _, width, height = test_mode.sniff_image(image)
+    if not framing.is_guide_crop(width, height):
+        return "NOT_CROPPED"
+    decision = service.analyze_frames(get_engine(), [image], test_mode.readonly_config(db), require_liveness=False)
+    if decision.state in ("NO_FACE", "MULTIPLE_FACES"):
+        return decision.state
+    if decision.face is None:
+        return "QUALITY_FAILED"
+    placed = framing.assess(decision.face.bbox, width, height)
+    if not placed.ok:
+        return placed.state
+    if decision.state == "OK":
+        return "OK"
+    reasons = " ".join(decision.reasons or [])
+    return "TOO_FAR" if "trop petit" in reasons else "BLURRED" if "floue" in reasons else "QUALITY_FAILED"
+
+
+def _decoded(body: dict[str, Any]) -> bytes | None:
+    try:
+        return test_mode.decode_frames([body.get("photo")])[0]      # format, taille et dimensions contrôlés
+    except HTTPException:
+        return None
+
+
+@router.post("/terminal/capture/check")
+def terminal_capture_check(req: terminals.TerminalRequest = Depends(terminals.authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Contrôle de cadrage en direct (image réduite du carré du cercle) : consigne et feu vert,
+    rien n'est conservé, aucun jeton consommé. Seulement pour LA session en attente de ce terminal."""
+    _ensure_enabled()
+    terminal, body = req.terminal, req.body
+    limiter = f"remote-photo-check:{terminal.id}"
+    if rate_limit.failure_count(limiter, 60) >= MAX_CHECKS_PER_MINUTE:
+        raise _error(429, "RATE_LIMITED", "Trop de contrôles — patientez")
+    rate_limit.record_failure(limiter, 60)
+    row = _terminal_session(db, terminal, body.get("session_id"))
+    status = row.status if row is not None else None
+    db.commit()
+    if status != CAPTURE_WAITING_FOR_FACE:
+        raise _error(409, "SESSION_CLOSED" if status is None else "CAPTURE_NOT_EXPECTED", "Aucune prise de photo en attente pour ce terminal")
+    image = _decoded(body)
+    if image is None:
+        return {"ok": False, "state": "INVALID_IMAGE", "instruction": INSTRUCTIONS["INVALID_IMAGE"]}
+    try:
+        state = evaluate(db, image)
+    except EngineUnavailable:
+        return {"ok": False, "state": "ANALYSIS_UNAVAILABLE", "instruction": INSTRUCTIONS["ANALYSIS_UNAVAILABLE"]}
+    return {"ok": state == "OK", "state": state, "instruction": INSTRUCTIONS[state]}
 
 
 @router.post("/terminal/capture/photo")
@@ -452,23 +510,20 @@ def terminal_capture_photo(req: terminals.TerminalRequest = Depends(terminals.au
         raise _error(409, "CAPTURE_NOT_EXPECTED", "Photo non attendue pour cette session")
     nonce = secrets.token_urlsafe(32)                      # le jeton présenté est consommé dans tous les cas
     row.nonce_hash = hashlib.sha256(nonce.encode()).hexdigest()
-    try:
-        image = test_mode.decode_frames([body.get("photo")])[0]      # format, taille et dimensions contrôlés
-    except HTTPException:
+    image = _decoded(body)
+    if image is None:
         db.commit()
         return {"accepted": False, "state": "INVALID_IMAGE", "instruction": INSTRUCTIONS["INVALID_IMAGE"], "nonce": nonce}
-    checks: dict[str, Any] | None = None
-    if service.enrollment_enabled():
-        try:
-            decision = service.analyze_frames(get_engine(), [image], test_mode.readonly_config(db), require_liveness=False)
-        except EngineUnavailable:
-            decision = None
-        if decision is not None:
-            if decision.state != "OK":
-                code, instruction = _instruction(decision)
-                db.commit()
-                return {"accepted": False, "state": code, "instruction": instruction, "nonce": nonce}
-            checks = {"face": True, "quality": True}
+    # La photo candidate n'est retenue que si le SERVEUR valide, sur cette image recadrée
+    # elle-même : un seul visage, tête entière dans la zone sûre du cercle, qualité.
+    try:
+        state = evaluate(db, image)
+    except EngineUnavailable:
+        state = "ANALYSIS_UNAVAILABLE"
+    if state != "OK":
+        db.commit()
+        return {"accepted": False, "state": state, "instruction": INSTRUCTIONS[state], "nonce": nonce}
+    checks = dict(CHECKS_PASSED)
     now = _now()
     row.photo_encrypted = crypto.encrypt_bytes(image)
     row.photo_sha256 = hashlib.sha256(image).hexdigest()

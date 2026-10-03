@@ -28,9 +28,12 @@
     STATUS_POLL_MS: 30000,   // terminal désactivé / facial coupé : relecture de l'état
     COMMAND_POLL_MS: 2000,   // « ai-je une commande ? » (prise de photo distante) — au repos
     CAPTURE_POLL_MS: 1000,   // pendant une prise de photo
-    CAPTURE_STABLE: 2,       // échantillons consécutifs sans mouvement avant de proposer une photo
-    CAPTURE_RETRY_MS: 1500,  // délai minimal entre deux photos proposées
+    CAPTURE_RETRY_MS: 1500,  // délai minimal entre deux photos candidates
+    CHECK_MS: 400,           // contrôle de cadrage (image réduite du cercle) — par défaut
+    STABLE_MS: 800,          // cadrage correct et immobile pendant 0,8 s avant la photo candidate
   };
+  // Cercle de capture : diamètre = 84 % du plus petit côté de la zone vidéo VISIBLE, centré.
+  const GUIDE_RATIO = 0.84;
   const DOMAIN = "ATLAS-TERMINAL-1";
   const UNAVAILABLE = "SERVICE TEMPORAIREMENT INDISPONIBLE";
   const FALLBACK = "UTILISEZ LE QR OU LA MÉTHODE DE SECOURS";
@@ -120,6 +123,71 @@
   // ne lit aucun QR et n'enregistre aucun pointage. La vidéo ne quitte jamais l'appareil :
   // seules des photos fixes sont proposées au serveur. Fin, annulation, expiration ou
   // serveur muet : retour automatique au pointage.
+  // ── Géométrie canonique du cercle de capture ─────────────────────────────────────────────
+  // UNE seule fonction pure donne, pour un élément vidéo affiché (taille CSS, object-fit,
+  // miroir) et une vidéo source (taille intrinsèque) : le cercle à DESSINER (repère de
+  // l'élément, tel qu'affiché) et le CARRÉ à recadrer dans la vidéo source (pixels réels,
+  // non miroir). Dessin, contrôle et recadrage en dérivent tous : ce qui est dans le cercle à
+  // l'écran est exactement ce qui est envoyé. Les coordonnées CSS ne sont jamais prises pour
+  // des pixels vidéo.
+  function guideGeometry(view) {
+    const { elW, elH, vw, vh } = view;
+    const fit = view.fit || "cover", mirrored = view.mirrored !== false, ratio = view.ratio || GUIDE_RATIO;
+    if (!(elW > 0 && elH > 0 && vw > 0 && vh > 0)) return null;
+    const scale = fit === "contain" ? Math.min(elW / vw, elH / vh) : Math.max(elW / vw, elH / vh);
+    const dispW = vw * scale, dispH = vh * scale;
+    const ox = (elW - dispW) / 2, oy = (elH - dispH) / 2;                 // < 0 : vidéo rognée (cover)
+    const visL = Math.max(0, ox), visT = Math.max(0, oy), visW = Math.min(elW, dispW), visH = Math.min(elH, dispH);
+    const d = ratio * Math.min(visW, visH);
+    const cx = visL + visW / 2, cy = visT + visH / 2;                     // centre affiché
+    const ux = mirrored ? elW - cx : cx;                                  // même point, élément non miroir
+    let side = Math.min(d / scale, vw, vh);
+    let sx = (ux - ox) / scale - side / 2, sy = (cy - oy) / scale - side / 2;
+    sx = Math.min(Math.max(0, sx), vw - side); sy = Math.min(Math.max(0, sy), vh - side);
+    return { display: { cx, cy, d }, video: { sx, sy, side }, scale, mirrored, fit };
+  }
+
+  function liveGuide() {
+    const video = $("kioskVideo");
+    if (!video || !video.videoWidth) return null;
+    const rect = video.getBoundingClientRect();
+    const style = window.getComputedStyle ? window.getComputedStyle(video) : {};
+    return guideGeometry({ elW: rect.width, elH: rect.height, vw: video.videoWidth, vh: video.videoHeight,
+      fit: style.objectFit === "contain" ? "contain" : "cover", mirrored: /matrix\(-1|scaleX\(-1/.test(String(style.transform || "")) || style.transform === undefined });
+  }
+
+  // Le cercle affiché pendant une prise est posé EXACTEMENT sur la géométrie canonique.
+  function layoutGuide(state) {
+    const frame = document.querySelector(".kiosk-frame");
+    const video = $("kioskVideo");
+    if (!frame) return;
+    if (!B.remote) { frame.removeAttribute("style"); frame.classList.remove("is-guide", "guide-ok", "guide-error"); return; }
+    const geo = liveGuide();
+    if (geo && video && frame.parentElement) {
+      const v = video.getBoundingClientRect(), p = frame.parentElement.getBoundingClientRect();
+      Object.assign(frame.style, { left: `${v.left - p.left + geo.display.cx - geo.display.d / 2}px`, top: `${v.top - p.top + geo.display.cy - geo.display.d / 2}px`,
+        width: `${geo.display.d}px`, height: `${geo.display.d}px` });
+    }
+    frame.classList.add("is-guide");
+    frame.classList.toggle("guide-ok", state === "ok");
+    frame.classList.toggle("guide-error", state === "error");
+  }
+
+  // Recadrage : le carré du cercle, dans la vidéo source, en `maxSide` px au plus (jamais agrandi).
+  B.cropGuide = function (source, geo, maxSide, quality) {
+    const out = Math.max(1, Math.round(Math.min(maxSide, geo.video.side)));
+    const c = document.createElement("canvas");
+    c.width = c.height = out;
+    c.getContext("2d").drawImage(source, geo.video.sx, geo.video.sy, geo.video.side, geo.video.side, 0, 0, out, out);
+    return c.toDataURL("image/jpeg", quality);
+  };
+  B.captureGuide = function (maxSide, quality) {
+    const geo = liveGuide();
+    return geo ? B.cropGuide($("kioskVideo"), geo, maxSide, quality) : null;
+  };
+  B.guideGeometry = guideGeometry;
+  B.layoutGuide = layoutGuide;
+
   function captureBanner(on) {
     const el = $("kioskMode");
     if (el) { el.hidden = !on; el.textContent = on ? "PRISE DE PHOTO EN COURS" : ""; }
@@ -135,6 +203,7 @@
     if (!B.remote) return;
     B.remote = null;
     captureBanner(false);
+    layoutGuide();
     // La personne photographiée est encore devant la borne : aucun pointage tant que la scène
     // n'a pas changé (même réarmement qu'après un pointage).
     B.holdScene = B.lastAnalyzed = B.lastSample;
@@ -145,9 +214,10 @@
 
   async function enterCapture(command) {
     B.remote = { session_id: command.session_id, status: command.status, employee: command.employee, capture: command.capture || {},
-      nonce: null, stable: 0, lastTry: 0, attempt: command.attempt };
+      nonce: null, okSince: 0, lastCheck: 0, lastTry: 0, attempt: command.attempt };
     captureBanner(true);
-    showCapture("Veuillez vous placer devant la caméra.");
+    layoutGuide("adjust");
+    showCapture("Placez votre visage dans le cercle");
     await acknowledgeCapture();
   }
 
@@ -155,8 +225,10 @@
     try {
       const out = await call("POST", "/terminal/capture/ack", { session_id: B.remote.session_id });
       if (!B.remote) return;
-      B.remote.status = out.status; B.remote.nonce = out.nonce; B.remote.attempt = out.attempt; B.remote.stable = 0;
-      showCapture("Veuillez vous placer devant la caméra.");
+      B.remote.status = out.status; B.remote.nonce = out.nonce; B.remote.attempt = out.attempt; B.remote.okSince = 0;
+      if (out.capture) B.remote.capture = out.capture;
+      layoutGuide("adjust");                          // reprise : géométrie et feu remis à zéro
+      showCapture("Placez votre visage dans le cercle");
     } catch (e) {
       if (e.status === 409 || e.status === 503) leaveCapture(); else handleError(e);
     }
@@ -175,7 +247,7 @@
     if (!B.remote || B.remote.session_id !== out.session_id) { await enterCapture(out); return; }
     B.remote.employee = out.employee;
     if (out.status === "RETAKE_REQUESTED" || (out.status === "REQUESTED")) { B.remote.status = out.status; await acknowledgeCapture(); return; }
-    if (out.status === "PREVIEW_READY" && B.remote.status !== "PREVIEW_READY") { B.remote.status = out.status; showCapture("Photo prise — vérification en cours…", "ok"); }
+    if (out.status === "PREVIEW_READY" && B.remote.status !== "PREVIEW_READY") { B.remote.status = out.status; layoutGuide("ok"); showCapture("Photo prise — vérification en cours…", "ok"); }
   }
 
   function commandDue() {
@@ -183,29 +255,54 @@
     return B.deps.now() - B.commandAt >= (B.remote ? TIMING.CAPTURE_POLL_MS : TIMING.COMMAND_POLL_MS);
   }
 
-  // Une itération en mode prise de photo : scène stable ⇒ UNE photo fixe proposée au serveur.
+  // Une itération en mode prise de photo. Le cadrage est contrôlé par le SERVEUR sur le seul
+  // carré du cercle (image réduite, jamais conservée) ; le cercle passe au vert quand la tête
+  // entière est dans la zone sûre. La photo candidate n'est envoyée qu'après un cadrage resté
+  // correct et immobile pendant STABLE_MS ; tout écart remet le compteur à zéro.
+  function guideFeedback(out) {
+    const error = out.state === "MULTIPLE_FACES";
+    B._guideState = out.ok ? "ok" : error ? "error" : "adjust";
+    layoutGuide(out.ok ? "ok" : error ? "error" : "adjust");
+    showCapture(out.instruction || "Placez votre visage dans le cercle", out.ok ? "ok" : error ? "error" : "warn");
+  }
+
   async function captureTick(current, previous) {
     const r = B.remote;
     if (!r || r.status !== "WAITING_FOR_FACE" || !r.nonce || !current) return;
-    r.stable = previous && diff(current, previous) < TIMING.MOTION ? r.stable + 1 : 0;
-    const now = B.deps.now();
-    if (r.stable < TIMING.CAPTURE_STABLE || now - r.lastTry < (r.capture.min_interval_ms || TIMING.CAPTURE_RETRY_MS)) return;
-    r.lastTry = now; r.stable = 0;
-    const nonce = r.nonce; r.nonce = null;            // jeton à usage unique
+    const now = B.deps.now(), spec = r.capture || {};
+    if (previous && diff(current, previous) >= TIMING.MOTION) r.okSince = 0;     // mouvement : on recommence
+    layoutGuide(r.okSince ? "ok" : B._guideState);                               // cercle dessiné = zone recadrée, à chaque instant
     try {
-      const out = await call("POST", "/terminal/capture/photo", { session_id: r.session_id, nonce,
-        photo: B.capture(r.capture.max_side || 1000, r.capture.jpeg_quality || 0.9) });
+      if (r.okSince && now - r.okSince >= (spec.stable_ms || TIMING.STABLE_MS) && now - r.lastTry >= (spec.min_interval_ms || TIMING.CAPTURE_RETRY_MS)) {
+        const photo = B.captureGuide(spec.max_side || 640, spec.jpeg_quality || 0.9);
+        if (!photo) return;
+        r.lastTry = now;
+        const nonce = r.nonce; r.nonce = null;          // jeton à usage unique
+        const out = await call("POST", "/terminal/capture/photo", { session_id: r.session_id, nonce, photo });
+        if (B.remote !== r) return;
+        if (out.accepted) { r.status = "PREVIEW_READY"; layoutGuide("ok"); showCapture("Photo prise — vérification en cours…", "ok"); return; }
+        r.nonce = out.nonce; r.okSince = 0;
+        guideFeedback({ ok: false, state: out.state, instruction: out.instruction });
+        return;
+      }
+      if (now - r.lastCheck < (spec.check_interval_ms || TIMING.CHECK_MS)) return;
+      const photo = B.captureGuide(spec.check_side || 480, 0.8);
+      if (!photo) return;
+      r.lastCheck = now;
+      const out = await call("POST", "/terminal/capture/check", { session_id: r.session_id, photo });
       if (B.remote !== r) return;
-      if (out.accepted) { r.status = "PREVIEW_READY"; showCapture("Photo prise — vérification en cours…", "ok"); return; }
-      r.nonce = out.nonce;
-      showCapture(out.instruction || "Regardez la caméra", "warn");
+      r.okSince = out.ok ? (r.okSince || now) : 0;
+      guideFeedback(out);
     } catch (e) {
+      r.okSince = 0;
       if (e.status === 409 || e.status === 503) { B.commandAt = 0; return; }   // session close ou reprise : la relève tranchera
       if (e.status === 401 || e.status === 403) { leaveCapture(); handleError(e); return; }
       if (B.remote === r) showCapture("Connexion interrompue — nouvel essai…", "warn");
       B.commandAt = 0;
     }
   }
+
+  window.addEventListener("resize", () => { if (B.remote) layoutGuide(B.remote.okSince ? "ok" : "adjust"); });
 
   function showRecorded(result) {
     const e = result.employee || {};

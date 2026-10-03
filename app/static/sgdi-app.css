@@ -10632,6 +10632,8 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .photo-source-state.is-online{color:#166534}.photo-source-state.is-offline{color:#64748b}.photo-source-state.is-busy{color:#9a3412}
 .photo-remote-stage{position:relative;background:#0f172a;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:grid;place-items:center;color:#e2e8f0;text-align:center;padding:12px}
 .photo-remote-stage img{width:100%;height:100%;object-fit:contain;display:block}
+.photo-remote-stage.is-square{aspect-ratio:1/1;width:min(420px,100%);margin:0 auto}
+.photo-remote-checks .is-warn{color:#9a3412}
 .photo-remote-stage [hidden],.photo-remote-checks[hidden]{display:none}
 .photo-remote-wait{display:grid;gap:12px;justify-items:center;font-size:14px}
 .photo-remote-spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:photo-remote-spin 1s linear infinite}

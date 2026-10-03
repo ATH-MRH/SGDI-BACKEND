@@ -9375,15 +9375,17 @@ function agentRemoteRender(session){
   const msg=document.getElementById("photo-remote-msg");
   if(!msg)return;
   const active=Boolean(session.active),ready=session.status==="PREVIEW_READY";
+  // « Utiliser cette photo » seulement si le serveur a validé visage, cadrage et qualité.
+  const c=session.checks||{},validated=ready&&Boolean(c.face&&c.framing&&c.quality);
   msg.textContent=session.message||"";
   msg.className="photo-remote-msg"+(active?"":" is-closed")+(ready?" is-ready":"");
   agentRemoteShow("photo-remote-wait",active&&!ready);
   agentRemoteShow("photo-remote-shot",ready&&Boolean(agentRemotePhoto.previewUrl));
   agentRemoteShow("photo-remote-checks",ready);
-  agentRemoteShow("photo-remote-retake",ready);agentRemoteShow("photo-remote-use",ready);
+  agentRemoteShow("photo-remote-retake",ready);agentRemoteShow("photo-remote-use",validated);
   agentRemoteShow("photo-remote-cancel",active);agentRemoteShow("photo-remote-close",!active);
   const checks=document.getElementById("photo-remote-checks");
-  if(checks&&ready)checks.innerHTML=session.checks?`<span>✓ Visage détecté</span><span>✓ Qualité suffisante</span>`:`<span>Contrôle automatique indisponible — vérifiez la photo.</span>`;
+  if(checks&&ready)checks.innerHTML=validated?`<span>✓ Visage détecté</span><span>✓ Cadrage conforme</span><span>✓ Qualité suffisante</span>`:`<span class="is-warn">Photo non validée — reprenez la photo.</span>`;
 }
 async function agentRemoteTick(){
   const sid=agentRemotePhoto.sessionId;
@@ -9430,7 +9432,7 @@ async function startAgentRemotePhoto(agentId,terminalId){
   openModal(`<div class="photo-remote" role="dialog" aria-modal="true" aria-labelledby="photo-remote-title">
     <h3 id="photo-remote-title" class="font-bold">Photo prise avec ${escapeHTML(t.type||"le terminal")} ${escapeHTML(t.name||"")}</h3>
     <p class="text-xs text-slate-500 mb-3">${escapeHTML(t.site||"")}</p>
-    <div class="photo-remote-stage"><div class="photo-remote-wait" id="photo-remote-wait"><span class="photo-remote-spinner" aria-hidden="true"></span>Demandez au salarié de se placer devant le terminal.</div>
+    <div class="photo-remote-stage is-square"><div class="photo-remote-wait" id="photo-remote-wait"><span class="photo-remote-spinner" aria-hidden="true"></span>Demandez au salarié de se placer devant le terminal.</div>
       <img id="photo-remote-shot" alt="Photo prise par le terminal" hidden></div>
     <div class="photo-remote-checks" id="photo-remote-checks" hidden></div>
     <div class="photo-remote-msg" id="photo-remote-msg" role="status" aria-live="polite"></div>
@@ -9465,7 +9467,7 @@ async function decideAgentRemotePhoto(action){
     return;
   }
   if(action==="accept"&&r.data.photo){
-    const checked=Boolean(document.querySelector("#photo-remote-checks span")&&/Visage détecté/.test(document.getElementById("photo-remote-checks").textContent));
+    const checked=/Cadrage conforme/.test(document.getElementById("photo-remote-checks")?.textContent||"");
     agentRemoteReset();                                                // session close côté serveur : rien à annuler
     closeModal();
     if(!employeePhotoEditGuard())return;

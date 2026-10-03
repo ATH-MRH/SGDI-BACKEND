@@ -19,8 +19,11 @@ const session = (facial = true, remote = { enabled: true, poll_ms: 2000 }) => ({
   terminal: { terminal_id: 'trm_1', name: 'TAB-01', terminal_type: 'TABLET_ANDROID', site_id: 3, site: 'HAMOUL 01', society: 'IRON GLOBAL SOLUTION' },
   facial: facial ? { available: true, code: null, message: '' } : { available: false, code: 'BIOMETRIC_DISABLED', message: 'Pointage facial non activé' },
   qr: { available: true }, remote_capture: remote, burst: { frames: 3, interval_ms: 1, max_side: 800, jpeg_quality: 0.85 }, challenge_ttl: 10, server_time: Date.now() });
+const CAPTURE = { max_side: 640, check_side: 480, jpeg_quality: 0.9, check_interval_ms: 400, stable_ms: 800, min_interval_ms: 1500 };
 const COMMAND = (status, extra = {}) => ({ command: 'CAPTURE_PHOTO', session_id: 'sess-1', status, attempt: 0, employee: { nom: 'OUALI', prenom: 'Amine' },
-  expires_in: 100, capture: { max_side: 1000, jpeg_quality: 0.9, min_interval_ms: 1500 }, poll_ms: 1000, enabled: true, ...extra });
+  expires_in: 100, capture: CAPTURE, poll_ms: 1000, enabled: true, ...extra });
+const OK = { ok: true, state: 'OK', instruction: 'Position correcte — restez immobile' };
+const NOT = (state, instruction) => ({ ok: false, state, instruction });
 const NONE = { command: null, poll_ms: 2000, enabled: true };
 
 async function started({ facial = true, remote, routes = {}, barcode = null } = {}) {
@@ -50,10 +53,13 @@ async function started({ facial = true, remote, routes = {}, barcode = null } = 
   };
   B.sample = () => new Uint8Array(768).fill(scene);
   B.capture = () => `data:image/jpeg;base64,${Buffer.from(`photo-${Math.random()}`).toString('base64')}`;
+  const crops = [];                                                              // côtés demandés au recadrage du cercle
+  B.captureGuide = (side) => { crops.push(side); return `data:image/jpeg;base64,${Buffer.from(`carre-${side}-${Math.random()}`).toString('base64')}`; };
   await B.boot();
   B.running = false; clearTimeout(B.timer); clearTimeout(B.pollTimer);
   B.lastAnalyzed = B.sample();
-  const ctx = { dom, w, d: w.document, B, calls, all,
+  const ctx = { dom, w, d: w.document, B, calls, all, crops,
+    frame: () => w.document.querySelector('.kiosk-frame'),
     advance(ms) { now += ms; }, setScene(v) { scene = v; },
     count: (p, method) => calls.filter((c) => c.path === p && (!method || c.method === method)).length,
     text: () => w.document.getElementById('kioskStatus').innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
@@ -64,14 +70,15 @@ async function started({ facial = true, remote, routes = {}, barcode = null } = 
   return ctx;
 }
 
-// Serveur simulé d'une session : commande, prise en compte, photos proposées.
-function sessionServer(verdicts) {
-  const state = { status: 'REQUESTED', nonce: 0, photos: [], acks: 0, open: true };
+// Serveur simulé d'une session : commande, prise en compte, contrôles de cadrage, photos candidates.
+function sessionServer(verdicts, checks = []) {
+  const state = { status: 'REQUESTED', nonce: 0, photos: [], checks: [], acks: 0, open: true, at: [] };
   // Scène immobile jusqu'à ce que `n` photos aient été proposées (borné).
-  state.until = async (t, n) => { for (let i = 0; i < 40 && state.photos.length < n; i++) { await t.still(300); if (state.photos.length > (state.at || []).length) (state.at = state.at || []).push(t.now()); } };
+  state.until = async (t, n) => { for (let i = 0; i < 60 && state.photos.length < n; i++) { await t.still(200); if (state.photos.length > state.at.length) state.at.push(t.now()); } };
   return { state, routes: {
     [`GET ${API}/terminal/command`]: () => [200, state.open ? COMMAND(state.status) : NONE],
     [`POST ${API}/terminal/capture/ack`]: () => { state.acks++; state.status = 'WAITING_FOR_FACE'; return [200, { ...COMMAND('WAITING_FOR_FACE'), nonce: `nonce-${++state.nonce}` }]; },
+    [`POST ${API}/terminal/capture/check`]: (call) => { state.checks.push(call.body); return [200, checks.length ? checks.shift() : OK]; },
     [`POST ${API}/terminal/capture/photo`]: (call) => {
       state.photos.push(call.body);
       const verdict = verdicts.shift() || { accepted: true };
@@ -104,8 +111,10 @@ test('au repos : relève signée toutes les 2 s au plus, sans changer l\'écran'
   t.dom.window.close();
 });
 
-test('commande → « PRISE DE PHOTO » : terminal réservé, consignes, photo fixe, puis retour automatique au pointage', async () => {
-  const srv = sessionServer([{ state: 'NO_FACE', instruction: 'Regardez la caméra' }, { state: 'TOO_SMALL', instruction: 'Approchez-vous' }, { accepted: true }]);
+test('commande → « PRISE DE PHOTO » : cercle de capture, consignes réelles, feu vert, stabilité, puis photo recadrée', async () => {
+  const srv = sessionServer([NOT('TOO_HIGH', 'Descendez légèrement') && { accepted: false, state: 'TOO_HIGH', instruction: 'Descendez légèrement' }, { accepted: true }],
+    [NOT('NO_FACE', 'Placez votre visage dans le cercle'), NOT('TOO_HIGH', 'Descendez légèrement'), NOT('MULTIPLE_FACES', 'Une seule personne devant la caméra'),
+     OK, NOT('TOO_LEFT', 'Déplacez-vous légèrement vers la droite'), OK, OK, OK]);
   let qrReads = 0;
   const t = await started({ barcode: { detect: async () => { qrReads++; return []; } }, routes: { ...srv.routes,
     [`POST ${API}/terminal/challenge`]: [200, { challenge_id: 1, nonce: 'n'.repeat(44), expires_in: 10 }],
@@ -113,39 +122,61 @@ test('commande → « PRISE DE PHOTO » : terminal réservé, consignes, photo f
   await t.still(2100);                                                           // relève → commande → prise en compte
   assert.equal(srv.state.acks, 1);
   assert.equal(t.B.state, 'CAPTURE');
-  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Veuillez vous placer devant la caméra.');
+  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Placez votre visage dans le cercle');
   assert.equal(t.banner().hidden, false); assert.equal(t.banner().textContent, 'PRISE DE PHOTO EN COURS');
-  assert.ok(t.d.body.classList.contains('kiosk-capturing'));
-  // Quelqu'un bouge devant la tablette : ni reconnaissance, ni QR, ni pointage.
+  assert.ok(t.frame().classList.contains('is-guide')); assert.ok(!t.frame().classList.contains('guide-ok'), 'cercle jaune au départ');
+  // Contrôles de cadrage : carré du cercle en basse définition, au plus toutes les 400 ms.
+  assert.equal(srv.state.checks.length, 1, 'premier contrôle dès la prise en compte');
+  await t.still(200);
+  assert.equal(srv.state.checks.length, 1, 'pas plus d\'un contrôle par 400 ms');
+  const seen = [];
+  const colours = [];
+  for (let i = 0; i < 3; i++) {
+    await t.still(400); seen.push(t.text().replace('PRISE DE PHOTO OUALI Amine ', ''));
+    colours.push(t.frame().classList.contains('guide-ok') ? 'vert' : t.frame().classList.contains('guide-error') ? 'rouge' : 'jaune');
+  }
+  assert.deepEqual(colours, ['jaune', 'rouge', 'vert']);
+  assert.deepEqual(seen, ['Descendez légèrement', 'Une seule personne devant la caméra', 'Position correcte — restez immobile']);
+  assert.ok(srv.state.checks.every((c) => Object.keys(c).sort().join() === 'photo,session_id'), 'aucun jeton de capture dans un contrôle');
+  assert.ok(t.crops.every((side) => side === 480));
+  assert.equal(srv.state.photos.length, 0, 'aucune photo candidate pendant l\'ajustement');
+  assert.ok(t.frame().classList.contains('guide-ok'), 'cercle vert');
+  // Cadrage perdu avant la fin de la période de stabilité : compteur remis à zéro, cercle jaune.
+  await t.still(400);
+  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Déplacez-vous légèrement vers la droite');
+  assert.ok(!t.frame().classList.contains('guide-ok'));
+  assert.equal(srv.state.photos.length, 0);
+  // Mouvement pendant un cadrage correct : compteur remis à zéro aussi.
+  await t.still(400);                                                            // OK
+  await t.motion(400);                                                           // mouvement → remise à zéro, nouveau contrôle OK
+  assert.equal(srv.state.photos.length, 0);
+  // Cadrage correct et immobile ≥ 800 ms : photo candidate (carré 640), avec le jeton.
+  await srv.state.until(t, 1);
+  assert.equal(srv.state.photos.length, 1);
+  assert.deepEqual(Object.keys(srv.state.photos[0]).sort(), ['nonce', 'photo', 'session_id']);
+  assert.equal(srv.state.photos[0].nonce, 'nonce-1');
+  assert.equal(t.crops[t.crops.length - 1], 640);
+  assert.match(srv.state.photos[0].photo, /^data:image\/jpeg;base64,/);
+  // Refus du serveur (validation sur la photo recadrée) : consigne, cercle jaune, nouveau jeton, nouvelle stabilité exigée.
+  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Descendez légèrement');
+  assert.ok(!t.frame().classList.contains('guide-ok'));
+  await srv.state.until(t, 2);
+  assert.equal(srv.state.photos[1].nonce, 'nonce-2');
+  assert.ok(srv.state.at[1] - srv.state.at[0] >= 800, 'nouvelle période de stabilité');
+  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Photo prise — vérification en cours…');
+  assert.doesNotMatch(t.text(), /score|gabarit|%/i);
+  // Quelqu'un bouge devant la tablette pendant la prise : ni reconnaissance, ni QR, ni pointage.
   const qrBefore = qrReads;
   for (let i = 0; i < 6; i++) await t.motion(300);
   assert.equal(t.count('/terminal/challenge'), 0); assert.equal(t.count('/terminal/recognize'), 0); assert.equal(t.count('/terminal/qr'), 0);
   assert.equal(qrReads, qrBefore);
-  assert.equal(srv.state.photos.length, 0, 'scène en mouvement : aucune photo proposée');
-  // Scène stable : UNE photo fixe, avec le jeton de capture ; refus ⇒ consigne simple, nouveau jeton.
-  await srv.state.until(t, 1);
-  assert.equal(srv.state.photos.length, 1);
-  assert.deepEqual(Object.keys(srv.state.photos[0]).sort(), ['nonce', 'photo', 'session_id']);
-  assert.equal(srv.state.photos[0].nonce, 'nonce-1'); assert.equal(srv.state.photos[0].session_id, 'sess-1');
-  assert.match(srv.state.photos[0].photo, /^data:image\/jpeg;base64,/);
-  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Regardez la caméra');
-  await srv.state.until(t, 2);
-  assert.equal(srv.state.photos[1].nonce, 'nonce-2');
-  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Approchez-vous');
-  await srv.state.until(t, 3);
-  assert.equal(srv.state.photos.length, 3);
-  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Photo prise — vérification en cours…');
-  assert.doesNotMatch(t.text(), /score|gabarit|%/i);
-  // Pas de flux : jamais plus d'une photo fixe par 1,5 s.
-  assert.ok(srv.state.at[1] - srv.state.at[0] >= 1500 && srv.state.at[2] - srv.state.at[1] >= 1500, JSON.stringify(srv.state.at));
-  // En attente de l'opérateur : toujours réservé, plus aucune photo envoyée.
-  for (let i = 0; i < 6; i++) await t.still(600);
-  assert.equal(srv.state.photos.length, 3); assert.equal(t.count('/terminal/recognize'), 0);
-  // L'opérateur a retenu la photo (ou annulé, ou la session a expiré) : retour au pointage.
+  assert.equal(srv.state.photos.length, 2, 'plus aucune photo après la prise');
+  // L'opérateur a retenu la photo (ou annulé, ou la session a expiré) : retour au pointage, cercle d'origine.
   srv.state.open = false;
   await t.still(1100);
   assert.equal(t.B.remote, null); assert.equal(t.banner().hidden, true);
   assert.equal(t.text(), 'PRÉSENTEZ VOTRE VISAGE');
+  assert.equal(t.frame().classList.contains('is-guide'), false); assert.equal(t.frame().getAttribute('style'), null);
   // La personne photographiée est encore là : aucun pointage tant qu'elle n'a pas quitté le champ.
   for (let i = 0; i < 5; i++) await t.still(600);
   assert.equal(t.count('/terminal/recognize'), 0);
@@ -163,7 +194,9 @@ test('reprendre : la borne recommence la prise avec un nouveau jeton', async () 
   srv.state.status = 'RETAKE_REQUESTED';                                         // l'opérateur clique « Reprendre »
   await t.still(1100);
   assert.equal(srv.state.acks, 2);
-  assert.equal(t.text(), 'PRISE DE PHOTO OUALI Amine Veuillez vous placer devant la caméra.');
+  assert.equal(srv.state.photos.length, 1, 'pas de photo immédiate : nouvelle période de stabilité exigée');
+  assert.ok(t.B.remote.okSince === 0 || t.now() - t.B.remote.okSince < 800, 'compteur de stabilité réinitialisé');
+  assert.ok(t.frame().classList.contains('is-guide'));
   await srv.state.until(t, 2);
   assert.equal(srv.state.photos.length, 2); assert.equal(srv.state.photos[1].nonce, 'nonce-2');
   t.dom.window.close();

@@ -3,6 +3,9 @@
 // position) et la tablette (/borne, associée par code, caméra virtuelle diffusant un portrait).
 // Le PC ne reçoit aucune vidéo : état de session puis LA photo prise. Reprendre, Utiliser,
 // Annuler, fermeture brutale du PC : la tablette revient toujours au pointage.
+// Correctif « cercle de capture » : les vidéos de la caméra virtuelle sont générées à partir de
+// la géométrie RÉELLEMENT mesurée sur la page de la tablette (taille de l'élément vidéo) : tête
+// hors du cercle, front coupé, menton coupé ⇒ aucune photo ; tête centrée ⇒ photo = carré du cercle.
 // Pointage facial DÉSACTIVÉ (BIOMETRIC_ENABLED=false) pendant tout le parcours.
 // `npm run test:drh-remote-photo-e2e`. Exécuté seulement si ATLAS_E2E_PYTHON,
 // BIOMETRIC_MODELS_DIR et BIOMETRIC_TEST_FACES sont définis (sinon skip explicite).
@@ -47,6 +50,7 @@ test("LOT C1 — Prise de photo distante supervisée : PC DRH → tablette → p
     fs.rmSync(TMP, { recursive: true, force: true });
   });
   const VIDEO = path.join(TMP, "portrait.mjpeg");
+  const TABLET_PROFILE = fs.mkdtempSync(path.join(os.tmpdir(), "atlas_lotc1_tab_"));   // identité de la borne conservée entre relances
   py(`
 import io
 from PIL import Image
@@ -164,28 +168,106 @@ S.commit(); print(site.id)
   };
   const waitPreview = () => page.waitForFunction(() => { const img = document.getElementById("photo-remote-shot"); return img && !img.hidden && img.naturalWidth > 0; }, { timeout: 60000 });
 
+  let caseVideos = {}, guide = null;
+  const launchTablet = async (video, url) => {
+    if (tabletBrowser) { await tabletBrowser.close().catch(() => {}); tabletBrowser = null; }
+    tabletBrowser = await puppeteer.launch({ executablePath: CHROME, headless: "new", userDataDir: TABLET_PROFILE,
+      args: ["--no-first-run", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${video}`,
+        `--host-resolver-rules=MAP pointeur.irongs.com 127.0.0.1:${PORT}`, "--unsafely-treat-insecure-origin-as-secure=http://pointeur.irongs.com"] });
+    tablet = await tabletBrowser.newPage();
+    await tablet.setViewport({ width: 1280, height: 800 });                // Galaxy Tab paysage
+    tablet.on("pageerror", (e) => kiosk.errors.push(String(e)));
+    tablet.on("request", (r) => { if (r.url().includes("/api/")) kiosk.paths.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+    await tablet.goto(url || "http://pointeur.irongs.com/borne", { waitUntil: "domcontentloaded" });
+  };
+  const ready = async () => {
+    await waitKiosk("FACIAL_OFF", 20000);
+    await tablet.waitForFunction(() => window.AtlasBorne.commandAt > 0, { timeout: 10000 });
+  };
+  const lastSession = () => state().sessions.at(-1);
   await t.test("tablette associée par code à usage unique, EN LIGNE, en mode pointage (facial désactivé)", async () => {
     adminToken = (await (await fetch(BASE + "/api/auth/admin-system-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ADMIN) })).json()).access_token;
     const term = await api("/biometrics/terminals", { method: "POST", body: { name: "TAB-HAMOUL-C1", terminal_type: "TABLET_ANDROID", site_id: siteId } });
     assert.strictEqual(term.status, 200, JSON.stringify(term.data));
     const code = (await api(`/biometrics/terminals/${term.data.id}/pairing-code`, { method: "POST" })).data;
-    tabletBrowser = await puppeteer.launch({ executablePath: CHROME, headless: "new", userDataDir: fs.mkdtempSync(path.join(os.tmpdir(), "atlas_lotc1_tab_")),
-      args: ["--no-first-run", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${VIDEO}`,
-        `--host-resolver-rules=MAP pointeur.irongs.com 127.0.0.1:${PORT}`, "--unsafely-treat-insecure-origin-as-secure=http://pointeur.irongs.com"] });
-    tablet = await tabletBrowser.newPage();
-    await tablet.setViewport({ width: 1280, height: 800 });
-    tablet.on("pageerror", (e) => kiosk.errors.push(String(e)));
-    tablet.on("request", (r) => { if (r.url().includes("/api/")) kiosk.paths.push(`${r.method()} ${new URL(r.url()).pathname}`); });
-    await tablet.goto(`http://pointeur.irongs.com/borne${code.pair_path.slice("/borne".length)}`, { waitUntil: "domcontentloaded" });
+    await launchTablet(VIDEO, `http://pointeur.irongs.com/borne${code.pair_path.slice("/borne".length)}`);
     await tablet.waitForFunction(() => document.querySelector("#pairCode").value.length === 10, { timeout: 10000 });
     await tablet.click("#pairSubmit");
     await waitKiosk("FACIAL_OFF", 20000);                                  // BIOMETRIC_ENABLED=false : pas de pointage facial
     assert.strictEqual(await tablet.$eval("#kioskMode", (e) => e.hidden), true);
     await tablet.waitForFunction(() => window.AtlasBorne.commandAt > 0, { timeout: 10000 });   // première relève de commande = en ligne
     page.on("request", (r) => { if (r.url().includes("/remote-photo/")) pcRequests.push(`${r.method()} ${new URL(r.url()).pathname.replace(/sessions\/[^/]+/, "sessions/:id")}`); });
+    // Géométrie RÉELLE du cercle sur cette tablette, pour une caméra 1280×720.
+    // (mesurée en mode prise de photo : la zone de texte y a une hauteur fixe)
+    const box = await tablet.evaluate(() => {
+      const badge = document.getElementById("kioskMode");
+      document.body.classList.add("kiosk-capturing"); badge.hidden = false; badge.textContent = "PRISE DE PHOTO EN COURS";
+      const r = document.getElementById("kioskVideo").getBoundingClientRect();
+      document.body.classList.remove("kiosk-capturing"); badge.hidden = true; badge.textContent = "";
+      return { elW: r.width, elH: r.height };
+    });
+    guide = await tablet.evaluate((view) => window.AtlasBorne.guideGeometry(view), { ...box, vw: 1280, vh: 720 });
+    assert.ok(guide && guide.video.side > 300, JSON.stringify(guide));
+    // Vidéos : la TÊTE (estimée comme le serveur, à partir de la boîte du VRAI détecteur) placée
+    // par rapport au cercle. dx/dy en fraction du rayon sûr ; écran miroir pour les consignes.
+    caseVideos = JSON.parse(py(`
+import io, json
+from PIL import Image
+from app.modules.biometrics.engine import OpenCvFaceEngine
+from app.modules.biometrics import framing
+eng = OpenCvFaceEngine(${JSON.stringify(MODELS)})
+src = Image.open(${JSON.stringify(path.join(FACES, "obama2.jpg"))}).convert("RGB"); src.thumbnail((470, 640))
+b = io.BytesIO(); src.save(b, "JPEG", quality=92)
+x, y, w, h = eng.analyze(b.getvalue()).faces[0].bbox
+hx, hy, hw, hh = framing.head_box((x, y, w, h))
+sx, sy, side = ${guide.video.sx}, ${guide.video.sy}, ${guide.video.side}
+safe = framing.SAFE_RATIO * side / 2
+out = {}
+for name, dx, dy in (("centre", 0, 0), ("hors_cercle", 0.80, 0), ("front_coupe", 0, -0.62), ("menton_coupe", 0, 0.62)):
+    k = (0.72 * 2 * safe) / hh
+    face = src.resize((round(src.width * k), round(src.height * k)))
+    cx, cy = sx + side / 2 + dx * safe, sy + side / 2 + dy * safe
+    left, top = round(cx - (hx + hw / 2) * k), round(cy - (hy + hh / 2) * k)
+    path = ${JSON.stringify(TMP)} + "/" + name + ".mjpeg"
+    with open(path, "wb") as f:
+        for n in range(60):
+            canvas = Image.new("RGB", (1280, 720), (52, 58, 66)); canvas.paste(face, (left, top))
+            d = (n % 3 - 1) * 2
+            frame = canvas.point(lambda v, d=d: max(0, min(255, v + d)))
+            if n == 0:
+                frame.save(${JSON.stringify(TMP)} + "/" + name + "-ref.png")
+            bb = io.BytesIO(); frame.save(bb, "JPEG", quality=92); f.write(bb.getvalue())
+    out[name] = path
+print(json.dumps(out))
+`));
   });
 
-  await t.test("PC : choix de l'appareil → la tablette passe en « PRISE DE PHOTO » → aperçu de LA photo sur le PC (aucune vidéo)", async () => {
+  // Tête hors de la zone sûre : consigne correspondante, cercle jamais vert, AUCUNE photo candidate.
+  for (const [name, label, instruction] of [["hors_cercle", "visage partiellement hors du cercle", /Déplacez-vous légèrement vers la (droite|gauche)/],
+    ["front_coupe", "front coupé", /Descendez légèrement/], ["menton_coupe", "menton coupé", /Montez légèrement/]]) {
+    await t.test(`CAS ${label} : consigne « ${instruction.source.replace(/\\/g, "")} », aucune photo candidate`, async () => {
+      await launchTablet(caseVideos[name]);
+      await ready();
+      await startRemote();
+      await waitKiosk("CAPTURE");
+      try { await tablet.waitForFunction((re) => new RegExp(re).test(document.querySelector("#kioskStatus").innerText), { timeout: 20000 }, instruction.source); }
+      catch (e) { throw new Error(`${label} : ` + JSON.stringify({ text: await kioskText(), session: lastSession() })); }
+      await sleep(5000);                                                      // bien au-delà de la période de stabilité
+      assert.match(await kioskText(), instruction);
+      assert.doesNotMatch(await tablet.$eval(".kiosk-frame", (e) => e.className), /guide-ok/, "cercle jamais vert");
+      const row = lastSession();
+      assert.deepStrictEqual([row[0], row[2]], ["WAITING_FOR_FACE", true], "aucune photo candidate");
+      assert.strictEqual(await page.$eval("#photo-remote-shot", (e) => e.hidden), true);
+      assert.strictEqual(await page.$eval("#photo-remote-use", (e) => e.hidden), true);
+      await page.click("#photo-remote-cancel");
+      await page.waitForFunction(() => !document.getElementById("photo-remote-title"), { timeout: 10000 });
+      await waitKiosk("FACIAL_OFF");
+    });
+  }
+
+  await t.test("CAS tête centrée : cercle vert, capture ; le PC reçoit SEULEMENT le carré du cercle (aucune vidéo)", async () => {
+    await launchTablet(caseVideos.centre);
+    await ready();
     await page.waitForFunction(() => document.querySelector(".rh-facial-ref")?.dataset.state === "NONE", { timeout: 15000 });
     const picked = await startRemote();
     assert.match(picked.text, /^Tablette TAB-HAMOUL-C1 HAMOUL 01 E2E ● En ligne$/);
@@ -197,10 +279,39 @@ S.commit(); print(site.id)
     assert.deepStrictEqual(await tablet.$eval("#kioskMode", (e) => [e.hidden, e.textContent]), [false, "PRISE DE PHOTO EN COURS"]);
     await waitPreview();
     assert.match(await kioskText(), /Photo prise — vérification en cours/);
-    assert.strictEqual(await page.$eval("#photo-remote-checks", (e) => e.innerText.replace(/\s+/g, " ").trim()), "✓ Visage détecté ✓ Qualité suffisante");
+    assert.strictEqual(await page.$eval("#photo-remote-checks", (e) => e.innerText.replace(/\s+/g, " ").trim()), "✓ Visage détecté ✓ Cadrage conforme ✓ Qualité suffisante");
+    assert.match(await tablet.$eval(".kiosk-frame", (e) => e.className), /is-guide guide-ok|guide-ok/, "cercle vert");
+    // CAS 5 : l'aperçu est le carré du cercle — mêmes dimensions et même contenu que la zone
+    // correspondante de l'image caméra (et non l'image caméra complète 1280×720).
+    const preview = await page.evaluate(async () => {
+      const img = document.getElementById("photo-remote-shot");
+      const blob = await (await fetch(img.src)).blob();
+      const b64 = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+      return { w: img.naturalWidth, h: img.naturalHeight, b64 };
+    });
+    assert.strictEqual(preview.w, preview.h);
+    const live = await tablet.evaluate(() => { const v = document.getElementById("kioskVideo"), r = v.getBoundingClientRect();
+      return window.AtlasBorne.guideGeometry({ elW: r.width, elH: r.height, vw: v.videoWidth, vh: v.videoHeight }); });
+    assert.deepStrictEqual(live, guide, "géométrie stable pendant la prise (celle qui a servi à placer la tête)");
+    assert.strictEqual(preview.w, Math.round(Math.min(640, guide.video.side)));
+    const previewFile = path.join(TMP, "preview.jpg");
+    fs.writeFileSync(previewFile, Buffer.from(preview.b64, "base64"));
+    const diff = JSON.parse(py(`
+import json
+from PIL import Image, ImageChops, ImageStat
+ref = Image.open(${JSON.stringify(path.join(TMP, "centre-ref.png"))}).convert("RGB")
+sx, sy, side = ${guide.video.sx}, ${guide.video.sy}, ${guide.video.side}
+got = Image.open(${JSON.stringify(previewFile)}).convert("RGB")
+expected = ref.crop((round(sx), round(sy), round(sx + side), round(sy + side))).resize(got.size)
+full = ref.resize(got.size)
+mean = lambda a, b: sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+print(json.dumps({"crop": mean(got, expected), "full": mean(got, full)}))
+`));
+    assert.ok(diff.crop < 12, `aperçu ≠ zone du cercle : ${JSON.stringify(diff)}`);
+    assert.ok(diff.full > 2 * diff.crop, `l'aperçu ne doit pas être l'image complète : ${JSON.stringify(diff)}`);
     assert.deepStrictEqual(await page.evaluate(() => ["photo-remote-retake", "photo-remote-use", "photo-remote-cancel"].map((id) => !document.getElementById(id).hidden)), [true, true, true]);
     const s = state();
-    assert.deepStrictEqual(s.sessions.map((x) => [x[0], x[2]]), [["PREVIEW_READY", false]], "photo candidate dans la session, chiffrée");
+    assert.deepStrictEqual([s.sessions.at(-1)[0], s.sessions.at(-1)[2]], ["PREVIEW_READY", false], "photo candidate dans la session, chiffrée");
     assert.deepStrictEqual([s.templates, s.sync, s.photo], [[], null, ""], "rien dans la fiche, aucune référence");
     assert.strictEqual(pcRequests.filter((r) => r.endsWith("/preview")).length, 1, "une seule image reçue par le PC");
   });
@@ -208,7 +319,7 @@ S.commit(); print(site.id)
   await t.test("Reprendre : la tablette recommence ; Utiliser cette photo : formulaire rempli, tablette revenue au pointage", async () => {
     await page.click("#photo-remote-retake");
     await page.waitForFunction(() => document.getElementById("photo-remote-shot").hidden, { timeout: 10000 });
-    await tablet.waitForFunction(() => /Veuillez vous placer|Regardez|Approchez|Restez/.test(document.querySelector("#kioskStatus").innerText), { timeout: 15000 });
+    await tablet.waitForFunction(() => !/Photo prise/.test(document.querySelector("#kioskStatus").innerText), { timeout: 15000 });
     await waitPreview();
     assert.strictEqual(pcRequests.filter((r) => r.endsWith("/preview")).length, 2);
     await page.click("#photo-remote-use");
@@ -218,7 +329,7 @@ S.commit(); print(site.id)
     await waitKiosk("FACIAL_OFF");                                         // retour automatique au pointage
     assert.strictEqual(await tablet.$eval("#kioskMode", (e) => e.hidden), true);
     const s = state();
-    assert.deepStrictEqual(s.sessions, [["ACCEPTED", null, true, null]], "session close, photo candidate effacée");
+    assert.deepStrictEqual(s.sessions.at(-1), ["ACCEPTED", null, true, null], "session close, photo candidate effacée");
     assert.deepStrictEqual([s.templates, s.sync, s.photo], [[], null, ""], "« Utiliser cette photo » n'enregistre pas la fiche");
   });
 
@@ -241,7 +352,7 @@ S.commit(); print(site.id)
     await page.click("#photo-remote-cancel");
     await page.waitForFunction(() => !document.getElementById("photo-remote-title"), { timeout: 10000 });
     await waitKiosk("FACIAL_OFF");
-    assert.strictEqual(state().sessions[1][0], "CANCELLED");
+    assert.strictEqual(lastSession()[0], "CANCELLED");
     // Le navigateur du PC disparaît pendant une prise (aucune annulation propre possible).
     await startRemote();
     await waitKiosk("CAPTURE");
@@ -250,13 +361,13 @@ S.commit(); print(site.id)
     pcProcess.kill("SIGKILL");
     await waitKiosk("FACIAL_OFF", 45000);
     const s = state();
-    assert.deepStrictEqual(s.sessions[2].slice(0, 1).concat(s.sessions[2].slice(2)), ["CANCELLED", true, null]);
-    assert.strictEqual(s.sessions[2][1], "OPERATOR_GONE");
+    assert.deepStrictEqual(s.sessions.at(-1), ["CANCELLED", "OPERATOR_GONE", true, null]);
     assert.deepStrictEqual([s.templates, s.events, s.biometric_enabled], [[["ACTIVE", "EMPLOYEE_PHOTO"]], 0, false], "aucune référence ni pointage créé par les prises annulées");
   });
 
   await t.test("tablette : aucune erreur, aucun appel de pointage pendant les prises ; journaux sans image", async () => {
     assert.deepStrictEqual(kiosk.errors, []);
+    assert.ok(kiosk.paths.filter((p) => p.endsWith("/terminal/capture/check")).length >= 6, "contrôles de cadrage en direct");
     assert.strictEqual(kiosk.paths.some((p) => /terminal\/(recognize|challenge|qr)$/.test(p)), false);
     assert.ok(kiosk.paths.filter((p) => p.endsWith("/terminal/capture/photo")).length >= 2);
     const log = fs.readFileSync(SERVER_LOG, "utf8");

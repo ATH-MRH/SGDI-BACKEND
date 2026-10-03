@@ -3,6 +3,9 @@
 terminal authentifié par sa signature ; aucune vidéo ; aucun gabarit ni pointage créé ici.
 Le terminal est simulé par une vraie clé ECDSA P-256 qui signe chaque requête."""
 import base64
+import dataclasses
+import io
+import json
 import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,11 +28,33 @@ from tests.biometric_fakes import face, frame
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 from tests.test_biometrics import TEST_KEY
 from tests.test_biometrics_terminals import _enrolled, _terminal, burst
-from tests.test_biometrics_test_mode import FakePngEngine, png
+from tests.biometric_fakes import FakeFaceEngine
+from tests.test_biometrics_test_mode import png
+from tests.test_remote_capture_framing import face_for_head
 
 SOC = "Iron Global Securite"
 OTHER = "Sword Corporation"
 DRH = "/api/drh"
+SIDE = 480                                    # le terminal envoie le CARRÉ du cercle de capture
+SAFE_R = 0.90 * SIDE / 2
+CENTRED = face_for_head(SIDE / 2, SIDE / 2, 1.3 * SAFE_R)
+
+
+class FramingEngine(FakeFaceEngine):
+    """Moteur simulé : visage décrit dans le PNG, boîte du visage pilotable (`box`), centrée par
+    défaut ; dimensions = celles de l'image réellement reçue."""
+
+    def analyze(self, image):
+        from PIL import Image
+        try:
+            with Image.open(io.BytesIO(image)) as im:
+                payload, size = im.text["fake"], im.size
+        except Exception:
+            raise ValueError("Image illisible") from None
+        data = json.loads(payload)
+        out = super().analyze(payload.encode())
+        faces = [dataclasses.replace(obs, bbox=tuple(spec.get("box") or CENTRED)) for obs, spec in zip(out.faces, data["faces"])]
+        return dataclasses.replace(out, width=size[0], height=size[1], faces=faces)
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +65,7 @@ def lot_c1(monkeypatch):
     monkeypatch.setattr(settings, "drh_remote_photo_capture_enabled", True)
     monkeypatch.setattr(settings, "drh_facial_reference_auto_sync_enabled", False)
     monkeypatch.setattr(settings, "attendance_min_event_gap_seconds", 0)
-    engine_module.set_engine(FakePngEngine())
+    engine_module.set_engine(FramingEngine())
     with rate_limit._LOCK:
         rate_limit._FAILURES.clear()
     yield
@@ -79,8 +104,13 @@ def drh(client, db):
     return _login(client, db)
 
 
-def _photo(*faces):
-    return base64.b64encode(png(frame(*faces))).decode()
+def _photo(*faces, size=(SIDE, SIDE)):
+    return base64.b64encode(png(frame(*faces), size=size)).decode()
+
+
+def boxed(who, cx, cy, head_h, **kw):
+    """Visage dont la TÊTE estimée est centrée en (cx, cy), de hauteur head_h (pixels du carré)."""
+    return {**face(who, **kw), "box": list(face_for_head(cx, cy, head_h))}
 
 
 def _poll(client, device):
@@ -211,10 +241,10 @@ def test_full_supervised_capture_flow(client, db, setup):
     assert _status(client, h, sid).json()["status"] == "WAITING_FOR_FACE"
     # Photo non exploitable : consigne simple, rien n'est conservé, nouveau jeton.
     bad = device.call(client, "POST", "/terminal/capture/photo", {"session_id": sid, "nonce": ack["nonce"], "photo": _photo()}).json()
-    assert (bad["accepted"], bad["state"], bad["instruction"]) == (False, "NO_FACE", "Regardez la caméra") and bad["nonce"]
+    assert (bad["accepted"], bad["state"], bad["instruction"]) == (False, "NO_FACE", "Placez votre visage dans le cercle") and bad["nonce"]
     assert _row(db, sid).photo_encrypted is None and _row(db, sid).status == "WAITING_FOR_FACE"
     for faces, state, text in (((face("A"), face("B")), "MULTIPLE_FACES", "Une seule personne devant la caméra"),
-                               ((face("S", px=20),), "TOO_SMALL", "Approchez-vous"), ((face("S", sharp=5),), "BLURRED", "Restez immobile")):
+                               ((face("S", px=20),), "TOO_FAR", "Approchez-vous"), ((face("S", sharp=5),), "BLURRED", "Restez immobile")):
         again = device.call(client, "POST", "/terminal/capture/photo", {"session_id": sid, "nonce": bad["nonce"], "photo": _photo(*faces)}).json()
         assert (again["accepted"], again["state"], again["instruction"]) == (False, state, text)
         assert "score" not in str(again).lower()
@@ -228,7 +258,7 @@ def test_full_supervised_capture_flow(client, db, setup):
     assert good == {"accepted": True, "state": "CAPTURED", "instruction": "Photo prise", "nonce": None}
 
     status = _status(client, h, sid).json()
-    assert (status["status"], status["preview"], status["checks"]) == ("PREVIEW_READY", True, {"face": True, "quality": True})
+    assert (status["status"], status["preview"], status["checks"]) == ("PREVIEW_READY", True, {"face": True, "framing": True, "quality": True})
     assert status["terminal"]["site"] == setup["site"].name and status["terminal"]["type"] == "Tablette"
     stored = _row(db, sid)
     assert stored.photo_encrypted and base64.b64decode(image) not in stored.photo_encrypted               # chiffrée au repos
@@ -462,12 +492,10 @@ def test_permissions_and_scope(client, db, setup):
 
 def test_rate_limits_and_analysis_unavailable(client, db, setup, monkeypatch):
     emp, device, h, terminal_id = setup["emp"], setup["device"], setup["h"], setup["terminal_id"]
-    # Analyse indisponible : la photo est remise à l'opérateur sans contrôle automatique.
+    # Analyse indisponible : aucune prise distante (le serveur ne pourrait valider ni visage, ni cadrage, ni qualité).
     monkeypatch.setattr(settings, "biometric_enrollment_enabled", False)
-    sid = _start(client, h, emp, terminal_id).json()["session_id"]
-    assert _capture(client, device, sid).json()["accepted"] is True
-    assert _status(client, h, sid).json()["checks"] is None
-    _decide(client, h, sid, "cancel")
+    refused = _start(client, h, emp, terminal_id)
+    assert refused.status_code == 503 and refused.json()["detail"]["code"] == "FACIAL_ANALYSIS_UNAVAILABLE"
     monkeypatch.setattr(settings, "biometric_enrollment_enabled", True)
     # Image invalide : refusée sans être conservée.
     sid = _start(client, h, emp, terminal_id).json()["session_id"]
@@ -546,3 +574,67 @@ def test_migration_is_additive_reversible_and_enforces_one_active_session(tmp_pa
     assert {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")} == existing
     con.close()
     assert alembic("upgrade", "head").returncode == 0
+
+
+# ── Correctif C1 : cadrage strict, carré du cercle uniquement, contrôle sans stockage ─────
+@pytest.mark.parametrize("label, photo, state, instruction", [
+    ("image complète de la caméra", lambda: _photo(face("FULL"), size=(1280, 720)), "NOT_CROPPED", "Restez immobile"),
+    ("visage partiellement hors du cercle", lambda: _photo(boxed("P1", SIDE * 0.15, SIDE / 2, 1.3 * SAFE_R)), "TOO_RIGHT", "Déplacez-vous légèrement vers la gauche"),
+    ("front coupé", lambda: _photo(boxed("P2", SIDE / 2, SIDE * 0.28, 1.3 * SAFE_R)), "TOO_HIGH", "Descendez légèrement"),
+    ("menton coupé", lambda: _photo(boxed("P3", SIDE / 2, SIDE * 0.74, 1.3 * SAFE_R)), "TOO_LOW", "Montez légèrement"),
+    ("trop près", lambda: _photo(boxed("P4", SIDE / 2, SIDE / 2, 2.1 * SAFE_R)), "TOO_CLOSE", "Reculez-vous"),
+    ("trop loin", lambda: _photo(boxed("P5", SIDE / 2, SIDE / 2, 0.8 * SAFE_R)), "TOO_FAR", "Approchez-vous"),
+])
+def test_candidate_outside_the_circle_never_becomes_a_photo(client, db, setup, label, photo, state, instruction):
+    emp, device, h = setup["emp"], setup["device"], setup["h"]
+    sid = _start(client, h, emp, setup["terminal_id"]).json()["session_id"]
+    nonce = device.call(client, "POST", "/terminal/capture/ack", {"session_id": sid}).json()["nonce"]
+    out = device.call(client, "POST", "/terminal/capture/photo", {"session_id": sid, "nonce": nonce, "photo": photo()}).json()
+    assert (out["accepted"], out["state"], out["instruction"]) == (False, state, instruction), label
+    row = _row(db, sid)
+    assert (row.status, row.photo_encrypted, row.checks) == ("WAITING_FOR_FACE", None, None), label
+    assert client.get(f"{DRH}/remote-photo/sessions/{sid}/preview", headers=h).status_code == 409
+    assert _decide(client, h, sid, "accept").status_code == 409, "jamais « Utiliser cette photo »"
+    # Bien cadré : retenu, et le PC reçoit exactement ce carré.
+    good = _photo(face("OK-" + label[:4]))
+    out = device.call(client, "POST", "/terminal/capture/photo", {"session_id": sid, "nonce": out["nonce"], "photo": good}).json()
+    assert out["accepted"] is True
+    preview = client.get(f"{DRH}/remote-photo/sessions/{sid}/preview", headers=h).content
+    from PIL import Image
+    assert preview == base64.b64decode(good) and Image.open(io.BytesIO(preview)).size == (SIDE, SIDE)
+    _decide(client, h, sid, "cancel")
+
+
+def test_live_framing_check_guides_without_storing_anything(client, db, setup):
+    emp, device, h = setup["emp"], setup["device"], setup["h"]
+    sid = _start(client, h, emp, setup["terminal_id"]).json()["session_id"]
+    check = lambda photo: device.call(client, "POST", "/terminal/capture/check", {"session_id": sid, "photo": photo})  # noqa: E731
+    assert check(_photo(face("C0"))).status_code == 409                                  # pas encore pris en compte
+    nonce = device.call(client, "POST", "/terminal/capture/ack", {"session_id": sid}).json()["nonce"]
+    cases = [(_photo(), "NO_FACE"), (_photo(face("A"), face("B")), "MULTIPLE_FACES"), (_photo(boxed("L", SIDE * 0.85, SIDE / 2, 1.3 * SAFE_R)), "TOO_LEFT"),
+             (_photo(boxed("H", SIDE / 2, SIDE * 0.25, 1.3 * SAFE_R)), "TOO_HIGH"), (_photo(face("F"), size=(640, 480)), "NOT_CROPPED"), (_photo(face("OK")), "OK")]
+    for photo, state in cases:
+        out = check(photo).json()
+        assert (out["ok"], out["state"]) == (state == "OK", state), state
+        assert out["instruction"] and "score" not in str(out).lower()
+    assert check(_photo(face("OK"))).json()["instruction"] == "Position correcte — restez immobile"
+    row = _row(db, sid)
+    assert (row.status, row.photo_encrypted, row.photo_sha256) == ("WAITING_FOR_FACE", None, None), "aucun contrôle n'est conservé"
+    # Le jeton de capture n'est pas consommé par les contrôles.
+    assert device.call(client, "POST", "/terminal/capture/photo", {"session_id": sid, "nonce": nonce, "photo": _photo(face("OK"))}).json()["accepted"] is True
+    assert check(_photo(face("OK"))).status_code == 409                                  # photo prise : plus de contrôle
+    actions = [e.action.rsplit(".", 1)[1] for e in _audits(db, emp)]
+    assert actions.count("captured") == 1
+
+
+def test_unvalidated_candidate_can_never_be_used(client, db, setup):
+    """Défense en profondeur : une candidate sans validation complète (ex. session ouverte avant
+    le correctif) ne peut pas être utilisée."""
+    emp, device, h = setup["emp"], setup["device"], setup["h"]
+    sid = _start(client, h, emp, setup["terminal_id"]).json()["session_id"]
+    assert _capture(client, device, sid, face("LEG")).json()["accepted"] is True
+    row = _row(db, sid); row.checks = {"face": True, "quality": True}; db.commit()          # ancienne forme
+    assert _status(client, h, sid).json()["checks"] == {"face": True, "quality": True}
+    r = _decide(client, h, sid, "accept")
+    assert r.status_code == 409 and "photo" not in r.json() and "base64" not in r.text
+    assert _decide(client, h, sid, "retake").status_code == 200

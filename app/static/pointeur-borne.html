@@ -42,6 +42,14 @@
   .kiosk-mode { background: var(--warn); color: #1b1300; border-radius: 999px; padding: 3px 12px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
   .kiosk-mode[hidden] { display: none; }
   body.kiosk-capturing .kiosk-frame { border-color: var(--warn); }
+  /* Cercle de capture : posé par le script sur la géométrie canonique (dessin = contrôle = recadrage).
+     Jaune : ajustement ; vert : tête entière dans la zone sûre ; rouge : plusieurs personnes. */
+  .kiosk-frame.is-guide { aspect-ratio: auto; max-width: none; border-radius: 50%; border-width: 6px; border-color: var(--warn); transition: border-color .2s; }
+  .kiosk-frame.is-guide.guide-ok { border-color: var(--ok); }
+  .kiosk-frame.is-guide.guide-error { border-color: var(--err); }
+  /* Pendant la prise, la zone de texte a une hauteur FIXE : la zone vidéo (donc le cercle et le
+     recadrage) ne bouge pas quand la consigne change de longueur. */
+  body.kiosk-capturing .kiosk-status { height: max(26vh, 210px); min-height: 0; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -63,6 +71,6 @@
     <div id="pairMessage" role="alert"></div>
   </form>
 </div>
-<script src="/static/pointeur-borne.js?v=20261003-c1"></script>
+<script src="/static/pointeur-borne.js?v=20261003-c1-cercle"></script>
 </body>
 </html>
