@@ -154,3 +154,47 @@ def test_closure_crossing_scans_loses_and_doubles_nothing(pg_sessionmaker):
     state = _state(pg_sessionmaker, site_id)
     assert Counter(c[2] for c in state["checks"]) == Counter({"CONFORM": 3, "UNEXPECTED_ROTATION": 1})
     assert len(state["alerts"]) == 1
+
+
+def test_projection_while_versions_change_stays_consistent(pg_sessionmaker):
+    """Lot 4 : des consultations de planning (30 jours) croisent des changements de groupe
+    confirmés et une clôture apprise. Aucune erreur, versions sans doublon ni trou, et la
+    projection n'écrit rien."""
+    from app.modules.attendance import deviations, projection, sheets
+    from app.modules.attendance.models import AttendanceSheet, RotationDecision, RotationModelVersion, RotationSiteModel
+    from app.modules.ops.models import Site
+
+    site_id, teams = _active(pg_sessionmaker)
+    _sheets(pg_sessionmaker, site_id, teams, [16])
+    movers = teams[0] + teams[1]
+    with pg_sessionmaker() as db:
+        sheets_before = db.execute(select(func.count(AttendanceSheet.id)).where(AttendanceSheet.site_id == site_id)).scalar_one()
+
+    def job(i):
+        with pg_sessionmaker() as db:
+            if i < len(movers):
+                deviations.decide(db, site_id=site_id, employee_id=movers[i], kind="PERMANENT", group="C",
+                                  start=START + timedelta(hours=8 * (30 + i)), end=None, reason="Mutation", user=SimpleNamespace(id=None, username=f"ops{i}"))
+                db.commit()
+                return "decision"
+            if i % 2:
+                sheets.maintain(db, _local(17), [site_id], ensure_current=False)
+                db.commit()
+                return "closure"
+            plan = projection.project(db, db.get(Site, site_id), date_from=(START + timedelta(days=6)).date(),
+                                      date_to=(START + timedelta(days=35)).date(), now=_local(17))
+            return len(plan["occurrences"])
+
+    results, errors = _parallel(len(movers) + 8, job)
+    assert errors == []
+    assert {r for r in results if isinstance(r, int)} == {90}
+    with pg_sessionmaker() as db:
+        model = db.execute(select(RotationSiteModel).where(RotationSiteModel.site_id == site_id)).scalar_one()
+        versions = db.execute(select(RotationModelVersion.version).where(RotationModelVersion.site_id == site_id).order_by(RotationModelVersion.version)).scalars().all()
+        assert versions == list(range(1, model.model_version + 1))
+        assert db.execute(select(func.count(RotationModelVersion.id)).where(RotationModelVersion.site_id == site_id, RotationModelVersion.source == "HUMAN")).scalar_one() == len(movers)
+        assert db.execute(select(func.count(RotationDecision.id)).where(RotationDecision.site_id == site_id)).scalar_one() == len(movers)
+        assert db.execute(select(func.count(AttendanceSheet.id)).where(AttendanceSheet.site_id == site_id)).scalar_one() == sheets_before
+        final = projection.project(db, db.get(Site, site_id), date_from=(START + timedelta(days=20)).date(), date_to=(START + timedelta(days=20)).date(), now=_local(17))
+    c_slots = [o for o in final["occurrences"] if o["group"] == "C"]
+    assert c_slots and all(o["expected_count"] == 3 + len(movers) for o in c_slots)          # tous mutés vers C, à leur date d'effet

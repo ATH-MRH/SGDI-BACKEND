@@ -596,6 +596,9 @@ def _recompute(db: Session, model: RotationSiteModel, observations: list[Obs], *
                      new_state={"state": state, "model_version": version, "groups_detected": established,
                                 "sheets_observed": len(filled), "source": source, "source_sheet_id": source_sheet_id,
                                 "engine_version": ENGINE_VERSION, "actor": actor, "membership_changes": len(changes)})
+    if model.mode == MODE_ACTIVE and old_summary["state"] != state and SITE_REVIEW in (old_summary["state"], state):
+        from app.modules.attendance import projection
+        projection.sync_review_alert(db, model, conditions, now)
     db.flush()
     return {"site_id": site_id, "state": state, "model_version": version, "changed": changed, "sheets_observed": len(filled),
             "groups_detected": established, "mean_confidence": mean, "membership_changes": changes, "fingerprint": fingerprint}

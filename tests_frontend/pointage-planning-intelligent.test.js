@@ -32,7 +32,19 @@ const CARD = { employee_id: 11, matricule: 'K162', name: 'ADDA IBRAHIM', fonctio
   history: [{ changed_at: '2026-10-01T14:00:00+01:00', old_group: null, new_group: 'A', old_status: 'LEARNING', new_status: 'PROBABLE', old_confidence: 0.62, new_confidence: 0.74, source: 'LEARNED', source_sheet_id: 42, actor: null, engine_version: 'rot-learn-1' }],
   observations: [{ sheet_id: 42, date: '2026-10-03', label: '06:00 – 14:00', group: 'A', first_entry: '06:02', last_exit: '14:01' }] };
 
-function boot({ items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning' } = {}) {
+const P = (id, matricule, name, source = 'LEARNED') => ({ employee_id: id, matricule, name, source });
+const PLAN = { site_id: 3, site: 'DHL HAMOUL 01', mode: 'ACTIVE', state: 'STABLE', model_version: 6, materialized: false,
+  banner: { code: 'ACTIVE', label: 'PLANNING INTELLIGENT ACTIF', reliable: true },
+  cycle: { period: 4, pattern: ['A', 'B', 'C', 'D'], shift_minutes: 480, version: 6, source: 'HUMAN' },
+  occurrences: [
+    { date: '2026-10-03', start: '14:00', end: '22:00', group: 'B', rest: false, expected: [P(21, 'K201', 'BENALI Sara'), P(11, 'K162', 'ADDA Ibrahim', 'TEMPORARY')], expected_count: 2,
+      exceptions: [{ matricule: 'K162', type: 'TEMPORARY', label: 'Remplacement temporaire (habituel : groupe A)' }], version: 5, version_source: 'LEARNED', period: 'past',
+      actual: { sheet_id: 7, status: 'ARCHIVED', present: 2, observed_group: 'B', missing: [P(22, 'K202', 'KACI Lina')], unexpected: [],
+        deviations: [{ matricule: 'K162', name: 'ADDA Ibrahim', expected_group: 'A', observed_group: 'B', outcome_label: 'Rotation inhabituelle', qualification_label: 'Remplacement temporaire' }] } },
+    { date: '2026-10-03', start: '22:00', end: '06:00', group: 'C', rest: false, expected: [P(31, 'K301', '<img src=x onerror=alert(1)>', 'CONFIRMED')], expected_count: 1, exceptions: [], version: 6, version_source: 'HUMAN', period: 'current', actual: null },
+    { date: '2026-10-04', start: '06:00', end: '14:00', group: null, rest: true, expected: [], expected_count: 0, exceptions: [], version: 6, version_source: 'HUMAN', period: 'future', actual: null }] };
+
+function boot({ items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning', plan = PLAN } = {}) {
   const calls = [];
   const errors = [];
   const vc = new VirtualConsole();
@@ -51,6 +63,7 @@ function boot({ items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning
         else if (u.pathname === '/api/attendance/sites') data = [{ id: 3, name: 'DHL HAMOUL 01', society: 'SOC' }, { id: 4, name: 'Site neuf', society: 'SOC' }];
         else if (u.pathname === '/api/attendance/rotation-learning') data = { enabled, engine_version: 'rot-learn-1', items: u.searchParams.get('site_id') ? items.filter((i) => String(i.site_id) === u.searchParams.get('site_id')) : items };
         else if (u.pathname === '/api/attendance/rotation-learning/3/groups') data = GROUPS;
+        else if (u.pathname === '/api/attendance/rotation-planning') data = typeof plan === 'function' ? plan(call.query) : plan;
         else if (u.pathname === '/api/attendance/rotation-learning/employees/11') data = CARD;
         else if (/^\/api\/attendance\/rotation-learning\/\d+$/.test(u.pathname)) data = { ...OFF, mode: call.body.mode };
         return { ok: true, status: 200, text: async () => JSON.stringify(data) };
@@ -173,4 +186,61 @@ test('feuilles de rotation : observation brute et interprétation du moteur affi
   assert.match(rows[0].children[7].textContent, /Groupe A\s*· appris G2/);
   assert.equal(rows[1].children[7].textContent.trim(), 'Groupe B');
   dom.window.close();
+});
+
+test('planning projeté : bandeau selon l\'état, prévu / réel / écart / décision, version, rien d\'enregistré', async () => {
+  const { d, calls, dom, w } = boot({ items: [STABLE] });
+  await tick(120);
+  assert.equal(d.getElementById('pl-plan-card').classList.contains('hidden'), false);
+  const first = calls.find((c) => c.path === '/api/attendance/rotation-planning');
+  assert.deepEqual([first.query.site_id, first.query.date_from === first.query.date_to, 'group' in first.query], ['3', true, false], 'aujourd\'hui par défaut');
+  const banner = d.querySelector('[data-pl-banner]');
+  assert.equal(banner.dataset.plBanner, 'ACTIVE');
+  assert.match(banner.textContent, /PLANNING INTELLIGENT ACTIF · cycle A → B → C → D · version 6 \(décision OPS\)/);
+  const rows = [...d.querySelectorAll('#pl-plan-rows tr')];
+  assert.equal(rows.length, 3);
+  const past = [...rows[0].children].map((c) => c.textContent.replace(/\s+/g, ' ').trim());
+  assert.deepEqual(past.slice(0, 3), ['2026-10-03', '14:00 – 22:00', 'Groupe B']);
+  assert.match(past[3], /^2 · K201 BENALI Sara, K162 ADDA Ibrahim \(temporaire\)$/);
+  assert.match(past[4], /K162 : Remplacement temporaire \(habituel : groupe A\)/);
+  assert.match(past[5], /2 présent\(s\).*K162 prévu A · réel B · Remplacement temporaire.*Attendus non pointés : K202/);
+  assert.equal(past[6], 'v5');
+  assert.match(rows[1].textContent, /En cours[\s\S]*Groupe C[\s\S]*\(confirmé\)[\s\S]*v6 · OPS/);
+  assert.equal(rows[1].querySelector('img'), null, 'aucune injection HTML');
+  assert.match(rows[2].textContent, /Repos/);
+  assert.match(d.getElementById('pl-plan-total').textContent, /3 rotation\(s\) · calculées à la demande, non enregistrées/);
+  // Horizons : aujourd'hui, demain, 7 jours, 30 jours — bornés par le serveur.
+  const span = (q) => Math.round((new Date(q.date_to) - new Date(q.date_from)) / 86400000);
+  for (const [days, expected] of [['1', 0], ['7', 6], ['30', 29]]) {
+    d.querySelector(`[data-pl-days="${days}"]`).click();
+    await tick(40);
+    assert.equal(span(calls.filter((c) => c.path === '/api/attendance/rotation-planning').at(-1).query), expected);
+  }
+  d.getElementById('pl-group').value = 'A';
+  d.getElementById('pl-group').dispatchEvent(new w.Event('change'));
+  await tick(40);
+  assert.equal(calls.filter((c) => c.path === '/api/attendance/rotation-planning').at(-1).query.group, 'A');
+  d.getElementById('pl-employee').value = 'k201';
+  d.getElementById('pl-employee').dispatchEvent(new w.Event('input'));
+  assert.equal(d.querySelectorAll('#pl-plan-rows tr').length, 1);
+  assert.equal(calls.filter((c) => c.method !== 'GET').length, 0, 'consultation seule');
+  dom.window.close();
+});
+
+test('planning projeté : apprentissage = prévision, révision requise signalée, sans cycle rien n\'est projeté', async () => {
+  for (const [banner, pattern] of [
+    [{ code: 'LEARNING', label: 'PRÉVISION EN APPRENTISSAGE', reliable: false }, /PRÉVISION EN APPRENTISSAGE/],
+    [{ code: 'REVIEW_REQUIRED', label: 'RÉVISION DU PLANNING REQUISE', reliable: false }, /RÉVISION DU PLANNING REQUISE/]]) {
+    const { d, dom } = boot({ items: [STABLE], plan: { ...PLAN, banner } });
+    await tick(120);
+    assert.equal(d.querySelector('[data-pl-banner]').dataset.plBanner, banner.code);
+    assert.match(d.querySelector('[data-pl-banner]').textContent, pattern);
+    assert.doesNotMatch(d.querySelector('[data-pl-banner]').textContent, /PLANNING INTELLIGENT ACTIF/);
+    dom.window.close();
+  }
+  const empty = boot({ items: [STABLE], plan: { ...PLAN, cycle: null, occurrences: [], banner: { code: 'LEARNING', label: 'PRÉVISION EN APPRENTISSAGE', reliable: false, detail: 'Aucun cycle démontré pour l\'instant : rien n\'est projeté.' } } });
+  await tick(120);
+  assert.match(empty.d.querySelector('[data-pl-banner]').textContent, /Aucun cycle démontré/);
+  assert.match(empty.d.getElementById('pl-plan-rows').textContent, /Aucune rotation projetée/);
+  empty.dom.window.close();
 });

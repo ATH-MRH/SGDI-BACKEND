@@ -9,6 +9,7 @@ RULE_MISSING_CHECKOUT = "attendance.presence.missing_checkout"
 # Écart de rotation (planning intelligent) : alerte créée à l'événement par
 # app/modules/attendance/deviations.py, pas par un détecteur planifié.
 RULE_ROTATION_DEVIATION = "attendance.rotation.deviation"
+RULE_ROTATION_MODEL_REVIEW = "attendance.rotation.model_review"
 
 # Seuils v1 figés — voir scoring.py pour leur usage dans le calcul du score.
 CONTRACT_EXPIRING_THRESHOLDS_DAYS: tuple[int, ...] = (30, 15, 7, 0)
@@ -62,6 +63,21 @@ RULE_CATALOG: tuple[dict, ...] = (
             "Un salarié pointe sur une rotation qui n'est pas celle de son groupe attendu "
             "(remplacement en cours, groupe confirmé ou groupe appris fiable). Le pointage "
             "reste enregistré ; l'écart est à qualifier par OPS."
+        ),
+        "module_key": "ops",
+        "feature_key": None,
+        "enabled": True,
+        "severity_base": "warning",
+        "configuration_json": {},
+    },
+    {
+        "rule_key": RULE_ROTATION_MODEL_REVIEW,
+        "rule_version": 1,
+        "label": "Révision du planning requise",
+        "description": (
+            "Le modèle de rotation appris d'un site actif n'est plus cohérent avec les pointages "
+            "(groupes instables, cycle contredit, configuration incompatible). Les projections "
+            "ne sont plus présentées comme fiables tant que le modèle n'est pas revu."
         ),
         "module_key": "ops",
         "feature_key": None,

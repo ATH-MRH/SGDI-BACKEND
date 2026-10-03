@@ -301,11 +301,64 @@ def alerts_for_events(db: Session, event_ids: list[int]) -> dict[int, dict[str, 
 
 
 # ── Qualification OPS ────────────────────────────────────────────────────────────────────
-def _current_group(db: Session, check: RotationCheck, membership: RotationMembership | None) -> str | None:
-    params = learning.effective_params(learning.model_for(db, check.site_id))
-    reference = reference_at([d for d in decisions_for(db, check.site_id, [check.employee_id]).get(check.employee_id, [])
-                              if d.kind == DECISION_PERMANENT], membership, check.occurred_at, {**params, "alert_confidence": 0})
-    return reference["group"] if reference else None
+def decide(db: Session, *, site_id: int, employee_id: int, kind: str, group: str, start: datetime, end: datetime | None,
+           reason: str | None, user: Any, check: RotationCheck | None = None, membership: RotationMembership | None = None,
+           now: datetime | None = None) -> RotationDecision:
+    """Décision humaine DATÉE (UTC naïf) : remplacement temporaire ou changement de groupe
+    confirmé. Elle prime sur le modèle pendant sa période d'effet et ne touche jamais au passé :
+    une période antérieure à `start` se relit avec les décisions qui la précèdent."""
+    if kind not in (DECISION_TEMPORARY, DECISION_PERMANENT):
+        raise ValueError("Type de décision inconnu")
+    if not (reason or "").strip():
+        raise ValueError("Un motif est obligatoire pour cette décision")
+    known = set(db.execute(select(RotationGroup.label).where(RotationGroup.site_id == site_id)).scalars().all())
+    if not group or group not in known:
+        raise ValueError("Groupe inconnu sur ce site")
+    now = now or datetime.utcnow()
+    username = getattr(user, "username", None)
+    # Verrou du modèle du site AVANT l'appartenance (même ordre que l'apprentissage) : les
+    # versions restent sans doublon et aucune étreinte fatale n'est possible avec une clôture.
+    model = learning.model_for(db, site_id, lock=True)
+    if membership is None:
+        membership = db.execute(select(RotationMembership).where(RotationMembership.site_id == site_id,
+                                                                 RotationMembership.employee_id == employee_id)
+                                .with_for_update()).scalar_one_or_none()
+    params = {**learning.effective_params(model), "alert_confidence": 0}
+    permanent = [d for d in decisions_for(db, site_id, [employee_id]).get(employee_id, []) if d.kind == DECISION_PERMANENT]
+    usual = reference_at(permanent, membership, start, params)
+    if kind == DECISION_TEMPORARY:
+        if end is None or end <= start:
+            raise ValueError("La fin du remplacement doit suivre son début")
+        decision = RotationDecision(kind=DECISION_TEMPORARY, effective_to=end)
+    else:
+        decision = RotationDecision(kind=DECISION_PERMANENT, effective_to=None)
+        if membership is None:
+            membership = RotationMembership(site_id=site_id, employee_id=employee_id, status=MEMBER_LEARNING, source=SOURCE_HUMAN,
+                                            confidence=0, observations=0, with_group=0, model_version=0)
+            db.add(membership)
+        before = (membership.confirmed_group or membership.learned_group, membership.status, membership.confidence)
+        membership.confirmed_group = group
+        membership.status = learning._status_of(bool(membership.learned_group), membership.learned_group, group)[1]
+        membership.updated_at = now
+        # Nouvelle version de l'appartenance : ancienne / nouvelle valeur, validateur, motif,
+        # alerte source, confiance du modèle au moment de la décision. Rien de rétroactif.
+        db.add(RotationMembershipHistory(
+            site_id=site_id, employee_id=employee_id, old_group=before[0], new_group=group,
+            old_status=before[1], new_status=membership.status, old_confidence=before[2], new_confidence=membership.confidence,
+            source=SOURCE_HUMAN, source_sheet_id=check.sheet_id if check else None, actor=username,
+            engine_version=learning.ENGINE_VERSION, model_version=(model.model_version if model else 0) or 0, changed_at=now))
+    decision.site_id, decision.employee_id = site_id, employee_id
+    decision.group_label, decision.previous_group, decision.effective_from = group, usual["group"] if usual else None, start
+    decision.reason, decision.validator, decision.validator_user_id = reason.strip(), username, getattr(user, "id", None)
+    decision.check_id, decision.alert_id = (check.id, check.alert_id) if check else (None, None)
+    decision.model_confidence = check.confidence if check else (membership.confidence if membership else None)
+    decision.model_version = check.model_version if check else (model.model_version if model else None)
+    db.add(decision)
+    db.flush()
+    if kind == DECISION_PERMANENT and model is not None:
+        from app.modules.attendance import projection
+        projection.record_human_version(db, model, effective_at=start, actor=username, sheet_id=check.sheet_id if check else None, now=now)
+    return decision
 
 
 def qualify(db: Session, check_id: int, *, action: str, user: Any, reason: str | None = None, group: str | None = None,
@@ -332,6 +385,7 @@ def qualify(db: Session, check_id: int, *, action: str, user: Any, reason: str |
     now = now or datetime.utcnow()
     username = getattr(user, "username", None)
     sheet = db.get(AttendanceSheet, check.sheet_id)
+    learning.model_for(db, check.site_id, lock=True)                # ordre des verrous : modèle, puis appartenance
     membership = db.execute(select(RotationMembership).where(RotationMembership.site_id == check.site_id,
                                                              RotationMembership.employee_id == check.employee_id)
                             .with_for_update()).scalar_one_or_none()
@@ -339,40 +393,10 @@ def qualify(db: Session, check_id: int, *, action: str, user: Any, reason: str |
                  "confirmed_group": membership.confirmed_group if membership else None}
     decision: RotationDecision | None = None
     if action in (QUALIFY_REPLACEMENT, QUALIFY_GROUP_CHANGE):
-        target = (group or check.observed_group or "").strip()
-        known = set(db.execute(select(RotationGroup.label).where(RotationGroup.site_id == check.site_id)).scalars().all())
-        if not target or target not in known:
-            raise ValueError("Groupe inconnu sur ce site")
-        start = start_at or sheet.window_start
-        usual = _current_group(db, check, membership)
-        if action == QUALIFY_REPLACEMENT:
-            if end_at is None or end_at <= start:
-                raise ValueError("La fin du remplacement doit suivre son début")
-            decision = RotationDecision(kind=DECISION_TEMPORARY, effective_to=end_at)
-        else:
-            decision = RotationDecision(kind=DECISION_PERMANENT, effective_to=None)
-            if membership is None:
-                membership = RotationMembership(site_id=check.site_id, employee_id=check.employee_id, status=MEMBER_LEARNING,
-                                                source=SOURCE_HUMAN, confidence=0, observations=0, with_group=0, model_version=0)
-                db.add(membership)
-            before = (membership.confirmed_group or membership.learned_group, membership.status, membership.confidence)
-            membership.confirmed_group = target
-            membership.status = learning._status_of(bool(membership.learned_group), membership.learned_group, target)[1]
-            membership.updated_at = now
-            # Nouvelle version de l'appartenance : ancienne / nouvelle valeur, validateur, motif,
-            # alerte source, confiance du modèle au moment de la décision. Rien de rétroactif.
-            db.add(RotationMembershipHistory(
-                site_id=check.site_id, employee_id=check.employee_id, old_group=before[0], new_group=target,
-                old_status=before[1], new_status=membership.status, old_confidence=before[2], new_confidence=membership.confidence,
-                source=SOURCE_HUMAN, source_sheet_id=check.sheet_id, actor=username, engine_version=learning.ENGINE_VERSION,
-                model_version=check.model_version or 0, changed_at=now))
-        decision.site_id, decision.employee_id = check.site_id, check.employee_id
-        decision.group_label, decision.previous_group, decision.effective_from = target, usual, start
-        decision.reason, decision.validator, decision.validator_user_id = reason, username, getattr(user, "id", None)
-        decision.check_id, decision.alert_id = check.id, check.alert_id
-        decision.model_confidence, decision.model_version = check.confidence, check.model_version
-        db.add(decision)
-        db.flush()
+        decision = decide(db, site_id=check.site_id, employee_id=check.employee_id,
+                          kind=DECISION_TEMPORARY if action == QUALIFY_REPLACEMENT else DECISION_PERMANENT,
+                          group=(group or check.observed_group or "").strip(), start=start_at or sheet.window_start, end=end_at,
+                          reason=reason, user=user, check=check, membership=membership, now=now)
         check.decision_id = decision.id
     status, alert_action = _OUTCOMES[action]
     check.status, check.qualification, check.reason = status, action, reason

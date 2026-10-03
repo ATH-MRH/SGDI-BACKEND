@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.attendance import core, deviations, learning, sheets
+from app.modules.attendance import core, deviations, learning, projection, sheets
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -768,3 +768,81 @@ def rotation_history(
         db, site_ids=_scope(db, user, site_id), date_from=date_from, date_to=date_to, employee_id=employee_id, group=group,
         outcome=outcome.upper() if outcome else None, anomaly=anomaly, sheet_status=status.upper() if status else None,
         q=q, page=page, page_size=page_size)
+
+
+# ── Planning intelligent — projection du planning (lot 4) ──────────────────────────────────
+# Occurrences CALCULÉES à la demande depuis la règle de cycle versionnée et les décisions datées :
+# rien n'est matérialisé. Consultation : périmètre de sites. Décision planifiée : action « validate ».
+class RotationDecisionIn(BaseModel):
+    employee_id: int
+    kind: str = Field(min_length=3, max_length=12)       # TEMPORARY | PERMANENT
+    group: str = Field(min_length=1, max_length=12)
+    start_at: datetime                                    # heure locale du site
+    end_at: datetime | None = None
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+@router.get("/rotation-planning")
+def rotation_planning(
+    site_id: int,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    group: str | None = None,
+    employee_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Planning d'un site : aujourd'hui par défaut, jusqu'à 92 jours. Passé = prévu / réel /
+    écart / décision ; futur = prévision, présentée selon l'état du modèle."""
+    _ensure_site_allowed(db, user, site_id)
+    site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    start = date_from or core._now_local().date()
+    try:
+        return projection.project(db, site, date_from=start, date_to=date_to or start, group=group, employee_id=employee_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/rotation-planning/{site_id}/decisions")
+def rotation_planning_decisions(site_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Décisions humaines datées du site (remplacements temporaires, changements confirmés)."""
+    _ensure_site_allowed(db, user, site_id)
+    return {"site_id": site_id, "items": projection.decisions_out(db, site_id)}
+
+
+@router.post("/rotation-planning/{site_id}/decisions")
+def create_rotation_decision(
+    site_id: int,
+    payload: RotationDecisionIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Décision OPS planifiée (override) : remplacement temporaire ou changement de groupe à une
+    date d'effet. Prioritaire sur la projection pendant sa période ; jamais rétroactive."""
+    _require_action(user, "validate")
+    _ensure_site_allowed(db, user, site_id)
+    employee = db.get(Employee, payload.employee_id)
+    model = learning.model_for(db, site_id, lock=True)
+    if employee is None or model is None or model.mode == "OFF":
+        raise HTTPException(status_code=404, detail="Site ou employé introuvable pour le planning intelligent")
+    try:
+        decision = deviations.decide(
+            db, site_id=site_id, employee_id=employee.id, kind=payload.kind.upper(), group=payload.group.strip(),
+            start=core.to_utc_naive(payload.start_at), end=core.to_utc_naive(payload.end_at) if payload.end_at else None,
+            reason=payload.reason, user=user)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    site = db.get(Site, site_id)
+    append_audit(db, action="attendance.rotation_planning.decision", resource="rotation_decision", resource_id=decision.id,
+                 result="success", user=user, request=request, society=_site_society(site) if site else None,
+                 old_state={"group": decision.previous_group},
+                 new_state={"employee_id": employee.id, "kind": decision.kind, "group": decision.group_label,
+                            "effective_from": decision.effective_from.isoformat(),
+                            "effective_to": decision.effective_to.isoformat() if decision.effective_to else None,
+                            "reason": decision.reason})
+    db.commit()
+    return projection.decision_out(decision, employee)
