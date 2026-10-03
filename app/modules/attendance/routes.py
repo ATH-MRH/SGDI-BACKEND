@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.attendance import core, sheets
+from app.modules.attendance import core, learning, sheets
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -30,6 +30,8 @@ from app.modules.attendance.models import (
     AttendanceEvent,
     AttendanceSheet,
     AttendanceSheetLine,
+    RotationMembership,
+    RotationModelVersion,
     RotationSetting,
 )
 from app.core.audit import append_audit
@@ -478,8 +480,10 @@ def list_sheets(
     rows = db.execute(query.order_by(AttendanceSheet.window_start.desc(), AttendanceSheet.id.desc())
                       .offset((page - 1) * page_size).limit(page_size)).scalars().all()
     names = {s.id: (s.name or s.indicatif or "") for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows} or {0}))).scalars().all()}
+    learned = learning.interpretations(db, [row.id for row in rows])
     return {"total": int(total), "page": page, "page_size": page_size,
-            "items": [{**sheets.sheet_out(db, row), "site": names.get(row.site_id, "")} for row in rows]}
+            "items": [{**sheets.sheet_out(db, row), "site": names.get(row.site_id, ""),
+                       "interpretation": learned.get(row.id)} for row in rows]}
 
 
 @router.get("/sheets/{sheet_id}")
@@ -496,4 +500,157 @@ def get_sheet(
     site = db.get(Site, sheet.site_id)
     events = sheets.line_events_out(db, sheet)
     lines = [{**line, "events": events.get(line["id"], [])} for line in sheets.lines_out(db, sheet)]
-    return {**sheets.sheet_out(db, sheet), "site": (site.name or site.indicatif or "") if site else "", "lines": lines}
+    return {**sheets.sheet_out(db, sheet), "site": (site.name or site.indicatif or "") if site else "", "lines": lines,
+            "interpretation": learning.interpretations(db, [sheet.id]).get(sheet.id)}
+
+
+# ── Planning intelligent — apprentissage des groupes et des rotations (lot 2) ──────────────
+# Lecture du modèle appris (DRH / OPS) et pilotage explicite. Aucune alerte, aucune projection.
+class RotationLearningIn(BaseModel):
+    mode: str = Field(min_length=2, max_length=12)
+    params: dict[str, Any] | None = None
+
+
+class RotationRebuildIn(BaseModel):
+    date_from: date | None = None
+    date_to: date | None = None
+    dry_run: bool = True
+
+
+def _learning_sites(db: Session, user: User, site_id: int | None) -> list[Site]:
+    scope = _scope(db, user, site_id)
+    query = select(Site).join(RotationSetting, RotationSetting.site_id == Site.id)
+    if scope is not None:
+        query = query.where(Site.id.in_(scope))
+    return list(db.execute(query.order_by(Site.name, Site.id)).scalars().all())
+
+
+@router.get("/rotation-learning")
+def rotation_learning_overview(
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """État d'apprentissage des sites à rotation paramétrée du périmètre (valeurs mesurées)."""
+    rows = _learning_sites(db, user, site_id)
+    sheets.maintain(db, site_ids=[site.id for site in rows], ensure_current=False)
+    db.commit()
+    return {"enabled": learning.settings.rotation_learning_enabled, "engine_version": learning.ENGINE_VERSION,
+            "items": [learning.site_out(db, site, learning.model_for(db, site.id)) for site in rows]}
+
+
+@router.put("/rotation-learning/{site_id}")
+def put_rotation_learning(
+    site_id: int,
+    payload: RotationLearningIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Active (LEARNING) ou fige (OFF) l'apprentissage d'un site et règle ses paramètres."""
+    _require_action(user, "update")
+    _ensure_site_allowed(db, user, site_id)
+    site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    try:
+        model, old_state = learning.set_mode(db, site_id, mode=payload.mode.upper(), params=payload.params, username=user.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    append_audit(db, action="attendance.rotation_learning.settings", resource="rotation_site_model", resource_id=site_id,
+                 result="success", user=user, request=request, society=_site_society(site),
+                 old_state=old_state, new_state={"mode": model.mode, "params": model.params})
+    db.commit()
+    return learning.site_out(db, site, model)
+
+
+@router.get("/rotation-learning/employees/{employee_id}")
+def rotation_learning_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Fiche rotation d'un salarié : groupe déclaré / appris / confirmé, observations,
+    confiance expliquée, historique d'appartenance. Complète la fiche RH, ne la remplace pas."""
+    employee = db.get(Employee, employee_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    if allowed is not None:
+        known = db.execute(select(func.count(RotationMembership.id)).where(
+            RotationMembership.employee_id == employee_id, RotationMembership.site_id.in_(list(allowed) or [0]))).scalar_one()
+        assigned = db.execute(select(func.count(Assignment.id)).where(
+            Assignment.employee_id == employee_id, Assignment.site_id.in_(list(allowed) or [0]))).scalar_one()
+        if not known and not assigned:
+            raise HTTPException(status_code=404, detail="Employé introuvable")
+    return learning.employee_out(db, employee, list(allowed) if allowed is not None else None)
+
+
+@router.get("/rotation-learning/{site_id}/groups")
+def rotation_learning_groups(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Groupes DÉTECTÉS d'un site : membres probables / confirmés / en apprentissage, créneau
+    habituel, confiance. Le groupe déclaré de chaque salarié est rappelé, jamais modifié."""
+    _ensure_site_allowed(db, user, site_id)
+    site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    return {**learning.site_out(db, site, learning.model_for(db, site_id)), "groups": learning.groups_out(db, site_id)}
+
+
+@router.get("/rotation-learning/{site_id}/versions")
+def rotation_learning_versions(
+    site_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Versions successives du modèle d'un site (jamais réécrites)."""
+    _ensure_site_allowed(db, user, site_id)
+    rows = db.execute(select(RotationModelVersion).where(RotationModelVersion.site_id == site_id)
+                      .order_by(RotationModelVersion.version.desc()).limit(limit)).scalars().all()
+    return {"site_id": site_id, "items": [{
+        "version": row.version, "effective_at": core.to_local(row.effective_at).isoformat(), "state": row.state,
+        "previous_state": row.previous_state, "params": row.params, "groups": row.groups, "cycle": row.cycle,
+        "conditions": row.reasons, "sheets_observed": row.sheets_observed, "mean_confidence": row.mean_confidence,
+        "source": row.source, "source_sheet_id": row.source_sheet_id, "actor": row.actor,
+        "engine_version": row.engine_version} for row in rows]}
+
+
+@router.post("/rotation-learning/{site_id}/rebuild")
+def rotation_learning_rebuild(
+    site_id: int,
+    payload: RotationRebuildIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Reconstruction administrative du modèle d'un site sur une période (simulation par défaut)."""
+    _require_action(user, "admin")
+    _ensure_site_allowed(db, user, site_id)
+    try:
+        result = learning.rebuild(db, site_id, date_from=payload.date_from, date_to=payload.date_to,
+                                  dry_run=payload.dry_run, actor=user, request=request)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return result
+
+
+@router.get("/rotation-learning/{site_id}/backfill-preview")
+def rotation_learning_backfill_preview(
+    site_id: int,
+    date_from: date,
+    date_to: date,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Audit en LECTURE SEULE : ce que les anciens pointages permettraient de reconstituer."""
+    _ensure_site_allowed(db, user, site_id)
+    if date_to < date_from or (date_to - date_from).days > 92:
+        raise HTTPException(status_code=422, detail="Période invalide (92 jours au plus)")
+    return learning.backfill_preview(db, site_id, date_from, date_to)

@@ -59,6 +59,10 @@ tr:hover td{background:#fafcff}
 .who b{display:block}.who small{color:var(--muted)}
 .pill{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:850;white-space:nowrap}
 .sheet-modal{padding:22px;overflow:auto}.sheet-modal .table-wrap{margin-top:14px}
+.pill.pl-learning{background:#fef3c7;color:#92400e}.pill.pl-stable,.pill.pl-probable,.pill.pl-confirmed{background:#dcfce7;color:#166534}.pill.pl-review_required,.pill.pl-overridden{background:#fee2e2;color:#991b1b}.pill.pl-off{background:#eef2f6;color:#52677f}
+.pl-site{padding:16px;margin-bottom:14px}.pl-site h3{margin:0;font-size:17px}.pl-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-bottom:12px}
+.pl-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.pl-fact{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.pl-fact span{display:block;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.pl-fact strong{display:block;font-size:18px;margin-top:3px}
+.pl-conds{list-style:none;margin:12px 0 0;padding:0;font-size:13px}.pl-conds li{padding:3px 0}.pl-banner{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#fef3c7;color:#92400e;font-weight:850;font-size:12px;letter-spacing:.04em}
 .pill.sheet-open{background:#dcfce7;color:#166534}.pill.sheet-closed{background:#e0ecfb;color:#0b4d86}.pill.sheet-archived{background:#eef2f6;color:#52677f}
 .st-present{background:#dcfce7;color:#166534}.st-absent{background:#fee2e2;color:#991b1b}.st-non_pointe{background:#fef3c7;color:#92400e}
 .st-repos{background:#e2e8f0;color:#334155}.st-conge,.st-mission{background:#e0f2fe;color:#075985}.st-maladie{background:#f3e8ff;color:#6b21a8}
@@ -197,6 +201,7 @@ body.modal-open{overflow:hidden}
         <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
         <button class="nav-btn" data-view="sheets" type="button">▤ Feuilles de rotation</button>
+        <button class="nav-btn" data-view="planning" type="button">◈ Planning intelligent</button>
       </nav><div class="side-title">Biométrie</div><nav>
         <button class="nav-btn" data-view="enrollment" type="button">☺ Enrôlement</button>
         <button class="nav-btn" data-view="terminals" type="button">▣ Terminaux (tablettes)</button>
@@ -321,6 +326,15 @@ body.modal-open{overflow:hidden}
           <div class="pager"><span id="sheet-total"></span><span><button class="secondary" id="s-prev" type="button">‹ Précédent</button> <button class="secondary" id="s-next" type="button">Suivant ›</button></span></div>
         </div>
       </section>
+      <section id="view-planning" class="hidden">
+        <div class="page-head"><div><h2>Planning intelligent</h2><p>Groupes et rotations appris à partir des feuilles clôturées. Le pointage réel reste un fait : le moteur observe et propose, il ne modifie ni les pointages ni les affectations.</p></div></div>
+        <div id="pl-state"></div>
+        <div id="pl-sites"></div>
+        <div class="card hidden" id="pl-groups-card">
+          <div class="page-head" style="padding:14px 16px 0"><div><h2 style="font-size:17px" id="pl-groups-title">Groupes détectés</h2><p id="pl-groups-sub"></p></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Groupe</th><th>État</th><th>Rotations observées</th><th>Horaire habituel</th><th>Membres probables</th><th>Membres confirmés</th><th>En apprentissage</th><th>Confiance</th><th>Dernière observation</th></tr></thead><tbody id="pl-group-rows"></tbody></table></div>
+        </div>
+      </section>
     </main>
   </div>
 </section>
@@ -405,7 +419,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "sheets", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["anomalies", "sheets", "planning", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -417,6 +431,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-sheets").classList.toggle("hidden", view !== "sheets");
+    $("view-planning").classList.toggle("hidden", view !== "planning");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
     $("view-terminals").classList.toggle("hidden", view !== "terminals");
     $("view-enrollment").classList.toggle("hidden", view !== "enrollment");
@@ -429,6 +444,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (view === "enrollment") return loadEnrollment();
     if (view === "duplicates") return loadDuplicates();
     if (view === "sheets") return loadSheets();
+    if (view === "planning") return loadPlanning();
     return view === "board" ? loadBoard() : loadAnomalies();
   }
 
@@ -653,7 +669,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <td>${esc(f.date)}</td><td><b>${esc(f.label)}</b></td><td>${esc(f.site) || "—"}</td>
         <td><span class="pill sheet-${esc(String(f.status).toLowerCase())}">${esc(SHEET_STATUS[f.status] || f.status)}</span></td>
         <td>${Number(f.present_count) || 0}</td><td>${Number(f.out_count) || 0}</td><td>${Number(f.lines_count) || 0}${f.anomalies_count ? ` <small>· ${Number(f.anomalies_count)} départ(s) manquant(s)</small>` : ""}</td>
-        <td>${f.observed_group ? "Groupe " + esc(f.observed_group) : "—"}</td>
+        <td>${f.observed_group ? "Groupe " + esc(f.observed_group) : "—"}${f.interpretation && f.interpretation.group ? ` <small>· appris ${esc(f.interpretation.group)}</small>` : ""}</td>
         <td><div class="row-actions"><button class="link" type="button" data-sheet="${f.id}">Ouvrir</button></div></td></tr>`).join("")
         : '<tr><td colspan="9" class="empty">Aucune feuille sur cette période. Un site n\'a de feuilles qu\'après configuration de ses paramètres de rotation.</td></tr>';
       $("sheet-rows").querySelectorAll("[data-sheet]").forEach((b) => b.addEventListener("click", () => openSheet(b.dataset.sheet)));
@@ -667,7 +683,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     let f;
     try { f = await api("/attendance/sheets/" + id); } catch (ex) { toast(ex.message, true); return; }
     const m = modal(`<div class="sheet-modal"><h3 id="sheet-title">Feuille ${esc(f.label)} · ${esc(f.date)}</h3>
-      <div class="sub">${esc(f.site) || "—"} · ${esc(SHEET_STATUS[f.status] || f.status)}${f.observed_group ? " · groupe observé " + esc(f.observed_group) : ""}${f.closed_at ? " · clôturée par " + esc(f.closed_by || "système") : ""}</div>
+      <div class="sub">${esc(f.site) || "—"} · ${esc(SHEET_STATUS[f.status] || f.status)}${f.observed_group ? " · groupe observé " + esc(f.observed_group) : ""}${f.interpretation && f.interpretation.group ? " · groupe appris " + esc(f.interpretation.group) : ""}${f.closed_at ? " · clôturée par " + esc(f.closed_by || "système") : ""}</div>
       <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Groupe</th><th>Première entrée</th><th>Dernière sortie</th><th>État</th><th>Pointages bruts</th></tr></thead><tbody>${
         f.lines.length ? f.lines.map((l) => `<tr><td class="who"><b>${esc(l.name) || "—"}</b><small>${esc(l.matricule)}${l.fonction ? " · " + esc(l.fonction) : ""}</small></td>
           <td>${esc(l.declared_group) || "—"}</td><td>${esc(l.first_entry) || "—"}</td><td>${esc(l.last_exit) || "—"}</td>
@@ -705,6 +721,108 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       try { await api("/attendance/rotation-settings/" + siteId, { method: "PUT", body }); closeModal(); toast("Paramètres de rotation enregistrés"); loadSheets(); }
       catch (ex) { err.textContent = ex.message; err.classList.add("show"); }
     });
+  }
+
+  // ── Planning intelligent : modèle appris (lot 2) ─────────────────────────────────────
+  // Lecture du modèle : aucune valeur n'est calculée ni inventée ici ; « — » quand le moteur n'a rien mesuré.
+  const PL_STATE = { LEARNING: "Apprentissage", STABLE: "Stable", REVIEW_REQUIRED: "À revoir", OFF: "Désactivé" };
+  const PL_MEMBER = { LEARNING: "En apprentissage", PROBABLE: "Probable", CONFIRMED: "Confirmé", OVERRIDDEN: "Confirmé ≠ appris" };
+  const PL_COND = { ok: "✓", pending: "…", failed: "✗" };
+  // "\u0025" : le signe pour-cent n'apparaît pas en clair dans ce script (les scores biométriques, eux, ne sont jamais des pourcentages).
+  const pct = (v) => (v === null || v === undefined ? "—" : Math.round(Number(v) * 100) + " \u0025");
+  const plDate = (iso) => (iso ? new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+  const plValue = (c) => (c.value === null || c.value === undefined ? "—" : (Number(c.value) <= 1 && !Number.isInteger(c.required) ? pct(c.value) : esc(c.value)));
+  const plRequired = (c) => (c.required === null || c.required === undefined ? "" : " / " + (Number.isInteger(c.required) ? esc(c.required) : pct(c.required)));
+  state.planning = null; state.plSite = "";
+
+  async function loadPlanning() {
+    $("pl-state").innerHTML = '<div class="state info">Chargement…</div>';
+    const q = $("f-site").value ? "?site_id=" + encodeURIComponent($("f-site").value) : "";
+    try {
+      const data = await api("/attendance/rotation-learning" + q);
+      state.planning = data;
+      $("pl-state").innerHTML = data.enabled ? "" : '<div class="state info">L\'apprentissage des rotations est désactivé sur cette installation (ROTATION_LEARNING_ENABLED). Les feuilles de rotation continuent de fonctionner.</div>';
+      $("pl-sites").innerHTML = data.items.length ? data.items.map(planningSite).join("")
+        : '<div class="card"><div class="empty">Aucun site n\'a de paramètres de rotation dans votre périmètre. Configurez d\'abord un site dans « Feuilles de rotation ».</div></div>';
+      $("pl-sites").querySelectorAll("[data-pl-groups]").forEach((b) => b.addEventListener("click", () => loadPlanningGroups(b.dataset.plGroups)));
+      $("pl-sites").querySelectorAll("[data-pl-mode]").forEach((b) => b.addEventListener("click", () => setPlanningMode(b.dataset.plSite, b.dataset.plMode)));
+      const only = data.items.length === 1 ? String(data.items[0].site_id) : "";
+      if (only || (state.plSite && data.items.some((i) => String(i.site_id) === state.plSite))) await loadPlanningGroups(only || state.plSite);
+      else $("pl-groups-card").classList.add("hidden");
+    } catch (ex) { $("pl-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`; }
+  }
+
+  function planningSite(s) {
+    const shown = s.mode === "OFF" ? "OFF" : (s.state || "LEARNING");
+    const measured = !!s.computed_at;
+    const next = s.next ? (s.next.rest ? "Repos" : "Groupe " + esc(s.next.group)) + " · " + esc(s.next.label) + (s.next.indicative ? " <small>(indicatif)</small>" : "") : "—";
+    const conds = (s.conditions || []).map((c) => `<li><b>${PL_COND[c.status] || ""}</b> ${esc(c.label)} : ${plValue(c)}${plRequired(c)}</li>`).join("");
+    return `<div class="card pl-site" data-pl-card="${s.site_id}">
+      <div class="pl-head"><div><h3>${esc(s.site) || "—"}</h3><small>${s.sheets_configured ? "Feuilles de rotation actives" : "Feuilles de rotation inactives"}${measured ? " · modèle v" + esc(s.model_version) + " · moteur " + esc(s.engine_version) : ""}</small></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill pl-${esc(shown.toLowerCase())}">${esc(PL_STATE[shown] || shown)}</span>
+          <button class="link" type="button" data-pl-groups="${s.site_id}">Groupes détectés</button>
+          <button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="${s.mode === "OFF" ? "LEARNING" : "OFF"}">${s.mode === "OFF" ? "Activer l'apprentissage" : "Suspendre l'apprentissage"}</button></div></div>
+      ${s.mode !== "OFF" && shown === "LEARNING" ? '<div class="pl-banner">PLANNING EN COURS D\'APPRENTISSAGE — aucune alerte de rotation n\'est émise.</div>' : ""}
+      ${shown === "REVIEW_REQUIRED" ? '<div class="pl-banner" style="background:#fee2e2;color:#991b1b">MODÈLE À REVOIR — les observations contredisent une condition ci-dessous.</div>' : ""}
+      <div class="pl-facts">
+        <div class="pl-fact"><span>État d'apprentissage</span><strong>${esc(PL_STATE[shown] || shown)}</strong></div>
+        <div class="pl-fact"><span>Rotations observées</span><strong>${measured ? Number(s.sheets_observed) : "—"}</strong></div>
+        <div class="pl-fact"><span>Groupes détectés</span><strong>${measured ? Number(s.groups_detected) : "—"}${s.expected_groups ? ` <small>/ ${Number(s.expected_groups)} attendus</small>` : ""}</strong></div>
+        <div class="pl-fact"><span>Confiance</span><strong>${measured ? pct(s.mean_confidence) : "—"}</strong></div>
+        <div class="pl-fact"><span>Dernière mise à jour</span><strong style="font-size:14px">${plDate(s.computed_at)}</strong></div>
+        <div class="pl-fact"><span>Rotation probable suivante</span><strong style="font-size:14px">${next}</strong></div>
+      </div>
+      ${s.cycle && s.cycle.found ? `<p class="sub" style="margin:12px 0 0">Cycle observé : ${s.cycle.pattern.map((g) => (g === "∅" ? "repos" : esc(g))).join(" → ")} → … (${pct(s.cycle.concordance)} sur ${Number(s.cycle.comparisons)} comparaisons)</p>` : ""}
+      ${conds ? `<ul class="pl-conds">${conds}</ul>` : ""}</div>`;
+  }
+
+  async function setPlanningMode(siteId, mode) {
+    try { await api("/attendance/rotation-learning/" + siteId, { method: "PUT", body: { mode } }); toast(mode === "OFF" ? "Apprentissage suspendu (modèle conservé)" : "Apprentissage activé pour ce site"); loadPlanning(); }
+    catch (ex) { toast(ex.message, true); }
+  }
+
+  async function loadPlanningGroups(siteId) {
+    let data;
+    try { data = await api("/attendance/rotation-learning/" + siteId + "/groups"); } catch (ex) { toast(ex.message, true); return; }
+    state.plSite = String(siteId);
+    const members = (list) => (list.length ? list.map((m) => `<button class="link" type="button" data-pl-emp="${m.employee_id}" title="${esc(m.explanation)}">${esc(m.matricule)} ${esc(m.name)}${m.status === "LEARNING" ? "" : " · " + pct(m.confidence)}</button>`).join(" ") : "—");
+    $("pl-groups-card").classList.remove("hidden");
+    $("pl-groups-title").textContent = "Groupes détectés — " + (data.site || "");
+    $("pl-groups-sub").textContent = "Un groupe est consolidé après plusieurs rotations ; un salarié n'y est rattaché qu'après des observations répétées. Le groupe déclaré (affectation) n'est jamais modifié.";
+    $("pl-group-rows").innerHTML = data.groups.length ? data.groups.map((g) => `<tr>
+      <td><b>Groupe ${esc(g.label)}</b></td>
+      <td><span class="pill pl-${g.status === "STABLE" ? "stable" : "learning"}">${g.status === "STABLE" ? "Consolidé" : "Candidat"}</span></td>
+      <td>${Number(g.sheets_count)}</td>
+      <td>${g.usual_start ? esc(g.usual_start) + " – " + esc(g.usual_end) + ` <small>(${pct(g.usual_share)} des rotations)</small>` : "—"}</td>
+      <td>${members(g.members_probable)}</td><td>${members(g.members_confirmed)}</td><td>${members(g.members_learning)}</td>
+      <td>${pct(g.confidence)}</td><td>${plDate(g.last_observed_at)}</td></tr>`).join("")
+      : '<tr><td colspan="9" class="empty">Aucun groupe détecté pour l\'instant : le moteur n\'apprend que des feuilles clôturées.</td></tr>';
+    $("pl-group-rows").querySelectorAll("[data-pl-emp]").forEach((b) => b.addEventListener("click", () => openRotationCard(b.dataset.plEmp)));
+  }
+
+  async function openRotationCard(employeeId) {
+    let e;
+    try { e = await api("/attendance/rotation-learning/employees/" + employeeId); } catch (ex) { toast(ex.message, true); return; }
+    const group = (v) => (v ? "Groupe " + esc(v) : "—");
+    const m = modal(`<div class="sheet-modal"><h3 id="pl-emp-title">${esc(e.matricule)} — ${esc(e.name) || "—"}</h3>
+      <div class="sub">${esc(e.fonction) || "—"} · rotation apprise (complément de la fiche RH, qui n'est pas modifiée)</div>
+      ${e.memberships.length ? e.memberships.map((x) => `<div class="pl-facts" style="margin-top:12px" data-pl-membership="${x.site_id}">
+        <div class="pl-fact"><span>Site</span><strong style="font-size:14px">${esc(x.site) || "—"}</strong></div>
+        <div class="pl-fact"><span>Groupe déclaré</span><strong>${group(x.declared_group)}</strong></div>
+        <div class="pl-fact"><span>Groupe appris</span><strong>${x.learned_group ? group(x.learned_group) : (x.candidate_group ? "<small>candidat " + esc(x.candidate_group) + "</small>" : "—")}</strong></div>
+        <div class="pl-fact"><span>Groupe confirmé</span><strong>${group(x.confirmed_group)}</strong></div>
+        <div class="pl-fact"><span>Confiance</span><strong>${pct(x.confidence)}</strong></div>
+        <div class="pl-fact"><span>Statut</span><strong style="font-size:14px"><span class="pill pl-${esc(String(x.status).toLowerCase())}">${esc(PL_MEMBER[x.status] || x.status)}</span></strong></div></div>
+        <p class="sub" style="margin-top:8px">${esc(x.explanation)}${x.last_observed_at ? " · dernière observation " + plDate(x.last_observed_at) : ""}</p>`).join("")
+        : '<div class="empty">Aucune rotation observée pour ce salarié.</div>'}
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rotation</th><th>Groupe de la feuille</th><th>Entrée</th><th>Sortie</th></tr></thead><tbody>${
+        e.observations.length ? e.observations.map((o) => `<tr><td>${esc(o.date)}</td><td>${esc(o.label)}</td><td>${group(o.group)}</td><td>${esc(o.first_entry) || "—"}</td><td>${esc(o.last_exit) || "—"}</td></tr>`).join("")
+        : '<tr><td colspan="5" class="empty">Aucune observation.</td></tr>'}</tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Historique d'appartenance</th><th>Avant</th><th>Après</th><th>Confiance</th><th>Source</th></tr></thead><tbody>${
+        e.history.length ? e.history.map((h) => `<tr><td>${plDate(h.changed_at)}</td><td>${group(h.old_group)} <small>${esc(PL_MEMBER[h.old_status] || h.old_status || "")}</small></td><td>${group(h.new_group)} <small>${esc(PL_MEMBER[h.new_status] || h.new_status || "")}</small></td><td>${pct(h.old_confidence)} → ${pct(h.new_confidence)}</td><td><small>${esc(h.source)}${h.source_sheet_id ? " · feuille " + esc(h.source_sheet_id) : ""}${h.actor ? " · " + esc(h.actor) : ""} · ${esc(h.engine_version)}</small></td></tr>`).join("")
+        : '<tr><td colspan="5" class="empty">Aucun changement enregistré.</td></tr>'}</tbody></table></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="pl-emp-close">Fermer</button></div></div>`, { wide: true, labelledBy: "pl-emp-title" });
+    m.querySelector("#pl-emp-close").addEventListener("click", closeModal);
   }
 
   // ── Biométrie : caméras ───────────────────────────────────────────────────────────

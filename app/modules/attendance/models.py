@@ -189,3 +189,154 @@ class AttendanceSheetEvent(Base):
     event_id: Mapped[int] = mapped_column(ForeignKey("attendance_events.id", ondelete="CASCADE"), primary_key=True)
     sheet_id: Mapped[int] = mapped_column(ForeignKey("attendance_sheets.id", ondelete="CASCADE"), index=True)
     line_id: Mapped[int] = mapped_column(ForeignKey("attendance_sheet_lines.id", ondelete="CASCADE"), index=True)
+
+
+# ── Planning intelligent — apprentissage (lot 2) ──────────────────────────────────────────
+# Couche d'OBSERVATION au-dessus des feuilles clôturées. Elle ne modifie ni les événements, ni
+# les feuilles, ni les données RH (affectation / groupe déclaré) : elle PROPOSE, avec un score
+# déterministe et sa justification. Trois valeurs distinctes sont conservées par salarié :
+# groupe DÉCLARÉ (affectation), groupe APPRIS (moteur), groupe CONFIRMÉ (décision humaine, lot 3).
+MODE_OFF = "OFF"
+MODE_LEARNING = "LEARNING"
+MODE_ACTIVE = "ACTIVE"
+ROTATION_MODES = (MODE_OFF, MODE_LEARNING, MODE_ACTIVE)
+
+SITE_LEARNING = "LEARNING"
+SITE_STABLE = "STABLE"
+SITE_REVIEW = "REVIEW_REQUIRED"
+
+MEMBER_LEARNING = "LEARNING"
+MEMBER_PROBABLE = "PROBABLE"
+MEMBER_CONFIRMED = "CONFIRMED"
+MEMBER_OVERRIDDEN = "OVERRIDDEN"
+
+
+class RotationSiteModel(Base):
+    """État du modèle appris d'un site : activation (OFF / LEARNING / ACTIVE), état mesuré
+    (LEARNING / STABLE / REVIEW_REQUIRED), cycle observé, paramètres propres au site."""
+    __tablename__ = "rotation_site_models"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), unique=True)
+    mode: Mapped[str] = mapped_column(String(12), default=MODE_OFF)
+    state: Mapped[str] = mapped_column(String(20), default=SITE_LEARNING)
+    reasons: Mapped[list | None] = mapped_column(JSON)               # conditions mesurées (explicabilité)
+    params: Mapped[dict | None] = mapped_column(JSON)                # surcharges du site
+    sheets_observed: Mapped[int] = mapped_column(Integer, default=0)
+    days_observed: Mapped[int] = mapped_column(Integer, default=0)
+    groups_detected: Mapped[int] = mapped_column(Integer, default=0)
+    mean_confidence: Mapped[float | None] = mapped_column(Float)
+    cycle: Mapped[dict | None] = mapped_column(JSON)
+    model_version: Mapped[int] = mapped_column(Integer, default=0)    # +1 quand le modèle change réellement
+    fingerprint: Mapped[str | None] = mapped_column(String(64))
+    engine_version: Mapped[str | None] = mapped_column(String(20))
+    computed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    updated_by: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationSheetObservation(Base):
+    """Une feuille clôturée = UNE observation, prise en compte une seule fois (clé primaire =
+    feuille) : deux clôtures ou deux workers simultanés ne doublent jamais une observation."""
+    __tablename__ = "rotation_sheet_observations"
+
+    sheet_id: Mapped[int] = mapped_column(ForeignKey("attendance_sheets.id", ondelete="CASCADE"), primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    members_count: Mapped[int] = mapped_column(Integer, default=0)
+    group_label: Mapped[str | None] = mapped_column(String(12))       # groupe auquel la feuille est rattachée
+    engine_version: Mapped[str] = mapped_column(String(20))
+    processed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationGroup(Base):
+    """Groupe DÉTECTÉ sur un site (ensemble de salariés travaillant habituellement ensemble)."""
+    __tablename__ = "rotation_groups"
+    __table_args__ = (UniqueConstraint("site_id", "label", name="uq_rotation_groups_site_label"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    label: Mapped[str] = mapped_column(String(12))
+    status: Mapped[str] = mapped_column(String(20), default=SITE_LEARNING)
+    sheets_count: Mapped[int] = mapped_column(Integer, default=0)
+    members_probable: Mapped[int] = mapped_column(Integer, default=0)
+    members_learning: Mapped[int] = mapped_column(Integer, default=0)
+    usual_start: Mapped[str | None] = mapped_column(String(5))
+    usual_end: Mapped[str | None] = mapped_column(String(5))
+    usual_share: Mapped[float | None] = mapped_column(Float)          # stabilité de l'horaire habituel
+    confidence: Mapped[float | None] = mapped_column(Float)
+    last_observed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    explanation: Mapped[dict | None] = mapped_column(JSON)
+    model_version: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationMembership(Base):
+    """Appartenance d'un salarié sur un site : déclaré / appris / confirmé, jamais confondus."""
+    __tablename__ = "rotation_memberships"
+    __table_args__ = (UniqueConstraint("site_id", "employee_id", name="uq_rotation_memberships_site_employee"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    declared_group: Mapped[str | None] = mapped_column(String(12))    # recopie de l'affectation (jamais écrasée par le moteur)
+    learned_group: Mapped[str | None] = mapped_column(String(12))
+    confirmed_group: Mapped[str | None] = mapped_column(String(12))   # décision humaine (lot 3)
+    status: Mapped[str] = mapped_column(String(20), default=MEMBER_LEARNING)
+    source: Mapped[str] = mapped_column(String(20), default="LEARNED")
+    confidence: Mapped[float] = mapped_column(Float, default=0)
+    observations: Mapped[int] = mapped_column(Integer, default=0)
+    with_group: Mapped[int] = mapped_column(Integer, default=0)
+    first_observed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_observed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    explanation: Mapped[dict | None] = mapped_column(JSON)
+    model_version: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationMembershipHistory(Base):
+    """Historique des appartenances apprises : ancienne valeur, nouvelle valeur, feuille source,
+    version du moteur — rien n'est réécrit."""
+    __tablename__ = "rotation_membership_history"
+    __table_args__ = (Index("ix_rotation_membership_history_employee", "employee_id", "changed_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    old_group: Mapped[str | None] = mapped_column(String(12))
+    new_group: Mapped[str | None] = mapped_column(String(12))
+    old_status: Mapped[str | None] = mapped_column(String(20))
+    new_status: Mapped[str | None] = mapped_column(String(20))
+    old_confidence: Mapped[float | None] = mapped_column(Float)
+    new_confidence: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(20), default="LEARNED")  # LEARNED | REBUILD | humain (lot 3)
+    source_sheet_id: Mapped[int | None] = mapped_column(Integer)
+    actor: Mapped[str | None] = mapped_column(String(120))
+    engine_version: Mapped[str | None] = mapped_column(String(20))
+    model_version: Mapped[int] = mapped_column(Integer, default=0)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationModelVersion(Base):
+    """Photographie du modèle d'un site à chaque évolution significative (version, date d'effet,
+    paramètres, groupes, cycle, confiance, source) : une version n'est jamais réécrite."""
+    __tablename__ = "rotation_model_versions"
+    __table_args__ = (UniqueConstraint("site_id", "version", name="uq_rotation_model_versions_site_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    effective_at: Mapped[datetime] = mapped_column(DateTime)
+    state: Mapped[str] = mapped_column(String(20))
+    previous_state: Mapped[str | None] = mapped_column(String(20))
+    params: Mapped[dict | None] = mapped_column(JSON)
+    groups: Mapped[list | None] = mapped_column(JSON)
+    cycle: Mapped[dict | None] = mapped_column(JSON)
+    reasons: Mapped[list | None] = mapped_column(JSON)
+    sheets_observed: Mapped[int] = mapped_column(Integer, default=0)
+    mean_confidence: Mapped[float | None] = mapped_column(Float)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    engine_version: Mapped[str] = mapped_column(String(20))
+    source: Mapped[str] = mapped_column(String(20), default="LEARNED")  # LEARNED | REBUILD
+    source_sheet_id: Mapped[int | None] = mapped_column(Integer)
+    actor: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

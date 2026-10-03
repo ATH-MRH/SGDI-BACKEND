@@ -57,5 +57,7 @@ de rotation du site). Les feuilles déjà créées gardent leur fenêtre.
 
 ## Hors périmètre de ce lot
 
+Apprentissage des groupes et des rotations : voir `docs/attendance-rotation-learning.md` (lot 2).
+
 Apprentissage des groupes et score de confiance, cycle et projection, comparaison prévu / réel,
 alertes de rotation (Pointeur, OPS, Centre d'alertes) et qualification OPS.

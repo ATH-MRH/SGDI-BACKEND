@@ -38,6 +38,31 @@ class Settings(BaseSettings):
     # Une feuille CLOSED reste modifiable par les SORTIES de ses propres entrées jusqu'à son
     # archivage ; au-delà du plus long cycle ouvert (30 h), un départ manquant est constaté.
     attendance_sheet_archive_after_hours: int = 36
+    # Interrupteurs par lot du Planning intelligent (activation progressive, jamais implicite).
+    # Feuilles : coupe-circuit global (chaque site reste soumis à sa propre configuration).
+    rotation_sheets_enabled: bool = True
+    # Apprentissage des groupes / cycles : désactivé par défaut ; il faut ce drapeau ET un mode
+    # LEARNING ou ACTIVE posé explicitement sur le site.
+    rotation_learning_enabled: bool = False
+    # Apprentissage — valeurs INITIALES, surchargées site par site (paramètres d'exploitation,
+    # non calibrés sur la production ; voir docs/attendance-rotation-learning.md).
+    rotation_learning_window_sheets: int = 180          # fenêtre glissante de feuilles clôturées
+    rotation_learning_link_threshold: float = 0.6       # recouvrement minimal feuille ↔ groupe
+    rotation_learning_core_share: float = 0.5           # présence minimale pour être « noyau » d'un groupe
+    rotation_learning_min_group_sheets: int = 3         # feuilles avant qu'un groupe soit consolidé
+    rotation_learning_min_observations: int = 6         # rotations observées avant de proposer un groupe
+    rotation_learning_probable_threshold: float = 0.7   # confiance à partir de laquelle l'appartenance est PROBABLE
+    rotation_learning_recent_observations: int = 5      # profondeur de la composante « récence »
+    rotation_learning_arrival_tolerance_minutes: int = 60
+    rotation_learning_weight_share: float = 0.6
+    rotation_learning_weight_time: float = 0.2
+    rotation_learning_weight_recency: float = 0.2
+    rotation_learning_min_site_sheets: int = 12         # rotations observées avant de quitter LEARNING
+    rotation_learning_stable_member_ratio: float = 0.8  # part des salariés suivis devant être PROBABLE
+    rotation_learning_stable_sheet_ratio: float = 0.8   # part des feuilles rattachées à un groupe consolidé
+    rotation_learning_cycle_threshold: float = 0.9      # concordance minimale d'un cycle
+    rotation_learning_min_cycle_comparisons: int = 12
+    rotation_learning_max_cycle_slots: int = 120
     # Biométrie faciale — DÉSACTIVÉE par défaut (jamais d'activation implicite en production).
     # Activation = décision explicite : BIOMETRIC_ENABLED=true + clé de chiffrement dédiée des
     # gabarits (Fernet, générée hors dépôt) + modèles présents et vérifiés (empreintes SHA-256,

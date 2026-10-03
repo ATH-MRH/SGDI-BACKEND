@@ -246,7 +246,9 @@ def test_pointage_host_serves_the_control_center_not_the_terminal(client):
     root = client.get("/", headers={"host": "pointage.irongs.com"})
     assert root.status_code == 200
     assert "Centre de contrôle Pointage" in root.text
-    assert "Planning intelligent" not in root.text
+    # Le centre de contrôle a sa vue « Planning intelligent » (modèle appris, lot 2) ; ce qui
+    # distingue le terminal reste son moteur de planning côté poste.
+    assert "attendance-feed?days=8" not in root.text and 'data-view="planning"' in root.text
     assert "no-store" in root.headers.get("cache-control", "")
     # Transition des terminaux déjà installés sur ce domaine.
     assert 'display-mode: standalone' in root.text and 'location.replace("/pointeur")' in root.text

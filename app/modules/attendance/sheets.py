@@ -87,7 +87,7 @@ def default_setting() -> dict[str, Any]:
 
 
 def setting_for(db: Session, site_id: int | None) -> RotationSetting | None:
-    if site_id is None:
+    if site_id is None or not settings.rotation_sheets_enabled:
         return None
     row = db.execute(select(RotationSetting).where(RotationSetting.site_id == site_id)).scalar_one_or_none()
     return row if row is not None and row.active else None
@@ -203,7 +203,7 @@ def maintain(db: Session, now: datetime | None = None, site_ids: set[int] | list
     closed = close_due(db, now_utc, site_ids)
     archived = archive_due(db, now_utc, site_ids)
     created = 0
-    if ensure_current:
+    if ensure_current and settings.rotation_sheets_enabled:
         query = select(RotationSetting).where(RotationSetting.active == 1)
         if site_ids is not None:
             query = query.where(RotationSetting.site_id.in_(list(site_ids)))
@@ -215,6 +215,11 @@ def maintain(db: Session, now: datetime | None = None, site_ids: set[int] | list
             _get_or_create_sheet(db, site, setting, window_at(setting, local), source)
             after = db.execute(select(func.count(AttendanceSheet.id)).where(AttendanceSheet.site_id == site.id)).scalar_one()
             created += int(after) - int(before)
+    # Planning intelligent (lot 2) : une feuille clôturée devient une observation du modèle du
+    # site. Fait ICI (accès, orchestrateur), jamais dans le chemin du pointage ; sans effet tant
+    # que l'apprentissage n'est pas activé explicitement.
+    from app.modules.attendance import learning
+    learning.learn_pending(db, site_ids)
     return {"closed": closed, "archived": archived, "created": created}
 
 
