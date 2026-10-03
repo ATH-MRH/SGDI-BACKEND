@@ -36,7 +36,7 @@ window.sgdiLoadQRLib=function(){return window._qrLoaded?Promise.resolve():new Pr
 window.sgdiLoadHtml5QR=function(){return window._h5qrLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.Html5Qrcode){window._h5qrLoaded=true;return res()}const s=document.createElement('script');s.src='/static/html5-qrcode.min.js?v=1';s.onload=()=>{window._h5qrLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
 </script>
 <link rel="stylesheet" href="/static/admin-user-wizard.css?v=20261003-admin-user-wizard-v3" media="screen">
-<link rel="stylesheet" href="/static/design-system/atlas.css?v=20261003-shell-v4" media="screen">
+<link rel="stylesheet" href="/static/design-system/atlas.css?v=20261003-kpi-compact" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="legacy">
 <div id="ui-progress"></div>
