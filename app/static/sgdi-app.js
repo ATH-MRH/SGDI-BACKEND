@@ -8544,7 +8544,7 @@ function normalizePageHeader(view){
   // leurs boutons vers le style d'action jaune admin (repère déjà vu sur .ops-dash-hero,
   // dont le dégradé disparaissait entièrement à cause de cette règle).
   // This page owns its header; its table and pagination are not header actions.
-  if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel,.admin-users-page'))return;
+  if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel,.admin-users-page,.ops-outgoing-page'))return;
   if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero')||first.classList.contains('drh-leave-page'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');
@@ -21588,6 +21588,8 @@ function renderElementsSortants(view,scope="current"){
   const currentMonth=today().slice(0,7);
   const exitMonth=a=>String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);
   const isArchive=scope==="archives";
+  // Vue OPS courante : écran modernisé. DRH et archives gardent le rendu historique ci-dessous.
+  if(isOps&&!isDrh&&!isArchive){renderOpsOutgoingEmployees(view);return}
   const sortants=(db.agents||[]).filter(a=>{
     if(a.statut!=="sortant"||!(!soc||!a.societe||a.societe===soc))return false;
     if(!isDrh)return true;
@@ -21631,4 +21633,252 @@ function renderElementsSortants(view,scope="current"){
         <tbody>${rows.join("")}</tbody>
       </table></div>`}
   </div>`;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPS → ÉLÉMENTS SORTANTS (refonte UI). Aucune règle métier nouvelle : la population
+// reste celle de renderElementsSortants (statut "sortant" de la société active, lue
+// dans db.agents déjà chargé par le shell). Recherche, filtres, tri et pagination
+// s'appliquent à ces seules lignes ; rien n'est fabriqué (ni date, ni statut, ni action).
+const OPS_OUTGOING_PAGE_SIZE=25;
+const OPS_OUTGOING_AVATAR_TONES=["blue","green","violet","amber","rose","teal","indigo","orange"];
+const OPS_OUTGOING_DATE_PERIODS=[["","Toutes les dates"],["month","Ce mois-ci"],["30d","30 derniers jours"],["year","Cette année"],["none","Non renseignée"]];
+let opsOutgoingState={q:"",societe:"",date:"",poste:"",sort:"",dir:"asc",page:1};
+function opsOutgoingIcon(name){
+  const paths={
+    exit:`<path d="M9 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9"></path><path d="M14 12H3"></path><path d="M6.5 8.5 3 12l3.5 3.5"></path>`,
+    people:`<circle cx="9" cy="8" r="3.2"></circle><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"></path><path d="M16 5.2a3 3 0 0 1 0 5.6"></path><path d="M17.5 14.3c2 .7 3.2 2.3 3.5 4.7"></path>`,
+    search:`<circle cx="11" cy="11" r="6.5"></circle><path d="m20 20-4.2-4.2"></path>`,
+    building:`<path d="M5 20V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v15"></path><path d="M15 10h3a1 1 0 0 1 1 1v9"></path><path d="M3 20h18"></path><path d="M8.5 8h3M8.5 12h3M8.5 16h3"></path>`,
+    calendar:`<rect x="4" y="5.5" width="16" height="14.5" rx="2"></rect><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"></path>`,
+    briefcase:`<rect x="3.5" y="7.5" width="17" height="12" rx="2"></rect><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5"></path><path d="M3.5 13h17"></path>`,
+    eye:`<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"></path><circle cx="12" cy="12" r="2.8"></circle>`,
+    sort:`<path d="m8 9.5 4-4 4 4"></path><path d="m8 14.5 4 4 4-4"></path>`,
+    asc:`<path d="m7 14 5-5 5 5"></path>`,
+    desc:`<path d="m7 10 5 5 5-5"></path>`,
+    prev:`<path d="m14.5 6-6 6 6 6"></path>`,
+    next:`<path d="m9.5 6 6 6-6 6"></path>`
+  };
+  return `<svg class="ops-outgoing-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name]||""}</svg>`;
+}
+function opsOutgoingFold(value){
+  return String(value??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+}
+function opsOutgoingActiveSociete(){
+  return currentStructureSocieteFilter()||mySoc()||"";
+}
+// Même population que l'écran historique : aucun élargissement ni restriction.
+function opsOutgoingBaseRows(){
+  const soc=opsOutgoingActiveSociete();
+  return (db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||!a.societe||a.societe===soc));
+}
+function opsOutgoingName(a){return ((a.nom||"")+" "+(a.prenom||"")).trim()}
+function opsOutgoingMatricule(a){return String(a.matricule||a.code||"")}
+function opsOutgoingPoste(a){return String(a.fonction||a.poste||"").trim()}
+// Date de sortie réellement saisie (champ dateSortie, comme l'écran historique). "" si absente
+// ou illisible : jamais de date de remplacement.
+function opsOutgoingExitDate(a){
+  const raw=String(a.dateSortie||"").trim();
+  if(!raw)return "";
+  const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(iso){
+    const date=new Date(Number(iso[1]),Number(iso[2])-1,Number(iso[3]));
+    return date.getMonth()===Number(iso[2])-1&&date.getDate()===Number(iso[3])?`${iso[1]}-${iso[2]}-${iso[3]}`:"";
+  }
+  const parsed=new Date(raw);
+  if(Number.isNaN(parsed.getTime()))return "";
+  return `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,"0")}-${String(parsed.getDate()).padStart(2,"0")}`;
+}
+function opsOutgoingFormatDate(iso){
+  return iso?`${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}`:"";
+}
+// Statut de sortie déterminable : l'écran ne liste que le statut RH "sortant". La sortie est
+// "en cours" tant que la date de sortie saisie est à venir, sinon l'employé est sorti
+// (même lecture que employeeIsFormer). Tout autre statut ne reçoit aucun badge.
+function opsOutgoingStatus(a,asOf=today()){
+  if(employeeLifecycleStatusKey(a)!=="sortant")return null;
+  const exit=opsOutgoingExitDate(a);
+  return exit&&exit>asOf?{key:"pending",label:"En cours de sortie"}:{key:"left",label:"Sorti"};
+}
+function opsOutgoingAvatarTone(a){
+  const seed=String(a.id||a.backendId||a.matricule||a.code||opsOutgoingName(a)||"");
+  let hash=0;
+  for(let i=0;i<seed.length;i++)hash=(hash*31+seed.charCodeAt(i))>>>0;
+  return OPS_OUTGOING_AVATAR_TONES[hash%OPS_OUTGOING_AVATAR_TONES.length];
+}
+// Périmètre réel de l'utilisateur. "global" uniquement sans société active imposée et avec un
+// accès réellement non restreint ; sinon le libellé décrit le périmètre effectif.
+function opsOutgoingScope(){
+  const active=opsOutgoingActiveSociete();
+  const allowed=currentAllowedSocietes();
+  if(active)return{active,multi:false,global:false,label:"Sur la société active"};
+  const unrestricted=session?.permissionsFromServer?!!session.globalSocietyAccess:(isAdminGeneralSession()||!hasExplicitSocieteRestriction());
+  if(unrestricted)return{active:"",multi:true,global:true,label:"Sur l'ensemble des sociétés"};
+  if(allowed.length>1)return{active:"",multi:true,global:false,label:`Sur ${allowed.length} sociétés autorisées`};
+  return{active:allowed[0]||"",multi:false,global:false,label:"Sur la société active"};
+}
+function opsOutgoingDistinct(rows,read){
+  const seen=new Map();
+  rows.forEach(a=>{const value=String(read(a)||"").trim();if(value&&!seen.has(opsOutgoingFold(value)))seen.set(opsOutgoingFold(value),value)});
+  return Array.from(seen.values()).sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+}
+function opsOutgoingDateMatches(iso,period,asOf=today()){
+  if(!period)return true;
+  if(period==="none")return !iso;
+  if(!iso)return false;
+  if(period==="month")return iso.slice(0,7)===asOf.slice(0,7);
+  if(period==="year")return iso.slice(0,4)===asOf.slice(0,4);
+  if(period==="30d"){
+    const start=new Date(Number(asOf.slice(0,4)),Number(asOf.slice(5,7))-1,Number(asOf.slice(8,10))-30);
+    const from=`${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}-${String(start.getDate()).padStart(2,"0")}`;
+    return iso>=from&&iso<=asOf;
+  }
+  return true;
+}
+const OPS_OUTGOING_SORTS={
+  employe:a=>opsOutgoingFold(opsOutgoingName(a)),
+  societe:a=>opsOutgoingFold(a.societe),
+  date:a=>opsOutgoingExitDate(a),
+  poste:a=>opsOutgoingFold(opsOutgoingPoste(a))
+};
+// Modèle d'affichage : options réelles, lignes filtrées/triées et page courante.
+function opsOutgoingModel(){
+  const state=opsOutgoingState;
+  const base=opsOutgoingBaseRows();
+  const scope=opsOutgoingScope();
+  const societes=opsOutgoingDistinct(base,a=>a.societe);
+  const postes=opsOutgoingDistinct(base,opsOutgoingPoste);
+  const hasDates=base.some(a=>opsOutgoingExitDate(a));
+  // Un filtre mémorisé qui ne correspond plus aux données réelles est abandonné.
+  if(!scope.multi||!societes.some(s=>s===state.societe))state.societe="";
+  if(!postes.some(p=>p===state.poste))state.poste="";
+  if(!hasDates||!OPS_OUTGOING_DATE_PERIODS.some(([key])=>key===state.date))state.date="";
+  if(!OPS_OUTGOING_SORTS[state.sort]||(state.sort==="date"&&!hasDates)){state.sort="";state.dir="asc"}
+  const query=opsOutgoingFold(state.q);
+  let rows=base.filter(a=>{
+    if(state.societe&&a.societe!==state.societe)return false;
+    if(state.poste&&opsOutgoingPoste(a)!==state.poste)return false;
+    if(!opsOutgoingDateMatches(opsOutgoingExitDate(a),state.date))return false;
+    if(!query)return true;
+    return opsOutgoingFold([a.nom,a.prenom,a.matricule,a.code,opsOutgoingPoste(a),a.societe].filter(Boolean).join(" ")).includes(query);
+  });
+  if(state.sort){
+    const read=OPS_OUTGOING_SORTS[state.sort],factor=state.dir==="desc"?-1:1;
+    rows=rows.map((a,index)=>({a,index,key:read(a)})).sort((x,y)=>{
+      // Les valeurs absentes restent en fin de liste quel que soit le sens.
+      if(!x.key||!y.key){if(x.key||y.key)return x.key?-1:1;return x.index-y.index}
+      return x.key.localeCompare(y.key,"fr")*factor||x.index-y.index;
+    }).map(entry=>entry.a);
+  }
+  const total=rows.length;
+  const pages=Math.max(1,Math.ceil(total/OPS_OUTGOING_PAGE_SIZE));
+  state.page=Math.min(Math.max(1,parseInt(state.page,10)||1),pages);
+  const start=(state.page-1)*OPS_OUTGOING_PAGE_SIZE;
+  return{state,base,scope,societes,postes,hasDates,total,pages,start,pageRows:rows.slice(start,start+OPS_OUTGOING_PAGE_SIZE)};
+}
+function opsOutgoingSelectHTML(key,icon,label,options,value,locked){
+  return `<label class="ops-outgoing-select${locked?" is-locked":""}">${opsOutgoingIcon(icon)}<span class="ops-outgoing-sr">${escapeHTML(label)}</span>
+    <select data-no-lock="1" data-ops-outgoing-filter="${key}" aria-label="${escapeHTML(label)}"${locked?" disabled":""} onchange="opsOutgoingSetFilter('${key}',this.value)">${options.map(([optionValue,optionLabel])=>`<option value="${escapeHTML(optionValue)}"${optionValue===value?" selected":""}>${escapeHTML(optionLabel)}</option>`).join("")}</select></label>`;
+}
+function opsOutgoingFiltersHTML(model){
+  const {state,scope,societes,postes,hasDates}=model;
+  const societeSelect=scope.multi
+    ?opsOutgoingSelectHTML("societe","building","Société",[["","Toutes les sociétés"],...societes.map(s=>[s,s])],state.societe,false)
+    :(scope.active?opsOutgoingSelectHTML("societe","building","Société active",[[scope.active,scope.active]],scope.active,true):"");
+  const dateSelect=hasDates?opsOutgoingSelectHTML("date","calendar","Date de sortie",OPS_OUTGOING_DATE_PERIODS,state.date,false):"";
+  const posteSelect=postes.length?opsOutgoingSelectHTML("poste","briefcase","Poste",[["","Tous les postes"],...postes.map(p=>[p,p])],state.poste,false):"";
+  return `<label class="ops-outgoing-search">${opsOutgoingIcon("search")}<span class="ops-outgoing-sr">Rechercher</span>
+      <input type="search" id="ops-outgoing-search" data-no-lock="1" autocomplete="off" placeholder="Rechercher un employé, un matricule, un poste..." value="${escapeHTML(state.q)}" oninput="opsOutgoingSetFilter('q',this.value)"></label>
+    ${societeSelect}${dateSelect}${posteSelect}`;
+}
+function opsOutgoingHeadHTML(key,label,sortable,state){
+  if(!sortable)return `<th scope="col" data-ops-outgoing-col="${key}">${label}</th>`;
+  const active=state.sort===key;
+  return `<th scope="col" data-ops-outgoing-col="${key}" aria-sort="${active?(state.dir==="desc"?"descending":"ascending"):"none"}"><button type="button" class="ops-outgoing-sort${active?" is-active":""}" data-ops-outgoing-sort="${key}" onclick="opsOutgoingSetSort('${key}')">${label}${opsOutgoingIcon(active?state.dir:"sort")}</button></th>`;
+}
+function opsOutgoingRowHTML(a){
+  const name=opsOutgoingName(a),matricule=opsOutgoingMatricule(a),poste=opsOutgoingPoste(a),exit=opsOutgoingExitDate(a),status=opsOutgoingStatus(a);
+  const dateCell=exit
+    ?`<span class="ops-outgoing-date">${opsOutgoingFormatDate(exit)}</span>`
+    :`<span class="ops-outgoing-date is-missing">—</span><span class="ops-outgoing-tag is-muted">Non renseignée</span>`;
+  return `<tr data-ops-outgoing-row="${escapeHTML(employeeRouteId(a))}">
+    <td data-label="Employé"><div class="ops-outgoing-person"><span class="ops-outgoing-avatar" data-tone="${opsOutgoingAvatarTone(a)}">${employeeAvatarHTML(a)}</span><span class="ops-outgoing-person-text"><strong>${escapeHTML(name||"—")}</strong><small>${escapeHTML(matricule||"—")}</small></span></div></td>
+    <td data-label="Société">${a.societe?`<span class="ops-outgoing-company"><span class="ops-outgoing-company-icon">${opsOutgoingIcon("building")}</span><span>${escapeHTML(a.societe)}</span></span>`:`<span class="ops-outgoing-date is-missing">—</span>`}</td>
+    <td data-label="Date sortie"><div class="ops-outgoing-date-cell">${dateCell}</div></td>
+    <td data-label="Poste"><div class="ops-outgoing-role">${poste?`<span class="ops-outgoing-tag is-role">${opsOutgoingIcon("briefcase")}<span>${escapeHTML(poste)}</span></span>`:`<span class="ops-outgoing-date is-missing">—</span>`}${status?`<span class="ops-outgoing-status is-${status.key}" data-ops-outgoing-status="${status.key}"><i aria-hidden="true"></i>${status.label}</span>`:""}</div></td>
+    <td data-label="Action"><a class="ops-outgoing-open" href="#/agents/${employeeRouteId(a)}" onclick="setFicheContext('ops')">${opsOutgoingIcon("eye")}<span>Ouvrir →</span></a></td>
+  </tr>`;
+}
+function opsOutgoingPagerHTML(model){
+  const {state,pages}=model;
+  const numbers=[];
+  for(let page=1;page<=pages;page++){
+    if(page===1||page===pages||Math.abs(page-state.page)<=1)numbers.push(page);
+    else if(numbers[numbers.length-1]!=="…")numbers.push("…");
+  }
+  const step=(page,label,icon,disabled)=>`<button type="button" class="ops-outgoing-page-btn" aria-label="${label}"${disabled?" disabled":""} onclick="opsOutgoingSetPage(${page})">${opsOutgoingIcon(icon)}</button>`;
+  return `<nav class="ops-outgoing-pager" aria-label="Pagination des éléments sortants">${step(state.page-1,"Page précédente","prev",state.page<=1)}${numbers.map(page=>page==="…"?`<span class="ops-outgoing-page-gap">…</span>`:`<button type="button" class="ops-outgoing-page-btn${page===state.page?" is-current":""}"${page===state.page?' aria-current="page"':""} onclick="opsOutgoingSetPage(${page})">${page}</button>`).join("")}${step(state.page+1,"Page suivante","next",state.page>=pages)}</nav>`;
+}
+function opsOutgoingResultsHTML(model){
+  const {state,hasDates,total,start,pageRows}=model;
+  const body=pageRows.length
+    ?pageRows.map(opsOutgoingRowHTML).join("")
+    :`<tr class="ops-outgoing-empty-row"><td colspan="5"><div class="ops-outgoing-empty"><span class="ops-outgoing-empty-icon">${opsOutgoingIcon("exit")}</span><strong>Aucun élément sortant.</strong><span>Aucun dossier ne correspond aux critères sélectionnés.</span></div></td></tr>`;
+  return `<div class="ops-outgoing-table-frame"><div class="ops-outgoing-table-scroll"><table class="ops-outgoing-table${pageRows.length?"":" is-empty"}">
+      <thead><tr>${opsOutgoingHeadHTML("employe","Employé",true,state)}${opsOutgoingHeadHTML("societe","Société",true,state)}${opsOutgoingHeadHTML("date","Date sortie",hasDates,state)}${opsOutgoingHeadHTML("poste","Poste",true,state)}${opsOutgoingHeadHTML("action","Action",false,state)}</tr></thead>
+      <tbody>${body}</tbody>
+    </table></div></div>
+    <div class="ops-outgoing-footer"><span class="ops-outgoing-range" role="status">${total?`Affichage de ${start+1} à ${start+pageRows.length} sur ${total} élément${total>1?"s":""}`:"Aucun élément à afficher"}</span>${total?opsOutgoingPagerHTML(model):""}</div>`;
+}
+function renderOpsOutgoingEmployees(view){
+  const model=opsOutgoingModel();
+  const {base,scope}=model;
+  view.innerHTML=`<div class="ops-outgoing-page" data-ops-outgoing>
+    <section class="ops-outgoing-card" aria-labelledby="ops-outgoing-title">
+      <header class="ops-outgoing-header">
+        <div class="ops-outgoing-heading">
+          <span class="ops-outgoing-mark">${opsOutgoingIcon("exit")}</span>
+          <div class="ops-outgoing-heading-text">
+            <h1 id="ops-outgoing-title" class="ops-outgoing-title" data-keep-case>Éléments sortants</h1>
+            <p class="ops-outgoing-count"><span data-ops-outgoing-total>${base.length}</span> dossier(s)${scope.active?` · ${escapeHTML(scope.active)}`:""}</p>
+            <p class="ops-outgoing-description">Liste des employés ayant quitté l'entreprise ou en cours de sortie.</p>
+          </div>
+        </div>
+        <div class="ops-outgoing-kpi" role="group" aria-label="Éléments sortants">
+          <span class="ops-outgoing-kpi-icon">${opsOutgoingIcon("people")}</span>
+          <span class="ops-outgoing-kpi-text"><strong data-ops-outgoing-kpi>${base.length}</strong><span>Éléments sortants</span><small data-ops-outgoing-scope>${escapeHTML(scope.label)}</small></span>
+        </div>
+      </header>
+      <div class="ops-outgoing-filters" role="search">${opsOutgoingFiltersHTML(model)}</div>
+      <div class="ops-outgoing-results" id="ops-outgoing-results">${opsOutgoingResultsHTML(model)}</div>
+    </section>
+  </div>`;
+  if(typeof hydrateEmployeePhotos==="function")hydrateEmployeePhotos(view);
+}
+// Les filtres ne redessinent que la zone de résultats : le champ de recherche garde le focus.
+function opsOutgoingRefreshResults(){
+  const zone=document.getElementById("ops-outgoing-results");
+  if(!zone)return;
+  zone.innerHTML=opsOutgoingResultsHTML(opsOutgoingModel());
+  if(typeof hydrateEmployeePhotos==="function")hydrateEmployeePhotos(zone);
+}
+function opsOutgoingSetFilter(key,value){
+  if(!["q","societe","date","poste"].includes(key))return;
+  opsOutgoingState[key]=String(value??"");
+  opsOutgoingState.page=1;
+  opsOutgoingRefreshResults();
+}
+function opsOutgoingSetSort(key){
+  if(!OPS_OUTGOING_SORTS[key])return;
+  const state=opsOutgoingState;
+  if(state.sort!==key){state.sort=key;state.dir="asc"}
+  else if(state.dir==="asc")state.dir="desc";
+  else{state.sort="";state.dir="asc"}
+  state.page=1;
+  opsOutgoingRefreshResults();
+}
+function opsOutgoingSetPage(page){
+  opsOutgoingState.page=parseInt(page,10)||1;
+  opsOutgoingRefreshResults();
 }
