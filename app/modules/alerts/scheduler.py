@@ -75,6 +75,15 @@ async def _loop() -> None:
             raise
         except Exception as exc:  # pragma: no cover
             logger.warning("Boucle orchestrateur alertes: %s", exc)
+        # Feuilles de présence par rotation : clôture planifiée (complément du rattrapage fait à
+        # chaque accès et à chaque pointage — jamais la seule garantie). Isolée des détecteurs.
+        try:
+            from app.modules.attendance.sheets import run_scheduled_maintenance
+            await asyncio.to_thread(run_scheduled_maintenance)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Clôture planifiée des feuilles de présence: %s", exc)
         await asyncio.sleep(_CHECK_INTERVAL_SECONDS)
 
 

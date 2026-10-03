@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.attendance import core
+from app.modules.attendance import core, sheets
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -25,9 +25,14 @@ from app.modules.attendance.models import (
     EVENT_DEPARTURE,
     SOURCE_MANUAL,
     SOURCE_SYSTEM,
+    SHEET_STATUSES,
     AttendanceAnomaly,
     AttendanceEvent,
+    AttendanceSheet,
+    AttendanceSheetLine,
+    RotationSetting,
 )
+from app.core.audit import append_audit
 from app.modules.auth.dependencies import AUTHORIZED_ACTIONS, current_user
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
@@ -379,3 +384,116 @@ def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
         "anomalies": [{"id": a.id, "date": a.presence_date.isoformat() if a.presence_date else "", "type": a.anomaly_type,
                        "severity": a.severity, "status": a.status, "message": a.message} for a in anomalies_rows],
     }
+
+
+# ── Feuilles de présence par rotation (Pointage & Planning intelligent V3 — lot 1) ─────────
+class RotationSettingIn(BaseModel):
+    first_shift_time: str = Field(min_length=5, max_length=5)
+    shift_minutes: int
+    groups_count: int
+    early_margin_minutes: int
+    active: bool = True
+
+
+@router.get("/rotation-settings")
+def get_rotation_settings(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Paramètres de rotation d'un site (ou valeurs initiales proposées s'il n'est pas configuré)."""
+    _ensure_site_allowed(db, user, site_id)
+    row = db.execute(select(RotationSetting).where(RotationSetting.site_id == site_id)).scalar_one_or_none()
+    return {"site_id": site_id, **sheets.setting_out(row), "active": bool(row.active) if row else False}
+
+
+@router.put("/rotation-settings/{site_id}")
+def put_rotation_settings(
+    site_id: int,
+    payload: RotationSettingIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Configure la rotation d'un site. Les feuilles déjà créées gardent leur fenêtre : la
+    nouvelle règle s'applique aux rotations suivantes (l'historique reste reproductible)."""
+    _require_action(user, "update")
+    _ensure_site_allowed(db, user, site_id)
+    try:
+        sheets.validate_setting(payload.first_shift_time, payload.shift_minutes, payload.groups_count, payload.early_margin_minutes)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    now = datetime.utcnow()
+    row = db.execute(select(RotationSetting).where(RotationSetting.site_id == site_id)).scalar_one_or_none()
+    old_state = sheets.setting_out(row) if row else None
+    values = payload.model_dump()
+    values["active"] = 1 if payload.active else 0
+    if row is None:
+        row = RotationSetting(site_id=site_id, version=1, created_at=now, **values)
+        db.add(row)
+    else:
+        window_changed = any(getattr(row, key) != values[key] for key in ("first_shift_time", "shift_minutes", "groups_count", "early_margin_minutes"))
+        for key, value in values.items():
+            setattr(row, key, value)
+        if window_changed:
+            row.version = int(row.version or 1) + 1
+    row.updated_by = user.username
+    row.updated_at = now
+    db.flush()
+    site = db.get(Site, site_id)
+    append_audit(db, action="attendance.rotation_settings", resource="attendance_rotation_settings", resource_id=row.id,
+                 result="success", user=user, request=request, society=_site_society(site) if site else None,
+                 old_state=old_state, new_state=sheets.setting_out(row))
+    db.commit()
+    return {"site_id": site_id, **sheets.setting_out(row), "active": bool(row.active)}
+
+
+@router.get("/sheets")
+def list_sheets(
+    site_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Historique des feuilles de rotation (DRH / OPS) : en cours, clôturées, archivées."""
+    scope = _scope(db, user, site_id)
+    sheets.maintain(db, site_ids=scope)
+    db.commit()
+    query = select(AttendanceSheet)
+    if scope is not None:
+        query = query.where(AttendanceSheet.site_id.in_(scope))
+    if date_from:
+        query = query.where(AttendanceSheet.local_date >= date_from)
+    if date_to:
+        query = query.where(AttendanceSheet.local_date <= date_to)
+    if status:
+        if status.upper() not in SHEET_STATUSES:
+            raise HTTPException(status_code=422, detail="Statut de feuille inconnu")
+        query = query.where(AttendanceSheet.status == status.upper())
+    total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+    rows = db.execute(query.order_by(AttendanceSheet.window_start.desc(), AttendanceSheet.id.desc())
+                      .offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    names = {s.id: (s.name or s.indicatif or "") for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows} or {0}))).scalars().all()}
+    return {"total": int(total), "page": page, "page_size": page_size,
+            "items": [{**sheets.sheet_out(db, row), "site": names.get(row.site_id, "")} for row in rows]}
+
+
+@router.get("/sheets/{sheet_id}")
+def get_sheet(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Une feuille : synthèse par employé + événements BRUTS rattachés (jamais modifiés)."""
+    sheet = db.get(AttendanceSheet, sheet_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if sheet is None or (allowed is not None and sheet.site_id not in set(allowed)):
+        raise HTTPException(status_code=404, detail="Feuille introuvable")
+    site = db.get(Site, sheet.site_id)
+    events = sheets.line_events_out(db, sheet)
+    lines = [{**line, "events": events.get(line["id"], [])} for line in sheets.lines_out(db, sheet)]
+    return {**sheets.sheet_out(db, sheet), "site": (site.name or site.indicatif or "") if site else "", "lines": lines}

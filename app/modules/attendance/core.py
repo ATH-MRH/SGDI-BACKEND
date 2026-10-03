@@ -460,6 +460,12 @@ def record_scan(
                               message=f"Arrivée à {now.strftime('%H:%M')} pour {plan['start_time']} prévu ({late} min de retard)",
                               details={"expected": plan["start_time"], "late_minutes": late})
 
+    # Feuille de présence de la rotation (lot 1) : reflet opérationnel du FAIT ci-dessus. Le fait
+    # est déjà écrit ; ce rattachement est isolé dans son point de sauvegarde et ne peut ni le
+    # modifier ni faire échouer le pointage.
+    from app.modules.attendance import sheets
+    sheets.attach_event_safely(db, event=event, employee=employee, site=site, assignment=assignment, now=now)
+
     append_audit(db, action="attendance.event", resource="attendance_event", resource_id=event.id,
                  result="success", user=actor, society=employee.society,
                  new_state={"type": event_type, "source": source, "site_id": event.site_id,

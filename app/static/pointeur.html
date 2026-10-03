@@ -415,6 +415,14 @@ body.ptr-v3 .live-feed-badge.in{background:var(--ptr-green)}
 body.ptr-v3 .live-feed-badge.out{background:var(--ptr-orange)}
 body.ptr-v3 .live-feed-badge.absent{background:var(--ptr-red)}
 body.ptr-v3 .live-feed-empty{padding:44px 12px;font-size:13px;color:var(--ptr-muted)}
+/* Feuille de présence de la rotation en cours */
+body.ptr-v3 .sheet-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:12px 14px;border-radius:14px;background:linear-gradient(100deg,var(--ptr-kpi-1),var(--ptr-kpi-2));color:var(--ptr-on-navy)}
+body.ptr-v3 .sheet-banner small{display:block;font-size:10.5px;font-weight:700;letter-spacing:.09em;color:var(--ptr-on-navy-muted)}
+body.ptr-v3 .sheet-banner b{display:block;margin-top:2px;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+body.ptr-v3 .sheet-banner-meta{display:flex;gap:6px;flex-wrap:wrap}
+body.ptr-v3 .sheet-banner-meta span{padding:4px 10px;border-radius:999px;background:#ffffff1f;font-size:11.5px;font-weight:700;white-space:nowrap}
+body.ptr-v3 .sheet-next{margin-top:14px;padding-top:12px;border-top:1px dashed var(--ptr-line-strong)}
+body.ptr-v3 .sheet-next-title{margin:0 4px 8px;font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--ptr-ink-2)}
 
 /* ── État du système (faits connus du navigateur uniquement) ── */
 body.ptr-v3 .system-card{padding:16px 20px 18px}
@@ -819,8 +827,8 @@ function updateSelectedSiteLabel(){
 async function changeAttendanceSite(value){
   const nextSiteId=String(value||"");
   selectedSiteId=nextSiteId;localStorage.setItem("atlas_pointer_site",selectedSiteId);
-  liveFeedFilter="";updateSelectedSiteLabel();resetManualPanel();
-  await Promise.all([loadHistory(),loadAttendanceAlerts(),loadShiftStaffing()]);
+  liveFeedFilter="";activeSheet=null;updateSelectedSiteLabel();resetManualPanel();
+  await Promise.all([loadHistory(),loadActiveSheet(),loadAttendanceAlerts(),loadShiftStaffing()]);
   if(pointerSession)startLivePolling();
   if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
   // Un changement de site ne doit pas rallumer la caméra QR derrière Planning ou Facial
@@ -842,7 +850,27 @@ async function enterApp(){
   startLivePolling();
   requestAnimationFrame(setupScanMode);
 }
-function refreshPointeurData(){loadHistory();loadAttendanceAlerts();loadShiftStaffing()}
+function refreshPointeurData(){loadHistory();loadActiveSheet();loadAttendanceAlerts();loadShiftStaffing()}
+// Feuille de présence de la rotation EN COURS (serveur) : « Pointage en direct » n'affiche que
+// cette feuille — une ligne par employé — et non l'historique de la journée. Un site sans
+// paramètres de rotation renvoie configured=false : l'affichage historique est conservé.
+let activeSheet=null;
+async function loadActiveSheet(){
+  if(!pointerSession?.token)return;
+  try{
+    const response=await fetch("/api/portal/attendance-sheet"+siteQuery(),{cache:"no-store",headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}
+    if(!response.ok)return;                                      // on garde la dernière feuille connue
+    const data=await response.json();
+    activeSheet=data&&data.configured&&data.sheet?data:null;
+    renderLiveFeed();
+  }catch(e){/* réseau : nouvel essai au prochain rafraîchissement */}
+}
+function sheetRows(sheet){
+  return (sheet?.lines||[]).map(line=>({matricule:line.matricule||"",name:line.name||"Employé",photo:line.photo||"",poste:line.fonction||"Fonction non renseignée",
+    site:line.site||"",date:localDate(),arrivee:line.first_entry||"",depart:line.last_exit||"",present:line.state==="PRESENT",absent:false,
+    group:line.declared_group||"",events:Number(line.events_count)||0,anomaly:line.anomaly||""}));
+}
 async function loadShiftStaffing(){
   // Source canonique UNIQUE = DC.IRONGS.COM. Aucun repli sur les anciennes quotas
   // techniques OPS pour la notion "effectif contractuel" : un site sans contrat DC
@@ -903,7 +931,7 @@ async function pollLive(){
     renderCounters();
     if(first)return;                                             // au démarrage : on n'affiche pas un ancien passage
     const events=Array.isArray(data.events)?data.events:[],refusals=Array.isArray(data.refusals)?data.refusals:[];
-    if(events.length){loadHistory();showLastScan(events[events.length-1])}
+    if(events.length){loadHistory();loadActiveSheet();showLastScan(events[events.length-1])}
     else if(refusals.length)showLastRefusal(refusals[refusals.length-1]);
   }catch(e){setLiveState("error")/* réseau : la pastille de connexion l'indique ; nouvel essai au prochain tour */}
   finally{liveBusy=false}
@@ -1074,7 +1102,7 @@ async function logout(){
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
     stopLivePolling();
-    liveState="pending";liveOkAt=0;
+    liveState="pending";liveOkAt=0;activeSheet=null;
     Object.values(portraitUrls).forEach(u=>{if(String(u).startsWith("blob:"))try{URL.revokeObjectURL(u)}catch(e){}});
     Object.keys(portraitUrls).forEach(k=>delete portraitUrls[k]);
     localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
@@ -1283,10 +1311,18 @@ function setLiveFilter(filter){
 function renderLiveFeed(){
   const list=document.getElementById("liveFeedList");
   if(!list)return;
-  const filtered=sessionScans.filter(row=>!liveFeedFilter||(row.date===localDate()&&((liveFeedFilter==="entrees"&&row.arrivee&&!row.absent)||(liveFeedFilter==="sorties"&&row.depart)||(liveFeedFilter==="presents"&&row.arrivee&&!row.depart&&!row.absent)||(liveFeedFilter==="absents"&&row.absent))));
-  const groups=new Map();filtered.forEach(row=>{const poste=String(row.poste||"Fonction non renseignée").trim().toUpperCase();if(!groups.has(poste))groups.set(poste,[]);groups.get(poste).push(row)});
-  const rowHTML=row=>{const isAbsent=!!row.absent,isIn=row.arrivee&&!row.depart&&!isAbsent,lamp=isIn?lampHTMLForMatricule(row.matricule):"",initials=String(row.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase(),avatar=row.photo?`<img class="live-feed-avatar" src="${esc(row.photo)}" alt="Photo de ${esc(row.name)}">`:`<span class="live-feed-avatar initials">${esc(initials)}</span>`,times=isAbsent?`<div class="live-feed-time"><span class="live-feed-badge absent">ABSENT</span><div class="live-feed-meta">${esc(row.absenceAt||"")}</div></div>`:`<div class="live-feed-time"><span class="live-feed-badge in">ENTRÉE</span><div class="live-feed-meta">${esc(row.arrivee||"—")}</div></div>${row.depart?`<div class="live-feed-time"><span class="live-feed-badge out">SORTIE</span><div class="live-feed-meta">${esc(row.depart)}</div></div>`:""}`;return `<div class="live-feed-row ${isAbsent?"live-absent":(isIn?"live-in":"live-out")}"><div class="live-feed-person">${avatar}<div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${isAbsent&&row.observation?" · "+esc(row.observation):""}</div></div></div><div class="live-feed-times">${times}</div></div>`};
-  list.innerHTML=groups.size?`<div class="live-feed-groups">${[...groups.entries()].sort(([a],[b])=>a.localeCompare(b,"fr")).map(([poste,rows])=>{const pointed=rows.filter(row=>!row.absent),absent=rows.filter(row=>row.absent);return `<section class="live-feed-group"><header class="live-feed-group-head"><b>${esc(poste)}</b><span>${rows.length}</span></header>${pointed.length?`<div class="live-feed-section"><div class="live-feed-section-title"><b>PRÉSENTS / POINTÉS</b><span>${pointed.length}</span></div><div class="live-feed-section-rows">${pointed.slice(0,12).map(rowHTML).join("")}</div></div>`:""}${absent.length?`<div class="live-feed-section"><div class="live-feed-section-title absent"><b>ABSENTS</b><span>${absent.length}</span></div><div class="live-feed-section-rows">${absent.slice(0,12).map(rowHTML).join("")}</div></div>`:""}</section>`}).join("")}</div>`:`<div class="live-feed-empty">${liveFeedFilter?"Aucun employé pour ce filtre.":"Aucun pointage récent."}</div>`;
+  const sheet=activeSheet?.sheet||null,fromSheet=!!sheet;
+  const source=fromSheet?sheetRows(sheet):sessionScans;
+  // Sur une feuille, l'état vient du serveur (une ligne par employé) ; sinon, logique historique.
+  const isPresent=row=>fromSheet?row.present:(row.arrivee&&!row.depart&&!row.absent);
+  const filtered=source.filter(row=>!liveFeedFilter||(row.date===localDate()&&((liveFeedFilter==="entrees"&&row.arrivee&&!row.absent)||(liveFeedFilter==="sorties"&&row.depart)||(liveFeedFilter==="presents"&&isPresent(row))||(liveFeedFilter==="absents"&&row.absent))));
+  const rowHTML=row=>{const isAbsent=!!row.absent,isIn=isPresent(row),lamp=isIn?lampHTMLForMatricule(row.matricule):"",initials=String(row.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase(),avatar=row.photo?`<img class="live-feed-avatar" src="${esc(row.photo)}" alt="Photo de ${esc(row.name)}">`:`<span class="live-feed-avatar initials">${esc(initials)}</span>`,times=isAbsent?`<div class="live-feed-time"><span class="live-feed-badge absent">ABSENT</span><div class="live-feed-meta">${esc(row.absenceAt||"")}</div></div>`:`<div class="live-feed-time"><span class="live-feed-badge in">ENTRÉE</span><div class="live-feed-meta">${esc(row.arrivee||"—")}</div></div>${row.depart?`<div class="live-feed-time"><span class="live-feed-badge out">SORTIE</span><div class="live-feed-meta">${esc(row.depart)}</div></div>`:""}`,extra=fromSheet?`${row.group?" · Groupe "+esc(row.group):""}${row.events>2?" · "+row.events+" passages":""}${row.anomaly==="DEPART_MANQUANT"?" · départ manquant":""}`:"";return `<div class="live-feed-row ${isAbsent?"live-absent":(isIn?"live-in":"live-out")}"><div class="live-feed-person">${avatar}<div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${extra}${isAbsent&&row.observation?" · "+esc(row.observation):""}</div></div></div><div class="live-feed-times">${times}</div></div>`};
+  const groupsHTML=rows=>{const groups=new Map();rows.forEach(row=>{const poste=String(row.poste||"Fonction non renseignée").trim().toUpperCase();if(!groups.has(poste))groups.set(poste,[]);groups.get(poste).push(row)});return groups.size?`<div class="live-feed-groups">${[...groups.entries()].sort(([a],[b])=>a.localeCompare(b,"fr")).map(([poste,group])=>{const pointed=group.filter(row=>!row.absent),absent=group.filter(row=>row.absent);return `<section class="live-feed-group"><header class="live-feed-group-head"><b>${esc(poste)}</b><span>${group.length}</span></header>${pointed.length?`<div class="live-feed-section"><div class="live-feed-section-title"><b>PRÉSENTS / POINTÉS</b><span>${pointed.length}</span></div><div class="live-feed-section-rows">${pointed.slice(0,fromSheet?200:12).map(rowHTML).join("")}</div></div>`:""}${absent.length?`<div class="live-feed-section"><div class="live-feed-section-title absent"><b>ABSENTS</b><span>${absent.length}</span></div><div class="live-feed-section-rows">${absent.slice(0,12).map(rowHTML).join("")}</div></div>`:""}</section>`}).join("")}</div>`:""};
+  const empty=`<div class="live-feed-empty">${liveFeedFilter?"Aucun employé pour ce filtre.":(fromSheet?"Aucun pointage sur cette rotation.":"Aucun pointage récent.")}</div>`;
+  if(!fromSheet){list.innerHTML=groupsHTML(filtered)||empty;return}
+  const banner=`<div class="sheet-banner" id="activeSheetBanner"><div><small>FEUILLE EN COURS</small><b>${esc(sheet.label||"")}</b></div><div class="sheet-banner-meta"><span>${Number(sheet.present_count)||0} présent(s)</span><span>${Number(sheet.lines_count)||0} pointé(s)</span>${sheet.observed_group?`<span>Groupe ${esc(sheet.observed_group)}</span>`:""}</div></div>`;
+  const next=activeSheet.next&&!liveFeedFilter?`<div class="sheet-next"><div class="sheet-next-title">ROTATION SUIVANTE · ${esc(activeSheet.next.label||"")} · arrivées anticipées</div>${groupsHTML(sheetRows(activeSheet.next))}</div>`:"";
+  list.innerHTML=banner+(groupsHTML(filtered)||empty)+next;
 }
 let manualResults=[];
 let manualSelected=null;

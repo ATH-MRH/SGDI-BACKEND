@@ -749,6 +749,25 @@ def attendance_sites(db: Session = Depends(get_db), user: User = Depends(current
     return [{"id": site.id, "name": site.name, "indicatif": site.indicatif or ""} for site in db.execute(query).scalars().all()]
 
 
+@router.get("/attendance-sheet")
+def attendance_sheet(
+    site_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Poste de pointage : FEUILLE ACTIVE de la rotation en cours du site (une ligne par
+    employé), et non l'historique de la journée. Sans paramètres de rotation pour ce site —
+    ou sans site unique — `configured` est faux et le poste garde son affichage historique."""
+    from app.modules.attendance import sheets
+
+    selected = _attendance_selected_sites(db, user, site_id)
+    if selected is None or len(selected) != 1:
+        return {"configured": False, "site_id": site_id, "sheet": None, "next": None, "reason": "site_required"}
+    view = sheets.active_view(db, next(iter(selected)))
+    db.commit()
+    return view
+
+
 @router.get("/attendance-live")
 def attendance_live(
     site_id: int | None = None,

@@ -58,6 +58,8 @@ td{padding:10px 12px;border-bottom:1px solid #edf2f7;vertical-align:middle}
 tr:hover td{background:#fafcff}
 .who b{display:block}.who small{color:var(--muted)}
 .pill{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:850;white-space:nowrap}
+.sheet-modal{padding:22px;overflow:auto}.sheet-modal .table-wrap{margin-top:14px}
+.pill.sheet-open{background:#dcfce7;color:#166534}.pill.sheet-closed{background:#e0ecfb;color:#0b4d86}.pill.sheet-archived{background:#eef2f6;color:#52677f}
 .st-present{background:#dcfce7;color:#166534}.st-absent{background:#fee2e2;color:#991b1b}.st-non_pointe{background:#fef3c7;color:#92400e}
 .st-repos{background:#e2e8f0;color:#334155}.st-conge,.st-mission{background:#e0f2fe;color:#075985}.st-maladie{background:#f3e8ff;color:#6b21a8}
 .sev-critical{background:#fee2e2;color:#991b1b}.sev-warning{background:#fef3c7;color:#92400e}.sev-info{background:#e0f2fe;color:#075985}
@@ -194,6 +196,7 @@ body.modal-open{overflow:hidden}
       <nav>
         <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
+        <button class="nav-btn" data-view="sheets" type="button">▤ Feuilles de rotation</button>
       </nav><div class="side-title">Biométrie</div><nav>
         <button class="nav-btn" data-view="enrollment" type="button">☺ Enrôlement</button>
         <button class="nav-btn" data-view="terminals" type="button">▣ Terminaux (tablettes)</button>
@@ -305,6 +308,19 @@ body.modal-open{overflow:hidden}
           <div class="pager"><span id="anomaly-total"></span><span><button class="secondary" id="a-prev" type="button">‹ Précédent</button> <button class="secondary" id="a-next" type="button">Suivant ›</button></span></div>
         </div>
       </section>
+      <section id="view-sheets" class="hidden">
+        <div class="page-head"><div><h2>Feuilles de rotation</h2><p>Une feuille par rotation et par site, une ligne par employé. Les pointages bruts restent consultables et ne sont jamais modifiés.</p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+            <div><label for="s-from">Du</label><input id="s-from" type="date"></div>
+            <div><label for="s-to">Au</label><input id="s-to" type="date"></div>
+            <div><label for="s-status">Statut</label><select id="s-status" style="width:auto"><option value="">Toutes</option><option value="OPEN">En cours</option><option value="CLOSED">Clôturées</option><option value="ARCHIVED">Archivées</option></select></div>
+            <button class="secondary" id="s-settings" type="button">Paramètres de rotation du site</button>
+          </div></div>
+        <div class="card"><div id="sheet-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rotation</th><th>Site</th><th>Statut</th><th>Présents</th><th>Sortis</th><th>Pointés</th><th>Groupe observé</th><th></th></tr></thead><tbody id="sheet-rows"></tbody></table></div>
+          <div class="pager"><span id="sheet-total"></span><span><button class="secondary" id="s-prev" type="button">‹ Précédent</button> <button class="secondary" id="s-next" type="button">Suivant ›</button></span></div>
+        </div>
+      </section>
     </main>
   </div>
 </section>
@@ -389,7 +405,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["anomalies", "sheets", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -400,6 +416,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
+    $("view-sheets").classList.toggle("hidden", view !== "sheets");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
     $("view-terminals").classList.toggle("hidden", view !== "terminals");
     $("view-enrollment").classList.toggle("hidden", view !== "enrollment");
@@ -411,6 +428,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (view === "terminals") return loadTerminals();
     if (view === "enrollment") return loadEnrollment();
     if (view === "duplicates") return loadDuplicates();
+    if (view === "sheets") return loadSheets();
     return view === "board" ? loadBoard() : loadAnomalies();
   }
 
@@ -607,6 +625,87 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     });
   }
 
+
+  // ── Feuilles de présence par rotation (historique DRH / OPS) ─────────────────────────
+  // Lecture seule des feuilles : la vérité reste le journal des pointages (jamais modifié ici).
+  const SHEET_STATUS = { OPEN: "En cours", CLOSED: "Clôturée", ARCHIVED: "Archivée" };
+  const SHEET_LINE_STATE = { PRESENT: "Présent", SORTI: "Sorti" };
+  const SHIFT_CHOICES = [[360, "6 h"], [480, "8 h"], [720, "12 h"], [1440, "24 h"]];
+  state.sPage = 1; state.sheets = null;
+  const dayOffset = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  ["s-from", "s-to", "s-status"].forEach((id) => $(id).addEventListener("change", () => { state.sPage = 1; loadSheets(); }));
+  $("s-prev").addEventListener("click", () => { if (state.sPage > 1) { state.sPage--; loadSheets(); } });
+  $("s-next").addEventListener("click", () => { if (state.sheets && state.sPage * state.sheets.page_size < state.sheets.total) { state.sPage++; loadSheets(); } });
+  $("s-settings").addEventListener("click", openRotationSettings);
+
+  async function loadSheets() {
+    if (!$("s-from").value) $("s-from").value = dayOffset(-7);
+    if (!$("s-to").value) $("s-to").value = today();
+    $("sheet-state").innerHTML = '<div class="state info">Chargement…</div>';
+    const q = new URLSearchParams({ page: state.sPage, page_size: 25, date_from: $("s-from").value, date_to: $("s-to").value });
+    if ($("s-status").value) q.set("status", $("s-status").value);
+    if ($("f-site").value) q.set("site_id", $("f-site").value);
+    try {
+      const data = await api("/attendance/sheets?" + q);
+      state.sheets = data;
+      $("sheet-state").innerHTML = "";
+      $("sheet-rows").innerHTML = data.items.length ? data.items.map((f) => `<tr>
+        <td>${esc(f.date)}</td><td><b>${esc(f.label)}</b></td><td>${esc(f.site) || "—"}</td>
+        <td><span class="pill sheet-${esc(String(f.status).toLowerCase())}">${esc(SHEET_STATUS[f.status] || f.status)}</span></td>
+        <td>${Number(f.present_count) || 0}</td><td>${Number(f.out_count) || 0}</td><td>${Number(f.lines_count) || 0}${f.anomalies_count ? ` <small>· ${Number(f.anomalies_count)} départ(s) manquant(s)</small>` : ""}</td>
+        <td>${f.observed_group ? "Groupe " + esc(f.observed_group) : "—"}</td>
+        <td><div class="row-actions"><button class="link" type="button" data-sheet="${f.id}">Ouvrir</button></div></td></tr>`).join("")
+        : '<tr><td colspan="9" class="empty">Aucune feuille sur cette période. Un site n\'a de feuilles qu\'après configuration de ses paramètres de rotation.</td></tr>';
+      $("sheet-rows").querySelectorAll("[data-sheet]").forEach((b) => b.addEventListener("click", () => openSheet(b.dataset.sheet)));
+      const pages = Math.max(1, Math.ceil(data.total / data.page_size));
+      $("sheet-total").textContent = `${data.total} feuille(s) · page ${data.page}/${pages}`;
+      $("s-prev").disabled = data.page <= 1; $("s-next").disabled = data.page >= pages;
+    } catch (ex) { $("sheet-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`; }
+  }
+
+  async function openSheet(id) {
+    let f;
+    try { f = await api("/attendance/sheets/" + id); } catch (ex) { toast(ex.message, true); return; }
+    const m = modal(`<div class="sheet-modal"><h3 id="sheet-title">Feuille ${esc(f.label)} · ${esc(f.date)}</h3>
+      <div class="sub">${esc(f.site) || "—"} · ${esc(SHEET_STATUS[f.status] || f.status)}${f.observed_group ? " · groupe observé " + esc(f.observed_group) : ""}${f.closed_at ? " · clôturée par " + esc(f.closed_by || "système") : ""}</div>
+      <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Groupe</th><th>Première entrée</th><th>Dernière sortie</th><th>État</th><th>Pointages bruts</th></tr></thead><tbody>${
+        f.lines.length ? f.lines.map((l) => `<tr><td class="who"><b>${esc(l.name) || "—"}</b><small>${esc(l.matricule)}${l.fonction ? " · " + esc(l.fonction) : ""}</small></td>
+          <td>${esc(l.declared_group) || "—"}</td><td>${esc(l.first_entry) || "—"}</td><td>${esc(l.last_exit) || "—"}</td>
+          <td>${esc(SHEET_LINE_STATE[l.state] || l.state)}${l.anomaly === "DEPART_MANQUANT" ? ' <span class="pill sev-warning">Départ manquant</span>' : ""}</td>
+          <td><small>${(l.events || []).map((e) => (e.type === "ENTREE" ? "Entrée " : "Sortie ") + esc(e.heure) + " (" + esc(SOURCE_LABEL[e.source] || e.source) + ")").join(" · ") || "—"}</small></td></tr>`).join("")
+        : '<tr><td colspan="6" class="empty">Aucun pointage sur cette rotation.</td></tr>'}</tbody></table></div>
+      <div class="modal-actions"><button class="secondary" type="button" id="sheet-close">Fermer</button></div></div>`, { wide: true, labelledBy: "sheet-title" });
+    m.querySelector("#sheet-close").addEventListener("click", closeModal);
+  }
+
+  async function openRotationSettings() {
+    const siteId = $("f-site").value;
+    if (!siteId) { toast("Choisissez d'abord un site dans le filtre en haut de page.", true); return; }
+    let cfg;
+    try { cfg = await api("/attendance/rotation-settings?site_id=" + siteId); } catch (ex) { toast(ex.message, true); return; }
+    const siteName = $("f-site").selectedOptions[0] ? $("f-site").selectedOptions[0].textContent : "";
+    const shiftOptions = SHIFT_CHOICES.some(([v]) => v === cfg.shift_minutes) ? SHIFT_CHOICES : SHIFT_CHOICES.concat([[cfg.shift_minutes, cfg.shift_minutes + " min"]]);
+    const m = modal(`<h3 id="rot-title">Paramètres de rotation</h3><div class="sub">${esc(siteName)} · ${cfg.configured ? "configuré (version " + esc(cfg.version) + ")" : "non configuré — valeurs proposées"}</div>
+      <form id="rot-form">
+        <label for="rot-first">Heure du premier poste</label><input id="rot-first" type="time" required value="${esc(cfg.first_shift_time)}">
+        <label for="rot-shift">Durée d'une rotation</label><select id="rot-shift">${shiftOptions.map(([v, t]) => `<option value="${v}"${v === cfg.shift_minutes ? " selected" : ""}>${esc(t)}</option>`).join("")}</select>
+        <label for="rot-groups">Nombre de groupes attendu</label><input id="rot-groups" type="number" min="1" max="26" required value="${esc(cfg.groups_count)}">
+        <label for="rot-margin">Arrivée anticipée rattachée à la rotation suivante (minutes)</label><input id="rot-margin" type="number" min="0" required value="${esc(cfg.early_margin_minutes)}">
+        <label style="display:flex;gap:8px;align-items:center"><input id="rot-active" type="checkbox" style="width:auto"${cfg.configured || !cfg.version ? " checked" : ""}> Feuilles de rotation actives pour ce site</label>
+        <p class="sub">Les feuilles déjà créées gardent leur fenêtre : la nouvelle règle s'applique aux rotations suivantes.</p>
+        <div class="error" id="rot-error" role="alert"></div>
+        <div class="modal-actions"><button class="secondary" type="button" id="rot-cancel">Annuler</button><button class="primary" type="submit">Enregistrer</button></div>
+      </form>`, { labelledBy: "rot-title" });
+    m.querySelector("#rot-cancel").addEventListener("click", closeModal);
+    m.querySelector("#rot-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = m.querySelector("#rot-error");
+      const body = { first_shift_time: m.querySelector("#rot-first").value, shift_minutes: Number(m.querySelector("#rot-shift").value),
+        groups_count: Number(m.querySelector("#rot-groups").value), early_margin_minutes: Number(m.querySelector("#rot-margin").value), active: m.querySelector("#rot-active").checked };
+      try { await api("/attendance/rotation-settings/" + siteId, { method: "PUT", body }); closeModal(); toast("Paramètres de rotation enregistrés"); loadSheets(); }
+      catch (ex) { err.textContent = ex.message; err.classList.add("show"); }
+    });
+  }
 
   // ── Biométrie : caméras ───────────────────────────────────────────────────────────
   const USAGE_LABEL = { ATTENDANCE: "Pointage", ENROLLMENT: "Enrôlement", ATTENDANCE_AND_ENROLLMENT: "Pointage + enrôlement" };

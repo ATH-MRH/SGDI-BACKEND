@@ -37,6 +37,7 @@ function buildHtml() {
   LIVE_POLL_MS, LAST_SCAN_DISPLAY_MS,
   renderSystemState, setLiveState, syncModeCards, selectQrMode, lastScanIdleHTML, setupScanMode, toggleManualPanel,
   getUi: () => ({ liveState, liveOkAt, cameraMode }),
+  loadActiveSheet, renderLiveFeed, setLiveFilter, loadHistory, getActiveSheet: () => activeSheet,
 };
 `;
   return RAW_HTML.replace(/(<script>)([\s\S]*?)(<\/script>)/, (match, open, body, close) => open + body + suffix + close);

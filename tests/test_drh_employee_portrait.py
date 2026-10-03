@@ -292,7 +292,8 @@ def test_migration_is_additive_and_reversible(tmp_path):
     con = sqlite3.connect(database)
     tables = lambda: {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}  # noqa: E731
     existing = tables()
-    up = alembic("upgrade", "head")
+    # Révision de CE lot (d'autres migrations additives peuvent suivre sans le concerner).
+    up = alembic("upgrade", "20261004_0001")
     assert up.returncode == 0, up.stderr
     assert tables() - existing == {"employee_portraits"}
     assert con.execute("SELECT COUNT(*) FROM employee_portraits").fetchone()[0] == 0

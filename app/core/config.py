@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     # Tolérance métier avant qu'une arrivée soit signalée en retard par rapport à l'horaire
     # prévu du planning (rotation). Réglage d'exploitation, pas une règle légale.
     attendance_late_tolerance_minutes: int = 15
+    # Feuilles de présence par rotation (lot 1) — valeurs INITIALES proposées à la configuration
+    # d'un site (le moteur ne code en dur ni 8 h ni 4 groupes ; chaque site a ses paramètres).
+    attendance_rotation_default_shift_minutes: int = 480
+    attendance_rotation_default_groups: int = 4
+    # Une ARRIVÉE moins de N minutes avant le début d'une rotation appartient à cette rotation
+    # (prise de poste anticipée), pas à la rotation en cours.
+    attendance_sheet_early_margin_minutes: int = 60
+    # Une feuille CLOSED reste modifiable par les SORTIES de ses propres entrées jusqu'à son
+    # archivage ; au-delà du plus long cycle ouvert (30 h), un départ manquant est constaté.
+    attendance_sheet_archive_after_hours: int = 36
     # Biométrie faciale — DÉSACTIVÉE par défaut (jamais d'activation implicite en production).
     # Activation = décision explicite : BIOMETRIC_ENABLED=true + clé de chiffrement dédiée des
     # gabarits (Fernet, générée hors dépôt) + modèles présents et vérifiés (empreintes SHA-256,
