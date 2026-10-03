@@ -1,0 +1,610 @@
+/* Pointage — terminal management. Keep every rule within this page so the
+   shared shell, other attendance views and print presentation stay unchanged. */
+@media screen {
+  #view-terminals {
+    min-width: 0;
+    color: var(--atlas-text);
+  }
+
+  #view-terminals svg {
+    display: block;
+    flex: none;
+    width: 20px;
+    height: 20px;
+  }
+
+  #view-terminals .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  #view-terminals .terminal-intro {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) minmax(180px, 24%);
+    align-items: center;
+    gap: var(--atlas-space-5);
+    padding: var(--atlas-space-6);
+    margin-bottom: var(--atlas-space-3);
+    border-radius: var(--atlas-radius-lg);
+  }
+
+  #view-terminals .terminal-intro-icon {
+    align-self: start;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    color: var(--atlas-primary);
+    background: var(--atlas-primary-soft);
+    border-radius: var(--atlas-radius-md);
+  }
+
+  #view-terminals .terminal-intro-icon svg {
+    width: 46px;
+    height: 46px;
+  }
+
+  #view-terminals .terminal-intro-copy h2 {
+    margin: 0 0 var(--atlas-space-2);
+    font-size: clamp(19px, 1.5vw, 24px);
+    line-height: 1.3;
+    font-weight: 750;
+    letter-spacing: -.025em;
+  }
+
+  #view-terminals .terminal-intro-copy p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--atlas-text-secondary);
+  }
+
+  #view-terminals .terminal-intro-copy p + p {
+    margin-top: var(--atlas-space-1);
+  }
+
+  #view-terminals .terminal-intro-art {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--atlas-space-2);
+    padding: var(--atlas-space-3);
+    border-radius: var(--atlas-radius-lg);
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+  }
+
+  #view-terminals .terminal-intro-art svg {
+    width: 110px;
+    height: 78px;
+  }
+
+  #view-terminals .terminal-intro-art p {
+    margin: 0;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.5;
+  }
+
+  #view-terminals .terminal-kpis {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--atlas-space-3);
+    margin-bottom: var(--atlas-space-6);
+  }
+
+  #view-terminals .terminal-kpi {
+    display: flex;
+    align-items: center;
+    gap: var(--atlas-space-3);
+    min-width: 0;
+    padding: var(--atlas-space-4);
+    border: 1px solid var(--atlas-border);
+    border-radius: var(--atlas-radius-md);
+    background: var(--atlas-surface);
+    box-shadow: var(--atlas-shadow-sm);
+  }
+
+  #view-terminals .terminal-kpi-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--atlas-radius-sm);
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-primary);
+  }
+
+  #view-terminals .terminal-kpi-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  #view-terminals .terminal-kpi > div { min-width: 0; }
+  #view-terminals .terminal-kpi strong {
+    display: block;
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+  }
+  #view-terminals .terminal-kpi > div > span {
+    display: block;
+    margin-top: var(--atlas-space-1);
+    color: var(--atlas-text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  #view-terminals .terminal-kpi.is-primary strong { color: var(--atlas-primary); }
+  #view-terminals .terminal-kpi.is-success strong,
+  #view-terminals .terminal-kpi.is-success .terminal-kpi-icon { color: var(--atlas-success); }
+  #view-terminals .terminal-kpi.is-success .terminal-kpi-icon { background: var(--atlas-success-soft); }
+  #view-terminals .terminal-kpi.is-danger strong,
+  #view-terminals .terminal-kpi.is-danger .terminal-kpi-icon { color: var(--atlas-danger); }
+  #view-terminals .terminal-kpi.is-danger .terminal-kpi-icon { background: var(--atlas-danger-soft); }
+  #view-terminals .terminal-kpi.is-warning strong,
+  #view-terminals .terminal-kpi.is-warning .terminal-kpi-icon { color: var(--atlas-warning); }
+  #view-terminals .terminal-kpi.is-warning .terminal-kpi-icon { background: var(--atlas-warning-soft); }
+
+  #view-terminals .terminal-toolbar,
+  #view-terminals .terminal-toolbar-actions,
+  #view-terminals .terminal-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--atlas-space-3);
+    min-width: 0;
+  }
+  #view-terminals .terminal-toolbar {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin-bottom: var(--atlas-space-4);
+  }
+  #view-terminals .terminal-toolbar-actions { flex-wrap: wrap; }
+  #view-terminals .terminal-toolbar-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--atlas-space-2);
+    min-height: 44px;
+    font-size: 13px;
+    font-weight: 650;
+    border-radius: var(--atlas-radius-sm);
+  }
+  #view-terminals .terminal-filters {
+    flex: 0 1 560px;
+    margin-left: auto;
+  }
+  #view-terminals .terminal-search {
+    display: flex;
+    align-items: center;
+    flex: 1 1 250px;
+    gap: var(--atlas-space-2);
+    min-width: 150px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 var(--atlas-space-3);
+    border: 1px solid var(--atlas-border-strong);
+    border-radius: var(--atlas-radius-sm);
+    background: var(--atlas-surface);
+    color: var(--atlas-text-muted);
+  }
+  #view-terminals .terminal-search input {
+    width: 100%;
+    min-width: 0;
+    height: 42px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 13px;
+  }
+  #view-terminals .terminal-search:focus-within {
+    outline: 2px solid var(--atlas-primary);
+    outline-offset: 3px;
+    border-color: var(--atlas-primary);
+  }
+  /* The full search control carries the visible focus indicator, including
+     the icon. Override only the shared input focus ring, never button focus. */
+  #view-terminals .terminal-search input:focus,
+  #view-terminals .terminal-search input:focus-visible {
+    outline: none !important;
+    box-shadow: none;
+  }
+  #view-terminals #terminal-type {
+    width: 180px;
+    min-height: 44px;
+    flex: 0 1 180px;
+  }
+  #view-terminals #terminal-refresh {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  #view-terminals .terminal-card { min-width: 0; }
+  #view-terminals #terminal-state:empty { display: none; }
+  #view-terminals #terminal-state .state { line-height: 1.5; }
+  #view-terminals #terminal-state .state.error { display: block; }
+  #view-terminals .terminal-table-wrap {
+    border-radius: var(--atlas-radius-md) var(--atlas-radius-md) 0 0;
+  }
+  #view-terminals .terminal-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--atlas-text);
+  }
+  #view-terminals .terminal-table th {
+    padding: 12px 10px;
+    background: var(--atlas-primary-soft);
+    color: var(--atlas-text-secondary);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: .06em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #view-terminals .terminal-table th:nth-child(1) { width: 16%; }
+  #view-terminals .terminal-table th:nth-child(2) { width: 11%; }
+  #view-terminals .terminal-table th:nth-child(3) { width: 14%; }
+  #view-terminals .terminal-table th:nth-child(4) { width: 15%; }
+  #view-terminals .terminal-table th:nth-child(5) { width: 13%; }
+  #view-terminals .terminal-table th:nth-child(6) { width: 11%; }
+  #view-terminals .terminal-table th:nth-child(7) { width: 20%; }
+  #view-terminals .terminal-table td {
+    padding: 18px 10px;
+    border-bottom-color: var(--atlas-border);
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  #view-terminals .terminal-table tr:last-child td { border-bottom: 0; }
+  #view-terminals .terminal-table tr:hover td { background: var(--atlas-surface-secondary); }
+  #view-terminals .terminal-table td.empty {
+    padding: var(--atlas-space-8) var(--atlas-space-5);
+    color: var(--atlas-text-muted);
+    text-align: center;
+  }
+  #view-terminals .terminal-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--atlas-space-2);
+    min-width: 0;
+  }
+  #view-terminals .terminal-device {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    height: 52px;
+    color: var(--atlas-primary);
+    background: var(--atlas-primary-soft);
+    border-radius: var(--atlas-radius-sm);
+  }
+  #view-terminals .terminal-device svg { width: 28px; height: 40px; }
+  #view-terminals .terminal-identity > div { min-width: 0; }
+  #view-terminals .terminal-identity b { display: block; font-weight: 750; }
+  #view-terminals .terminal-identity small,
+  #view-terminals .terminal-site small,
+  #view-terminals .terminal-association small {
+    display: block;
+    margin-top: var(--atlas-space-1);
+    color: var(--atlas-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  #view-terminals .terminal-site b { font-weight: 600; }
+  #view-terminals .terminal-type > svg {
+    width: 25px;
+    height: 25px;
+    margin-bottom: var(--atlas-space-1);
+    color: var(--atlas-success);
+  }
+  #view-terminals .terminal-os {
+    display: inline-block;
+    margin-top: var(--atlas-space-1);
+    padding: 2px 5px;
+    border-radius: var(--atlas-radius-sm);
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text-secondary);
+    font-size: 10px;
+  }
+  #view-terminals .terminal-association code {
+    display: inline;
+    font: inherit;
+    color: var(--atlas-text-secondary);
+  }
+  #view-terminals .terminal-device-label {
+    margin-top: var(--atlas-space-2);
+    padding: 5px 7px;
+    border-radius: var(--atlas-radius-sm);
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text-secondary);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  #view-terminals .terminal-activity time {
+    display: block;
+    margin-bottom: var(--atlas-space-2);
+    font-variant-numeric: tabular-nums;
+  }
+  #view-terminals .terminal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.3;
+    font-weight: 650;
+    text-align: center;
+    background: var(--atlas-surface-secondary);
+    color: var(--atlas-text-secondary);
+  }
+  #view-terminals .terminal-badge.is-success { background: var(--atlas-success-soft); color: var(--atlas-success); }
+  #view-terminals .terminal-badge.is-danger { background: var(--atlas-danger-soft); color: var(--atlas-danger); }
+  #view-terminals .terminal-badge.is-warning { background: var(--atlas-warning-soft); color: var(--atlas-warning); }
+  #view-terminals .terminal-badge.is-muted { background: var(--atlas-surface-secondary); color: var(--atlas-text-secondary); }
+  #view-terminals .terminal-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--atlas-space-2);
+  }
+  #view-terminals .terminal-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--atlas-space-3) 5px;
+    align-items: start;
+  }
+  #view-terminals .terminal-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+    min-height: 64px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--atlas-radius-sm);
+    background: transparent;
+    color: var(--atlas-primary);
+    cursor: pointer;
+    font: inherit;
+  }
+  #view-terminals .terminal-action-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 40px;
+    max-width: 100%;
+    border: 1px solid var(--atlas-border);
+    border-radius: var(--atlas-radius-sm);
+    background: var(--atlas-surface-secondary);
+  }
+  #view-terminals .terminal-action-label {
+    color: var(--atlas-text);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
+  #view-terminals .terminal-action:hover .terminal-action-icon {
+    background: var(--atlas-primary-soft);
+    border-color: var(--atlas-border-strong);
+  }
+  #view-terminals .terminal-action.is-danger { color: var(--atlas-danger); }
+  #view-terminals .terminal-action.is-danger .terminal-action-icon { background: var(--atlas-danger-soft); }
+  #view-terminals .terminal-action.is-warning { color: var(--atlas-warning); }
+  #view-terminals .terminal-action.is-warning .terminal-action-icon { background: var(--atlas-warning-soft); }
+  #view-terminals .terminal-action:disabled { opacity: .5; cursor: not-allowed; }
+
+  #view-terminals .terminal-pager {
+    padding: var(--atlas-space-3) var(--atlas-space-4);
+    border-top: 1px solid var(--atlas-border);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  #view-terminals .terminal-pagination,
+  #view-terminals .terminal-pagination nav,
+  #view-terminals .terminal-pagination label {
+    display: flex;
+    align-items: center;
+    gap: var(--atlas-space-2);
+    min-width: 0;
+  }
+  #view-terminals .terminal-pagination { gap: var(--atlas-space-6); }
+  #view-terminals .terminal-pagination label {
+    margin: 0;
+    color: var(--atlas-text-muted);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  #view-terminals #terminal-page-size { width: 68px; min-height: 44px; }
+  #view-terminals .terminal-pagination button,
+  #view-terminals #terminal-page {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    border-radius: var(--atlas-radius-sm);
+  }
+  #view-terminals .terminal-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+  #view-terminals #terminal-page {
+    background: var(--atlas-primary);
+    color: var(--atlas-on-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  #view-terminals .terminal-practices {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--atlas-space-3);
+    margin-top: var(--atlas-space-4);
+    padding: var(--atlas-space-5) var(--atlas-space-6);
+    background: var(--atlas-primary-soft);
+    border-color: var(--atlas-border-strong);
+    border-radius: var(--atlas-radius-md);
+    box-shadow: none;
+  }
+  #view-terminals .terminal-practices > svg {
+    width: 26px;
+    height: 26px;
+    color: var(--atlas-primary);
+  }
+  #view-terminals .terminal-practices h3 {
+    margin: 2px 0 var(--atlas-space-2);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  #view-terminals .terminal-practices ul {
+    margin: 0;
+    padding-left: var(--atlas-space-3);
+    color: var(--atlas-text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  #view-terminals .terminal-practices li::marker { color: var(--atlas-primary); }
+
+  @media (min-width: 1600px) {
+    #view-terminals .terminal-table th:nth-child(1) { width: 14%; }
+    #view-terminals .terminal-table th:nth-child(2) { width: 9%; }
+    #view-terminals .terminal-table th:nth-child(3) { width: 12%; }
+    #view-terminals .terminal-table th:nth-child(4) { width: 13%; }
+    #view-terminals .terminal-table th:nth-child(5) { width: 12%; }
+    #view-terminals .terminal-table th:nth-child(6) { width: 10%; }
+    #view-terminals .terminal-table th:nth-child(7) { width: 30%; }
+    #view-terminals .terminal-actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    #view-terminals .terminal-intro-art { flex-direction: row; }
+    #view-terminals .terminal-intro-art p { text-align: left; }
+  }
+
+  @media (max-width: 1280px) {
+    #view-terminals .terminal-intro { gap: var(--atlas-space-4); padding: var(--atlas-space-5); }
+    #view-terminals .terminal-kpi { gap: var(--atlas-space-2); padding: var(--atlas-space-3); }
+    #view-terminals .terminal-kpi-icon { width: 38px; height: 42px; }
+    #view-terminals .terminal-filters { flex-basis: 510px; }
+  }
+
+  /* At tablet widths, each original table row becomes a labelled card. This
+     retains every cell and action instead of squeezing seven columns. */
+  @media (max-width: 1100px) {
+    #view-terminals .terminal-intro { grid-template-columns: 52px minmax(0, 1fr); }
+    #view-terminals .terminal-intro-icon { width: 52px; height: 56px; }
+    #view-terminals .terminal-intro-art {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      justify-content: center;
+      padding: var(--atlas-space-2) var(--atlas-space-3);
+    }
+    #view-terminals .terminal-intro-art svg { width: 72px; height: 50px; }
+    #view-terminals .terminal-intro-art p { text-align: left; }
+    #view-terminals .terminal-kpis { gap: var(--atlas-space-2); }
+    #view-terminals .terminal-kpi { flex-direction: column; align-items: flex-start; }
+    #view-terminals .terminal-kpi-icon { width: 36px; height: 36px; }
+    #view-terminals .terminal-kpi-icon svg { width: 23px; height: 23px; }
+    #view-terminals .terminal-kpi strong { font-size: 22px; }
+    #view-terminals .terminal-filters { flex-basis: 100%; }
+    #view-terminals .terminal-table-wrap { overflow: visible; }
+    #view-terminals .terminal-table { display: block; }
+    #view-terminals .terminal-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    #view-terminals .terminal-table tbody {
+      display: grid;
+      gap: var(--atlas-space-4);
+      padding: var(--atlas-space-4);
+    }
+    #view-terminals .terminal-table tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: hidden;
+      border: 1px solid var(--atlas-border);
+      border-radius: var(--atlas-radius-md);
+      background: var(--atlas-surface);
+    }
+    #view-terminals .terminal-table td {
+      display: block;
+      min-width: 0;
+      padding: var(--atlas-space-3) var(--atlas-space-4);
+      border-bottom: 1px solid var(--atlas-border);
+      font-size: 13px;
+    }
+    #view-terminals .terminal-table tr:last-child td { border-bottom: 1px solid var(--atlas-border); }
+    #view-terminals .terminal-table td::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: var(--atlas-space-2);
+      color: var(--atlas-text-muted);
+      font-size: 10px;
+      line-height: 1.3;
+      font-weight: 750;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    #view-terminals .terminal-table td:first-child,
+    #view-terminals .terminal-table td:nth-child(6),
+    #view-terminals .terminal-table td:last-child { grid-column: 1 / -1; }
+    #view-terminals .terminal-table td:first-child { background: var(--atlas-surface-secondary); }
+    #view-terminals .terminal-table td:last-child { border-bottom: 0; }
+    #view-terminals .terminal-table td.empty::before { display: none; }
+    #view-terminals .terminal-identity b { font-size: 14px; }
+    #view-terminals .terminal-type { display: flex; align-items: center; gap: var(--atlas-space-2); }
+    #view-terminals .terminal-type > svg { margin: 0; }
+    #view-terminals .terminal-device-label { display: inline-block; }
+    #view-terminals .terminal-actions { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--atlas-space-2); }
+    #view-terminals .terminal-action-icon { width: 46px; height: 44px; }
+    #view-terminals .terminal-action-label { font-size: 11px; }
+  }
+
+  @media (max-width: 600px) {
+    #view-terminals .terminal-intro { grid-template-columns: 42px minmax(0, 1fr); gap: var(--atlas-space-3); padding: var(--atlas-space-4); }
+    #view-terminals .terminal-intro-icon { width: 42px; height: 48px; }
+    #view-terminals .terminal-intro-icon svg { width: 36px; height: 40px; }
+    #view-terminals .terminal-intro-copy h2 { font-size: 19px; }
+    #view-terminals .terminal-intro-copy p { font-size: 12px; }
+    #view-terminals .terminal-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--atlas-space-4); }
+    #view-terminals .terminal-kpi { flex-direction: row; align-items: center; gap: var(--atlas-space-3); }
+    #view-terminals .terminal-kpi:last-child { grid-column: 1 / -1; }
+    #view-terminals .terminal-toolbar-actions { width: 100%; }
+    #view-terminals .terminal-toolbar-actions button { flex: 1 1 auto; }
+    #view-terminals .terminal-filters { flex-wrap: wrap; gap: var(--atlas-space-2); }
+    #view-terminals .terminal-search { flex-basis: 100%; }
+    #view-terminals #terminal-type { width: auto; flex: 1 1 150px; }
+    #view-terminals .terminal-table tbody { padding: var(--atlas-space-2); gap: var(--atlas-space-3); }
+    #view-terminals .terminal-table tr { grid-template-columns: minmax(0, 1fr); }
+    #view-terminals .terminal-table td { padding: var(--atlas-space-3); }
+    #view-terminals .terminal-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--atlas-space-4) var(--atlas-space-2); }
+    #view-terminals .terminal-action-label { font-size: 12px; }
+    #view-terminals .terminal-pager { padding: var(--atlas-space-3); gap: var(--atlas-space-3); }
+    #view-terminals #terminal-count { width: 100%; }
+    #view-terminals .terminal-pagination { width: 100%; justify-content: space-between; gap: var(--atlas-space-2); }
+    #view-terminals .terminal-pagination nav { gap: var(--atlas-space-1); }
+    #view-terminals .terminal-pagination label { gap: var(--atlas-space-1); }
+    #view-terminals .terminal-practices { padding: var(--atlas-space-4); gap: var(--atlas-space-2); }
+    #view-terminals .terminal-practices > svg { width: 23px; height: 23px; }
+  }
+}

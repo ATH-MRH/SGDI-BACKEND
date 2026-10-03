@@ -336,7 +336,7 @@ test('terminaux : liste sans secret, code d\'association à usage unique, activa
   w.confirm = (msg) => { confirms.push(msg); return true; };
   await tick(80);
   const rows = d.getElementById('terminal-rows').textContent;
-  assert.match(rows, /TAB-ENTREE-01/); assert.match(rows, /Tablette Android/); assert.match(rows, /Facial coupé/); assert.match(rows, /abcd1234abcd1234/);
+  assert.match(rows, /TAB-ENTREE-01/); assert.match(rows, /Tablette Android/); assert.match(rows, /Facial désactivé/); assert.match(rows, /abcd1234abcd1234/);
   assert.doesNotMatch(d.body.innerHTML, /public_key|privateKey|"x":|pairing_code_hash/);
   // Activation du facial : confirmation explicite, PATCH dédié.
   d.querySelector('[data-term-facial="4"]').click();
