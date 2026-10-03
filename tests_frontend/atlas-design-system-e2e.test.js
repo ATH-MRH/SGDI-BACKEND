@@ -362,6 +362,25 @@ s.close()
     await page.close();
   });
 
+  await t.test('OPS Command Center V2: contenu réel et responsive 1440 / 1024 / 768 / 390', async () => {
+    const page = await newPage();
+    await standardLogin(page, 'http://ops.irongs.com/#/login', 'OPS01', { ready: '.module-host-soc-card', submit: '.sgdi-login-submit' });
+    await clickText(page, '.module-host-soc-card', SOCIETY);
+    await page.goto('http://ops.irongs.com/#/ops/dashboard', { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('[data-testid="ops-command-center-v2"]', { visible: true, timeout: 20000 });
+    await page.waitForFunction(() => document.querySelector('.ops-cc-sites')?.textContent.includes('SITE DS LOCAL'));
+    const content = await page.$eval('[data-testid="ops-command-center-v2"]', el => el.textContent);
+    assert.match(content, /Situation opérationnelle/);
+    assert.match(content, /SITE DS LOCAL/);
+    assert.doesNotMatch(content, /SITE DS INTERDIT/);
+    for (const width of [1440, 1024, 768, 390]) {
+      await page.setViewport({ width, height: 900 });
+      await visualContract(page, 'legacy', 'ops-command-center-v2', artifacts, measurements, '.sidebar');
+    }
+    await mobileNavigation(page, { sidebar: '.sidebar', toggle: '.sgdi-sidebar-toggle', active: '#sidebar-nav .nav-link.active' });
+    await page.close();
+  });
+
   for (const config of [
     { surface: 'finance', path: '/finance-platform', user: 'FIN01', nav: 'creances', marker: '#obl-list' },
     { surface: 'beo', path: '/site-workforce', user: 'CE01', nav: 'personnel', marker: '#pers-list' },

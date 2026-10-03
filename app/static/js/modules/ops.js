@@ -486,6 +486,154 @@ async function submitOpsObservationResolution(id){
   }catch(e){toast(e.message||"Mise à jour impossible","error")}
 }
 
+function opsCommandCenterTime(value){
+  const raw=String(value||"").trim();
+  if(!raw||["P","A","AB","M","R","S","C"].includes(raw.toUpperCase()))return"";
+  const match=raw.match(/(?:T|\s)(\d{2}:\d{2})|^(\d{1,2}:\d{2})/);
+  return match?(match[1]||match[2]).padStart(5,"0"):"";
+}
+
+function opsCommandCenterSiteMatch(site,row){
+  if(!site||!row)return false;
+  if(typeof siteMatchesReference==="function"&&siteMatchesReference(site,row))return true;
+  const a=normalizedSearchText(site.nom||site.intitule||site.name||"");
+  return !!a&&a===normalizedSearchText(row.siteName||row.site_name||"");
+}
+
+function opsCommandCenterKpi(label,value,detail,tone){
+  return `<div class="ops-cc-kpi" data-tone="${tone||"neutral"}"><span class="ops-cc-kpi-dot"></span><strong>${value}</strong><div><b>${escapeHTML(label)}</b><small>${escapeHTML(detail||"")}</small></div></div>`;
+}
+
+function opsCommandCenterRefreshSituation(soc){
+  const now=Date.now(),scope=normalizeSocieteName(soc||"");
+  if(window._opsCommandCenterSituationLoading||(window._opsCommandCenterSituationScope===scope&&now-(window._opsCommandCenterSituationFetchedAt||0)<10000))return;
+  window._opsCommandCenterSituationLoading=true;
+  SGDI.sites.situation(soc?{society:soc}:undefined).then(data=>{
+    const map=new Map();
+    (data?.sites||[]).forEach(row=>{const id=row?.site?.id;if(id!==undefined&&id!==null)map.set(String(id),row)});
+    window.__SGDI_SITE_SITUATION_BY_SITE=map;
+    window._opsCommandCenterSituationTotals=data||null;
+    window._opsCommandCenterSituationScope=scope;
+    window._opsCommandCenterSituationFetchedAt=Date.now();
+    if(((location.hash||"").slice(2)).startsWith("ops/dashboard"))renderView();
+  }).catch(e=>console.warn("Situation des sites indisponible pour le cockpit OPS",e)).finally(()=>{window._opsCommandCenterSituationLoading=false});
+}
+
+function opsCommandCenterRefreshAttendance(soc){
+  const date=today(),scope=normalizeSocieteName(soc||""),key=`${date}|${scope}`;
+  if(window._opsCommandCenterAttendanceLoading||(window._opsCommandCenterAttendanceKey===key&&Date.now()-(window._opsCommandCenterAttendanceFetchedAt||0)<10000))return;
+  window._opsCommandCenterAttendanceLoading=true;
+  const query=new URLSearchParams({presence_date:date,page_size:"200"});
+  if(soc)query.set("society",soc);
+  sgdiApi(`/api/attendance/board?${query}`,{method:"GET",legacy:false}).then(data=>{
+    window._opsCommandCenterAttendanceBoard=data||null;
+    window._opsCommandCenterAttendanceKey=key;
+    window._opsCommandCenterAttendanceFetchedAt=Date.now();
+    if(((location.hash||"").slice(2)).startsWith("ops/dashboard"))renderView();
+  }).catch(e=>console.warn("Attendance Core indisponible pour le cockpit OPS",e)).finally(()=>{window._opsCommandCenterAttendanceLoading=false});
+}
+
+function renderOpsCommandCenterV2(view){
+  opsDashboardRefreshFeuillePresence();
+  const soc=currentStructureSocieteFilter();
+  opsCommandCenterRefreshSituation(soc);
+  opsCommandCenterRefreshAttendance(soc);
+  const sites=siteOpsSitesForScope(soc).filter(s=>s.actif!==false&&s.active!==0);
+  const siteScope=supervisorAuthorizedSiteIds();
+  const inSiteScope=row=>sites.some(site=>opsCommandCenterSiteMatch(site,row));
+  const agents=(db.agents||[]).filter(a=>(!soc||normalizeSocieteName(a.societe||"")===normalizeSocieteName(soc))&&(!siteScope||agentInSupervisorScope(a)));
+  const active=agents.filter(employeeIsActive);
+  const affected=active.filter(a=>{const aff=agentLiveAffectation(a);return !!aff&&(!siteScope||inSiteScope(aff));});
+  const employeeCounters=sgdiUnifiedEmployeeCounters(soc),opsCounters=sgdiErpModuleCounters("ops",soc);
+  const activeCount=siteScope?active.length:counterNumericValue(employeeCounters?.active??active.length);
+  const date=today();
+  const attendanceBoard=window._opsCommandCenterAttendanceKey===`${date}|${normalizeSocieteName(soc||"")}`?window._opsCommandCenterAttendanceBoard:null;
+  const canonicalPresence=(attendanceBoard?.items||[]).map(r=>({date:attendanceBoard.date,agentId:r.employee_id,employee_id:r.employee_id,employeeName:r.nom,societe:r.society,siteId:r.site_id,site_id:r.site_id,siteName:r.site,code:{present:"P",absent:"A",conge:"C",maladie:"M",repos:"R",suspendu:"S"}[r.status]||"",scanArrivee:r.arrival||"",scanDepart:r.departure||""}));
+  const legacyPresence=(db.feuillePresence||[]).filter(r=>r.date===date&&(!soc||normalizeSocieteName(r.societe||"")===normalizeSocieteName(soc))&&(!siteScope||inSiteScope(r)));
+  const presence=attendanceBoard?canonicalPresence:legacyPresence;
+  const code=r=>String(r.code||fpqPresenceCode(r.heureArrivee)||((r.scanArrivee||opsCommandCenterTime(r.heureArrivee))?"P":"")).toUpperCase();
+  const presents=presence.filter(r=>code(r)==="P");
+  const absents=presence.filter(r=>["A","AB","A1","A2","A3"].includes(code(r)));
+  const sick=presence.filter(r=>code(r)==="M");
+  const suspended=presence.filter(r=>code(r)==="S");
+  const suspendedCount=siteScope?suspended.length:counterNumericValue(employeeCounters?.suspended??suspended.length);
+  const attendanceKpi=attendanceBoard?.kpi||null;
+  const presentCount=attendanceKpi?counterNumericValue(attendanceKpi.present):presents.length;
+  const absentCount=attendanceKpi?counterNumericValue(attendanceKpi.absent):absents.length;
+  const sickCount=attendanceKpi?counterNumericValue(attendanceKpi.maladie):sick.length;
+  const leaveCount=attendanceKpi?counterNumericValue(attendanceKpi.conge):presence.filter(r=>code(r)==="C").length;
+  const localUnassigned=active.filter(agentNeedsAffectation);
+  const unassignedCount=siteScope?localUnassigned.length:counterNumericValue(employeeCounters?.withoutAssignment??localUnassigned.length);
+  const unequipped=counterNumericValue(sgdiUnifiedEmployeeCounters(soc)?.withoutEquipment??materialPendingDotationCountForSoc(soc));
+  const incidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,soc)&&(!siteScope||inSiteScope(i)));
+  const missions=(db.missions||[]).filter(m=>(!soc||normalizeSocieteName(m.societe||"")===normalizeSocieteName(soc))&&opsMissionStatus(m).key==="encours"&&(!siteScope||inSiteScope(m)));
+  const situationMap=window.__SGDI_SITE_SITUATION_BY_SITE;
+  const siteRows=sites.map(site=>{
+    const metric=siteBackendMetricForSite(site,situationMap);
+    const assigned=metric.row?metric.realized:affected.filter(a=>opsCommandCenterSiteMatch(site,agentLiveAffectation(a))).length;
+    const rows=presence.filter(r=>opsCommandCenterSiteMatch(site,r));
+    const attendanceComplete=!attendanceBoard||counterNumericValue(attendanceBoard.total)<=canonicalPresence.length;
+    const present=attendanceComplete?rows.filter(r=>code(r)==="P").length:null;
+    const absent=attendanceComplete?rows.filter(r=>["A","AB","A1","A2","A3","M","S"].includes(code(r))).length:null;
+    const expected=metric.row?metric.contractual:(Number(site.effectifs?.totalContractuel??site.contractual_staff??0)||0);
+    return {site,expected,assigned,present,absent,pct:expected?Math.round(assigned*100/expected):null,state:expected?(assigned>=expected?"Couvert":"Sous-effectif"):"Non configuré"};
+  }).sort((a,b)=>(b.expected?Math.max(0,b.expected-b.assigned):0)-(a.expected?Math.max(0,a.expected-a.assigned):0)||(a.site.nom||"").localeCompare(b.site.nom||"","fr"));
+  const siteAssignedCount=siteRows.reduce((sum,row)=>sum+row.assigned,0);
+  const affectedCount=siteScope?siteAssignedCount:counterNumericValue(opsCounters?.assignments_active??siteAssignedCount??affected.length);
+  const coverage=activeCount?Math.round(affectedCount*100/activeCount):0;
+  const understaffed=siteRows.filter(r=>r.expected&&r.assigned<r.expected);
+  const territories=new Map();
+  sites.forEach(s=>{const k=String(s.wilaya||s.commune||"").trim();if(k)territories.set(k,(territories.get(k)||0)+1)});
+  const territoryRows=[...territories.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
+  const unlocated=sites.filter(s=>!String(s.wilaya||s.commune||"").trim()).length;
+  const movements=presence.flatMap(r=>{
+    const agent=(db.agents||[]).find(a=>String(a.id)===String(r.agentId)||String(a.backendId||"")===String(r.employee_id||r.agentBackendId||""));
+    const common={agent,name:agent?`${agent.nom||""} ${agent.prenom||""}`.trim():(r.employeeName||r.agentName||"Employé"),site:r.siteName||agentLiveAffectation(agent||{})?.siteName||"—"};
+    const arrival=opsCommandCenterTime(r.scanArrivee||r.lastScanArrivee||r.heureArrivee),departure=opsCommandCenterTime(r.scanDepart||r.lastScanDepart||r.heureDepart);
+    return [arrival?{...common,time:arrival,type:"Entrée"}:null,departure?{...common,time:departure,type:"Sortie"}:null].filter(Boolean);
+  }).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,6);
+  const alerts=[
+    [understaffed.length,"Sites sous-effectif","sites/actifs","danger"],
+    [unassignedCount,"Employés sans affectation","effectif/preparation_affectation","warning"],
+    [unequipped,"Employés sans dotation","ops/instance_dotation","warning"],
+    [incidents.length,"Incidents ouverts","incidents/dashboard","danger"],
+    [suspendedCount,"Employés suspendus","effectif/suspension","violet"]
+  ].filter(x=>x[0]>0);
+  const readOnly=isOpsSupervisorReadOnlySession();
+  const explicitActions=Array.isArray(session?.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
+  const canWrite=!readOnly&&(!explicitActions.length||explicitActions.some(x=>["create","update","write","manage"].includes(x)));
+  const actions=[
+    ["Affecter du personnel","effectif/preparation_affectation","↗","blue",canWrite],
+    ["Planifier une mission","ops/missions","▣","green",canWrite],
+    ["Gérer les dotations","ops/instance_dotation","◇","orange",canWrite],
+    ["Déclarer une anomalie","incidents/dashboard","△","violet",canWrite],
+    ["Rapport OPS","ops/supervision","▥","plain",true]
+  ].filter(x=>x[4]);
+  view.innerHTML=`<section class="ops-cc" data-testid="ops-command-center-v2">
+    <header class="ops-cc-summary">
+      ${opsCommandCenterKpi("Sites",sites.length,"Périmètre autorisé","neutral")}${opsCommandCenterKpi("Opérationnel",activeCount,"Employés actifs","success")}${opsCommandCenterKpi("Missions en cours",missions.length,"Statut mission réel","info")}${opsCommandCenterKpi("Congé / maladie",leaveCount+sickCount,"Attendance Core","warning")}${opsCommandCenterKpi("Absent",absentCount,"Attendance Core","danger")}${opsCommandCenterKpi("Sans affectation",unassignedCount,"Compteur serveur","warning")}${opsCommandCenterKpi("Suspendu",suspendedCount,"Compteur serveur","violet")}${opsCommandCenterKpi("Sans dotation",unequipped,"Compteur serveur","info")}
+    </header>
+    <div class="ops-cc-head"><div class="ops-cc-title"><span class="ops-cc-title-icon">⌂</span><div><small>${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</small><h1>Tableau de bord OPS</h1><p>Pilotage en temps réel de vos sites, missions et effectifs</p></div></div><div class="ops-cc-clock"><b>${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</b><span><i></i> Temps réel</span></div></div>
+    <nav class="ops-cc-actions" aria-label="Actions rapides OPS">${actions.map(a=>`<a class="ops-cc-action" data-tone="${a[3]}" href="#/${a[1]}"><span>${a[2]}</span>${escapeHTML(a[0])}</a>`).join("")}</nav>
+    ${opsSupervisorReadOnlyNoticeHTML()}
+    <div class="ops-cc-grid ops-cc-grid-top">
+      <article class="ops-cc-card ops-cc-situation"><div class="ops-cc-card-head"><h2>Situation opérationnelle</h2><a href="#/effectif/actifs">Voir les effectifs →</a></div><div class="ops-cc-situation-body"><div class="ops-cc-donut" style="--ops-cc-pct:${Math.min(100,coverage)}"><div><b>${coverage}%</b><span>Affectés / opérationnels</span></div></div><dl><div><dt>Effectif actif</dt><dd>${activeCount}</dd></div><div><dt>Affectés</dt><dd>${affectedCount}</dd></div><div><dt>Présents aujourd'hui</dt><dd>${presentCount}</dd></div><div><dt>Absents / maladie</dt><dd>${absentCount+sickCount}</dd></div></dl></div></article>
+      <article class="ops-cc-card ops-cc-alerts"><div class="ops-cc-card-head"><h2>Alertes & actions prioritaires</h2><span class="ops-cc-count">${alerts.length}</span></div><div class="ops-cc-alert-list">${alerts.length?alerts.map(a=>`<a href="#/${a[2]}" data-tone="${a[3]}"><strong>${a[0]}</strong><span>${escapeHTML(a[1])}</span><b>Voir</b></a>`).join(""):`<div class="ops-cc-empty">Aucune alerte opérationnelle issue des données disponibles.</div>`}</div></article>
+      <article class="ops-cc-card ops-cc-repartition"><div class="ops-cc-card-head"><h2>Répartition des effectifs</h2></div><div class="ops-cc-bars"><div><span>Affectés</span><i><b style="width:${Math.min(100,coverage)}%"></b></i><strong>${affectedCount}</strong></div><div><span>Sans affectation</span><i><b style="width:${activeCount?Math.min(100,Math.round(unassignedCount*100/activeCount)):0}%;background:#f59e0b"></b></i><strong>${unassignedCount}</strong></div><div><span>Suspendus</span><i><b style="width:${activeCount?Math.min(100,Math.round(suspendedCount*100/activeCount)):0}%;background:#7c3aed"></b></i><strong>${suspendedCount}</strong></div></div></article>
+    </div>
+    <div class="ops-cc-grid ops-cc-grid-middle">
+      <article class="ops-cc-card ops-cc-sites"><div class="ops-cc-card-head"><div><h2>Situation des sites</h2><p>Effectifs contractuels, affectations et présence du jour</p></div><a href="#/sites/actifs">Tous les sites →</a></div><div class="ops-cc-table-wrap"><table><thead><tr><th>Site</th><th>Prévu</th><th>Affecté</th><th>Présent</th><th>Absent</th><th>Couverture</th><th>État</th></tr></thead><tbody>${siteRows.length?siteRows.slice(0,8).map(r=>`<tr><td><b>${escapeHTML(r.site.nom||r.site.intitule||"Site")}</b><small>${escapeHTML(r.site.client||r.site.client_name||r.site.wilaya||"")}</small></td><td>${r.expected||"—"}</td><td>${r.assigned}</td><td>${r.present===null?"—":r.present}</td><td>${r.absent===null?"—":r.absent}</td><td>${r.pct===null?"—":r.pct+"%"}</td><td><span data-state="${r.state}">${r.state}</span></td></tr>`).join(""):`<tr><td colspan="7" class="ops-cc-empty">Aucun site dans le périmètre autorisé.</td></tr>`}</tbody></table></div></article>
+      <article class="ops-cc-card ops-cc-territories"><div class="ops-cc-card-head"><div><h2>Répartition territoriale</h2><p>Wilaya ou commune renseignée sur les sites</p></div></div><div class="ops-cc-territory-list">${territoryRows.length?territoryRows.map(([name,count])=>`<div><span>⌖ ${escapeHTML(name)}</span><b>${count} site${count>1?"s":""}</b></div>`).join(""):`<div class="ops-cc-empty">Aucune localisation renseignée.</div>`}${unlocated?`<div class="is-muted"><span>Localisation non renseignée</span><b>${unlocated} site${unlocated>1?"s":""}</b></div>`:""}</div></article>
+    </div>
+    <div class="ops-cc-grid ops-cc-grid-bottom">
+      <article class="ops-cc-card ops-cc-missions"><div class="ops-cc-card-head"><div><h2>Missions en cours</h2><p>${missions.length} mission${missions.length>1?"s":""} active${missions.length>1?"s":""}</p></div><a href="#/ops/missions">Toutes les missions →</a></div><div class="ops-cc-table-wrap"><table><thead><tr><th>Mission</th><th>Lieu</th><th>Employé</th><th>Début</th><th>Fin</th><th>État</th></tr></thead><tbody>${missions.length?missions.slice(0,5).map(m=>{const a=(db.agents||[]).find(x=>String(x.id)===String(m.agentId));return`<tr><td><b>${escapeHTML(m.numero||m.objet||m.motif||"Mission")}</b></td><td>${escapeHTML(m.lieu||"—")}</td><td>${escapeHTML(a?`${a.nom||""} ${a.prenom||""}`.trim():(m.agentName||"—"))}</td><td>${escapeHTML(formatDate(m.dateDebut))} ${escapeHTML(m.heureDebut||"")}</td><td>${escapeHTML(formatDate(m.dateFin))} ${escapeHTML(m.heureFin||"")}</td><td><span data-state="En cours">En cours</span></td></tr>`}).join(""):`<tr><td colspan="6" class="ops-cc-empty">Aucune mission en cours.</td></tr>`}</tbody></table></div></article>
+      <article class="ops-cc-card ops-cc-movements"><div class="ops-cc-card-head"><div><h2>Mouvements temps réel</h2><p>Pointages d'entrée et de sortie du jour</p></div><a href="#/pointage/feuille">Voir tout →</a></div><div class="ops-cc-movement-list">${movements.length?movements.map(m=>`<div><time>${m.time}</time>${m.agent?employeeAvatarHTML(m.agent):`<span class="ops-cc-avatar">${opsAlertInitials(m.name)}</span>`}<span><b>${escapeHTML(m.name)}</b><small>${escapeHTML(m.site)}</small></span><em data-type="${m.type}">${m.type}</em></div>`).join(""):`<div class="ops-cc-empty">Aucun pointage horodaté aujourd'hui.</div>`}</div></article>
+    </div>
+    <p class="ops-cc-data-note">Les indicateurs utilisent uniquement le périmètre société/site autorisé. Les effectifs prévus non configurés sont affichés « — ».</p>
+  </section>`;
+  clearInterval(window._opsAttendanceAlertsTimer);
+}
+
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
@@ -499,6 +647,9 @@ function renderOPS(view,sub,arg){
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
   if(sub==="signalements-clients"){renderOpsClientObservations(view);return}
+  renderOpsCommandCenterV2(view);
+  return;
+  /* Ancien rendu gardé ici pendant la transition pour ses modales partagées. */
   opsDashboardRefreshFeuillePresence();
   const soc=currentStructureSocieteFilter();
   const empCounters=sgdiUnifiedEmployeeCounters(soc);
