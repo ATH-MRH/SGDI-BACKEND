@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.attendance import core, learning, sheets
+from app.modules.attendance import core, deviations, learning, sheets
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -30,6 +30,9 @@ from app.modules.attendance.models import (
     AttendanceEvent,
     AttendanceSheet,
     AttendanceSheetLine,
+    CHECK_DEVIATIONS,
+    DEVIATION_STATUSES,
+    RotationCheck,
     RotationMembership,
     RotationModelVersion,
     RotationSetting,
@@ -499,7 +502,11 @@ def get_sheet(
         raise HTTPException(status_code=404, detail="Feuille introuvable")
     site = db.get(Site, sheet.site_id)
     events = sheets.line_events_out(db, sheet)
-    lines = [{**line, "events": events.get(line["id"], [])} for line in sheets.lines_out(db, sheet)]
+    learned = learning.interpretations(db, [sheet.id]).get(sheet.id)
+    checks = deviations.checks_for_sheet(db, sheet.id)
+    lines = [{**line, "events": events.get(line["id"], []),
+              **deviations.line_check_out(checks.get(line["employee_id"]), learned["group"] if learned else None)}
+             for line in sheets.lines_out(db, sheet)]
     return {**sheets.sheet_out(db, sheet), "site": (site.name or site.indicatif or "") if site else "", "lines": lines,
             "interpretation": learning.interpretations(db, [sheet.id]).get(sheet.id)}
 
@@ -654,3 +661,110 @@ def rotation_learning_backfill_preview(
     if date_to < date_from or (date_to - date_from).days > 92:
         raise HTTPException(status_code=422, detail="Période invalide (92 jours au plus)")
     return learning.backfill_preview(db, site_id, date_from, date_to)
+
+
+# ── Planning intelligent — écarts prévu / réel et qualification OPS (lot 3) ─────────────────
+# Voir : périmètre de sites du compte. Qualifier (dont confirmer un changement de groupe) :
+# action « validate ». Paramètres : « update ». Reconstruction du modèle : « admin ».
+class RotationQualifyIn(BaseModel):
+    action: str = Field(min_length=3, max_length=20)
+    reason: str | None = Field(default=None, max_length=1000)
+    group: str | None = Field(default=None, max_length=12)
+    start_at: datetime | None = None          # heure locale du site (début de rotation)
+    end_at: datetime | None = None            # heure locale du site (fin de rotation)
+
+
+def _scoped_check(db: Session, user: User, check_id: int) -> RotationCheck:
+    check = db.get(RotationCheck, check_id)
+    allowed = _allowed_assignment_site_ids(db, user)
+    if check is None or check.outcome not in CHECK_DEVIATIONS or (allowed is not None and check.site_id not in set(allowed)):
+        raise HTTPException(status_code=404, detail="Écart introuvable")
+    return check
+
+
+@router.get("/rotation-deviations")
+def list_rotation_deviations(
+    site_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    employee_id: int | None = None,
+    group: str | None = None,
+    type: str | None = None,
+    severity: str | None = None,
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Écarts de rotation persistés (OPS / DRH) : période, site, employé, groupe, type, sévérité, statut."""
+    if status and status.upper() not in DEVIATION_STATUSES:
+        raise HTTPException(status_code=422, detail="Statut d'écart inconnu")
+    if type and type.upper() not in CHECK_DEVIATIONS:
+        raise HTTPException(status_code=422, detail="Type d'écart inconnu")
+    return deviations.list_deviations(
+        db, site_ids=_scope(db, user, site_id), date_from=date_from, date_to=date_to, employee_id=employee_id, group=group,
+        deviation_type=type.upper() if type else None, severity=severity, status=status.upper() if status else None,
+        page=page, page_size=page_size)
+
+
+@router.get("/rotation-deviations/{check_id}")
+def get_rotation_deviation(check_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """« Examiner » : employé, site, date, heure, groupe et rotation attendus / observés,
+    historique récent, confiance du modèle, explication."""
+    return deviations.detail(db, _scoped_check(db, user, check_id))
+
+
+@router.post("/rotation-deviations/{check_id}/qualify")
+def qualify_rotation_deviation(
+    check_id: int,
+    payload: RotationQualifyIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Qualification OPS. Le pointage et les feuilles ne sont jamais modifiés."""
+    _require_action(user, "validate")
+    _scoped_check(db, user, check_id)
+    try:
+        check = deviations.qualify(
+            db, check_id, action=payload.action.upper(), user=user, reason=payload.reason, group=payload.group,
+            start_at=core.to_utc_naive(payload.start_at) if payload.start_at else None,
+            end_at=core.to_utc_naive(payload.end_at) if payload.end_at else None, request=request)
+    except deviations.AlreadyQualified as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.commit()
+    return deviations.detail(db, check)
+
+
+@router.get("/rotation-history")
+def rotation_history(
+    site_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    employee_id: int | None = None,
+    group: str | None = None,
+    outcome: str | None = None,
+    anomaly: str | None = None,
+    status: str | None = None,
+    q: str | None = Query(None, max_length=80),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Historique de pointage par rotation (DRH / OPS) : une ligne réelle par salarié et par
+    feuille, avec prévu / réel / écart / décision tels qu'enregistrés au moment du pointage."""
+    if status and status.upper() not in SHEET_STATUSES:
+        raise HTTPException(status_code=422, detail="Statut de feuille inconnu")
+    return deviations.history_rows(
+        db, site_ids=_scope(db, user, site_id), date_from=date_from, date_to=date_to, employee_id=employee_id, group=group,
+        outcome=outcome.upper() if outcome else None, anomaly=anomaly, sheet_status=status.upper() if status else None,
+        q=q, page=page, page_size=page_size)

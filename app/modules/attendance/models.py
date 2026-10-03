@@ -340,3 +340,96 @@ class RotationModelVersion(Base):
     source_sheet_id: Mapped[int | None] = mapped_column(Integer)
     actor: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ── Planning intelligent — comparaison prévu / réel et décisions OPS (lot 3) ───────────────
+# Trois notions séparées : OBSERVATION RÉELLE (ligne de feuille), PRÉDICTION DU MOTEUR
+# (`rotation_checks`), DÉCISION HUMAINE (`rotation_decisions`). Aucune ne réécrit les autres.
+CHECK_CONFORM = "CONFORM"
+CHECK_UNEXPECTED_ROTATION = "UNEXPECTED_ROTATION"
+CHECK_UNPLANNED_PRESENCE = "UNPLANNED_PRESENCE"
+CHECK_PERSISTENT_CHANGE = "PERSISTENT_ROTATION_CHANGE_POSSIBLE"
+CHECK_DEVIATIONS = (CHECK_UNEXPECTED_ROTATION, CHECK_UNPLANNED_PRESENCE, CHECK_PERSISTENT_CHANGE)
+
+DEVIATION_OPEN = "OPEN"
+DEVIATION_ACKNOWLEDGED = "ACKNOWLEDGED"
+DEVIATION_RESOLVED = "RESOLVED"
+DEVIATION_DISMISSED = "DISMISSED"
+DEVIATION_STATUSES = (DEVIATION_OPEN, DEVIATION_ACKNOWLEDGED, DEVIATION_RESOLVED, DEVIATION_DISMISSED)
+
+QUALIFY_PERMUTATION = "PERMUTATION"
+QUALIFY_REPLACEMENT = "REPLACEMENT"
+QUALIFY_GROUP_CHANGE = "GROUP_CHANGE"
+QUALIFY_FALSE_POSITIVE = "FALSE_POSITIVE"
+QUALIFY_LATER = "LATER"
+QUALIFICATIONS = (QUALIFY_PERMUTATION, QUALIFY_REPLACEMENT, QUALIFY_GROUP_CHANGE, QUALIFY_FALSE_POSITIVE, QUALIFY_LATER)
+
+DECISION_TEMPORARY = "TEMPORARY"
+DECISION_PERMANENT = "PERMANENT"
+
+
+class RotationCheck(Base):
+    """Comparaison prévu / réel d'UNE prise de poste (un salarié, une feuille) : ce que le moteur
+    attendait, ce qui est observé, le résultat, puis la qualification OPS. Unicité (feuille,
+    salarié) : un même écart logique ne produit jamais deux lignes ni deux alertes."""
+    __tablename__ = "rotation_checks"
+    __table_args__ = (
+        UniqueConstraint("sheet_id", "employee_id", name="uq_rotation_checks_sheet_employee"),
+        Index("ix_rotation_checks_site_occurred", "site_id", "occurred_at"),
+        Index("ix_rotation_checks_employee_occurred", "employee_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"))
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
+    sheet_id: Mapped[int] = mapped_column(ForeignKey("attendance_sheets.id", ondelete="CASCADE"), index=True)
+    line_id: Mapped[int | None] = mapped_column(Integer)
+    event_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    society: Mapped[str | None] = mapped_column(String(150))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)            # UTC naïf (heure du pointage)
+    outcome: Mapped[str] = mapped_column(String(40), index=True)
+    severity: Mapped[str | None] = mapped_column(String(20))
+    expected_group: Mapped[str | None] = mapped_column(String(12))
+    expected_source: Mapped[str | None] = mapped_column(String(20))    # TEMPORARY | CONFIRMED | LEARNED
+    expected_start: Mapped[str | None] = mapped_column(String(5))
+    expected_end: Mapped[str | None] = mapped_column(String(5))
+    observed_group: Mapped[str | None] = mapped_column(String(12))
+    observed_start: Mapped[str | None] = mapped_column(String(5))
+    observed_end: Mapped[str | None] = mapped_column(String(5))
+    confidence: Mapped[float | None] = mapped_column(Float)            # confiance du modèle au moment du pointage
+    model_version: Mapped[int | None] = mapped_column(Integer)
+    engine_version: Mapped[str | None] = mapped_column(String(20))
+    explanation: Mapped[dict | None] = mapped_column(JSON)
+    status: Mapped[str | None] = mapped_column(String(20), index=True) # None pour un pointage conforme
+    qualification: Mapped[str | None] = mapped_column(String(20))
+    reason: Mapped[str | None] = mapped_column(Text)
+    decided_by: Mapped[str | None] = mapped_column(String(120))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+    decision_id: Mapped[int | None] = mapped_column(Integer)
+    alert_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class RotationDecision(Base):
+    """Décision humaine DATÉE sur le groupe d'un salarié : remplacement temporaire (début / fin)
+    ou changement confirmé (date d'effet). Jamais rétroactive : les périodes antérieures restent
+    reproductibles avec les décisions qui les précèdent."""
+    __tablename__ = "rotation_decisions"
+    __table_args__ = (Index("ix_rotation_decisions_site_employee", "site_id", "employee_id", "effective_from"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"))
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(12))
+    group_label: Mapped[str] = mapped_column(String(12))
+    previous_group: Mapped[str | None] = mapped_column(String(12))
+    effective_from: Mapped[datetime] = mapped_column(DateTime)         # UTC naïf
+    effective_to: Mapped[datetime | None] = mapped_column(DateTime)    # None = permanent
+    reason: Mapped[str | None] = mapped_column(Text)
+    validator: Mapped[str | None] = mapped_column(String(120))
+    validator_user_id: Mapped[int | None] = mapped_column(Integer)
+    check_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    alert_id: Mapped[int | None] = mapped_column(Integer)
+    model_confidence: Mapped[float | None] = mapped_column(Float)
+    model_version: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

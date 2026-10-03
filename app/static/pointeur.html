@@ -36,6 +36,8 @@ button,input{font:inherit}
 .last-scan-move{margin-top:14px;padding:12px 14px;border-radius:14px;font-weight:900}
 .last-scan-move b{display:block;font-size:22px;letter-spacing:.02em}.last-scan-move span{font-size:30px;font-variant-numeric:tabular-nums}
 .last-scan-state{margin-top:8px;font-weight:900;font-size:16px}
+.last-scan-rotation{margin-top:12px;padding:12px 14px;border-radius:14px;border:2px solid #f59e0b;background:#fffbeb;color:#78350f;font-weight:800}
+.last-scan-rotation b{display:block;font-size:18px;letter-spacing:.02em}.last-scan-rotation dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0}.last-scan-rotation dt{font-weight:700;opacity:.8}.last-scan-rotation dd{margin:0}.last-scan-rotation small{font-weight:900;letter-spacing:.04em}
 .last-scan.is-entry{border-color:var(--green);background:#f0fdf4}.last-scan.is-entry .last-scan-move{background:#dcfce7;color:#14532d}
 .last-scan.is-exit{border-color:var(--blue);background:#eff6ff}.last-scan.is-exit .last-scan-badge{background:var(--blue)}.last-scan.is-exit .last-scan-move{background:#dbeafe;color:#1e3a8a}
 .last-scan.is-refused{border-color:var(--red);background:#fef2f2}.last-scan.is-refused .last-scan-badge{background:var(--red)}.last-scan.is-refused .last-scan-move{background:#fee2e2;color:#7f1d1d}
@@ -1014,6 +1016,13 @@ function selectQrMode(){
   if(isManualPanelOpen())closeManualPanel();
   setupScanMode();
 }
+// Écart de rotation (planning intelligent) : information ajoutée à la fiche normale. Le pointage
+// est déjà enregistré ; le poste n'offre aucune action sur le planning.
+function rotationAlertHTML(alert){
+  if(!alert||!alert.expected||!alert.observed)return "";
+  const side=x=>(x.group?`Groupe ${esc(x.group)}`:"Repos")+(x.start?` · ${esc(x.start)}–${esc(x.end)}`:"");
+  return `<div class="last-scan-rotation" role="alert"><b>⚠ ROTATION INHABITUELLE</b><dl><dt>Attendu</dt><dd>${side(alert.expected)}</dd><dt>Observé</dt><dd>${side(alert.observed)}</dd></dl><small>POINTAGE ENREGISTRÉ</small></div>`;
+}
 function showLastScan(event){
   const card=document.getElementById("lastScanCard");if(!card||!event)return;
   const token="e"+event.id;if(lastScanShownId===token){scheduleLastScanIdle();return}
@@ -1028,7 +1037,7 @@ function showLastScan(event){
     <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>
       <dt>Site</dt><dd>${esc(event.site||e.site||"—")}</dd><dt>Société</dt><dd>${esc(e.societe||"—")}</dd>${event.terminal?`<dt>Terminal</dt><dd>${esc(event.terminal)}</dd>`:""}</dl>
     <div class="last-scan-move"><b>${entry?"ENTRÉE ENREGISTRÉE":"SORTIE ENREGISTRÉE"}</b><span>${esc(event.heure||"")}</span></div>
-    <div class="last-scan-state">ÉTAT ACTUEL : ${state}</div></div></div>`;
+    <div class="last-scan-state">ÉTAT ACTUEL : ${state}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`;
   fillLastScanPhoto(e,token);
   scheduleLastScanIdle();
 }

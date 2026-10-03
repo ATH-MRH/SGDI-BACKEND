@@ -500,7 +500,7 @@ def test_api_activation_is_explicit_validated_scoped_and_audited(client, db):
     assert (item["mode"], item["state"], item["learning"], item["sheets_observed"], item["next"]) == ("OFF", None, False, 0, None)
     assert item["params"]["min_observations"] == settings.rotation_learning_min_observations and item["expected_groups"] == 4
     url = f"/api/attendance/rotation-learning/{site.id}"
-    assert client.put(url, json={"mode": "ACTIVE"}, headers=headers).status_code == 422            # lot 3
+    assert client.put(url, json={"mode": "FORCED"}, headers=headers).status_code == 422
     assert client.put(url, json={"mode": "LEARNING", "params": {"probable_threshold": 7}}, headers=headers).status_code == 422
     assert client.put(f"/api/attendance/rotation-learning/{other.id}", json={"mode": "LEARNING"}, headers=headers).status_code in (403, 404)
     read_only = _user(client, db, sites=[site.id], actions=["read"])

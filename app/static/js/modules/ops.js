@@ -533,11 +533,70 @@ function opsCommandCenterRefreshAttendance(soc){
   }).catch(e=>console.warn("Attendance Core indisponible pour le cockpit OPS",e)).finally(()=>{window._opsCommandCenterAttendanceLoading=false});
 }
 
+// Écarts de rotation (planning intelligent) ouverts ou à examiner : lus sur le serveur, jamais
+// calculés ici. Le pointage concerné est déjà enregistré ; OPS qualifie l'écart.
+function opsCommandCenterRefreshRotationAlerts(force){
+  const now=Date.now();
+  if(window._opsCommandCenterRotationLoading||(!force&&now-(window._opsCommandCenterRotationFetchedAt||0)<10000))return;
+  window._opsCommandCenterRotationLoading=true;
+  Promise.all(["OPEN","ACKNOWLEDGED"].map(status=>sgdiApi(`/api/attendance/rotation-deviations?status=${status}&page_size=10`,{method:"GET",legacy:false})))
+    .then(pages=>{
+      window._opsCommandCenterRotationAlerts=pages.flatMap(p=>Array.isArray(p?.items)?p.items:[]);
+      window._opsCommandCenterRotationFetchedAt=Date.now();
+      if(((location.hash||"").slice(2)).startsWith("ops/dashboard"))renderView();
+    }).catch(e=>console.warn("Écarts de rotation indisponibles pour le cockpit OPS",e)).finally(()=>{window._opsCommandCenterRotationLoading=false});
+}
+function opsRotationSide(group,rotation){return (group?`Groupe ${escapeHTML(group)}`:"Repos")+(rotation?` · ${escapeHTML(rotation)}`:"")}
+function opsRotationAlertRowHTML(a){
+  return `<div class="ops-cc-rotation-alert" data-rotation-alert="${Number(a.id)}" data-tone="${a.severity==="critical"?"danger":"warning"}"><div><small>${a.status==="ACKNOWLEDGED"?"À EXAMINER — ":""}${a.type==="PERSISTENT_ROTATION_CHANGE_POSSIBLE"?"CHANGEMENT DE ROTATION DURABLE POSSIBLE":a.type==="UNPLANNED_PRESENCE"?"PRÉSENCE SUR UN CRÉNEAU DE REPOS":"CHANGEMENT DE ROTATION DÉTECTÉ"}</small><strong>${escapeHTML(a.matricule||"")} — ${escapeHTML(a.name||"")}</strong><span>${escapeHTML(a.site||"")} · ${escapeHTML(a.date||"")} ${escapeHTML(a.heure||"")}</span><span>Attendu : ${opsRotationSide(a.expected_group,a.expected_rotation)}</span><span>Observé : ${opsRotationSide(a.observed_group,a.observed_rotation)}</span></div><button type="button" onclick="opsExamineRotationDeviation(${Number(a.id)})">Examiner</button></div>`;
+}
+async function opsExamineRotationDeviation(id){
+  let d;
+  try{d=await sgdiApi(`/api/attendance/rotation-deviations/${Number(id)}`,{method:"GET",legacy:false})}catch(e){toast(e.message||"Écart indisponible","error");return}
+  const explicit=Array.isArray(session?.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
+  const canQualify=!isOpsSupervisorReadOnlySession()&&(!explicit.length||explicit.some(x=>["validate","admin"].includes(x)))&&["OPEN","ACKNOWLEDGED"].includes(d.status);
+  const pct=v=>v===null||v===undefined?"—":`${Math.round(Number(v)*100)} %`;
+  const recent=(d.recent||[]).map(r=>`<tr><td>${escapeHTML(r.date)}</td><td>${escapeHTML(r.rotation)}</td><td>${r.expected_group?"Groupe "+escapeHTML(r.expected_group):"—"}</td><td>${r.observed_group?"Groupe "+escapeHTML(r.observed_group):"—"}</td><td>${escapeHTML(r.outcome_label||"")}${r.qualification_label?" · "+escapeHTML(r.qualification_label):""}</td></tr>`).join("");
+  openModal(`<div class="ops-rotation-exam" data-rotation-exam="${Number(d.id)}"><h3 class="font-black text-xl mb-1">${escapeHTML(d.type_label||"Écart de rotation")}</h3>
+    <p class="text-sm text-slate-500 mb-3">Le pointage est enregistré et n'est pas modifié par cette décision.</p>
+    <dl class="ops-rotation-exam-grid"><div><dt>Employé</dt><dd>${escapeHTML(d.matricule||"")} — ${escapeHTML(d.name||"")}</dd></div><div><dt>Site</dt><dd>${escapeHTML(d.site||"—")}</dd></div><div><dt>Date</dt><dd>${escapeHTML(formatDate(d.date))}</dd></div><div><dt>Heure</dt><dd>${escapeHTML(d.heure||"")}</dd></div>
+      <div><dt>Groupe attendu</dt><dd>${d.expected_group?"Groupe "+escapeHTML(d.expected_group):"—"}</dd></div><div><dt>Groupe observé</dt><dd>${d.observed_group?"Groupe "+escapeHTML(d.observed_group):"Repos"}</dd></div>
+      <div><dt>Rotation attendue</dt><dd>${escapeHTML(d.expected_rotation||"—")}</dd></div><div><dt>Rotation observée</dt><dd>${escapeHTML(d.observed_rotation||"—")}</dd></div>
+      <div><dt>Confiance du modèle</dt><dd>${pct(d.confidence)}</dd></div><div><dt>Statut</dt><dd>${escapeHTML(d.qualification_label||(d.status==="OPEN"?"Ouvert":d.status||""))}</dd></div></dl>
+    <p class="text-sm mb-3"><b>Explication :</b> ${escapeHTML(d.explanation||"")}</p>
+    <div class="overflow-auto mb-3" style="max-height:28vh"><table class="ops-rotation-exam-table"><thead><tr><th>Historique récent</th><th>Rotation</th><th>Attendu</th><th>Observé</th><th>Résultat</th></tr></thead><tbody>${recent||'<tr><td colspan="5">Aucun historique.</td></tr>'}</tbody></table></div>
+    ${canQualify?`<form id="opsRotationQualify" onsubmit="return false"><label class="text-xs font-black">Qualification</label><select id="opsRotationAction" class="input mb-2" onchange="opsRotationQualifyFields()">${(d.actions||[]).map(a=>`<option value="${escapeHTML(a.key)}">${escapeHTML(a.label)}</option>`).join("")}</select>
+      <div id="opsRotationGroupRow" style="display:none"><label class="text-xs font-black">Groupe</label><select id="opsRotationGroup" class="input mb-2">${(d.groups||[]).map(g=>`<option value="${escapeHTML(g)}"${g===d.observed_group?" selected":""}>Groupe ${escapeHTML(g)}</option>`).join("")}</select></div>
+      <div id="opsRotationEndRow" style="display:none"><label class="text-xs font-black">Fin du remplacement (fin de rotation)</label><input id="opsRotationEnd" type="datetime-local" class="input mb-2"></div>
+      <label class="text-xs font-black">Motif / justification</label><textarea id="opsRotationReason" class="input mb-2" rows="2" maxlength="1000"></textarea>
+      <div id="opsRotationError" class="text-sm" style="color:#b91c1c" role="alert"></div>
+      <div class="flex justify-end gap-2 mt-3"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button type="button" class="btn btn-primary" onclick="opsSubmitRotationQualification(${Number(d.id)})">Enregistrer la décision</button></div></form>`
+      :`${d.decision?`<p class="text-sm mb-2"><b>Décision :</b> groupe ${escapeHTML(d.decision.group)} (précédent : ${escapeHTML(d.decision.previous_group||"—")}) · ${escapeHTML(d.decision.validator||"")}${d.reason?" · "+escapeHTML(d.reason):""}</p>`:""}<div class="flex justify-end mt-3"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`}</div>`);
+  if(canQualify)opsRotationQualifyFields();
+}
+function opsRotationQualifyFields(){
+  const action=document.getElementById("opsRotationAction")?.value||"";
+  const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none"};
+  show("opsRotationGroupRow",action==="REPLACEMENT"||action==="GROUP_CHANGE");
+  show("opsRotationEndRow",action==="REPLACEMENT");
+}
+async function opsSubmitRotationQualification(id){
+  const action=document.getElementById("opsRotationAction").value,error=document.getElementById("opsRotationError");
+  const body={action,reason:document.getElementById("opsRotationReason").value.trim()||null};
+  if(action==="REPLACEMENT"||action==="GROUP_CHANGE")body.group=document.getElementById("opsRotationGroup").value;
+  if(action==="REPLACEMENT")body.end_at=document.getElementById("opsRotationEnd").value||null;
+  try{
+    await sgdiApi(`/api/attendance/rotation-deviations/${Number(id)}/qualify`,{method:"POST",legacy:false,body});
+    closeModal();toast("Décision enregistrée","success");opsCommandCenterRefreshRotationAlerts(true);
+  }catch(e){error.textContent=e.message||"Décision refusée"}
+}
+
 function renderOpsCommandCenterV2(view){
   opsDashboardRefreshFeuillePresence();
   const soc=currentStructureSocieteFilter();
   opsCommandCenterRefreshSituation(soc);
   opsCommandCenterRefreshAttendance(soc);
+  opsCommandCenterRefreshRotationAlerts();
   const sites=siteOpsSitesForScope(soc).filter(s=>s.actif!==false&&s.active!==0);
   const siteScope=supervisorAuthorizedSiteIds();
   const inSiteScope=row=>sites.some(site=>opsCommandCenterSiteMatch(site,row));
@@ -599,6 +658,7 @@ function renderOpsCommandCenterV2(view){
     [incidents.length,"Incidents ouverts","incidents/dashboard","danger"],
     [suspendedCount,"Employés suspendus","effectif/suspension","violet"]
   ].filter(x=>x[0]>0);
+  const rotationAlerts=(window._opsCommandCenterRotationAlerts||[]).filter(a=>!soc||!a.society||normalizeSocieteName(a.society)===normalizeSocieteName(soc));
   const readOnly=isOpsSupervisorReadOnlySession();
   const explicitActions=Array.isArray(session?.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
   const canWrite=!readOnly&&(!explicitActions.length||explicitActions.some(x=>["create","update","write","manage"].includes(x)));
@@ -615,7 +675,7 @@ function renderOpsCommandCenterV2(view){
     ${opsSupervisorReadOnlyNoticeHTML()}
     <div class="ops-cc-grid ops-cc-grid-top">
       <article class="ops-cc-card ops-cc-situation"><div class="ops-cc-card-head"><h2>Situation opérationnelle</h2><a href="#/effectif/actifs">Voir les effectifs →</a></div><div class="ops-cc-situation-body"><div class="ops-cc-donut" style="--ops-cc-pct:${Math.min(100,coverage)}"><div><b>${coverage}%</b><span>Affectés / opérationnels</span></div></div><dl><div><dt>Effectif actif</dt><dd>${activeCount}</dd></div><div><dt>Affectés</dt><dd>${affectedCount}</dd></div><div><dt>Présents aujourd'hui</dt><dd>${presentCount}</dd></div><div><dt>Absents / maladie</dt><dd>${absentCount+sickCount}</dd></div></dl></div></article>
-      <article class="ops-cc-card ops-cc-alerts"><div class="ops-cc-card-head"><h2>Alertes & actions prioritaires</h2><span class="ops-cc-count">${alerts.length}</span></div><div class="ops-cc-alert-list">${alerts.length?alerts.map(a=>`<a href="#/${a[2]}" data-tone="${a[3]}"><strong>${a[0]}</strong><span>${escapeHTML(a[1])}</span><b>Voir</b></a>`).join(""):`<div class="ops-cc-empty">Aucune alerte opérationnelle issue des données disponibles.</div>`}</div></article>
+      <article class="ops-cc-card ops-cc-alerts"><div class="ops-cc-card-head"><h2>Alertes & actions prioritaires</h2><span class="ops-cc-count">${alerts.length+rotationAlerts.length}</span></div><div class="ops-cc-alert-list">${rotationAlerts.map(opsRotationAlertRowHTML).join("")}${alerts.length||rotationAlerts.length?alerts.map(a=>`<a href="#/${a[2]}" data-tone="${a[3]}"><strong>${a[0]}</strong><span>${escapeHTML(a[1])}</span><b>Voir</b></a>`).join(""):`<div class="ops-cc-empty">Aucune alerte opérationnelle issue des données disponibles.</div>`}</div></article>
       <article class="ops-cc-card ops-cc-repartition"><div class="ops-cc-card-head"><h2>Répartition des effectifs</h2></div><div class="ops-cc-bars"><div><span>Affectés</span><i><b style="width:${Math.min(100,coverage)}%"></b></i><strong>${affectedCount}</strong></div><div><span>Sans affectation</span><i><b style="width:${activeCount?Math.min(100,Math.round(unassignedCount*100/activeCount)):0}%;background:#f59e0b"></b></i><strong>${unassignedCount}</strong></div><div><span>Suspendus</span><i><b style="width:${activeCount?Math.min(100,Math.round(suspendedCount*100/activeCount)):0}%;background:#7c3aed"></b></i><strong>${suspendedCount}</strong></div></div></article>
     </div>
     <div class="ops-cc-grid ops-cc-grid-middle">

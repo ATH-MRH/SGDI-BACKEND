@@ -464,7 +464,11 @@ def record_scan(
     # est déjà écrit ; ce rattachement est isolé dans son point de sauvegarde et ne peut ni le
     # modifier ni faire échouer le pointage.
     from app.modules.attendance import sheets
-    sheets.attach_event_safely(db, event=event, employee=employee, site=site, assignment=assignment, now=now)
+    sheet_line = sheets.attach_event_safely(db, event=event, employee=employee, site=site, assignment=assignment, now=now)
+    # Comparaison prévu / réel (lot 3) : APRÈS le fait et la feuille, isolée de la même façon.
+    # Elle n'émet un écart que sur un site ACTIVE dont le modèle est STABLE ; le pointage est accepté.
+    from app.modules.attendance import deviations
+    rotation_alert = deviations.check_arrival_safely(db, event=event, employee=employee, site=site, line=sheet_line, now=now)
 
     append_audit(db, action="attendance.event", resource="attendance_event", resource_id=event.id,
                  result="success", user=actor, society=employee.society,
@@ -485,6 +489,7 @@ def record_scan(
         "authorized_minutes": authorized_minutes, "overtime_minutes": overtime_minutes,
         "overtime_alert": overtime_minutes > 0, "date": now.strftime("%Y-%m-%d"), "site": site_name,
         "observation": observation, "employee": _employee_card(employee, site_name), "record": record,
+        "rotation_alert": rotation_alert,
     }
 
 

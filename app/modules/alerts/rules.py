@@ -6,6 +6,9 @@ from __future__ import annotations
 
 RULE_CONTRACT_EXPIRING = "drh.employee_contract.expiring"
 RULE_MISSING_CHECKOUT = "attendance.presence.missing_checkout"
+# Écart de rotation (planning intelligent) : alerte créée à l'événement par
+# app/modules/attendance/deviations.py, pas par un détecteur planifié.
+RULE_ROTATION_DEVIATION = "attendance.rotation.deviation"
 
 # Seuils v1 figés — voir scoring.py pour leur usage dans le calcul du score.
 CONTRACT_EXPIRING_THRESHOLDS_DAYS: tuple[int, ...] = (30, 15, 7, 0)
@@ -50,5 +53,20 @@ RULE_CATALOG: tuple[dict, ...] = (
         "configuration_json": {
             "threshold_minutes": MISSING_CHECKOUT_THRESHOLD_MINUTES,
         },
+    },
+    {
+        "rule_key": RULE_ROTATION_DEVIATION,
+        "rule_version": 1,
+        "label": "Changement de rotation détecté",
+        "description": (
+            "Un salarié pointe sur une rotation qui n'est pas celle de son groupe attendu "
+            "(remplacement en cours, groupe confirmé ou groupe appris fiable). Le pointage "
+            "reste enregistré ; l'écart est à qualifier par OPS."
+        ),
+        "module_key": "ops",
+        "feature_key": None,
+        "enabled": True,
+        "severity_base": "warning",
+        "configuration_json": {},
     },
 )

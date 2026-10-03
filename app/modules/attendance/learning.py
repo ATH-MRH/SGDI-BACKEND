@@ -96,6 +96,8 @@ PARAMS: dict[str, tuple[type, float, float]] = {
     "cycle_threshold": (float, 0.5, 1.0),
     "min_cycle_comparisons": (int, 1, 2000),
     "max_cycle_slots": (int, 1, 1000),
+    "alert_confidence": (float, 0.05, 1.0),
+    "persistent_deviations": (int, 2, 50),
 }
 
 
@@ -729,10 +731,11 @@ def rebuild(db: Session, site_id: int, *, date_from: date | None = None, date_to
 
 
 def set_mode(db: Session, site_id: int, *, mode: str, params: dict[str, Any] | None, username: str | None) -> tuple[RotationSiteModel, dict[str, Any] | None]:
-    """Activation explicite par site. Passer à OFF fige le modèle (rien n'est effacé)."""
-    if mode not in (MODE_OFF, MODE_LEARNING):
-        # ACTIVE (comparaison prévu / réel) relève du lot 3 : refusé tant qu'il n'existe pas.
-        raise ValueError("Mode inconnu (OFF ou LEARNING)")
+    """Activation explicite par site. OFF fige le modèle (rien n'est effacé) ; LEARNING apprend
+    sans alerter ; ACTIVE apprend ET compare prévu / réel — les écarts ne sont toutefois émis
+    que lorsque l'état mesuré du site est STABLE (jamais de sur-alerte en apprentissage)."""
+    if mode not in (MODE_OFF, MODE_LEARNING, MODE_ACTIVE):
+        raise ValueError("Mode inconnu (OFF, LEARNING ou ACTIVE)")
     clean = validate_params(params) if params is not None else None
     model = model_for(db, site_id, lock=True)
     old = None

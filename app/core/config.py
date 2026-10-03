@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     rotation_learning_cycle_threshold: float = 0.9      # concordance minimale d'un cycle
     rotation_learning_min_cycle_comparisons: int = 12
     rotation_learning_max_cycle_slots: int = 120
+    # Comparaison prévu / réel (lot 3) : un groupe APPRIS ne sert de référence attendue qu'à
+    # partir de cette confiance ; N écarts consécutifs vers le même groupe ⇒ changement durable possible.
+    rotation_learning_alert_confidence: float = 0.8
+    rotation_learning_persistent_deviations: int = 3
     # Biométrie faciale — DÉSACTIVÉE par défaut (jamais d'activation implicite en production).
     # Activation = décision explicite : BIOMETRIC_ENABLED=true + clé de chiffrement dédiée des
     # gabarits (Fernet, générée hors dépôt) + modèles présents et vérifiés (empreintes SHA-256,

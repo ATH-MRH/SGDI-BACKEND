@@ -155,10 +155,14 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
     site_rows = {e.site_id for e in events if e.site_id} | {e.site_id for e in current.values() if e.site_id}
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_(site_rows))).scalars()} if site_rows else {}
     from app.modules.auth.models import AuditEvent
+    from app.modules.attendance import deviations
 
+    # Écart de rotation éventuel de chaque passage : affiché sur la fiche, le pointage reste accepté.
+    rotation_alerts = deviations.alerts_for_events(db, [e.id for e in events])
     latest_refusal = db.execute(select(AuditEvent.id).where(AuditEvent.action.in_(REFUSAL_ACTIONS)).order_by(AuditEvent.id.desc()).limit(1)).scalar_one_or_none() or 0
     return {"latest_event_id": latest.id if latest is not None else 0,
-            "events": [_event_out(e, employees.get(e.employee_id), current.get(e.employee_id), now_local, sites) for e in events],
+            "events": [{**_event_out(e, employees.get(e.employee_id), current.get(e.employee_id), now_local, sites),
+                        "rotation_alert": rotation_alerts.get(e.id)} for e in events],
             "latest_refusal_id": latest_refusal,
             "refusals": refusals(db, site_ids, after_refusal_id, now) if after_refusal_id is not None else [],
             "summary": summary(db, site_ids, now), "server_time": now_local.strftime("%H:%M:%S")}

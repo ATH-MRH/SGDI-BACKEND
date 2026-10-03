@@ -201,6 +201,7 @@ body.modal-open{overflow:hidden}
         <button class="nav-btn active" data-view="board" type="button">▦ Situation du jour</button>
         <button class="nav-btn" data-view="anomalies" type="button">⚠ Anomalies <span class="nav-count hidden" id="anomaly-count"></span></button>
         <button class="nav-btn" data-view="sheets" type="button">▤ Feuilles de rotation</button>
+        <button class="nav-btn" data-view="history" type="button">☰ Historique de pointage</button>
         <button class="nav-btn" data-view="planning" type="button">◈ Planning intelligent</button>
       </nav><div class="side-title">Biométrie</div><nav>
         <button class="nav-btn" data-view="enrollment" type="button">☺ Enrôlement</button>
@@ -326,6 +327,22 @@ body.modal-open{overflow:hidden}
           <div class="pager"><span id="sheet-total"></span><span><button class="secondary" id="s-prev" type="button">‹ Précédent</button> <button class="secondary" id="s-next" type="button">Suivant ›</button></span></div>
         </div>
       </section>
+      <section id="view-history" class="hidden">
+        <div class="page-head"><div><h2>Historique de pointage</h2><p>Une ligne réelle par salarié et par rotation, avec le groupe attendu, le groupe observé, l'écart et la décision OPS tels qu'enregistrés au moment du pointage.</p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+            <div><label for="h-from">Du</label><input id="h-from" type="date"></div>
+            <div><label for="h-to">Au</label><input id="h-to" type="date"></div>
+            <div><label for="h-employee">Employé (matricule ou nom)</label><input id="h-employee" type="search" placeholder="K162…"></div>
+            <div><label for="h-group">Groupe</label><input id="h-group" type="text" maxlength="12" style="width:90px"></div>
+            <div><label for="h-outcome">Résultat</label><select id="h-outcome" style="width:auto"><option value="">Tous</option><option value="CONFORM">Conforme</option><option value="DEVIATION">Écart</option><option value="NOT_EVALUATED">Non évalué</option></select></div>
+            <div><label for="h-status">Feuille</label><select id="h-status" style="width:auto"><option value="">Toutes</option><option value="OPEN">En cours</option><option value="CLOSED">Clôturées</option><option value="ARCHIVED">Archivées</option></select></div>
+            <div><label for="h-anomaly">Anomalie</label><select id="h-anomaly" style="width:auto"><option value="">Toutes</option><option value="DEPART_MANQUANT">Départ manquant</option></select></div>
+          </div></div>
+        <div class="card"><div id="history-state"></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Rotation</th><th>Site</th><th>Employé</th><th>Entrée</th><th>Sortie</th><th>Passages</th><th>Groupe attendu</th><th>Groupe observé</th><th>Résultat</th><th>Décision</th><th></th></tr></thead><tbody id="history-rows"></tbody></table></div>
+          <div class="pager"><span id="history-total"></span><span><button class="secondary" id="h-prev" type="button">‹ Précédent</button> <button class="secondary" id="h-next" type="button">Suivant ›</button></span></div>
+        </div>
+      </section>
       <section id="view-planning" class="hidden">
         <div class="page-head"><div><h2>Planning intelligent</h2><p>Groupes et rotations appris à partir des feuilles clôturées. Le pointage réel reste un fait : le moteur observe et propose, il ne modifie ni les pointages ni les affectations.</p></div></div>
         <div id="pl-state"></div>
@@ -419,7 +436,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "sheets", "planning", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["anomalies", "sheets", "history", "planning", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
@@ -432,6 +449,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-sheets").classList.toggle("hidden", view !== "sheets");
     $("view-planning").classList.toggle("hidden", view !== "planning");
+    $("view-history").classList.toggle("hidden", view !== "history");
     $("view-cameras").classList.toggle("hidden", view !== "cameras");
     $("view-terminals").classList.toggle("hidden", view !== "terminals");
     $("view-enrollment").classList.toggle("hidden", view !== "enrollment");
@@ -445,6 +463,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (view === "duplicates") return loadDuplicates();
     if (view === "sheets") return loadSheets();
     if (view === "planning") return loadPlanning();
+    if (view === "history") return loadHistory();
     return view === "board" ? loadBoard() : loadAnomalies();
   }
 
@@ -683,15 +702,58 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     let f;
     try { f = await api("/attendance/sheets/" + id); } catch (ex) { toast(ex.message, true); return; }
     const m = modal(`<div class="sheet-modal"><h3 id="sheet-title">Feuille ${esc(f.label)} · ${esc(f.date)}</h3>
-      <div class="sub">${esc(f.site) || "—"} · ${esc(SHEET_STATUS[f.status] || f.status)}${f.observed_group ? " · groupe observé " + esc(f.observed_group) : ""}${f.interpretation && f.interpretation.group ? " · groupe appris " + esc(f.interpretation.group) : ""}${f.closed_at ? " · clôturée par " + esc(f.closed_by || "système") : ""}</div>
-      <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Groupe</th><th>Première entrée</th><th>Dernière sortie</th><th>État</th><th>Pointages bruts</th></tr></thead><tbody>${
+      <div class="sub">${esc(f.site) || "—"} · ${esc(SHEET_STATUS[f.status] || f.status)}${f.expected_group ? " · groupe attendu " + esc(f.expected_group) : ""}${f.observed_group ? " · groupe observé " + esc(f.observed_group) : ""}${f.interpretation && f.interpretation.group ? " · groupe appris " + esc(f.interpretation.group) : ""}${f.closed_at ? " · clôturée par " + esc(f.closed_by || "système") : ""}</div>
+      <div class="table-wrap"><table><thead><tr><th>Employé</th><th>Groupe</th><th>Première entrée</th><th>Dernière sortie</th><th>État</th><th>Attendu / observé</th><th>Pointages bruts</th></tr></thead><tbody>${
         f.lines.length ? f.lines.map((l) => `<tr><td class="who"><b>${esc(l.name) || "—"}</b><small>${esc(l.matricule)}${l.fonction ? " · " + esc(l.fonction) : ""}</small></td>
           <td>${esc(l.declared_group) || "—"}</td><td>${esc(l.first_entry) || "—"}</td><td>${esc(l.last_exit) || "—"}</td>
           <td>${esc(SHEET_LINE_STATE[l.state] || l.state)}${l.anomaly === "DEPART_MANQUANT" ? ' <span class="pill sev-warning">Départ manquant</span>' : ""}</td>
+          <td>${rotationOutcome(l)}</td>
           <td><small>${(l.events || []).map((e) => (e.type === "ENTREE" ? "Entrée " : "Sortie ") + esc(e.heure) + " (" + esc(SOURCE_LABEL[e.source] || e.source) + ")").join(" · ") || "—"}</small></td></tr>`).join("")
-        : '<tr><td colspan="6" class="empty">Aucun pointage sur cette rotation.</td></tr>'}</tbody></table></div>
+        : '<tr><td colspan="7" class="empty">Aucun pointage sur cette rotation.</td></tr>'}</tbody></table></div>
       <div class="modal-actions"><button class="secondary" type="button" id="sheet-close">Fermer</button></div></div>`, { wide: true, labelledBy: "sheet-title" });
     m.querySelector("#sheet-close").addEventListener("click", closeModal);
+  }
+
+  // Prévu / réel d'une ligne : valeurs enregistrées au moment du pointage (« non évalué » sinon).
+  function rotationOutcome(l) {
+    if (!l || !l.outcome || l.outcome === "NOT_EVALUATED") return '<small>Non évalué</small>';
+    const pair = `${l.expected_group ? esc(l.expected_group) : "—"} → ${l.observed_group ? esc(l.observed_group) : "repos"}`;
+    if (l.outcome === "CONFORM") return `<span class="pill pl-stable">Conforme</span> <small>${pair}</small>`;
+    return `<span class="pill sev-warning">${esc(l.outcome_label || "Écart")}</span> <small>${pair}${l.qualification_label ? " · " + esc(l.qualification_label) : ""}</small>`;
+  }
+
+  // ── Historique de pointage par rotation (DRH / OPS) ──────────────────────────────────
+  state.hPage = 1; state.history = null; state.hEmployees = null;
+  ["h-from", "h-to", "h-group", "h-outcome", "h-status", "h-anomaly", "h-employee"].forEach((id) => $(id).addEventListener("change", () => { state.hPage = 1; loadHistory(); }));
+  $("h-prev").addEventListener("click", () => { if (state.hPage > 1) { state.hPage--; loadHistory(); } });
+  $("h-next").addEventListener("click", () => { if (state.history && state.hPage * state.history.page_size < state.history.total) { state.hPage++; loadHistory(); } });
+
+  async function loadHistory() {
+    if (!$("h-from").value) $("h-from").value = dayOffset(-7);
+    if (!$("h-to").value) $("h-to").value = today();
+    $("history-state").innerHTML = '<div class="state info">Chargement…</div>';
+    const q = new URLSearchParams({ page: state.hPage, page_size: 50, date_from: $("h-from").value, date_to: $("h-to").value });
+    if ($("f-site").value) q.set("site_id", $("f-site").value);
+    [["group", "h-group"], ["outcome", "h-outcome"], ["status", "h-status"], ["anomaly", "h-anomaly"]].forEach(([key, id]) => { if ($(id).value.trim()) q.set(key, $(id).value.trim()); });
+    try {
+      if ($("h-employee").value.trim()) q.set("q", $("h-employee").value.trim());
+      const data = await api("/attendance/rotation-history?" + q);
+      state.history = data;
+      $("history-state").innerHTML = "";
+      $("history-rows").innerHTML = data.items.length ? data.items.map((r) => `<tr>
+        <td>${esc(r.date)}</td><td><b>${esc(r.rotation)}</b></td><td>${esc(r.site) || "—"}</td>
+        <td class="who"><b>${esc(r.name) || "—"}</b><small>${esc(r.matricule)}</small></td>
+        <td>${esc(r.first_entry) || "—"}</td><td>${esc(r.last_exit) || "—"}${r.anomaly === "DEPART_MANQUANT" ? ' <span class="pill sev-warning">Départ manquant</span>' : ""}</td><td>${Number(r.events_count) || 0}</td>
+        <td>${r.expected_group ? "Groupe " + esc(r.expected_group) : "—"}</td><td>${r.observed_group ? "Groupe " + esc(r.observed_group) : "—"}</td>
+        <td>${r.outcome === "CONFORM" ? '<span class="pill pl-stable">Conforme</span>' : r.outcome === "NOT_EVALUATED" ? "<small>Non évalué</small>" : `<span class="pill sev-warning">${esc(r.outcome_label)}</span>`}</td>
+        <td>${esc(r.qualification_label) || (r.deviation_status === "OPEN" ? "À qualifier (OPS)" : "—")}</td>
+        <td><div class="row-actions"><button class="link" type="button" data-h-sheet="${r.sheet_id}">Feuille</button></div></td></tr>`).join("")
+        : '<tr><td colspan="12" class="empty">Aucun pointage par rotation sur cette période.</td></tr>';
+      $("history-rows").querySelectorAll("[data-h-sheet]").forEach((b) => b.addEventListener("click", () => openSheet(b.dataset.hSheet)));
+      const pages = Math.max(1, Math.ceil(data.total / data.page_size));
+      $("history-total").textContent = `${data.total} ligne(s) · page ${data.page}/${pages}`;
+      $("h-prev").disabled = data.page <= 1; $("h-next").disabled = data.page >= pages;
+    } catch (ex) { $("history-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`; }
   }
 
   async function openRotationSettings() {
