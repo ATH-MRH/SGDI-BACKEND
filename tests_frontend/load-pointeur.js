@@ -35,6 +35,8 @@ function buildHtml() {
   getLive: () => ({ liveCursor, liveRefusalCursor, serverSummary, lastScanShownId, liveTimer }),
   setPlanningEvents: (v) => { planningEvents = v; },
   LIVE_POLL_MS, LAST_SCAN_DISPLAY_MS,
+  renderSystemState, setLiveState, syncModeCards, selectQrMode, lastScanIdleHTML, setupScanMode, toggleManualPanel,
+  getUi: () => ({ liveState, liveOkAt, cameraMode }),
 };
 `;
   return RAW_HTML.replace(/(<script>)([\s\S]*?)(<\/script>)/, (match, open, body, close) => open + body + suffix + close);

@@ -216,6 +216,270 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .face-check{font-size:24px;letter-spacing:.03em}.face-name{font-size:30px;margin-top:8px}.face-meta{font-size:16px;font-weight:700;margin-top:6px}
 .face-fallback{margin-top:12px}
 @media (max-width:640px){.face-view{padding:10px}.face-check{font-size:20px}.face-name{font-size:24px}}
+/* ============================================================================
+   POSTE DE POINTAGE V3 — habillage uniquement (aucune logique). Portée : body.ptr-v3.
+   Tokens ATLAS réutilisés quand ils existent ; les teintes propres au poste sont
+   déclarées UNE fois ci-dessous. Animations légères (transform/opacity), coupées
+   par prefers-reduced-motion : le poste reste ouvert des heures.
+   ============================================================================ */
+body.ptr-v3{
+  --ptr-navy-1:var(--atlas-sidebar-bg-start,#0a2d6b);--ptr-navy-2:var(--atlas-sidebar-bg-mid,#05214f);--ptr-navy-3:var(--atlas-sidebar-bg-end,#021738);
+  --ptr-kpi-1:var(--atlas-kpi-bg-start,#0a3577);--ptr-kpi-2:var(--atlas-kpi-bg-mid,#0e4691);
+  --ptr-blue:var(--atlas-primary,#165dde);--ptr-blue-soft:var(--atlas-primary-soft,#eaf2ff);--ptr-cyan:var(--atlas-sidebar-active-border,#4fd8f5);
+  --ptr-ink:var(--atlas-text,#172b4d);--ptr-ink-2:var(--atlas-text-secondary,#51627c);--ptr-muted:var(--atlas-text-muted,#61748f);
+  --ptr-line:var(--atlas-border,#dde7f3);--ptr-line-strong:var(--atlas-border-strong,#b9cbe2);--ptr-surface:var(--atlas-surface,#fff);--ptr-surface-2:var(--atlas-surface-secondary,#f8fafd);--ptr-bg:var(--atlas-background,#f3f7fc);
+  --ptr-green:#15a05a;--ptr-green-ink:var(--atlas-success,#117647);--ptr-green-soft:var(--atlas-success-soft,#e7f6ef);
+  --ptr-orange:#e9820c;--ptr-orange-ink:var(--atlas-warning,#9f580a);--ptr-orange-soft:var(--atlas-warning-soft,#fff3df);
+  --ptr-red:#dc3f4c;--ptr-red-ink:var(--atlas-danger,#bb303e);--ptr-red-soft:var(--atlas-danger-soft,#fff0f1);
+  --ptr-on-navy:#fff;--ptr-on-navy-muted:#c6dbf8;--ptr-on-navy-line:#c6dbf833;
+  --ptr-shadow:0 10px 30px #0a2d6b14;--ptr-shadow-kpi:0 14px 34px #0a357738;--ptr-radius:20px;
+  background:var(--ptr-bg)!important;color:var(--ptr-ink);
+}
+body.ptr-v3 .app{background:var(--ptr-bg)}
+body.ptr-v3 svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── Header blanc ── */
+body.ptr-v3 #appView>.top{position:sticky;top:0;z-index:1000;min-height:0;padding:max(10px,env(safe-area-inset-top)) 24px 10px!important;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;border:0!important;border-bottom:1px solid var(--ptr-line)!important;border-radius:0 0 18px 18px!important;box-shadow:0 6px 22px #0a2d6b0f!important}
+body.ptr-v3 .top-row{display:grid!important;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:center;gap:18px;width:100%;max-width:none;margin:0}
+body.ptr-v3 .brand{gap:12px;margin:0}
+body.ptr-v3 .top .brand-logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(140deg,var(--ptr-blue),var(--ptr-kpi-2))!important;color:var(--ptr-on-navy)!important;border:0!important;font-size:14px;font-weight:800;letter-spacing:.04em;box-shadow:0 6px 16px #165dde40}
+body.ptr-v3 .brand-title{font-size:18px;font-weight:800;letter-spacing:.07em;color:var(--ptr-ink)}
+body.ptr-v3 .top .brand-user{margin-top:2px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ptr-muted)!important;opacity:1}
+/* Horloge : vraie heure du poste, chiffres lumineux sur fond marine */
+body.ptr-v3 .header-clock{gap:14px;justify-content:center;grid-column:auto;grid-row:auto;min-width:0}
+body.ptr-v3 .top .seg-date{font-size:14px;font-weight:650;letter-spacing:.04em;color:var(--ptr-ink-2)!important}
+body.ptr-v3 .seg-clock{gap:4px;padding:9px 16px;border-radius:12px;background:linear-gradient(160deg,var(--ptr-navy-1),var(--ptr-navy-3));box-shadow:inset 0 0 0 1px #4fd8f52e,0 8px 20px #0a2d6b33}
+body.ptr-v3 :is(.seg-digit,.seg-colon){zoom:1.22}
+body.ptr-v3 .seg{background:#ffffff0d}
+body.ptr-v3 .seg.on{background:#7be7ff;box-shadow:0 0 3px #4fd8f5e6,0 0 9px #4fd8f573}
+body.ptr-v3 .seg-colon i{background:var(--ptr-cyan);box-shadow:0 0 5px #4fd8f5b3}
+/* Contrôles du header : mêmes fonctions, apparence modernisée */
+body.ptr-v3 .top-actions{gap:8px;flex-wrap:wrap;justify-content:flex-end;width:auto}
+body.ptr-v3 .top :is(.site-control,.module-nav button,.logout,.header-scanner-status,.conn-pill){height:38px;border-radius:999px;font-size:12px;font-weight:650;letter-spacing:0;box-shadow:0 1px 2px #0a2d6b0a!important}
+body.ptr-v3 .top .site-control{width:230px;padding:0 10px 0 14px;gap:9px;background:var(--ptr-surface)!important;border:1px solid var(--ptr-line)!important}
+body.ptr-v3 .top .site-control-label{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--ptr-muted)!important}
+body.ptr-v3 .top .site-selector{height:30px;font-size:12px;font-weight:700;color:var(--ptr-ink)!important;background:transparent!important;border:0!important;box-shadow:none!important}
+body.ptr-v3 .module-nav{gap:8px;order:0;width:auto}
+body.ptr-v3 .top .module-nav button{flex:none;padding:0 15px;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;border:1px solid var(--ptr-line)!important;cursor:pointer;transition:background-color .16s ease,color .16s ease}
+body.ptr-v3 .top .module-nav button:hover{background:var(--ptr-blue-soft)!important;color:var(--ptr-blue)!important;border-color:var(--ptr-line-strong)!important}
+body.ptr-v3 .top .module-nav button.active{background:linear-gradient(140deg,var(--ptr-blue),var(--ptr-kpi-2))!important;color:var(--ptr-on-navy)!important;border-color:transparent!important;box-shadow:0 6px 16px #165dde40!important}
+body.ptr-v3 .top :is(.header-scanner-status,.conn-pill){padding:0 13px;gap:7px;background:var(--ptr-green-soft)!important;color:var(--ptr-green-ink)!important;border:1px solid #15a05a40!important;text-transform:none}
+body.ptr-v3 .top .header-scanner-status{font-size:12px}
+body.ptr-v3 .top :is(.header-scanner-status .dot,.conn-dot){width:8px;height:8px;background:var(--ptr-green)!important;box-shadow:0 0 0 3px #15a05a2e!important;animation:none}
+body.ptr-v3 .top .conn-pill.offline{background:var(--ptr-red-soft)!important;color:var(--ptr-red-ink)!important;border-color:#dc3f4c59!important}
+body.ptr-v3 .top .conn-pill.offline .conn-dot{background:var(--ptr-red)!important;box-shadow:0 0 0 3px #dc3f4c2e!important}
+body.ptr-v3 .top .conn-label{display:inline}
+body.ptr-v3 .top .logout{padding:0 15px;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;border:1px solid var(--ptr-line)!important;cursor:pointer}
+body.ptr-v3 .top .logout:hover{background:var(--ptr-red-soft)!important;color:var(--ptr-red-ink)!important;border-color:#dc3f4c59!important}
+body.ptr-v3 .top :is(button,select):focus-visible,body.ptr-v3 .main :is(button,input,textarea):focus-visible{outline:2px solid var(--ptr-blue);outline-offset:2px}
+
+/* ── Contenu ── */
+body.ptr-v3 .main{width:100%;max-width:none;margin:0;padding:16px 24px 28px!important}
+/* Barre KPI : carte marine flottante — valeurs réelles uniquement (ni %, ni mini-graphiques) */
+body.ptr-v3 .status-row{display:flex!important;flex-direction:column;align-items:stretch;gap:12px;height:auto!important;margin:0 0 16px!important;padding:0!important;background:transparent!important;border:0!important}
+body.ptr-v3 .presence-summary{order:1;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;flex:none;padding:10px;border-radius:18px;background:linear-gradient(100deg,var(--ptr-kpi-1),var(--ptr-kpi-2) 52%,var(--ptr-kpi-1));box-shadow:var(--ptr-shadow-kpi);color:var(--ptr-on-navy);font-size:inherit;text-transform:none}
+body.ptr-v3 .presence-summary button{position:relative;display:flex!important;align-items:center;gap:14px;min-width:0!important;width:auto;padding:14px 18px!important;text-align:left!important;font-size:inherit!important;color:var(--ptr-on-navy)!important;background:transparent!important;border:0!important;border-radius:13px!important;box-shadow:none!important;cursor:pointer;transition:background-color .16s ease}
+body.ptr-v3 .presence-summary button+button::before{content:"";position:absolute;left:0;top:16px;bottom:16px;width:1px;background:var(--ptr-on-navy-line)}
+body.ptr-v3 .presence-summary button:hover{background:#ffffff14!important}
+body.ptr-v3 .presence-summary button.active{background:#ffffff1f!important;box-shadow:inset 0 0 0 1.5px #ffffff59!important}
+body.ptr-v3 .presence-summary button:focus-visible{outline:2px solid var(--ptr-cyan);outline-offset:-2px}
+body.ptr-v3 .kpi-ico{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;color:var(--ptr-on-navy);background:var(--kpi-accent);box-shadow:0 0 0 5px #ffffff14}
+body.ptr-v3 .kpi-ico svg{width:22px;height:22px;stroke-width:2.1}
+body.ptr-v3 .kpi-txt{min-width:0;display:block}
+body.ptr-v3 .presence-summary button small{display:block!important;margin:0 0 4px!important;font-size:12px!important;font-weight:600!important;letter-spacing:.01em!important;color:var(--ptr-on-navy-muted)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.ptr-v3 .presence-summary button b{display:block!important;font-size:30px!important;font-weight:800!important;line-height:1!important;letter-spacing:.01em;color:var(--ptr-on-navy)!important;font-variant-numeric:tabular-nums}
+body.ptr-v3 .presence-summary button:nth-child(1){--kpi-accent:var(--ptr-green)}
+body.ptr-v3 .presence-summary button:nth-child(2){--kpi-accent:var(--ptr-orange)}
+body.ptr-v3 .presence-summary button:nth-child(3){--kpi-accent:var(--ptr-blue)}
+body.ptr-v3 .presence-summary button:nth-child(4){--kpi-accent:var(--ptr-red)}
+body.ptr-v3 .shift-staffing{order:2;width:100%;flex:none;border:1px solid var(--ptr-line);border-radius:14px;background:var(--ptr-surface);padding:8px 10px;box-shadow:0 1px 2px #0a2d6b0a}
+body.ptr-v3 .status-row .presence-summary button{flex:initial!important;flex-direction:row!important;justify-content:flex-start!important}
+
+body.ptr-v3 .work-grid{display:grid!important;grid-template-columns:minmax(0,1fr);gap:18px;padding-top:0;align-items:start}
+body.ptr-v3 .side-col{display:flex;flex-direction:column;gap:18px;min-width:0}
+body.ptr-v3 .scanner-card{background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;border:1px solid var(--ptr-line)!important;border-radius:var(--ptr-radius)!important;box-shadow:var(--ptr-shadow)!important;padding:22px}
+body.ptr-v3 #scannerCard{min-height:0}
+
+/* ── Poste de pointage (colonne gauche) ── */
+body.ptr-v3 .station-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+body.ptr-v3 .station-ico{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:13px;background:var(--ptr-blue-soft);color:var(--ptr-blue)}
+body.ptr-v3 .station-ico svg{width:24px;height:24px}
+body.ptr-v3 .station-titles{flex:1;min-width:0}
+body.ptr-v3 .station-head .scanner-title{margin:0;text-align:left;font-size:19px;font-weight:800;letter-spacing:-.005em;color:var(--ptr-ink)}
+body.ptr-v3 .station-sub{margin:3px 0 0;font-size:13px;color:var(--ptr-muted);overflow-wrap:anywhere}
+body.ptr-v3 .station-state{flex:none;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--ptr-line);background:var(--ptr-surface);font-size:11px;font-weight:750;letter-spacing:.06em;color:var(--ptr-ink-2);white-space:nowrap}
+body.ptr-v3 .station-state i{width:8px;height:8px;border-radius:50%;background:var(--ptr-muted)}
+body.ptr-v3 .station-state.is-ok{color:var(--ptr-green-ink);border-color:#15a05a40;background:var(--ptr-green-soft)}
+body.ptr-v3 .station-state.is-ok i{background:var(--ptr-green);box-shadow:0 0 0 3px #15a05a2e}
+body.ptr-v3 .station-state.is-bad{color:var(--ptr-red-ink);border-color:#dc3f4c59;background:var(--ptr-red-soft)}
+body.ptr-v3 .station-state.is-bad i{background:var(--ptr-red)}
+/* Zone centrale : attente (scanner dessiné) ou fiche du dernier pointage */
+body.ptr-v3 .last-scan{margin:0 0 16px;padding:22px;min-height:360px;border:1.5px solid var(--ptr-line);border-radius:18px;background:var(--ptr-surface);transition:border-color .25s ease,background-color .25s ease}
+body.ptr-v3 .last-scan.is-idle{display:grid;place-items:center;border:1px solid var(--ptr-line);border-style:solid;background:radial-gradient(120% 90% at 50% 38%,var(--ptr-blue-soft) 0%,var(--ptr-surface) 62%);overflow:hidden}
+body.ptr-v3 .last-scan-idle{color:var(--ptr-muted);padding:4px 0}
+body.ptr-v3 .last-scan-idle-dot{display:none}
+body.ptr-v3 .scan-visual{position:relative;width:230px;height:210px;margin:0 auto 18px;display:grid;place-items:center}
+body.ptr-v3 .scan-ring{position:absolute;left:50%;top:50%;width:206px;height:206px;margin:-103px 0 0 -103px;border-radius:50%;border:1px solid #165dde2b}
+body.ptr-v3 .scan-ring-2{width:290px;height:290px;margin:-145px 0 0 -145px;border-color:#165dde17;animation:ptrRing 4.5s ease-in-out infinite}
+body.ptr-v3 .scan-device{position:relative;display:grid;place-items:center;width:136px;height:136px;border-radius:28px;background:linear-gradient(150deg,var(--ptr-navy-1),var(--ptr-navy-3));color:var(--ptr-cyan);box-shadow:0 22px 44px #0a2d6b4d,inset 0 0 0 1px #4fd8f540,0 0 0 8px #165dde0f;overflow:hidden}
+body.ptr-v3 .scan-device svg{width:62px;height:62px;stroke-width:1.5;filter:drop-shadow(0 0 5px #4fd8f580)}
+body.ptr-v3 .scan-corner{position:absolute;width:18px;height:18px;border:2px solid var(--ptr-cyan);opacity:.9}
+body.ptr-v3 .scan-corner.tl{left:16px;top:16px;border-right:0;border-bottom:0;border-radius:6px 0 0 0}
+body.ptr-v3 .scan-corner.tr{right:16px;top:16px;border-left:0;border-bottom:0;border-radius:0 6px 0 0}
+body.ptr-v3 .scan-corner.bl{left:16px;bottom:16px;border-right:0;border-top:0;border-radius:0 0 0 6px}
+body.ptr-v3 .scan-corner.br{right:16px;bottom:16px;border-left:0;border-top:0;border-radius:0 0 6px 0}
+body.ptr-v3 .scan-line{position:absolute;left:14px;right:14px;top:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,var(--ptr-cyan),transparent);box-shadow:0 0 10px #4fd8f5cc;animation:ptrScan 3.4s ease-in-out infinite alternate}
+@keyframes ptrScan{from{transform:translateY(0)}to{transform:translateY(90px)}}
+@keyframes ptrRing{0%,100%{opacity:.45;transform:scale(.97)}50%{opacity:1;transform:scale(1.02)}}
+body.ptr-v3 .last-scan-idle-title{margin-top:0;font-size:23px;font-weight:800;letter-spacing:-.005em;color:var(--ptr-ink);text-transform:lowercase}
+body.ptr-v3 .last-scan-idle-title::first-letter{text-transform:uppercase}
+body.ptr-v3 .last-scan-idle-hint{margin-top:8px;font-size:14px;color:var(--ptr-muted)}
+body.ptr-v3 .last-scan-body{animation:ptrIn .28s ease both}
+@keyframes ptrIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+body.ptr-v3 .last-scan-photo{border-radius:16px;border-color:var(--ptr-line);box-shadow:0 10px 24px #0a2d6b1f}
+body.ptr-v3 .last-scan-initials{color:var(--ptr-kpi-1)}
+body.ptr-v3 .last-scan-badge{background:var(--ptr-green);font-size:12px;letter-spacing:.09em}
+body.ptr-v3 .last-scan-name{font-weight:800;color:var(--ptr-ink)}
+body.ptr-v3 .last-scan-meta dt{color:var(--ptr-muted)}
+body.ptr-v3 .last-scan.is-entry{border-color:var(--ptr-green);background:linear-gradient(180deg,var(--ptr-green-soft),var(--ptr-surface) 70%)}
+body.ptr-v3 .last-scan.is-entry .last-scan-move{background:var(--ptr-green-soft);color:var(--ptr-green-ink);border:1px solid #15a05a40}
+body.ptr-v3 .last-scan.is-exit{border-color:var(--ptr-orange);background:linear-gradient(180deg,var(--ptr-orange-soft),var(--ptr-surface) 70%)}
+body.ptr-v3 .last-scan.is-exit .last-scan-badge{background:var(--ptr-orange)}
+body.ptr-v3 .last-scan.is-exit .last-scan-move{background:var(--ptr-orange-soft);color:var(--ptr-orange-ink);border:1px solid #e9820c47}
+body.ptr-v3 .last-scan.is-refused{border-color:var(--ptr-red);background:linear-gradient(180deg,var(--ptr-red-soft),var(--ptr-surface) 70%)}
+body.ptr-v3 .last-scan.is-refused .last-scan-badge{background:var(--ptr-red)}
+body.ptr-v3 .last-scan.is-refused .last-scan-move{background:var(--ptr-red-soft);color:var(--ptr-red-ink);border:1px solid #dc3f4c47}
+/* L'attente dessinée remplace l'ancien panneau « douchette » ; la caméra QR reste telle quelle */
+body.ptr-v3 #usbReader{display:none!important}
+body.ptr-v3 #reader{border-radius:18px;min-height:300px;margin-bottom:16px;background:linear-gradient(150deg,var(--ptr-navy-1),var(--ptr-navy-3))}
+body.ptr-v3 #restartBtn{margin:0 0 14px}
+/* Modes de pointage */
+body.ptr-v3 .mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+body.ptr-v3 .mode-card{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:118px;padding:16px 10px;border:1px solid var(--ptr-line);border-radius:16px;background:var(--ptr-surface);color:var(--ptr-ink);text-align:center;cursor:pointer;box-shadow:0 1px 2px #0a2d6b0a;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}
+body.ptr-v3 .mode-card:hover{border-color:var(--ptr-line-strong);background:var(--ptr-surface-2)}
+body.ptr-v3 .mode-card.active{border-color:var(--ptr-blue);background:var(--ptr-blue-soft);box-shadow:0 0 0 3px #165dde1f}
+body.ptr-v3 .mode-ico{display:grid;place-items:center;width:38px;height:38px;margin-bottom:4px;color:var(--ptr-blue)}
+body.ptr-v3 .mode-ico svg{width:32px;height:32px;stroke-width:1.7}
+body.ptr-v3 .mode-card b{font-size:14px;font-weight:750;line-height:1.25}
+body.ptr-v3 .mode-card small{font-size:12px;color:var(--ptr-muted);line-height:1.3}
+body.ptr-v3 .mode-dot{display:none;position:absolute;right:12px;top:12px;width:9px;height:9px;border-radius:50%;background:var(--ptr-green);box-shadow:0 0 0 3px #15a05a2e}
+body.ptr-v3 .mode-card.active .mode-dot{display:block}
+body.ptr-v3 .ptr-legacy{display:none!important}
+body.ptr-v3 .action-row{display:flex!important;gap:10px;margin-top:12px}
+body.ptr-v3 .action-row:not(:has(>button:not(.hidden):not(.ptr-legacy))){display:none!important}
+body.ptr-v3 .action-row .secondary{flex:1;height:44px;margin:0;padding:0 14px;border:1px solid var(--ptr-line)!important;border-radius:12px;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;font-size:12.5px;font-weight:700;cursor:pointer}
+body.ptr-v3 .action-row .secondary:hover{background:var(--ptr-blue-soft)!important;color:var(--ptr-blue)!important}
+body.ptr-v3 .station-foot{display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--ptr-line)}
+body.ptr-v3 .station-foot .dot{flex:none;width:9px;height:9px;background:var(--ptr-green);box-shadow:0 0 0 3px #15a05a2e;animation:none}
+body.ptr-v3 .station-foot .scanner-hint{margin:0;text-align:left;font-size:13px;color:var(--ptr-ink-2)}
+/* Saisie manuelle : le panneau existant, la fiche d'attente laisse la place */
+body.ptr-v3 .scanner-card.manual-mode{min-height:0}
+body.ptr-v3 .scanner-card.manual-mode>.last-scan.is-idle,body.ptr-v3 .scanner-card.manual-mode>.station-foot{display:none}
+body.ptr-v3 .scanner-card.manual-mode #manualSearchStep{margin-top:18px}
+body.ptr-v3 .manual-panel{margin-top:16px}
+body.ptr-v3 .manual-heading{font-size:17px;font-weight:800;border-bottom:1px solid var(--ptr-line)}
+body.ptr-v3 .manual-observation{border-color:var(--ptr-line-strong);border-radius:14px;min-height:110px}
+body.ptr-v3 .main input{border-color:var(--ptr-line-strong);border-radius:12px}
+
+/* ── Pointage en direct ── */
+body.ptr-v3 #liveFeedCard{display:flex;flex-direction:column;min-height:0;padding:0!important;overflow:hidden}
+body.ptr-v3 .live-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--ptr-line)}
+body.ptr-v3 #liveFeedCard .scanner-title{display:flex;align-items:center;gap:10px;margin:0;padding:0;text-align:left;font-size:18px!important;font-weight:800;color:var(--ptr-ink)}
+body.ptr-v3 #liveFeedCard .scanner-hint{margin:4px 0 0;padding:0;border:0;text-align:left;font-size:13px;color:var(--ptr-muted)}
+body.ptr-v3 .live-dot{flex:none;width:12px;height:12px;border-radius:50%;background:var(--ptr-red);box-shadow:0 0 0 4px #dc3f4c2e;animation:ptrLive 2.4s ease-in-out infinite}
+@keyframes ptrLive{0%,100%{box-shadow:0 0 0 3px #dc3f4c2e}50%{box-shadow:0 0 0 7px #dc3f4c14}}
+body.ptr-v3 .live-badge{flex:none;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;background:var(--ptr-green-soft);color:var(--ptr-green-ink);border:1px solid #15a05a40;font-size:11.5px;font-weight:700;white-space:nowrap}
+body.ptr-v3 .live-badge i{width:7px;height:7px;border-radius:50%;background:var(--ptr-green)}
+body.ptr-v3 .live-feed-list{display:block;flex:1;overflow:auto;padding:14px;max-height:min(58vh,640px)}
+body.ptr-v3 .live-feed-groups{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:12px;overflow:visible!important;padding:0!important}
+body.ptr-v3 .live-feed-group{min-width:0!important;border:1px solid var(--ptr-line);border-radius:14px;background:var(--ptr-surface-2);overflow:hidden}
+body.ptr-v3 .live-feed-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--ptr-blue-soft);color:var(--ptr-ink);font-size:12.5px;letter-spacing:.03em}
+body.ptr-v3 .live-feed-group-head span{min-width:26px;height:22px;display:inline-grid;place-items:center;padding:0 7px;border-radius:999px;background:var(--ptr-kpi-1);color:var(--ptr-on-navy);font-size:11px;font-weight:750}
+body.ptr-v3 .live-feed-section{padding:10px}
+body.ptr-v3 .live-feed-section-title{margin:0 4px 8px;font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--ptr-green-ink)}
+body.ptr-v3 .live-feed-section-title.absent{color:var(--ptr-red-ink)}
+body.ptr-v3 .live-feed-section-rows{display:grid;gap:8px}
+body.ptr-v3 .live-feed-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px!important;border:1px solid var(--ptr-line)!important;border-radius:13px;background:var(--ptr-surface)!important;box-shadow:0 1px 2px #0a2d6b0a}
+body.ptr-v3 .live-feed-avatar{width:42px;height:42px;flex:0 0 42px;border:2px solid var(--ptr-surface);box-shadow:0 2px 8px #0a2d6b29;background:var(--ptr-blue-soft)}
+body.ptr-v3 .live-feed-avatar.initials{display:grid;place-items:center;color:var(--ptr-kpi-1);font-size:13px;font-weight:800}
+body.ptr-v3 .live-feed-name{font-size:13px;font-weight:750;color:var(--ptr-ink);overflow-wrap:anywhere}
+body.ptr-v3 .live-feed-meta{font-size:11.5px;color:var(--ptr-muted)}
+body.ptr-v3 .live-feed-times{flex:none;gap:8px;flex-wrap:nowrap}
+body.ptr-v3 .live-feed-time{gap:4px;min-width:74px;padding:5px 6px 6px;border-radius:11px}
+body.ptr-v3 .live-feed-time .live-feed-meta{font-variant-numeric:tabular-nums;font-weight:650;color:var(--ptr-ink-2)}
+body.ptr-v3 .live-feed-time:has(.in){background:var(--ptr-green-soft)}
+body.ptr-v3 .live-feed-time:has(.out){background:var(--ptr-orange-soft)}
+body.ptr-v3 .live-feed-time:has(.absent){background:var(--ptr-red-soft)}
+body.ptr-v3 .live-feed-badge{display:block;width:100%;text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.05em;padding:4px 9px}
+body.ptr-v3 .live-feed-badge.in{background:var(--ptr-green)}
+body.ptr-v3 .live-feed-badge.out{background:var(--ptr-orange)}
+body.ptr-v3 .live-feed-badge.absent{background:var(--ptr-red)}
+body.ptr-v3 .live-feed-empty{padding:44px 12px;font-size:13px;color:var(--ptr-muted)}
+
+/* ── État du système (faits connus du navigateur uniquement) ── */
+body.ptr-v3 .system-card{padding:16px 20px 18px}
+body.ptr-v3 .system-title{font-size:11.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ptr-muted);margin-bottom:12px}
+body.ptr-v3 .system-list{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:0}
+body.ptr-v3 .system-item{display:flex;align-items:center;justify-content:space-between;gap:14px;min-width:0;padding:10px 14px;border:1px solid var(--ptr-line);border-radius:13px;background:var(--ptr-surface-2)}
+body.ptr-v3 .system-item dt{flex:none;font-size:12.5px;color:var(--ptr-muted);font-weight:600}
+body.ptr-v3 .system-item dd{display:flex;align-items:center;gap:8px;min-width:0;margin:0;font-size:13px;font-weight:700;color:var(--ptr-ink);text-align:right;overflow-wrap:anywhere}
+body.ptr-v3 .system-item dd::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--ptr-muted)}
+body.ptr-v3 .system-item[data-tone="ok"] dd::before{background:var(--ptr-green)}
+body.ptr-v3 .system-item[data-tone="bad"] dd::before{background:var(--ptr-red)}
+
+/* ── Vues Planning et Facial : mêmes cartes ── */
+body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr-line);border-radius:var(--ptr-radius);box-shadow:var(--ptr-shadow)}
+
+/* ── Responsive ── */
+@media(min-width:960px){
+  body.ptr-v3 .work-grid{grid-template-columns:minmax(0,1.42fr) minmax(0,1fr);align-items:start}
+}
+@media(max-width:1399px){
+  body.ptr-v3 .top-row{grid-template-columns:max-content minmax(0,1fr);row-gap:10px}
+  body.ptr-v3 .header-clock{justify-content:flex-end}
+  body.ptr-v3 .top-actions{grid-column:1/-1;justify-content:flex-start}
+}
+@media(max-width:959px){
+  body.ptr-v3 .presence-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.ptr-v3 .presence-summary button+button::before{display:none}
+  body.ptr-v3 .presence-summary button:nth-child(even)::before{display:block}
+  body.ptr-v3 .last-scan{min-height:320px}
+  body.ptr-v3 .live-feed-list{max-height:none}
+}
+@media(max-width:759px){
+  body.ptr-v3 #appView>.top{position:static;padding:max(10px,env(safe-area-inset-top)) 14px 10px!important;border-radius:0 0 16px 16px!important}
+  body.ptr-v3 .top-row{display:grid!important;grid-template-columns:minmax(0,1fr) max-content;gap:10px}
+  body.ptr-v3 .top .seg-date{display:none}
+  body.ptr-v3 .seg-clock{padding:7px 11px}
+  body.ptr-v3 .top .site-control{width:100%;flex:1 1 100%}
+  body.ptr-v3 .module-nav{flex:1 1 100%;width:100%}
+  body.ptr-v3 .top .module-nav button{flex:1;padding:0 8px}
+  body.ptr-v3 .top .logout{margin-left:auto}
+  body.ptr-v3 .main{padding:12px 12px 24px!important}
+  body.ptr-v3 .presence-summary{padding:8px;border-radius:16px}
+  body.ptr-v3 .presence-summary button{gap:10px;padding:11px 10px!important}
+  body.ptr-v3 .presence-summary button:nth-child(even)::before{top:12px;bottom:12px}
+  body.ptr-v3 .kpi-ico{width:38px;height:38px;box-shadow:0 0 0 4px #ffffff14}
+  body.ptr-v3 .kpi-ico svg{width:19px;height:19px}
+  body.ptr-v3 .presence-summary button small{font-size:11px!important}
+  body.ptr-v3 .presence-summary button b{font-size:24px!important}
+  body.ptr-v3 .scanner-card{padding:16px;border-radius:18px!important}
+  body.ptr-v3 .station-head{flex-wrap:wrap}
+  body.ptr-v3 .station-state{margin-left:60px}
+  body.ptr-v3 .last-scan{padding:16px;min-height:300px}
+  body.ptr-v3 .last-scan-idle-title{font-size:19px}
+  body.ptr-v3 .mode-grid{gap:8px}
+  body.ptr-v3 .mode-card{min-height:104px;padding:12px 6px}
+  body.ptr-v3 .mode-card b{font-size:12.5px}
+  body.ptr-v3 .mode-card small{font-size:11px}
+  body.ptr-v3 .live-head{padding:16px 16px 12px;flex-wrap:wrap}
+  body.ptr-v3 .live-feed-row{flex-wrap:wrap}
+  body.ptr-v3 .live-feed-times{margin-left:52px}
+}
+@media(prefers-reduced-motion:reduce){
+  body.ptr-v3 :is(.scan-line,.scan-ring-2,.live-dot,.last-scan-body){animation:none!important}
+  body.ptr-v3 *{transition:none!important}
+}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script defer src="/static/pointeur-facial.js?v=1"></script>
@@ -223,7 +487,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body class="atlas-ui" data-atlas-surface="pointeur">
+<body class="atlas-ui ptr-v3" data-atlas-surface="pointeur">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE POINTAGE</span><h2>Vos présences.<br>Un suivi terrain.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Pointage</strong><small>Enregistrez les présences</small></div><div><b>02</b><strong>Sites</strong><small>Retrouvez vos affectations</small></div><div><b>03</b><strong>Planning</strong><small>Consultez votre organisation</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
@@ -248,7 +512,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <div class="top-actions">
         <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
         <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
-        <span class="header-scanner-status"><span class="dot"></span> SCANNER ACTIF</span>
+        <span class="header-scanner-status"><span class="dot"></span> Scanner actif</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
       </div>
@@ -258,10 +522,10 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <div class="status-row">
       <div id="shiftStaffing" class="shift-staffing"><span class="shift-staffing-empty">Chargement de l’effectif contractuel…</span></div>
       <div class="presence-summary">
-        <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><small>Entrées aujourd’hui</small><b id="entrantCount">00</b></button>
-        <button type="button" data-live-filter="sorties" onclick="setLiveFilter('sorties')"><small>Sorties aujourd’hui</small><b id="sortantCount">00</b></button>
-        <button type="button" data-live-filter="presents" onclick="setLiveFilter('presents')"><small>Présents sur site</small><b id="presentCount">00</b></button>
-        <button type="button" data-live-filter="absents" onclick="setLiveFilter('absents')"><small>Absents aujourd’hui</small><b id="absentCount">00</b></button>
+        <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></span><span class="kpi-txt"><small>Entrées aujourd’hui</small><b id="entrantCount">00</b></span></button>
+        <button type="button" data-live-filter="sorties" onclick="setLiveFilter('sorties')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17M15 17H7V9"/></svg></span><span class="kpi-txt"><small>Sorties aujourd’hui</small><b id="sortantCount">00</b></span></button>
+        <button type="button" data-live-filter="presents" onclick="setLiveFilter('presents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.9-3.6 10.1-3.6 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.4M17.5 14.6c1.7.6 2.8 2 3 4.4"/></svg></span><span class="kpi-txt"><small>Présents sur site</small><b id="presentCount">00</b></span></button>
+        <button type="button" data-live-filter="absents" onclick="setLiveFilter('absents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.2"/><path d="M4 19c.9-3.6 6-4.4 8.6-2.8"/><path d="m16 15 5 5M21 15l-5 5"/></svg></span><span class="kpi-txt"><small>Absents aujourd’hui</small><b id="absentCount">00</b></span></button>
       </div>
     </div>
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
@@ -269,12 +533,16 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       <section id="scannerCard" class="scanner-card">
         <!-- POSTE DE SÉCURITÉ : dernier passage ACCEPTÉ par Attendance Core (facial, QR, saisie),
              affiché automatiquement — aucun clic, aucune recherche. -->
-        <div id="lastScanCard" class="last-scan is-idle" role="status" aria-live="polite" aria-atomic="true">
-          <div class="last-scan-idle"><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>
-            <div class="last-scan-idle-hint">Reconnaissance faciale, QR ou saisie manuelle : la fiche s'affiche ici automatiquement.</div></div>
+        <div class="station-head">
+          <span class="station-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span>
+          <div class="station-titles"><div class="scanner-title" id="scannerTitle">Poste de pointage</div>
+            <p class="station-sub">Reconnaissance faciale, QR ou saisie manuelle<span id="stationSite"></span></p></div>
+          <span id="stationState" class="station-state is-pending" role="status"><i aria-hidden="true"></i><span id="stationStateLabel">CONNEXION EN COURS…</span></span>
         </div>
-        <div class="scanner-title" id="scannerTitle">Scannez le QR employé</div>
-        <p class="scanner-hint" id="scannerHint">La validation est automatique.</p>
+        <div id="lastScanCard" class="last-scan is-idle" role="status" aria-live="polite" aria-atomic="true">
+          <div class="last-scan-idle"><div class="scan-visual" aria-hidden="true"><span class="scan-ring"></span><span class="scan-ring scan-ring-2"></span><div class="scan-device"><i class="scan-corner tl"></i><i class="scan-corner tr"></i><i class="scan-corner bl"></i><i class="scan-corner br"></i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg><span class="scan-line"></span></div></div><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>
+            <div class="last-scan-idle-hint">Présentez le QR à la douchette, ou utilisez la reconnaissance faciale ou la saisie manuelle.</div></div>
+        </div>
         <div id="usbReader" class="usb-reader hidden">
           <div id="usbReaderSociety" class="idle-society hidden"></div>
           <div class="usb-icon">▣</div>
@@ -284,11 +552,18 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         </div>
         <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
-        <div class="action-row">
-          <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">⌨ SAISIE MANUELLE</button>
-          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ UTILISER LA CAMÉRA</button>
-          <button id="generateQrBtn" class="secondary generate-qr-btn">▦ GÉNÉRER UN QR SITE</button>
+        <!-- Modes de pointage : chaque carte déclenche le mécanisme EXISTANT (aucune fonction nouvelle). -->
+        <div class="mode-grid" role="group" aria-label="Modes de pointage">
+          <button id="qrModeBtn" type="button" class="mode-card active" aria-pressed="true" onclick="selectQrMode()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span><b>QR Code</b><small>Présentez votre badge</small><i class="mode-dot" aria-hidden="true"></i></button>
+          <button id="faceModeBtn" type="button" class="mode-card" onclick="showPointerSection('facial')"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="10" r="2.6"/><path d="M7.6 17c.8-2.8 8-2.8 8.8 0"/></svg></span><b>Reconnaissance faciale</b><small>Détection automatique</small></button>
+          <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code employé</small></button>
         </div>
+        <div class="action-row">
+          <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
+          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ UTILISER LA CAMÉRA</button>
+          <button id="generateQrBtn" class="secondary generate-qr-btn ptr-legacy" tabindex="-1" aria-hidden="true">▦ GÉNÉRER UN QR SITE</button>
+        </div>
+        <div class="station-foot"><i class="dot" aria-hidden="true"></i><p class="scanner-hint" id="scannerHint">La validation est automatique.</p></div>
         <div id="result" class="result"></div>
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
@@ -308,11 +583,26 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
           </div>
         </div>
       </section>
+      <div class="side-col">
       <aside id="liveFeedCard" class="scanner-card">
-        <div class="scanner-title" style="font-size:16px">🔴 Pointage en direct</div>
-        <p class="scanner-hint">Se met à jour automatiquement</p>
+        <div class="live-head">
+          <div><div class="scanner-title"><i class="live-dot" aria-hidden="true"></i>Pointage en direct</div>
+            <p class="scanner-hint">Derniers mouvements enregistrés sur ce site</p></div>
+          <span id="liveBadge" class="live-badge hidden"><i aria-hidden="true"></i>Actualisation temps réel</span>
+        </div>
         <div id="liveFeedList" class="live-feed-list"></div>
       </aside>
+      <!-- État du système : uniquement des états réellement connus du navigateur (jamais de
+           « base de données » ni de « sécurité » affirmées sans source). -->
+      <section id="systemCard" class="scanner-card system-card" aria-label="État du système">
+        <div class="system-title">État du système</div>
+        <dl class="system-list">
+          <div class="system-item" id="sysReader"><dt>Lecteur QR</dt><dd>—</dd></div>
+          <div class="system-item" id="sysNetwork"><dt>Réseau</dt><dd>—</dd></div>
+          <div class="system-item" id="sysLive"><dt>Temps réel</dt><dd>—</dd></div>
+        </dl>
+      </section>
+      </div>
     </div>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
@@ -484,6 +774,7 @@ function updateConnPill(){
   const label=document.getElementById("connLabel");
   if(label)label.textContent=online?"En ligne":"Hors ligne";
   pill.title=online?"Connecté au réseau":"Hors ligne — le pointage nécessite une connexion";
+  renderSystemState();
 }
 window.addEventListener("online",updateConnPill);
 window.addEventListener("offline",updateConnPill);
@@ -522,6 +813,8 @@ function updateSelectedSiteLabel(){
   const siteName=select.selectedOptions[0]?.textContent||"";
   societyEl.textContent=siteName?"SITE DE POINTAGE : "+siteName.toUpperCase():"";
   societyEl.classList.toggle("hidden",!siteName);
+  const stationSite=document.getElementById("stationSite");
+  if(stationSite)stationSite.textContent=select.value&&siteName?" · Site : "+siteName:"";
 }
 async function changeAttendanceSite(value){
   const nextSiteId=String(value||"");
@@ -601,8 +894,9 @@ async function pollLive(){
     // Session invalide (401) ou droits / site retirés (403) : sans déconnexion pour inactivité,
     // la relève est le contrôle permanent de la session — jamais d'écran figé maintenu ouvert.
     if(response.status===401||response.status===403){logout();return}
-    if(!response.ok)return;
+    if(!response.ok){setLiveState("error");return}
     const data=await response.json();
+    setLiveState("ok");
     serverSummary=data.summary||null;
     const first=liveCursor===null;
     liveCursor=data.latest_event_id||0;liveRefusalCursor=data.latest_refusal_id||0;
@@ -611,7 +905,7 @@ async function pollLive(){
     const events=Array.isArray(data.events)?data.events:[],refusals=Array.isArray(data.refusals)?data.refusals:[];
     if(events.length){loadHistory();showLastScan(events[events.length-1])}
     else if(refusals.length)showLastRefusal(refusals[refusals.length-1]);
-  }catch(e){/* réseau : la pastille de connexion l'indique ; nouvel essai au prochain tour */}
+  }catch(e){setLiveState("error")/* réseau : la pastille de connexion l'indique ; nouvel essai au prochain tour */}
   finally{liveBusy=false}
 }
 function initialsOf(name){return String(name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase()}
@@ -640,13 +934,57 @@ async function fillLastScanPhoto(employee,token){
   img.onerror=()=>{};                                            // jamais d'image cassée : les initiales restent
   img.src=src;
 }
+// Poste V3 — état d'attente : scanner dessiné en CSS (représentation ; le moteur de lecture est inchangé).
+const LAST_SCAN_IDLE_VISUAL='<div class="scan-visual" aria-hidden="true"><span class="scan-ring"></span><span class="scan-ring scan-ring-2"></span><div class="scan-device"><i class="scan-corner tl"></i><i class="scan-corner tr"></i><i class="scan-corner bl"></i><i class="scan-corner br"></i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg><span class="scan-line"></span></div></div>';
+function lastScanIdleHTML(){
+  const hint=cameraMode?"Présentez le QR devant la caméra, ou utilisez la reconnaissance faciale ou la saisie manuelle."
+    :"Présentez le QR à la douchette, ou utilisez la reconnaissance faciale ou la saisie manuelle.";
+  return '<div class="last-scan-idle">'+LAST_SCAN_IDLE_VISUAL+'<div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div><div class="last-scan-idle-hint">'+esc(hint)+'</div></div>';
+}
 function scheduleLastScanIdle(){
   clearTimeout(lastScanTimer);
   lastScanTimer=setTimeout(()=>{
     const card=document.getElementById("lastScanCard");if(!card)return;
     lastScanShownId="";card.className="last-scan is-idle";
-    card.innerHTML='<div class="last-scan-idle"><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div><div class="last-scan-idle-hint">Reconnaissance faciale, QR ou saisie manuelle : la fiche s\'affiche ici automatiquement.</div></div>';
+    card.innerHTML=lastScanIdleHTML();
   },LAST_SCAN_DISPLAY_MS);
+}
+// Poste V3 — ÉTAT DU SYSTÈME : uniquement des faits connus du navigateur (réseau, mode de
+// lecture, dernière relève attendance-live). La douchette USB émule un clavier : sa présence
+// physique n'est pas détectable, on affiche donc « à l'écoute », jamais « connectée ».
+let liveState="pending",liveOkAt=0;
+function setLiveState(state){liveState=state;if(state==="ok")liveOkAt=Date.now();renderSystemState()}
+function setSystemItem(id,text,tone){
+  const item=document.getElementById(id);if(!item)return;
+  const dd=item.querySelector("dd");if(dd&&dd.textContent!==text)dd.textContent=text;
+  if(item.dataset.tone!==tone)item.dataset.tone=tone;
+}
+function renderSystemState(){
+  if(typeof document==="undefined"||!document)return;          // page déjà fermée (fin d'une ouverture caméra asynchrone)
+  const online=navigator.onLine!==false;
+  const restart=document.getElementById("restartBtn");
+  const reader=cameraMode?(scanner?["Caméra active","ok"]:(restart&&!restart.classList.contains("hidden")?["Caméra indisponible","bad"]:["Ouverture de la caméra…","pending"])):["Douchette USB à l'écoute","ok"];
+  setSystemItem("sysReader",reader[0],reader[1]);
+  setSystemItem("sysNetwork",online?"En ligne":"Hors ligne",online?"ok":"bad");
+  const time=liveOkAt?new Date(liveOkAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"";
+  const live=!online?["Suspendu (hors ligne)","bad"]:liveState==="ok"?["Actif · relève "+time,"ok"]:liveState==="error"?["Interrompu · nouvel essai automatique","bad"]:["En attente","pending"];
+  setSystemItem("sysLive",live[0],live[1]);
+  const pill=document.getElementById("stationState"),label=document.getElementById("stationStateLabel");
+  if(pill&&label){
+    const state=!online?["is-bad","HORS LIGNE"]:liveState==="ok"?["is-ok","SYSTÈME OPÉRATIONNEL"]:liveState==="error"?["is-bad","RELÈVE INTERROMPUE"]:["is-pending","CONNEXION EN COURS…"];
+    if(pill.className!=="station-state "+state[0])pill.className="station-state "+state[0];
+    if(label.textContent!==state[1])label.textContent=state[1];
+  }
+  document.getElementById("liveBadge")?.classList.toggle("hidden",!(online&&liveState==="ok"));
+}
+// Cartes de mode : reflet de l'état existant (panneau de saisie manuelle ouvert ou non).
+function syncModeCards(){
+  const manual=isManualPanelOpen();
+  [["qrModeBtn",!manual],["manualModeBtn",manual]].forEach(([id,on])=>{const el=document.getElementById(id);if(el){el.classList.toggle("active",on);el.setAttribute("aria-pressed",String(on))}});
+}
+function selectQrMode(){
+  if(isManualPanelOpen())closeManualPanel();
+  setupScanMode();
 }
 function showLastScan(event){
   const card=document.getElementById("lastScanCard");if(!card||!event)return;
@@ -736,6 +1074,7 @@ async function logout(){
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
     stopLivePolling();
+    liveState="pending";liveOkAt=0;
     Object.values(portraitUrls).forEach(u=>{if(String(u).startsWith("blob:"))try{URL.revokeObjectURL(u)}catch(e){}});
     Object.keys(portraitUrls).forEach(k=>delete portraitUrls[k]);
     localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
@@ -761,6 +1100,7 @@ function setupScanMode(){
     document.getElementById("scannerHint").textContent="Douchette USB active · aucune action à effectuer.";
     document.getElementById("wedgeInput").focus({preventScroll:true});
   }
+  syncModeCards();renderSystemState();
 }
 function enableCameraMode(){
   cameraMode=true;
@@ -770,6 +1110,7 @@ function enableCameraMode(){
   document.getElementById("scannerTitle").textContent="Scannez le QR employé";
   document.getElementById("scannerHint").textContent="Présentez le QR dans le cadre. La validation est automatique.";
   startScanner();
+  syncModeCards();renderSystemState();
 }
 async function startScanner(){
   if(scanner)return;
@@ -789,6 +1130,7 @@ async function startScanner(){
       restart.classList.remove("hidden");
     }
   }
+  renderSystemState();
 }
 async function stopScanner(){
   const active=scanner;scanner=null;
@@ -957,6 +1299,7 @@ function toggleManualPanel(){
     document.getElementById("scannerCard").classList.add("manual-mode");
     resetManualPanel();
     document.getElementById("manualQuery").focus({preventScroll:true});
+    syncModeCards();
   }else{
     closeManualPanel();
   }
@@ -965,6 +1308,7 @@ function closeManualPanel(){
   document.getElementById("manualPanel").classList.add("hidden");
   document.getElementById("scannerCard").classList.remove("manual-mode");
   document.getElementById("manualToggleBtn").textContent="🔤 SAISIE MANUELLE (SANS SMARTPHONE)";
+  syncModeCards();
 }
 function resetManualPanel(){
   manualSelected=null;manualResults=[];

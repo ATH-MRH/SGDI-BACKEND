@@ -292,9 +292,9 @@ print(a.id, a2.id, bb.id, emps[0].id, emps[1].id)
       const s = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
         card: document.querySelector("#lastScanCard").getBoundingClientRect().width, facial: !!document.querySelector("#faceNav"),
         counters: [...document.querySelectorAll(".presence-summary button")].map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.width)]; }) }));
-      // 4 compteurs visibles, sans débordement ; alignés sur une ligne (≥ 768 px) ou une grille 2×2.
+      // 4 compteurs visibles, sans débordement ; alignés sur une ligne (≥ 960 px, poste V3) ou une grille 2×2.
       const rows = new Set(s.counters.map(([top]) => top)).size;
-      assert.deepStrictEqual([s.overflow, s.card > 0, s.facial, s.counters.length, s.counters.every(([, w]) => w > 0), width >= 768 ? rows === 1 : rows <= 2],
+      assert.deepStrictEqual([s.overflow, s.card > 0, s.facial, s.counters.length, s.counters.every(([, w]) => w > 0), width >= 960 ? rows === 1 : rows <= 2],
         [false, true, true, 4, true, true], `${width}px ${JSON.stringify(s)}`);
     }
     // Poste de sécurité permanent : 31 s sans aucun geste, puis F5 — toujours connecté.
