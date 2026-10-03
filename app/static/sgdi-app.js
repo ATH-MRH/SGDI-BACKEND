@@ -15853,6 +15853,8 @@ function sgdiMapLibreMarkerHTML(site){
 function initSitesDashboardMap(){
   const el=document.getElementById("sites-map-frame");
   if(!el||el.dataset.sgdiMapReady==="1")return;
+  // OPS → Sites (Command Center) : même carte MapLibre/OSM, rendu sombre et marqueurs par statut.
+  if(el.closest(".ops-sites-cc")&&typeof opsSitesCcInitMap==="function"){opsSitesCcInitMap(el);return}
   el.dataset.sgdiMapReady="1";
   if(window.__sgdiSitesDashboardMap&&typeof window.__sgdiSitesDashboardMap.remove==="function"){
     try{window.__sgdiSitesDashboardMap.remove()}catch(_){}

@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startAtlas, CHROME, puppeteer, SOCIETY } = require('./helpers/atlas-chrome');
+const { startAtlas, CHROME, puppeteer } = require('./helpers/atlas-chrome');
 
 const WIDTHS = [1440, 1280, 1024, 768, 430, 390];
 const PREFIX = process.env.ATLAS_KPI_E2E_PREFIX || '';

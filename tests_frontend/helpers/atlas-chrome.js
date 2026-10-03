@@ -99,6 +99,14 @@ async function startAtlas(t, { port, artifacts }) {
       role, access_level: 'H3', authorized_modules: modules, authorized_societies: [SOCIETY], authorized_sites: sites,
       authorized_structures: [], authorized_actions: actions, global_society_access: false, password: PASSWORD, validation_password: PASSWORD } });
     assert.equal(created.status, 200, JSON.stringify(created));
+    // Le cache serveur des compteurs (120 s) a la même clé avec ou sans paramètre `society` pour un
+    // utilisateur mono-société : selon l'ordre des requêtes du shell, la réponse « sans société » peut
+    // être resservie et le bandeau KPI ne s'affiche alors pas (comportement existant, hors périmètre).
+    // On amorce donc ce cache avec la requête ciblée, pour un bandeau déterministe pendant le test.
+    const authenticated = await api('/auth/login', { method: 'POST', body: { username, password: PASSWORD } });
+    assert.equal(authenticated.status, 200, JSON.stringify(authenticated));
+    const stats = await api('/ui/sidebar-stats?society=' + encodeURIComponent(SOCIETY), { token: authenticated.data.access_token });
+    assert.equal(stats.data?.scope?.active_society, SOCIETY, JSON.stringify(stats).slice(0, 300));
   }
   browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', userDataDir: path.join(tmp, 'chrome'),
     args: ['--no-first-run', '--no-default-browser-check', '--disable-background-networking', `--host-resolver-rules=${HOSTS.map(host => `MAP ${host}.irongs.com 127.0.0.1:${port}`).join(', ')}`] });

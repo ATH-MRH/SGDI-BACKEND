@@ -107,6 +107,9 @@ async function renderSitesServer(view){
     window.__SGDI_SITE_SITUATION_DATA=situationData||null;
     window.__SGDI_SITE_SITUATION_BY_SITE=situationBySite;
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
+    // Contexte OPS : même données, présentation Command Center (sites-command-center.js).
+    // La pagination serveur n'est utile que si la liste complète n'a pas pu être chargée.
+    if(opsSitesCcEnabled()){renderOpsSitesCommandCenter(view,sites,{situationBySite,pagination:mapRows.length?"":pagination});return}
     const opsReadOnly=isOpsSupervisorReadOnlySession();
     view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1><span class="text-sm text-slate-500">Sites transmis par le Commercial</span></div>
     ${opsSupervisorReadOnlyNoticeHTML()}
@@ -133,7 +136,9 @@ function renderSites(view){
   if(sgdiAuthToken()&&typeof sgdiBackendShouldUse==="function"&&sgdiBackendShouldUse()&&!window.__sgdiSitesLocalFallback&&!window.__sgdiSitesBgRefreshing){
     // Chargement affiché seulement au 1er rendu (écran vide) pour ne pas "flasher" à chaque
     // synchro auto ; sinon on garde l'affichage courant et le serveur le met à jour.
-    if(!view.querySelector(".sites-synth-panel")){
+    if(opsSitesCcEnabled()){
+      if(!view.querySelector(".ops-sites-cc"))view.innerHTML=opsSitesCcLoadingHTML();
+    }else if(!view.querySelector(".sites-synth-panel")){
       view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1></div><div class="card p-10 text-center text-slate-500">Chargement des chiffres depuis le serveur…</div>`;
     }
     window.__sgdiSitesBgRefreshing=true;
@@ -143,7 +148,9 @@ function renderSites(view){
   const soc=sitesPageSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
   const opsReadOnly=isOpsSupervisorReadOnlySession();
-  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1><span class="text-sm text-slate-500">Sites transmis par le Commercial</span></div>
+  // Contexte OPS : repli local dans la même présentation Command Center (Map vide = calcul local).
+  if(opsSitesCcEnabled())renderOpsSitesCommandCenter(view,sites,{situationBySite:new Map()});
+  else view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1><span class="text-sm text-slate-500">Sites transmis par le Commercial</span></div>
   ${opsSupervisorReadOnlyNoticeHTML()}
   ${sitesSocieteSelectorHTML(sites)}
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
@@ -1230,7 +1237,7 @@ function openSiteRotationPlanningWindow(siteId){
   </div>`);
 }
 
-SGDIModules.registerModule({key: "sites", routes: ["sites"], dependencies: ["sites-1"], init: function(){}, destroy: sitesModuleDestroy});
+SGDIModules.registerModule({key: "sites", routes: ["sites"], dependencies: ["sites-1","sites-command-center"], init: function(){}, destroy: sitesModuleDestroy});
 
 const sitesModuleTimeouts=new Set();
 function sitesModuleTimeout(callback,delay){
@@ -1243,4 +1250,5 @@ function sitesModuleDestroy(){
   document.removeEventListener("click",closeSuperviseurDemandeMenu);closeSuperviseurDemandeMenu();
   for(const key of ["__sgdiSitesDashboardMap","__sgdiInlineSitePositionMap","__sgdiSitePositionMap"]){try{window[key]?.remove()}catch(e){console.warn("Nettoyage carte Sites",e)}finally{window[key]=null}}
   window.__sgdiSitesDashboardMarkers=[];window.__sgdiInlineSitePositionMarker=null;window.__sgdiSitePositionMarker=null;
+  window.__opsSitesCcModel=null;window.__opsSitesCcSignature=null;
 }
