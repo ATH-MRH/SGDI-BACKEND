@@ -549,7 +549,7 @@ def test_migration_is_additive_reversible_and_enforces_one_active_session(tmp_pa
     con = sqlite3.connect(database)
     tables = lambda: {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}  # noqa: E731
     existing = tables()
-    up = alembic("upgrade", "head")
+    up = alembic("upgrade", "20261003_0001")
     assert up.returncode == 0, up.stderr
     assert tables() - existing == {"biometric_remote_capture_sessions"}
     assert con.execute("SELECT COUNT(*) FROM biometric_remote_capture_sessions").fetchone()[0] == 0
@@ -573,7 +573,7 @@ def test_migration_is_additive_reversible_and_enforces_one_active_session(tmp_pa
     con = sqlite3.connect(database)
     assert {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")} == existing
     con.close()
-    assert alembic("upgrade", "head").returncode == 0
+    assert alembic("upgrade", "20261003_0001").returncode == 0
 
 
 # ── Correctif C1 : cadrage strict, carré du cercle uniquement, contrôle sans stockage ─────

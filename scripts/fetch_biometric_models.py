@@ -28,11 +28,21 @@ MODELS = {
         "0cbe5caec95c31de9d2ef845cb85407d76aecd1b6a2c0e343f7d35306bfbccb8"),
 }
 
+# Modèles NON biométriques, téléchargés au même endroit et de la même manière (commit figé,
+# SHA-256 vérifié). PP-HumanSeg — segmentation de la personne (Apache-2.0, PaddleSeg, OpenCV
+# Zoo) : sert UNIQUEMENT au portrait de présentation de la fiche DRH (fond blanc), jamais au
+# moteur facial ni à une référence biométrique (app/modules/drh/portrait.py).
+PORTRAIT_MODELS = {
+    "human_segmentation_pphumanseg_2023mar.onnx": (
+        f"{ZOO}/human_segmentation_pphumanseg/human_segmentation_pphumanseg_2023mar.onnx",
+        "552d8a984054e59b5d773d24b9b12022b22046ceb2bbc4c9aaeaceb36a9ddf24"),
+}
+
 
 def main(target: str) -> None:
     out = Path(target)
     out.mkdir(parents=True, exist_ok=True)
-    for name, (url, expected) in MODELS.items():
+    for name, (url, expected) in {**MODELS, **PORTRAIT_MODELS}.items():
         with urllib.request.urlopen(url, timeout=180) as response:
             data = response.read()
         digest = hashlib.sha256(data).hexdigest()

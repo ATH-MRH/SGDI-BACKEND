@@ -860,3 +860,32 @@ Tests : `tests/test_drh_remote_photo_capture.py`, `tests/test_remote_capture_fra
 `tests_frontend/employee-remote-photo.test.js`, `tests_frontend/pointeur-borne-remote-capture.test.js`,
 `tests_frontend/borne-guide-geometry.test.js`, `npm run test:borne-guide-crop` (vrai Chrome, au
 pixel), `npm run test:drh-remote-photo-e2e`.
+
+## 17. Portrait de présentation DRH (Fiche de position) — hors biométrie
+
+L'en-tête de la Fiche de position affiche un **portrait dérivé** de type photo d'identité
+(visage agrandi et centré, tête entière, haut des épaules, fond **#FFFFFF** réel, format 3:4,
+300×400 affiché en 120×160). La **photo source** n'est jamais modifiée : c'est elle qu'utilisent
+la biométrie (LOT B), l'audit et le bouton « Aperçu ».
+
+- Traitement (`app/modules/drh/portrait.py`) : détection du visage (YuNet, sur une copie
+  ramenée à 640 px) → cadre 3:4 autour de la tête (tête ≈ 66 % de la hauteur, 5 % de marge
+  au-dessus ; resserré jusqu'à 80 % si la photo s'arrête sous les épaules) → segmentation de la
+  personne (PP-HumanSeg, OpenCV Zoo, Apache-2.0, moteur DNN « classique » d'OpenCV : le nouveau
+  moteur d'OpenCV 5 décale le masque de ce modèle) → contours affinés (filtre guidé) →
+  composition sur blanc. Le portrait n'est jamais transmis au moteur facial.
+- Modèle : `human_segmentation_pphumanseg_2023mar.onnx`, téléchargé à la construction de
+  l'image comme les modèles biométriques (même commit figé, SHA-256 vérifié), mais dans une
+  liste séparée (`PORTRAIT_MODELS`).
+- Cache : table `employee_portraits` (migration additive `20261004_0001`), une ligne par
+  employé liée à l'empreinte SHA-256 de la photo source ; recalculé quand la photo change,
+  jamais à chaque affichage (verrou par employé, requêtes partagées côté navigateur).
+- Accès : `GET /api/drh/employees/{id}/portrait`, authentifié, périmètre de la fiche ; jamais
+  d'URL publique ni de fichier dans `/uploads`.
+- Replis : modèle de segmentation absent ⇒ portrait recadré sans détourage (`CROPPED`) ; aucun
+  visage ou OpenCV absent ⇒ cadrage centré (`CENTERED`) ; route indisponible ou lente (> 4 s)
+  ⇒ la photo source s'affiche. La fiche n'est jamais bloquée.
+
+Tests : `tests/test_drh_employee_portrait.py` (dont 10 photos réelles avec les vrais modèles),
+`tests_frontend/employee-portrait.test.js`, `npm run test:drh-employee-portrait-e2e` (contrôle
+visuel réel dans Chrome, 7 largeurs d'écran).

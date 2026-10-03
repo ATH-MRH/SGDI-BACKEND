@@ -9075,6 +9075,7 @@ function openAgentPhotoUpload(agentId){
     reader.onload=e=>{
       const src=e.target.result;
       const zone=document.getElementById("rh-erp-photo-"+agentId);
+      if(zone)employeePortraitShowSource(zone);
       if(zone)zone.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:cover;display:block;"><div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
       const hidden=document.querySelector("#agent-form [name='photo']");
       if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
@@ -9143,6 +9144,55 @@ function employeePhotoPanelHTML(a,photoEditable){
     </div>
   </div>`;
 }
+/* ── Portrait de présentation (Fiche de position) ─────────────────────────────────────────────
+ * L'en-tête affiche un PORTRAIT DÉRIVÉ type photo d'identité (visage agrandi et centré, fond
+ * blanc), calculé une fois par le serveur et servi par une route authentifiée. La PHOTO SOURCE
+ * n'est jamais modifiée : c'est elle que montre « Aperçu » et qu'utilise la biométrie. Photo
+ * pas encore enregistrée, portrait indisponible ou trop lent : la photo source s'affiche. */
+const EMPLOYEE_PORTRAIT_TIMEOUT_MS=4000;
+// Un seul chargement par photo pour toute la session : les rendus successifs de la fiche
+// réutilisent le même portrait (aucune requête ni aucun calcul répétés).
+const employeePortraitCache={};
+function employeePortraitFetch(a){
+  const key=String(a.backendId)+"|"+String(a.photo);
+  if(!employeePortraitCache[key]){
+    employeePortraitCache[key]=fetch(sgdiApiUrl("/drh/employees/"+encodeURIComponent(a.backendId)+"/portrait",false),{cache:"no-store",headers:sgdiAuthHeaders()})
+      .then(async(res)=>{if(!res.ok)throw new Error("portrait "+res.status);return {url:URL.createObjectURL(await res.blob()),method:res.headers.get("x-portrait-method")||""}})
+      .catch((e)=>{delete employeePortraitCache[key];throw e});
+  }
+  return employeePortraitCache[key];
+}
+function employeePortraitEligible(a){
+  const photo=String(a?.photo||"");
+  return Boolean(a&&a.backendId&&photo&&!/^data:/i.test(photo));
+}
+function employeePortraitShowSource(zone){
+  if(!zone)return;
+  zone.classList.remove("is-portrait","is-portrait-pending");
+  zone.classList.add("is-portrait-fallback");
+  delete zone.dataset.portrait;
+}
+async function loadEmployeePortrait(a){
+  const zone=a&&document.getElementById("rh-erp-photo-"+a.id);
+  if(!zone||!a.photo)return null;
+  if(!employeePortraitEligible(a)||!sgdiAuthToken()){employeePortraitShowSource(zone);return null}
+  const photo=a.photo,img=zone.querySelector("img.rh-portrait-img");
+  const timer=setTimeout(()=>{if(zone.classList.contains("is-portrait-pending"))employeePortraitShowSource(zone)},EMPLOYEE_PORTRAIT_TIMEOUT_MS);
+  try{
+    const loaded=await employeePortraitFetch(a);
+    // La fiche a changé entre-temps (autre employé, nouvelle photo) : on n'applique rien.
+    if(!img||!img.isConnected||a.photo!==photo||!zone.isConnected)return null;
+    img.src=loaded.url;
+    zone.classList.remove("is-portrait-pending","is-portrait-fallback");
+    zone.classList.add("is-portrait");
+    zone.dataset.portrait=loaded.method;
+    return loaded.method;
+  }catch(e){
+    if(zone.isConnected&&a.photo===photo)employeePortraitShowSource(zone);
+    return null;
+  }finally{clearTimeout(timer)}
+}
+window.loadEmployeePortrait=loadEmployeePortrait;
 function employeeCurrentPhotoSrc(agentId){
   const hidden=document.querySelector("#agent-form [name='photo']");
   if(hidden&&hidden.value)return hidden.value;
@@ -9165,6 +9215,7 @@ function applyAgentPhotoToForm(agentId,src){
     img.src=src;img.alt="";img.style.cssText="width:100%;height:100%;object-fit:cover;display:block;";
     const overlay=zone.querySelector(".photo-cam-overlay");
     zone.innerHTML="";zone.appendChild(img);if(overlay)zone.appendChild(overlay);
+    employeePortraitShowSource(zone);
   }
   const hidden=document.querySelector("#agent-form [name='photo']");
   if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
@@ -13349,9 +13400,9 @@ function renderAgentForm(view,id){
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
-      <div class="rh-erp-photo${photoEditable?"":" is-locked"}" id="rh-erp-photo-${escapeHTML(a.id)}" ${photoEditable?`onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')"`:""} title="${photoEditable?`Cliquer pour ${a.photo?"modifier":"ajouter"} la photo`:"Photo verrouillée — déverrouillez la fiche pour la modifier"}">
+      <div class="rh-erp-photo${photoEditable?"":" is-locked"}${a.photo?" has-photo"+(employeePortraitEligible(a)?" is-portrait-pending":""):""}" id="rh-erp-photo-${escapeHTML(a.id)}" ${photoEditable?`onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')"`:""} title="${photoEditable?`Cliquer pour ${a.photo?"modifier":"ajouter"} la photo`:"Photo verrouillée — déverrouillez la fiche pour la modifier"}">
         ${a.photo
-          ?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`
+          ?`<img class="rh-portrait-img" src="${a.photo}" alt="Photo de ${escapeHTML(((a.prenom||"")+" "+(a.nom||"")).trim())}">`
           :`<div style="display:flex;flex-direction:column;align-items:center;gap:6px;color:#94a3b8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" width="34" height="34"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span style="font-size:10px;font-weight:700;letter-spacing:.04em">PHOTO</span></div>`}
         ${photoEditable?`<div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`:""}
       </div>
@@ -13469,6 +13520,7 @@ function renderAgentForm(view,id){
   setTimeout(()=>{bindAgentDuplicateFieldSync();bindAgentFormDirtyState()},0);
   loadEmployeeSituationAlerts(a);
   loadEmployeeFacialReference(a.id);
+  loadEmployeePortrait(a);
 }
 // DOSSIER EMPLOYÉ 360° — "Situation à traiter" : consomme EXCLUSIVEMENT le moteur
 // d'alertes déterministe existant (Lot 0.6-A, GET /api/alerts?employee_id=…).

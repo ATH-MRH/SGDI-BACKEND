@@ -533,6 +533,25 @@ def remote_photo_decide(session_id: str, payload: dict, db: Session = Depends(ge
     return remote_capture.decide(db, session_id=session_id, action=str((payload or {}).get("action") or "") if isinstance(payload, dict) else "", user=user)
 
 
+# ── Portrait de présentation (Fiche de position) ─────────────────────────────────────────────
+# Dérivé de la photo de la fiche (visage agrandi, fond blanc) : même périmètre que la fiche,
+# route authentifiée (jamais d'URL publique), aucune écriture de la photo source ni des tables
+# biométriques. Le bouton « Aperçu » continue d'afficher la photo source.
+@router.get("/employees/{employee_id}/portrait")
+def employee_portrait(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
+    from app.modules.drh import portrait
+
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    try:
+        result = portrait.portrait_for(db, employee)
+    except ValueError:
+        result = None
+    if result is None:
+        raise HTTPException(status_code=404, detail="Aucune photo exploitable pour le portrait")
+    return Response(content=result.image, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Portrait-Method": result.method})
+
+
 @router.put("/employees/{employee_id}", response_model=EmployeeOut)
 def update_employee(employee_id: int, payload: EmployeeUpdate, background_tasks: BackgroundTasks,
                     photo_source: str | None = Query(None, max_length=30),

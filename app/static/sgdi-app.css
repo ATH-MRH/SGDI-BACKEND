@@ -2010,8 +2010,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .rh-erp-status-tab.is-active{background:#bbf7d0;color:#166534;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 50%,calc(100% - 12px) 100%,0 100%,12px 50%)}
   .rh-erp-status-tab.is-future.is-active{background:#e0f2fe;color:#075985}
   .rh-erp-status-tab.is-old.is-active{background:#e2e8f0;color:#334155}
-  .rh-erp-profile-card{background:#fff;border:1px solid #d7e3f3;border-radius:6px;padding:14px;margin-bottom:12px;display:grid;grid-template-columns:86px minmax(0,1fr) minmax(280px,.85fr);gap:14px;align-items:stretch}
-  .rh-erp-photo{position:relative;width:120px;height:150px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;transition:border-color .15s,box-shadow .15s}
+  .rh-erp-profile-card{background:#fff;border:1px solid #d7e3f3;border-radius:6px;padding:14px;margin-bottom:12px;display:grid;grid-template-columns:120px minmax(0,1fr) minmax(280px,.85fr);gap:14px;align-items:stretch}
+  .rh-erp-photo{position:relative;width:120px;height:160px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;transition:border-color .15s,box-shadow .15s}
   .rh-erp-photo:hover{border-color:#2563eb;border-style:solid;box-shadow:0 0 0 4px rgba(37,99,235,.08)}
   .rh-erp-photo:hover .photo-cam-overlay{opacity:1}
   .rh-erp-photo.is-locked{cursor:default}
@@ -2138,7 +2138,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .rh-op-box .rh-input-invalid,.rh-panel-fieldset .rh-input-invalid{border-color:#dc2626!important;background:#fffafa!important;box-shadow:0 0 0 3px rgba(220,38,38,.08)!important}.rh-field-error{grid-column:2;display:block;margin-top:-6px;color:#c02626;font-size:10px;font-weight:700;line-height:1.2}
   @media(max-width:900px){
     .rh-erp-profile-card{grid-template-columns:1fr}
-    .rh-erp-photo{width:120px;height:150px}
+    .rh-erp-photo{width:120px;height:160px}
     .rh-erp-fields{grid-template-columns:1fr}
     .rh-erp-side{border-left:0;border-top:1px solid #e2eaf5;padding-left:0;padding-top:12px}
     .rh-erp-field{grid-template-columns:92px minmax(0,1fr)}
@@ -10642,3 +10642,10 @@ html,#view,#sidebar-nav{scrollbar-gutter:stable}
 .photo-remote-checks{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:13px;font-weight:700;color:#166534}
 .photo-remote-msg{margin-top:8px;font-size:13px;color:#475569;min-height:18px}
 .photo-remote-msg.is-ready{color:#166534;font-weight:700}.photo-remote-msg.is-closed{color:#b91c1c;font-weight:700}
+/* Fiche de position — portrait de présentation (photo d'identité 3:4, fond blanc). La photo
+   source reste celle de l'« Aperçu ». En attente du portrait : cadre blanc (pas de clignotement). */
+.rh-erp-photo.has-photo{background:#fff;border-style:solid;border-color:#dbe3ee}
+.rh-erp-photo.has-photo img.rh-portrait-img{width:100%;height:100%;display:block;object-fit:cover;object-position:50% 22%;background:#fff}
+.rh-erp-photo.is-portrait img.rh-portrait-img{object-position:50% 50%}
+.rh-erp-photo.is-portrait-pending img.rh-portrait-img{visibility:hidden}
+body.sgdi-view-mode #view .rh-erp-photo.has-photo{opacity:1}

@@ -39,6 +39,7 @@ from app.modules.materiel import models as _materiel_models  # noqa: F401
 from app.modules.ops import models as _ops_models  # noqa: F401
 from app.modules.attendance import models as _attendance_models  # noqa: F401
 from app.modules.biometrics import models as _biometrics_models  # noqa: F401
+from app.modules.drh import portrait_models as _drh_portrait_models  # noqa: F401  (portrait de présentation, migration 20261004_0001)
 from app.modules.client_portal import models as _client_portal_models  # noqa: F401
 from app.modules.irongs import service as irongs_service
 from app.modules.drh import service as drh_service
