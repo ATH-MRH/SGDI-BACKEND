@@ -40,6 +40,12 @@
   --atlas-header-height: 56px;
   --atlas-font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
+/* Commercial's light navigation palette is confined to its shared-shell adapter. */
+body.atlas-ui .sgdi-commercial-shell {
+  --atlas-commercial-sidebar-bg: #f5faff;
+  --atlas-commercial-sidebar-hover: #edf5ff;
+  --atlas-commercial-sidebar-overlay: #172b4d33;
+}
 /* These existing frontends already offer a dark theme. Preserve that preference,
    while the default/light reference remains the white floating ATLAS shell. */
 @media screen and (prefers-color-scheme: dark) {

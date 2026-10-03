@@ -6254,8 +6254,222 @@ function applyLanguagePreference(root){
     el.textContent=mode==='ar'?sgdiTranslateText(original,translations):(original==='GRH'?original:sgdiTitleCaseText(original));
     if(el.parentElement?.hasAttribute('aria-label'))el.parentElement.setAttribute('aria-label',el.textContent);
   });
+  scope.querySelectorAll('[data-commercial-label]').forEach(el=>{
+    el.textContent=commercialSidebarLocalizedLabel(el.dataset.commercialLabel);
+    el.parentElement?.setAttribute('aria-label',el.textContent);
+  });
   scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
+
+/* Commercial navigation is a presentation of the existing menu and access map.
+   It deliberately owns no routes, counters, company scope or business actions. */
+function commercialSidebarIcon(name){
+  const paths={
+    collapse:'<path d="m14 6-6 6 6 6m6-12-6 6 6 6"/>',
+    close:'<path d="m6 6 12 12M18 6 6 18"/>',
+    back:'<path d="M20 12H4m6-6-6 6 6 6"/>',
+    logout:'<path d="M10 4H5v16h5m4-13 5 5-5 5m-5-5h10"/>',
+    chevron:'<path d="m9 5 7 7-7 7"/>',
+    more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]||paths.more}</svg>`;
+}
+function commercialSidebarIdentityHTML(){
+  const name=String(session.nom||session.username||"Utilisateur");
+  const parts=name.trim().split(/\s+/);
+  const initials=(parts.length>1?parts.slice(0,2).map(part=>part[0]).join(""):name.replace(/[^\p{L}]/gu,"").slice(0,2)).toUpperCase();
+  const role=typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role;
+  return `<div class="commercial-sidebar-brand">${atlasBrandHTML()}<button type="button" class="commercial-sidebar-collapse" onclick="toggleSgdiSidebar()" aria-controls="commercial-sidebar" aria-label="Réduire le menu latéral">${commercialSidebarIcon("collapse")}</button><button type="button" class="commercial-sidebar-close" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu latéral">${commercialSidebarIcon("close")}</button></div>
+    <div class="commercial-sidebar-user" data-no-lang="1" aria-label="Compte connecté"><span class="commercial-sidebar-avatar" aria-hidden="true">${escapeHTML(initials)}</span><div class="commercial-sidebar-identity"><div class="sidebar-current-user-name">${escapeHTML(name)}</div><div class="sidebar-user-role">${escapeHTML(role||"")}</div></div></div>`;
+}
+function commercialSidebarFooterHTML(){
+  return `<div class="commercial-sidebar-footer"><div id="commercial-sidebar-settings"></div><div id="sidebar-back-slot"></div><button type="button" class="commercial-sidebar-logout" onclick="logout()" aria-label="Déconnexion"><span class="nav-ico" aria-hidden="true">${commercialSidebarIcon("logout")}</span><span class="nav-label" data-no-lang="1" data-commercial-label="Déconnexion">Déconnexion</span></button><div class="commercial-sidebar-signature">IRON GLOBAL</div></div>`;
+}
+function commercialSidebarLabel(item){
+  const labels={"commercial/clients":"Clients","commercial/visites":"Visites","commercial/catalogue":"Catalogue prestations"};
+  return item.custom?item.label:(labels[item.route]||sgdiTitleCaseText(item.label));
+}
+function commercialSidebarLocalizedLabel(label){
+  if(sgdiLangMode()!=="ar")return label;
+  const arabic={"Tableau de bord":"لوحة القيادة","Clients":"الزبائن","Commercial":"التجارة","Prospects":"العملاء المحتملون","Opportunités":"الفرص","Calendrier":"التقويم","Devis":"عروض الأسعار","Visites":"الزيارات","Catalogue":"الكتالوج","Catalogue prestations":"كتالوج الخدمات","Tarification":"التسعير","Statistiques":"الإحصائيات","Autres accès":"وصول إضافي","Agenda":"المفكرة","Demandes structure":"طلبات الهيكل","Paramètres":"الإعدادات","Déconnexion":"تسجيل الخروج","Retour":"العودة"};
+  return arabic[label]||sgdiTranslateText(label);
+}
+// Normal module sessions do not hydrate Administration's droitsAcces snapshot.
+// Read the existing role-filtered endpoint for this navigation only; never persist
+// or replace permissions. A session-bound cache also prevents a stale login from
+// publishing its navigation after logout or account switching.
+let commercialSidebarAccessState=null;
+function commercialSidebarCurrentAccess(){
+  const state=commercialSidebarAccessState;
+  return state&&session&&state.token===sgdiAuthToken()&&state.generation===sgdiSessionGeneration&&state.role===session.role?state:null;
+}
+function ensureCommercialSidebarAccessRules(options={}){
+  if(!session?.permissionsFromServer||!sgdiAuthToken())return true;
+  const previous=commercialSidebarCurrentAccess();
+  if(previous&&(previous.status!=="error"||!options.retry))return previous.status==="ready";
+  const state={token:sgdiAuthToken(),generation:sgdiSessionGeneration,role:session.role,status:"loading",rules:{},pending:null};
+  commercialSidebarAccessState=state;
+  state.pending=Promise.resolve().then(()=>SGDI.auth.accessRules()).then(rows=>{
+    if(commercialSidebarCurrentAccess()!==state)return false;
+    if(!Array.isArray(rows))throw new Error("Invalid navigation access response");
+    state.rules=Object.fromEntries(rows.map(rule=>[(rule.module_key||rule.moduleKey)+":"+rule.role,!!rule.allowed]));
+    state.status="ready";
+    return true;
+  }).catch(()=>{
+    if(commercialSidebarCurrentAccess()===state)state.status="error";
+    return false;
+  }).finally(()=>{
+    if(commercialSidebarCurrentAccess()===state&&session?.transverse==="commercial"&&document.querySelector(".sgdi-commercial-shell"))renderSidebar();
+  });
+  return false;
+}
+function commercialSidebarItemAllowed(item){
+  const route=String(item.route||""),root=route.split("/")[0];
+  if(["admin","parametres"].includes(root)&&!canAccessStructureKey("admin"))return false;
+  const access=commercialSidebarCurrentAccess();
+  const map=defaultAccessMap(),rights=access?.status==="ready"?access.rules:(db?.droitsAcces||{});
+  const roles=[session?.role,adminAccessBaseRole(session?.role)];
+  const hasExact=!!map[route]||roles.some(role=>Object.prototype.hasOwnProperty.call(rights,route+":"+role));
+  const key=hasExact?route:(map[root]?root:"commercial");
+  if(session?.permissionsFromServer){
+    if(access&&access.status!=="ready")return false;
+    if(!canAccessStructureKey("commercial"))return false;
+    const level=accessLevelRecord(session.niveau);
+    if(level&&!levelAllowsModule(level,key))return false;
+    for(const role of roles){if(rights[key+":"+role]!==undefined)return !!rights[key+":"+role];}
+    // Backend-authorized Commercial roles are not necessarily legacy rh/ops roles.
+    // No destination is added here: rows still come from the existing menu source.
+    return true;
+  }
+  return canAccess(key);
+}
+function commercialSidebarNavigationHTML(items,itemHTML,navIcon){
+  const path=(location.hash||"#/commercial/dashboard").slice(2);
+  const rows=items.filter(commercialSidebarItemAllowed);
+  const previous=new Map([...document.querySelectorAll(".sgdi-commercial-shell .commercial-nav-group")].map(group=>[group.dataset.commercialGroup,group.open]));
+  const used=new Set();
+  const blocks=[];
+  const settings=rows.filter(item=>/^(?:admin|parametres)(?:\/|$)/.test(item.route));
+  settings.forEach(item=>used.add(item));
+  function addRoute(route){
+    const item=rows.find(row=>row.route===route);if(!item)return;
+    used.add(item);blocks.push({rows:[item],html:itemHTML(item)});
+  }
+  function group(key,label,children,icon){
+    if(!children.length)return "";
+    const active=children.some(item=>sidebarRouteActive(path,item.route)||item.aliases?.some(route=>sidebarRouteActive(path,route)));
+    const open=active||previous.get(key)||false;
+    return `<details class="commercial-nav-group${active?" has-active":""}" data-commercial-group="${key}"${open?" open":""}><summary class="commercial-group-toggle" aria-label="${escapeHTML(label)}" aria-expanded="${open}" aria-controls="commercial-submenu-${key}"><span class="nav-ico" aria-hidden="true">${icon}</span><span class="nav-label" data-no-lang="1" data-commercial-label="${escapeHTML(label)}">${escapeHTML(label)}</span><span class="commercial-chevron">${commercialSidebarIcon("chevron")}</span></summary><div class="commercial-submenu" id="commercial-submenu-${key}">${children.map(itemHTML).join("")}</div></details>`;
+  }
+  function addGroup(key,label,routes,iconRoute){
+    const children=rows.filter(item=>routes.includes(item.route));
+    children.forEach(item=>used.add(item));
+    if(children.length)blocks.push({rows:children,html:group(key,label,children,navIcon({route:iconRoute}))});
+  }
+  addRoute("commercial/dashboard");
+  addRoute("commercial/clients");
+  addGroup("commercial","Commercial",["commercial/prospects","commercial/opportunites"],"commercial/stats");
+  addRoute("commercial/calendrier");
+  addRoute("commercial/devis");
+  addRoute("commercial/visites");
+  addGroup("catalogue","Catalogue",["commercial/catalogue","commercial/tarifs"],"commercial/catalogue");
+  addRoute("commercial/stats");
+  // Existing administrator-defined menu order still takes precedence.
+  if(sidebarOrderForModule("commercial").length)blocks.sort((a,b)=>Math.min(...a.rows.map(row=>rows.indexOf(row)))-Math.min(...b.rows.map(row=>rows.indexOf(row))));
+  const navigation=blocks.map(block=>(block.rows.some(item=>item.route==="commercial/stats")?'<div class="commercial-nav-divider" role="separator"></div>':"")+block.html).join("");
+  const extras=rows.filter(item=>!used.has(item));
+  return {navigation:navigation+(extras.length?`<div class="commercial-nav-extras">${group("more","Autres accès",extras,commercialSidebarIcon("more"))}</div>`:""),settings:settings.map(itemHTML).join("")};
+}
+let commercialSidebarReturnFocus=null;
+function syncCommercialSidebarState(restoreFocus=false){
+  const shell=document.querySelector(".sgdi-commercial-shell");
+  hideCommercialSidebarTooltip();
+  if(!shell)return;
+  const mobile=sgdiIsMobileViewport(),open=mobile&&sgdiMobileSidebarOpen();
+  const collapsed=sgdiSidebarCollapsed();
+  shell.classList.toggle("sgdi-sidebar-collapsed",collapsed);
+  shell.classList.toggle("sgdi-mobile-sidebar-open",open);
+  const sidebar=shell.querySelector(".sidebar");
+  sidebar.inert=mobile&&!open;
+  if(open){sidebar.setAttribute("role","dialog");sidebar.setAttribute("aria-modal","true");}
+  else {sidebar.removeAttribute("role");sidebar.removeAttribute("aria-modal");}
+  shell.querySelectorAll("main,.sgdi-topbar").forEach(node=>{node.inert=open;});
+  shell.querySelectorAll(".sgdi-sidebar-toggle,.commercial-sidebar-collapse").forEach(button=>{
+    const title=mobile?(open?"Fermer le menu latéral":"Ouvrir le menu latéral"):(collapsed?"Développer le menu latéral":"Réduire le menu latéral");
+    button.setAttribute("aria-label",title);button.title=title;
+    button.setAttribute("aria-expanded",String(mobile?open:!collapsed));
+    button.setAttribute("aria-controls","commercial-sidebar");
+  });
+  if(!mobile&&document.activeElement?.matches?.(".commercial-sidebar-close"))sidebar.querySelector(".commercial-sidebar-collapse")?.focus({preventScroll:true});
+  if(!mobile&&collapsed&&document.activeElement?.closest?.(".commercial-submenu"))document.activeElement.closest(".commercial-nav-group")?.querySelector("summary")?.focus({preventScroll:true});
+  if(open&&!sidebar.contains(document.activeElement)){
+    if(!commercialSidebarReturnFocus?.isConnected)commercialSidebarReturnFocus=document.activeElement;
+    sidebar.querySelector(".commercial-sidebar-close")?.focus({preventScroll:true});
+  }else if(!open&&(restoreFocus||(mobile&&sidebar.contains(document.activeElement)))){
+    const target=commercialSidebarReturnFocus?.isConnected?commercialSidebarReturnFocus:shell.querySelector(".sgdi-topbar .sgdi-sidebar-toggle");
+    target?.focus({preventScroll:true});commercialSidebarReturnFocus=null;
+  }
+}
+function toggleCommercialSidebar(){
+  if(sgdiIsMobileViewport()){
+    const open=!sgdiMobileSidebarOpen();
+    if(open)commercialSidebarReturnFocus=document.activeElement;
+    try{sessionStorage.setItem("sgdiMobileSidebarOpen",open?"1":"0")}catch(e){}
+    syncCommercialSidebarState(!open);
+  }else{
+    try{localStorage.setItem("sgdiSidebarCollapsed",sgdiSidebarCollapsed()?"0":"1")}catch(e){}
+    syncCommercialSidebarState();
+  }
+}
+function hideCommercialSidebarTooltip(){
+  const tooltip=document.getElementById("commercial-sidebar-tooltip");
+  tooltip?.remove();
+  document.querySelectorAll('[aria-describedby="commercial-sidebar-tooltip"]').forEach(node=>node.removeAttribute("aria-describedby"));
+}
+function showCommercialSidebarTooltip(target){
+  hideCommercialSidebarTooltip();
+  const shell=target?.closest?.(".sgdi-commercial-shell.sgdi-sidebar-collapsed");
+  if(!shell||sgdiIsMobileViewport())return;
+  const control=target.closest('.sidebar [aria-label]');
+  if(!control||control.matches(".sidebar,.commercial-sidebar-user"))return;
+  const tooltip=document.createElement("div");
+  tooltip.id="commercial-sidebar-tooltip";tooltip.className="commercial-sidebar-tooltip";tooltip.setAttribute("role","tooltip");
+  tooltip.textContent=control.getAttribute("aria-label");
+  document.body.appendChild(tooltip);control.setAttribute("aria-describedby",tooltip.id);
+  const rect=control.getBoundingClientRect();
+  tooltip.style.left=Math.min(rect.right+12,window.innerWidth-tooltip.offsetWidth-8)+"px";
+  tooltip.style.top=Math.max(8,Math.min(rect.top+(rect.height-tooltip.offsetHeight)/2,window.innerHeight-tooltip.offsetHeight-8))+"px";
+}
+document.addEventListener("pointerover",event=>showCommercialSidebarTooltip(event.target));
+document.addEventListener("focusin",event=>showCommercialSidebarTooltip(event.target));
+document.addEventListener("pointerout",hideCommercialSidebarTooltip);
+document.addEventListener("focusout",hideCommercialSidebarTooltip);
+document.addEventListener("scroll",hideCommercialSidebarTooltip,true);
+document.addEventListener("click",event=>{
+  const summary=event.target?.closest?.(".sgdi-commercial-shell .commercial-group-toggle");
+  if(summary&&!sgdiIsMobileViewport()&&sgdiSidebarCollapsed()){
+    // Even an already-open group must reveal its children when leaving the rail.
+    event.preventDefault();
+    const group=summary.closest("details");
+    group.open=true;summary.setAttribute("aria-expanded","true");
+    try{localStorage.setItem("sgdiSidebarCollapsed","0")}catch(e){}
+    syncCommercialSidebarState();
+  }
+});
+document.addEventListener("toggle",event=>{
+  if(event.target.matches?.(".sgdi-commercial-shell .commercial-nav-group"))event.target.querySelector("summary")?.setAttribute("aria-expanded",String(event.target.open));
+},true);
+document.addEventListener("keydown",event=>{
+  const sidebar=document.querySelector(".sgdi-commercial-shell .sidebar");
+  if(!sidebar||!sgdiIsMobileViewport()||!sgdiMobileSidebarOpen())return;
+  if(event.key==="Escape"){event.preventDefault();closeSgdiMobileSidebar();return;}
+  if(event.key!=="Tab")return;
+  const focusable=[...sidebar.querySelectorAll('a[href],button:not([disabled]),summary,[tabindex="0"]')].filter(node=>node.getClientRects().length&&getComputedStyle(node).visibility!=="hidden");
+  const first=focusable[0],last=focusable.at(-1);
+  if(event.shiftKey&&(document.activeElement===first||!sidebar.contains(document.activeElement))){event.preventDefault();last?.focus();}
+  else if(!event.shiftKey&&(document.activeElement===last||!sidebar.contains(document.activeElement))){event.preventDefault();first?.focus();}
+});
+window.addEventListener("resize",()=>syncCommercialSidebarState());
 
 /* ---- SHELL ---- */
 function sgdiIsMobileViewport(){
@@ -6266,7 +6480,11 @@ function sgdiMobileSidebarOpen(){
 }
 function sgdiSidebarCollapsed(){
   if(sgdiIsMobileViewport())return !sgdiMobileSidebarOpen();
-  try{return localStorage.getItem("sgdiSidebarCollapsed")==="1"}catch(e){return false}
+  try{
+    const saved=localStorage.getItem("sgdiSidebarCollapsed");
+    if(saved===null&&session?.transverse==="commercial")return !!window.matchMedia?.("(max-width: 1024px)").matches;
+    return saved==="1";
+  }catch(e){return false}
 }
 function sgdiSidebarToggleTitle(){
   if(sgdiIsMobileViewport())return sgdiMobileSidebarOpen()?"Fermer le menu latéral":"Ouvrir le menu latéral";
@@ -6276,6 +6494,7 @@ function sgdiSidebarToggleIcon(){
   return sgdiSidebarCollapsed()?"☰":"☰";
 }
 function toggleSgdiSidebar(){
+  if(document.querySelector(".sgdi-commercial-shell")){toggleCommercialSidebar();return;}
   if(sgdiIsMobileViewport()){
     const next=!sgdiMobileSidebarOpen();
     try{sessionStorage.setItem("sgdiMobileSidebarOpen",next?"1":"0")}catch(e){}
@@ -6312,6 +6531,7 @@ function closeSgdiMobileSidebar(){
     btn.setAttribute("aria-label",sgdiSidebarToggleTitle());
     btn.classList.add("is-collapsed");
   });
+  syncCommercialSidebarState(true);
 }
 window.closeSgdiMobileSidebar=closeSgdiMobileSidebar;
 document.addEventListener("click",(event)=>{
@@ -6409,20 +6629,22 @@ function renderInternal(options={}){
   const shellSidebarClass=sgdiIsMobileViewport()
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
-  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}">
+  const commercialShell=session.transverse==="commercial";
+  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">
-      <aside class="sidebar w-72 flex flex-col shrink-0">
-        <div class="sidebar-user sidebar-user-identity sidebar-user-profile-large px-4 py-5 text-xs">
+      <aside class="sidebar w-72 flex flex-col shrink-0"${commercialShell?' id="commercial-sidebar" aria-label="Navigation Commercial"':''}>
+        ${commercialShell?commercialSidebarIdentityHTML():`<div class="sidebar-user sidebar-user-identity sidebar-user-profile-large px-4 py-5 text-xs">
           ${atlasBrandHTML()}
           <div class="atlas-sidebar-profile" aria-label="Compte connecté"><div class="sidebar-atlas-brand sidebar-current-user-name">${escapeHTML(session.nom||session.username)}</div><div class="sidebar-user-role">${escapeHTML(typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role)}</div></div>
         </div>
-        <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
-        <div id="sidebar-back-slot"></div>
+        `}
+        <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"${commercialShell?' aria-label="Navigation principale"':""}></nav>
+        ${commercialShell?commercialSidebarFooterHTML():`<div id="sidebar-back-slot"></div>
         <div class="sidebar-user sidebar-user-logout px-4 py-3 text-xs">
           <button class="btn btn-ghost w-full justify-center" onclick="logout()">Se déconnecter</button>
-        </div>
+        </div>`}
       </aside>
       <button type="button" class="sgdi-sidebar-backdrop no-print" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu"></button>
       <main class="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -6434,6 +6656,7 @@ function renderInternal(options={}){
     ${typeof maladieRetardSidebarHTML==="function"?maladieRetardSidebarHTML():""}
   </div>`;
   renderSidebar();
+  syncCommercialSidebarState();
   sgdiEnterViewMode(true);
   renderView();
   renderOverlayHost();
@@ -6910,6 +7133,7 @@ function renderSidebar(){
   const nav=document.getElementById("sidebar-nav");
   const backSlot=document.getElementById("sidebar-back-slot");
   const navScrollTop=nav?nav.scrollTop:0;
+  const commercialFocus=session?.transverse==="commercial"&&document.activeElement?.closest?.(".sidebar")?document.activeElement:null;
   const restoreSidebarScroll=()=>{if(nav)requestAnimationFrame(()=>{nav.scrollTop=navScrollTop||0})};
   if(backSlot)backSlot.innerHTML="";
   if(!nav)return;
@@ -6989,9 +7213,13 @@ function renderSidebar(){
   };
   const itemHTML=item=>{
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
-    const label=item.custom||item.label==="GRH"?item.label:sgdiTitleCaseText(item.label);
+    const label=session?.transverse==="commercial"?commercialSidebarLabel(item):(item.custom||item.label==="GRH"?item.label:sgdiTitleCaseText(item.label));
     const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)!==null?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
     const gapClass=item.gapBefore?" nav-gap-before":"";
+    if(session?.transverse==="commercial"){
+      const iconItem=item.route==="commercial/dashboard"?{route:"dashboard"}:item.route==="commercial/clients"?{route:"agents"}:item;
+      return `<a class="nav-link ${active?"active":""}" href="#/${escapeHTML(item.route)}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" aria-label="${escapeHTML(label)}"${active?' aria-current="page"':''} onclick="if(!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.altKey)sidebarNavigate(event,this.dataset.route)"><span class="nav-ico" aria-hidden="true">${navIcon(iconItem)}</span><span class="nav-label" data-no-lang="1" data-commercial-label="${escapeHTML(label)}">${escapeHTML(label)}</span>${badge}</a>`;
+    }
     return `<div ${session?.transverse==="admin"?`role="link" tabindex="0" aria-label="${escapeHTML(label)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sidebarNavigate(event,'${item.route}')}"`:""} class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label"${item.custom?"":` data-atlas-nav-label="${escapeHTML(item.label)}"`}>${escapeHTML(label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
@@ -7006,11 +7234,27 @@ function renderSidebar(){
     const secondary=session?.transverse==="admin"&&isAdminSystemSession()?items.filter(item=>item.secondary&&!item.custom):[];
     const primary=secondary.length?items.filter(item=>!secondary.includes(item)):items;
     const secondaryActive=secondary.some(item=>sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r)));
-    nav.innerHTML=groupItemsHTML(primary)+(secondary.length?`<details class="atlas-admin-secondary"${secondaryActive?" open":""}><summary>Paramètres métier</summary>${groupItemsHTML(secondary)}</details>`:"");
+    if(session?.transverse==="commercial"){
+      const ready=ensureCommercialSidebarAccessRules();
+      const access=commercialSidebarCurrentAccess();
+      const result=ready?commercialSidebarNavigationHTML(items,itemHTML,navIcon):{
+        navigation:access?.status==="error"?'<div class="commercial-nav-status" role="status">Navigation indisponible.<button type="button" class="commercial-nav-retry" onclick="ensureCommercialSidebarAccessRules({retry:true});renderSidebar()">Réessayer</button></div>':'<p class="commercial-nav-status" role="status">Chargement de la navigation…</p>',settings:""
+      };
+      nav.innerHTML=result.navigation;
+      const settings=document.getElementById("commercial-sidebar-settings");
+      if(settings)settings.innerHTML=result.settings;
+    }else nav.innerHTML=groupItemsHTML(primary)+(secondary.length?`<details class="atlas-admin-secondary"${secondaryActive?" open":""}><summary>Paramètres métier</summary>${groupItemsHTML(secondary)}</details>`:"");
     if(backSlot&&showBack){
-      backSlot.innerHTML=`<div class="sidebar-back"><button type="button" class="sidebar-return-button" onclick="exitTransverseModule()" title="${session.societe?"Retour société":"Retour à la sélection"}" aria-label="${session.societe?"Retour société":"Retour à la sélection"}"><span aria-hidden="true">←</span><span>Retour</span></button></div>`;
+      backSlot.innerHTML=`<div class="sidebar-back"><button type="button" class="sidebar-return-button" onclick="exitTransverseModule()" title="${session.societe?"Retour société":"Retour à la sélection"}" aria-label="${session.societe?"Retour société":"Retour à la sélection"}"><span aria-hidden="true">${session.transverse==="commercial"?commercialSidebarIcon("back"):"←"}</span><span${session.transverse==="commercial"?' class="nav-label" data-no-lang="1" data-commercial-label="Retour"':''}>Retour</span></button></div>`;
     }
-    setTimeout(()=>applyLanguagePreference(nav),0);
+    if(commercialFocus&&!commercialFocus.isConnected){
+      const sidebar=nav.closest(".sidebar");
+      const route=commercialFocus.dataset.route;
+      const group=commercialFocus.closest(".commercial-nav-group")?.dataset.commercialGroup;
+      const selector=route?`[data-route="${CSS.escape(route)}"]`:group?`[data-commercial-group="${CSS.escape(group)}"] > summary`:commercialFocus.matches(".sidebar-return-button")?".sidebar-return-button":null;
+      (selector&&sidebar?.querySelector(selector)||sidebar?.querySelector(".nav-link"))?.focus({preventScroll:true});
+    }
+    setTimeout(()=>applyLanguagePreference(session?.transverse==="commercial"?(nav.closest(".sidebar")||nav):nav),0);
     scheduleSidebarStatsRefresh();
   };
 
@@ -7287,7 +7531,7 @@ function renderSidebar(){
         orderedItems.splice(updatedAgendaIdx+1,0,portailItem);
       }
     }
-    renderItems(clusterSidebarItemsByGroup(orderedItems));
+    renderItems(mod==="commercial"?orderedItems:clusterSidebarItemsByGroup(orderedItems));
     restoreSidebarScroll();
     return;
   }
@@ -7319,12 +7563,20 @@ function syncSidebarActiveState(){
   const nav=document.getElementById("sidebar-nav");
   if(!nav)return false;
   const path=(location.hash||"#/dashboard").slice(2);
-  nav.querySelectorAll(".nav-link,.sub-link").forEach(el=>{
+  const activeScope=document.querySelector(".sgdi-commercial-shell .sidebar")||nav;
+  activeScope.querySelectorAll(".nav-link,.sub-link").forEach(el=>{
     const route=el.dataset.route||"";
     const aliases=(el.dataset.aliases||"").split("|").filter(Boolean);
     const active=route&&(sidebarRouteActive(path,route)||aliases.some(a=>sidebarRouteActive(path,a)));
     el.classList.toggle("active",!!active);
-    if(active){const section=el.closest("details.atlas-admin-secondary");if(section)section.open=true;}
+    if(active){const section=el.closest("details.atlas-admin-secondary,details.commercial-nav-group");if(section)section.open=true;}
+    if(el.closest(".sgdi-commercial-shell")){
+      if(active)el.setAttribute("aria-current","page");else el.removeAttribute("aria-current");
+    }
+  });
+  activeScope.querySelectorAll(".commercial-nav-group").forEach(group=>{
+    group.classList.toggle("has-active",!!group.querySelector(".nav-link.active"));
+    group.querySelector("summary")?.setAttribute("aria-expanded",String(group.open));
   });
   return true;
 }

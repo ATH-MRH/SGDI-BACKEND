@@ -151,3 +151,185 @@
     body.atlas-ui .sgdi-shell #sidebar-nav :is(.nav-link,.sub-link,.nav-group) { min-height:40px!important; }
   }
 }
+
+/* Commercial navigation: a local adapter, deliberately independent of the
+   content area and of the other modules using the shared SGDI shell. */
+@media screen {
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell {
+    --atlas-sidebar-width:240px;
+    --commercial-sidebar-bg:var(--atlas-commercial-sidebar-bg);
+    --commercial-sidebar-border:var(--atlas-border);
+    --commercial-sidebar-hover:var(--atlas-commercial-sidebar-hover);
+    --commercial-sidebar-active:var(--atlas-primary-soft);
+    --commercial-sidebar-text:var(--atlas-sidebar-text);
+    --commercial-sidebar-muted:var(--atlas-text-muted);
+    grid-template-columns:var(--atlas-sidebar-width) minmax(0,1fr);
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sidebar {
+    display:flex!important; flex-direction:column!important;
+    min-height:0!important; overflow:hidden!important;
+    background:var(--commercial-sidebar-bg)!important;
+    color:var(--commercial-sidebar-text)!important;
+    border:0!important; border-inline-end:1px solid var(--commercial-sidebar-border)!important;
+    border-radius:0!important; box-shadow:none!important;
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand {
+    display:flex; align-items:center; gap:8px; flex:none;
+    min-width:0; min-height:82px; padding:16px 12px;
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand { flex:1; min-width:0; gap:8px; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand>svg { width:30px; height:30px; stroke-width:1.4; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand>span { font-size:12px!important; line-height:1.35; letter-spacing:0!important; white-space:nowrap; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand small { font-size:6.5px!important; line-height:1.5; letter-spacing:.025em!important; white-space:nowrap; }
+  body.atlas-ui .sgdi-commercial-shell :is(.commercial-sidebar-collapse,.commercial-sidebar-close) {
+    display:inline-flex; align-items:center; justify-content:center; flex:none;
+    width:30px; height:34px; min-width:30px; padding:0;
+    color:var(--commercial-sidebar-muted); background:transparent;
+    border:0; border-radius:var(--atlas-radius-sm); box-shadow:none; cursor:pointer;
+    transition:background-color .16s ease,color .16s ease;
+  }
+  body.atlas-ui .sgdi-commercial-shell :is(.commercial-sidebar-collapse,.commercial-sidebar-close) svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.8; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-close { display:none; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-user {
+    display:flex; align-items:center; gap:12px; flex:none; min-width:0;
+    margin:0 16px; padding:16px 0 20px; border-bottom:1px solid var(--commercial-sidebar-border);
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-avatar {
+    display:grid; place-items:center; flex:none; width:44px; height:44px;
+    border-radius:var(--atlas-radius-md); background:var(--commercial-sidebar-active);
+    color:var(--atlas-primary); font-size:17px!important; font-weight:700; line-height:1;
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-identity { min-width:0; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-identity .sidebar-current-user-name {
+    font-size:14px!important; font-weight:650!important; line-height:1.4!important; text-align:start!important;
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-identity .sidebar-user-role {
+    color:var(--commercial-sidebar-muted)!important; font-size:11px!important; font-weight:500!important;
+    line-height:1.4!important; text-align:start!important; margin-top:3px;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell #sidebar-nav {
+    flex:1 1 auto!important; min-height:0!important; min-width:0; display:block!important;
+    overflow-y:auto!important; overflow-x:hidden!important; overscroll-behavior:contain;
+    padding:16px 10px!important; background:transparent!important;
+    scrollbar-width:thin; scrollbar-color:var(--atlas-border-strong) transparent; scrollbar-gutter:auto;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-link,.commercial-group-toggle,.commercial-sidebar-logout,.sidebar-return-button) {
+    position:relative; display:grid!important; grid-template-columns:22px minmax(0,1fr) auto!important;
+    align-items:center!important; gap:12px!important; min-width:0!important;
+    width:100%!important; height:auto!important; min-height:50px!important; max-height:none!important;
+    padding:10px 12px!important; margin:2px 0!important;
+    color:var(--commercial-sidebar-text)!important; background:transparent!important;
+    border:0!important; border-radius:var(--atlas-radius-md)!important; box-shadow:none!important;
+    font-family:var(--atlas-font); font-size:13px!important; font-weight:500!important;
+    line-height:1.4!important; text-align:start; text-decoration:none; text-transform:none!important;
+    cursor:pointer; list-style:none; transition:background-color .16s ease,color .16s ease;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) .nav-label {
+    display:block; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    color:inherit!important; background:transparent!important; font-size:13px!important;
+    line-height:1.4!important; font-weight:inherit!important; white-space:nowrap!important; text-transform:none!important;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-ico,.nav-ico svg) {
+    display:inline-flex!important; align-items:center; justify-content:center;
+    width:22px!important; height:22px!important; min-width:22px!important;
+    color:inherit!important; background:transparent!important; opacity:1!important;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-ico svg,.commercial-sidebar-logout>svg,.sidebar-return-button svg) {
+    width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) .nav-count {
+    display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px;
+    padding:0 5px; margin:0; background:var(--commercial-sidebar-active)!important; color:var(--atlas-primary)!important;
+    border:0!important; border-radius:999px; font-size:11px!important; font-weight:650; line-height:1;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-link,.commercial-group-toggle,.commercial-sidebar-logout,.sidebar-return-button):hover,
+  body.atlas-ui .sgdi-commercial-shell :is(.commercial-sidebar-collapse,.commercial-sidebar-close):hover {
+    background:var(--commercial-sidebar-hover)!important; color:var(--atlas-primary)!important;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) .nav-link.active {
+    background:var(--commercial-sidebar-active)!important; color:var(--atlas-primary)!important; box-shadow:none!important; font-weight:650!important;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell :is(#sidebar-nav,.commercial-sidebar-footer) .nav-link.active::before {
+    content:""; position:absolute; inset-inline-start:0; inset-block:11px; width:3px;
+    border-radius:3px; background:var(--atlas-primary);
+  }
+  body.atlas-ui .sgdi-commercial-shell .sidebar :is(a,button,summary):focus-visible {
+    outline:2px solid var(--atlas-primary)!important; outline-offset:-2px; box-shadow:var(--atlas-focus-ring)!important;
+  }
+  body.atlas-ui .sgdi-commercial-shell .commercial-group-toggle::-webkit-details-marker { display:none; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-group-toggle::marker { content:""; }
+  body.atlas-ui .sgdi-commercial-shell :is(.commercial-chevron,.commercial-chevron svg) { display:block; width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.8; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-group[open]>.commercial-group-toggle .commercial-chevron { transform:rotate(90deg); }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-group:has(.nav-link.active)>.commercial-group-toggle { color:var(--atlas-primary)!important; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-submenu { margin:2px 0 8px 20px; padding-inline-start:9px; border-inline-start:1px solid var(--commercial-sidebar-border); }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell #sidebar-nav .commercial-submenu .nav-link {
+    grid-template-columns:18px minmax(0,1fr) auto!important; min-height:44px!important; gap:9px!important; padding:8px!important;
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell #sidebar-nav .commercial-submenu :is(.nav-ico,.nav-ico svg) { width:18px!important; height:18px!important; min-width:18px!important; }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell #sidebar-nav .commercial-submenu .nav-label { font-size:12px!important; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-divider { height:1px; margin:19px 12px; background:var(--commercial-sidebar-border); border:0; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-extras { margin-block-start:16px; padding-block-start:12px; border-top:1px solid var(--commercial-sidebar-border); }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-status { padding:12px; color:var(--commercial-sidebar-muted); font-size:12px; line-height:1.5; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-nav-retry { display:block; min-height:40px; margin-top:8px; padding:8px 12px; color:var(--atlas-primary); background:var(--commercial-sidebar-active); border:0; border-radius:var(--atlas-radius-sm); cursor:pointer; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-footer {
+    flex:0 0 auto; min-width:0; margin:0 10px; padding:10px 0 12px;
+    border-top:1px solid var(--commercial-sidebar-border); background:var(--commercial-sidebar-bg);
+  }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell .commercial-sidebar-footer :is(.nav-link,.commercial-sidebar-logout,.sidebar-return-button) { min-height:44px!important; color:var(--commercial-sidebar-muted)!important; }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell .commercial-sidebar-footer .sidebar-back { margin:0!important; padding:0!important; border:0!important; background:transparent!important; }
+  body.atlas-ui .sgdi-shell.sgdi-commercial-shell .commercial-sidebar-footer .sidebar-return-button span:first-child { font-size:20px!important; width:22px!important; height:22px!important; }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-signature { padding:14px 12px 0; font-size:10px!important; font-weight:600; line-height:1.5; letter-spacing:.04em!important; color:var(--commercial-sidebar-muted); }
+  body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-signature small { display:block; font-size:9px!important; font-weight:400; }
+  body.atlas-ui .commercial-sidebar-tooltip {
+    position:fixed; z-index:1200; max-width:230px; padding:8px 11px; pointer-events:none;
+    color:var(--atlas-text); background:var(--atlas-surface); border:1px solid var(--atlas-border-strong);
+    border-radius:var(--atlas-radius-sm); box-shadow:var(--atlas-shadow-sm); font:500 12px/1.4 var(--atlas-font);
+  }
+  body.atlas-ui .commercial-sidebar-tooltip[hidden] { display:none!important; }
+  @media(min-width:768px) {
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed { --atlas-sidebar-width:72px; grid-template-columns:72px minmax(0,1fr); }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed>.sgdi-topbar,
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed .sgdi-shell-body>main { grid-column:2; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-brand { flex-direction:column; justify-content:center; gap:4px; padding:12px 8px 4px; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-brand .atlas-brand { flex:none; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-brand .atlas-brand>span,
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed :is(.commercial-sidebar-identity,.commercial-sidebar-signature),
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-label,.nav-count,.commercial-chevron,.commercial-submenu),
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed .sidebar-return-button span:not(:first-child) { display:none!important; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-collapse svg { transform:rotate(180deg); }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-user { justify-content:center; margin:0 10px; padding:12px 0 16px; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-avatar { width:38px; height:38px; font-size:14px!important; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed #sidebar-nav { padding:12px 8px!important; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed :is(#sidebar-nav,.commercial-sidebar-footer) :is(.nav-link,.commercial-group-toggle,.commercial-sidebar-logout,.sidebar-return-button) { grid-template-columns:22px!important; justify-content:center!important; gap:0!important; padding:10px!important; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed #sidebar-nav .commercial-nav-group.has-active>.commercial-group-toggle { background:var(--commercial-sidebar-active)!important; color:var(--atlas-primary)!important; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed #sidebar-nav .commercial-nav-group.has-active>.commercial-group-toggle::before { content:""; position:absolute; inset-inline-start:0; inset-block:11px; width:3px; border-radius:3px; background:var(--atlas-primary); }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-sidebar-footer { margin-inline:8px; padding-bottom:8px; }
+    body.atlas-ui .sgdi-commercial-shell.sgdi-sidebar-collapsed .commercial-nav-divider { margin-inline:8px; }
+  }
+  @media(max-width:767px) {
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell,
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed { grid-template-columns:minmax(0,1fr); }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell>.sgdi-topbar,
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sgdi-shell-body>main { grid-column:1; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sidebar,
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell.sgdi-sidebar-collapsed .sidebar {
+      --atlas-sidebar-width:280px; width:min(280px,calc(100vw - 48px))!important;
+      max-width:calc(100vw - 48px)!important; height:100dvh!important; top:0!important; bottom:0!important; left:0!important;
+      border-radius:0!important; box-shadow:var(--atlas-shadow-md)!important;
+      transition:transform .18s ease!important;
+    }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sgdi-sidebar-backdrop { background:var(--atlas-commercial-sidebar-overlay)!important; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-collapse { display:none; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-close { display:inline-flex; width:40px; height:40px; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand { min-height:74px; padding-inline:18px; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand>span { font-size:13px!important; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-brand .atlas-brand small { font-size:7px!important; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-user { padding-top:8px; padding-bottom:16px; }
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell #sidebar-nav { padding-block:12px!important; }
+    body.atlas-ui .sgdi-commercial-shell .commercial-sidebar-signature { padding-top:6px; }
+  }
+  @media(prefers-reduced-motion:reduce) {
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sidebar,
+    body.atlas-ui .sgdi-shell.sgdi-commercial-shell .sidebar :is(a,button,summary) { transition:none!important; }
+  }
+}
