@@ -37,7 +37,9 @@ function adminUserFromApi(u){
     modulesAutorises:Array.isArray(u.authorized_modules)?u.authorized_modules:(Array.isArray(u.modulesAutorises)?u.modulesAutorises:null),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled),
     hasValidationPassword:!!u.has_validation_password,
-    supervisorReadOnly:u.supervisor_read_only!==false
+    supervisorReadOnly:u.supervisor_read_only!==false,
+    peutReactiverSortant:!!(cached.peutReactiverSortant??u.peutReactiverSortant),
+    originalAccess:{role:u.role,niveau:u.access_level,modulesAutorises:u.authorized_modules,structuresAutorisees:u.authorized_structures,actionsAutorisees:u.authorized_actions,societesAutorisees:u.authorized_societies,sitesAutorises:u.authorized_sites}
   };
 }
 
@@ -205,7 +207,8 @@ async function openAdminUserModal(username){
       })()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
-  setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false);adminSyncBeoSiteGroups()},0);
+  adminWizardMount(u,isNew);
+  setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false);adminSyncBeoSiteGroups();const f=adminWizardForm();if(f)f.__adminWizard.fingerprint=adminWizardFingerprint(f)},0);
 }
 
 function adminAccessCheckboxHTML(st,user){
@@ -238,6 +241,7 @@ async function confirmAdminUser(originalUsername){
   const password=String(fd.get("password")||"");
   const validationPassword=String(fd.get("validationPassword")||"");
   const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),modulesAutorises:ADMIN_LOGIN_MODULES.filter(m=>fd.get("module_"+m.key)===m.key).map(m=>m.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
+  if(f.__adminWizard)adminWizardPreserveAccess(f,data);
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -245,8 +249,8 @@ async function confirmAdminUser(originalUsername){
   if(!data.nom){if(nomInput)nomInput.style.background="#fee2e2";toast("Nom complet obligatoire","error");return}
   if(!data.email||!f.querySelector('[name="email"]')?.checkValidity()){toast("Une adresse email valide et propre à cet utilisateur est obligatoire","error");return}
   if((db.users||[]).some(user=>String(user.email||"").toLowerCase()===data.email&&String(user.username||"").toLowerCase()!==String(originalUsername||"").toLowerCase())){toast("Cette adresse email est déjà attribuée à un autre utilisateur","error");return}
-  if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)){toast("Niveau d'accès obligatoire","error");return}
-  if(normalizeAdminUserRole(data.role)!=="ADM"&&!data.modulesAutorises.length){toast("Sélectionnez au moins un module accessible","error");return}
+  if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)&&!(f.__adminWizard&&!f.__adminWizard.isNew&&data.niveau===(f.__adminWizard.original.originalAccess?f.__adminWizard.original.originalAccess.niveau:f.__adminWizard.original.niveau))){toast("Niveau d'accès obligatoire","error");return}
+  if(normalizeAdminUserRole(data.role)!=="ADM"&&!data.modulesAutorises?.length&&!(f.__adminWizard&&!f.__adminWizard.isNew&&data.modulesAutorises===null)){toast("Sélectionnez au moins un module accessible","error");return}
   const beoGuard=adminBeoRoleGuard(data);if(beoGuard){toast(beoGuard,"error");return}
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
@@ -292,6 +296,8 @@ async function confirmAdminUser(originalUsername){
   rememberUserPermissions(username,savedForScope?.societesAutorisees||[],savedForScope?.niveau||"",savedForScope?.structuresAutorisees||[],data.validationCodeEnabled);
   if(session&&session.username===username)await sgdiRefreshSessionFromServer();
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
+  const localSaved=adminUserByUsername(username);if(localSaved)localSaved.peutReactiverSortant=data.peutReactiverSortant;
+  userPermissionCache()[username].peutReactiverSortant=data.peutReactiverSortant;
   saveDB();closeModal();toastCenter("Données enregistrées","success");render();
 }
 
