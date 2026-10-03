@@ -49,7 +49,8 @@ test('OPS Command Center V2 rend les blocs opérationnels avec le périmètre so
   assert.match(root.textContent, /08:12/);
   assert.match(root.textContent, /Sous-effectif/);
   assert.match(root.textContent, /MIS-001/);
-  assert.equal(root.querySelectorAll('.ops-cc-kpi').length, 8);
+  assert.equal(root.querySelectorAll('.ops-cc-summary,.ops-cc-kpi').length, 0);
+  assert.ok(root.firstElementChild.classList.contains('ops-cc-head'), 'le titre remonte sans conteneur KPI vide');
 });
 
 test('OPS Command Center V2 masque les actions d’écriture pour un profil explicitement lecture seule', t => {
@@ -61,18 +62,21 @@ test('OPS Command Center V2 masque les actions d’écriture pour un profil expl
 
 test('OPS Command Center V2 gère honnêtement zéro, un et plusieurs sites', t => {
   const r = boot(t);
-  assert.equal(r.root.querySelector('.ops-cc-kpi strong').textContent, '1');
+  assert.equal(r.root.querySelectorAll('.ops-cc-sites tbody tr').length, 1);
+  assert.match(r.root.querySelector('.ops-cc-sites tbody').textContent, /SITE ALGER/);
   const empty = r.T().emptyDB();
   r.T().setDb(empty);
   r.T().renderOpsCommandCenterV2(r.w.document.getElementById('view'));
-  assert.equal(r.w.document.querySelector('.ops-cc-kpi strong').textContent, '0');
+  assert.equal(r.w.document.querySelectorAll('.ops-cc-summary,.ops-cc-kpi').length, 0);
   assert.match(r.w.document.querySelector('.ops-cc-sites').textContent, /Aucun site dans le périmètre autorisé/);
   empty.sites = [
     { id: 'm1', nom: 'SITE 1', societe: 'IRON GLOBAL SOLUTION', actif: true },
     { id: 'm2', nom: 'SITE 2', societe: 'IRON GLOBAL SOLUTION', actif: true },
   ];
   r.T().renderOpsCommandCenterV2(r.w.document.getElementById('view'));
-  assert.equal(r.w.document.querySelector('.ops-cc-kpi strong').textContent, '2');
+  assert.equal(r.w.document.querySelectorAll('.ops-cc-sites tbody tr').length, 2);
+  assert.match(r.w.document.querySelector('.ops-cc-sites tbody').textContent, /SITE 1/);
+  assert.match(r.w.document.querySelector('.ops-cc-sites tbody').textContent, /SITE 2/);
 });
 
 test('OPS Command Center V2 ne fabrique ni carte ni données géographiques', t => {

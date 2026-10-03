@@ -610,9 +610,6 @@ function renderOpsCommandCenterV2(view){
     ["Rapport OPS","ops/supervision","▥","plain",true]
   ].filter(x=>x[4]);
   view.innerHTML=`<section class="ops-cc" data-testid="ops-command-center-v2">
-    <header class="ops-cc-summary">
-      ${opsCommandCenterKpi("Sites",sites.length,"Périmètre autorisé","neutral")}${opsCommandCenterKpi("Opérationnel",activeCount,"Employés actifs","success")}${opsCommandCenterKpi("Missions en cours",missions.length,"Statut mission réel","info")}${opsCommandCenterKpi("Congé / maladie",leaveCount+sickCount,"Attendance Core","warning")}${opsCommandCenterKpi("Absent",absentCount,"Attendance Core","danger")}${opsCommandCenterKpi("Sans affectation",unassignedCount,"Compteur serveur","warning")}${opsCommandCenterKpi("Suspendu",suspendedCount,"Compteur serveur","violet")}${opsCommandCenterKpi("Sans dotation",unequipped,"Compteur serveur","info")}
-    </header>
     <div class="ops-cc-head"><div class="ops-cc-title"><span class="ops-cc-title-icon">⌂</span><div><small>${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</small><h1>Tableau de bord OPS</h1><p>Pilotage en temps réel de vos sites, missions et effectifs</p></div></div><div class="ops-cc-clock"><b>${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</b><span><i></i> Temps réel</span></div></div>
     <nav class="ops-cc-actions" aria-label="Actions rapides OPS">${actions.map(a=>`<a class="ops-cc-action" data-tone="${a[3]}" href="#/${a[1]}"><span>${a[2]}</span>${escapeHTML(a[0])}</a>`).join("")}</nav>
     ${opsSupervisorReadOnlyNoticeHTML()}
