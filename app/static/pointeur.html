@@ -491,13 +491,158 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
   body.ptr-v3 *{transition:none!important}
 }
 </style>
+<style id="ptr-v5-style">
+/* ══ Pointeur V5 — poste de contrôle des vacations et présences ══════════════════════════ */
+body.ptr-v5{background:#eef2f8}
+body.ptr-v5 .brand-logo-img{height:44px;width:auto;max-width:150px;object-fit:contain;flex:none}
+body.ptr-v5 .brand-sub{font-size:12px;font-weight:600;color:var(--ptr-muted);margin-top:1px}
+body.ptr-v5 .brand-user{font-size:11.5px}
+body.ptr-v5 .v5-card{background:var(--ptr-surface);border:1px solid var(--ptr-line);border-radius:16px;box-shadow:0 2px 10px #0a2d6b0a;min-width:0}
+body.ptr-v5 .v5-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-ink-2);margin:0 0 12px}
+body.ptr-v5 .v5-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:var(--ptr-blue-soft);color:var(--ptr-blue);font-size:12.5px;font-weight:800;letter-spacing:0}
+body.ptr-v5 .v5-count.is-alert{background:var(--ptr-red-soft);color:var(--ptr-red-ink)}
+body.ptr-v5 .v5-empty{padding:14px;border:1px dashed var(--ptr-line-strong);border-radius:12px;color:var(--ptr-muted);font-size:13px;text-align:center}
+/* Bandeau vacation */
+body.ptr-v5 .v5-shift{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:center;padding:18px 22px;margin:0 0 14px;background:linear-gradient(100deg,var(--ptr-blue-soft),#fff 62%)}
+body.ptr-v5 .v5-shift.is-unconfigured{grid-template-columns:minmax(0,1fr);background:var(--ptr-orange-soft);border-color:#f3d9ad}
+body.ptr-v5 .v5-shift.is-neutral{grid-template-columns:minmax(0,1fr);background:var(--ptr-surface)}
+body.ptr-v5 .v5-shift small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ptr-muted)}
+body.ptr-v5 .v5-shift-main{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-top:4px}
+body.ptr-v5 .v5-shift-name{font-size:28px;font-weight:900;color:var(--ptr-blue);letter-spacing:.02em}
+body.ptr-v5 .v5-shift-hours{font-size:24px;font-weight:800;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-group{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:999px;background:var(--ptr-blue);color:#fff;font-size:13px;font-weight:800;letter-spacing:.05em}
+body.ptr-v5 .v5-group.is-soft{background:var(--ptr-blue-soft);color:var(--ptr-blue)}
+body.ptr-v5 .v5-relief{padding-left:18px;border-left:1px solid var(--ptr-line);min-width:0}
+body.ptr-v5 .v5-relief-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:4px;font-size:17px;font-weight:800;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-countdown{margin-top:6px;font-size:14px;font-weight:700;color:var(--ptr-ink-2);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-countdown b{font-size:19px;color:var(--ptr-blue)}
+body.ptr-v5 .v5-shift-note{margin:6px 0 0;font-size:14px;font-weight:600;color:var(--ptr-orange-ink)}
+/* Fenêtre de maintien */
+body.ptr-v5 .v5-maintien{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:11px 18px;margin:0 0 14px;border:1px solid #f3d9ad;border-radius:14px;background:var(--ptr-orange-soft);color:var(--ptr-orange-ink);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-maintien b{font-weight:900;letter-spacing:.04em}
+/* KPI personnes */
+body.ptr-v5 .v5-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 14px}
+body.ptr-v5 .v5-kpi{padding:14px 16px;border-left:4px solid var(--ptr-blue)}
+body.ptr-v5 .v5-kpi small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-muted);overflow-wrap:anywhere}
+body.ptr-v5 .v5-kpi b{display:block;margin-top:4px;font-size:32px;line-height:1.05;font-weight:900;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-kpi span{display:block;margin-top:2px;font-size:11.5px;color:var(--ptr-muted)}
+body.ptr-v5 .v5-kpi[data-tone="green"]{border-left-color:var(--ptr-green)}
+body.ptr-v5 .v5-kpi[data-tone="orange"]{border-left-color:var(--ptr-orange)}
+body.ptr-v5 .v5-kpi[data-tone="red"]{border-left-color:var(--ptr-red)}
+body.ptr-v5 .v5-kpi[data-tone="muted"]{border-left-color:var(--ptr-line-strong)}
+/* Activité du jour : mouvements, discrets — jamais confondus avec les KPI personnes */
+body.ptr-v5.has-post .status-row{flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:10px!important;margin:0 0 14px!important}
+body.ptr-v5.has-post .presence-summary{display:flex!important;flex:0 1 auto;gap:8px;padding:0!important;background:transparent!important;box-shadow:none!important;border:0!important}
+body.ptr-v5.has-post .presence-summary button{min-height:44px;padding:6px 12px!important;border:1px solid var(--ptr-line)!important;border-radius:12px!important;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;box-shadow:none!important}
+body.ptr-v5.has-post .presence-summary button::before{display:none!important}
+body.ptr-v5.has-post .presence-summary button :is(small,b){color:inherit!important}
+body.ptr-v5.has-post .presence-summary button b{font-size:18px!important}
+body.ptr-v5.has-post .presence-summary .kpi-ico{display:none}
+body.ptr-v5.has-post .presence-summary button:is([data-live-filter="presents"],[data-live-filter="absents"]){display:none!important}
+body.ptr-v5 .v5-activity-label{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-muted)}
+body.ptr-v5 .v5-activity-chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:6px 12px;border:1px solid var(--ptr-line);border-radius:12px;background:var(--ptr-surface);font-size:12.5px;color:var(--ptr-ink-2)}
+body.ptr-v5 .v5-activity-chip b{font-size:18px;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5:not(.has-post) :is(.v5-activity-label,.v5-activity-chip,#presentNowCard,#todoCard,#movementsCard,#postKpis,#shiftBanner){display:none}
+body.ptr-v5.has-post #liveFeedCard{display:none}
+/* Zone de pointage */
+body.ptr-v5 .last-scan-idle-shift{margin-top:10px;font-size:15px;font-weight:800;color:var(--ptr-blue);font-variant-numeric:tabular-nums}
+body.ptr-v5.has-post .last-scan{min-height:250px}
+body.ptr-v5 .v5-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:10px 0 0;font-size:14px}
+body.ptr-v5 .v5-facts dt{color:var(--ptr-muted);font-weight:600}
+body.ptr-v5 .v5-facts dd{margin:0;font-weight:800;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-reason{margin:10px 0 0;font-size:15px;font-weight:700;color:var(--ptr-ink)}
+body.ptr-v5 .v5-inline-btn{min-height:44px;margin-top:10px;padding:0 16px;border:0;border-radius:12px;background:var(--ptr-blue);color:#fff;font-weight:800;font-size:13px;letter-spacing:.04em;cursor:pointer}
+/* Colonne droite */
+body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:16px 18px}
+body.ptr-v5 .v5-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;overflow-x:hidden}
+body.ptr-v5 .v5-person{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--ptr-line);border-radius:12px;background:var(--ptr-surface-2);min-width:0}
+body.ptr-v5 .v5-avatar{flex:none;width:42px;height:42px;border-radius:50%;object-fit:cover;background:var(--ptr-blue-soft);color:var(--ptr-blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+body.ptr-v5 .v5-person-main{flex:1;min-width:0}
+body.ptr-v5 .v5-person-name{font-size:14px;font-weight:800;color:var(--ptr-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.ptr-v5 .v5-person-meta{font-size:12px;color:var(--ptr-muted);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-badge{flex:none;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;background:var(--ptr-green-soft);color:var(--ptr-green-ink)}
+body.ptr-v5 .v5-badge.is-maintien{background:var(--ptr-orange-soft);color:var(--ptr-orange-ink)}
+body.ptr-v5 .v5-todo{padding:11px 13px;border:1px solid #f1c7cb;border-left:4px solid var(--ptr-red);border-radius:12px;background:var(--ptr-red-soft);min-width:0}
+body.ptr-v5 .v5-todo[data-severity="info"]{border-color:#f3d9ad;border-left-color:var(--ptr-orange);background:var(--ptr-orange-soft)}
+body.ptr-v5 .v5-todo b{display:block;font-size:12.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--ptr-ink)}
+body.ptr-v5 .v5-todo div{margin-top:3px;font-size:13px;color:var(--ptr-ink-2);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+/* Derniers mouvements */
+body.ptr-v5 #movementsCard{margin-top:18px}
+body.ptr-v5 .v5-filters{display:flex;flex-wrap:wrap;gap:6px}
+body.ptr-v5 .v5-filters button{min-height:36px;padding:0 12px;border:1px solid var(--ptr-line);border-radius:999px;background:var(--ptr-surface);color:var(--ptr-ink-2);font-size:12.5px;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}
+body.ptr-v5 .v5-filters button.active{background:var(--ptr-blue);border-color:var(--ptr-blue);color:#fff}
+body.ptr-v5 .v5-moves{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 14px;max-height:300px;overflow-y:auto;overflow-x:hidden}
+body.ptr-v5 .v5-move{display:grid;grid-template-columns:max-content max-content minmax(0,1fr) max-content;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--ptr-line);font-size:13px;min-width:0}
+body.ptr-v5 .v5-move time{font-weight:800;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-move code{font:inherit;font-weight:800;color:var(--ptr-blue)}
+body.ptr-v5 .v5-move span{color:var(--ptr-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.ptr-v5 .v5-move em{font-style:normal;font-size:11px;font-weight:900;letter-spacing:.05em;padding:4px 8px;border-radius:999px;background:var(--ptr-green-soft);color:var(--ptr-green-ink)}
+body.ptr-v5 .v5-move[data-type="SORTIE"] em{background:var(--ptr-blue-soft);color:var(--ptr-blue)}
+body.ptr-v5 .v5-move[data-type="MAINTIEN"] em{background:var(--ptr-orange-soft);color:var(--ptr-orange-ink)}
+body.ptr-v5 .v5-move[data-type="REFUS"] em{background:var(--ptr-red-soft);color:var(--ptr-red-ink)}
+/* Saisie manuelle : contexte de maintien */
+body.ptr-v5 .v5-context{max-width:560px;margin:14px auto 0;padding:14px 16px;border:1px solid var(--ptr-line);border-radius:14px;background:var(--ptr-surface-2);text-align:left}
+body.ptr-v5 .v5-context .v5-facts{margin-top:6px}
+body.ptr-v5 .v5-audit-note{margin:10px 0 0;font-size:12.5px;font-weight:700;color:var(--ptr-ink-2)}
+body.ptr-v5 .v5-context textarea{width:100%;min-height:70px;margin-top:8px;padding:10px;border:1px solid var(--ptr-line-strong);border-radius:12px;font:inherit}
+body.ptr-v5 .v5-extra-btn{display:block;width:100%;max-width:560px;min-height:48px;margin:12px auto 0;border:0;border-radius:14px;background:var(--ptr-orange);color:#fff;font-weight:900;letter-spacing:.04em;cursor:pointer}
+/* Header : le titre et le sous-titre ne chevauchent jamais la date ni l'horloge. */
+body.ptr-v5 .brand{min-width:0}
+body.ptr-v5 .brand>div{min-width:0}
+body.ptr-v5 :is(.brand-title,.brand-sub,.brand-user){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.ptr-v5 .header-clock{flex-wrap:nowrap;white-space:nowrap}
+/* Activité du jour : libellé, entrées, sorties, refus — dans cet ordre, alignés à gauche. */
+body.ptr-v5.has-post .status-row{justify-content:flex-start!important}
+body.ptr-v5.has-post .v5-activity-label{order:0}
+body.ptr-v5.has-post .presence-summary{order:1;margin:0!important}
+body.ptr-v5.has-post .v5-activity-chip{order:2}
+body.ptr-v5.has-post .shift-staffing{order:3}
+@media(min-width:960px){
+  body.ptr-v5.has-post .work-grid{grid-template-columns:minmax(0,65fr) minmax(0,35fr)}
+}
+@media(max-width:1699px){
+  body.ptr-v5 .top-row{grid-template-columns:minmax(0,1fr) max-content!important;row-gap:10px}
+  body.ptr-v5 .header-clock{justify-content:flex-end}
+  body.ptr-v5 .top-actions{grid-column:1/-1;justify-content:flex-start}
+}
+@media(max-width:1279px){
+  body.ptr-v5 .v5-kpi b{font-size:27px}
+  body.ptr-v5 .v5-shift-name{font-size:24px}
+  body.ptr-v5 .v5-shift-hours{font-size:20px}
+}
+@media(max-width:959px){
+  body.ptr-v5 .v5-shift{grid-template-columns:minmax(0,1fr)}
+  body.ptr-v5 .v5-relief{padding:12px 0 0;border-left:0;border-top:1px solid var(--ptr-line)}
+  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  /* Ordre mobile / tablette étroite : À traiter avant Présents. */
+  body.ptr-v5.has-post #todoCard{order:-2}
+  body.ptr-v5.has-post #presentNowCard{order:-1}
+  body.ptr-v5 .v5-list{max-height:none}
+}
+@media(max-width:759px){
+  /* Date métier visible aussi sur mobile, sous forme compacte. */
+  body.ptr-v5 .top .seg-date{display:inline!important;font-size:12px}
+  body.ptr-v5 .header-clock{gap:8px}
+  body.ptr-v5 .brand-logo-img{height:34px;max-width:96px}
+  body.ptr-v5 .brand-sub{display:none}
+  body.ptr-v5 .v5-shift{padding:14px}
+  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  body.ptr-v5 .v5-kpi{padding:11px 12px}
+  body.ptr-v5 .v5-kpi b{font-size:25px}
+  body.ptr-v5 .v5-moves{grid-template-columns:minmax(0,1fr);max-height:none}
+  body.ptr-v5 .v5-move{grid-template-columns:max-content max-content minmax(0,1fr);row-gap:2px}
+  body.ptr-v5 .v5-move em{grid-column:1/-1;justify-self:start}
+  body.ptr-v5 .v5-filters button{min-height:44px}
+  body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:14px}
+}
+</style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script defer src="/static/pointeur-facial.js?v=1"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body class="atlas-ui ptr-v3" data-atlas-surface="pointeur">
+<body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE POINTAGE</span><h2>Vos présences.<br>Un suivi terrain.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Pointage</strong><small>Enregistrez les présences</small></div><div><b>02</b><strong>Sites</strong><small>Retrouvez vos affectations</small></div><div><b>03</b><strong>Planning</strong><small>Consultez votre organisation</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
@@ -517,7 +662,7 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
 <section id="appView" class="app hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand"><div class="brand-logo">QR</div><div><div class="brand-title">POINTAGE</div><div class="brand-user" id="userLabel">—</div></div></div>
+      <div class="brand"><img class="brand-logo-img" src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><div><div class="brand-title">POSTE DE POINTAGE</div><div class="brand-sub">Contrôle des présences en temps réel</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
         <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
@@ -529,7 +674,12 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
     </div>
   </header>
   <main class="main">
+    <!-- Poste de contrôle V5 : tout vient du flux live (planning officiel + Attendance Core). -->
+    <section id="shiftBanner" class="v5-card v5-shift" aria-live="polite"></section>
+    <div id="maintienBanner" class="v5-maintien hidden" role="status"></div>
+    <div id="postKpis" class="v5-kpis" aria-label="Personnes sur la vacation active"></div>
     <div class="status-row">
+      <span class="v5-activity-label">Activité du jour (mouvements)</span>
       <div id="shiftStaffing" class="shift-staffing"><span class="shift-staffing-empty">Chargement de l’effectif contractuel…</span></div>
       <div class="presence-summary">
         <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></span><span class="kpi-txt"><small>Entrées aujourd’hui</small><b id="entrantCount">00</b></span></button>
@@ -537,6 +687,7 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
         <button type="button" data-live-filter="presents" onclick="setLiveFilter('presents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.9-3.6 10.1-3.6 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.4M17.5 14.6c1.7.6 2.8 2 3 4.4"/></svg></span><span class="kpi-txt"><small>Présents sur site</small><b id="presentCount">00</b></span></button>
         <button type="button" data-live-filter="absents" onclick="setLiveFilter('absents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.2"/><path d="M4 19c.9-3.6 6-4.4 8.6-2.8"/><path d="m16 15 5 5M21 15l-5 5"/></svg></span><span class="kpi-txt"><small>Absents aujourd’hui</small><b id="absentCount">00</b></span></button>
       </div>
+      <span class="v5-activity-chip" title="Tentatives refusées aujourd'hui : aucun mouvement enregistré">Tentatives refusées <b id="refusedCount">0</b></span>
     </div>
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
     <div class="work-grid">
@@ -545,7 +696,7 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
              affiché automatiquement — aucun clic, aucune recherche. -->
         <div class="station-head">
           <span class="station-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span>
-          <div class="station-titles"><div class="scanner-title" id="scannerTitle">Poste de pointage</div>
+          <div class="station-titles"><div class="scanner-title" id="scannerTitle">Pointage</div>
             <p class="station-sub">Reconnaissance faciale, QR ou saisie manuelle<span id="stationSite"></span></p></div>
           <span id="stationState" class="station-state is-pending" role="status"><i aria-hidden="true"></i><span id="stationStateLabel">CONNEXION EN COURS…</span></span>
         </div>
@@ -560,7 +711,7 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
           <div class="usb-hint">Le lecteur USB est prêt. La fiche de l’employé apparaîtra automatiquement après la lecture.</div>
           <div class="usb-ready"><span class="dot" style="display:inline-block;margin-right:7px"></span> EN ATTENTE D’UN QR</div>
         </div>
-        <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
+        <div id="reader" class="hidden"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
         <!-- Modes de pointage : chaque carte déclenche le mécanisme EXISTANT (aucune fonction nouvelle). -->
         <div class="mode-grid" role="group" aria-label="Modes de pointage">
@@ -586,6 +737,8 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
           </div>
           <div id="manualCardStep" class="hidden">
             <div id="manualCard"></div>
+            <div id="manualContext" class="v5-context hidden"></div>
+            <button id="manualExtraBtn" type="button" class="v5-extra-btn hidden" onclick="confirmManualPointage('present',{intent:'EXTRA_SHIFT_ENTRY'})">NOUVELLE ENTRÉE DE MAINTIEN</button>
             <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
             <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
             <div id="manualFeedback" class="manual-feedback" role="status" aria-live="polite"></div>
@@ -594,6 +747,14 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
         </div>
       </section>
       <div class="side-col">
+      <section id="presentNowCard" class="v5-card" aria-label="Présents actuellement">
+        <h2 class="v5-title">Présents actuellement <span id="presentNowCount" class="v5-count">0</span></h2>
+        <div id="presentNowList" class="v5-list"></div>
+      </section>
+      <section id="todoCard" class="v5-card" aria-label="À traiter">
+        <h2 class="v5-title">À traiter <span id="todoCount" class="v5-count">0</span></h2>
+        <div id="todoList" class="v5-list"></div>
+      </section>
       <aside id="liveFeedCard" class="scanner-card">
         <div class="live-head">
           <div><div class="scanner-title"><i class="live-dot" aria-hidden="true"></i>Pointage en direct</div>
@@ -614,6 +775,11 @@ body.ptr-v3 :is(.planning-hero,.planning-card,.face-card){border-color:var(--ptr
       </section>
       </div>
     </div>
+    <section id="movementsCard" class="v5-card" aria-label="Derniers mouvements">
+      <h2 class="v5-title">Derniers mouvements
+        <span class="v5-filters" role="group" aria-label="Filtrer les mouvements"><button type="button" data-move-filter="all" class="active" onclick="setMovementFilter('all')">Tous</button><button type="button" data-move-filter="ENTREE" onclick="setMovementFilter('ENTREE')">Entrées</button><button type="button" data-move-filter="SORTIE" onclick="setMovementFilter('SORTIE')">Sorties</button><button type="button" data-move-filter="REFUS" onclick="setMovementFilter('REFUS')">Refus</button><button type="button" data-move-filter="MAINTIEN" onclick="setMovementFilter('MAINTIEN')">Maintiens</button></span></h2>
+      <div id="movementsList" class="v5-moves"></div>
+    </section>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
   <section id="faceView" class="face-view hidden" aria-live="polite">
@@ -771,6 +937,7 @@ function syncOpsClock(data){
   if(data&&data.timezone)opsTimeZone=data.timezone;
   const server=Date.parse((data&&data.server_now)||"");
   if(!Number.isNaN(server))opsClockOffset=server-Date.now();
+  if(document.getElementById("headerClock"))updateHeaderClock();    // l'horloge suit le serveur sans attendre la seconde suivante
 }
 function opsNow(){return new Date(Date.now()+opsClockOffset)}
 function opsParts(d){
@@ -788,6 +955,7 @@ function updateHeaderClock(){
   const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone});
   el.innerHTML='<span class="seg-date">'+esc(date)+'</span><span class="seg-clock">'+segClockHTML(time)+'</span>';
   el.dataset.time=time;el.dataset.date=opsDate(now);
+  tickPost();
 }
 function startHeaderClock(){
   clearInterval(headerClockTimer);
@@ -946,6 +1114,7 @@ async function pollLive(){
     syncOpsClock(data);
     setLiveState("ok");
     serverSummary=data.summary||null;
+    postState=data.post||null;renderPost();
     const first=liveCursor===null;
     liveCursor=data.latest_event_id||0;liveRefusalCursor=data.latest_refusal_id||0;
     renderCounters();
@@ -987,7 +1156,112 @@ const LAST_SCAN_IDLE_VISUAL='<div class="scan-visual" aria-hidden="true"><span c
 function lastScanIdleHTML(){
   const hint=cameraMode?"Présentez le QR devant la caméra, ou utilisez la reconnaissance faciale ou la saisie manuelle."
     :"Présentez le QR à la douchette, ou utilisez la reconnaissance faciale ou la saisie manuelle.";
-  return '<div class="last-scan-idle">'+LAST_SCAN_IDLE_VISUAL+'<div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div><div class="last-scan-idle-hint">'+esc(hint)+'</div></div>';
+  const cur=postState&&postState.current,shift=cur?'<div class="last-scan-idle-shift" id="idleShift">Vacation actuelle : '+esc(cur.start)+' → '+esc(cur.end)+' · Groupe '+esc(cur.group)+'</div>':'';
+  return '<div class="last-scan-idle">'+LAST_SCAN_IDLE_VISUAL+'<div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>'+shift+'<div class="last-scan-idle-hint">'+esc(hint)+'</div></div>';
+}
+// ══ Poste de contrôle V5 ═══════════════════════════════════════════════════════════════════
+// Tout ce qui est affiché vient du serveur (`post` du flux live : planning officiel + Attendance
+// Core). Rien n'est codé en dur, rien n'est déduit côté navigateur hors comptes à rebours.
+let postState=null,movementFilter="all";
+const hm=iso=>iso?String(iso).slice(11,16):"—";
+const hms=iso=>iso?String(iso).slice(11,19):"—";
+const minutesLabel=m=>m==null?"—":Math.floor(m/60)+" h "+String(m%60).padStart(2,"0");
+// Ne réécrit le DOM que si le contenu change : un rafraîchissement ne fait rien clignoter.
+function setHTML(id,html){const el=document.getElementById(id);if(!el||el.__html===html)return el;el.__html=html;el.innerHTML=html;return el}
+function countdownTo(iso){
+  const ms=Date.parse(iso)-opsNow().getTime();if(Number.isNaN(ms))return "";
+  const total=Math.max(0,Math.floor(ms/1000)),pad=v=>String(v).padStart(2,"0");
+  return pad(Math.floor(total/3600))+":"+pad(Math.floor(total%3600/60))+":"+pad(total%60);
+}
+function tickPost(){
+  const cur=postState&&postState.current,relief=document.getElementById("reliefCountdown");
+  if(relief&&cur)relief.textContent=countdownTo(cur.scheduled_end);
+  const m=postState&&postState.maintien,left=document.getElementById("maintienCountdown");
+  if(left&&m)left.textContent=countdownTo(m.state==="OPEN"?m.closes_at:m.opens_at);
+}
+function shiftBannerHTML(post){
+  if(post.status==="ROTATION_NOT_CONFIGURED")return {cls:"v5-card v5-shift is-unconfigured",html:'<div><small>Vacation</small><div class="v5-shift-main"><span class="v5-shift-name" style="color:var(--ptr-orange-ink)">ROTATION NON CONFIGURÉE</span></div><p class="v5-shift-note">Le régime posté de ce site n’a pas encore de date d’ancrage.</p></div>'};
+  const cur=post.current;
+  if(!cur)return {cls:"v5-card v5-shift is-neutral",html:'<div><small>Vacation</small><div class="v5-shift-main"><span class="v5-shift-hours">Site hors travail posté</span></div></div>'};
+  const next=post.next;
+  return {cls:"v5-card v5-shift",html:'<div><small>Vacation en cours</small><div class="v5-shift-main"><span class="v5-shift-name">'+esc(String(cur.shift_label||"").toUpperCase())+'</span><span class="v5-shift-hours">'+esc(cur.start)+' → '+esc(cur.end)+'</span><span class="v5-group">GROUPE '+esc(cur.group)+'</span></div></div>'
+    +'<div class="v5-relief"><small>Prochaine relève</small>'+(next?'<div class="v5-relief-row"><span>'+esc(next.start)+' → '+esc(next.end)+'</span><span class="v5-group is-soft">GROUPE '+esc(next.group)+'</span></div>':'<div class="v5-relief-row"><span>—</span></div>')
+    +'<div class="v5-countdown">Dans <b id="reliefCountdown"></b></div></div>'};
+}
+function personAvatarHTML(e){
+  const name=[e.nom,e.prenom].filter(Boolean).join(" ");
+  return e.photo?'<img class="v5-avatar" src="'+esc(e.photo)+'" alt="">':'<span class="v5-avatar">'+esc(initialsOf(name))+'</span>';
+}
+function renderPost(){
+  const post=postState;
+  document.body.classList.toggle("has-post",!!post);
+  if(!post)return;
+  const banner=shiftBannerHTML(post),bannerEl=setHTML("shiftBanner",banner.html);
+  if(bannerEl&&bannerEl.className!==banner.cls)bannerEl.className=banner.cls;
+  const m=post.maintien,mEl=document.getElementById("maintienBanner");
+  if(mEl){
+    mEl.classList.toggle("hidden",!m);
+    if(m)setHTML("maintienBanner",'<b>MAINTIENS — VACATION '+esc(m.previous.start)+' → '+esc(m.previous.end)+'</b><span>Nouvelle entrée autorisée : '+esc(m.opens)+' → '+esc(m.closes)+'</span><span>'+(m.state==="OPEN"?"Fermeture dans ":"Ouverture dans ")+'<b id="maintienCountdown"></b></span>');
+  }
+  const k=post.kpi||{},num=v=>v==null?"—":String(v);
+  const kpi=(label,value,tone,hint)=>'<div class="v5-card v5-kpi" data-tone="'+tone+'"><small>'+label+'</small><b>'+esc(num(value))+'</b>'+(hint?'<span>'+esc(hint)+'</span>':'')+'</div>';
+  setHTML("postKpis",kpi("Attendus",k.expected,"blue",post.current?"Groupe "+post.current.group:"")+kpi("Présents",k.present,"green","personnes uniques")
+    +kpi("Absents / non pointés",k.absent,k.absent?"red":"muted",k.excused?k.excused+" en congé, maladie ou mission":"")+kpi("En maintien",k.maintien,k.maintien?"orange":"muted","")+kpi("Anomalies",k.anomalies,k.anomalies?"red":"muted","à traiter"));
+  const refused=document.getElementById("refusedCount");if(refused)refused.textContent=String((post.activity||{}).refused_today||0);
+  const present=Array.isArray(post.present)?post.present:[];
+  const pc=document.getElementById("presentNowCount");if(pc)pc.textContent=String(present.length);
+  setHTML("presentNowList",present.length?present.map(row=>{const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
+    return '<div class="v5-person" data-employee="'+esc(e.id)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:""].filter(Boolean).join(" · "))+'</div><div class="v5-person-meta">Entrée réelle '+esc(row.entry)+(row.shift_start?' · Vacation '+esc(row.shift_start)+' → '+esc(row.shift_end):'')+'</div></div><span class="v5-badge'+(row.badge==="EN_MAINTIEN"?" is-maintien":"")+'">'+esc(row.badge_label)+'</span></div>'}).join(""):'<div class="v5-empty">Aucune personne présente actuellement.</div>');
+  const todo=Array.isArray(post.todo)?post.todo:[];
+  const tc=document.getElementById("todoCount");if(tc){tc.textContent=String(todo.length);tc.classList.toggle("is-alert",todo.length>0)}
+  setHTML("todoList",todo.length?todo.map((item,index)=>{const e=item.employee||{},who=[[e.nom,e.prenom].filter(Boolean).join(" "),e.matricule].filter(Boolean).join(" · ");
+    return '<div class="v5-todo" data-code="'+esc(item.code)+'" data-severity="'+esc(item.severity||"warning")+'"><b>'+esc(item.label)+'</b>'+(who?'<div>'+esc(who)+'</div>':'')
+      +(item.scheduled_end?'<div>Fin prévue : '+esc(item.scheduled_end)+'</div>':'')+(item.overdue_since?'<div>'+(item.code==="VACATION_NON_CLOTUREE"?"Toujours présent après : ":"Fenêtre terminée à : ")+esc(item.overdue_since)+'</div>':'')
+      +(!item.scheduled_end&&item.message?'<div>'+esc(item.message)+'</div>':'')
+      +(item.action==="MANUAL_ENTRY"?'<button type="button" class="v5-inline-btn" onclick="openManualFor('+index+')">SAISIE MANUELLE</button>':'')+'</div>'}).join(""):'<div class="v5-empty">Rien à traiter.</div>');
+  renderMovements();
+  tickPost();
+  const idle=document.getElementById("lastScanCard");
+  if(idle&&idle.classList.contains("is-idle")){const html=lastScanIdleHTML();if(idle.__idle!==html){idle.__idle=html;idle.innerHTML=html}}
+}
+function setMovementFilter(filter){
+  movementFilter=filter;
+  document.querySelectorAll("[data-move-filter]").forEach(b=>b.classList.toggle("active",b.dataset.moveFilter===filter));
+  renderMovements();
+}
+function renderMovements(){
+  const rows=(postState&&Array.isArray(postState.movements)?postState.movements:[]).filter(row=>movementFilter==="all"||row.type===movementFilter);
+  setHTML("movementsList",rows.length?rows.map(row=>'<div class="v5-move" data-type="'+esc(row.type)+'"'+(row.detail?' title="'+esc(row.detail)+'"':'')+'><time>'+esc(row.heure)+'</time><code>'+esc(row.matricule||"—")+'</code><span>'+esc(row.name||row.detail||"")+'</span><em>'+esc(row.label)+'</em></div>').join(""):'<div class="v5-empty">Aucun mouvement pour ce filtre.</div>');
+}
+function openManualFor(index){
+  const item=postState&&postState.todo&&postState.todo[index],e=item&&item.employee;
+  if(!e||!e.id)return;
+  if(!isManualPanelOpen())toggleManualPanel();
+  manualResults=[e];selectManualResult(0);
+}
+// Motif RÉEL du refus (Attendance Core) traduit en message opérationnel, sans qualification disciplinaire.
+function refusalBlockHTML(refusal){
+  const c=refusal.counted||{},prev=c.previous||{},code=refusal.code;
+  const facts=rows=>'<dl class="v5-facts">'+rows.filter(r=>r[1]&&r[1]!=="—").map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>';
+  const span=(a,b)=>a&&b?hm(a)+" → "+hm(b):"";
+  if(code==="EARLY_OUTSIDE_WINDOW")return {title:"ARRIVÉE HORS FENÊTRE",body:'<p class="v5-reason">Votre vacation commence à '+esc(hm(c.scheduled_start))+'.</p>'+facts([["Pointage autorisé à partir de",hm(c.window_opens_at)],["Tentative",hms(c.actual_entry)]])};
+  if(code==="EXTRA_BEFORE_WINDOW")return {title:"NOUVELLE ENTRÉE NON AUTORISÉE",body:facts([["Vacation précédente",span(prev.scheduled_start,prev.scheduled_end)],["Sortie enregistrée",hm(prev.actual_exit)],["Nouvelle entrée possible",span(c.window_opens_at,c.window_closes_at)]])};
+  if(code==="MANUAL_ENTRY_REQUIRED")return {title:"FENÊTRE DE MAINTIEN TERMINÉE",body:'<p class="v5-reason">La nouvelle entrée automatique n’est plus autorisée.</p>'+facts([["Vacation précédente",span(prev.scheduled_start,prev.scheduled_end)],["Fenêtre terminée à",hm(c.window_closes_at)]])+'<p class="v5-reason">SAISIE MANUELLE PAR LE POINTEUR REQUISE.</p>'
+    +(postState&&postState.permissions&&postState.permissions.manual_entry?'<button type="button" class="v5-inline-btn" onclick="toggleManualPanel()">SAISIE MANUELLE</button>':'')};
+  if(code==="PREVIOUS_SHIFT_NOT_CLOSED")return {title:"VACATION PRÉCÉDENTE NON CLÔTURÉE",body:'<p class="v5-reason">La sortie de la première vacation doit être enregistrée avant l’ouverture d’une deuxième vacation.</p>'+facts([["Vacation précédente",span(prev.scheduled_start,prev.scheduled_end)]])};
+  return null;
+}
+// Jamais d'erreur technique brute à l'écran : message opérationnel, détail en console.
+function operationalError(response,data){
+  const error=new Error("Pointage impossible. Réessayez ou contactez le responsable.");
+  const raw=response.headers&&response.headers.get?response.headers.get("X-Attendance-Refusal"):null;
+  if(raw){try{const counted=JSON.parse(raw);error.refusal={code:counted.code,message:counted.message,counted};error.message=counted.message||error.message;return error}catch(e){}}
+  if(typeof data.detail==="string"&&data.detail)error.message=data.detail;
+  else if(data.detail&&typeof data.detail.message==="string")error.message=data.detail.message;
+  else if(response.status>=500)error.message="Service momentanément indisponible. Réessayez dans un instant.";
+  else if(response.status===422)error.message="Pointage impossible : informations incomplètes ou invalides.";
+  if(data.detail&&typeof data.detail!=="string")console.warn("Pointage refusé",response.status,data.detail);
+  return error;
 }
 function scheduleLastScanIdle(){
   clearTimeout(lastScanTimer);
@@ -1054,10 +1328,33 @@ function showLastScan(event){
     <div class="last-scan-name">${esc(name)}</div>
     <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>
       <dt>Site</dt><dd>${esc(event.site||e.site||"—")}</dd><dt>Société</dt><dd>${esc(e.societe||"—")}</dd>${event.terminal?`<dt>Terminal</dt><dd>${esc(event.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${entry?"ENTRÉE ENREGISTRÉE":"SORTIE ENREGISTRÉE"}</b><span>${esc(event.heure||"")}</span></div>
-    <div class="last-scan-state">ÉTAT ACTUEL : ${state}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`;
+    <div class="last-scan-move"><b>${countedTitle(event,entry)}</b><span>${esc(event.heure||"")}</span></div>
+    ${countedFactsHTML(event,entry)}
+    <div class="last-scan-state">ÉTAT ACTUEL : ${countedState(event,state)}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`;
   fillLastScanPhoto(e,token);
   scheduleLastScanIdle();
+}
+function countedTitle(event,entry){
+  const c=event.counted;
+  if(entry&&c&&c.kind==="EXTRA_SHIFT")return event.source==="MANUAL"?"ENTRÉE MANUELLE ENREGISTRÉE":"MAINTIEN ENREGISTRÉ";
+  return entry?"ENTRÉE ENREGISTRÉE":"SORTIE ENREGISTRÉE";
+}
+function countedState(event,state){
+  const c=event.counted;
+  if(c&&c.kind==="EXTRA_SHIFT"&&event.type==="ENTREE")return "EN MAINTIEN";
+  if(c&&event.type!=="ENTREE"&&c.counted_end)return "VACATION TERMINÉE";
+  return state;
+}
+// Heure RÉELLE du pointage, horaire PLANIFIÉ et temps COMPTABILISÉ, affichés distinctement.
+function countedFactsHTML(event,entry){
+  const c=event.counted;if(!c)return "";
+  const rows=[];
+  if(c.group)rows.push(["Groupe",c.group]);
+  if(entry){
+    if(c.kind==="EXTRA_SHIFT")rows.push(["Deuxième vacation",hm(c.scheduled_start)+" → "+hm(c.scheduled_end)],["Début réel",hms(c.actual_entry)],["Temps comptabilisé à partir de",hm(c.counted_start)]);
+    else rows.push(["Pointage réel",hms(c.actual_entry)],["Début planifié",hm(c.scheduled_start)],["Temps comptabilisé à partir de",hm(c.counted_start)]);
+  }else rows.push(["Pointage réel",hms(c.actual_exit)],["Fin planifiée",hm(c.scheduled_end)],["Temps comptabilisé jusqu’à",hm(c.counted_end)],["Durée comptabilisée",minutesLabel(c.counted_minutes)]);
+  return '<dl class="v5-facts">'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>';
 }
 function showLastRefusal(refusal){
   const card=document.getElementById("lastScanCard");if(!card||!refusal)return;
@@ -1068,7 +1365,8 @@ function showLastRefusal(refusal){
     <span class="last-scan-badge">POINTAGE REFUSÉ</span>
     <div class="last-scan-name">${esc(name)}</div>
     <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>${refusal.terminal?`<dt>Terminal</dt><dd>${esc(refusal.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${esc(refusal.label||"POINTAGE REFUSÉ")}</b><span>${esc(refusal.heure||"")}</span></div>
+    <div class="last-scan-move"><b>${esc((refusalBlockHTML(refusal)||{}).title||refusal.label||"POINTAGE REFUSÉ")}</b><span>${esc(refusal.heure||"")}</span></div>
+    ${(refusalBlockHTML(refusal)||{}).body||(refusal.message?'<p class="v5-reason">'+esc(refusal.message)+'</p>':"")}
     <div class="last-scan-state">AUCUN MOUVEMENT ENREGISTRÉ</div></div></div>`;
   fillLastScanPhoto(e,token);
   scheduleLastScanIdle();
@@ -1151,7 +1449,7 @@ function setupScanMode(){
     startScanner();
   }else{
     stopScanner();usb.classList.remove("hidden");reader.classList.add("hidden");cameraButton.classList.remove("hidden");
-    document.getElementById("scannerTitle").textContent="Borne de pointage QR";
+    document.getElementById("scannerTitle").textContent="Pointage";
     document.getElementById("scannerHint").textContent="Douchette USB active · aucune action à effectuer.";
     document.getElementById("wedgeInput").focus({preventScroll:true});
   }
@@ -1292,11 +1590,13 @@ async function onQr(token){
     const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
-    if(!response.ok)throw new Error(data.detail||"Pointage refusé");
+    if(!response.ok)throw operationalError(response,data);
     const entry=recordScanEntry(data);
     showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);
     pollLive();                                                   // la fiche « Dernier pointage » suit sans attendrenavigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
-  }catch(error){showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
+  }catch(error){
+    if(error.refusal)showLastRefusal({id:"x"+Date.now(),heure:opsStamp().slice(11,19),...error.refusal});
+    showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
 function playTone(success){
@@ -1382,6 +1682,10 @@ function resetManualPanel(){
   feedback.textContent="";feedback.className="manual-feedback";
   document.getElementById("manualSearchStep").classList.remove("hidden");
   document.getElementById("manualCardStep").classList.add("hidden");
+  const ctxBox=document.getElementById("manualContext"),extraBtn=document.getElementById("manualExtraBtn");
+  if(ctxBox){ctxBox.classList.add("hidden");ctxBox.innerHTML=""}
+  if(extraBtn)extraBtn.classList.add("hidden");
+  manualContext=null;
 }
 function onManualQueryInput(){
   clearTimeout(manualSearchTimer);
@@ -1411,9 +1715,45 @@ function selectManualResult(index){
   document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><div class="result-meta">CODE ${esc(manualSelected.matricule)} · ${esc(manualSelected.site||"Site non renseigné")}</div><div class="result-company">${esc(manualSelected.societe||"Société non renseignée")}${manualSelected.poste?" · "+esc(manualSelected.poste):""}</div></div></div>`;
   document.getElementById("manualSearchStep").classList.add("hidden");
   document.getElementById("manualCardStep").classList.remove("hidden");
+  loadManualContext(manualSelected);
 }
-async function confirmManualPointage(action="present"){
+// Contexte de maintien de l'employé choisi (lecture seule) : ce qu'Attendance Core appliquera.
+let manualContext=null;
+async function loadManualContext(employee){
+  const box=document.getElementById("manualContext"),button=document.getElementById("manualExtraBtn");
+  manualContext=null;box.classList.add("hidden");box.innerHTML="";button.classList.add("hidden");
+  if(!employee||!employee.id)return;
+  try{
+    const response=await fetch("/api/portal/attendance-manual/context?employee_id="+encodeURIComponent(employee.id)+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(!response.ok)return;
+    const ctx=await response.json();
+    if(manualSelected!==employee)return;                              // l'opérateur a changé d'employé entre-temps
+    manualContext=ctx;
+    const x=ctx.extra_shift;
+    const rows=[["Employé",[employee.nom,employee.prenom].filter(Boolean).join(" ")+" · "+(employee.matricule||"")],["Site",ctx.site&&ctx.site.name]];
+    let note="",explicit=false;
+    if(x){
+      const prev=x.previous||{};
+      rows.push(["Vacation précédente",hm(prev.scheduled_start)+" → "+hm(prev.scheduled_end)],["Sortie précédente",prev.actual_exit?hm(prev.actual_exit):"Non enregistrée"],["Fin théorique",hm(prev.scheduled_end)],
+        ["Fenêtre automatique",hm(x.window_opens_at)+" → "+hm(x.window_closes_at)],["Vacation supplémentaire",(x.shift_label?x.shift_label+" ":"")+hm(x.scheduled_start)+" → "+hm(x.scheduled_end)],["Situation",x.entry_status_label]);
+      explicit=["EXTRA_IN_WINDOW","EXTRA_MANUAL","PREVIOUS_SHIFT_NOT_CLOSED"].includes(x.entry_status);
+      if(x.entry_status==="MANUAL_ENTRY_REQUIRED")note="Ce compte n’a pas la permission « Saisie manuelle » : la deuxième vacation ne peut pas être ouverte ici.";
+      if(x.entry_status==="EXTRA_BEFORE_WINDOW")note="Nouvelle entrée possible entre "+hm(x.window_opens_at)+" et "+hm(x.window_closes_at)+".";
+    }
+    box.innerHTML='<dl class="v5-facts">'+rows.filter(r=>r[1]).map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>'
+      +(note?'<p class="v5-reason">'+esc(note)+'</p>':"")
+      +(explicit?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
+      +'<p class="v5-audit-note">Cette opération sera auditée.</p>';
+    box.classList.remove("hidden");
+    button.classList.toggle("hidden",!explicit);
+  }catch(e){/* contexte indisponible : la saisie reste possible, Attendance Core décide */}
+}
+async function confirmManualPointage(action="present",options={}){
   if(!manualSelected||scanBusy)return;
+  const intent=options.intent||null,reasonEl=document.getElementById("manualReason"),reason=reasonEl?reasonEl.value.trim():"";
+  if(intent&&manualContext&&manualContext.reason_required&&!reason){
+    const fb=document.getElementById("manualFeedback");fb.textContent="Motif obligatoire pour cette saisie manuelle.";fb.className="manual-feedback show error";reasonEl.focus();return;
+  }
   scanBusy=true;
   const button=document.getElementById("manualPointerBtn");
   const absentButton=document.getElementById("manualAbsentBtn");
@@ -1422,23 +1762,31 @@ async function confirmManualPointage(action="present"){
   feedback.textContent="";feedback.className="manual-feedback";
   try{
     const employeeRef=manualSelected.id||manualSelected.matricule;
-    const observation=document.getElementById("manualObservation").value.trim();
-    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action,site_id:selectedSiteId||null})});
+    const observation=reason||document.getElementById("manualObservation").value.trim();
+    // Intention EXPLICITE d'ouvrir une deuxième vacation : jamais devinée depuis un scan ambigu.
+    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action,site_id:selectedSiteId||null,...(intent?{intent}:{})})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
-    if(!response.ok)throw new Error(data.detail||"Pointage refusé");
+    if(!response.ok)throw operationalError(response,data);
     if(action==="absent"){
       feedback.textContent="ABSENCE ENREGISTRÉE À "+(data.heure||"");await loadHistory();playTone(true);navigator.vibrate?.([100,50,100]);
     }else{
       const entry=recordScanEntry(data);showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
       feedback.textContent=(entry.action==="depart"?"DÉPART":"PRÉSENCE")+" ENREGISTRÉE À "+entry.heure;
+      if(data.counted&&data.counted.kind==="EXTRA_SHIFT"&&data.action!=="depart"){
+        const who=(pointerSession.user&&(pointerSession.user.full_name||pointerSession.user.username))||pointerSession.username||"";
+        feedback.innerHTML='<b>ENTRÉE MANUELLE ENREGISTRÉE</b><dl class="v5-facts"><dt>Source</dt><dd>Pointeur</dd><dt>Saisi par</dt><dd>'+esc(who)+'</dd><dt>Motif</dt><dd>'+esc(data.observation||observation||"—")+'</dd><dt>Statut</dt><dd>EN MAINTIEN · À QUALIFIER</dd></dl>';
+      }
+      pollLive();
     }
     feedback.className="manual-feedback show success";
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
-    setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},1800);
+    setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},intent?6000:1800);
   }catch(error){
     const message=error.message||"Pointage impossible";
-    feedback.textContent=message;feedback.className="manual-feedback show error";
+    const block=error.refusal?refusalBlockHTML(error.refusal):null;
+    if(block)feedback.innerHTML='<b>'+esc(block.title)+'</b>'+block.body+'<p class="v5-reason">Aucun mouvement enregistré.</p>';else feedback.textContent=message;
+    feedback.className="manual-feedback show error";
     showResult({message},"error");playTone(false);navigator.vibrate?.(180);
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
   }finally{

@@ -247,18 +247,71 @@ def shift_on(db: Session, assignment: Assignment, work_date: date, anchors: list
               else _anchor_among(anchors, assignment.site_id, rotation.id, work_date))
     if anchor is None:
         return {**out, "reason": "Rotation non configurée : cycle officiel non ancré sur ce site à cette date"}
-    index = ((work_date - anchor.start_date).days + int(rotation.group_offsets[assignment.group_code])) % rotation.cycle_length
+    slot = _cycle_slot(rotation, anchor, assignment.group_code, work_date)
+    out.update({"status": STATUS_OFFICIAL, "official": True, "shift": slot["shift"], "shift_label": SHIFT_LABELS[slot["shift"]],
+                "work_date": work_date, "cycle_day": slot["cycle_day"], "model": {**out["model"], "anchor_date": anchor.start_date}})
+    if slot["shift"] == SHIFT_OFF:
+        return {**out, "working": False, "in_progress": False, "normal_minutes": 0}
+    return {**out, "working": True, "scheduled_start": slot["scheduled_start"], "scheduled_end": slot["scheduled_end"],
+            "normal_minutes": NORMAL_SHIFT_MINUTES}
+
+
+def _cycle_slot(rotation: RotationTemplate, anchor: SiteRotation, group: str, work_date: date) -> dict[str, Any]:
+    """Jour de cycle et vacation d'un groupe pour `work_date` — UNIQUE calcul du cycle officiel
+    (ancrage du site + décalage du groupe), partagé par l'employé (`shift_on`) et le site
+    (`site_shift`)."""
+    from app.modules.attendance import core
+
+    index = ((work_date - anchor.start_date).days + int(rotation.group_offsets[group])) % rotation.cycle_length
     day = rotation.cycle_days[index]
     shift = shift_of(day)
-    out.update({"status": STATUS_OFFICIAL, "official": True, "shift": shift, "shift_label": SHIFT_LABELS[shift],
-                "work_date": work_date, "cycle_day": index + 1, "model": {**out["model"], "anchor_date": anchor.start_date}})
+    out = {"group": group, "shift": shift, "cycle_day": index + 1, "work_date": work_date, "scheduled_start": None, "scheduled_end": None}
     if shift == SHIFT_OFF:
-        return {**out, "working": False, "in_progress": False, "normal_minutes": 0}
+        return out
     start_minutes, end_minutes = _minutes(day["start_time"]), _minutes(day["end_time"])
     start = datetime.combine(work_date, time(start_minutes // 60, start_minutes % 60), tzinfo=core.TZ)
-    return {**out, "working": True, "scheduled_start": start,
-            "scheduled_end": start + timedelta(minutes=(end_minutes - start_minutes) % (24 * 60)),
-            "normal_minutes": NORMAL_SHIFT_MINUTES}
+    return {**out, "scheduled_start": start, "scheduled_end": start + timedelta(minutes=(end_minutes - start_minutes) % (24 * 60))}
+
+
+def site_shift(db: Session, *, site_id: int, at: datetime) -> dict[str, Any]:
+    """Vacation ACTIVE d'un site à un instant (quel groupe travaille, jusqu'à quand), la vacation
+    précédente et la prochaine relève — lues sur le cycle officiel ancré du site. Sans ancrage :
+    « ROTATION_NOT_CONFIGURED » si le site a des affectations postées, « NORMAL » sinon ; aucune
+    vacation, aucun groupe, aucune relève n'est alors renvoyé."""
+    local = _local(at)
+    today = local.date()
+    anchors = anchors_for(db, {site_id})
+    models = {m.id: m for m in db.execute(select(RotationTemplate).where(
+        RotationTemplate.id.in_({a.rotation_id for a in anchors} or {0}), RotationTemplate.official == 1,
+        RotationTemplate.active == 1)).scalars()}
+    slots = []
+    for rotation in models.values():
+        try:
+            validate_model(rotation)
+        except ValueError:
+            continue
+        for offset in (-1, 0, 1):
+            day = today + timedelta(days=offset)
+            anchor = _anchor_among(anchors, site_id, rotation.id, day)
+            if anchor is None:
+                continue
+            slots += [slot for slot in (_cycle_slot(rotation, anchor, group, day) for group in rotation.group_offsets)
+                      if slot["scheduled_start"] is not None]
+    current = next((s for s in slots if s["scheduled_start"] <= local < s["scheduled_end"]), None)
+    if current is None:
+        posted = db.execute(select(Assignment.id).where(
+            Assignment.site_id == site_id, Assignment.work_regime == REGIME_POSTE_CONTINU, Assignment.active == 1,
+            Assignment.start_date <= today, (Assignment.end_date.is_(None)) | (Assignment.end_date >= today)).limit(1)).first()
+        return {"status": STATUS_NOT_CONFIGURED if posted else STATUS_NORMAL, "official": False, "site_id": site_id,
+                "current": None, "previous": None, "next": None,
+                "reason": "Rotation non configurée : cycle officiel non ancré sur ce site à cette date" if posted else None}
+
+    def out(slot: dict[str, Any] | None) -> dict[str, Any] | None:
+        return None if slot is None else {**slot, "shift_label": SHIFT_LABELS[slot["shift"]], "normal_minutes": NORMAL_SHIFT_MINUTES}
+
+    return {"status": STATUS_OFFICIAL, "official": True, "site_id": site_id, "reason": None, "current": out(current),
+            "previous": out(next((s for s in slots if s["scheduled_end"] == current["scheduled_start"]), None)),
+            "next": out(next((s for s in slots if s["scheduled_start"] == current["scheduled_end"]), None))}
 
 
 def official_shift(db: Session, *, employee_id: int, site_id: int, at: datetime) -> dict[str, Any]:

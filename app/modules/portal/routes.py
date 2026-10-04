@@ -796,7 +796,8 @@ def attendance_live(
     from app.modules.attendance import live
 
     allowed_site_ids = _attendance_selected_sites(db, user, site_id)
-    return live.live(db, allowed_site_ids, after_id=after_id, after_refusal_id=after_refusal_id)
+    return live.live(db, allowed_site_ids, after_id=after_id, after_refusal_id=after_refusal_id,
+                     manual_entry=_manual_entry_granted(db, user))
 
 
 @router.get("/attendance-employee/{employee_id}/portrait")
@@ -1393,6 +1394,36 @@ def search_employee_for_manual_attendance(
         } if employee_ids and allowed else set()
         rows = [row for row in rows if row.id in permitted_employee_ids]
     return [_employee_search_result(db, row) for row in rows]
+
+
+@router.get("/attendance-manual/context")
+def manual_attendance_context(employee_id: int, site_id: int | None = None, db: Session = Depends(get_db),
+                              scanner: User = Depends(current_user)) -> dict[str, Any]:
+    """Contexte affiché avant une saisie manuelle (lecture seule) : dernière vacation de l'employé,
+    sa sortie, la fenêtre de nouvelle entrée et la vacation supplémentaire concernée, tels
+    qu'Attendance Core les appliquera. Rien n'est écrit ; l'opération elle-même sera auditée."""
+    from app.modules.attendance import counted as counted_time
+
+    employee = employee_by_ref(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_employee_on_selected_site(db, employee, site_id)
+    assignment = attendance_core.active_assignment(db, employee.id)
+    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
+    now = attendance_core._now_local()
+    events = attendance_core._last_scan_events(db, employee.id)
+    allowed = _manual_entry_granted(db, scanner)
+    extra = counted_time.extra_context(events, site.id if site else None, now, manual_allowed=allowed)
+    return {
+        "employee": {"id": employee.id, "matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name,
+                     "poste": employee.position or ""},
+        "site": {"id": site.id, "name": site.name} if site else None, "group": assignment.group_code if assignment else None,
+        "extra_shift": counted_time.view({"counted": extra}) if extra else None,
+        "manual_entry_allowed": allowed, "intent": counted_time.INTENT_EXTRA_ENTRY if extra else None,
+        "reason_required": bool(extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL),
+        "audited": True, **attendance_core.operational_clock(now),
+    }
 
 
 @router.post("/attendance-manual/scan", status_code=status.HTTP_201_CREATED)

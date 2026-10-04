@@ -164,6 +164,16 @@ def extra_entry(previous: dict[str, Any], at: datetime, *, previous_event_id: in
     }
 
 
+def extra_context(events: list[Any], site_id: int | None, at: datetime, *, manual_allowed: bool = False) -> dict[str, Any] | None:
+    """Contexte de deuxième vacation d'un employé à `at` (lecture seule, rien n'est écrit) :
+    vacation précédente, fenêtre de nouvelle entrée et ce que répondrait Attendance Core à une
+    entrée explicite. None hors du créneau qui suit sa vacation normale."""
+    previous = previous_shift(events, site_id)
+    if previous is None or not in_extra_slot(previous[0], at):
+        return None
+    return extra_entry(previous[0], at, previous_event_id=previous[1].id, manual_allowed=manual_allowed)
+
+
 # ── Vacation visée par une entrée ────────────────────────────────────────────────────────
 def entry(db: Session, *, employee_id: int, site_id: int, at: datetime) -> dict[str, Any] | None:
     """Instantané d'une entrée à `at`, ou None si aucune vacation officielle n'est à

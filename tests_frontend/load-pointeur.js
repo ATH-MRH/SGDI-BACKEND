@@ -38,6 +38,9 @@ function buildHtml() {
   renderSystemState, setLiveState, syncModeCards, selectQrMode, lastScanIdleHTML, setupScanMode, toggleManualPanel,
   getUi: () => ({ liveState, liveOkAt, cameraMode }),
   syncOpsClock, opsNow, opsDate, opsStamp, localDate, shiftDate, updateHeaderClock,
+  renderPost, tickPost, setMovementFilter, showLastRefusal, confirmManualPointage, selectManualResult, loadManualContext, openManualFor, operationalError,
+  getPost: () => postState, setPost: (v) => { postState = v; renderPost(); },
+  setManualResults: (v) => { manualResults = v; }, getManualContext: () => manualContext,
   loadActiveSheet, renderLiveFeed, rotationAlertHTML, setLiveFilter, loadHistory, getActiveSheet: () => activeSheet,
 };
 `;

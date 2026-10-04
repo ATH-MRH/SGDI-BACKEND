@@ -16,6 +16,7 @@ complétées par :
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -333,7 +334,12 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
                             **{key: value for key, value in counted.items() if value is not None and key != "entry_status"}})
     db.commit()
     manual_denied = code == counted_time.MANUAL_ENTRY_REQUIRED and source == SOURCE_MANUAL
-    raise HTTPException(status_code=403 if manual_denied else 409, headers={"X-Attendance-Code": code}, detail=detail)
+    # Motif structuré pour l'écran (ASCII : en-tête HTTP) ; `detail` reste le texte historique.
+    refusal = json.dumps({"code": code, "message": detail, "recorded": False,
+                          **{key: counted.get(key) for key in ("kind", "shift", "scheduled_start", "scheduled_end", "window_opens_at",
+                                                               "window_closes_at", "actual_entry", "previous")}}, ensure_ascii=True)
+    raise HTTPException(status_code=403 if manual_denied else 409, detail=detail,
+                        headers={"X-Attendance-Code": code, "X-Attendance-Refusal": refusal})
 
 
 def record_scan(
