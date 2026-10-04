@@ -137,3 +137,48 @@ test('dashboard destinations: read-only candidate rows expose no editing control
   assert.equal(c.rowActions(item),'—');assert.equal(c.rowActionItems(item).length,0);
   assert.doesNotMatch(c.avisCell(item),/<select/);assert.match(c.avisCell(item),/Favorable/);
 });
+
+function brandingContext(){
+  const dom=new JSDOM(source,{runScripts:'outside-only'});
+  const script=[...source.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(match=>match[1]).find(script=>script.includes('const SESSION_KEY='));
+  const ctx={document:dom.window.document,sessionStorage:{getItem:()=>null},localStorage:{setItem(){}},URLSearchParams};
+  // Browser startup is driven explicitly to test the asynchronous session boundary.
+  const realAddEventListener=ctx.document.addEventListener.bind(ctx.document);
+  ctx.document.addEventListener=(name,...args)=>{if(name!=='DOMContentLoaded')realAddEventListener(name,...args)};
+  vm.createContext(ctx);vm.runInContext(script,ctx);
+  ctx.populateFormSocieties=()=>{};ctx.loadPositionOptions=()=>{};ctx.renderTabs=()=>{};ctx.showRecruitSection=()=>{};
+  return {ctx,doc:ctx.document,setSociety:value=>{ctx.company=value;vm.runInContext('activeSociety=company;updateRecruitmentBrand()',ctx)}};
+}
+
+test('sidebar identity: official assets follow canonical society keys and unknown societies never borrow a logo',()=>{
+  const {doc,setSociety}=brandingContext();const host=doc.getElementById('recruitmentBrand');
+  assert.equal(host.querySelector('img'),null);assert.ok(host.classList.contains('hidden'));
+  for(const value of ['IRON GLOBAL SÉCURITÉ','  iron  global securite  ']){
+    setSociety(value);assert.equal(host.querySelector('img').getAttribute('src'),'/static/iron-securite-logo.png');
+    assert.equal(host.textContent,'IRON GLOBAL SÉCURITÉ');assert.equal(host.dataset.societyKey,'IRON GLOBAL SECURITE');
+  }
+  setSociety('IRON GLOBAL SOLUTION');assert.equal(host.querySelector('img').getAttribute('src'),'/static/iron-solution-logo.png');assert.equal(host.querySelector('img').alt,'IRON GLOBAL SOLUTION');assert.equal(host.textContent,'IRON GLOBAL SOLUTION');
+  setSociety('SWORD CORPORATION');assert.equal(host.querySelector('img'),null);assert.equal(host.querySelector('.sidebar-brand-initials').textContent,'SC');assert.equal(host.querySelector('span:last-child').textContent,'SWORD CORPORATION');
+  setSociety('');assert.equal(host.querySelector('img'),null);assert.equal(host.querySelector('span:last-child').textContent,'Recrutement');
+});
+
+test('sidebar identity: company switches replace logo and label immediately before the existing data refresh',()=>{
+  const {ctx,doc,setSociety}=brandingContext();const observed=[];
+  ctx.refreshRecruitCurrentSection=()=>{observed.push({name:doc.getElementById('recruitmentBrand').textContent,src:doc.querySelector('#recruitmentBrand img').getAttribute('src')})};
+  doc.getElementById('societySelect').innerHTML='<option>IRON GLOBAL SÉCURITÉ</option><option>IRON GLOBAL SOLUTION</option>';
+  setSociety('IRON GLOBAL SÉCURITÉ');const original=doc.querySelector('#recruitmentBrand img');
+  doc.getElementById('societySelect').value='IRON GLOBAL SOLUTION';ctx.onSocietyChange();assert.equal(original.isConnected,false);
+  doc.getElementById('societySelect').value='IRON GLOBAL SÉCURITÉ';ctx.onSocietyChange();
+  assert.deepEqual(observed,[{name:'IRON GLOBAL SOLUTION',src:'/static/iron-solution-logo.png'},{name:'IRON GLOBAL SÉCURITÉ',src:'/static/iron-securite-logo.png'}]);
+});
+
+test('sidebar identity: mono-company users see the right identity before the application is revealed',async()=>{
+  for(const [name,logo] of [['IRON GLOBAL SÉCURITÉ','iron-securite-logo.png'],['IRON GLOBAL SOLUTION','iron-solution-logo.png']]){
+    const {ctx,doc}=brandingContext();
+    vm.runInContext('recruteSession={token:"qa"}',ctx);
+    ctx.apiFetch=async()=>({full_name:'Test',role:'recruteur',recruitment_access:true,authorized_actions:['read'],authorized_societies:[name]});
+    let onReveal;const classes=doc.getElementById('appView').classList,remove=classes.remove.bind(classes);
+    classes.remove=(value)=>{if(value==='hidden')onReveal={name:doc.getElementById('recruitmentBrand').textContent,src:doc.querySelector('#recruitmentBrand img')?.getAttribute('src')};remove(value)};
+    await ctx.enterApp();assert.deepEqual(onReveal,{name,src:`/static/${logo}`});assert.ok(doc.getElementById('societySelect').classList.contains('hidden'));assert.equal(doc.getElementById('societyBadge').textContent,name);
+  }
+});

@@ -177,7 +177,7 @@ tr:last-child td{border-bottom:0}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
-<link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004" media="screen">
+<link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5">
@@ -216,7 +216,7 @@ tr:last-child td{border-bottom:0}
   </header>
   <div class="app-shell">
     <aside class="recruit-sidebar" aria-label="Navigation recrutement">
-      <div class="sidebar-brand"><img src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><span>IRON GLOBAL<br>SÉCURITÉ</span></div>
+      <div class="sidebar-brand hidden" id="recruitmentBrand" aria-live="polite"></div>
       <div class="recruit-sidebar-title">Espace recrutement</div>
       <nav class="recruit-nav">
         <button class="recruit-nav-btn" data-section="dashboard" onclick="showRecruitSection('dashboard')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/></svg></span>Tableau de bord</button>
@@ -461,8 +461,6 @@ function logout(){
 async function enterApp(){
   try{recruteSession.user=await apiFetch("/api/auth/me");localStorage.setItem(SESSION_KEY,JSON.stringify(recruteSession))}catch(error){showLoginError(error.message);return}
   if(!recruitmentCan("read")){showLoginError("Accès réservé au recrutement / DRH.");return}
-  document.getElementById("loginView").classList.add("hidden");
-  document.getElementById("appView").classList.remove("hidden");
   const user=recruteSession?.user||{};
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"")+" · "+(user.role||"");
   document.getElementById("sessionAvatar").textContent=String(user.full_name||user.username||"").split(/\s+/).filter(Boolean).map(value=>value[0]).slice(0,2).join("").toUpperCase();
@@ -479,6 +477,9 @@ async function enterApp(){
     if(activeSociety){badge.textContent=activeSociety;badge.classList.remove("hidden")}
     select.classList.add("hidden");
   }
+  updateRecruitmentBrand();
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
   populateFormSocieties(societies);
   loadPositionOptions();
   renderTabs();
@@ -512,9 +513,32 @@ function setPositionValue(id,value){
   }
   select.value=value;
 }
+// The recruitment session/API expose society strings, not company IDs/codes.
+// Match the canonical key used by app/core/scope_policy.py::society_key;
+// keep the original activeSociety value for all existing data/permission calls.
+const RECRUITMENT_BRANDS={
+  "IRON GLOBAL SECURITE":{name:"IRON GLOBAL SÉCURITÉ",logo:"/static/iron-securite-logo.png"},
+  "IRON GLOBAL SOLUTION":{name:"IRON GLOBAL SOLUTION",logo:"/static/iron-solution-logo.png"}
+};
+function recruitmentSocietyKey(value){
+  return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toUpperCase().replace(/\s+/g," ");
+}
+function updateRecruitmentBrand(){
+  const host=document.getElementById("recruitmentBrand");if(!host)return;
+  const key=recruitmentSocietyKey(activeSociety),brand=RECRUITMENT_BRANDS[key];
+  const name=brand?.name||String(activeSociety||"").trim()||"Recrutement";
+  const visual=document.createElement(brand?.logo?"img":"span");
+  if(brand?.logo){visual.src=brand.logo;visual.alt=name;visual.width=52;visual.height=52}
+  else{visual.className="sidebar-brand-initials";visual.textContent=name.split(/\s+/).filter(Boolean).map(word=>word[0]).slice(0,3).join("").toUpperCase();visual.setAttribute("aria-hidden","true")}
+  const label=document.createElement("span");label.textContent=name;
+  // Replace the old image element as well as its label in one synchronous update:
+  // a pending image decode must never display the previous company's logo.
+  host.replaceChildren(visual,label);host.dataset.societyKey=key;host.classList.remove("hidden");
+}
 function onSocietyChange(){
   recruitmentDashboardRequest++;recruitmentDashboardData=null;recruitmentDashboardPosition="";
   activeSociety=document.getElementById("societySelect").value||"";
+  updateRecruitmentBrand();
   Object.keys(tabState).forEach(k=>{tabState[k].page=1;tabState[k].request=(tabState[k].request||0)+1;tabState[k].items=[];if(tabState[k].societyFilter)tabState[k].societyFilter=activeSociety});
   refreshRecruitCurrentSection();
 }

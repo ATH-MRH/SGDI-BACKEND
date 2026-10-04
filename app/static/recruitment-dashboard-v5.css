@@ -185,3 +185,6 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recru
 @media(max-width:480px){body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .session-avatar{width:24px;height:24px;font-size:9px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand{gap:5px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-user{max-width:85px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:130px}}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi i svg{width:25px;height:25px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 @media(min-width:801px){body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav{flex-direction:column}}
+
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand-initials{width:52px;height:52px;flex-shrink:0;display:grid;place-items:center;background:#17355f;color:#fff;border-radius:8px;font-size:16px;letter-spacing:.03em}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand>span:not(.sidebar-brand-initials){overflow-wrap:anywhere;min-width:0}
