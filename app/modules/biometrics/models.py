@@ -11,7 +11,7 @@ Voir docs/biometrics.md.
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -186,7 +186,8 @@ MOBILE_TERMINAL_TYPES = frozenset({"TABLET_ANDROID", "SMARTPHONE_ANDROID", "IPHO
 
 class BiometricTerminal(Base, TimestampMixin):
     __tablename__ = "biometric_terminals"
-    __table_args__ = (UniqueConstraint("site_id", "name", name="uq_biometric_terminals_site_name"),)
+    __table_args__ = (Index("uq_biometric_terminals_live_site_name", "site_id", "name", unique=True,
+                           postgresql_where=text("deleted_at IS NULL"), sqlite_where=text("deleted_at IS NULL")),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     public_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # identifiant immuable
@@ -207,6 +208,9 @@ class BiometricTerminal(Base, TimestampMixin):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
     revoked_reason: Mapped[str | None] = mapped_column(Text)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    deleted_by: Mapped[str | None] = mapped_column(String(120))
+    deleted_reason: Mapped[str | None] = mapped_column(Text)
     config_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)   # incrémentée à chaque changement
     meta: Mapped[dict | None] = mapped_column(JSON)                        # non sensible (libellé appareil…)
     created_by: Mapped[str | None] = mapped_column(String(120))

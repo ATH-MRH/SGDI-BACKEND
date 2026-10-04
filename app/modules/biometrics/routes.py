@@ -17,8 +17,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core import rate_limit
 from app.core.audit import append_audit
@@ -771,22 +772,31 @@ def _terminal_out(term: BiometricTerminal, site: Site | None = None) -> dict[str
             "pairing_expires_at": iso(term.pairing_expires_at) if term.pairing_code_hash else None,
             "last_seen_at": iso(term.last_seen_at), "revoked_at": iso(term.revoked_at), "revoked_reason": term.revoked_reason,
             "config_version": term.config_version, "device_label": (term.meta or {}).get("device_label"),
-            "created_by": term.created_by}
+            "created_by": term.created_by, "deleted_at": iso(term.deleted_at),
+            "deleted_by": term.deleted_by, "deleted_reason": term.deleted_reason}
 
 
-def _terminal_in_scope(db: Session, user: User, terminal_id: int) -> BiometricTerminal:
-    term = db.get(BiometricTerminal, terminal_id)
+def _terminal_in_scope(db: Session, user: User, terminal_id: int, *, include_deleted: bool = False, lock: bool = False) -> BiometricTerminal:
+    stmt = select(BiometricTerminal).where(BiometricTerminal.id == terminal_id)
+    if lock:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    term = db.execute(stmt).scalar_one_or_none()
     allowed = _allowed_assignment_site_ids(db, user)
-    if not term or (allowed is not None and term.site_id not in set(allowed)):
+    if not term or (term.deleted_at and not include_deleted) or (allowed is not None and term.site_id not in set(allowed)):
         raise HTTPException(404, detail="Terminal introuvable")
     return term
 
 
 @router.get("/terminals")
-def list_terminals(site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+def list_terminals(site_id: int | None = None, include_deleted: bool = False, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
     require_feature(db, user, "biometric_status", "read")
     allowed = _allowed_assignment_site_ids(db, user)
     stmt = select(BiometricTerminal)
+    if include_deleted:
+        if not _feature_granted(db, user, "biometric_admin", ("validate", "admin")):
+            require_feature(db, user, "biometric_admin", "admin")
+    else:
+        stmt = stmt.where(BiometricTerminal.deleted_at.is_(None))
     if site_id is not None:
         _ensure_site_allowed(db, user, site_id)
         stmt = stmt.where(BiometricTerminal.site_id == site_id)
@@ -827,14 +837,18 @@ def add_terminal(payload: TerminalIn, db: Session = Depends(get_db), user: User 
     if not society:
         raise HTTPException(422, detail="Le site n'a pas de société : un terminal appartient à une société ET un site")
     if db.execute(select(BiometricTerminal.id).where(BiometricTerminal.site_id == site.id,
-                                                     BiometricTerminal.name == payload.name.strip())).first():
+                                                     BiometricTerminal.name == payload.name.strip(), BiometricTerminal.deleted_at.is_(None))).first():
         raise HTTPException(409, detail="Un terminal porte déjà ce nom sur ce site")
     term = BiometricTerminal(public_id="trm_" + secrets.token_urlsafe(18), name=payload.name.strip(),
                              terminal_type=payload.terminal_type, society=society, site_id=site.id, location=payload.location,
                              enabled=True, facial_attendance_enabled=False, config_version=1, meta={},
                              created_by=getattr(user, "username", None))
     db.add(term)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, detail="Un terminal porte déjà ce nom sur ce site") from None
     append_audit(db, action="biometrics.terminal.create", resource="biometric_terminal", resource_id=term.id, result="success",
                  user=user, society=society, new_state={k: v for k, v in _terminal_out(term, site).items() if k != "created_by"})
     db.commit()
@@ -844,7 +858,7 @@ def add_terminal(payload: TerminalIn, db: Session = Depends(get_db), user: User 
 @router.patch("/terminals/{terminal_id}")
 def update_terminal(terminal_id: int, payload: TerminalPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     require_feature(db, user, "biometric_admin", "admin")
-    term = _terminal_in_scope(db, user, terminal_id)
+    term = _terminal_in_scope(db, user, terminal_id, lock=True)
     if term.revoked_at:
         raise HTTPException(409, detail="Terminal révoqué")
     changes = payload.model_dump(exclude_unset=True)
@@ -866,7 +880,7 @@ def terminal_pairing_code(terminal_id: int, db: Session = Depends(get_db), user:
     """Code d'association à usage unique (10 min). Sur un terminal déjà associé : rotation de
     la clé (l'ancienne reste valable jusqu'à la nouvelle association)."""
     require_feature(db, user, "biometric_admin", "admin")
-    term = _terminal_in_scope(db, user, terminal_id)
+    term = _terminal_in_scope(db, user, terminal_id, lock=True)
     out = terminals.new_pairing_code(db, term, user)
     db.commit()
     return {**out, "terminal": _terminal_out(term, db.get(Site, term.site_id))}
@@ -876,16 +890,51 @@ def terminal_pairing_code(terminal_id: int, db: Session = Depends(get_db), user:
 def revoke_terminal(terminal_id: int, payload: RevokeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Révocation définitive, effet immédiat : clé publique effacée, code annulé."""
     require_feature(db, user, "biometric_admin", "admin")
-    term = _terminal_in_scope(db, user, terminal_id)
+    term = _terminal_in_scope(db, user, terminal_id, lock=True)
     if term.revoked_at:
         raise HTTPException(409, detail="Terminal déjà révoqué")
-    term.revoked_at, term.revoked_reason = datetime.utcnow(), payload.reason.strip()
-    term.enabled = term.facial_attendance_enabled = False
-    term.public_key = term.key_fingerprint = term.pairing_code_hash = term.pairing_expires_at = None
-    term.config_version += 1
+    changed = db.execute(update(BiometricTerminal).where(
+        BiometricTerminal.id == term.id, BiometricTerminal.deleted_at.is_(None),
+        BiometricTerminal.revoked_at.is_(None)).values(
+        revoked_at=datetime.utcnow(), revoked_reason=payload.reason.strip(), enabled=False,
+        facial_attendance_enabled=False, public_key=None, key_fingerprint=None,
+        pairing_code_hash=None, pairing_expires_at=None,
+        config_version=BiometricTerminal.config_version + 1), execution_options={"synchronize_session": False})
+    if not changed.rowcount:
+        db.rollback()
+        raise HTTPException(409, detail="Terminal déjà révoqué ou supprimé")
+    db.refresh(term)
     append_audit(db, action="biometrics.terminal.revoke", resource="biometric_terminal", resource_id=term.id, result="success",
                  user=user, society=term.society, new_state={"terminal_id": term.public_id, "reason": term.revoked_reason})
     db.commit()
+    return _terminal_out(term, db.get(Site, term.site_id))
+
+
+class TerminalDeleteIn(BaseModel):
+    reason: str | None = Field(None, max_length=500)
+
+
+@router.delete("/terminals/{terminal_id}")
+def delete_terminal(terminal_id: int, payload: TerminalDeleteIn | None = None,
+                    db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Retrait opérationnel définitif, sans supprimer la ligne ni ses preuves historiques."""
+    require_feature(db, user, "biometric_admin", "admin")
+    term = _terminal_in_scope(db, user, terminal_id, include_deleted=True, lock=True)
+    if not term.deleted_at:
+        changed = db.execute(update(BiometricTerminal).where(
+            BiometricTerminal.id == term.id, BiometricTerminal.deleted_at.is_(None)).values(
+            deleted_at=datetime.utcnow(), deleted_by=getattr(user, "username", None),
+            deleted_reason=(payload.reason or "").strip() or None if payload else None,
+            enabled=False, facial_attendance_enabled=False, public_key=None, key_fingerprint=None,
+            pairing_code_hash=None, pairing_expires_at=None,
+            config_version=BiometricTerminal.config_version + 1), execution_options={"synchronize_session": False})
+        db.refresh(term)
+        if changed.rowcount:
+            append_audit(db, action="biometrics.terminal.delete", resource="biometric_terminal",
+                         resource_id=term.id, result="success", user=user, society=term.society,
+                         new_state={"terminal_id": term.public_id, "name": term.name,
+                                    "reason": term.deleted_reason, "deleted_by": term.deleted_by})
+        db.commit()
     return _terminal_out(term, db.get(Site, term.site_id))
 
 
@@ -896,7 +945,7 @@ def terminal_audit(terminal_id: int, limit: int = 50, db: Session = Depends(get_
 
     if not _feature_granted(db, user, "biometric_admin", ("validate", "admin")):
         require_feature(db, user, "biometric_admin", "admin")
-    term = _terminal_in_scope(db, user, terminal_id)
+    term = _terminal_in_scope(db, user, terminal_id, include_deleted=True)
     rows = db.execute(select(AuditEvent).where(AuditEvent.resource == "biometric_terminal", AuditEvent.resource_id == str(term.id))
                       .order_by(AuditEvent.id.desc()).limit(max(1, min(limit, 200)))).scalars().all()
     out = []

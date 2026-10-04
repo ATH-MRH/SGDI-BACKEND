@@ -255,7 +255,7 @@ body.modal-open{overflow:hidden}
         </div>
         <div class="terminal-kpis" id="terminal-kpis" aria-label="Indicateurs des terminaux"></div>
         <div class="terminal-toolbar">
-          <div class="terminal-toolbar-actions"><button class="primary" id="terminal-add" type="button">+ Ajouter un terminal</button><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button></div>
+          <div class="terminal-toolbar-actions"><button class="secondary" id="terminal-archive" type="button">Audit des terminaux supprimés</button><button class="primary" id="terminal-add" type="button">+ Ajouter un terminal</button><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button></div>
           <div class="terminal-filters">
             <label class="terminal-search" for="terminal-q"><span class="sr-only">Rechercher un terminal, site, code ou société</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="terminal-q" type="search" placeholder="Rechercher un terminal, site, code..." autocomplete="off"></label>
             <label class="sr-only" for="terminal-type">Type de terminal</label><select id="terminal-type"><option value="">Tous les types</option><option value="TABLET_ANDROID">Tablette Android</option><option value="SMARTPHONE_ANDROID">Smartphone Android</option><option value="IPHONE">iPhone</option><option value="IPAD">iPad</option></select>
@@ -1127,12 +1127,12 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         : `<div>${t.pairing_pending ? "Association en attente" : "Non associé"}</div>${pending}`;
       const age = terminalSnapshotAt - Date.parse(t.last_seen_at);
       const online = !t.revoked_at && age >= 0 && age <= TERMINAL_ONLINE_MS;
-      const actions = t.revoked_at ? terminalAction(t, "audit", "Audit", "audit") : [
+      const actions = (t.revoked_at ? terminalAction(t, "audit", "Audit", "audit") : [
         terminalAction(t, "pair", t.paired ? "Ré-associer" : "Associer", "link"),
         terminalAction(t, "facial", t.facial_attendance_enabled ? "Couper le facial" : "Activer le facial", "camera"),
         terminalAction(t, "enable", t.enabled ? "Désactiver" : "Activer", "power", t.enabled ? "warning" : ""),
-        terminalAction(t, "rename", "Renommer", "edit"), terminalAction(t, "audit", "Audit", "audit"), terminalAction(t, "revoke", "Révoquer", "trash", "danger"),
-      ].join("");
+        terminalAction(t, "rename", "Renommer", "edit"), terminalAction(t, "audit", "Audit", "audit"), terminalAction(t, "revoke", "Révoquer", "cross", "danger"),
+      ].join("")) + terminalAction(t, "delete", "Supprimer", "trash", "danger");
       return `<tr data-terminal-id="${esc(t.id)}"><td data-label="Terminal"><div class="terminal-identity"><span class="terminal-device">${terminalIcon(device.icon)}</span><div><b>${esc(t.name)}</b><small>${esc(t.location || "Emplacement non renseigné")}</small></div></div></td>
         <td data-label="Type"><div class="terminal-type">${terminalIcon(/_ANDROID$/.test(t.terminal_type) ? "android" : device.icon)}<div>${esc(device.type)}${device.android ? `<small class="terminal-os">${esc(device.android)}</small>` : ""}</div></div></td>
         <td data-label="Site"><div class="terminal-site"><b>${esc(t.site || "Site non renseigné")}</b><small>${esc(t.society)}</small></div></td>
@@ -1152,6 +1152,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     bind("data-term-enable", (t) => patchTerminal(t, { enabled: !t.enabled }, t.enabled ? `Désactiver « ${t.name} » ? Effet immédiat (facial et QR de la borne).` : null));
     bind("data-term-rename", (t) => { const name = prompt("Nouveau nom du terminal", t.name); if (name && name.trim() && name.trim() !== t.name) patchTerminal(t, { name: name.trim() }); });
     bind("data-term-revoke", revokeTerminal);
+    bind("data-term-delete", deleteTerminal);
     bind("data-term-audit", terminalAudit);
   }
   async function loadTerminals() {
@@ -1169,7 +1170,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     try {
       const rows = await api("/biometrics/terminals" + (site ? "?site_id=" + encodeURIComponent(site) : ""));
       if (seq !== terminalSeq || site !== $("f-site").value) return;
-      terminalCache = rows;
+      terminalCache = rows.filter(t => !t.deleted_at);
       terminalSnapshotAt = Date.now();
       $("terminal-state").innerHTML = "";
       renderTerminalKpis(true);
@@ -1215,11 +1216,43 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   async function revokeTerminal(t) {
-    const reason = prompt(`Révoquer définitivement « ${t.name} » (tablette perdue, remplacée…) ?\nMotif obligatoire :`);
+    const reason = prompt(`Révoquer définitivement « ${t.name} » (tablette perdue, remplacée…) ?\nSa clé sera immédiatement invalidée, mais le terminal restera visible dans la liste et son historique sera conservé.\nMotif obligatoire :`);
     if (!reason || reason.trim().length < 3) return;
     try { await api(`/biometrics/terminals/${t.id}/revoke`, { method: "POST", body: { reason: reason.trim() } }); toast("Terminal révoqué"); loadTerminals(); }
     catch (ex) { toast(permissionMessage(ex), true); }
   }
+
+  function deleteTerminal(t) {
+    const m = modal(`<h3>Supprimer ce terminal ?</h3><p><b>${esc(t.name)}</b></p><p>Le terminal disparaîtra de la liste et ne pourra plus pointer. Son historique sera conservé. Vous pourrez créer un nouveau terminal ultérieurement.</p><label for="terminal-delete-reason">Motif (facultatif)</label><input id="terminal-delete-reason" maxlength="500"><div class="error" id="terminal-delete-error" role="alert"></div><div class="modal-actions"><button class="secondary" type="button" id="terminal-delete-cancel">Annuler</button><button class="danger" type="button" id="terminal-delete-confirm">Supprimer le terminal</button></div>`);
+    m.querySelector("#terminal-delete-cancel").addEventListener("click", closeModal);
+    m.querySelector("#terminal-delete-confirm").addEventListener("click", async function () {
+      if (this.disabled) return;
+      this.disabled = true;
+      try {
+        await api(`/biometrics/terminals/${t.id}`, { method: "DELETE", body: { reason: m.querySelector("#terminal-delete-reason").value.trim() || null } });
+        // Invalidate an older list response, remove locally and recalculate immediately.
+        terminalSeq++;
+        terminalCache = terminalCache.filter(row => row.id !== t.id);
+        renderTerminalKpis(true); renderTerminals();
+        $("site-facial-off-terminals").classList.toggle("hidden", !$("f-site").value || !terminalCache.some(row => row.facial_attendance_enabled));
+        closeModal(); toast("Terminal supprimé — historique conservé");
+      } catch (ex) {
+        this.disabled = false;
+        const err = m.querySelector("#terminal-delete-error");
+        err.textContent = permissionMessage(ex); err.classList.add("show");
+      }
+    });
+  }
+
+  $("terminal-archive").addEventListener("click", async () => {
+    try {
+      const site = $("f-site").value;
+      const rows = (await api("/biometrics/terminals?include_deleted=true" + (site ? "&site_id=" + encodeURIComponent(site) : ""))).filter(t => t.deleted_at);
+      const m = modal(`<h3>Audit des terminaux supprimés</h3><div class="table-wrap"><table><thead><tr><th>Terminal historique</th><th>Site</th><th>Suppression</th><th>Auteur</th><th>Audit</th></tr></thead><tbody>${rows.map(t => `<tr><td>${esc(t.name)}<small>${esc(t.terminal_id)}</small></td><td>${esc(t.site || "")}</td><td>${when(t.deleted_at)}</td><td>${esc(t.deleted_by || "")}</td><td><button type="button" class="secondary" data-deleted-audit="${t.id}">Audit</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">Aucun terminal supprimé dans ce périmètre.</td></tr>'}</tbody></table></div><div class="modal-actions"><button type="button" class="secondary" id="terminal-archive-close">Fermer</button></div>`);
+      m.querySelector("#terminal-archive-close").addEventListener("click", closeModal);
+      m.querySelectorAll("[data-deleted-audit]").forEach(button => button.addEventListener("click", () => terminalAudit(rows.find(t => String(t.id) === button.dataset.deletedAudit))));
+    } catch (ex) { toast(permissionMessage(ex), true); }
+  });
 
   async function terminalAudit(t) {
     try {

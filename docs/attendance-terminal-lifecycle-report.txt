@@ -1,0 +1,129 @@
+POINTAGE — TERMINAUX : RÉVOQUER / SUPPRIMER / RECRÉER
+
+CAUSE ACTUELLE
+L'API ne comportait aucune action DELETE. L'action Révoquer utilisait une icône
+corbeille, conservait la ligne et son nom restait réservé par une contrainte
+UNIQUE(site_id, name). La liste affichait donc normalement le terminal révoqué.
+
+AUDIT DU MODÈLE
+Table : biometric_terminals. Modèle : BiometricTerminal.
+PK : id entier. Identité de sécurité/device ID : public_id trm_* unique et immuable.
+Nom logique : name. Aucun code logique distinct n'existe dans ce modèle.
+Type : terminal_type ; site : site_id ; société : society ; emplacement : location.
+Association : clé publique ECDSA P-256, empreinte, paired_at et device_label.
+Le secret privé reste dans l'appareil, il n'est jamais enregistré sur le serveur.
+Code d'association : hash, expiration et usage unique ; ne doit pas être réutilisé.
+État : enabled, facial_attendance_enabled, revoked_at/revoked_reason.
+Suppression ajoutée : deleted_at, deleted_by, deleted_reason.
+
+API (préfixe /api/biometrics)
+Création : POST /terminals.
+Révocation : POST /terminals/{id}/revoke.
+Suppression ajoutée : DELETE /terminals/{id}, raison facultative.
+Liste : GET /terminals, uniquement les lignes non supprimées par défaut.
+Archive : GET /terminals?include_deleted=true, autorisation audit et périmètre.
+Audit : GET /terminals/{id}/audit, y compris après suppression.
+
+RÉVOCATION
+Clé et code d'association annulés immédiatement ; appareil désactivé.
+La ligne reste visible avec l'état Révoqué et réserve encore son nom.
+
+SUPPRESSION
+Retrait opérationnel définitif avec conservation de la ligne historique.
+Clé, empreinte et code d'association annulés ; appareil et facial désactivés.
+La suppression ne modifie aucune présence ni preuve ni feuille de rotation.
+Les événements antérieurs conservent public_id et terminal_name de l'ancien appareil.
+L'auteur, l'instant et le motif éventuel sont conservés.
+L'action est idempotente et produit un seul audit de suppression.
+
+SOFT DELETE : OUI.
+MIGRATION : 20261008_0001_terminal_soft_delete.py, parent 20261007_0001.
+Nécessité démontrée : absence de deleted_at et unicité couvrant les anciens appareils.
+Unicité remplacée par uq_biometric_terminals_live_site_name sur (site_id, name)
+WHERE deleted_at IS NULL. L'unicité globale de public_id est conservée.
+Les anciens terminaux révoqués ne sont pas convertis automatiquement en supprimés.
+Downgrade refusé si des terminaux supprimés existent, afin de préserver leur état.
+
+TERMINAL SUPPRIMÉ DISPARAÎT : OUI, sans F5.
+RECRÉATION MÊME NOM / SITE / TYPE : OUI.
+RECRÉATION MÊME CODE : aucun code logique distinct ; emplacement réutilisable.
+L'identifiant de sécurité public_id et le code d'association sont toujours nouveaux.
+ANCIENNE CLÉ INVALIDÉE : OUI, même en signant avec le nouvel identifiant.
+NOUVELLE CLÉ CRÉÉE : OUI, dans l'appareil lors de sa nouvelle association.
+POINTAGES HISTORIQUES CONSERVÉS : OUI, anciens et nouveaux reliés à leurs instances.
+AUDIT CONSERVÉ : OUI, consultation depuis « Audit des terminaux supprimés ».
+Actions natives conservées : biometrics.terminal.create / revoke / delete.
+KPI RECALCULÉS : OUI, suppression exclue de tous les KPI opérationnels de la liste.
+
+RBAC
+Création et révocation conservent biometric_admin/admin.
+Suppression exige biometric_admin/admin et les contrôles DELETE existants de session.
+L'archive exige les droits de consultation et d'audit existants.
+Les périmètres site et société restent ceux du serveur existant.
+Aucun élargissement des permissions ; le droit delete ajouté au compte E2E est
+uniquement une donnée de fixture pour exercer une suppression autorisée.
+
+CONCURRENCE
+PostgreSQL : double suppression, suppression/révocation, suppression/recréation,
+et double création vérifiées. Verrou de ligne et mises à jour conditionnelles.
+Deux DELETE réussissent sans double audit. La révocation ne réactive pas un terminal.
+Une création arrivée avant la suppression peut recevoir 409 ; après suppression,
+elle réussit. Jamais deux terminaux vivants du même nom sur le même site.
+L'association concurrente utilise aussi un verrou et une mise à jour conditionnelle.
+
+CHROME RÉEL
+Compte Pointage de test authentifié, serveur réel et base SQLite jetable.
+Créer SMARTPHONE HAMOUL 01, associer avec une clé WebCrypto, révoquer, supprimer,
+constater la disparition immédiate, recréer le même nom/site/type, associer avec
+une nouvelle clé, vérifier les signatures et consulter l'audit de l'ancien terminal.
+Responsive : 1440, 1280, 1024, 800, 768, 430, 390 px sans débordement.
+Captures et mesures : /tmp/atlas-terminal-lifecycle/
+  terminals-1440.png ; terminals-390.png ; terminal-deleted-audit.png ; terminal-recreated.png
+
+PÉRIMÈTRE
+Aucune modification d'Attendance Core, du moteur facial, des références employé,
+du Planning intelligent, des feuilles, d'OPS, de DRH ou du Global Shell.
+
+RISQUES / EXÉCUTION FUTURE
+Appliquer la migration avant de démarrer le backend qui lit les nouvelles colonnes.
+Ne pas réutiliser un identifiant ou secret de sécurité historique.
+Les anciennes révocations restent des révocations ; leur suppression doit être
+une action explicite d'un administrateur autorisé.
+Les scénarios de moteur facial réel dépendant de modèles/images absents restent
+explicitement ignorés ; la sécurité ECDSA et le cycle de vie ont été exécutés.
+
+AUCUN PUSH. AUCUN DÉPLOIEMENT.
+
+VALIDATION
+BACKEND CIBLÉ : 23/23. UI TERMINAUX : 22/22.
+BACKEND COMPLET : 1357 réussis, 50 ignorés explicitement, aucun échec.
+POSTGRESQL : 21/21 (cycle de vie, migration et non-régression Attendance).
+MIGRATION SQLITE : chaîne complète upgrade head sur base neuve réussie.
+MIGRATION POSTGRESQL : upgrade de la table précédente peuplée réussi ; FK historique conservée.
+E2E TERMINAUX CHROME : 7/7 ; WebCrypto réelle, anciennes signatures refusées, nouvelle signature acceptée.
+ATTENDANCE E2E CHROME : 6 réussis, 1 scénario facial ignoré faute de modèles/images.
+PERMISSIONS : contrôles serveur et périmètre validés en backend et Chrome.
+DIFF : git diff --check réussi ; syntaxe Python vérifiée.
+
+FICHIERS MODIFIÉS
+app/modules/biometrics/models.py
+app/modules/biometrics/routes.py
+app/modules/biometrics/terminals.py
+app/static/pointage/index.html
+tests/test_biometrics_terminals.py
+tests_frontend/pointage-terminals-e2e.test.js
+tests_frontend/pointage-terminals.test.js
+docs/attendance-terminal-lifecycle-report.txt
+migrations/versions/20261008_0001_terminal_soft_delete.py
+tests/test_terminal_lifecycle_pg.py
+tests/test_terminal_soft_delete_migration.py
+
+BRANCHE : fix/attendance-terminal-lifecycle
+ORIGIN/MAIN : 8186ee3745cb6c84d2d416888f0501a39bc984d8
+BASE INITIALE : cb08167c2ae9739ca0d62bd81bf76404699937b3
+COMMIT : commit unique contenant ce rapport, sujet exact demandé.
+
+NPM TEST FINAL : 900/900, aucun échec ni skip, après intégration du dernier origin/main.
+DIVERGENCE FINALE ATTENDUE : 0 derrière, 1 devant origin/main (commit unique).
+GO/NO-GO POUR PUSH : GO technique, avec migration avant démarrage du backend.
+Push et déploiement non exécutés conformément à la demande.

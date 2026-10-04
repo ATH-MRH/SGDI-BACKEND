@@ -49,13 +49,17 @@ function boot(t, { records = [terminal(1)], routes = {}, list } = {}) {
         if (route) result = typeof route === 'function' ? await route(call) : route;
         else if (call.path === '/api/auth/me') result = [200, { username: 'ADM', full_name: 'Administrateur' }];
         else if (call.path === '/api/attendance/sites') result = [200, sites];
-        else if (call.path === '/api/biometrics/terminals' && call.method === 'GET') result = list ? await list(call) : [200, current.filter((r) => !call.query.site_id || String(r.site_id) === call.query.site_id)];
+        else if (call.path === '/api/biometrics/terminals' && call.method === 'GET') result = list ? await list(call) : [200, current.filter((r) => (call.query.include_deleted || !r.deleted_at) && (!call.query.site_id || String(r.site_id) === call.query.site_id))];
         else if (call.path === '/api/biometrics/terminals' && call.method === 'POST') {
           const created = terminal(900, { ...call.body, paired: false, key_fingerprint: null, last_seen_at: null, device_label: null });
           current.push(created); result = [200, created];
         } else if (/\/terminals\/\d+$/.test(call.path) && call.method === 'PATCH') {
           const record = current.find((r) => r.id === Number(call.path.split('/').at(-1)));
           Object.assign(record, call.body); result = [200, record];
+        } else if (/\/terminals\/\d+$/.test(call.path) && call.method === 'DELETE') {
+          const record = current.find((r) => r.id === Number(call.path.split('/').at(-1)));
+          Object.assign(record, { deleted_at: iso(), deleted_by: 'ADM', enabled: false, paired: false });
+          result = [200, record];
         } else if (call.path.endsWith('/pairing-code')) result = [200, { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHIJ' }];
         else if (call.path.endsWith('/audit')) result = [200, [{ at: iso(), action: 'biometrics.terminal.pair', result: 'success', state: null, matricule: null, reason: 'Association validée' }]];
         else if (call.path.endsWith('/revoke')) {
@@ -110,7 +114,7 @@ test('KPI multi-sites : inactifs/révoqués, association absente ou rotation en 
   assert.deepEqual(['total', 'active', 'inactive', 'pairing', 'sites'].map(c.kpi), ['5', '3', '2', '3', '2']);
   assert.match(c.row(2).textContent, /Inactif/);
   assert.match(c.row(4).textContent, /Révoqué/);
-  assert.equal(c.row(4).querySelectorAll('button').length, 1);
+  assert.equal(c.row(4).querySelectorAll('button').length, 2);
   assert.ok(c.row(4).querySelector('[data-term-audit="4"]'));
 });
 
@@ -236,7 +240,7 @@ test('contenu hostile échappé et secrets ignorés : seules les empreintes hexa
 
 test('actions icônes : boutons clavier nommés, audit lecture seule et fermeture sans mutation', async (t) => {
   const c = boot(t); await c.ready();
-  for (const key of ['pair', 'facial', 'enable', 'rename', 'audit', 'revoke']) {
+  for (const key of ['pair', 'facial', 'enable', 'rename', 'audit', 'revoke', 'delete']) {
     const button = c.row(1).querySelector('[data-term-' + key + ']');
     assert.ok(button); assert.equal(button.tagName, 'BUTTON'); assert.equal(button.type, 'button');
     assert.ok(button.getAttribute('aria-label')); assert.ok(button.getAttribute('title'));
@@ -280,7 +284,7 @@ test('ré-associer, renommer et révoquer utilisent les routes et motifs existan
   c.w.prompt = () => '  Appareil perdu  '; c.click('[data-term-revoke="1"]');
   await waitFor(() => c.row(1)?.textContent.includes('Révoqué'));
   assert.deepEqual(c.writes().at(-1), { path: '/api/biometrics/terminals/1/revoke', method: 'POST', query: {}, body: { reason: 'Appareil perdu' } });
-  assert.equal(c.row(1).querySelectorAll('button').length, 1);
+  assert.equal(c.row(1).querySelectorAll('button').length, 2);
 });
 
 test('création smartphone : données saisies inchangées, aucun facial implicite, association proposée', async (t) => {
@@ -316,4 +320,27 @@ test('périmètre vide puis actualisation : zéro KPI, boutons de page désactiv
   assert.equal(c.d.getElementById('terminal-prev').disabled, true); assert.equal(c.d.getElementById('terminal-next').disabled, true);
   const before = c.listCalls().length; c.click('#terminal-refresh'); await c.ready();
   assert.equal(c.listCalls().length, before + 1); assert.equal(c.writes().length, 0);
+});
+
+ test('suppression confirmée : disparition immédiate, KPI et archive ; annulation sans mutation', async (t) => {
+  const c = boot(t, { records: [terminal(1), terminal(2)] }); await c.ready();
+  c.click('[data-term-delete="1"]');
+  assert.match(c.d.querySelector('.modal').textContent, /historique sera conservé/);
+  c.click('#terminal-delete-cancel'); assert.equal(c.writes().length, 0);
+  c.click('[data-term-delete="1"]'); const lists = c.listCalls().length;
+  c.click('#terminal-delete-confirm'); c.click('#terminal-delete-confirm');
+  await waitFor(() => !c.row(1));
+  assert.equal(c.kpi('total'), '1'); assert.equal(c.kpi('active'), '1');
+  assert.equal(c.listCalls().length, lists);
+  assert.equal(c.writes().filter(x => x.method === 'DELETE').length, 1);
+  c.click('#terminal-archive'); await waitFor(() => c.d.querySelector('.modal'));
+  await waitFor(() => /ADM/.test(c.d.querySelector('.modal').textContent));
+  assert.match(c.d.querySelector('.modal').textContent, /trm_public_1/);
+});
+ test('suppression refusée : ligne et compteurs conservés', async (t) => {
+  const c = boot(t, { routes: { 'DELETE /api/biometrics/terminals/1': [403, { detail: 'Interdit' }] } }); await c.ready();
+  c.click('[data-term-delete="1"]'); c.click('#terminal-delete-confirm');
+  await waitFor(() => c.d.getElementById('terminal-delete-error').textContent);
+  assert.ok(c.row(1)); assert.equal(c.kpi('total'), '1');
+  assert.equal(c.d.getElementById('terminal-delete-confirm').disabled, false);
 });

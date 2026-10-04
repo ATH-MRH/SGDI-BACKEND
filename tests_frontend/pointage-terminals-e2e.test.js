@@ -65,6 +65,28 @@ async function changeAndWait(page, act, expected) {
   await page.waitForFunction(count => document.querySelectorAll('#terminal-rows tr[data-terminal-id]').length === count, {}, expected);
 }
 
+async function pairInChrome(page, record, token, slot) {
+  const code = (await api(`/biometrics/terminals/${record.id}/pairing-code`, { token, method: 'POST' })).data.code;
+  const jwk = await page.evaluate(async slot => {
+    window.terminalKeys ||= {};
+    const keys = await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'}, false, ['sign','verify']);
+    window.terminalKeys[slot] = keys;
+    return crypto.subtle.exportKey('jwk', keys.publicKey);
+  }, slot);
+  assert.equal((await api('/biometrics/terminal/pair', {method:'POST',body:{code,public_key:jwk,device_label:'Chrome lifecycle test'}})).status,200);
+  return jwk;
+}
+async function signedSession(page, record, slot) {
+  return page.evaluate(async ({id,slot}) => {
+    const b64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    const timestamp = String(Date.now()), path = '/api/biometrics/terminal/session';
+    const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array()))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    const message = ['ATLAS-TERMINAL-1',id,'GET',path,timestamp,digest].join('\n');
+    const signature = await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},window.terminalKeys[slot].privateKey,new TextEncoder().encode(message));
+    return (await fetch(path,{headers:{'X-Atlas-Terminal':id,'X-Atlas-Timestamp':timestamp,'X-Atlas-Signature':b64(signature)}})).status;
+  },{id:record.terminal_id,slot});
+}
+
 test('Gestion du pointage — terminaux : E2E réel, permissions et responsive', {
   timeout: 180000,
   skip: !CHROME ? 'Chrome absent (PUPPETEER_EXECUTABLE_PATH)' : !puppeteer ? 'puppeteer-core absent' : false,
@@ -123,7 +145,7 @@ for name, allowed_sites, societies, admin in (("${OPERATOR}", [x.id for x in sit
     u = User(username=name, full_name="Administrateur local" if admin else "Lecteur HAMOUL", role="ops", access_level="H3", is_active=True,
              password_hash=hash_password("${PASSWORD}"), validation_password_hash=hash_password("unused"), authorized_structures=[],
              authorized_societies=societies, authorized_sites=allowed_sites, authorized_modules=["pointage"],
-             authorized_actions=["read", "create", "update", "validate"] if admin else ["read"])
+             authorized_actions=["read", "create", "update", "validate", "delete"] if admin else ["read"])
     s.add(u); s.flush()
     s.add(UserFeaturePermission(user_id=u.id, module_key="attendance", feature_key="biometric_status", action_key="read"))
     if admin:
@@ -190,7 +212,7 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
     const kpis = await page.$$eval('#terminal-kpis strong[data-terminal-kpi]', els => Object.fromEntries(els.map(el => [el.dataset.terminalKpi, Number(el.textContent)])));
     assert.deepEqual(kpis, { total: 2, active: 2, inactive: 0, pairing: 0, sites: 1 });
     const labels = await page.$$eval(`tr[data-terminal-id="${ids.phone}"] .terminal-action`, els => els.map(el => ({ label: el.getAttribute('aria-label'), title: el.getAttribute('title'), tag: el.tagName, disabled: el.disabled })));
-    assert.equal(labels.length, 6);
+    assert.equal(labels.length, 7);
     assert.ok(labels.every(item => item.label && item.title && item.tag === 'BUTTON' && !item.disabled));
     const before = (await api('/biometrics/terminals', { token })).data;
     await page.focus(`[data-term-audit="${ids.phone}"]`);
@@ -308,28 +330,58 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
     assert.equal((await api('/biometrics/terminals', { token })).data.find(row => row.id === ids.phone).name, 'SMARTPHONE HAMOUL 01 RENOMME');
     await page.click('#terminal-add');
     await page.waitForSelector('#term-form');
-    await page.type('#t-name', 'TERMINAL CREE PAR INTERFACE');
+    await page.type('#t-name', 'SMARTPHONE HAMOUL 01');
     await page.select('#t-type', 'SMARTPHONE_ANDROID');
     await page.select('#t-site', String(ids.sites[0]));
     await page.type('#t-loc', 'POSTE TEST');
     await page.click('#term-form button[type="submit"]');
     await page.waitForSelector('#pair-close');
     await changeAndWait(page, () => page.click('#pair-close'), 3);
-    const created = (await api('/biometrics/terminals', { token })).data.find(row => row.name === 'TERMINAL CREE PAR INTERFACE');
+    const created = (await api('/biometrics/terminals', { token })).data.find(row => row.name === 'SMARTPHONE HAMOUL 01');
     assert.ok(created);
     assert.equal(created.facial_attendance_enabled, false);
     assert.equal(created.terminal_type, 'SMARTPHONE_ANDROID');
+    const oldKey = await pairInChrome(page, created, token, 'old');
+    assert.equal(await signedSession(page, created, 'old'), 200);
     page.once('dialog', dialog => dialog.accept('Révocation terminal E2E jetable'));
     await changeAndWait(page, () => page.click(`[data-term-revoke="${created.id}"]`), 3);
     const revoked = (await api('/biometrics/terminals', { token })).data.find(row => row.id === created.id);
     assert.ok(revoked.revoked_at);
     assert.equal(revoked.enabled, false);
-    assert.equal(await page.$$eval(`tr[data-terminal-id="${created.id}"] .terminal-action`, els => els.length), 1, 'terminal révoqué : audit seul');
+    assert.equal(await page.$$eval(`tr[data-terminal-id="${created.id}"] .terminal-action`, els => els.length), 2, 'terminal révoqué : audit et suppression');
     await page.click(`[data-term-audit="${created.id}"]`);
     await page.waitForSelector('#audit-close');
     assert.match(await page.$eval('.modal', el => el.innerText), /create/);
     assert.match(await page.$eval('.modal', el => el.innerText), /revoke/);
     await page.click('#audit-close');
+    await page.click(`[data-term-delete="${created.id}"]`);
+    await page.waitForSelector('#terminal-delete-confirm');
+    await page.type('#terminal-delete-reason', 'Remplacement E2E');
+    await page.click('#terminal-delete-confirm');
+    await page.waitForFunction(id => !document.querySelector(`[data-terminal-id="${id}"]`), {}, created.id);
+    assert.ok(!(await api('/biometrics/terminals', { token })).data.some(row => row.id === created.id));
+    const archived = (await api('/biometrics/terminals?include_deleted=true', { token })).data.find(row => row.id === created.id);
+    assert.ok(archived.deleted_at);
+    assert.equal(await signedSession(page, created, 'old'), 401);
+    assert.match(JSON.stringify((await api(`/biometrics/terminals/${created.id}/audit`, { token })).data), /terminal.delete/);
+    await page.click('#terminal-add'); await page.waitForSelector('#term-form');
+    await page.type('#t-name', created.name); await page.select('#t-type', created.terminal_type);
+    await page.select('#t-site', String(created.site_id)); await page.click('#term-form button[type="submit"]');
+    await page.waitForSelector('#pair-close'); await page.click('#pair-close');
+    const recreated = (await api('/biometrics/terminals', { token })).data.find(row => row.name === created.name);
+    assert.ok(recreated); assert.notEqual(recreated.id, created.id); assert.notEqual(recreated.terminal_id, created.terminal_id);
+    const newKey = await pairInChrome(page, recreated, token, 'new');
+    assert.notDeepEqual(newKey, oldKey);
+    assert.equal(await signedSession(page, recreated, 'new'), 200);
+    assert.equal(await signedSession(page, created, 'old'), 401);
+    assert.equal(await signedSession(page, recreated, 'old'), 401);
+    await page.click('#terminal-archive'); await page.waitForSelector('#terminal-archive-close');
+    assert.match(await page.$eval('.modal', el => el.innerText), new RegExp(created.terminal_id));
+    await page.click(`[data-deleted-audit="${created.id}"]`); await page.waitForSelector('#audit-close');
+    assert.match(await page.$eval('.modal', el => el.innerText), /delete/);
+    await page.screenshot({path:path.join(ARTIFACTS,'terminal-deleted-audit.png'),fullPage:true});
+    await page.click('#audit-close');
+    await page.screenshot({ path: path.join(ARTIFACTS, 'terminal-recreated.png'), fullPage: true });
     assert.equal(py('from app.db.session import SessionLocal\nfrom app.modules.attendance.models import AttendanceEvent\nprint(SessionLocal().query(AttendanceEvent).count())'), '0', 'aucun pointage réel produit');
   });
 
@@ -345,6 +397,8 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
       [`/biometrics/terminals/${ids.phone}/pairing-code`, 'POST', undefined],
       [`/biometrics/terminals/${ids.phone}/revoke`, 'POST', { reason: 'Interdit' }],
       [`/biometrics/terminals/${ids.phone}/audit`, 'GET', undefined],
+      [`/biometrics/terminals/${ids.phone}`, 'DELETE', { reason: 'Interdit' }],
+      ['/biometrics/terminals?include_deleted=true', 'GET', undefined],
     ]) assert.equal((await api(endpoint, { token: viewerToken, method, body })).status, 403, endpoint);
     await page.click('#logout-btn');
     await loginPage(page, VIEWER);

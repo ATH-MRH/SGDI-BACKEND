@@ -510,3 +510,94 @@ def test_review_band_and_clear_recognition(client, auth_headers, db):
     assert set(r) <= {"state", "recorded", "message", "employee", "action", "heure", "site", "confidence", "liveness",
                       "site_id", "config_version", "duration_ms"}
     assert _events(db, uncertain) == []
+
+
+# ── Revocation versus deletion: identity and history never recycled ──────────────
+def test_delete_recreate_same_name_retains_qr_history_and_rejects_old_key(client, auth_headers, db):
+    site = _site(db)
+    emp = _employee(db, site)
+    name = "SMARTPHONE HAMOUL 01"
+    def create_pair():
+        response = client.post(f"{API}/terminals", headers=auth_headers,
+                               json={"name": name, "terminal_type": "SMARTPHONE_ANDROID", "site_id": site.id})
+        assert response.status_code == 200, response.text
+        term = response.json()
+        code = client.post(f"{API}/terminals/{term['id']}/pairing-code", headers=auth_headers).json()["code"]
+        device = Device()
+        paired = client.post(f"{API}/terminal/pair", json={"code": code, "public_key": device.jwk})
+        assert paired.status_code == 200
+        device.terminal_id = paired.json()["terminal_id"]
+        return term, device
+    def scan(device):
+        token = create_access_token(subject=emp.code, claims={"attendance_qr": True, "employee_id": emp.id,
+                                                            "nonce": uuid.uuid4().hex}, ttl_seconds=60)
+        response = device.call(client, "POST", "/terminal/qr", {"token": token})
+        assert response.status_code == 200, response.text
+    old, old_device = create_pair()
+    scan(old_device)
+    pending_code = client.post(f"{API}/terminals/{old['id']}/pairing-code", headers=auth_headers).json()["code"]
+    deleted = client.request(
+        "DELETE", f"{API}/terminals/{old['id']}", headers=auth_headers, json={"reason": "Remplacement"})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["deleted_at"] and deleted.json()["deleted_by"]
+    assert not deleted.json()["enabled"] and not deleted.json()["paired"]
+    assert old['id'] not in [row['id'] for row in client.get(f"{API}/terminals", headers=auth_headers).json()]
+    assert client.get(f"{API}/terminals?include_deleted=true", headers=auth_headers).status_code == 200
+    for path in ("/terminal/session", "/terminal/challenge", "/terminal/qr"):
+        assert old_device.call(client, "GET" if path.endswith('session') else "POST", path, {} if not path.endswith('session') else None).status_code == 401
+    assert client.post(f"{API}/terminal/pair", json={"code": pending_code, "public_key": Device().jwk}).status_code == 401
+    for method, suffix in (("PATCH", ""), ("POST", "/pairing-code"), ("POST", "/revoke")):
+        response = client.request(method, f"{API}/terminals/{old['id']}"+suffix, headers=auth_headers,
+                                  json={"enabled": True} if method == 'PATCH' else {"reason": "Test"} if suffix == '/revoke' else None)
+        assert response.status_code == 404
+    second_delete = client.delete(f"{API}/terminals/{old['id']}", headers=auth_headers)
+    assert second_delete.status_code == 200 and second_delete.json()["deleted_at"] == deleted.json()["deleted_at"]
+    new, new_device = create_pair()
+    assert new['id'] != old['id'] and new['terminal_id'] != old['terminal_id']
+    assert old_device.jwk != new_device.jwk
+    assert old_device.session(client).status_code == 401
+    assert new_device.session(client).status_code == 200
+    # An old key cannot sign under the new instance's identifier either.
+    assert old_device.call(client, "GET", "/terminal/session", terminal_id=new['terminal_id']).status_code == 401
+    scan(new_device)
+    events = _events(db, emp)
+    assert len(events) == 2
+    assert [event.data['terminal'] for event in events] == [old['terminal_id'], new['terminal_id']]
+    assert events[0].data['terminal_name'] == name
+    assert db.get(BiometricTerminal, old['id']).deleted_at
+    audit = client.get(f"{API}/terminals/{old['id']}/audit", headers=auth_headers)
+    assert audit.status_code == 200
+    actions = [row['action'] for row in audit.json()]
+    assert actions.count('biometrics.terminal.delete') == 1
+    assert 'biometrics.terminal.qr' in actions and 'biometrics.terminal.create' in actions
+
+
+def test_revoked_terminal_visible_and_name_reserved_until_deleted(client, auth_headers, db):
+    site = _site(db)
+    tid, device = _terminal(client, auth_headers, site)
+    name = db.get(BiometricTerminal, tid).name
+    assert client.post(f"{API}/terminals/{tid}/revoke", headers=auth_headers, json={'reason':'Appareil perdu'}).status_code == 200
+    rows = client.get(f"{API}/terminals", headers=auth_headers).json()
+    assert any(row['id'] == tid and row['revoked_at'] and not row['deleted_at'] for row in rows)
+    assert device.session(client).status_code == 401
+    body = {'name': name, 'terminal_type':'TABLET_ANDROID', 'site_id':site.id}
+    assert client.post(f"{API}/terminals", headers=auth_headers, json=body).status_code == 409
+    assert client.delete(f"{API}/terminals/{tid}", headers=auth_headers).status_code == 200
+    assert client.post(f"{API}/terminals", headers=auth_headers, json=body).status_code == 200
+    assert client.post(f"{API}/terminals", headers=auth_headers, json=body).status_code == 409
+
+
+def test_delete_and_archive_keep_original_permissions_and_scope(client, auth_headers, db):
+    local, outside = _site(db), _site(db, OTHER)
+    tid, _ = _terminal(client, auth_headers, local)
+    other_tid, _ = _terminal(client, auth_headers, outside)
+    reader = _user(client, db, sites=[local.id], features=[('biometric_status','read')])
+    manager = _user(client, db, sites=[local.id], features=[('biometric_status','read'),('biometric_admin','admin')])
+    assert client.delete(f"{API}/terminals/{tid}", headers=reader).status_code == 403
+    assert client.get(f"{API}/terminals?include_deleted=true", headers=reader).status_code == 403
+    assert client.delete(f"{API}/terminals/{other_tid}", headers=manager).status_code == 404
+    assert client.get(f"{API}/terminals/{other_tid}/audit", headers=manager).status_code == 404
+    assert client.delete(f"{API}/terminals/{tid}", headers=manager).status_code == 200
+    assert client.get(f"{API}/terminals/{tid}/audit", headers=manager).status_code == 200
+    rows = client.get(f"{API}/terminals?include_deleted=true", headers=manager).json()
+    assert all(row['site_id'] == local.id for row in rows)

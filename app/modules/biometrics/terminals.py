@@ -105,6 +105,8 @@ def normalize_pairing_code(code: str) -> str:
 
 
 def new_pairing_code(db: Session, terminal: BiometricTerminal, actor: Any) -> dict[str, Any]:
+    if terminal.deleted_at:
+        raise _error(409, "TERMINAL_DELETED", "Terminal supprimé : créez un nouveau terminal")
     if terminal.revoked_at:
         raise _error(409, "TERMINAL_REVOKED", "Terminal révoqué : créez un nouveau terminal")
     if terminal.terminal_type not in MOBILE_TERMINAL_TYPES:
@@ -142,8 +144,9 @@ def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, i
     terminal = None
     if len(normalized) == PAIRING_CODE_LENGTH:
         terminal = db.execute(select(BiometricTerminal).where(
-            BiometricTerminal.pairing_code_hash == _sha256(normalized))).scalar_one_or_none()
-    if terminal is None or terminal.revoked_at or not terminal.enabled or not terminal.pairing_expires_at \
+            BiometricTerminal.pairing_code_hash == _sha256(normalized)).with_for_update()
+            .execution_options(populate_existing=True)).scalar_one_or_none()
+    if terminal is None or terminal.deleted_at or terminal.revoked_at or not terminal.enabled or not terminal.pairing_expires_at \
             or terminal.pairing_expires_at < _now():
         rate_limit.record_failure(limiter, PAIRING_TTL_SECONDS)
         append_audit(db, action="biometrics.terminal.pair", resource="biometric_terminal",
@@ -153,11 +156,18 @@ def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, i
         raise _error(401, "PAIRING_CODE_INVALID", "Code d'association invalide ou expiré")
     key, fingerprint = _validated_public_key(public_key)
     rotation = bool(terminal.public_key)
-    terminal.public_key, terminal.key_fingerprint = key, fingerprint
-    terminal.pairing_code_hash, terminal.pairing_expires_at = None, None     # usage unique
-    terminal.paired_at = _now()
-    terminal.config_version += 1          # défis antérieurs caducs
-    terminal.meta = {**(terminal.meta or {}), "device_label": str(device_label or "")[:120] or None}
+    changed = db.execute(update(BiometricTerminal).where(
+        BiometricTerminal.id == terminal.id, BiometricTerminal.deleted_at.is_(None),
+        BiometricTerminal.revoked_at.is_(None), BiometricTerminal.enabled.is_(True),
+        BiometricTerminal.pairing_code_hash == _sha256(normalized)).values(
+        public_key=key, key_fingerprint=fingerprint, pairing_code_hash=None,
+        pairing_expires_at=None, paired_at=_now(), config_version=BiometricTerminal.config_version + 1,
+        meta={**(terminal.meta or {}), "device_label": str(device_label or "")[:120] or None}),
+        execution_options={"synchronize_session": False})
+    if not changed.rowcount:
+        db.rollback()
+        raise _error(401, "PAIRING_CODE_INVALID", "Code d'association invalide ou expiré")
+    db.refresh(terminal)
     rate_limit.clear(limiter)
     append_audit(db, action="biometrics.terminal.pair", resource="biometric_terminal", resource_id=terminal.id,
                  result="success", society=terminal.society,
@@ -226,7 +236,7 @@ async def authenticated_terminal(request: Request, db: Session = Depends(get_db)
     body = await _read_body(request, MAX_BODY_BYTES)
     terminal = db.execute(select(BiometricTerminal).where(BiometricTerminal.public_id == public_id)).scalar_one_or_none() \
         if public_id else None
-    if terminal is None or not terminal.public_key:
+    if terminal is None or terminal.deleted_at or not terminal.public_key:
         rate_limit.record_failure(ip_limiter, 300)
         raise _error(401, "TERMINAL_UNKNOWN", "Terminal non associé")
     if terminal.revoked_at:
