@@ -32,7 +32,7 @@ temps de présence.
 `planned_shifts`, `worked_shifts`, `counted_minutes` / `counted_hours`, `early_arrivals`,
 `late_arrivals` (anomalies `LATE` existantes — la tolérance déjà définie n'est pas redéfinie),
 `early_exits`, `late_exits`, `extra_shifts`, `extra_counted_minutes`, `refused_attempts`
-(+ `refused_by_code`), `relief_anomalies` (`VACATION_NON_CLOTUREE`), `manual_entries`,
+(+ `refused_by_code`), `relief_anomalies` / `relief_anomalies_resolved` (`VACATION_NON_CLOTUREE` uniquement — jamais les tentatives refusées ni `MANUAL_POINTAGE`), `manual_entries`,
 `anomalies_open` / `anomalies_resolved` / `anomalies_dismissed`, `regularisations`,
 `other_presences` (présences hors travail posté), `unconfigured_days` (jours postés sans rotation
 configurée : rien n'est planifié ni inventé).

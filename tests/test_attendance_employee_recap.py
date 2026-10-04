@@ -92,15 +92,15 @@ def test_summary_states_facts_and_never_judges(db):
 def test_resolved_anomaly_stays_in_the_recap(db):
     emp, site = _setup(db)                                            # groupe B : Après-midi
     _scan(db, emp, ANCHOR, "13:50")
-    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:05"))
+    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:46"))
     before = _month(db, emp)["summary"]
     assert (before["relief_anomalies"], before["anomalies_open"], before["open_shifts"]) == (1, 1, 1)
-    _scan(db, emp, ANCHOR, "22:30")
+    _scan(db, emp, ANCHOR, "22:50")
     out = _month(db, emp)
     assert (out["summary"]["relief_anomalies"], out["summary"]["anomalies_open"], out["summary"]["anomalies_resolved"]) == (1, 0, 1)
     assert out["summary"]["regularisations"] == 1 and out["summary"]["open_shifts"] == 0
     anomaly = next(a for a in out["anomalies"] if a["type"] == "VACATION_NON_CLOTUREE")
-    assert (anomaly["status"], anomaly["resolved_by"], anomaly["resolution"]) == ("RESOLVED", "system", "Sortie enregistrée à 22:30:00")
+    assert (anomaly["status"], anomaly["resolved_by"], anomaly["resolution"]) == ("RESOLVED", "system", "Sortie enregistrée à 22:50:00")
     assert out["history"][0]["anomalies"][0]["status"] == "RESOLVED"
 
 

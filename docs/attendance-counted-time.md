@@ -162,7 +162,7 @@ motif affiché, vacation visée, vacation précédente, dernière entrée, derni
 (`counted.detect_unclosed`), avec une clé unique par événement d'entrée : N rafraîchissements ne
 créent qu'une anomalie, et une anomalie résolue n'est jamais recréée ni supprimée. La sortie
 enfin enregistrée la passe à `RESOLVED` (`resolved_by = system`). Délai avant détection :
-`attendance_unclosed_shift_grace_minutes` (0 = dès la fin de vacation dépassée).
+`attendance_unclosed_shift_grace_minutes` = 45 min (grâce de relève : aucune anomalie de TFIN à TFIN+45 inclus, création à partir de TFIN+45:01).
 
 **Flux live du Pointeur** (`GET /api/portal/attendance-live`, ajouts rétrocompatibles) :
 `refusals[]` porte désormais les refus d'Attendance Core (`code`, `message`, `counted`) ; `alerts[]`

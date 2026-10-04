@@ -190,7 +190,9 @@ def summarize(planned: list[dict], shifts: list[dict], anomalies: list[dict], re
         "other_presences": len(shifts) - len(counted_rows),            # présences hors travail posté (règles historiques)
         "open_shifts": sum(1 for s in shifts if s["open"]),
         "refused_attempts": len(refusals), "refused_by_code": by_code,
+        # Anomalies de relève = VACATION_NON_CLOTUREE uniquement (jamais les tentatives refusées).
         "relief_anomalies": sum(by_type.get(kind, 0) for kind in RELIEF_ANOMALIES),
+        "relief_anomalies_resolved": sum(1 for a in anomalies if a["type"] in RELIEF_ANOMALIES and a["status"] == ANOMALY_RESOLVED),
         "manual_entries": sum(1 for s in shifts if s["manual"]),
         "anomalies_total": len(anomalies), "anomalies_by_type": by_type,
         "anomalies_open": sum(1 for a in anomalies if a["status"] == ANOMALY_OPEN),

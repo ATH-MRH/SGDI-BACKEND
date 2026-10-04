@@ -39,8 +39,9 @@ class Settings(BaseSettings):
     # archivage ; au-delà du plus long cycle ouvert (30 h), un départ manquant est constaté.
     attendance_sheet_archive_after_hours: int = 36
     # Vacation postée sans sortie : délai après la fin THÉORIQUE avant l'anomalie
-    # VACATION_NON_CLOTUREE (0 = dès la fin de vacation dépassée).
-    attendance_unclosed_shift_grace_minutes: int = 0
+    # VACATION_NON_CLOTUREE. 45 min = fin de la fenêtre de maintien (TFIN+45) : jusque-là, la
+    # sortie tardive ou l'attente de la nouvelle entrée sont normales.
+    attendance_unclosed_shift_grace_minutes: int = 45
     # Interrupteurs par lot du Planning intelligent (activation progressive, jamais implicite).
     # Feuilles : coupe-circuit global (chaque site reste soumis à sa propre configuration).
     rotation_sheets_enabled: bool = True

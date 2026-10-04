@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.modules.attendance import core, counted, live, official
+from app.modules.attendance import core, counted, live, official, recap
 from app.modules.attendance.models import AttendanceAnomaly
 from app.modules.auth.models import AuditEvent
 from app.modules.ops.models import DailyPresence
@@ -70,10 +70,10 @@ def test_refusal_reaches_the_live_feed_with_its_real_reason(db):
 def test_unclosed_shift_raises_one_anomaly_whatever_the_number_of_refreshes(db):
     emp, site = _setup(db)                                            # Après-midi 14:00 → 22:00
     _scan(db, emp, ANCHOR, "13:50")
-    assert live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:00"))["alerts"] == []
-    assert _unclosed(db, emp) == []                                   # fin de vacation non dépassée
+    assert live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:45"))["alerts"] == []
+    assert _unclosed(db, emp) == []                                   # grâce de relève non dépassée
     for second in range(5):                                           # rafraîchissements successifs du poste
-        feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, f"22:00:0{second + 1}"))
+        feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, f"22:45:0{second + 1}"))
     rows = _unclosed(db, emp)
     assert len(rows) == 1 and rows[0].status == "OPEN" and rows[0].event_id == _events(db, emp)[0].id
     assert (rows[0].presence_date, rows[0].details["shift"], rows[0].details["scheduled_end"]) == (ANCHOR, "APRES_MIDI", _iso(ANCHOR, "22:00"))
@@ -81,33 +81,57 @@ def test_unclosed_shift_raises_one_anomaly_whatever_the_number_of_refreshes(db):
     assert (alert["label"], alert["employee"]["matricule"], alert["id"]) == ("Vacation non clôturée", emp.code, rows[0].id)
 
     # La sortie clôt l'anomalie : résolue, conservée dans l'historique, jamais recréée.
-    _scan(db, emp, ANCHOR, "22:20")
-    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:21"))
+    _scan(db, emp, ANCHOR, "22:50")
+    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:51"))
     rows = _unclosed(db, emp)
-    assert len(rows) == 1 and (rows[0].status, rows[0].resolved_by, rows[0].resolution) == ("RESOLVED", "system", "Sortie enregistrée à 22:20:00")
-    assert not any(a["code"] == "VACATION_NON_CLOTUREE" for a in live.alerts(db, {site.id}, _ts(ANCHOR, "22:21")))
+    assert len(rows) == 1 and (rows[0].status, rows[0].resolved_by, rows[0].resolution) == ("RESOLVED", "system", "Sortie enregistrée à 22:50:00")
+    assert not any(a["code"] == "VACATION_NON_CLOTUREE" for a in live.alerts(db, {site.id}, _ts(ANCHOR, "22:51")))
 
 
 def test_resolved_unclosed_anomaly_stays_in_history_and_is_not_recreated(client, db, auth_headers):
     emp, site = _setup(db)
     _scan(db, emp, ANCHOR, "13:50")
-    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:05"))
+    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "22:46"))
     anomaly = _unclosed(db, emp)[0]
     done = client.patch(f"/api/attendance/anomalies/{anomaly.id}", headers=auth_headers,
                         json={"status": "RESOLVED", "resolution": "Sortie non pointée, départ confirmé par le chef de poste"})
     assert done.status_code == 200, done.text
-    for minute in (6, 7, 8):
-        live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, f"22:0{minute}"))
+    for minute in (47, 48, 49):
+        live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, f"22:{minute}"))
     rows = _unclosed(db, emp)
     assert len(rows) == 1 and rows[0].status == "RESOLVED" and rows[0].resolution.startswith("Sortie non pointée")
 
 
+def test_relief_grace_of_45_minutes_before_the_unclosed_shift_anomaly(db):
+    """Vacation 06:00 → 14:00 : aucune anomalie jusqu'à 14:45:00 inclus, une seule à partir de
+    14:45:01, résolue automatiquement par la sortie et conservée dans l'historique."""
+    assert settings.attendance_unclosed_shift_grace_minutes == 45
+    emp, site = _setup(db, group="A")
+    _scan(db, emp, ANCHOR, "05:50")
+    for hms in ("14:00:01", "14:29:59", "14:30:00", "14:45:00"):
+        live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, hms))
+        assert _unclosed(db, emp) == [], hms
+    for hms in ("14:45:01", "14:45:03", "14:46:00", "14:49:00"):       # plusieurs rafraîchissements
+        feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, hms))
+        assert len(_unclosed(db, emp)) == 1, hms
+    assert [a["code"] for a in feed["alerts"]] == ["VACATION_NON_CLOTUREE"] and _unclosed(db, emp)[0].status == "OPEN"
+    out = _scan(db, emp, ANCHOR, "14:50")                             # sortie valide : résolution automatique
+    assert (out["action"], out["counted"]["counted_end"], out["counted"]["counted_minutes"]) == ("depart", _iso(ANCHOR, "14:00"), 480)
+    live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(ANCHOR, "14:55"))
+    rows = _unclosed(db, emp)
+    assert len(rows) == 1 and (rows[0].status, rows[0].resolved_by, rows[0].resolution) == ("RESOLVED", "system", "Sortie enregistrée à 14:50:00")
+    summary = recap.monthly(db, emp, "2026-10")
+    assert (summary["summary"]["relief_anomalies"], summary["summary"]["relief_anomalies_resolved"], summary["summary"]["anomalies_open"]) == (1, 1, 0)
+    assert [(a["type"], a["status"]) for a in summary["anomalies"]] == [("VACATION_NON_CLOTUREE", "RESOLVED")]
+    assert summary["summary"]["refused_attempts"] == 0
+
+
 def test_unclosed_grace_is_a_setting(db, monkeypatch):
-    monkeypatch.setattr(settings, "attendance_unclosed_shift_grace_minutes", 45)
+    monkeypatch.setattr(settings, "attendance_unclosed_shift_grace_minutes", 0)
     emp, site = _setup(db)
     _scan(db, emp, ANCHOR, "13:50")
-    assert counted.detect_unclosed(db, {site.id}, _ts(ANCHOR, "22:45")) == 0
-    assert counted.detect_unclosed(db, {site.id}, _ts(ANCHOR, "22:45:01")) == 1
+    assert counted.detect_unclosed(db, {site.id}, _ts(ANCHOR, "22:00")) == 0
+    assert counted.detect_unclosed(db, {site.id}, _ts(ANCHOR, "22:00:01")) == 1
     assert counted.detect_unclosed(db, {site.id}, _ts(ANCHOR, "22:50")) == 0
 
 
@@ -166,7 +190,7 @@ def test_night_shift_state_does_not_reset_at_midnight(db):
     for day, hhmm in ((ANCHOR, "23:59"), (NEXT, "00:00"), (NEXT, "01:00"), (NEXT, "05:59")):
         feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(day, hhmm))
         assert feed["summary"]["present_now"] == 1 and feed["alerts"] == [], (day, hhmm)
-    feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(NEXT, "06:00:01"))
+    feed = live.live(db, {site.id}, after_id=0, after_refusal_id=None, now=_ts(NEXT, "06:45:01"))
     alert = feed["alerts"][0]
     assert (alert["code"], alert["presence_date"], feed["operational_date"]) == ("VACATION_NON_CLOTUREE", ANCHOR.isoformat(), NEXT.isoformat())
     out = _scan(db, emp, NEXT, "06:11")
