@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.attendance import core, deviations, learning, official, projection, sheets
+from app.modules.attendance import counted as counted_time
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -176,6 +177,8 @@ def board(
             "departure": _local_hhmm(departures[-1].occurred_at) if departures else (presence.departure_time or "" if presence else ""),
             "status": day_status, "source": last_source, "incomplete": incomplete,
             "closed": bool(presence and presence.closed_at), "presence_id": presence.id if presence else None,
+            # Travail posté : heure RÉELLE (arrival/departure) et temps COMPTABILISÉ sont distincts.
+            "counted": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c), None),
             "anomalies": [{"id": a.id, "type": a.anomaly_type, "severity": a.severity, "message": a.message} for a in anomalies],
         })
 
@@ -401,6 +404,7 @@ def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
         "events": [{"id": e.id, "date": e.presence_date.isoformat(), "at": core.to_local(e.occurred_at).isoformat(),
                     "type": e.event_type, "source": e.source, "site": site_map.get(e.site_id, ""),
                     "actor": e.actor_label or "", "device_id": e.device_id, "observation": e.observation or "",
+                    "counted": counted_time.view(e.data),
                     "changes": (e.data or {}).get("changes") if e.event_type == "CORRECTION" else None}
                    for e in events],
         "anomalies": [{"id": a.id, "date": a.presence_date.isoformat() if a.presence_date else "", "type": a.anomaly_type,

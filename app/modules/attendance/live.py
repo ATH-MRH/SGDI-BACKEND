@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.attendance import core
+from app.modules.attendance import counted as counted_time
 from app.modules.attendance.models import EVENT_ARRIVAL, EVENT_DEPARTURE, AttendanceEvent
 from app.modules.drh.models import Employee
 from app.modules.ops.models import DailyPresence, Site
@@ -97,7 +98,7 @@ def _event_out(event: AttendanceEvent, employee: Employee | None, current: Atten
             "heure": local.strftime("%H:%M:%S"), "date": local.strftime("%Y-%m-%d"), "presence_date": event.presence_date.isoformat(),
             "source": event.source, "source_label": SOURCE_LABELS.get(event.source, event.source),
             "terminal": data.get("terminal_name") or None, "site_id": event.site_id, "site": site_name,
-            "state": state, "employee": {**card, "fonction": card.get("poste", ""), "has_photo": bool(card.get("photo"))}}
+            "state": state, "counted": counted_time.view(data), "employee": {**card, "fonction": card.get("poste", ""), "has_photo": bool(card.get("photo"))}}
 
 
 def _refusal_label(employee: Employee | None, reason: str) -> str:

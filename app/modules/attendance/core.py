@@ -191,7 +191,7 @@ def event_to_scan_row(event: AttendanceEvent, employee: Employee | None = None) 
     }
     if event.observation:
         row["observation"] = event.observation
-    for key in ("authorizedMinutes", "workedMinutes", "overtimeMinutes", "overtimeAlert"):
+    for key in ("authorizedMinutes", "workedMinutes", "overtimeMinutes", "overtimeAlert", "counted"):
         if key in data:
             row[key] = data[key]
     return row
@@ -286,6 +286,27 @@ def _duplicate_response(event: AttendanceEvent, employee: Employee, site_name: s
     }
 
 
+def _refuse_early_entry(db: Session, *, employee: Employee, actor: Any | None, source: str, counted: dict[str, Any]) -> None:
+    """Entrée avant l'ouverture de la fenêtre (T-30 min) d'une vacation officielle : refusée.
+    Aucun événement ni présence n'est créé — rien ne démarre la vacation, aucun temps n'est
+    fabriqué ; la tentative est tracée dans l'audit, sans qualification disciplinaire."""
+    from app.modules.attendance import counted as counted_time, official
+
+    society = employee.society
+    start, opens = datetime.fromisoformat(counted["scheduled_start"]), datetime.fromisoformat(counted["window_opens_at"])
+    db.rollback()                                                     # libère le verrou : rien n'a été écrit
+    append_audit(db, action="attendance.early_outside_window", resource="attendance_event", resource_id=employee.id,
+                 result="refused", user=actor, society=society,
+                 new_state={"code": counted_time.EARLY_OUTSIDE_WINDOW, "source": source, "recorded": False,
+                            **{key: counted[key] for key in ("actual_entry", "shift", "group", "work_date", "scheduled_start", "window_opens_at")}})
+    db.commit()
+    label = official.SHIFT_LABELS.get(counted["shift"], counted["shift"])
+    raise HTTPException(
+        status_code=409, headers={"X-Attendance-Code": counted_time.EARLY_OUTSIDE_WINDOW},
+        detail=f"Pointage hors fenêtre : vacation {label} à {start.strftime('%H:%M')}, "
+               f"pointage possible à partir de {opens.strftime('%H:%M')}.")
+
+
 def record_scan(
     db: Session,
     *,
@@ -377,6 +398,18 @@ def record_scan(
     if existing is not None and existing.closed_at is not None:
         raise HTTPException(status_code=409, detail="Journée clôturée : pointage refusé. Une correction post-clôture est nécessaire.")
 
+    # Travail posté (lot 1) : le temps COMPTABILISÉ de la vacation officielle est distinct de
+    # l'heure RÉELLE, qui reste celle de l'événement. Hors travail posté : None, rien ne change.
+    from app.modules.attendance import counted as counted_time
+
+    counted: dict[str, Any] | None = None
+    if event_type == EVENT_ARRIVAL and site is not None:
+        counted = counted_time.entry(db, employee_id=employee.id, site_id=site.id, at=now)
+        if counted is not None and counted["entry_status"] == counted_time.EARLY_OUTSIDE_WINDOW:
+            _refuse_early_entry(db, employee=employee, actor=actor, source=source, counted=counted)
+    elif event_type == EVENT_DEPARTURE and open_arrival is not None:
+        counted = counted_time.close((open_arrival.data or {}).get("counted"), now)
+
     heure = now.strftime("%H:%M:%S")
     worked_minutes = (
         max(0, int((now - arrival_at_for_departure).total_seconds() // 60))
@@ -384,6 +417,11 @@ def record_scan(
     )
     authorized_minutes = authorized_work_minutes(db, assignment, site, (arrival_at_for_departure or now).date())
     overtime_minutes = max(0, worked_minutes - authorized_minutes) if worked_minutes is not None else 0
+    if counted is not None and counted["counted_minutes"] is not None:
+        # Le dépassement se mesure sur le temps comptabilisé, jamais sur la présence physique
+        # brute : arriver avant T ou sortir après la fin de vacation ne crée aucun OVERTIME.
+        authorized_minutes = int(counted["normal_minutes"])
+        overtime_minutes = max(0, counted["counted_minutes"] - authorized_minutes)
     agent_name = f"{employee.last_name or ''} {employee.first_name or ''}".strip()
     legacy_action = LEGACY_ACTION[event_type]
 
@@ -398,6 +436,7 @@ def record_scan(
             "authorizedMinutes": authorized_minutes,
             **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
             **({"workedMinutes": worked_minutes} if worked_minutes is not None and not overtime_minutes else {}),
+            **({"counted": counted} if counted is not None else {}),
             **(extra or {}),
         },
     )
@@ -430,6 +469,7 @@ def record_scan(
         ],
         "authorizedMinutes": authorized_minutes,
         **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
+        **({"counted": counted} if counted is not None else {}),
         **(extra or {}),
     }
     if observation_line:
@@ -504,6 +544,7 @@ def record_scan(
         "overtime_alert": overtime_minutes > 0, "date": now.strftime("%Y-%m-%d"), "site": site_name,
         "observation": observation, "employee": _employee_card(employee, site_name), "record": record,
         "rotation_alert": rotation_alert,
+        **({"counted": counted_time.view({"counted": counted})} if counted is not None else {}),
     }
 
 

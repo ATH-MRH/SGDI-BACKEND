@@ -8,6 +8,7 @@ import unicodedata
 from fastapi import HTTPException
 from sqlalchemy import select
 from app.modules.attendance import core
+from app.modules.attendance import counted as counted_time
 from app.modules.attendance.models import AttendanceAnomaly, ANOMALY_OPEN
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, Site, RotationTemplate
@@ -97,7 +98,8 @@ def read_workspace(db, *, site_ids, month, q="", employee_status=None, employee_
                     "recorded": fact is not None, "presence_id": fact.id if fact else None,
                     "closed": bool(fact and fact.closed_at), "planning": plan,
                     "arrival": fact.arrival_time if fact else None, "departure": fact.departure_time if fact else None,
-                    "anomalies": anomalies.get((eid, day), [])}
+                    "anomalies": anomalies.get((eid, day), []),
+                    "counted": counted_time.view((fact.data or {}).get("_legacy")) if fact and isinstance(fact.data, dict) else None}
             cells.append(cell)
             own["total"] += 1
             summary["total"] += 1

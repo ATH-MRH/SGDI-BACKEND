@@ -301,7 +301,11 @@ def shift_out(result: dict[str, Any]) -> dict[str, Any]:
 def catalog(db: Session) -> dict[str, Any]:
     models = db.execute(select(RotationTemplate).where(RotationTemplate.official == 1, RotationTemplate.active == 1)
                         .order_by(RotationTemplate.name)).scalars().all()
+    from app.modules.attendance import counted
+
     return {
+        "time_labels": {**counted.LABELS, "entry_status": dict(counted.ENTRY_STATUS_LABELS),
+                        "early_window_minutes": int(counted.EARLY_WINDOW.total_seconds() // 60)},
         "regimes": [{"value": value, "label": REGIME_LABELS[value]} for value in REGIMES],
         "groups": list(GROUPS),
         "shifts": [{"value": shift, "label": SHIFT_LABELS[shift], "start": SHIFT_TIMES.get(shift, (None, None))[0],
