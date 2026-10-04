@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 
 HTML = (Path(__file__).parents[1] / "app/static/recrute.html").read_text(encoding="utf-8")
@@ -32,9 +33,18 @@ def test_interview_contains_operational_decision_fields():
 
 
 def test_favorable_candidate_gets_direct_green_recruit_action():
-    assert 'const favorable=item.data?.avisDecision==="Favorable"' in HTML
-    assert 'class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>' in HTML
-    assert ".row-recruit{background:#15803d" in HTML
+    # Execute the real renderer and handler instead of depending on the spelling
+    # of a local JavaScript condition. This test uses only Node built-ins.
+    root = Path(__file__).parents[1]
+    result = subprocess.run(
+        ["node", "--test", "tests_frontend/recrute-favorable-action.test.js"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_recruitment_society_is_selected_and_transmitted():
