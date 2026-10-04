@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -251,6 +251,21 @@ def employees(q: str | None = None, page: int = 1, page_size: int = 25,
     return {"items": items, "total": total, "page": safe_page, "page_size": safe_size, "pages": pages}
 
 
+# Monthly UI adapter: shared central read model, same scope and existing write API.
+@router.get("/attendance/workspace")
+def attendance_workspace(month: str = Query(pattern=r"^\d{4}-\d{2}$"), q: str = "", employee_status: str | None = None,
+                         employee_id: int | None = None, page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=50),
+                         db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.attendance.workspace import read_workspace
+    actions = set(user.authorized_actions or [])
+    if "read" not in actions and "admin" not in actions:
+        raise HTTPException(403, "Lecture du pointage non autorisée")
+    result = read_workspace(db, site_ids=scope.selected, month=month, q=q, employee_status=employee_status,
+                            employee_id=employee_id, page=page, page_size=page_size)
+    result["permissions"] = {a: a in actions or "admin" in actions for a in ("create", "update", "validate", "unlock", "export")}
+    return result
+
+
 # ── Pointage (§9) ────────────────────────────────────────────────────────────────────────
 @router.get("/attendance")
 def attendance(presence_date: date, db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope)):
@@ -273,6 +288,8 @@ def attendance(presence_date: date, db: Session = Depends(get_db), scope: BeoSco
 @router.post("/attendance")
 def upsert_attendance(payload: AttendanceUpsert, request: Request, db: Session = Depends(get_db),
                        scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    if not set(user.authorized_actions or []) & {"create", "admin"}:
+        raise HTTPException(403, "Saisie du pointage non autorisée")
     if payload.status not in ATTENDANCE_STATUSES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Statut de pointage invalide")
     employee, site = ensure_employee_in_scope(db, scope, payload.employee_id, site_id=payload.site_id, as_of=payload.presence_date)
@@ -281,6 +298,8 @@ def upsert_attendance(payload: AttendanceUpsert, request: Request, db: Session =
     ).order_by(DailyPresence.id.desc())).scalars().first()
     if existing is not None and existing.site_id not in (None, site.id):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Journée déjà pointée sur un autre site")
+    if existing is not None:
+        _require_action(user, "update")
     old_state = {"status": existing.status} if existing else None
     # Écriture via Attendance Core (seul point d'écriture de la présence) ; l'audit métier
     # Site Workforce ci-dessous reste celui du module.

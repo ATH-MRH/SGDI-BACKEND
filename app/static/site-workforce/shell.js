@@ -64,6 +64,7 @@
 
   // Changement de périmètre : requêtes en cours annulées (setScope), vue re-rendue depuis zéro.
   function changeScope(next) {
+    if (window.SW.attendanceCanLeave && !window.SW.attendanceCanLeave()) { renderScope(); return; }
     window.SW.setScope(next);
     renderScope();
     renderRoute();
@@ -88,7 +89,7 @@
           </div>
           <div class="shell-role-badge">
             <b>Chargé des effectifs</b>
-            <span>Bureau des Effectifs Ouest</span>
+            <span>${esc(state.user?.full_name || "Chargé des effectifs")}</span>
             <span data-perimeter-label></span>
           </div>
           <nav class="shell-nav"><div class="shell-nav-group">${renderNav()}</div></nav>
@@ -97,8 +98,9 @@
           <header class="shell-header">
             <div class="shell-header-left">
               <button class="sidebar-toggle" data-toggle-sidebar aria-label="Menu">☰</button>
+              <input id="beo-quick-search" type="search" placeholder="Rechercher un agent, un matricule…" aria-label="Recherche rapide dans le pointage">
               <div class="shell-header-heading">
-                <span class="shell-header-app">Bureau des Effectifs Ouest</span>
+                <span class="shell-header-app">${esc(state.user?.full_name || "Chargé des effectifs")}</span>
                 <span class="shell-header-title" id="view-title"></span>
               </div>
             </div>
@@ -118,7 +120,7 @@
         </div>
       </div>`;
 
-    document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => { location.hash = "#/" + b.dataset.nav; closeSidebar(); }));
+    document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => { if (!window.SW.attendanceCanLeave || window.SW.attendanceCanLeave()) { location.hash = "#/" + b.dataset.nav; closeSidebar(); } }));
     document.querySelector("[data-toggle-sidebar]").addEventListener("click", toggleSidebar);
     document.querySelector("[data-close-sidebar]").addEventListener("click", closeSidebar);
     document.querySelector("#logout-btn").addEventListener("click", () => { window.SW.logout(); location.hash = ""; renderLogin(); });
@@ -158,8 +160,13 @@
   function closeSidebar() { document.querySelector("#shell")?.classList.remove("sidebar-open"); }
 
   async function renderRoute() {
+    if (!document.querySelector("#view")) return;
     const token = ++renderToken;
     const key = currentRouteKey();
+    // Return the live scope controls to the shell before replacing a view.
+    const scopeBar = document.querySelector("#scope-selectors");
+    if (scopeBar) document.querySelector(".shell-header")?.appendChild(scopeBar);
+    document.body.dataset.swRoute = key;
     currentKey = key;
     document.querySelectorAll(".nav-link").forEach((b) => b.classList.toggle("active", b.dataset.nav === key));
     const titleEl = document.querySelector("#view-title");
@@ -186,6 +193,10 @@
   }
 
   function renderLogin(error) {
+    ++renderToken;
+    if (typeof currentCleanup === "function") currentCleanup();
+    currentCleanup = null;
+    delete document.body.dataset.swRoute;
     document.querySelector("#root").innerHTML = `
       <div id="login-screen" class="card">
         <h2 style="margin-top:0">Bureau des Effectifs Ouest</h2>

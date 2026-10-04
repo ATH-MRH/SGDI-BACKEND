@@ -81,6 +81,20 @@ def _local_hhmm(value: datetime | None) -> str:
     return core.to_local(value).strftime("%H:%M") if value else ""
 
 
+@router.get("/workspace")
+def central_workspace(month: str = Query(pattern=r"^\d{4}-\d{2}$"), site_id: int | None = None, society: str | None = None,
+                      q: str = "", employee_status: str | None = None, employee_id: int | None = None,
+                      page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=50),
+                      db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from app.modules.attendance.workspace import read_workspace
+    ids = _scope(db, user, site_id)
+    scoped = list(db.scalars(select(Site).where(Site.id.in_(ids or [-1])))) if ids is not None else list(db.scalars(select(Site)))
+    if society:
+        scoped = [s for s in scoped if _site_society(s) == society]
+    return read_workspace(db, site_ids=[s.id for s in scoped], month=month, q=q, employee_status=employee_status,
+                          employee_id=employee_id, page=page, page_size=page_size)
+
+
 # ── Tableau du jour ──────────────────────────────────────────────────────────────────────
 @router.get("/board")
 def board(

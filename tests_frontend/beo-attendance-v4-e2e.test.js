@@ -1,0 +1,47 @@
+// Real BEO host, Core APIs and Chrome on a disposable database. No production account/data.
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {spawn,execFileSync}=require('node:child_process');let puppeteer;try{puppeteer=require('puppeteer-core');}catch{}
+const ROOT=path.join(__dirname,'..'),PORT=8978,BASE=`http://127.0.0.1:${PORT}`,HOST=`http://beo.irongs.com:${PORT}`,PASS='BEO-Local-E2E-2026',OUT=process.env.ATLAS_BEO_V4_ARTIFACTS||'/tmp/atlas-beo-attendance-v4';
+const CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function api(route,{token,method='GET',body,host}={}){const r=await fetch(BASE+'/api'+route,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(host?{Host:host}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};}
+async function login(page,name){await page.waitForSelector('#login-form');await page.type('[name=username]',name);await page.type('[name=password]',PASS);await page.click('#login-form button');await page.waitForSelector('[data-nav=pointage]');await page.click('[data-nav=pointage]');await page.waitForSelector('.aw-grid [data-cell]');}
+test('BEO V4 : périmètres, cohérence Core et sept vues en Chrome réel',{skip:!puppeteer||!fs.existsSync(CHROME),timeout:180000},async t=>{
+ fs.mkdirSync(OUT,{recursive:true});const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'beo-v4-'));
+ const env={...process.env,PYTHONPATH:ROOT,DATABASE_URL:'sqlite:///'+path.join(tmp,'db.sqlite'),APP_ENV:'test',JWT_SECRET:'beo-v4-disposable-local-only-secret',ADMIN_SYSTEM_USERNAME:'BEOADMIN',ADMIN_SYSTEM_PASSWORD:PASS,SGDI_UPLOADS_DIR:path.join(tmp,'uploads'),LOGIN_MAX_ATTEMPTS:'1000000',LOG_LEVEL:'ERROR',BIOMETRIC_ENABLED:'false',STARTUP_MAINTENANCE_ENABLED:'false',SMTP_HOST:''};
+ const fd=fs.openSync(path.join(OUT,'server.log'),'w');const server=spawn('python3',['-m','uvicorn','app.main:app','--host','127.0.0.1','--port',String(PORT)],{cwd:ROOT,env,stdio:['ignore',fd,fd]});fs.closeSync(fd);let browser;t.after(async()=>{if(browser)await browser.close();server.kill('SIGTERM');await new Promise(r=>server.exitCode!==null?r():server.once('exit',r));});
+ let admin;for(let i=0;i<100;i++){try{admin=await api('/auth/admin-system-login',{method:'POST',body:{username:'BEOADMIN',password:PASS}});if(admin.status===200)break;}catch{}await sleep(250);}assert.equal(admin?.status,200);
+ const ids=JSON.parse(execFileSync('python3',['-c',`import app.main,json
+from datetime import date
+from app.db.session import SessionLocal
+from app.core.security import hash_password
+from app.modules.auth.models import User
+from app.modules.ops.models import Site,Assignment,DailyPresence
+from app.modules.drh.models import Employee
+with SessionLocal() as db:
+ sites=[Site(name=n,active=1,equipment_plan={'societe':soc}) for n,soc in [('DHL HAMOUL 01','IRON GLOBAL SÉCURITÉ'),('DHL HAMOUL 2','IRON GLOBAL SÉCURITÉ'),('SITE CENTRE','SOCIÉTÉ CENTRE'),('SITE SANS AGENT','IRON GLOBAL SÉCURITÉ')]]
+ db.add_all(sites);db.flush()
+ users=[User(username=u,full_name=n,role='charge_effectifs_site',access_level='H2',is_active=True,password_hash=hash_password('${PASS}'),authorized_modules=['site_workforce'],authorized_actions=['read','create','update','validate'],authorized_societies=[soc],authorized_sites=allowed) for u,n,soc,allowed in [('OUEST','Chargé des effectifs Ouest','IRON GLOBAL SÉCURITÉ',[sites[0].id,sites[1].id,sites[3].id]),('CENTRE','Chargé des effectifs Centre','SOCIÉTÉ CENTRE',[sites[2].id])]]
+ db.add_all(users);employees=[]
+ for i in range(23):
+  site=sites[2] if i==22 else sites[i%2]
+  e=Employee(code=f'K{i+1:03}',last_name=['ABDELLALI','ABDELHADI','ABOURAR','ADDA','AFFANE','AGUID','AHMED','AISSAOUI'][i%8],first_name=['Habib','Mohamed','Ali','Ibrahim','Boualem'][i%5],society=site.equipment_plan['societe'],status='actif');db.add(e);db.flush();employees.append(e.id)
+  db.add(Assignment(employee_id=e.id,site_id=site.id,start_date=date(2026,1,1),group_code='A',active=1))
+  for day,status in [(1,'present'),(2,'present'),(3,'absent' if i%4==0 else 'present')]:db.add(DailyPresence(employee_id=e.id,site_id=site.id,presence_date=date(2026,10,day),status=status))
+ db.commit();print(json.dumps({'sites':[s.id for s in sites],'employees':employees}))`],{cwd:ROOT,env}).toString().trim().split('\n').pop());
+ browser=await puppeteer.launch({executablePath:CHROME,headless:'new',userDataDir:path.join(tmp,'chrome'),args:['--no-first-run','--no-proxy-server','--host-resolver-rules=MAP beo.irongs.com 127.0.0.1, MAP pointage.irongs.com 127.0.0.1','--no-sandbox']});const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewport({width:1440,height:1000});await page.goto(HOST+'/#/pointage',{waitUntil:'networkidle0'});await login(page,'OUEST');
+ await page.$eval('#aw-month',e=>{e.value='2026-10';e.dispatchEvent(new Event('change',{bubbles:true}));});await page.waitForFunction(()=>document.querySelector('.aw-toolbar h2')?.textContent.includes('octobre 2026')&&document.querySelector('#aw-content')?.getAttribute('aria-busy')==='false');
+ assert.match(await page.$eval('.aw-heading',e=>e.textContent),/Ouest/);assert.equal(await page.$$('.aw-tabs [data-tab]').then(a=>a.length),7);assert.equal(await page.$$('#site-select option').then(a=>a.length),4);
+ const token=await page.evaluate(()=>SW.state.token);assert.equal((await api('/site-workforce/attendance/workspace?month=2026-10&site_id='+ids.sites[2],{token,host:'beo.irongs.com'})).status,403);assert.equal((await api('/site-workforce/attendance/workspace?month=2026-10&society=SOCIÉTÉ%20CENTRE',{token,host:'beo.irongs.com'})).status,403);assert.equal((await api('/site-workforce/attendance/workspace?month=2026-10&employee_id='+ids.employees[22],{token,host:'beo.irongs.com'})).status,404);
+ for(const width of [1600,1440,1280,1024,768,430,390]){await page.setViewport({width,height:1000});await sleep(100);const geom=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,v:innerWidth}));assert.ok(geom.doc<=geom.v+1,JSON.stringify({width,...geom}));await page.screenshot({path:path.join(OUT,`beo-${width}.png`),fullPage:true});}
+ await page.setViewport({width:1440,height:1000});const cell=await page.$('.aw-grid [data-cell][data-date="2026-10-04"]');const eid=Number(await cell.evaluate(e=>e.dataset.cell));await cell.click();await page.click('[data-code="present"]');await page.click('#aw-save');await page.waitForFunction(()=>document.querySelector('#aw-message')?.textContent.includes('enregistrés')&&document.querySelector('#aw-content')?.getAttribute('aria-busy')==='false');
+ const central=await api(`/attendance/workspace?month=2026-10&site_id=${ids.sites[0]}&employee_id=${eid}`,{token:admin.data.access_token});
+ // First displayed employee may belong to either authorized site.
+ let centralData=central.data;if(central.status===404)centralData=(await api(`/attendance/workspace?month=2026-10&site_id=${ids.sites[1]}&employee_id=${eid}`,{token:admin.data.access_token})).data;
+ const fact=centralData.items[0].days[3];assert.equal(fact.status,'present');assert.ok(fact.presence_id);
+ const centralPage=await browser.newPage();await centralPage.evaluateOnNewDocument(token=>sessionStorage.setItem('atlas_pointage_token',token),admin.data.access_token);await centralPage.goto('http://pointage.irongs.com:'+PORT+'/',{waitUntil:'networkidle0'});await centralPage.waitForSelector('#f-date');await centralPage.$eval('#f-date',e=>{e.value='2026-10-04';e.dispatchEvent(new Event('change',{bubbles:true}));});await centralPage.waitForFunction(name=>document.querySelector('#board-rows')?.textContent.includes(name),{},centralData.items[0].name);await centralPage.screenshot({path:path.join(OUT,'central-core.png'),fullPage:true});await centralPage.close();
+ assert.equal((await api(`/attendance/presences/${fact.presence_id}`,{token:admin.data.access_token,method:'PATCH',body:{status:'absent',reason:'Correction centrale E2E'}})).status,200);
+ await page.select('#aw-actions','refresh');await page.waitForFunction((eid)=>document.querySelector(`.aw-grid [data-cell="${eid}"][data-date="2026-10-04"]`)?.textContent==='A',{},eid);
+ for(const tab of ['daily','planning','agent','society','stats','legend','auto']){await page.click(`.aw-tabs [data-tab="${tab}"]`);assert.ok((await page.$eval('#aw-content',e=>e.textContent)).trim());}
+ await page.select('#site-select',String(ids.sites[3]));await page.waitForFunction(()=>document.querySelector('#aw-content')?.textContent.includes('Aucun agent'));await page.screenshot({path:path.join(OUT,'empty-site.png'),fullPage:true});
+ await page.select('#site-select','');await page.waitForSelector('.aw-grid [data-cell]');await page.click('#logout-btn');await page.waitForSelector('#login-form');await login(page,'CENTRE');await page.waitForFunction(()=>document.querySelector('.aw-heading')?.textContent.includes('Centre'));assert.equal(await page.$$('#site-select option').then(a=>a.length),1);const centreToken=await page.evaluate(()=>SW.state.token);assert.equal((await api('/site-workforce/attendance/workspace?month=2026-10&site_id='+ids.sites[0],{token:centreToken,host:'beo.irongs.com'})).status,403);await page.screenshot({path:path.join(OUT,'centre-1440.png'),fullPage:true});assert.deepEqual(errors,[]);t.diagnostic('Captures : '+OUT);
+});

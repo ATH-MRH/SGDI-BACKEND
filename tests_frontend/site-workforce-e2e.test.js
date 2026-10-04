@@ -189,8 +189,11 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id,
     // Pointage : pointer l'employé A présent
     consoleErrors.length = 0;
     await page.evaluate(() => { location.hash = "#/pointage"; });
-    await page.waitForSelector(`[data-set="${empAId}"]`, { timeout: 10000 });
-    await page.select(`[data-set="${empAId}"]`, "absent");
+    await page.waitForSelector(`[data-cell="${empAId}"]`, { timeout: 10000 });
+    const day = new Date().toISOString().slice(0,10);
+    await page.click(`[data-cell="${empAId}"][data-date="${day}"]`);
+    await page.click('[data-code="absent"]');
+    await page.click('#aw-save');
     await new Promise((r) => setTimeout(r, 400));
     text = await page.evaluate(() => document.querySelector("#view")?.innerText || "");
     assert.match(text, /absent/i);

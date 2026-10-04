@@ -329,14 +329,14 @@ test("noAccessNotice/emptyState/errorState rendent un état explicite, jamais un
   assert.match(w.SW.errorState(new w.SW.ApiError("Panne", 500)), /Panne/);
 });
 
-test("portail BEO : écran de connexion et badge affichent Bureau des Effectifs Ouest, Chargé des effectifs et le périmètre consulté", async () => {
+test("portail BEO : connexion BEO, identité réelle du chargé et périmètre consulté", async () => {
   const w = shellWindow(scopedFetch([], { scope: { societies: ["SocB"], sites: [{ id: 7, name: "HAMOUL 01", society: "SocB" }] } }));
   w.SiteWorkforceShell.renderLogin();
   assert.match(w.document.querySelector("#login-screen").textContent, /Bureau des Effectifs Ouest/);
   await w.SiteWorkforceShell.renderShell();
   const badge = w.document.querySelector(".shell-role-badge").textContent;
   assert.match(badge, /Chargé des effectifs/);
-  assert.match(badge, /Bureau des Effectifs Ouest/);
+  assert.match(badge, /CE Test/);
   assert.match(badge, /Site : HAMOUL 01/);
-  assert.match(w.document.querySelector(".shell-header").textContent, /Bureau des Effectifs Ouest/);
+  assert.match(w.document.querySelector(".shell-header").textContent, /CE Test/);
 });
