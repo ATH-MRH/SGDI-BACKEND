@@ -2,12 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadSgdiApp } = require('./load-app');
-const tick = () => new Promise(resolve => setTimeout(resolve, 25));
+const { loadSgdiApp, settle, LOGIN_BOOT_URL } = require('./load-app');
+// Attente « à l'état » : 25 ms réels, puis jusqu'à ce qu'aucun minuteur de mise en place d'écran (post-rendu,
+// démarrage de sous-vue, événements de navigation jsdom) ne reste en attente — voir settle() dans load-app.js.
+const tick = () => settle(() => new Promise(resolve => setTimeout(resolve, 25)));
 function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
 
 async function boot(t) {
-  const r = loadSgdiApp(['renderView'], { lazyModules: true }), w = r.window;
+  // Ce banc pilote l'URL par replaceState + renderView() : démarrer sur #/login évite les événements
+  // de navigation périmés du boot (voir LOGIN_BOOT_URL).
+  const r = loadSgdiApp(['renderView'], { lazyModules: true, url: LOGIN_BOOT_URL, trackTimers: true }), w = r.window;
   assert.ifError(r.loadError); t.after(() => w.close());
   r.dom.reconfigure({ url: 'http://localhost/' });
   for (const id of ['view', 'sidebar-nav']) w.document.getElementById('app').appendChild(w.document.getElementById(id));

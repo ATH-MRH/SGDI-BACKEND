@@ -20,12 +20,66 @@ const MODULES = fs.existsSync(MODULES_DIR)
   : '';
 const SRC = [CORE_UTILS, MODULE_REGISTRY, CORE_FILES, APP, MODULES].join('\n');
 
+// URL de démarrage sans navigation au boot. Sans fragment, l'application (aucune session) fait
+// elle-même `location.hash="#/login"` : jsdom met alors en file (setTimeout 0) un popstate et un
+// hashchange. Un banc qui installe ensuite une session et pilote l'URL par replaceState +
+// renderView() — que le routeur ne voit pas — reçoit ces événements PÉRIMÉS plus tard : le routeur
+// rejoue alors render() sur l'URL du moment et applique sa garde d'accueil (ex. dashboard →
+// admin/dashboard pour une session admin), ce qui change la route sous les pieds du test.
+// En démarrant sur #/login, l'application n'a aucune navigation à faire : aucun événement en file.
+const LOGIN_BOOT_URL = 'https://drh.irongs.com/#/login';
+
+// Suivi des minuteurs de mise en place d'écran (option `trackTimers`). Un `await setTimeout(N)` côté
+// test ne garantit PAS que l'écran est stabilisé :
+//  - Node range les minuteurs par durée : quand un rendu synchrone dépasse N ms, le minuteur du test
+//    (déjà échu) peut passer AVANT un minuteur 0 ms créé après lui. Le test observait alors l'écran
+//    avant son post-rendu (requestAnimationFrame → setTimeout 0) ou avant les événements de
+//    navigation de jsdom (hashchange/popstate, eux aussi en setTimeout 0) ;
+//  - un écran termine sa mise en place par ses propres minuteurs (balayage post-mutation à 30 ms,
+//    démarrage des sous-vues Pointage à 100 ms, styles employés à 150 ms) : un instantané pris plus
+//    tôt change ensuite tout seul, sans qu'aucune réponse tardive n'y soit pour rien.
+// settle() remplace l'attente « au temps » par une attente « à l'état » : tant qu'un de ces
+// minuteurs est en attente dans une fenêtre suivie, on attend encore. Les minuteurs de fond de
+// l'application (rafraîchissements >= 250 ms, expirations réseau) ne sont pas attendus.
+const SETTLE_TIMER_MS = 150;
+const trackedWindows = new Set(); // un Set d'identifiants de minuteurs en attente par fenêtre suivie
+let settleWaiters = [];
+const timerSettled = () => { const waiters = settleWaiters; settleWaiters = []; for (const wake of waiters) wake(); };
+function trackSettleTimers(window) {
+  const pending = new Set();
+  const set = window.setTimeout.bind(window), clear = window.clearTimeout.bind(window), close = window.close.bind(window);
+  window.setTimeout = (fn, ms, ...args) => {
+    if (typeof fn !== 'function' || Number(ms || 0) > SETTLE_TIMER_MS) return set(fn, ms, ...args);
+    const id = set(() => { pending.delete(id); try { fn(...args); } finally { timerSettled(); } }, ms);
+    pending.add(id);
+    return id;
+  };
+  window.clearTimeout = id => { clear(id); if (pending.delete(id)) timerSettled(); };
+  // close() annule tous les minuteurs de la fenêtre : plus rien à attendre pour elle.
+  window.close = () => { pending.clear(); trackedWindows.delete(pending); close(); timerSettled(); };
+  trackedWindows.add(pending);
+}
+// `wait` : l'attente réelle du banc (son tick), faite une fois. Ensuite, tant qu'un minuteur suivi est
+// en attente, on attend son exécution ou son annulation — sans durée ajoutée ni nouvel essai.
+// setImmediate laisse d'abord finir les chaînes de promesses en cours (elles peuvent armer un minuteur).
+// Un minuteur qui se réarmerait sans fin est signalé au lieu de bloquer le banc.
+async function settle(wait) {
+  await wait();
+  for (let turn = 0; turn < 1000; turn++) {
+    await new Promise(resolve => setImmediate(resolve));
+    if (![...trackedWindows].some(pending => pending.size)) return;
+    await new Promise(resolve => settleWaiters.push(resolve));
+  }
+  throw new Error('load-app settle : des minuteurs de mise en place se réarment sans fin');
+}
+
 function loadSgdiApp(names = [], options = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><body><div id="app"></div><div id="sidebar-nav"></div><div id="view"></div><div id="modal-host"></div></body></html>',
-    { url: 'https://drh.irongs.com/', runScripts: options.lazyModules ? 'dangerously' : 'outside-only', pretendToBeVisual: true }
+    { url: options.url || 'https://drh.irongs.com/', runScripts: options.lazyModules ? 'dangerously' : 'outside-only', pretendToBeVisual: true }
   );
   const { window } = dom;
+  if (options.trackTimers) trackSettleTimers(window);
 
   window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve('') });
   window.EventSource = function () { this.close = () => {}; this.addEventListener = () => {}; this.onopen = null; this.onerror = null; };
@@ -36,7 +90,8 @@ function loadSgdiApp(names = [], options = {}) {
     this.destination = {}; this.currentTime = 0; this.state = 'running'; this.resume = () => Promise.resolve();
   };
   window.webkitAudioContext = window.AudioContext;
-  window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+  // Avec suivi : le rAF passe par le minuteur de la fenêtre (suivi, et annulé par window.close()).
+  window.requestAnimationFrame = options.trackTimers ? (cb) => window.setTimeout(cb, 0) : (cb) => setTimeout(cb, 0);
   window.scrollTo = () => {};
   // CSS.escape est disponible dans les navigateurs, absent de cette version de jsdom.
   window.CSS = window.CSS || {};
@@ -105,4 +160,4 @@ ${exposed}
   return { dom, window, loadError, T: () => window.__sgdiTest || {} };
 }
 
-module.exports = { loadSgdiApp };
+module.exports = { loadSgdiApp, settle, LOGIN_BOOT_URL };

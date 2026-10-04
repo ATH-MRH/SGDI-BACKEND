@@ -2,14 +2,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadSgdiApp } = require('./load-app');
+const { loadSgdiApp, settle, LOGIN_BOOT_URL } = require('./load-app');
 const inventory = JSON.parse(fs.readFileSync(path.join(__dirname, '../docs/frontend-phase2b-2g-inventory.json')));
 const phase2hInventory = path.join(__dirname, '../docs/frontend-phase2h-inventory.json');
 if (fs.existsSync(phase2hInventory)) Object.assign(inventory, JSON.parse(fs.readFileSync(phase2hInventory)));
-const tick = () => new Promise(resolve => setTimeout(resolve, 150));
+// Attente « à l'état » : 150 ms réels, puis jusqu'à ce qu'aucun minuteur de mise en place d'écran (post-rendu,
+// démarrage de sous-vue, événements de navigation jsdom) ne reste en attente — voir settle() dans load-app.js.
+const tick = () => settle(() => new Promise(resolve => setTimeout(resolve, 150)));
 
 function boot(options = {}) {
-  const ctx = loadSgdiApp(['renderView'], { lazyModules: true, ...options });
+  // Ce banc pilote l'URL par replaceState + renderView() : démarrer sur #/login évite les événements
+  // de navigation périmés du boot (voir LOGIN_BOOT_URL).
+  const ctx = loadSgdiApp(['renderView'], { lazyModules: true, url: LOGIN_BOOT_URL, trackTimers: true, ...options });
   assert.ifError(ctx.loadError);
   ctx.dom.reconfigure({ url: 'http://localhost/' });
   const { window: w, T } = ctx;
