@@ -1,4 +1,4 @@
-# Temps réel / temps comptabilisé du travail posté (lot 1)
+# Temps réel / temps comptabilisé du travail posté (lots 1 et 2)
 
 ## Principe
 
@@ -48,8 +48,55 @@ refus ne fabrique rien et laisse l'entrée à T-30 se faire normalement.
 
 **Limite connue.** Un salarié posté qui vient travailler sur une autre vacation que celle de son
 groupe (permutation, remplacement) avant T-30 de sa propre vacation est refusé, alors qu'un jour
-`OFF` reste accepté en « hors planning ». Ce cas relève des lots suivants (maintien, deuxième
-vacation, remplacement).
+`OFF` reste accepté en « hors planning ». Le maintien (lot 2) couvre uniquement le créneau qui suit
+sa propre vacation.
+
+## Vacation supplémentaire / maintien (lot 2)
+
+Un salarié maintenu au poste fait **deux vacations distinctes** — ENTRÉE / SORTIE, puis NOUVELLE
+ENTRÉE / SORTIE — jamais une présence continue de 16 h. La vacation supplémentaire est le créneau
+qui suit la vacation normale (06-14 → 14-22, 14-22 → 22-06, 22-06 → 06-14), durée de référence
+480 min. Son instantané porte `kind = EXTRA_SHIFT` (la vacation normale : `kind = NORMAL`) et la
+vacation précédente (`previous` : vacation, horaires, entrée et sortie réelles, événement).
+
+TFIN = fin **théorique** de la vacation précédente (son `scheduled_end` figé). La fenêtre se compte
+depuis TFIN, jamais depuis la sortie réelle :
+
+| Nouvelle entrée | Résultat |
+|---|---|
+| vacation précédente sans sortie | `PREVIOUS_SHIFT_NOT_CLOSED` — refusée |
+| TFIN ≤ entrée < TFIN+30 | `EXTRA_BEFORE_WINDOW` — refusée |
+| TFIN+30 ≤ entrée ≤ TFIN+45 | acceptée (`EXTRA_IN_WINDOW`) |
+| entrée > TFIN+45 | `MANUAL_ENTRY_REQUIRED` — refusée (409) |
+| entrée > TFIN+45, saisie manuelle habilitée | acceptée (`EXTRA_MANUAL`), motif obligatoire |
+
+Tout refus suit la règle du lot 1 : aucun mouvement, audit `attendance.<code>`, en-tête
+`X-Attendance-Code`.
+
+**Sortie obligatoire.** Attendance Core décide ENTRÉE / SORTIE d'après l'état réel : tant que la
+première vacation est ouverte, le pointage suivant **est** sa sortie. `PREVIOUS_SHIFT_NOT_CLOSED`
+répond donc à une entrée explicite (saisie manuelle avec `intent = EXTRA_SHIFT_ENTRY`) ou à une
+vacation restée ouverte au-delà de la fenêtre de cycle.
+
+**Saisie manuelle.** `POST /api/portal/attendance-manual/scan` transmet la permission explicite
+`attendance / manual_entry / create` (refus par défaut, 403 sinon). L'événement conserve employé,
+société, site, pointeur (`actor_user_id`), heure réelle, source `MANUAL`, motif (`observation`),
+vacation précédente et vacation supplémentaire, terminal le cas échéant.
+
+**Décisions prises faute de règle écrite — à confirmer :**
+- *Début comptabilisé de la vacation supplémentaire* = heure réelle de la nouvelle entrée (règle
+  « entrée après T » du lot 1) : une entrée à TFIN+30 compte au plus 450 min. Aucun temps n'est
+  fabriqué ; la référence 480 min est conservée dans `normal_minutes`.
+- *Saisie manuelle entre TFIN et TFIN+30* : refusée comme l'entrée autonome (la dérogation manuelle
+  n'est définie qu'après TFIN+45).
+- *Portée* : les règles s'appliquent pendant le créneau suivant (TFIN → TFIN+480 min), après une
+  vacation normale comptabilisée du même site. Une vacation supplémentaire n'en ouvre pas une autre.
+- Le délai historique de 8 h entre deux arrivées ne s'applique pas à la vacation supplémentaire ;
+  ni retard ni « hors planning » n'est constaté sur sa nouvelle entrée.
+
+Journée : `DailyPresence.data._legacy.counted` (vacation normale) et `countedExtra` (vacation
+supplémentaire) ne s'écrasent pas. Projections : champ `extra_shift` à côté de `counted`
+(`/board`, `/workspace`).
 
 ## Stockage — instantané figé, sans migration
 

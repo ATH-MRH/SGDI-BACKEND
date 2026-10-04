@@ -682,6 +682,18 @@ def create_employee_attendance_qr(
     }
 
 
+EXTRA_SHIFT_ENTRY = "EXTRA_SHIFT_ENTRY"
+
+
+def _manual_entry_granted(db: Session, user: User) -> bool:
+    """Permission explicite attendance / manual_entry / create (refus par défaut)."""
+    from app.core.granular_permissions import is_global_administrator, load_feature_permissions
+
+    return is_global_administrator(user) or any(
+        g.module_key == "attendance" and g.feature_key == "manual_entry" and g.action_key == "create"
+        for g in load_feature_permissions(db, user.id))
+
+
 def _register_attendance(
     db: Session,
     employee: Any,
@@ -689,6 +701,7 @@ def _register_attendance(
     nonce: str,
     source: str,
     observation: str = "",
+    **core_options: Any,
 ) -> dict[str, Any]:
     """Pointage QR / saisie manuelle : délégué à Attendance Core (seul point d'écriture de la
     présence). `nonce` est la clé d'idempotence de l'événement ; `source` (libellé historique)
@@ -696,6 +709,7 @@ def _register_attendance(
     core_source = SOURCE_MANUAL if (nonce.startswith("manual-") or "manuel" in source) else SOURCE_QR
     return attendance_core.record_scan(
         db, employee=employee, source=core_source, actor=scanner, idempotency_key=nonce, observation=observation,
+        **core_options,
     )
 
 
@@ -1474,6 +1488,9 @@ def manual_employee_attendance_scan(
         nonce,
         "portail-rh-employee-manuel",
         _clean_text(payload.get("observation")),
+        # Vacation supplémentaire après la fenêtre : permission « Saisie manuelle » explicite.
+        manual_entry_allowed=_manual_entry_granted(db, scanner),
+        intent=EXTRA_SHIFT_ENTRY if _clean_text(payload.get("intent")).upper() == EXTRA_SHIFT_ENTRY else None,
     )
 
 

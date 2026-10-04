@@ -178,7 +178,8 @@ def board(
             "status": day_status, "source": last_source, "incomplete": incomplete,
             "closed": bool(presence and presence.closed_at), "presence_id": presence.id if presence else None,
             # Travail posté : heure RÉELLE (arrival/departure) et temps COMPTABILISÉ sont distincts.
-            "counted": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c), None),
+            "counted": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_NORMAL), None),
+            "extra_shift": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_EXTRA), None),
             "anomalies": [{"id": a.id, "type": a.anomaly_type, "severity": a.severity, "message": a.message} for a in anomalies],
         })
 

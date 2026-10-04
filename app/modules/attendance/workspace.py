@@ -99,7 +99,8 @@ def read_workspace(db, *, site_ids, month, q="", employee_status=None, employee_
                     "closed": bool(fact and fact.closed_at), "planning": plan,
                     "arrival": fact.arrival_time if fact else None, "departure": fact.departure_time if fact else None,
                     "anomalies": anomalies.get((eid, day), []),
-                    "counted": counted_time.view((fact.data or {}).get("_legacy")) if fact and isinstance(fact.data, dict) else None}
+                    "counted": counted_time.view((fact.data or {}).get("_legacy")) if fact and isinstance(fact.data, dict) else None,
+                    "extra_shift": counted_time.view({"counted": ((fact.data or {}).get("_legacy") or {}).get("countedExtra")}) if fact and isinstance(fact.data, dict) else None}
             cells.append(cell)
             own["total"] += 1
             summary["total"] += 1
