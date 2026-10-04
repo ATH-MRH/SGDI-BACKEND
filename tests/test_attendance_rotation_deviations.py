@@ -79,7 +79,7 @@ def _when(index, minutes=480, offset=2):
 
 
 def _scan(db, emp, when, *, source=SOURCE_QR, key=None):
-    return core.record_scan(db, employee=emp, source=source, actor=None, idempotency_key=key or f"k-{_tag()}", now=when)
+    return core.record_scan(db, employee=emp, source=source, actor=None, idempotency_key=key or f"k-{uuid.uuid4().hex}", now=when)
 
 
 def _rotation(db, index, employees, *, minutes=480):

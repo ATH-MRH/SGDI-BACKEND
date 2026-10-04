@@ -212,6 +212,8 @@ def current_user(
     user = get_user(db, int(payload["sub"]))
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur inactif")
+    from app.modules.auth.pointer_policy import validate_pointer_scope
+    validate_pointer_scope(db, role=user.role, societies=user.authorized_societies, sites=user.authorized_sites, global_society_access=user.global_society_access, status_code=403)
     enforce_module_access(db, request, user)
     enforce_application_host(request, user)
     if request.url.path.lower().startswith(SOCIETY_SCOPED_PREFIXES) and society_scope(user).kind is ScopeKind.NONE:

@@ -167,6 +167,8 @@ body.modal-open{overflow:hidden}
 .test-mode-identity,.test-mode-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.test-mode-identity div,.test-mode-details dl div{min-width:0;background:var(--atlas-surface-secondary);border-radius:9px;padding:8px}.test-mode-identity dt,.test-mode-details dt{color:var(--atlas-text-muted);font-size:11px;font-weight:800}.test-mode-identity dd,.test-mode-details dd{margin:2px 0 0;font-weight:800;overflow-wrap:anywhere}.test-mode-metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.test-mode-metrics span{background:var(--atlas-primary-soft);border-radius:999px;padding:6px 10px;font-size:12px}.test-mode-details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}.test-mode-details summary{cursor:pointer;color:var(--atlas-primary);font-weight:850;min-height:30px}.test-mode-checklist{padding:16px}.test-mode-checklist label{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;min-height:38px;margin:2px 0}.test-mode-checklist input{width:18px;height:18px;flex:none}
 @media(max-width:900px){.test-mode-layout{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.test-mode-card,.test-mode-checklist{padding:12px}.test-mode-warning{position:static}.test-mode-video-wrap{aspect-ratio:3/4;max-height:55vh;margin:10px 0}.test-mode-video{object-fit:cover}.test-mode-controls{grid-template-columns:1fr}.test-mode-actions{display:grid;grid-template-columns:1fr 1fr}.test-mode-actions button{height:48px;min-height:48px;min-width:0;width:100%;padding:10px 8px}.test-mode-identity,.test-mode-details dl{grid-template-columns:1fr 1fr}}
+
+#pointer-form{display:grid;gap:12px}#pointer-form label{display:block}#pointer-form input:not([type="checkbox"]),#pointer-form select{display:block;width:100%;margin-top:5px}#pointer-form fieldset{border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0;max-height:190px;overflow:auto}#pointer-form input[type="checkbox"]{width:auto}#pointer-form fieldset label{margin:7px 0;overflow-wrap:anywhere}#view-pointers .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}@media(max-width:768px){#view-pointers .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <link rel="stylesheet" href="/static/pointage/terminals.css?v=20261003-terminals-ui-v1" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
@@ -209,7 +211,7 @@ body.modal-open{overflow:hidden}
         <button class="nav-btn" data-view="cameras" type="button">◉ Caméras</button>
         <button class="nav-btn" data-view="duplicates" type="button">⧉ Doublons à revoir</button>
         <button class="nav-btn hidden" data-view="test-mode" type="button">◎ Mode Test facial</button>
-      </nav>
+      </nav><div class="side-title hidden" id="pointer-admin-label">Administration</div><nav><button class="nav-btn hidden" data-view="pointers" id="pointer-nav" type="button">♙ Pointeurs</button></nav>
     </aside>
     <main>
       <section id="view-board">
@@ -273,7 +275,13 @@ body.modal-open{overflow:hidden}
           <li>En cas de perte ou de vol, révoquez immédiatement le terminal.</li>
         </ul></div></aside>
       </section>
-      <section id="view-cameras" class="hidden">
+      <section id="view-pointers" class="hidden">
+ <div class="page-head"><div><h1>Pointeurs</h1><p>Comptes de pointage sur les sociétés et sites autorisés</p></div><button class="primary hidden" id="pointer-add" type="button">+ Ajouter un pointeur</button></div>
+ <div class="kpis" id="pointer-kpis"></div>
+ <div class="card"><div class="filters"><input id="pointer-search" placeholder="Rechercher un nom, identifiant, société ou site…" aria-label="Rechercher un pointeur"><select id="pointer-status" aria-label="Statut du pointeur"><option value="">Tous les statuts</option><option value="active">Actifs</option><option value="disabled">Désactivés</option></select></div>
+ <div class="state" id="pointer-state" role="status"></div><div class="table-wrap"><table><thead><tr><th>Nom</th><th>Identifiant</th><th>Société</th><th>Site(s)</th><th>Statut</th><th>Dernière connexion</th><th>Actions</th></tr></thead><tbody id="pointer-rows"></tbody></table></div></div>
+</section>
+<section id="view-cameras" class="hidden">
         <div class="page-head"><div><h2>Caméras</h2><p>Une caméra appartient à une société et un site. Les identifiants ne sont jamais réaffichés. Le pointage facial n'est actif que sur les caméras explicitement activées (pilote).</p></div>
           <span><button class="danger hidden" id="site-facial-off" type="button">Couper le pointage facial du site</button> <button class="secondary" id="model-add" type="button">+ Modèle au catalogue</button> <button class="primary" id="camera-add" type="button">+ Ajouter une caméra</button></span></div>
         <div class="card"><div id="camera-state"></div>
@@ -436,6 +444,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   function logout() {
     if (window.ATLASTestMode) window.ATLASTestMode.stop();
     state.token = ""; state.user = null;
+    pointerSeq++; pointerRows = []; pointerCaps = {actions:[],sites:[],societies:[]};
+    $("pointer-rows").replaceChildren(); $("pointer-kpis").replaceChildren(); closeModal();
     sessionStorage.removeItem(TOKEN_KEY);
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   }
@@ -448,16 +458,19 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("f-site").innerHTML = '<option value="">Tous les sites autorisés</option>' + sites.map((s) => `<option value="${s.id}">${esc(s.name)}${s.society ? " — " + esc(s.society) : ""}</option>`).join("");
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    await initPointers();
     const initial = (location.hash || "").replace("#/", "");
-    show(["anomalies", "sheets", "history", "planning", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
+    show(["pointers", "anomalies", "sheets", "history", "planning", "enrollment", "terminals", "cameras", "duplicates", "test-mode"].includes(initial) ? initial : "board");
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────────────
   document.querySelectorAll(".nav-btn").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
   function show(view) {
+    if (view === "pointers" && !pointerCaps.actions.includes("read")) view = "board";
     state.view = view;
     history.replaceState(null, "", "#/" + view);
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+    $("view-pointers").classList.toggle("hidden", view !== "pointers");
     $("view-board").classList.toggle("hidden", view !== "board");
     $("view-anomalies").classList.toggle("hidden", view !== "anomalies");
     $("view-sheets").classList.toggle("hidden", view !== "sheets");
@@ -470,6 +483,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("view-test-mode").classList.toggle("hidden", view !== "test-mode");
     if (view !== "test-mode" && window.ATLASTestMode) window.ATLASTestMode.stop();
     if (view === "test-mode" && window.ATLASTestMode) return window.ATLASTestMode.load();
+    if (view === "pointers") return loadPointers();
     if (view === "cameras") return loadCameras();
     if (view === "terminals") return loadTerminals();
     if (view === "enrollment") return loadEnrollment();
@@ -478,6 +492,53 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     if (view === "planning") return loadPlanning();
     if (view === "history") return loadHistory();
     return view === "board" ? loadBoard() : loadAnomalies();
+  }
+
+
+  let pointerCaps = { actions: [], sites: [], societies: [] }, pointerRows = [], pointerSeq = 0;
+  async function initPointers() {
+    const caps = await api('/attendance/pointers/capabilities').catch(() => ({}));
+    pointerCaps = {actions:Array.isArray(caps?.actions)?caps.actions.filter(a=>['read','create','update'].includes(a)):[],sites:Array.isArray(caps?.sites)?caps.sites:[],societies:Array.isArray(caps?.societies)?caps.societies:[]};
+    const visible = pointerCaps.actions.includes('read');
+    $('pointer-nav').classList.toggle('hidden', !visible); $('pointer-admin-label').classList.toggle('hidden', !visible);
+    $('pointer-add').classList.toggle('hidden', !pointerCaps.actions.includes('create'));
+  }
+  async function loadPointers() {
+    const seq = ++pointerSeq; const box = $('pointer-state'); box.className='state info'; box.textContent='Chargement des pointeurs…';
+    try {
+      const result = await api('/attendance/pointers'); if(seq !== pointerSeq || !state.token) return;
+      pointerRows = result.items;
+      $('pointer-kpis').innerHTML = [['total','Pointeurs total'],['active','Actifs'],['disabled','Désactivés'],['sites','Sites couverts']].map(([key,label])=>`<div class="kpi"><strong data-pointer-kpi="${key}">${result.kpi[key]}</strong><span>${label}</span></div>`).join('');
+      box.className='state hidden'; box.textContent=''; renderPointers();
+    } catch(ex) { if(seq===pointerSeq){box.className='state error';box.textContent=ex.message;pointerRows=[];renderPointers();} }
+  }
+  function renderPointers() {
+    const q = $('pointer-search').value.trim().toLocaleLowerCase(), status=$('pointer-status').value;
+    const rows=pointerRows.filter(u => (!status || u.is_active === (status==='active')) && (!q || [u.full_name,u.username,...u.societies,...u.sites.map(s=>s.name)].join(' ').toLocaleLowerCase().includes(q)));
+    $('pointer-rows').innerHTML=rows.map(u=>`<tr data-pointer-id="${u.id}"><td>${esc(u.full_name)}</td><td>${esc(u.username)}</td><td>${u.societies.map(esc).join('<br>')}</td><td>${u.sites.map(s=>esc(s.name)).join('<br>')}</td><td>${u.is_active?'Actif':'Désactivé'}</td><td>${u.last_login?when(u.last_login):'Non enregistrée'}</td><td>${pointerCaps.actions.includes('update')?`<button class="link" data-pointer-edit="${u.id}" type="button">Modifier</button>${u.is_active?` <button class="link" data-pointer-disable="${u.id}" type="button">Désactiver</button>`:''}`:''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun pointeur dans ce périmètre.</td></tr>';
+    $('pointer-rows').querySelectorAll('[data-pointer-edit]').forEach(b=>b.onclick=()=>pointerForm(pointerRows.find(u=>u.id===Number(b.dataset.pointerEdit))));
+    $('pointer-rows').querySelectorAll('[data-pointer-disable]').forEach(b=>b.onclick=async()=>{
+      if(!confirm('Désactiver ce pointeur ? Il ne pourra plus se connecter ni pointer. Son historique sera conservé.'))return;
+      b.disabled=true; try{await api('/attendance/pointers/'+b.dataset.pointerDisable,{method:'PATCH',body:{is_active:false}});await loadPointers();toast('Pointeur désactivé');}catch(ex){toast(ex.message,true);b.disabled=false;}
+    });
+  }
+  $('pointer-search').addEventListener('input',renderPointers); $('pointer-status').addEventListener('change',renderPointers);
+  $('pointer-add').addEventListener('click',()=>pointerForm());
+  function pointerForm(user) {
+    const selectedSocieties=user?user.societies:[], selectedSites=user?user.site_ids:[];
+    const m=modal(`<h3>${user?'Modifier le pointeur':'Ajouter un pointeur'}</h3><form id="pointer-form"><label>Nom complet *<input name="full_name" maxlength="150" value="${esc(user?.full_name||'')}" required></label>${user?`<p>Identifiant : <b>${esc(user.username)}</b></p>`:'<label>Identifiant *<input name="username" minlength="3" maxlength="80" placeholder="ex. PTG01" required></label><label>Email (facultatif)<input type="email" name="email"></label><label>Mot de passe *<input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" required></label>'}<fieldset><legend>Société(s) *</legend>${pointerCaps.societies.map(s=>`<label><input type="checkbox" name="societies" value="${esc(s)}" ${selectedSocieties.includes(s)?'checked':''}> ${esc(s)}</label>`).join('')}</fieldset><fieldset><legend>Site(s) *</legend>${pointerCaps.sites.map(s=>`<label data-pointer-site-society="${esc(s.society)}"><input type="checkbox" name="site_ids" value="${s.id}" ${selectedSites.includes(s.id)?'checked':''}> ${esc(s.name)} — ${esc(s.society)}</label>`).join('')}</fieldset><label>Statut *<select name="is_active"><option value="true" ${user?.is_active===false?'':'selected'}>Actif</option><option value="false" ${user?.is_active===false?'selected':''}>Désactivé</option></select></label><p class="muted">Profil Pointeur : Pointage terrain uniquement, sur les sociétés et sites sélectionnés.</p><div id="pointer-form-error" role="alert" class="error"></div><div class="modal-actions"><button class="secondary" id="pointer-cancel" type="button">Annuler</button><button class="primary" type="submit">${user?'Enregistrer':'Créer le pointeur'}</button></div></form>`);
+    m.querySelector('#pointer-cancel').onclick=closeModal;
+    const form=m.querySelector('form');
+    function syncSites(){const chosen=[...form.querySelectorAll('[name="societies"]:checked')].map(i=>i.value);form.querySelectorAll('[data-pointer-site-society]').forEach(l=>{const input=l.querySelector('input');input.disabled=!chosen.includes(l.dataset.pointerSiteSociety);if(input.disabled)input.checked=false;});}
+    form.querySelectorAll('[name="societies"]').forEach(i=>i.onchange=syncSites);syncSites();
+    form.onsubmit=async e=>{
+      e.preventDefault();const button=form.querySelector('[type="submit"]'); if(button.disabled)return;
+      const data=new FormData(form),body={full_name:String(data.get('full_name')).trim(),is_active:data.get('is_active')==='true',societies:data.getAll('societies'),site_ids:data.getAll('site_ids').map(Number)};
+      const error=m.querySelector('#pointer-form-error');
+      if(!body.societies.length||!body.site_ids.length){error.textContent='Sélectionnez au moins une société et un site.';error.classList.add('show');return;}
+      if(!user)Object.assign(body,{username:String(data.get('username')).trim(),email:data.get('email')||null,password:data.get('password')});
+      button.disabled=true;try{await api('/attendance/pointers'+(user?'/'+user.id:''),{method:user?'PATCH':'POST',body});closeModal();await loadPointers();toast(user?'Pointeur modifié':'Pointeur créé');}catch(ex){error.textContent=ex.message;error.classList.add('show');button.disabled=false;}
+    };
   }
 
   // ── Situation du jour ───────────────────────────────────────────────────────────────

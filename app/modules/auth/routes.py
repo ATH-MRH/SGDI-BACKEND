@@ -736,6 +736,9 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
         rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise
     rate_limit.clear(f"login:{ip}")
+    if str(user.role).lower() == "pointeur":
+        append_audit(db, action="auth.login", resource="user", resource_id=user.id, result="success", user=user, request=request)
+        db.commit()
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 

@@ -74,7 +74,7 @@ def _team(db, site, group, size=3):
 
 
 def _scan(db, emp, when):
-    return core.record_scan(db, employee=emp, source="QR", actor=None, idempotency_key=f"k-{_tag()}", now=when)
+    return core.record_scan(db, employee=emp, source="QR", actor=None, idempotency_key=f"k-{uuid.uuid4().hex}", now=when)
 
 
 def _rotation(db, site, index, employees, *, minutes=480, late=2):

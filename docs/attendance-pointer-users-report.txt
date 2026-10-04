@@ -1,0 +1,168 @@
+EXTENSION — SOUS-UTILISATEURS POINTEURS DEPUIS POINTAGE
+
+SOUS-UTILISATEURS POINTEUR : OUI.
+UTILISATEURS CENTRAUX : OUI, table users et user_id central.
+NOUVELLE TABLE UTILISATEURS : NON.
+MIGRATION NOUVELLE POUR CETTE EXTENSION : NON.
+Le modèle central possède déjà les comptes, le statut, les modules, les actions,
+les périmètres, les tables de permissions et l'audit nécessaires.
+
+AUDIT AVANT EXTENSION
+User contient username unique, email facultatif unique, full_name, role,
+access_level, authorized_modules/actions/societies/sites, global_society_access,
+is_active et les mots de passe hachés. Aucun champ last_login ni created_by
+n'est nécessaire : ces informations sont conservées par le journal central.
+L'Administration utilise le rôle métier pointeur et le profil existant H2.
+Le formulaire central normalisait auparavant les rôles terrain inconnus vers
+agent ; pointeur est maintenant conservé explicitement dans ce formulaire.
+Le service central normalize_username continue à normaliser les identifiants.
+La convention PTG01 est reprise dans le formulaire ; aucune seconde logique de
+génération ni inventaire global des identifiants n'est exposé au responsable.
+Email : facultatif dans User ; aucune adresse ni mot de passe de validation
+supplémentaire imposés à un compte qui ne possède aucun droit de validation.
+Aucun email de création n'est envoyé par cette interface.
+
+RÔLE POINTEUR RÉUTILISÉ : pointeur.
+PROFIL : H2, saisie terrain.
+MODULES : authorized_modules = [pointeur], application pointeur.irongs.com.
+ACTIONS : authorized_actions = [read, create].
+Permissions canoniques : attendance/read et attendance/create ;
+attendance/qr_scanning/read, create et attendance/manual_entry/read, create.
+Aucun admin, delete, unlock, export, validate, ni module DRH/OPS/Finance/
+Commercial/Matériel/Administration accordé au Pointeur créé.
+La borne faciale conserve son identité d'appareil et n'acquiert pas de compte humain.
+
+PERMISSIONS DU RESPONSABLE
+Source : UserFeaturePermission, module canonique administration,
+fonctionnalité users, actions read/create/update, ou admin déjà existant.
+Les administrateurs explicitement globaux gardent leur politique centrale.
+Les actions individuelles du responsable limitent aussi les capacités affichées.
+L'entrée Administration → Pointeurs est masquée sans read ; ajout et modification
+sont affichés seulement avec leurs actions respectives. Le serveur vérifie tout.
+Ces permissions déléguées n'ouvrent pas l'API globale /auth/users à un compte terrain.
+Elles restent attribuées par les mécanismes de RBAC de l'Administration système.
+
+API AJOUTÉE (préfixe /api/attendance/pointers)
+GET /capabilities : droits effectifs et sociétés/sites attribuables.
+GET : liste autorisée et KPI calculés (total, actifs, désactivés, sites couverts).
+POST : création par le service central create_user, puis permissions et audit
+atomiques dans la même transaction.
+PATCH /{user_id} : nom, statut, sociétés et sites, sans champ de permission avancée.
+Aucune route DELETE ni hard delete dans l'interface Pointage.
+Les schémas refusent les champs supplémentaires (rôle, module, action, accès global...).
+
+SOCIÉTÉ EXPLICITE OBLIGATOIRE : OUI.
+SITE EXPLICITE OBLIGATOIRE : OUI, un ou plusieurs.
+Périmètre attribuable = intersection des sociétés centrales et sites autorisés
+au responsable. Chaque site doit appartenir à une société choisie.
+Un Pointeur dont le périmètre complet dépasse celui du responsable est invisible
+et n'est pas modifiable ni réactivable par lui. Aucun filtrage partiel ne remplace
+silencieusement les autorisations centrales d'un compte.
+Les gardes centrales de création/modification et d'authentification protègent
+également les Pointeurs contre des périmètres vides, globaux ou incohérents.
+La réactivation depuis l'Administration repasse par la même validation.
+
+ESCALADE PRIVILÈGES BLOQUÉE : OUI, contrôlée côté serveur.
+VISIBLE POINTAGE.IRONGS.COM : OUI, section Administration → Pointeurs.
+VISIBLE ADMINISTRATION SYSTÈME : OUI, mêmes utilisateurs centraux.
+La fiche centrale préserve le rôle pointeur et précise aussi les périmètres obligatoires.
+
+CRÉATION : OUI, nom, identifiant, mot de passe, sociétés, sites et statut ; email facultatif.
+MODIFICATION : OUI, nom, statut, sociétés et sites dans le périmètre du responsable.
+DÉSACTIVATION : OUI, confirmation et statut central is_active=false, sans suppression.
+Un compte désactivé ne peut ni se connecter ni utiliser son ancien jeton pour pointer.
+La vue, la recherche et les KPI sont recalculés après mutation.
+Les données de la vue et les modales sont effacées à la déconnexion.
+
+AUDIT
+pointer_user.created / updated / disabled / scope_changed.
+Auteur responsable (user_id), cible (resource_id=user_id du Pointeur), date,
+périmètre précédent/nouveau, état et profil ; aucun mot de passe journalisé.
+auth.login réussi enregistre la dernière connexion des comptes rôle pointeur.
+Les comptes anciens sans événement de connexion indiquent « Non enregistrée ».
+La relation de gestion est tracée par l'audit, pas par une seconde identité.
+
+POINTAGE ET TERMINAL
+Attendance Core existant conserve déjà actor_user_id, actor_label, site_id,
+source, date/heure, résultat et données du pointage. Un scan QR réel dans le test
+backend vérifie que le Pointeur central est l'acteur de l'événement.
+Les identités de terminal (public_id/clé ECDSA) restent distinctes des comptes humains.
+L'extension ne change pas le protocole de terminal ni ne prétend transformer une
+session humaine en identité d'appareil. Aucun algorithme d'Attendance Core modifié.
+
+AUTHENTIFICATION RÉELLE : OUI.
+Chrome + serveur local réel + comptes centraux sur une base jetable.
+Création depuis Pointage ; déconnexion du responsable ; connexion PTG01 sur
+pointeur.irongs.com (domaine résolu vers localhost) ; seuls ses sites sont proposés ;
+retour Pointage ; modification ; désactivation ; ancien jeton et nouvelle connexion
+refusés ; connexion Administration système ; compte central visible, désactivé.
+TEST SITE AUTORISÉ : OUI.
+TEST SITE INTERDIT : OUI, 403.
+TEST MODULE INTERDIT : OUI, 403.
+Captures : /tmp/atlas-pointer-users/ (1440, 1024, 768 et 390 px, formulaire,
+Pointeur authentifié, Administration centrale).
+Le service worker de l'Administration est attendu avant interaction pour éviter
+une navigation de première installation pendant la saisie du test.
+
+CONCURRENCE
+Deux créations du même identifiant, même avec casse différente : un succès et
+un 409 ; un seul utilisateur central, un seul audit de création, quatre permissions
+terrain. Vérifié avec sessions indépendantes sur SQLite et PostgreSQL jetable.
+La contrainte username centrale n'est pas retirée ni dupliquée.
+
+NON-RÉGRESSION
+Terminaux, QR, facial, saisie manuelle, feuilles, planning, OPS, DRH et Administration
+restent dans les suites existantes. Aucune modification d'Attendance Core, du moteur
+facial, des références employé ou des algorithmes de planning/feuilles.
+Deux fixtures de rotations produisaient des clés d'idempotence aléatoires sur
+seulement six caractères et pouvaient se heurter à une clé d'un autre employé.
+Le Core refusait correctement ces collisions. Seules ces clés d'essai utilisent
+maintenant des UUID complets ; aucune assertion ni règle métier n'est supprimée.
+
+BRANCHE : feat/attendance-pointer-users.
+BASE : 557bd7584d139843377a15a2af8b989307ed313f, correctif Terminaux précédent non poussé.
+ORIGIN/MAIN OBSERVÉ : 8186ee3745cb6c84d2d416888f0501a39bc984d8.
+AUCUN PUSH. AUCUN DÉPLOIEMENT.
+
+VALIDATIONS FINALES
+Backend complet : 1365 réussis, 51 ignorés selon environnement (349,73 s).
+Ciblés backend et PostgreSQL : 89 réussis, dont création concurrente réelle.
+Chrome Pointeurs : 1 parcours complet réussi.
+Chrome Terminaux : 7 scénarios réussis.
+Administration et Pointeurs frontend ciblés : 37 réussis.
+Les moteurs externes correspondant aux tests ignorés ne sont pas prétendus validés.
+PostgreSQL jetable arrêté après vérification.
+Diff : git diff --check valide.
+
+CAPTURE 1440 : /tmp/atlas-pointer-users/pointers-1440.png
+CAPTURE 390 : /tmp/atlas-pointer-users/pointers-390.png
+FORMULAIRE 1440 : /tmp/atlas-pointer-users/pointer-form-1440.png
+FORMULAIRE 390 : /tmp/atlas-pointer-users/pointer-form-390.png
+ADMINISTRATION CENTRALE : /tmp/atlas-pointer-users/central-administration.png
+
+FICHIERS MODIFIÉS
+app/modules/attendance/routes.py
+app/modules/attendance/pointer_users.py
+app/modules/auth/dependencies.py
+app/modules/auth/routes.py
+app/modules/auth/service.py
+app/modules/auth/pointer_policy.py
+app/static/js/modules/administration-user-forms.js
+app/static/pointage/index.html
+package.json
+tests/test_pointer_users.py
+tests/test_pointer_users_pg.py
+tests/test_attendance_rotation_deviations.py
+tests/test_attendance_rotation_learning.py
+tests_frontend/pointage-pointer-users.test.js
+tests_frontend/pointage-pointer-users-e2e.test.js
+docs/attendance-pointer-users-report.txt
+
+NPM TEST COMPLET : 906 réussis, 0 échec (exécution séquentielle isolée, 100,57 s).
+Une exécution sous charge backend avait échoué sur le délai fixe du test existant
+de navigation précédent/suivant ; la relance complète isolée passe sans modifier
+ce test ni la navigation.
+COMMIT : feat(attendance): administrer les pointeurs depuis le centre de contrôle
+Identifiant du commit : fourni dans le rapport final Git (ce fichier est inclus).
+GO : extension validée localement ; mise en production non effectuée.
+AUCUN PUSH. AUCUN DÉPLOIEMENT.

@@ -44,7 +44,10 @@ from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids, _ensure_site_allowed, _site_society
 
+from app.modules.attendance.pointer_users import router as pointer_users_router
+
 router = APIRouter()
+router.include_router(pointer_users_router)
 
 KPI_STATUSES = ("present", "absent", "conge", "maladie", "repos", "mission")
 

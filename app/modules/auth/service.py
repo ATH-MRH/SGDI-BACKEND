@@ -42,11 +42,13 @@ def _validate_beo_scope(db: Session, *, role, modules, societies, sites, global_
                                global_society_access=global_society_access)
 
 
-def create_user(db: Session, payload: UserCreate) -> User:
+def create_user(db: Session, payload: UserCreate, *, commit: bool = True) -> User:
     username = normalize_username(payload.username)
     email = normalize_login(str(payload.email)) if payload.email else None
     if get_user_by_login(db, username) or (email and get_user_by_login(db, email)):
         raise HTTPException(status_code=409, detail="Utilisateur déjà existant")
+    from app.modules.auth.pointer_policy import validate_pointer_scope
+    validate_pointer_scope(db, role=payload.role, societies=payload.authorized_societies, sites=payload.authorized_sites, global_society_access=payload.global_society_access)
     _validate_beo_scope(db, role=payload.role, modules=payload.authorized_modules,
                         societies=payload.authorized_societies, sites=payload.authorized_sites,
                         global_society_access=payload.global_society_access)
@@ -68,8 +70,11 @@ def create_user(db: Session, payload: UserCreate) -> User:
         is_active=True,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
     user.has_validation_password = bool(user.validation_password_hash)
     return user
 
@@ -81,11 +86,13 @@ def authenticate(db: Session, username: str, password: str) -> tuple[str, User]:
     password_ok = verify_password(password, user.password_hash)
     if not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
+    from app.modules.auth.pointer_policy import validate_pointer_scope
+    validate_pointer_scope(db, role=user.role, societies=user.authorized_societies, sites=user.authorized_sites, global_society_access=user.global_society_access, status_code=403)
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
     return token, user
 
 
-def update_user(db: Session, user: User, payload: UserUpdate) -> User:
+def update_user(db: Session, user: User, payload: UserUpdate, *, commit: bool = True) -> User:
     if payload.email is not None:
         email = normalize_login(str(payload.email)) if payload.email else None
         if email:
@@ -125,13 +132,18 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
     # périmètre incomplet, et sa réactivation repasse par cette validation.
     try:
         if user.is_active:
+            from app.modules.auth.pointer_policy import validate_pointer_scope
+            validate_pointer_scope(db, role=user.role, societies=user.authorized_societies, sites=user.authorized_sites, global_society_access=user.global_society_access)
             _validate_beo_scope(db, role=user.role, modules=user.authorized_modules,
                                 societies=user.authorized_societies, sites=user.authorized_sites,
                                 global_society_access=user.global_society_access)
     except HTTPException:
         db.rollback()
         raise
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
     user.has_validation_password = bool(user.validation_password_hash)
     return user
