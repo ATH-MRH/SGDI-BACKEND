@@ -1,4 +1,4 @@
-# Temps réel / temps comptabilisé du travail posté (lots 1 et 2)
+# Temps réel / temps comptabilisé du travail posté (lots 1 à 3)
 
 ## Principe
 
@@ -83,16 +83,20 @@ vacation restée ouverte au-delà de la fenêtre de cycle.
 société, site, pointeur (`actor_user_id`), heure réelle, source `MANUAL`, motif (`observation`),
 vacation précédente et vacation supplémentaire, terminal le cas échéant.
 
-**Décisions prises faute de règle écrite — à confirmer :**
-- *Début comptabilisé de la vacation supplémentaire* = heure réelle de la nouvelle entrée (règle
-  « entrée après T » du lot 1) : une entrée à TFIN+30 compte au plus 450 min. Aucun temps n'est
-  fabriqué ; la référence 480 min est conservée dans `normal_minutes`.
-- *Saisie manuelle entre TFIN et TFIN+30* : refusée comme l'entrée autonome (la dérogation manuelle
-  n'est définie qu'après TFIN+45).
-- *Portée* : les règles s'appliquent pendant le créneau suivant (TFIN → TFIN+480 min), après une
-  vacation normale comptabilisée du même site. Une vacation supplémentaire n'en ouvre pas une autre.
+**Décisions confirmées :**
+- *Début comptabilisé de la vacation supplémentaire* = heure réelle de la nouvelle entrée : une
+  entrée à TFIN+30 compte au plus 450 min ; les 30 minutes non travaillées ne sont pas créditées.
+- *Saisie manuelle entre TFIN et TFIN+30* : refusée (la dérogation n'existe qu'après TFIN+45).
+- *Deux vacations consécutives au maximum* : une vacation supplémentaire n'en ouvre jamais une
+  troisième.
+- *Intention explicite* : un scan ambigu n'est jamais deviné comme nouvelle entrée ; l'interface
+  Pointeur transmet `intent = EXTRA_SHIFT_ENTRY` quand elle déclenche une entrée de maintien.
 - Le délai historique de 8 h entre deux arrivées ne s'applique pas à la vacation supplémentaire ;
   ni retard ni « hors planning » n'est constaté sur sa nouvelle entrée.
+
+**Évolution future — remplacement hors planning.** Un salarié qui vient remplacer sur une vacation
+qui n'est pas la sienne est un cas métier distinct du maintien : son workflow n'est pas défini.
+Comportement actuel conservé (refus avant T-30 de sa propre vacation, « hors planning » un jour OFF).
 
 Journée : `DailyPresence.data._legacy.counted` (vacation normale) et `countedExtra` (vacation
 supplémentaire) ne s'écrasent pas. Projections : champ `extra_shift` à côté de `counted`
@@ -137,3 +141,37 @@ réponse du pointage (uniquement en travail posté), `GET /api/attendance/board`
 central), flux live et journal du Pointeur. Les champs existants gardent leur sens : heures
 réelles. `GET /api/attendance/work-regimes` expose `time_labels` (libellés pour le futur Pointeur
 V5 ; aucune refonte d'écran dans ce lot).
+
+## Audit, anomalies et temps opérationnel (lot 3)
+
+**Refus.** Tout refus du travail posté (QR, facial, manuel, terminal — tous passent par
+`core.record_scan`) ne crée aucun mouvement et écrit un audit `attendance.<code>` (`result =
+refused`) : employé, matricule, société, site, heure réelle de la tentative, source, terminal,
+motif affiché, vacation visée, vacation précédente, dernière entrée, dernière sortie, acteur.
+
+**Anomalies** (registre existant `attendance_anomalies`, statuts `OPEN` / `RESOLVED` /
+`DISMISSED` — aucune seconde architecture) :
+
+| Type | Quand | Sévérité |
+|---|---|---|
+| `VACATION_NON_CLOTUREE` | fin de vacation dépassée, aucune sortie | warning |
+| `EXTRA_SHIFT` | maintien détecté (nouvelle entrée acceptée) | info |
+| `MANUAL_POINTAGE` | saisie manuelle (existant) | info |
+
+`VACATION_NON_CLOTUREE` est détectée sans cron, à chaque lecture du flux live
+(`counted.detect_unclosed`), avec une clé unique par événement d'entrée : N rafraîchissements ne
+créent qu'une anomalie, et une anomalie résolue n'est jamais recréée ni supprimée. La sortie
+enfin enregistrée la passe à `RESOLVED` (`resolved_by = system`). Délai avant détection :
+`attendance_unclosed_shift_grace_minutes` (0 = dès la fin de vacation dépassée).
+
+**Flux live du Pointeur** (`GET /api/portal/attendance-live`, ajouts rétrocompatibles) :
+`refusals[]` porte désormais les refus d'Attendance Core (`code`, `message`, `counted`) ; `alerts[]`
+liste les anomalies ouvertes ci-dessus ; `alert_labels` donne les libellés des codes canoniques.
+
+**Temps opérationnel.** Une seule source : `core.operational_clock()` — fuseau métier
+`Africa/Algiers` (les sites n'ont pas de fuseau en base ; aucune migration), renvoyé par le flux
+live (`timezone`, `server_now`, `operational_date`, `server_time`). Le Pointeur recale son horloge
+sur `server_now` et formate tout dans ce fuseau : l'horloge, la date opérationnelle (plus de
+`new Date().toISOString().slice(0,10)`) et les comparaisons d'heures ne dépendent plus du PC.
+La Nuit 22:00 → 06:00 reste une vacation : présence, alertes et rattachement ne repartent pas à
+zéro à minuit.

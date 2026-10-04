@@ -764,13 +764,30 @@ function segDigitHTML(ch){
 function segClockHTML(timeStr){
   return timeStr.split("").map(ch=>ch===":"?'<span class="seg-colon"><i></i><i></i></span>':segDigitHTML(ch)).join("");
 }
+// Temps MÉTIER : fuseau du site fourni par le serveur (jamais celui du PC) et horloge recalée sur
+// le serveur — l'horloge, la date opérationnelle et les mouvements partagent la même source.
+let opsTimeZone="Africa/Algiers",opsClockOffset=0;
+function syncOpsClock(data){
+  if(data&&data.timezone)opsTimeZone=data.timezone;
+  const server=Date.parse((data&&data.server_now)||"");
+  if(!Number.isNaN(server))opsClockOffset=server-Date.now();
+}
+function opsNow(){return new Date(Date.now()+opsClockOffset)}
+function opsParts(d){
+  const parts={};
+  for(const part of new Intl.DateTimeFormat("en-CA",{timeZone:opsTimeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).formatToParts(d||opsNow()))parts[part.type]=part.value;
+  return parts;
+}
+function opsDate(d){const p=opsParts(d);return p.year+"-"+p.month+"-"+p.day}
+function opsStamp(d){const p=opsParts(d);return opsDate(d)+"T"+p.hour+":"+p.minute+":"+p.second}
 function updateHeaderClock(){
   const el=document.getElementById("headerClock");
   if(!el)return;
-  const now=new Date();
-  const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
-  const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  const now=opsNow();
+  const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",timeZone:opsTimeZone});
+  const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone});
   el.innerHTML='<span class="seg-date">'+esc(date)+'</span><span class="seg-clock">'+segClockHTML(time)+'</span>';
+  el.dataset.time=time;el.dataset.date=opsDate(now);
 }
 function startHeaderClock(){
   clearInterval(headerClockTimer);
@@ -926,6 +943,7 @@ async function pollLive(){
     if(response.status===401||response.status===403){logout();return}
     if(!response.ok){setLiveState("error");return}
     const data=await response.json();
+    syncOpsClock(data);
     setLiveState("ok");
     serverSummary=data.summary||null;
     const first=liveCursor===null;
@@ -996,7 +1014,7 @@ function renderSystemState(){
   const reader=cameraMode?(scanner?["Caméra active","ok"]:(restart&&!restart.classList.contains("hidden")?["Caméra indisponible","bad"]:["Ouverture de la caméra…","pending"])):["Douchette USB à l'écoute","ok"];
   setSystemItem("sysReader",reader[0],reader[1]);
   setSystemItem("sysNetwork",online?"En ligne":"Hors ligne",online?"ok":"bad");
-  const time=liveOkAt?new Date(liveOkAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"";
+  const time=liveOkAt?new Date(liveOkAt+opsClockOffset).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone}):"";
   const live=!online?["Suspendu (hors ligne)","bad"]:liveState==="ok"?["Actif · relève "+time,"ok"]:liveState==="error"?["Interrompu · nouvel essai automatique","bad"]:["En attente","pending"];
   setSystemItem("sysLive",live[0],live[1]);
   const pill=document.getElementById("stationState"),label=document.getElementById("stationStateLabel");
@@ -1062,8 +1080,8 @@ function renderCounters(){
   set("presentCount",serverSummary.present_now);set("absentCount",serverSummary.absent_today);
   return true;
 }
-function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
-function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
+function localDate(offset=0){return shiftDate(opsDate(),offset)}   // date OPÉRATIONNELLE du site, jamais la date UTC
+function shiftDate(value,days){const d=new Date(value+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 function eventTime(value){return String(value||"").slice(11,16)}
 function eventMinutes(value){const m=String(value||"").match(/(\d{2}):(\d{2})/);return m?+m[1]*60 + +m[2]:null}
 function showPointerSection(section){
@@ -1087,7 +1105,7 @@ function groupPlanningEvents(date){
 }
 function renderPlanning(date){
   const sourceDate=shiftDate(date,-7),expected=groupPlanningEvents(sourceDate),actual=groupPlanningEvents(date),used=new Set(),now=new Date();
-  const rows=expected.map(exp=>{const real=actual.find(a=>a.key===exp.key);if(real)used.add(real.key);let state="attendu",note=`Prévu à ${exp.arrival||"—"}`,severity="attendu";if(real?.absent){state="absent";severity="absent";note=`Absence confirmée${real.scannedBy?" par "+real.scannedBy:""}.${real.observation?" "+real.observation:""}`}else if(real?.arrival){state="present";severity="present";note="Conforme au planning appris.";const delta=Math.abs((eventMinutes(real.arrival)||0)-(eventMinutes(exp.arrival)||0));if(exp.arrival&&delta>30){state="anomalie";severity="anomalie";note=`Horaire prévu ${exp.arrival}, constaté ${real.arrival}.`}if(String(real.siteId||real.site)!==String(exp.siteId||exp.site)){state="permutation";severity="permutation";note=`Site prévu ${exp.site}, constaté ${real.site}.`}}else if(now>new Date(date+"T"+(exp.arrival||"23:59")+":00")){state="absent";severity="absent";note="Aucune arrivée enregistrée après l'heure prévue."}return{exp,real,state,severity,note}});
+  const rows=expected.map(exp=>{const real=actual.find(a=>a.key===exp.key);if(real)used.add(real.key);let state="attendu",note=`Prévu à ${exp.arrival||"—"}`,severity="attendu";if(real?.absent){state="absent";severity="absent";note=`Absence confirmée${real.scannedBy?" par "+real.scannedBy:""}.${real.observation?" "+real.observation:""}`}else if(real?.arrival){state="present";severity="present";note="Conforme au planning appris.";const delta=Math.abs((eventMinutes(real.arrival)||0)-(eventMinutes(exp.arrival)||0));if(exp.arrival&&delta>30){state="anomalie";severity="anomalie";note=`Horaire prévu ${exp.arrival}, constaté ${real.arrival}.`}if(String(real.siteId||real.site)!==String(exp.siteId||exp.site)){state="permutation";severity="permutation";note=`Site prévu ${exp.site}, constaté ${real.site}.`}}else if(opsStamp()>date+"T"+(exp.arrival||"23:59")+":00"){state="absent";severity="absent";note="Aucune arrivée enregistrée après l'heure prévue."}return{exp,real,state,severity,note}});
   // Le FAIT (présence enregistrée par Attendance Core) n'est jamais une anomalie tant que le
   // planning appris n'a pas de référence pour ce jour (apprentissage < 7 jours) : on le
   // qualifie « présence constatée », pas « non prévue ».
@@ -1180,7 +1198,7 @@ function recordScanEntry(data){
   const heure=data.heure||"";
   const action=data.action==="depart"?"depart":"arrivee";
   const cycle=Number(data.cycle||1);
-  const scanDate=data.date||new Date().toISOString().slice(0,10);
+  const scanDate=data.date||localDate();
   let entry=matricule?sessionScans.find(row=>row.matricule===matricule&&Number(row.cycle||1)===cycle):null;
   if(entry)sessionScans.splice(sessionScans.indexOf(entry),1);
   else entry={matricule,arrivee:"",depart:"",duration:""};

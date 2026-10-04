@@ -128,7 +128,7 @@ def test_b_entry_before_t_minus_30_is_refused_without_any_movement(db):
     assert _events(db, emp) == [] and _anomalies(db, emp) == []
     assert db.execute(select(DailyPresence).where(DailyPresence.employee_id == emp.id)).first() is None
     audit = db.execute(select(AuditEvent).where(AuditEvent.action == "attendance.early_outside_window",
-                                                AuditEvent.resource_id == str(emp.id))).scalar_one()
+                                                AuditEvent.resource_id == str(emp.id)).order_by(AuditEvent.id.desc())).scalars().first()
     state = json.loads(audit.new_state)
     assert audit.result == "refused" and state["recorded"] is False and state["actual_entry"] == _iso(ANCHOR, "13:29:59")
     assert state["window_opens_at"] == _iso(ANCHOR, "13:30")

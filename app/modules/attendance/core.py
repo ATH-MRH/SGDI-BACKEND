@@ -38,7 +38,8 @@ from app.modules.attendance.models import (
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
 
-TZ = ZoneInfo("Africa/Algiers")
+TZ_NAME = "Africa/Algiers"
+TZ = ZoneInfo(TZ_NAME)
 NEW_ARRIVAL_DELAY = timedelta(hours=8)
 # Un cycle non fermé ne reste pas actif indéfiniment : la limite standard couvre les postes de
 # nuit ; les sites en rotation 24 h ont une fenêtre plus large pour que le départ du lendemain
@@ -69,6 +70,16 @@ def to_local(value: datetime) -> datetime:
 
 def _now_local() -> datetime:
     return datetime.now(TZ)
+
+
+def operational_clock(now: datetime | None = None) -> dict[str, Any]:
+    """Temps MÉTIER, source unique des écrans (horloge, date opérationnelle, mouvements, vacations,
+    alertes) : fuseau du site, jamais celui du poste. Les sites n'ont pas de fuseau propre en
+    base : tous sont en Algérie (Africa/Algiers), le fuseau d'Attendance Core."""
+    local = (now or _now_local()).astimezone(TZ)
+    return {"timezone": TZ_NAME, "server_now": local.isoformat(timespec="seconds"),
+            "operational_date": local.date().isoformat(), "server_time": local.strftime("%H:%M:%S"),
+            "utc_offset_minutes": int(local.utcoffset().total_seconds() // 60)}
 
 
 # ── Planning ─────────────────────────────────────────────────────────────────────────────
@@ -286,22 +297,18 @@ def _duplicate_response(event: AttendanceEvent, employee: Employee, site_name: s
     }
 
 
-def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source: str, counted: dict[str, Any]) -> None:
+def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source: str, counted: dict[str, Any],
+                  site_id: int | None = None, events: list[AttendanceEvent] | None = None, extra: dict[str, Any] | None = None) -> None:
     """Entrée refusée par les règles du travail posté (avant T-30, nouvelle entrée avant TFIN+30,
     vacation précédente non clôturée, saisie manuelle requise). Aucun événement ni présence n'est
-    créé — aucun temps n'est fabriqué ; la tentative est tracée dans l'audit, sans qualification
+    créé — aucun temps n'est fabriqué ; la tentative est tracée dans l'audit (qui, où, quand,
+    par quelle source, pour quelle vacation, dernière entrée / sortie), sans qualification
     disciplinaire."""
     from app.modules.attendance import counted as counted_time, official
 
-    code, society = counted["entry_status"], employee.society
+    code, society, employee_id, matricule = counted["entry_status"], employee.society, employee.id, employee.code
     hhmm = {key: datetime.fromisoformat(counted[key]).strftime("%H:%M")
             for key in ("scheduled_start", "window_opens_at", "window_closes_at") if counted.get(key)}
-    db.rollback()                                                     # libère le verrou : rien n'a été écrit
-    append_audit(db, action=f"attendance.{code.lower()}", resource="attendance_event", resource_id=employee.id,
-                 result="refused", user=actor, society=society,
-                 new_state={"code": code, "source": source, "recorded": False,
-                            **{key: value for key, value in counted.items() if value is not None and key != "entry_status"}})
-    db.commit()
     if code == counted_time.EARLY_OUTSIDE_WINDOW:
         label = official.SHIFT_LABELS.get(counted["shift"], counted["shift"])
         detail = (f"Pointage hors fenêtre : vacation {label} à {hhmm['scheduled_start']}, "
@@ -314,6 +321,17 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
     else:
         detail = (f"Fenêtre de nouvelle entrée dépassée ({hhmm['window_closes_at']}) : "
                   "saisie manuelle par un pointeur habilité requise.")
+    last = {kind: next((to_local(e.occurred_at).isoformat() for e in reversed(events or []) if e.event_type == kind), None)
+            for kind in (EVENT_ARRIVAL, EVENT_DEPARTURE)}
+    terminal = (extra or {}).get("terminal_name") or (extra or {}).get("terminal") or (extra or {}).get("camera")
+    db.rollback()                                                     # libère le verrou : rien n'a été écrit
+    append_audit(db, action=f"attendance.{code.lower()}", resource="attendance_event", resource_id=employee_id,
+                 result="refused", user=actor, society=society,
+                 new_state={"code": code, "state": "REFUSED", "recorded": False, "source": source, "message": detail,
+                            "employee_id": employee_id, "matricule": matricule, "society": society, "site_id": site_id,
+                            "terminal": terminal, "last_entry": last[EVENT_ARRIVAL], "last_exit": last[EVENT_DEPARTURE],
+                            **{key: value for key, value in counted.items() if value is not None and key != "entry_status"}})
+    db.commit()
     manual_denied = code == counted_time.MANUAL_ENTRY_REQUIRED and source == SOURCE_MANUAL
     raise HTTPException(status_code=403 if manual_denied else 409, headers={"X-Attendance-Code": code}, detail=detail)
 
@@ -422,7 +440,8 @@ def record_scan(
     elif event_type == EVENT_DEPARTURE and open_arrival is not None:
         counted = counted_time.close((open_arrival.data or {}).get("counted"), now)
     if counted is not None and counted["entry_status"] in counted_time.REFUSALS:
-        _refuse_entry(db, employee=employee, actor=actor, source=source, counted=counted)
+        _refuse_entry(db, employee=employee, actor=actor, source=source, counted=counted,
+                      site_id=site.id if site is not None else None, events=events, extra=extra)
     extra_shift = counted is not None and counted.get("kind") == counted_time.KIND_EXTRA
 
     # Le délai entre deux arrivées ne s'applique pas à la vacation supplémentaire : sa fenêtre
@@ -528,6 +547,14 @@ def record_scan(
                       presence_date=presence_day, event=event, source=source,
                       message=f"Durée {worked_minutes} min pour {authorized_minutes} min autorisées",
                       details={"worked_minutes": worked_minutes, "authorized_minutes": authorized_minutes})
+    if extra_shift and event_type == EVENT_ARRIVAL:
+        # Maintien détecté : un fait à connaître, pas une faute (sévérité « info »).
+        raise_anomaly(db, anomaly_type=counted_time.KIND_EXTRA, severity="info", employee=employee, site_id=event.site_id,
+                      presence_date=presence_day, event=event, source=source,
+                      message=f"Vacation supplémentaire {counted['scheduled_start'][11:16]} → {counted['scheduled_end'][11:16]} (maintien)",
+                      details={"entry_status": counted["entry_status"], "previous": counted.get("previous")})
+    if event_type == EVENT_DEPARTURE and open_arrival is not None:
+        counted_time.resolve_unclosed(db, arrival=open_arrival, exit_at=now)
     if event_type == EVENT_ARRIVAL and not extra_shift:
         plan = planned_day(db, assignment, site, presence_day)
         if plan["known"] and plan["on"] is False:

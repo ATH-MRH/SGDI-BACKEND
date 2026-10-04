@@ -182,6 +182,67 @@ def entry(db: Session, *, employee_id: int, site_id: int, at: datetime) -> dict[
     return classify_entry(plan, at)
 
 
+# ── Vacation non clôturée (lot 3) ────────────────────────────────────────────────────────
+ANOMALY_UNCLOSED = "VACATION_NON_CLOTUREE"
+UNCLOSED_LOOKBACK = timedelta(hours=48)
+
+
+def _unclosed_key(event_id: int) -> str:
+    return f"{ANOMALY_UNCLOSED}:{event_id}"
+
+
+def detect_unclosed(db: Session, site_ids: set[int] | list[int] | None, now: datetime) -> int:
+    """Fin de vacation dépassée sans sortie ⇒ UNE anomalie VACATION_NON_CLOTUREE par entrée
+    (clé = événement d'entrée) : rejouable à chaque rafraîchissement sans jamais dupliquer, et
+    jamais recréée après résolution. Nombre de requêtes constant."""
+    from app.core.config import settings
+    from app.modules.attendance import core
+    from app.modules.attendance.models import EVENT_ARRIVAL, EVENT_DEPARTURE, AttendanceAnomaly, AttendanceEvent
+    from app.modules.drh.models import Employee
+    from sqlalchemy import select
+
+    local = now.astimezone(core.TZ)
+    since = core.to_utc_naive(local - UNCLOSED_LOOKBACK)
+    stmt = select(AttendanceEvent).where(AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)),
+                                         AttendanceEvent.occurred_at >= since)
+    if site_ids is not None:
+        stmt = stmt.where(AttendanceEvent.site_id.in_(list(site_ids) or [-1]))
+    last: dict[int, Any] = {}
+    for event in db.execute(stmt.order_by(AttendanceEvent.occurred_at, AttendanceEvent.id)).scalars():
+        last[event.employee_id] = event
+    grace = timedelta(minutes=max(0, int(settings.attendance_unclosed_shift_grace_minutes)))
+    due = [event for event in last.values()
+           if event.event_type == EVENT_ARRIVAL and isinstance((event.data or {}).get("counted"), dict)
+           and datetime.fromisoformat(event.data["counted"]["scheduled_end"]) + grace < local]
+    if not due:
+        return 0
+    known = set(db.execute(select(AttendanceAnomaly.dedupe_key).where(
+        AttendanceAnomaly.dedupe_key.in_([_unclosed_key(event.id) for event in due]))).scalars())
+    missing = [event for event in due if _unclosed_key(event.id) not in known]
+    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({e.employee_id for e in missing} or {0}))).scalars()}
+    for event in missing:
+        snapshot = event.data["counted"]
+        core.raise_anomaly(
+            db, anomaly_type=ANOMALY_UNCLOSED, employee=employees.get(event.employee_id), site_id=event.site_id,
+            presence_date=event.presence_date, event=event, source=event.source, dedupe_key=_unclosed_key(event.id),
+            message=f"Vacation {snapshot['scheduled_start'][11:16]} → {snapshot['scheduled_end'][11:16]} sans sortie enregistrée",
+            details={"kind": snapshot.get("kind", KIND_NORMAL), "shift": snapshot.get("shift"), "work_date": snapshot.get("work_date"),
+                     "scheduled_end": snapshot["scheduled_end"], "actual_entry": snapshot.get("actual_entry")})
+    return len(missing)
+
+
+def resolve_unclosed(db: Session, *, arrival: Any, exit_at: datetime) -> None:
+    """La sortie enfin enregistrée clôt l'anomalie de son entrée : résolue, jamais supprimée."""
+    from app.modules.attendance.models import ANOMALY_OPEN, ANOMALY_RESOLVED, AttendanceAnomaly
+    from sqlalchemy import select
+
+    row = db.execute(select(AttendanceAnomaly).where(AttendanceAnomaly.dedupe_key == _unclosed_key(arrival.id),
+                                                     AttendanceAnomaly.status == ANOMALY_OPEN)).scalar_one_or_none()
+    if row is not None:
+        row.status, row.resolved_by, row.resolved_at = ANOMALY_RESOLVED, "system", datetime.utcnow()
+        row.resolution = f"Sortie enregistrée à {exit_at.strftime('%H:%M:%S')}"
+
+
 # ── Lecture (projections) ────────────────────────────────────────────────────────────────
 def view(data: Any) -> dict[str, Any] | None:
     """Instantané porté par un événement ou une journée (`data` JSON), avec ses libellés."""

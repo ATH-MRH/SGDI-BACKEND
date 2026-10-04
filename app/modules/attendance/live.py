@@ -35,6 +35,17 @@ from app.modules.ops.models import DailyPresence, Site
 MAX_EVENTS = 20
 REFUSAL_WINDOW = timedelta(minutes=10)
 REFUSAL_ACTIONS = ("biometrics.terminal.recognize", "biometrics.terminal.qr")
+# Refus décidés par Attendance Core (travail posté) : toutes sources (QR, facial, manuel, terminal).
+CORE_REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted_time.REFUSALS))
+ALL_REFUSAL_ACTIONS = REFUSAL_ACTIONS + CORE_REFUSAL_ACTIONS
+# Alertes poussées dans le flux live du Pointeur (codes canoniques).
+ALERT_ANOMALY_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA, "MANUAL_POINTAGE")
+ALERT_WINDOW = timedelta(hours=48)
+ALERT_LABELS = {
+    counted_time.ANOMALY_UNCLOSED: "Vacation non clôturée", counted_time.KIND_EXTRA: "Vacation supplémentaire (maintien)",
+    "MANUAL_POINTAGE": "Pointage manuel",
+    **{code: counted_time.ENTRY_STATUS_LABELS[code] for code in counted_time.REFUSALS},
+}
 SOURCE_LABELS = {"FACIAL": "Reconnaissance faciale", "QR": "QR", "MANUAL": "Saisie manuelle", "PORTAL_GPS": "Portail (GPS)",
                  "SITE_WORKFORCE": "Site Workforce", "IMPORT": "Import", "SYSTEM": "Système"}
 
@@ -117,26 +128,56 @@ def refusals(db: Session, site_ids: set[int] | None, after_id: int, now: datetim
     from app.modules.auth.models import AuditEvent
 
     since = core.to_utc_naive(now.astimezone(core.TZ) - REFUSAL_WINDOW)
-    rows = db.execute(select(AuditEvent).where(AuditEvent.action.in_(REFUSAL_ACTIONS), AuditEvent.result == "refused",
+    rows = db.execute(select(AuditEvent).where(AuditEvent.action.in_(ALL_REFUSAL_ACTIONS), AuditEvent.result == "refused",
                                                AuditEvent.id > after_id, AuditEvent.created_at >= since)
                       .order_by(AuditEvent.id).limit(MAX_EVENTS)).scalars().all()
     out = []
+    parsed = []
     for row in rows:
         try:
-            state = json.loads(row.new_state or "{}")
+            parsed.append((row, json.loads(row.new_state or "{}")))
         except ValueError:
             continue
+    # Un refus d'Attendance Core relayé par un terminal n'apparaît qu'une fois (celui du moteur).
+    core_refused = [(state.get("matricule"), row.created_at) for row, state in parsed if row.action in CORE_REFUSAL_ACTIONS]
+    for row, state in parsed:
         matricule = state.get("matricule")
+        if row.action in REFUSAL_ACTIONS and any(m == matricule and abs((row.created_at - at).total_seconds()) <= 5 for m, at in core_refused):
+            continue
         if not matricule or state.get("state") != "REFUSED":
             continue
         if site_ids is not None and state.get("site_id") not in site_ids:
             continue
         employee = db.execute(select(Employee).where(Employee.code == matricule)).scalar_one_or_none()
         local = core.to_local(row.created_at)
-        out.append({"id": row.id, "heure": local.strftime("%H:%M:%S"), "label": _refusal_label(employee, str(state.get("reason") or "")),
-                    "terminal": (row.username or "").replace("BORNE ", "") or None, "site_id": state.get("site_id"),
+        core_row = row.action in CORE_REFUSAL_ACTIONS
+        out.append({"id": row.id, "heure": local.strftime("%H:%M:%S"),
+                    "label": ALERT_LABELS[state["code"]] if core_row else _refusal_label(employee, str(state.get("reason") or "")),
+                    "code": state.get("code") if core_row else None, "message": state.get("message") if core_row else None,
+                    "source": state.get("source") if core_row else None, "recorded": False,
+                    "counted": counted_time.view({"counted": {**state, "entry_status": state["code"]}}) if core_row else None,
+                    "terminal": (state.get("terminal") if core_row else (row.username or "").replace("BORNE ", "")) or None,
+                    "site_id": state.get("site_id"),
                     "employee": {**core._employee_card(employee, ""), "fonction": employee.position or ""} if employee else {"matricule": matricule}})
     return out
+
+
+def alerts(db: Session, site_ids: set[int] | None, now: datetime) -> list[dict[str, Any]]:
+    """Anomalies OUVERTES à connaître au poste (vacation non clôturée, maintien, pointage manuel).
+    Lecture seule : rafraîchir ne crée rien."""
+    from app.modules.attendance.models import ANOMALY_OPEN, AttendanceAnomaly
+
+    since = core.to_utc_naive(now.astimezone(core.TZ) - ALERT_WINDOW)
+    rows = db.execute(_site_filter(select(AttendanceAnomaly).where(
+        AttendanceAnomaly.anomaly_type.in_(ALERT_ANOMALY_TYPES), AttendanceAnomaly.status == ANOMALY_OPEN,
+        AttendanceAnomaly.created_at >= since), AttendanceAnomaly.site_id, site_ids)
+        .order_by(AttendanceAnomaly.id.desc()).limit(50)).scalars().all()
+    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({r.employee_id for r in rows} or {0}))).scalars()}
+    return [{"id": r.id, "code": r.anomaly_type, "label": ALERT_LABELS.get(r.anomaly_type, r.anomaly_type), "severity": r.severity,
+             "message": r.message, "site_id": r.site_id, "presence_date": r.presence_date.isoformat() if r.presence_date else None,
+             "event_id": r.event_id, "at": core.to_local(r.created_at).isoformat(timespec="seconds"),
+             "employee": core._employee_card(employees[r.employee_id], "") if r.employee_id in employees else None}
+            for r in rows]
 
 
 def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_refusal_id: int | None, now: datetime | None = None) -> dict[str, Any]:
@@ -144,6 +185,9 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
     récents, compteurs. Le PC interroge cette route toutes les ~2 s."""
     now = now or core._now_local()
     now_local = now.astimezone(core.TZ)
+    # Rattrapage idempotent (aucun cron requis) : une anomalie par vacation restée sans sortie.
+    if counted_time.detect_unclosed(db, site_ids, now_local):
+        db.commit()
     stmt = _site_filter(select(AttendanceEvent).where(AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE))),
                         AttendanceEvent.site_id, site_ids)
     latest = db.execute(stmt.order_by(AttendanceEvent.id.desc()).limit(1)).scalar_one_or_none()
@@ -160,10 +204,11 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
 
     # Écart de rotation éventuel de chaque passage : affiché sur la fiche, le pointage reste accepté.
     rotation_alerts = deviations.alerts_for_events(db, [e.id for e in events])
-    latest_refusal = db.execute(select(AuditEvent.id).where(AuditEvent.action.in_(REFUSAL_ACTIONS)).order_by(AuditEvent.id.desc()).limit(1)).scalar_one_or_none() or 0
+    latest_refusal = db.execute(select(AuditEvent.id).where(AuditEvent.action.in_(ALL_REFUSAL_ACTIONS)).order_by(AuditEvent.id.desc()).limit(1)).scalar_one_or_none() or 0
     return {"latest_event_id": latest.id if latest is not None else 0,
             "events": [{**_event_out(e, employees.get(e.employee_id), current.get(e.employee_id), now_local, sites),
                         "rotation_alert": rotation_alerts.get(e.id)} for e in events],
             "latest_refusal_id": latest_refusal,
             "refusals": refusals(db, site_ids, after_refusal_id, now) if after_refusal_id is not None else [],
-            "summary": summary(db, site_ids, now), "server_time": now_local.strftime("%H:%M:%S")}
+            "alerts": alerts(db, site_ids, now), "alert_labels": dict(ALERT_LABELS),
+            "summary": summary(db, site_ids, now), **core.operational_clock(now_local)}

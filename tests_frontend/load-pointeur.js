@@ -37,6 +37,7 @@ function buildHtml() {
   LIVE_POLL_MS, LAST_SCAN_DISPLAY_MS,
   renderSystemState, setLiveState, syncModeCards, selectQrMode, lastScanIdleHTML, setupScanMode, toggleManualPanel,
   getUi: () => ({ liveState, liveOkAt, cameraMode }),
+  syncOpsClock, opsNow, opsDate, opsStamp, localDate, shiftDate, updateHeaderClock,
   loadActiveSheet, renderLiveFeed, rotationAlertHTML, setLiveFilter, loadHistory, getActiveSheet: () => activeSheet,
 };
 `;

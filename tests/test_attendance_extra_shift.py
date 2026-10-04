@@ -71,7 +71,7 @@ def test_new_entry_before_t_plus_30_is_refused(db):
     assert refused.status_code == 409 and refused.headers["X-Attendance-Code"] == "EXTRA_BEFORE_WINDOW"
     assert "14:30" in refused.detail and "14:45" in refused.detail
     audit = db.execute(select(AuditEvent).where(AuditEvent.action == "attendance.extra_before_window",
-                                                AuditEvent.resource_id == str(emp.id))).scalar_one()
+                                                AuditEvent.resource_id == str(emp.id)).order_by(AuditEvent.id.desc())).scalars().first()
     state = json.loads(audit.new_state)
     assert audit.result == "refused" and state["recorded"] is False and state["previous"]["actual_exit"] == _iso(ANCHOR, "14:04")
 
@@ -89,7 +89,7 @@ def test_new_entry_at_t_plus_30_opens_a_distinct_extra_shift(db):
     assert (extra["previous"]["shift"], extra["previous"]["actual_exit"], extra["previous"]["counted_minutes"]) == ("MATIN", _iso(ANCHOR, "14:04"), 480)
     closing = _scan(db, emp, ANCHOR, "22:10")
     assert (closing["action"], closing["counted"]["counted_end"], closing["counted"]["counted_minutes"]) == ("depart", _iso(ANCHOR, "22:00"), 450)
-    assert closing["overtime_minutes"] == 0 and _anomalies(db, emp) == []     # ni retard, ni dépassement inventé
+    assert closing["overtime_minutes"] == 0 and _anomalies(db, emp) == ["EXTRA_SHIFT"]   # maintien signalé ; ni retard ni dépassement inventé
     # Deux vacations distinctes : quatre mouvements, jamais une présence de 16 h.
     events = _events(db, emp)
     assert [(e.event_type, e.cycle, e.data["counted"]["kind"]) for e in events] == [

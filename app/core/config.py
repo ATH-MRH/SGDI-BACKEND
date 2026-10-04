@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Une feuille CLOSED reste modifiable par les SORTIES de ses propres entrées jusqu'à son
     # archivage ; au-delà du plus long cycle ouvert (30 h), un départ manquant est constaté.
     attendance_sheet_archive_after_hours: int = 36
+    # Vacation postée sans sortie : délai après la fin THÉORIQUE avant l'anomalie
+    # VACATION_NON_CLOTUREE (0 = dès la fin de vacation dépassée).
+    attendance_unclosed_shift_grace_minutes: int = 0
     # Interrupteurs par lot du Planning intelligent (activation progressive, jamais implicite).
     # Feuilles : coupe-circuit global (chaque site reste soumis à sa propre configuration).
     rotation_sheets_enabled: bool = True
