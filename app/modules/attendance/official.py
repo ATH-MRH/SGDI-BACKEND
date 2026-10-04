@@ -211,9 +211,22 @@ def _base(assignment: Assignment | None, employee_id: int, site_id: int, status:
     }
 
 
-def shift_on(db: Session, assignment: Assignment, work_date: date) -> dict[str, Any]:
+def anchors_for(db: Session, site_ids: set[int] | list[int]) -> list[SiteRotation]:
+    """Liens site ↔ modèle des sites donnés, pour projeter une période sans requête par jour."""
+    return list(db.execute(select(SiteRotation).where(SiteRotation.site_id.in_(list(site_ids) or [-1]))).scalars())
+
+
+def _anchor_among(anchors: list[SiteRotation], site_id: int, rotation_id: int, day: date) -> SiteRotation | None:
+    """Même règle que `site_anchor`, appliquée à des liens déjà chargés."""
+    rows = [a for a in anchors if a.site_id == site_id and a.rotation_id == rotation_id and a.active == 1
+            and a.start_date <= day and (a.end_date is None or a.end_date >= day)]
+    return max(rows, key=lambda a: (a.start_date, a.id)) if rows else None
+
+
+def shift_on(db: Session, assignment: Assignment, work_date: date, anchors: list[SiteRotation] | None = None) -> dict[str, Any]:
     """Vacation officielle d'une affectation pour la journée de cycle `work_date` (jour où la
-    vacation COMMENCE : une Nuit du jour J s'achève à J+1 06:00 et reste rattachée à J)."""
+    vacation COMMENCE : une Nuit du jour J s'achève à J+1 06:00 et reste rattachée à J).
+    `anchors` (liens préchargés par `anchors_for`) évite une requête par jour sur une période."""
     from app.modules.attendance import core
 
     out = _base(assignment, assignment.employee_id, assignment.site_id, STATUS_NOT_CONFIGURED)
@@ -230,7 +243,8 @@ def shift_on(db: Session, assignment: Assignment, work_date: date) -> dict[str, 
                     "cycle_length": rotation.cycle_length, "anchor_date": None}
     if assignment.group_code not in rotation.group_offsets:
         return {**out, "reason": "Groupe absent du modèle officiel"}
-    anchor = site_anchor(db, assignment.site_id, rotation.id, work_date)
+    anchor = (site_anchor(db, assignment.site_id, rotation.id, work_date) if anchors is None
+              else _anchor_among(anchors, assignment.site_id, rotation.id, work_date))
     if anchor is None:
         return {**out, "reason": "Rotation non configurée : cycle officiel non ancré sur ce site à cette date"}
     index = ((work_date - anchor.start_date).days + int(rotation.group_offsets[assignment.group_code])) % rotation.cycle_length

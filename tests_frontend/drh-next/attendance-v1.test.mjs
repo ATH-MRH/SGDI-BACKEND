@@ -86,3 +86,47 @@ test("menu : plus d'entrée « Alertes » morte ; « Pointage » affiche les KPI
   assert.equal(calls.length, 1); assert.match(calls[0], /\/attendance\/board\?page_size=1$/);
   assert.match(text, /Effectif prévu12/); assert.match(text, /Anomalies ouvertes3/); assert.match(text, /centre de contrôle Pointage/);
 });
+
+test("onglet Pointage : rubrique « Pointage & vacations » — mois, synthèse, historique réel / comptabilisé, refus, anomalies", async () => {
+  const { window } = setup();
+  const recap = {
+    month: "2026-10",
+    summary: { planned_shifts: 24, worked_shifts: 2, counted_minutes: 890, early_arrivals: 1, late_arrivals: 1, early_exits: 1, late_exits: 1,
+      extra_shifts: 1, extra_counted_minutes: 445, refused_attempts: 1, relief_anomalies: 0, manual_entries: 0, anomalies_open: 2, anomalies_resolved: 0 },
+    history: [
+      { date: "2026-10-01", site: "SITE A", group: "A", kind: "NORMAL", kind_label: "Vacation normale", shift_label: "Matin", scheduled_start: "2026-10-01T06:00:00+01:00", scheduled_end: "2026-10-01T14:00:00+01:00",
+        actual_entry: "2026-10-01T05:40:00+01:00", actual_exit: "2026-10-01T14:06:00+01:00", counted_start: "2026-10-01T06:00:00+01:00", counted_end: "2026-10-01T14:00:00+01:00", counted_minutes: 480, anomalies: [] },
+      { date: "2026-10-01", site: "SITE A", group: "A", kind: "EXTRA_SHIFT", kind_label: "Vacation supplémentaire (maintien)", shift_label: "Après-midi", scheduled_start: "2026-10-01T14:00:00+01:00", scheduled_end: "2026-10-01T22:00:00+01:00",
+        actual_entry: "2026-10-01T14:35:00+01:00", actual_exit: null, open: true, counted_start: "2026-10-01T14:35:00+01:00", counted_end: null, counted_minutes: null,
+        treatment_label: "À qualifier (récupération ou paiement)", anomalies: [{ type: "EXTRA_SHIFT", status: "OPEN" }] },
+    ],
+    refusals: [{ at: "2026-10-01T14:20:00+01:00", code: "EXTRA_BEFORE_WINDOW", message: "Nouvelle entrée refusée : nouvelle entrée possible de 14:30 à 14:45.", source: "QR", site: "SITE A" }],
+    anomalies: [{ date: "2026-10-02", type: "LATE", message: "Arrivée à 06:40", status: "OPEN", resolution: null }],
+  };
+  const seen = [];
+  window.fetch = async (url) => {
+    seen.push(String(url));
+    return String(url).includes("/attendance/employees/1") ? jsonResp({ current: {}, days: [], events: [], anomalies: [], recap }) : jsonResp({ id: 1, code: "E1", first_name: "A", last_name: "B" });
+  };
+  await renderEmployeeDossier({ id: "1" });
+  document.querySelector('[data-dn-tab="pointage"]').click();
+  await tick(); await tick();
+  const panel = document.querySelector("#dn-dossier-panel");
+  const text = panel.textContent.replace(/\s+/g, " ");
+  assert.match(text, /Pointage & vacations/); assert.match(text, /Vacations planifiées\s*24/); assert.match(text, /Heures comptabilisées\s*14 h 50/);
+  assert.match(text, /Vacations supplémentaires\s*1/); assert.match(text, /Tentatives refusées\s*1/);
+  const rows = [...panel.querySelectorAll("[data-dn-att-history] tbody tr")].map((tr) => [...tr.children].map((td) => td.textContent.trim()));
+  assert.deepEqual(rows[0].slice(3, 10), ["Matin 06:00 → 14:00", "Vacation normale", "05:40", "14:06", "06:00", "14:00", "8 h 00"]);
+  assert.equal(rows[1][4], "Vacation supplémentaire (maintien)"); assert.equal(rows[1][6], "Sans sortie");
+  assert.match(rows[1][10], /À qualifier/);
+  assert.match(panel.querySelector("[data-dn-att-refusals]").textContent, /nouvelle entrée possible de 14:30 à 14:45/);
+  assert.match(panel.querySelector("[data-dn-att-anomalies]").textContent, /Arrivée à 06:40/);
+  assert.doesNotMatch(text, /fraude|sanction|défavorable/i);
+  // Un seul appel à l'ouverture, et le changement de mois recharge la synthèse de ce mois.
+  const calls = seen.filter((u) => u.includes("/attendance/employees/1"));
+  assert.equal(calls.length, 1); assert.match(calls[0], /month=\d{4}-\d{2}/);
+  const picker = panel.querySelector("[data-dn-att-month]");
+  picker.value = "2026-09"; picker.dispatchEvent(new window.Event("change"));
+  await tick(); await tick();
+  assert.match(seen[seen.length - 1], /month=2026-09/);
+});

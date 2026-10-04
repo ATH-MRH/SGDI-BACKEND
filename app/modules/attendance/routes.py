@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.attendance import core, deviations, learning, official, projection, sheets
 from app.modules.attendance import counted as counted_time
+from app.modules.attendance import recap
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -367,6 +368,7 @@ def reopen(presence_id: int, payload: ReopenIn, request: Request,
 # ── Employé 360 : onglet Pointages ───────────────────────────────────────────────────────
 @router.get("/employees/{employee_id}")
 def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
+                        month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
                         db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     employee = db.get(Employee, employee_id)
     if not employee:
@@ -392,7 +394,14 @@ def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
     assignment = core.active_assignment(db, employee_id)
     today = core._now_local().date()
     current = next((p for p in presences if p.presence_date == today), None)
+    # Dossier salarié : la synthèse du mois voyage avec le journal (un seul appel), dans le même
+    # périmètre de sites que l'appelant.
+    try:
+        month_recap = recap.monthly(db, employee, month, site_ids=set(allowed) if allowed is not None else None) if month else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return {
+        **({"recap": month_recap} if month_recap is not None else {}),
         "employee_id": employee_id,
         "current": {
             "date": today.isoformat(), "status": current.status if current else "non_pointe",
@@ -411,6 +420,45 @@ def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
         "anomalies": [{"id": a.id, "date": a.presence_date.isoformat() if a.presence_date else "", "type": a.anomaly_type,
                        "severity": a.severity, "status": a.status, "message": a.message} for a in anomalies_rows],
     }
+
+
+# ── Historique et récapitulatifs du salarié (lot 4) ──────────────────────────────────────
+def _employee_recap_scope(db: Session, user: User, employee_id: int) -> tuple[Employee, set[int] | None]:
+    """Salarié visible par l'appelant et périmètre de sites à appliquer aux données (None =
+    compte global). Refus par défaut : hors périmètre, le salarié est « introuvable »."""
+    _require_action(user, "read")
+    employee = db.get(Employee, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    allowed = _allowed_assignment_site_ids(db, user)
+    if allowed is None:
+        return employee, None
+    visible = db.execute(select(Assignment.id).where(
+        Assignment.employee_id == employee_id, Assignment.site_id.in_(allowed or [-1]))).first()
+    if not visible:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    return employee, set(allowed)
+
+
+@router.get("/employees/{employee_id}/monthly-recap")
+def employee_monthly_recap(employee_id: int, month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+                           db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Synthèse mensuelle + historique (vacations, tentatives refusées, anomalies) d'un salarié,
+    calculés à la demande — des faits, aucune appréciation."""
+    employee, site_ids = _employee_recap_scope(db, user, employee_id)
+    try:
+        return recap.monthly(db, employee, month or core._now_local().strftime("%Y-%m"), site_ids=site_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+@router.get("/employees/{employee_id}/contract-recap")
+def employee_contract_recap(employee_id: int, contract_id: int | None = None,
+                            db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Récapitulatif sur la période contractuelle réelle ; `computable: false` si aucun contrat
+    ne porte de date fiable (aucune date n'est inventée)."""
+    employee, site_ids = _employee_recap_scope(db, user, employee_id)
+    return recap.contract(db, employee, site_ids=site_ids, contract_id=contract_id)
 
 
 # ── Feuilles de présence par rotation (Pointage & Planning intelligent V3 — lot 1) ─────────

@@ -130,6 +130,7 @@ async function loadSection(employee, tabKey, sectionFn) {
     if (tabKey === "documents") wireDocumentsSection();
     if (tabKey === "blacklist") wireBlacklistSection(employee);
     if (tabKey === "biometrie") wireBiometricsSection(employee);
+    if (tabKey === "pointage") wireAttendanceSection(employee);
   } catch (err) {
     if (err?.aborted) return;
     if (mySeq !== tabRequestSeq || state.activeTab !== tabKey || !raceContextStillValid(raceCtx)) return;
@@ -481,15 +482,57 @@ const EVENT_LABELS = { ARRIVAL: "Entrée", DEPARTURE: "Sortie", STATUS: "Statut"
 // Source canonique Attendance Core (GET /attendance/employees/{id}) : journées, événements
 // (source, terminal/caméra, auteur), anomalies et corrections (avant/après) en UN appel,
 // à l'ouverture de l'onglet uniquement.
+// « Pointage & vacations » : synthèse mensuelle et historique des vacations (réel / comptabilisé),
+// calculés par Attendance Core (GET /attendance/employees/{id}/monthly-recap). Des FAITS uniquement.
+let attendanceMonth = "";
+const hhmm = (iso) => iso ? String(iso).slice(11, 16) : "—";
+const minutesLabel = (m) => m == null ? "—" : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
+function currentOpsMonth() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Algiers", year: "numeric", month: "2-digit" }).formatToParts(new Date()).map(p => [p.type, p.value]));
+  return `${parts.year}-${parts.month}`;
+}
+function attendanceRecapHTML(recap, month) {
+  const picker = `<label class="dn-error-state-text" style="display:flex;gap:8px;align-items:center;margin:0 0 10px">Mois <input type="month" data-dn-att-month value="${escapeHTML(month)}"></label>`;
+  const s = recap?.summary;
+  if (!s) return `<h3 style="margin:0 0 8px;font-size:14px">Pointage &amp; vacations</h3>${picker}`;
+  const facts = [["Vacations planifiées", s.planned_shifts], ["Vacations réalisées", s.worked_shifts], ["Heures comptabilisées", minutesLabel(s.counted_minutes)],
+    ["Arrivées anticipées", s.early_arrivals], ["Retards", s.late_arrivals], ["Sorties anticipées", s.early_exits], ["Sorties après horaire", s.late_exits],
+    ["Vacations supplémentaires", s.extra_shifts], ["Heures supplémentaires comptabilisées", minutesLabel(s.extra_counted_minutes)],
+    ["Tentatives refusées", s.refused_attempts], ["Anomalies de relève", s.relief_anomalies], ["Saisies manuelles", s.manual_entries],
+    ["Anomalies ouvertes", s.anomalies_open], ["Anomalies résolues", s.anomalies_resolved]];
+  const history = Array.isArray(recap.history) ? recap.history : [], refusals = Array.isArray(recap.refusals) ? recap.refusals : [], anomalies = Array.isArray(recap.anomalies) ? recap.anomalies : [];
+  return `<h3 style="margin:0 0 8px;font-size:14px">Pointage &amp; vacations</h3>${picker}
+    <table class="dn-table" data-dn-att-summary><tbody>${facts.map(([label, value]) => `<tr><th style="text-align:left">${escapeHTML(label)}</th><td>${escapeHTML(value ?? 0)}</td></tr>`).join("")}</tbody></table>
+    <h3 style="margin:18px 0 8px;font-size:14px">Vacations du mois</h3>
+    ${history.length ? `<table class="dn-table" data-dn-att-history><thead><tr><th>Date</th><th>Site</th><th>Groupe</th><th>Vacation planifiée</th><th>Type</th><th>Entrée réelle</th><th>Sortie réelle</th><th>Début compté</th><th>Fin comptée</th><th>Durée comptée</th><th>Suivi</th></tr></thead><tbody>
+      ${history.map(h => `<tr><td>${escapeHTML(h.date)}</td><td>${escapeHTML(h.site || "—")}</td><td>${escapeHTML(h.group || "—")}</td><td>${h.scheduled_start ? `${escapeHTML(h.shift_label || h.shift || "")} ${hhmm(h.scheduled_start)} → ${hhmm(h.scheduled_end)}` : "—"}</td><td>${escapeHTML(h.kind_label || "Hors travail posté")}</td><td>${hhmm(h.actual_entry)}${h.manual ? " · manuel" : ""}</td><td>${h.open ? "Sans sortie" : hhmm(h.actual_exit)}</td><td>${hhmm(h.counted_start)}</td><td>${hhmm(h.counted_end)}</td><td>${minutesLabel(h.counted_minutes)}</td><td>${escapeHTML([h.treatment_label, ...(h.anomalies || []).map(a => `${a.type} (${a.status})`)].filter(Boolean).join(" · ") || "—")}</td></tr>`).join("")}</tbody></table>` : emptyStateHTML("Aucune vacation pointée sur ce mois.")}
+    ${refusals.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Tentatives refusées (non comptabilisées)</h3><table class="dn-table" data-dn-att-refusals><thead><tr><th>Horodatage</th><th>Motif</th><th>Source</th><th>Site</th></tr></thead><tbody>
+      ${refusals.map(r => `<tr><td>${escapeHTML(String(r.at || "").slice(0, 16).replace("T", " "))}</td><td>${escapeHTML(r.message || r.label || r.code || "")}</td><td>${escapeHTML(SOURCE_LABELS[r.source] || r.source || "—")}</td><td>${escapeHTML(r.site || "—")}</td></tr>`).join("")}</tbody></table>` : ""}
+    ${anomalies.length ? `<h3 style="margin:18px 0 8px;font-size:14px">Anomalies du mois</h3><table class="dn-table" data-dn-att-anomalies><thead><tr><th>Date</th><th>Type</th><th>Détail</th><th>Statut</th><th>Résolution</th></tr></thead><tbody>
+      ${anomalies.map(a => `<tr><td>${escapeHTML(a.date || "—")}</td><td>${escapeHTML(a.type)}</td><td>${escapeHTML(a.message)}</td><td>${escapeHTML(a.status)}</td><td>${escapeHTML(a.resolution || "—")}</td></tr>`).join("")}</tbody></table>` : ""}
+    <h3 style="margin:22px 0 8px;font-size:14px">Journal (90 derniers jours)</h3>`;
+}
+function wireAttendanceSection(employee) {
+  document.querySelector("[data-dn-att-month]")?.addEventListener("change", (event) => {
+    if (!/^\d{4}-\d{2}$/.test(event.target.value)) return;
+    attendanceMonth = event.target.value;
+    loadSection(employee, "pointage", sectionAttendance);
+  });
+}
+
 async function sectionAttendance(e) {
-  const data = await loadData(`drh:employee:${e.id}:attendance-core`, (signal) => api.get(`/attendance/employees/${encodeURIComponent(e.id)}?days=90`, { signal }), { ttlMs: 10000 });
+  const month = attendanceMonth || currentOpsMonth();
+  // UN SEUL appel à l'ouverture de l'onglet : journal + synthèse du mois (`recap`).
+  const data = await loadData(`drh:employee:${e.id}:attendance-core:${month}`, (signal) => api.get(`/attendance/employees/${encodeURIComponent(e.id)}?days=90&month=${month}`, { signal }), { ttlMs: 10000 });
+  const recap = data?.recap || null;
+  const recapHTML = attendanceRecapHTML(recap, month);
   const days = Array.isArray(data?.days) ? data.days : [];
   const events = Array.isArray(data?.events) ? data.events : [];
   const anomalies = Array.isArray(data?.anomalies) ? data.anomalies : [];
-  if (!days.length && !events.length) return emptyStateHTML("Aucun pointage enregistré sur les 90 derniers jours.");
+  if (!days.length && !events.length) return recapHTML + emptyStateHTML("Aucun pointage enregistré sur les 90 derniers jours.");
   const cur = data.current || {};
   const changes = (c) => c ? Object.entries(c).map(([k, v]) => `${escapeHTML(k)} : ${escapeHTML(v?.avant ?? "—")} → ${escapeHTML(v?.apres ?? "—")}`).join("<br>") : "";
-  return `<div class="dn-error-state-text" style="margin:0 0 10px">Aujourd'hui : <b>${escapeHTML(cur.status || "—")}</b>${cur.site ? " · " + escapeHTML(cur.site) : ""}${cur.closed ? " · clôturé" : ""}</div>
+  return `${recapHTML}<div class="dn-error-state-text" style="margin:0 0 10px">Aujourd'hui : <b>${escapeHTML(cur.status || "—")}</b>${cur.site ? " · " + escapeHTML(cur.site) : ""}${cur.closed ? " · clôturé" : ""}</div>
     <table class="dn-table"><thead><tr><th>Date</th><th>Site</th><th>Statut</th><th>Arrivée</th><th>Départ</th><th>Clôture</th></tr></thead><tbody>
     ${days.map(p => `<tr><td>${escapeHTML(p.date || "—")}</td><td>${escapeHTML(p.site || "—")}</td><td><span class="dn-badge">${escapeHTML(p.status || "—")}</span></td><td>${escapeHTML(p.arrival || "—")}</td><td>${escapeHTML(p.departure || "—")}</td><td>${p.closed ? "Clôturé" : "—"}</td></tr>`).join("")}
     </tbody></table>
