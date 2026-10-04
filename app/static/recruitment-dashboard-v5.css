@@ -1,0 +1,187 @@
+/* Recruitment V5 — scoped application shell and operational dashboard. */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"]{--navy:#0b2145;--blue:#0064f5;--bg:#f5f8fc;--line:#e6edf6;--ink:#101c38;--muted:#61779f}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app{padding-bottom:0;display:grid;grid-template-columns:210px minmax(0,1fr);grid-template-rows:76px minmax(calc(100vh - 76px),auto)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top{grid-column:2;grid-row:1;background:#fff;color:var(--ink);padding:15px 24px;border-radius:0;box-shadow:none;border-bottom:1px solid var(--line)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-row{height:100%;gap:18px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand{margin-left:auto;order:2}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-logo{display:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-title{display:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-user{opacity:1;color:var(--ink);font-size:12px;font-weight:650;white-space:normal}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-actions{order:3;min-width:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .logout{border-color:var(--line);color:var(--muted);background:white;font-size:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-badge{max-width:210px;border:1px solid var(--line);border-radius:7px;background:#f8faff;color:var(--ink);font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .header-search{display:flex;align-items:center;gap:8px;flex:1;max-width:470px;min-width:120px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .header-search input{background:#f5f8fc;border:1px solid var(--line);height:38px;font-size:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .header-search button{border:0;background:transparent;color:var(--blue);cursor:pointer;padding:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app-shell{display:contents}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar{grid-column:1;grid-row:1 / 3;border:0;border-radius:0;background:var(--navy);color:#fff;padding:22px 12px;position:sticky;top:0;height:100vh;box-shadow:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand{display:flex;align-items:center;gap:10px;padding:0 6px 28px;font-weight:800;line-height:1.5;font-size:11px;letter-spacing:.03em}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand img{width:52px;height:52px;object-fit:contain;background:white;border-radius:8px;padding:3px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar-title{color:#90a4c4;font-size:9px;padding:8px 10px 14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav{gap:7px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn{color:#c0cde0;font-size:12px;border-radius:7px;padding:11px 10px;font-weight:600}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn:hover{background:#17355f;color:white}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn.active{background:var(--blue);box-shadow:none;color:white}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-icon{background:transparent;color:inherit;font-size:17px;border-radius:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn.active .recruit-nav-icon{background:transparent}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main{grid-column:2;grid-row:2;padding:26px 24px 24px;width:100%;min-width:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title{align-items:center;margin-bottom:20px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title h2{font-size:29px;letter-spacing:-.9px;line-height:1.2}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title p{font-size:12px;margin-top:5px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .primary,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .secondary{padding:11px 15px;font-size:12px;border-radius:7px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .primary{background:var(--blue)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .secondary{color:var(--blue)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-more{position:relative;color:var(--muted);font-size:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-more summary{cursor:pointer;padding:10px 6px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-more>div{position:absolute;right:0;top:100%;background:white;border:1px solid var(--line);padding:6px;border-radius:8px;z-index:5;min-width:145px;box-shadow:0 4px 20px #0b214510}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-more button{display:block;width:100%;text-align:left;padding:10px;border:0;background:white;cursor:pointer;color:var(--ink)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpis{gap:12px;margin-bottom:16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi{display:flex;align-items:center;gap:14px;border-radius:9px;padding:15px 13px;min-height:92px;box-shadow:0 2px 7px #13366503}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi:before{display:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi i{width:45px;height:45px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;font-size:25px;font-style:normal;color:var(--kpi-color);background:color-mix(in srgb,var(--kpi-color) 10%,white)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi span{text-transform:none;font-size:11px;letter-spacing:0;color:#22385e;font-weight:650}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi strong{font-size:28px;color:#101c38;margin-top:9px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi:hover{transform:none;box-shadow:0 2px 10px #13366508}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-grid{grid-template-columns:minmax(0,1fr) 285px;gap:14px;align-items:start}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel{padding:16px;border-radius:9px;box-shadow:0 2px 7px #13366503;min-width:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel-head{margin-bottom:14px;min-height:26px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel h3{font-size:14px;letter-spacing:-.25px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel-head button{font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel-head select{width:145px;height:28px;font-size:10px;padding:0 8px;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-pipeline{display:flex;gap:9px;overflow-x:auto;padding-bottom:3px;scrollbar-width:thin;scrollbar-color:#cddbec transparent}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-column{flex:1 0 140px;min-width:0;display:flex;flex-direction:column;border:1px solid color-mix(in srgb,var(--stage) 12%,#eef3fa);border-radius:8px;background:color-mix(in srgb,var(--stage) 3%,white);padding:7px;min-height:315px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-heading{display:flex;justify-content:space-between;gap:5px;align-items:center;font-size:10px;font-weight:750;padding:5px 2px 12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-heading>span{display:flex;align-items:center;gap:5px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-heading i{width:8px;height:8px;background:var(--stage);border-radius:50%;flex-shrink:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-heading>b{color:var(--stage);font-size:14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-cards{display:grid;gap:7px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card{border:1px solid #ecf0f6;border-radius:7px;background:white;text-align:left;padding:11px 8px;position:relative;display:block;width:100%;color:var(--ink);cursor:pointer;min-height:82px;box-shadow:0 1px 2px #12335403}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card:disabled{opacity:1;cursor:default}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card:hover:enabled{border-color:var(--stage)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card b{display:block;font-size:10px;padding-right:27px;overflow-wrap:anywhere}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card>span:not(.pipeline-avatar){display:block;font-size:10px;color:var(--muted);margin:4px 0 8px;overflow-wrap:anywhere}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card small{font-size:9px;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-avatar{width:28px;height:28px;background:color-mix(in srgb,var(--stage,#0064f5) 10%,white);color:var(--stage,#0064f5);display:grid;place-items:center;border-radius:50%;font-size:9px;font-weight:750;flex-shrink:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card .pipeline-avatar{position:absolute;right:7px;top:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-all{border:0;background:transparent;color:var(--blue);font-size:10px;font-weight:700;padding:14px 0 5px;margin-top:auto;cursor:pointer}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-empty{font-size:10px;color:var(--muted);padding:38px 8px;text-align:center}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-right{display:grid;gap:14px;min-width:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda{gap:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-item{grid-template-columns:45px 28px minmax(0,1fr);position:relative;border:0;border-bottom:1px solid var(--line);border-radius:0;background:white;padding:11px 0;gap:8px;min-height:65px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-date{height:auto;font-size:11px;background:#f3f7fd;padding:6px 3px;border-radius:6px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-date small{font-size:8px;display:block;color:var(--muted);margin-top:4px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-name{font-size:11px;overflow-wrap:anywhere}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-meta{font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-agenda-item .dashboard-mini-action{grid-column:3;justify-self:start}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish{background:linear-gradient(145deg,#1683ef,#0450b6);border-radius:8px;color:white;padding:22px 18px;box-shadow:0 2px 6px #0064f511}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish h3{margin:0;font-size:15px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish p{font-size:12px;line-height:1.5;margin:5px 0 12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish .secondary{padding:8px 11px;font-size:11px;border-radius:6px;color:var(--blue)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-bottom{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-table-wrap{overflow:auto}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-recent{min-width:400px;width:100%;border-collapse:collapse}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-recent th{background:#f5f8fc;font-size:8px;letter-spacing:.06em;color:var(--muted);text-align:left;padding:7px 8px;text-transform:uppercase}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-recent td{font-size:10px;padding:10px 8px;border-bottom:1px solid #edf2f8;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-recent td:first-child{color:var(--ink)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-status{font-size:9px;border-radius:5px;padding:5px 7px;white-space:nowrap;color:var(--stage,#0064f5);background:color-mix(in srgb,var(--stage,#0064f5) 10%,white)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-mini-action{font-size:9px;padding:5px 7px;border-radius:5px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-announcement{grid-template-columns:30px minmax(0,1fr) auto;padding:13px 0;gap:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .announcement-symbol{background:#e8f1ff;color:var(--blue);border-radius:7px;padding:6px;text-align:center}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-announcement-title{font-size:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-announcement-meta{font-size:9px;line-height:1.6}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-local-note{font-size:9px;color:var(--muted);margin-top:14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-sources{grid-column:1 / -1}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-content{display:flex;align-items:center;gap:24px;margin-top:16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-donut{width:106px;height:106px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-donut>span{background:white;border-radius:50%;width:77px;height:77px;display:flex;align-items:center;justify-content:center;flex-direction:column}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-donut b{font-size:20px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-donut small{font-size:9px;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-content ul{list-style:none;padding:0;margin:0;display:grid;gap:9px;max-width:360px;flex:1}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-content li{display:flex;align-items:center;gap:8px;font-size:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-content li i{width:8px;height:8px;border-radius:50%}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sources-content li span{flex:1}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-skeleton{background:linear-gradient(90deg,#eaf0f7,#f9fbfe,#eaf0f7);background-size:200% 100%;animation:recruit-skeleton 1.8s ease infinite;border-radius:9px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .kpi-skeleton{height:92px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-skeleton{height:385px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .bottom-skeleton{height:260px}@keyframes recruit-skeleton{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-skeleton{animation:none}}
+@media(min-width:1600px){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-column{flex-basis:0;min-width:130px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-grid{grid-template-columns:minmax(0,1fr) 300px}}
+@media(max-width:1279px){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app{grid-template-columns:185px minmax(0,1fr)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main{padding:20px 16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top{padding:15px 16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-grid{grid-template-columns:minmax(0,1fr) 250px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi{gap:8px;padding:12px 9px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi i{width:34px;height:34px;font-size:21px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi span{font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-actions{gap:6px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-user{max-width:120px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:160px}}
+@media(max-width:1100px){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-grid{grid-template-columns:minmax(0,1fr)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-right{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-pipeline{max-width:100%}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title h2{font-size:26px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .header-search{max-width:330px}}
+@media(max-width:800px){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app{display:block}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top{padding:12px 16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-row{flex-wrap:wrap}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .header-search{order:4;flex-basis:100%;max-width:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand{order:1;margin-left:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-actions{margin-left:auto}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar{height:auto;position:static;padding:8px 12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar-title{display:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav{flex-direction:row;overflow:auto}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn{min-width:max-content;padding:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main{padding:20px 14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-bottom{grid-template-columns:minmax(0,1fr)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-sources{grid-column:auto}}
+@media(max-width:480px){
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title{gap:14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title h2{font-size:27px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-title p{font-size:11px;line-height:1.5}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions{gap:7px;width:100%}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .primary,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .secondary{font-size:10px;padding:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-more{margin-left:auto}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpis{gap:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi{min-height:88px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi strong{font-size:25px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel{padding:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-right{grid-template-columns:minmax(0,1fr)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-column{flex-basis:165px;min-height:300px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card b{font-size:11px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-grid,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-bottom{gap:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-user{max-width:105px;font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:145px;font-size:9px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .logout{font-size:10px;padding:7px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top-row{gap:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel-head h3{font-size:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-panel-head select{width:130px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi span{font-size:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish{padding:18px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main{padding:18px 12px}}
+
+
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"]{font-family:var(--atlas-font);--navy:#0b2145;--blue:#0064f5;--bg:#f5f8fc;--line:var(--atlas-border);--ink:#101c38;--muted:#61779f;background:var(--bg)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-actions .primary{background:var(--blue)!important;color:white!important}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn{min-width:max-content}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar{background:var(--navy);color:#fff;border:0;border-radius:0;box-shadow:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn.active{background:var(--blue);color:white}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-icon,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn.active .recruit-nav-icon{background:transparent;color:inherit}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-publish h3{color:white}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card b{font-size:11px;line-height:1.4}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-card>span:not(.pipeline-avatar){font-size:10px;line-height:1.4}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-icon svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+@media(min-width:1400px){body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pipeline-column{flex:1 0 0;min-width:120px}}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .session-avatar{display:grid;place-items:center;width:32px;height:32px;flex-shrink:0;border-radius:50%;background:#e5efff;color:#0064f5;font-size:11px;font-weight:750}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-icon{border-radius:0;background:transparent}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn:hover .recruit-nav-icon{background:transparent}
+@media(max-width:480px){body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .session-avatar{width:24px;height:24px;font-size:9px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand{gap:5px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .brand-user{max-width:85px}body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:130px}}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .dashboard-kpi i svg{width:25px;height:25px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media(min-width:801px){body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav{flex-direction:column}}

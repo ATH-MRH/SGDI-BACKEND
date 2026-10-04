@@ -177,9 +177,10 @@ tr:last-child td{border-bottom:0}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
+<link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body class="atlas-ui" data-atlas-surface="recruitment">
+<body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE RECRUTEMENT</span><h2>Vos candidatures.<br>Un suivi clair.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Candidats</strong><small>Retrouvez les profils</small></div><div><b>02</b><strong>Entretiens</strong><small>Organisez les échanges</small></div><div><b>03</b><strong>Recrutement</strong><small>Suivez les candidatures</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
@@ -204,7 +205,8 @@ tr:last-child td{border-bottom:0}
 <section id="appView" class="app hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand"><div class="brand-logo">REC</div><div><div class="brand-title">RECRUTEMENT</div><div class="brand-user" id="userLabel">—</div></div></div>
+      <form class="header-search" onsubmit="event.preventDefault();dashboardSearch(this)"><input name="query" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, téléphone, poste…)"><button type="submit" aria-label="Lancer la recherche">⌕</button></form>
+      <div class="brand"><div class="session-avatar" id="sessionAvatar" aria-hidden="true"></div><div class="brand-logo">REC</div><div><div class="brand-title">RECRUTEMENT</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
         <span id="societyBadge" class="society-badge hidden"></span>
         <select id="societySelect" class="society-select hidden" onchange="onSocietyChange()"></select>
@@ -214,15 +216,16 @@ tr:last-child td{border-bottom:0}
   </header>
   <div class="app-shell">
     <aside class="recruit-sidebar" aria-label="Navigation recrutement">
+      <div class="sidebar-brand"><img src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><span>IRON GLOBAL<br>SÉCURITÉ</span></div>
       <div class="recruit-sidebar-title">Espace recrutement</div>
       <nav class="recruit-nav">
-        <button class="recruit-nav-btn" data-section="dashboard" onclick="showRecruitSection('dashboard')"><span class="recruit-nav-icon">⌂</span>Tableau de bord</button>
-        <button class="recruit-nav-btn" data-section="candidates" onclick="showRecruitSection('candidates')"><span class="recruit-nav-icon">👤</span>Candidatures</button>
-        <button class="recruit-nav-btn" data-section="interviews" onclick="showRecruitSection('interviews')"><span class="recruit-nav-icon">✓</span>Entretiens</button>
-        <button class="recruit-nav-btn" data-section="announcements" onclick="showRecruitSection('announcements')"><span class="recruit-nav-icon">▤</span>Annonces recrutement</button>
-        <button class="recruit-nav-btn" data-section="reserve" onclick="showRecruitSection('reserve')"><span class="recruit-nav-icon">◷</span>Réserve</button>
-        <button class="recruit-nav-btn" data-section="recruited" onclick="showRecruitSection('recruited')"><span class="recruit-nav-icon">★</span>Candidats recrutés</button>
-        <button class="recruit-nav-btn" data-section="archive" onclick="showRecruitSection('archive')"><span class="recruit-nav-icon">▣</span>Archives</button>
+        <button class="recruit-nav-btn" data-section="dashboard" onclick="showRecruitSection('dashboard')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/></svg></span>Tableau de bord</button>
+        <button class="recruit-nav-btn" data-section="candidates" onclick="showRecruitSection('candidates')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span>Candidatures</button>
+        <button class="recruit-nav-btn" data-section="interviews" onclick="showRecruitSection('interviews')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-14 5 3 3 6-6"/></svg></span>Entretiens</button>
+        <button class="recruit-nav-btn" data-section="announcements" onclick="showRecruitSection('announcements')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/></svg></span>Annonces</button>
+        <button class="recruit-nav-btn" data-section="reserve" onclick="showRecruitSection('reserve')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-2a7 7 0 0 1 14 0v2"/><circle cx="12" cy="7" r="3"/><path d="m18 7 2 2 3-4"/></svg></span>Réserve de talents</button>
+        <button class="recruit-nav-btn" data-section="recruited" onclick="showRecruitSection('recruited')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></span>Candidats recrutés</button>
+        <button class="recruit-nav-btn" data-section="archive" onclick="showRecruitSection('archive')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v13h14V8m-10 4h6"/></svg></span>Archives</button>
       </nav>
     </aside>
     <main class="main">
@@ -449,16 +452,20 @@ async function login(){
   finally{button.disabled=false;button.textContent="SE CONNECTER"}
 }
 function logout(){
+  recruitmentDashboardRequest++;recruitmentDashboardData=null;
   localStorage.removeItem(SESSION_KEY);recruteSession=null;
   document.getElementById("appView").classList.add("hidden");
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("password").value="";
 }
-function enterApp(){
+async function enterApp(){
+  try{recruteSession.user=await apiFetch("/api/auth/me");localStorage.setItem(SESSION_KEY,JSON.stringify(recruteSession))}catch(error){showLoginError(error.message);return}
+  if(!recruitmentCan("read")){showLoginError("Accès réservé au recrutement / DRH.");return}
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
   const user=recruteSession?.user||{};
-  document.getElementById("userLabel").textContent=(user.full_name||user.username||"Recruteur")+" · "+(user.username||"");
+  document.getElementById("userLabel").textContent=(user.full_name||user.username||"")+" · "+(user.role||"");
+  document.getElementById("sessionAvatar").textContent=String(user.full_name||user.username||"").split(/\s+/).filter(Boolean).map(value=>value[0]).slice(0,2).join("").toUpperCase();
   const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
   const badge=document.getElementById("societyBadge"),select=document.getElementById("societySelect");
   if(societies.length>1){
@@ -475,7 +482,7 @@ function enterApp(){
   populateFormSocieties(societies);
   loadPositionOptions();
   renderTabs();
-  switchTab("new",true);
+  document.getElementById("addCandidateBtn").classList.toggle("hidden",!recruitmentCan("create"));
   showRecruitSection(recruitSection);
 }
 const POSITIONS_FALLBACK=["Agent administratif","Agent d'entretien","Agent de bureau","Agent de prévention et de sécurité","Agent polyvalent","Cariste","Chauffeur","Chef d'équipe","Chef de groupe","Chef de poste","Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur","Maître-chien","Manutentionnaire","Magasinier","Superviseur"];
@@ -506,8 +513,9 @@ function setPositionValue(id,value){
   select.value=value;
 }
 function onSocietyChange(){
+  recruitmentDashboardRequest++;recruitmentDashboardData=null;recruitmentDashboardPosition="";
   activeSociety=document.getElementById("societySelect").value||"";
-  Object.keys(tabState).forEach(k=>{tabState[k].page=1});
+  Object.keys(tabState).forEach(k=>{tabState[k].page=1;tabState[k].request=(tabState[k].request||0)+1;tabState[k].items=[];if(tabState[k].societyFilter)tabState[k].societyFilter=activeSociety});
   refreshRecruitCurrentSection();
 }
 function refreshRecruitCurrentSection(){
@@ -531,11 +539,13 @@ async function apiFetch(path,options={}){
   return data;
 }
 
-function showRecruitSection(section){
+function showRecruitSection(section,refresh=true){
+  if(section!=="dashboard")recruitmentDashboardRequest++;
+  if(section!=="interviews"){const host=document.getElementById("interviewsSection");host._request=(host._request||0)+1}
   if(section==="reserve"||section==="archive"||section==="recruited"){
     recruitSection="candidates";
     sessionStorage.setItem("atlas_recrute_section",recruitSection);
-    showRecruitSection("candidates");
+    showRecruitSection("candidates",false);
     switchTab(section,true);
     document.querySelectorAll(".recruit-nav-btn").forEach(button=>button.classList.toggle("active",button.dataset.section===section));
     return;
@@ -548,7 +558,7 @@ function showRecruitSection(section){
   document.getElementById("candidatesSection").classList.toggle("hidden",recruitSection!=="candidates");
   document.getElementById("announcementsSection").classList.toggle("hidden",recruitSection!=="announcements");
   showBanner("");
-  refreshRecruitCurrentSection();
+  if(refresh)refreshRecruitCurrentSection();
 }
 function candidateFullName(item){return `${item?.last_name||""} ${item?.first_name||""}`.trim()||"Candidat sans nom"}
 function candidateConvocation(item){return item?.data?.derniereConvocation||null}
@@ -566,66 +576,120 @@ function dashboardDateTile(value){
   return match?`${match[3]}<br>${match[2]}`:"—";
 }
 function dashboardOpenCandidate(id,action="open"){
-  const item=[...tabState.new.items,...tabState.reserve.items,...tabState.recruited.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
+  const item=[...(recruitmentDashboardData?.society===activeSociety?recruitmentDashboardData.items:[]),...tabState.new.items,...tabState.reserve.items,...tabState.recruited.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
   if(!item)return;
   activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":tabState.recruited.items.some(row=>Number(row.id)===Number(id))?"recruited":"archive";
   if(action==="interview")openCandidateInterview(id);else openCandidateForm(id);
 }
+let recruitmentDashboardRequest=0;
+let recruitmentDashboardData=null;
+let recruitmentDashboardPosition="";
+function recruitmentCan(action){
+  const user=recruteSession?.user;
+  return user?.recruitment_access===true&&(user.authorized_actions||[]).some(value=>value===action||value==="admin");
+}
+function dashboardStage(item){
+  const data=item.data||{},status=String(item.status||data.statut||"").toLowerCase();
+  if(["archive","archived","archivé","archivee","archivée"].includes(status)||data.archivedAt||data.motifArchive||data.commentaireArchive||data.recruitmentArchivedAt)return "archive";
+  if([item.status,data.statut,data.status].some(value=>/^(embauche|embauché|embauchee|embauchée|recrute|recruté|recrutee|recrutée|employe|employé|employee)$/.test(String(value||"").toLowerCase()))||data.convertedEmployeeId||data.convertedAt||data.employeeId||data.agentId)return "recruited";
+  if(candidateIsContractPending(item))return "transmitted";
+  if(status==="reserve"&&data.fichePositionValidee)return "reserve";
+  if(data.removedFromRecruitmentAt)return "archive";
+  if(candidateInterview(item))return "interview";
+  if(candidateConvocation(item))return "convoked";
+  if(data.avisDecision&&data.avisDecision!=="Non évalué")return "screened";
+  return "new";
+}
+const DASHBOARD_STAGES=[
+  ["new","Nouvelles","#0064f5","new"],["screened","Présélection","#ed850c","new"],
+  ["convoked","Convoqués","#7842ed","new"],["interview","Entretiens","#079bb8","new"],
+  ["transmitted","Transmis à la DRH","#5268aa","recruited"],["recruited","Recrutés","#139b57","recruited"]
+];
+function dashboardIcon(key){
+  const paths={candidates:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m0-15a3 3 0 0 1 0 6m3 3a5 5 0 0 1 3 4v2"/>',screened:'<path d="M6 3h9l4 4v14H6Z"/><path d="M14 3v5h5M9 12h7m-7 4h5"/>',interviews:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-13 5h3"/>',reserve:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 13h18m-9-2v4"/>',recruited:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'};
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[key]||""}</svg>`;
+}
+function dashboardInitials(item){return [item.last_name,item.first_name].filter(Boolean).map(value=>String(value).trim()[0]).join("").slice(0,2)}
+function dashboardGo(mode="new"){
+  const state=tabState[mode];state.societyFilter=activeSociety;state.q="";state.posteFilter=recruitmentDashboardPosition;state.page=1;
+  showRecruitSection(mode==="new"?"candidates":mode,false);
+  if(mode==="new")switchTab("new",true);
+}
+function dashboardSetPosition(value){recruitmentDashboardPosition=value;renderRecruitDashboard()}
+function dashboardSearch(form){
+  const value=new FormData(form).get("query");
+  const state=tabState.new;state.q=String(value||"").trim();state.societyFilter=activeSociety;state.page=1;
+  showRecruitSection("candidates",false);switchTab("new",true);
+}
+function dashboardSkeleton(){return `<div class="dashboard-loading" aria-busy="true" aria-label="Chargement du tableau de bord"><div class="dashboard-kpis">${Array.from({length:5},()=>'<div class="dashboard-skeleton kpi-skeleton"></div>').join("")}</div><div class="dashboard-grid"><div class="dashboard-skeleton pipeline-skeleton"></div><div class="dashboard-skeleton pipeline-skeleton"></div></div><div class="dashboard-bottom"><div class="dashboard-skeleton bottom-skeleton"></div><div class="dashboard-skeleton bottom-skeleton"></div></div></div>`}
 async function renderRecruitDashboard(refresh=false){
   const host=document.getElementById("dashboardSection");
-  if(!host.hasChildNodes())host.innerHTML='<div class="empty">Chargement du tableau de bord…</div>';
-  if(refresh){
-    await Promise.all(["new","reserve","recruited","archive"].map(async mode=>{
-      try{
-        const params=new URLSearchParams({mode,page:"1",page_size:"100"});
+  if(!recruitmentCan("read")){host.innerHTML='<div class="empty" role="alert">Accès réservé au recrutement / DRH.</div>';return}
+  const society=activeSociety,request=++recruitmentDashboardRequest;
+  const current=()=>request===recruitmentDashboardRequest&&society===activeSociety&&recruitSection==="dashboard"&&!!recruteSession;
+  if(refresh||!recruitmentDashboardData||recruitmentDashboardData.society!==society){
+    if(recruitmentDashboardData?.society!==society||!host.hasChildNodes())host.innerHTML=dashboardSkeleton();
+    host.setAttribute("aria-busy","true");
+    try{
+      const rows=[];let page=1,pages=1;
+      do{
+        const params=new URLSearchParams({page:String(page),page_size:"100",sort_key:"date",sort_direction:"desc"});
+        if(society)params.set("society",society);
         const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
-        tabState[mode].items=result.items||[];tabState[mode].total=result.total||0;tabState[mode].pages=result.pages||1;
-      }catch(error){console.warn("Indicateur recrutement indisponible",mode,error)}
-    }));
+        if(!current())return;
+        rows.push(...(result.items||[]));pages=result.pages||1;page++;
+      }while(page<=pages);
+      recruitmentDashboardData={society,items:[...new Map(rows.filter(item=>!society||item.society===society).map(item=>[item.id,item])).values()]};
+    }catch(error){
+      if(current()){host.removeAttribute("aria-busy");host.innerHTML=`<div class="dashboard-panel empty" role="alert">Tableau de bord indisponible : ${esc(error.message)}<br><button class="secondary" onclick="renderRecruitDashboard(true)">Réessayer</button></div>`}
+      return;
+    }
   }
-  const announcements=getRecruitAnnouncements().filter(item=>!activeSociety||item.society===activeSociety);
-  const published=announcements.filter(item=>item.status==="Publiée").length;
-  const candidates=tabState.new.items;
-  const convocations=candidates.filter(item=>candidateConvocation(item));
-  const interviews=candidates.filter(item=>candidateInterview(item));
-  const favorable=candidates.filter(item=>item.data?.avisDecision==="Favorable");
-  const contractPending=[...tabState.recruited.items,...tabState.archive.items].filter(candidateIsContractPending);
-  const toConvoke=candidates.filter(item=>!candidateConvocation(item)&&!candidateInterview(item)&&!candidateIsContractPending(item));
-  const upcoming=convocations.filter(item=>String(candidateConvocation(item)?.date||"")>=today()).sort((a,b)=>String(candidateConvocation(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||""))).slice(0,4);
-  const recent=candidates.filter(item=>!candidateIsContractPending(item)).slice(0,5);
-  const maxFunnel=Math.max(tabState.new.total,1);
-  const funnel=[
-    ["Candidatures",tabState.new.total],["Présélectionnés",candidates.filter(item=>item.data?.avisDecision).length],["Convoqués",convocations.length],["Entretiens",interviews.length],["Validés",favorable.length]
-  ];
-  host.innerHTML=`<div class="section-head"><div><h2>Tableau de bord recrutement</h2><p>Suivi du parcours candidat, des annonces et des entretiens${activeSociety?` · ${esc(activeSociety)}`:""}.</p></div><div style="display:flex;gap:8px"><button class="secondary" onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button><button class="secondary" onclick="renderRecruitDashboard(true)">↻ Actualiser</button><button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">+ Ajouter un candidat</button></div></div>
-    <div class="dashboard-kpis">
-      <button class="dashboard-kpi" style="--kpi-color:#0d6ecc" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>Nouvelles candidatures</span><strong>${tabState.new.total}</strong></button>
-      <button class="dashboard-kpi" style="--kpi-color:#d97706" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>À convoquer</span><strong>${toConvoke.length}</strong></button>
-      <button class="dashboard-kpi" style="--kpi-color:#7c3aed" onclick="showRecruitSection('interviews')"><span>Entretiens planifiés</span><strong>${upcoming.length}</strong></button>
-      <button class="dashboard-kpi" style="--kpi-color:#0891b2" onclick="showRecruitSection('reserve')"><span>En réserve</span><strong>${tabState.reserve.total}</strong></button>
-      <button class="dashboard-kpi" style="--kpi-color:#16a34a" onclick="showRecruitSection('recruited')"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></button>
-    </div>
-    <div class="dashboard-grid">
-      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Avancement du recrutement</h3><button onclick="showRecruitSection('candidates')">Voir les candidatures →</button></div>
-        <div class="dashboard-funnel">${funnel.map(([label,value])=>`<div class="dashboard-funnel-row"><span>${esc(label)}</span><div class="dashboard-funnel-track"><div class="dashboard-funnel-fill" style="width:${Math.min(100,Math.round((value/maxFunnel)*100))}%"></div></div><b>${value}</b></div>`).join("")}</div>
-      </div>
-      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Tout afficher →</button></div>
-        <div class="dashboard-agenda">${upcoming.length?upcoming.map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${dashboardDateTile(c.date)}</div><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(c.heure||"Heure non précisée")} · ${esc(c.lieu||item.desired_position||"Entretien")}</div></div><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${item.id},'interview')">Entretien</button></div>`}).join(""):'<div class="empty" style="padding:24px 10px">Aucun entretien planifié.</div>'}</div>
-      </div>
-    </div>
-    <div class="dashboard-bottom">
-      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Candidatures à traiter</h3><button onclick="showRecruitSection('candidates')">Voir toutes →</button></div><div class="dashboard-candidate-list">${recent.length?recent.map(item=>`<div class="dashboard-candidate"><div><div class="dashboard-candidate-name">${esc(candidateFullName(item))}</div><div class="dashboard-candidate-meta">${esc(item.desired_position||"Poste non renseigné")} · ${formatDateFr(item.created_at)}</div></div><div style="display:flex;align-items:center;gap:7px"><span class="dashboard-status">${candidateInterview(item)?"Entretien réalisé":candidateConvocation(item)?"Convoqué":"À traiter"}</span><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${item.id})">Ouvrir</button></div></div>`).join(""):'<div class="empty" style="padding:24px 10px">Aucune candidature à traiter.</div>'}</div></div>
-      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Annonces actives</h3><button onclick="showRecruitSection('announcements')">Gérer les annonces →</button></div><div class="dashboard-announcement-list">${announcements.filter(item=>item.status==="Publiée").slice(0,5).map(item=>`<div class="dashboard-announcement"><div><div class="dashboard-announcement-title">${esc(item.title||"Annonce")}</div><div class="dashboard-announcement-meta">${esc(item.location||item.society||"")} · ${Number(item.positions||1)} poste(s)</div></div><span class="pill pill-green">Publiée</span></div>`).join("")||'<div class="empty" style="padding:24px 10px">Aucune annonce publiée.</div>'}</div><div style="margin-top:12px;font-size:10px;color:var(--muted)">${published} publiée(s) · ${announcements.filter(item=>item.status==="Brouillon").length} brouillon(s)</div></div>
-    </div>`;
+  if(!current())return;
+  host.removeAttribute("aria-busy");
+  const all=recruitmentDashboardData.items;
+  const positions=[...new Set(all.map(item=>item.desired_position).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
+  if(recruitmentDashboardPosition&&!positions.includes(recruitmentDashboardPosition))recruitmentDashboardPosition="";
+  const rows=all.filter(item=>!recruitmentDashboardPosition||item.desired_position===recruitmentDashboardPosition).sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||""))||Number(b.id)-Number(a.id));
+  // Keep existing candidate dialogs supplied with the already loaded real records.
+  for(const mode of ["new","reserve","recruited","archive"]){tabState[mode].items=all.filter(item=>{const stage=dashboardStage(item);return mode==="new"?["new","screened","convoked","interview"].includes(stage):mode==="recruited"?["transmitted","recruited"].includes(stage):stage===mode})}
+  const scheduled=rows.filter(item=>{const c=candidateConvocation(item);return c&&["new","screened","convoked","interview"].includes(dashboardStage(item))&&!candidateInterview(item)?.valide&&`${c.date||""}T${c.heure||"23:59"}`>=`${today()}T${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",timeZone:"Africa/Algiers"})}`}).sort((a,b)=>`${candidateConvocation(a).date}T${candidateConvocation(a).heure||""}`.localeCompare(`${candidateConvocation(b).date}T${candidateConvocation(b).heure||""}`));
+  const announcements=getRecruitAnnouncements().filter(item=>(!society||item.society===society)&&item.status==="Publiée");
+  const create=recruitmentCan("create"),update=recruitmentCan("update");
+  const count=stage=>rows.filter(item=>dashboardStage(item)===stage).length;
+  const kpis=[["Candidatures totales",rows.length,"#0064f5","candidates","dashboardGo()"],["En présélection",count("screened"),"#0064f5","screened","dashboardGo()"],["Entretiens planifiés",scheduled.length,"#ed850c","interviews","showRecruitSection('interviews')"],["En réserve",count("reserve"),"#22658b","reserve","dashboardGo('reserve')"],["Recrutés",count("recruited"),"#139b57","recruited","dashboardGo('recruited')"]];
+  const candidateCard=item=>`<button class="pipeline-card" ${update?`onclick="dashboardOpenCandidate(${Number(item.id)})"`:'disabled'}><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><b>${esc(candidateFullName(item))}</b><span>${esc(item.desired_position||"Poste non renseigné")}</span><small>${esc(formatDateFr(candidateConvocation(item)?.date||item.created_at))}${candidateConvocation(item)?.heure?` · ${esc(candidateConvocation(item).heure)}`:""}</small></button>`;
+  const sources=new Map();for(const item of rows){const value=String(item.data?.source||"").trim();if(value)sources.set(value,(sources.get(value)||0)+1)}
+  const sourceTotal=[...sources.values()].reduce((a,b)=>a+b,0),sourceColors=["#2783ff","#20bc97","#ffac50","#9364e7","#8294b9"];
+  let offset=0;const gradient=[...sources].map(([label,n],index)=>{const start=offset;offset+=n/sourceTotal*100;return `${sourceColors[index%sourceColors.length]} ${start}% ${offset}%`}).join(",");
+  host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">⚑ Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div>${create?`<button onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>`:""}<button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
+  <div class="dashboard-kpis">${kpis.map(([label,n,color,icon,action])=>`<button class="dashboard-kpi" style="--kpi-color:${color}" onclick="${action}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></button>`).join("")}</div>
+  <div class="dashboard-grid"><section class="dashboard-panel pipeline-panel"><div class="dashboard-panel-head"><h3>Pipeline de recrutement</h3><select aria-label="Filtrer le pipeline par poste" onchange="dashboardSetPosition(this.value)"><option value="">Tous les postes</option>${positions.map(value=>`<option value="${esc(value)}"${value===recruitmentDashboardPosition?' selected':''}>${esc(value)}</option>`).join("")}</select></div><div class="dashboard-pipeline">${DASHBOARD_STAGES.map(([key,label,color,mode])=>{const items=rows.filter(item=>dashboardStage(item)===key);return `<section class="pipeline-column" style="--stage:${color}"><div class="pipeline-heading"><span><i></i>${label}</span><b>${items.length}</b></div><div class="pipeline-cards">${items.slice(0,3).map(candidateCard).join("")||'<div class="pipeline-empty">Aucune candidature</div>'}</div><button class="pipeline-all" onclick="dashboardGo('${mode}')">Voir toutes (${items.length}) →</button></section>`}).join("")}</div></section>
+  <aside class="dashboard-right"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Voir tout</button></div><div class="dashboard-agenda">${scheduled.slice(0,4).map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${esc(c.heure||"—")}<small>${esc(formatDateFr(c.date))}</small></div><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(item.desired_position||"Poste non renseigné")}${c.lieu?` · ${esc(c.lieu)}`:""}</div></div>${update?`<button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)},'interview')">Ouvrir</button>`:""}</div>`}).join("")||'<div class="empty">Aucun entretien planifié.</div>'}</div></section>${create?'<section class="dashboard-publish"><div><h3>Publier une annonce</h3><p>Diffusez vos offres sur vos canaux de recrutement</p><button class="secondary" onclick="showRecruitSection(\'announcements\');openAnnouncementForm()">＋ Créer une annonce</button></div></section>':""}</aside></div>
+  <div class="dashboard-bottom"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Candidatures récentes</h3><button onclick="dashboardGo()">Voir toutes</button></div><div class="dashboard-table-wrap"><table class="dashboard-recent"><thead><tr><th>Nom</th><th>Poste</th><th>Date</th><th>Statut</th>${update?'<th>Action</th>':""}</tr></thead><tbody>${rows.slice(0,5).map(item=>{const stage=dashboardStage(item),definition=DASHBOARD_STAGES.find(row=>row[0]===stage);return `<tr><td><b>${esc(candidateFullName(item))}</b></td><td>${esc(item.desired_position||"—")}</td><td>${esc(formatDateFr(item.created_at))}</td><td><span class="dashboard-status" style="--stage:${definition?.[2]||'#5268aa'}">${esc(definition?.[1]||(stage==="reserve"?"Réserve":"Archivé"))}</span></td>${update?`<td><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)})">Ouvrir</button></td>`:""}</tr>`}).join("")||`<tr><td colspan="${update?5:4}" class="empty">Aucune candidature récente.</td></tr>`}</tbody></table></div></section>
+  <section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Annonces actives</h3><button onclick="showRecruitSection('announcements')">Voir toutes</button></div><div class="dashboard-announcement-list">${announcements.slice(0,4).map(item=>`<div class="dashboard-announcement"><span class="announcement-symbol" aria-hidden="true">▤</span><div><div class="dashboard-announcement-title">${esc(item.title||"Annonce")}</div><div class="dashboard-announcement-meta">${esc(item.location||"")}${item.publishedAt?` · Publiée le ${esc(formatDateFr(item.publishedAt))}`:""}</div></div><span class="pill pill-green">Publiée</span></div>`).join("")||`<div class="empty">Aucune annonce publiée.${create?'<br><button class="dashboard-mini-action" onclick="showRecruitSection(\'announcements\');openAnnouncementForm()">Créer une annonce</button>':""}</div>`}</div><div class="dashboard-local-note">Annonces enregistrées sur ce navigateur.</div></section>
+  ${sources.size?`<section class="dashboard-panel dashboard-sources"><h3>Sources des candidatures</h3><div class="sources-content"><div class="sources-donut" style="background:conic-gradient(${gradient})"><span><b>${sourceTotal}</b><small>renseignées</small></span></div><ul>${[...sources].map(([label,n],index)=>`<li><i style="background:${sourceColors[index%sourceColors.length]}"></i><span>${esc(label)}</span><b>${Math.round(n/sourceTotal*100)} %</b></li>`).join("")}</ul></div><div class="dashboard-local-note">${rows.length-sourceTotal} source(s) non renseignée(s)</div></section>`:""}</div>`;
 }
 async function renderRecruitInterviews(refresh=false){
   const host=document.getElementById("interviewsSection");
   if(!host.hasChildNodes())host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
+  const society=activeSociety,request=host._request=(host._request||0)+1;
+  if(!recruitmentCan("read")){host.innerHTML='<div class="empty">Accès réservé au recrutement / DRH.</div>';return}
+  const current=()=>request===host._request&&society===activeSociety&&recruitSection==="interviews"&&!!recruteSession;
   if(refresh){
-    try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+    try{
+      const items=[];let page=1,pages=1;
+      do{
+        const params=new URLSearchParams({mode:"new",page:String(page),page_size:"100"});if(society)params.set("society",society);
+        const result=await apiFetch("/api/drh/candidates/page?"+params.toString());if(!current())return;
+        items.push(...(result.items||[]));pages=result.pages||1;page++;
+      }while(page<=pages);
+      tabState.new.items=items.filter(item=>!society||item.society===society);
+    }catch(error){if(current())host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
   }
+  if(!current())return;
   const rows=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>String(candidateConvocation(a)?.date||candidateInterview(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||candidateInterview(b)?.date||"")));
-  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th><th>Recruteur</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?.valide?'<span class="pill pill-green">Validé</span>':e?'<span class="pill pill-amber">Brouillon</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / ${e.bareme||5}`:"—"}</td><td><button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?.valide?"Consulter":e?"Continuer":"Démarrer"}</button></td><td>${esc(e?.recruteur||"—")}</td></tr>`}).join(""):`<tr><td colspan="8" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
+  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th><th>Recruteur</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?.valide?'<span class="pill pill-green">Validé</span>':e?'<span class="pill pill-amber">Brouillon</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / ${e.bareme||5}`:"—"}</td><td>${recruitmentCan("update")?`<button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?.valide?"Consulter":e?"Continuer":"Démarrer"}</button>`:"—"}</td><td>${esc(e?.recruteur||"—")}</td></tr>`}).join(""):`<tr><td colspan="8" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
 }
 function normalizeExcelHeader(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
 function excelCell(row,names){
@@ -634,6 +698,7 @@ function excelCell(row,names){
   return key?String(row[key]??"").trim():"";
 }
 async function importRecruitmentExcel(input){
+  if(!recruitmentCan("create"))return;
   const file=input?.files?.[0];if(!file)return;
   try{
     if(!window.XLSX){await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src="/static/xlsx.full.min.js?v=1";script.onload=resolve;script.onerror=()=>reject(new Error("Lecteur Excel indisponible"));document.head.appendChild(script)})}
@@ -671,6 +736,7 @@ function announcementFormHTML(item={}){
     <div class="modal-actions"><button class="primary" type="submit">Enregistrer l’annonce</button></div></form>`;
 }
 function openAnnouncementForm(id=""){
+  if(!recruitmentCan(id?"update":"create"))return;
   const item=getRecruitAnnouncements().find(row=>row.id===id)||{};
   document.getElementById("announcementsSection").innerHTML=announcementFormHTML(item);
 }
@@ -721,7 +787,7 @@ function filteredRecruitAnnouncements(q="",status=""){
   return getRecruitAnnouncements().filter(item=>(!activeSociety||item.society===activeSociety)&&(!status||item.status===status)&&(!q||[item.title,item.society,item.location,item.reference].join(" ").toLowerCase().includes(q)));
 }
 function announcementListHTML(items){
-  return items.map(item=>`<article class="announcement-card"><div><h3>${esc(item.title)}</h3><div class="announcement-meta"><span>${esc(item.society)}</span><span>${esc(item.location||"Lieu non renseigné")}</span><span>${item.positions} poste(s)</span><span>Limite : ${formatDateFr(item.deadline)}</span><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></div></div><div class="announcement-actions"><button class="primary" data-share-announcement="${esc(item.id)}" onclick="shareRecruitAnnouncement('${jsStr(item.id)}')">Publier / Partager</button><button class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Clôturée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}<button class="danger" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button></div></article>`).join("")||'<div class="table-card empty">Aucune annonce pour ce filtre.</div>';
+  return items.map(item=>`<article class="announcement-card"><div><h3>${esc(item.title)}</h3><div class="announcement-meta"><span>${esc(item.society)}</span><span>${esc(item.location||"Lieu non renseigné")}</span><span>${item.positions} poste(s)</span><span>Limite : ${formatDateFr(item.deadline)}</span><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></div></div><div class="announcement-actions">${recruitmentCan("update")?`<button class="primary" data-share-announcement="${esc(item.id)}" onclick="shareRecruitAnnouncement('${jsStr(item.id)}')">Publier / Partager</button><button class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Clôturée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}`:""}${recruitmentCan("delete")?`<button class="danger" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button>`:""}</div></article>`).join("")||'<div class="table-card empty">Aucune annonce pour ce filtre.</div>';
 }
 function filterRecruitAnnouncements(){
   const q=document.getElementById("announcementSearch")?.value||"";const status=document.getElementById("announcementStatus")?.value||"";
@@ -730,7 +796,7 @@ function filterRecruitAnnouncements(){
 function renderRecruitAnnouncements(){
   const host=document.getElementById("announcementsSection");
   const items=filteredRecruitAnnouncements();
-  host.innerHTML=`<div class="section-head"><div><h2>Annonces recrutement</h2><p>Créez, publiez et clôturez les besoins de recrutement.</p></div><button class="primary" onclick="openAnnouncementForm()">+ Nouvelle annonce</button></div>
+  host.innerHTML=`<div class="section-head"><div><h2>Annonces recrutement</h2><p>Créez, publiez et clôturez les besoins de recrutement.</p></div>${recruitmentCan("create")?'<button class="primary" onclick="openAnnouncementForm()">+ Nouvelle annonce</button>':""}</div>
     <div class="announcement-toolbar"><input id="announcementSearch" placeholder="Rechercher une annonce…" oninput="filterRecruitAnnouncements()"><select id="announcementStatus" onchange="filterRecruitAnnouncements()"><option value="">Tous les statuts</option>${["Brouillon","Publiée","Clôturée"].map(s=>`<option>${s}</option>`).join("")}</select></div>
     <div id="announcementList" class="announcement-list">${announcementListHTML(items)}</div>`;
 }
@@ -751,7 +817,7 @@ function switchTab(tab,force){
   document.getElementById("countersRow").classList.toggle("hidden",isContract);
   if(isContract){loadContractReadyCandidates();return}
   document.getElementById("searchInput").value=tabState[tab].q||"";
-  document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new");
+  document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new"||!recruitmentCan("create"));
   loadTab(tab);
 }
 function onSearchInput(){
@@ -919,7 +985,7 @@ function avisClass(value){
 }
 function avisCell(item){
   const value=(item.data&&item.data.avisDecision)||"";
-  if(activeTab==="archive"||activeTab==="recruited"){
+  if(activeTab==="archive"||activeTab==="recruited"||!recruitmentCan("update")){
     const pillClass=value==="Favorable"?"pill-green":value==="Défavorable"?"pill-red":value==="Instance"?"pill-amber":"pill-gray";
     return value?`<span class="pill ${pillClass}">${esc(value)}</span>`:"—";
   }
@@ -931,17 +997,19 @@ function avisCell(item){
   </select>`;
 }
 function rowActionItems(item){
+  if(!recruitmentCan("update"))return [];
   const actions=[{label:"Ouvrir",onclick:`openCandidateForm(${item.id})`}];
   const editable=activeTab!=="archive"&&activeTab!=="recruited";
   if(editable)actions.push({label:"Convoquer",onclick:`openCandidateConvocation(${item.id})`});
   if(editable&&candidateConvocation(item))actions.push({label:"Entretien",onclick:`openCandidateInterview(${item.id})`});
-  if(editable&&item.data?.avisDecision==="Favorable")actions.push({label:"Recruter",onclick:`openCandidateRecruitment(${item.id})`});
-  if(activeTab==="reserve")actions.push({label:"Marquer prêt pour contrat",onclick:`markReadyForContract(${item.id})`});
+  if(editable&&recruitmentCan("create")&&item.data?.avisDecision==="Favorable")actions.push({label:"Recruter",onclick:`openCandidateRecruitment(${item.id})`});
+  if(activeTab==="reserve"&&recruitmentCan("create"))actions.push({label:"Marquer prêt pour contrat",onclick:`markReadyForContract(${item.id})`});
   return actions;
 }
 function rowActions(item){
+  if(!recruitmentCan("update"))return "—";
   const editable=activeTab!=="archive"&&activeTab!=="recruited";
-  const favorable=item.data?.avisDecision==="Favorable";
+  const favorable=recruitmentCan("create")&&item.data?.avisDecision==="Favorable";
   return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
 function handleCandidateRowClick(event,id){if(event.target.closest("button,select,input,a,textarea"))return;openCandidateForm(id)}
@@ -1344,6 +1412,7 @@ function previewCandidatePhoto(input){
 }
 function showFormError(message){const el=document.getElementById("formError");el.textContent=message;el.classList.add("show")}
 function openCandidateForm(id){
+  if(!recruitmentCan(id?"update":"create"))return;
   editingCandidateId=id;
   document.getElementById("formError").classList.remove("show");
   document.getElementById("candidateForm").reset();
