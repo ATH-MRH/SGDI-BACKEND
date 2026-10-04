@@ -6,7 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.pagination import paginate_list, paginate_statement
+from app.core.audit import append_audit
 from app.db.session import get_db
+from app.modules.attendance import official as official_shifts
 from app.modules.erp.service import unrestricted_scope
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
@@ -63,6 +65,8 @@ def update_rotation(rotation_id: int, payload: RotationTemplateCreate, db: Sessi
     row = db.get(RotationTemplate, rotation_id)
     if not row:
         raise HTTPException(status_code=404, detail="Rotation introuvable")
+    if row.official:
+        raise HTTPException(status_code=409, detail="Modèle officiel du travail posté : non modifiable depuis cet écran")
     if payload.cycle_length < 7 or payload.cycle_length > 366 or len(payload.cycle_days) != payload.cycle_length:
         raise HTTPException(status_code=400, detail="Cycle invalide")
     duplicate = db.execute(select(RotationTemplate).where(RotationTemplate.code == payload.code, RotationTemplate.id != rotation_id)).scalars().first()
@@ -95,6 +99,16 @@ def create_site_rotation(payload: SiteRotationCreate, db: Session = Depends(get_
 def delete_site_rotation(link_id: int, db: Session = Depends(get_db)):
     row = db.get(SiteRotation, link_id)
     if not row: raise HTTPException(status_code=404, detail="Association introuvable")
+    # Le lien porte l'ancrage du cycle officiel du site : tant que des affectations postées
+    # actives en dépendent, le retirer rendrait leur planning officiel indéterminé.
+    posted = db.execute(select(Assignment.id).where(
+        Assignment.site_id == row.site_id, Assignment.rotation_id == row.rotation_id, Assignment.active == 1,
+        Assignment.work_regime == official_shifts.REGIME_POSTE_CONTINU).limit(1)).first()
+    other = db.execute(select(SiteRotation.id).where(
+        SiteRotation.site_id == row.site_id, SiteRotation.rotation_id == row.rotation_id, SiteRotation.active == 1,
+        SiteRotation.id != row.id).limit(1)).first()
+    if posted and not other:
+        raise HTTPException(status_code=409, detail="Des affectations en travail posté utilisent ce modèle sur ce site")
     db.delete(row); db.commit()
 
 
@@ -354,6 +368,21 @@ def site_posts(site_id: int | None = None, db: Session = Depends(get_db), user: 
     return rows
 
 
+def _validate_posted(db: Session, site_id: int, group_code: str | None, rotation_id: int | None) -> None:
+    try:
+        official_shifts.validate_posted_assignment(db, site_id=site_id, group_code=group_code, rotation_id=rotation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _audit_work_regime(db: Session, user: User, employee: Employee | None, assignment: Assignment, old_state: dict | None) -> None:
+    append_audit(db, action="ops.assignment.work_regime", resource="assignment", resource_id=assignment.id, result="success",
+                 user=user, society=employee.society if employee else None, old_state=old_state,
+                 new_state={"work_regime": assignment.work_regime, "group_code": assignment.group_code,
+                            "rotation_id": assignment.rotation_id, "site_id": assignment.site_id})
+    db.commit()
+
+
 @router.post("/assignments", response_model=AssignmentOut)
 def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
     site = _ensure_site_allowed(db, user, payload.site_id) if payload.site_id else None
@@ -363,10 +392,16 @@ def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTas
         link = db.execute(select(SiteRotation).where(SiteRotation.site_id == payload.site_id, SiteRotation.rotation_id == payload.rotation_id, SiteRotation.active == 1)).scalars().first()
         if not rotation or not link:
             raise HTTPException(status_code=400, detail="Cette rotation n'est pas active sur ce site")
+    if payload.work_regime == official_shifts.REGIME_POSTE_CONTINU:
+        if "group_code" not in payload.model_fields_set:
+            raise HTTPException(status_code=422, detail="Travail posté : le groupe doit être indiqué explicitement")
+        _validate_posted(db, payload.site_id, payload.group_code, payload.rotation_id)
     if site and employee and _site_society(site) and employee.society:
         if _normalize_society(_site_society(site)) != _normalize_society(employee.society):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société employé/site incohérente")
     result = service.create_assignment(db, payload)
+    if payload.work_regime is not None:
+        _audit_work_regime(db, user, employee, result, None)
     if employee and site and _normalize_society(employee.society) == "IRON GLOBAL SECURITE":
         sync_data = iron_sync.build_payload(employee, site, result)
         background_tasks.add_task(iron_sync.push_payload, sync_data)
@@ -380,10 +415,20 @@ def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_
     was_active = assignment.active == 1
     going_inactive = payload.active == 0
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("group_code") is None:
+        changes.pop("group_code", None)
+    previous_regime = {"work_regime": assignment.work_regime, "group_code": assignment.group_code, "rotation_id": assignment.rotation_id}
+    regime_fields = {"work_regime", "group_code", "rotation_id"} & set(changes)
+    resulting = {**previous_regime, **{key: changes[key] for key in regime_fields}}
+    if regime_fields and resulting["work_regime"] == official_shifts.REGIME_POSTE_CONTINU:
+        _validate_posted(db, assignment.site_id, resulting["group_code"], resulting["rotation_id"])
+    for key, value in changes.items():
         setattr(assignment, key, value)
     if going_inactive and not assignment.end_date:
         assignment.end_date = date.today()
+    if regime_fields and (previous_regime["work_regime"] or assignment.work_regime) and resulting != previous_regime:
+        _audit_work_regime(db, user, employee, assignment, previous_regime)
     db.commit()
     db.refresh(assignment)
 

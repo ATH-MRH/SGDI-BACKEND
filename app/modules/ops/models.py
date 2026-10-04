@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -56,6 +56,10 @@ class RotationTemplate(Base, TimestampMixin):
     cycle_days: Mapped[list | None] = mapped_column(JSON)
     group_offsets: Mapped[dict | None] = mapped_column(JSON)
     active: Mapped[int] = mapped_column(Integer, default=1)
+    # Modèle OFFICIEL du travail posté (app/modules/attendance/official.py) : cycle ancré par site
+    # (SiteRotation.start_date), jamais par date d'affectation ; non modifiable par l'écran OPS.
+    official: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
 
 
 class SiteRotation(Base, TimestampMixin):
@@ -71,6 +75,13 @@ class SiteRotation(Base, TimestampMixin):
 
 class Assignment(Base, TimestampMixin):
     __tablename__ = "assignments"
+    __table_args__ = (
+        CheckConstraint("work_regime IS NULL OR work_regime IN ('NORMAL', 'POSTE_CONTINU')", name="ck_assignments_work_regime"),
+        # Travail posté : groupe et modèle officiel toujours explicites (jamais un « A » par défaut).
+        CheckConstraint("work_regime IS NULL OR work_regime <> 'POSTE_CONTINU' "
+                        "OR (group_code IN ('A', 'B', 'C', 'D') AND rotation_id IS NOT NULL)",
+                        name="ck_assignments_posted_explicit"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
@@ -82,6 +93,9 @@ class Assignment(Base, TimestampMixin):
     end_date: Mapped[date | None] = mapped_column(Date)
     change_reason: Mapped[str | None] = mapped_column(Text)
     active: Mapped[int] = mapped_column(Integer, default=1)
+    # Régime de travail EXPLICITE (NORMAL / POSTE_CONTINU). NULL = affectation historique :
+    # comportement inchangé, jamais déduit de group_code ni de Site.rotation_system.
+    work_regime: Mapped[str | None] = mapped_column(String(20), index=True)
 
 
 class DailyPresence(Base, TimestampMixin):

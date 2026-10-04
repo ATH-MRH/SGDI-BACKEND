@@ -451,7 +451,9 @@ def sync_assignment_from_agent(db: Session, employee: Employee, item: dict[str, 
             current.end_date = as_date(aff.get("date")) or date.today()
         current = Assignment(employee_id=employee.id, site_id=site.id, start_date=as_date(aff.get("date")) or date.today())
         db.add(current)
-    current.group_code = str(aff.get("groupe") or aff.get("group_code") or "A")[:20]
+    if current.work_regime != "POSTE_CONTINU":
+        # Travail posté : le groupe contractuel ne change que par l'affectation explicite.
+        current.group_code = str(aff.get("groupe") or aff.get("group_code") or "A")[:20]
     current.position = aff.get("poste") or employee.position
     current.change_reason = aff.get("motif")
     current.active = 1
@@ -490,7 +492,8 @@ def upsert_assignment(db: Session, item: dict[str, Any]) -> dict[str, Any] | Non
         db.add(row)
     row.employee_id = employee.id
     row.site_id = site.id
-    row.group_code = str(item.get("groupe") or item.get("group_code") or row.group_code or "A")[:20]
+    if row.work_regime != "POSTE_CONTINU":
+        row.group_code = str(item.get("groupe") or item.get("group_code") or row.group_code or "A")[:20]
     row.position = item.get("poste") or item.get("position")
     row.start_date = as_date(item.get("dateDebut") or item.get("date") or item.get("start_date")) or row.start_date or date.today()
     row.end_date = as_date(item.get("dateFin") or item.get("end_date"))

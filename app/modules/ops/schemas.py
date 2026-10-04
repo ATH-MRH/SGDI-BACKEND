@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -92,6 +92,9 @@ class AssignmentCreate(_UpperMixin):
     end_date: date | None = None
     change_reason: str | None = None
     active: int = 1
+    # Régime explicite (None = affectation historique). POSTE_CONTINU exige un groupe A/B/C/D
+    # et le modèle officiel (rotation_id) nommés explicitement.
+    work_regime: Literal["NORMAL", "POSTE_CONTINU"] | None = None
 
 
 class AssignmentOut(AssignmentCreate):
@@ -102,6 +105,8 @@ class AssignmentOut(AssignmentCreate):
 
 class AssignmentUpdate(BaseModel):
     rotation_id: int | None = None
+    group_code: str | None = None
+    work_regime: Literal["NORMAL", "POSTE_CONTINU"] | None = None
     end_date: date | None = None
     change_reason: str | None = None
     active: int | None = None
@@ -119,6 +124,8 @@ class RotationTemplateCreate(_UpperMixin):
 
 class RotationTemplateOut(RotationTemplateCreate):
     id: int
+    official: int = 0
+    version: int = 1
     model_config = {"from_attributes": True}
 
 

@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.modules.attendance import core, deviations, learning, projection, sheets
+from app.modules.attendance import core, deviations, learning, official, projection, sheets
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -409,6 +409,27 @@ def employee_attendance(employee_id: int, days: int = Query(31, ge=1, le=366),
 
 
 # ── Feuilles de présence par rotation (Pointage & Planning intelligent V3 — lot 1) ─────────
+# ── Planning OFFICIEL du travail posté (socle, lot 0) ────────────────────────────────────
+@router.get("/work-regimes")
+def work_regimes(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Régimes, groupes, vacations et modèles officiels proposables par l'interface Affectation."""
+    return official.catalog(db)
+
+
+@router.get("/official-shift")
+def get_official_shift(
+    employee_id: int,
+    site_id: int,
+    at: datetime | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Source officielle : régime, groupe et vacation prévue (intervalle THÉORIQUE) d'un employé
+    sur un site à un instant (`at` sans fuseau = heure du site ; défaut : maintenant)."""
+    _ensure_site_allowed(db, user, site_id)
+    return official.shift_out(official.official_shift(db, employee_id=employee_id, site_id=site_id, at=at or core._now_local()))
+
+
 class RotationSettingIn(BaseModel):
     first_shift_time: str = Field(min_length=5, max_length=5)
     shift_minutes: int

@@ -85,6 +85,13 @@ def planned_day(db: Session, assignment: Assignment | None, site: Site | None, w
 
     if not assignment:
         return {"known": False, "on": None, "period": "", "start_time": "", "end_time": ""}
+    from app.modules.attendance import official
+
+    posted = official.legacy_rotation(db, assignment, work_date)
+    if posted is not None:
+        # Travail posté explicite : la vérité attendue est le planning OFFICIEL.
+        return {"known": posted["known"], "on": posted["on"] if posted["known"] else None, "period": posted["period"],
+                "start_time": posted["start_time"], "end_time": posted["end_time"]}
     rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
     if rotation and rotation.active:
         rot = configured_rotation_for_date(rotation, assignment.group_code, work_date, assignment.start_date)
@@ -100,6 +107,10 @@ def authorized_work_minutes(db: Session, assignment: Assignment | None, site: Si
     """Durée autorisée issue du cycle configuré, avec repli sur l'ancien régime du site."""
     import re
 
+    from app.modules.attendance import official
+
+    if official.is_posted(assignment):
+        return official.NORMAL_SHIFT_MINUTES
     if assignment and assignment.rotation_id:
         rotation = db.get(RotationTemplate, assignment.rotation_id)
         days = rotation.cycle_days if rotation and isinstance(rotation.cycle_days, list) else []

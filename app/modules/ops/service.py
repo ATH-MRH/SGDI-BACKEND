@@ -306,6 +306,19 @@ def configured_rotation_for_date(rotation: RotationTemplate, group_code: str | N
     }
 
 
+def assignment_rotation_for_date(db: Session, assignment: Assignment, site: Site, rotation: RotationTemplate | None, work_date: date) -> dict[str, Any]:
+    """Jour prévu d'une affectation. Travail posté explicite : planning OFFICIEL (cycle ancré par
+    site) ; sinon comportement historique inchangé (gabarit configuré, puis régime du site)."""
+    from app.modules.attendance import official
+
+    posted = official.legacy_rotation(db, assignment, work_date)
+    if posted is not None:
+        return posted
+    if rotation and rotation.active:
+        return configured_rotation_for_date(rotation, assignment.group_code, work_date, assignment.start_date)
+    return rotation_for_date(site.rotation_system, assignment.group_code, work_date, assignment.start_date)
+
+
 def generate_rotation_daily_presence(db: Session, payload: Any, site_ids: list[int] | None = None):
     presence_date = payload.presence_date or date.today()
     stmt = select(Assignment).where(
@@ -333,7 +346,7 @@ def generate_rotation_daily_presence(db: Session, payload: Any, site_ids: list[i
             continue
         active_site_ids.add(site.id)
         rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
-        rot = configured_rotation_for_date(rotation, assignment.group_code, presence_date, assignment.start_date) if rotation and rotation.active else rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        rot = assignment_rotation_for_date(db, assignment, site, rotation, presence_date)
         rotation_name = rotation.name if rotation else site.rotation_system
         existing = db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date, DailyPresence.employee_id == assignment.employee_id).order_by(DailyPresence.id.desc())).scalars().first()
         if not rot["on"]:
@@ -409,7 +422,7 @@ def standby_personnel(db: Session, presence_date: date, society: str | None = No
         if society and employee.society != society and site_society != society:
             continue
         rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
-        rot = configured_rotation_for_date(rotation, assignment.group_code, presence_date, assignment.start_date) if rotation and rotation.active else rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        rot = assignment_rotation_for_date(db, assignment, site, rotation, presence_date)
         if rot["on"]:
             continue
         rows.append({
