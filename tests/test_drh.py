@@ -158,7 +158,7 @@ def test_convocation_email_copies_administration(monkeypatch):
 
 
 
-def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):
+def test_transmitted_candidates_leave_every_recruitment_list(client, auth_headers, db):
     from app.modules.drh.models import Candidate
 
     row = Candidate(
@@ -174,17 +174,19 @@ def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_
         params={"mode": "new", "society": "Iron Global Securite", "page": 1, "page_size": 100},
     )
     assert response.status_code == 200, response.text
-    assert any(item["id"] == row.id and item["last_name"] == "VISIBLE" for item in response.json()["items"])
-
-    row.data = {**row.data, "removedFromRecruitmentAt": "2026-09-02T21:30:00"}
-    db.commit()
-    hidden = client.get(
-        "/api/drh/candidates/page",
-        headers=auth_headers,
-        params={"mode": "new", "society": "Iron Global Securite", "page": 1, "page_size": 100},
-    )
-    assert hidden.status_code == 200, hidden.text
-    assert all(item["id"] != row.id for item in hidden.json()["items"])
+    # V7 : transmis à la DRH = sorti du périmètre Recrutement, même sans marqueur historique
+    # removedFromRecruitmentAt (anciens dossiers), et quelle que soit la vue ou la recherche.
+    assert all(item["id"] != row.id for item in response.json()["items"])
+    for mode in ("new", "reserve", "archive", "pool"):
+        hidden = client.get(
+            "/api/drh/candidates/page",
+            headers=auth_headers,
+            params={"mode": mode, "q": "VISIBLE", "page": 1, "page_size": 100},
+        )
+        assert hidden.status_code == 200, hidden.text
+        assert all(item["id"] != row.id for item in hidden.json()["items"]), mode
+    drh = client.get("/api/drh/candidates", headers=auth_headers, params={"status": "a_contractualiser"})
+    assert any(item["id"] == row.id for item in drh.json())
 
 
 # 7 sections visibles de la fiche de position (ordre imposé par le service)
@@ -466,8 +468,9 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     assert mark.status_code == 200, mark.text
     assert mark.json()["data"]["status"] == "a_contractualiser"
 
-    # Recruitment archives are a presentation category, not the DRH business status.
-    for mode, present in (("drh_pending", True), ("", True), ("archive", True), ("new", False), ("reserve", False), ("recruited", False)):
+    # V7 : un dossier transféré à la DRH quitte TOUTES les vues Recrutement (y compris Archives
+    # et le vivier) ; il reste visible côté DRH et la ligne est conservée (preuve, anti-doublon).
+    for mode, present in (("drh_pending", True), ("", True), ("archive", False), ("pool", False), ("new", False), ("reserve", False), ("recruited", False)):
         page = client.get(f"/api/drh/candidates/page?mode={mode}&page_size=100", headers=auth_headers)
         assert page.status_code == 200, page.text
         assert (cid in [row["id"] for row in page.json()["items"]]) is present

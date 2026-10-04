@@ -272,6 +272,13 @@ def _candidate_is_transmitted(row: Candidate) -> bool:
     return "a_contractualiser" in statuses
 
 
+def _candidate_left_recruitment(row: Candidate) -> bool:
+    """Dossier sorti du périmètre Recrutement : transféré à la DRH (à contractualiser) ou déjà
+    recruté. La ligne reste en base (preuve du transfert, anti-doublon, lien Candidate → Employee)
+    mais n'apparaît plus dans aucune vue de recrute.irongs.com."""
+    return _candidate_is_transmitted(row) or _candidate_is_recruited(row)
+
+
 def _candidate_is_drh_pending(row: Candidate) -> bool:
     # Transmission to contracts is still pending; an actual archive closes the dossier.
     # recruitmentArchivedAt alone only moves the source copy to Recruitment archives.
@@ -315,20 +322,30 @@ def list_candidates_page(
     page: int = 1,
     page_size: int = 25,
 ) -> dict[str, Any]:
+    from app.core.scope_policy import society_key
+
     stmt = select(Candidate)
     if society == "__unassigned__":
         stmt = stmt.where(or_(Candidate.society.is_(None), Candidate.society == ""))
-    elif society:
-        stmt = stmt.where(Candidate.society == society)
-    elif allowed_societies:
+    elif not society and allowed_societies:
         stmt = stmt.where(Candidate.society.in_(allowed_societies))
 
     rows = db.execute(stmt.order_by(Candidate.id.desc())).scalars().all()
+    if society and society != "__unassigned__":
+        # Filtre de portefeuille : casse et accents ignorés (les libellés de société sont du texte).
+        wanted = society_key(society)
+        rows = [row for row in rows if society_key(row.society) == wanted]
     selected_mode = (mode or "").strip().lower()
     if selected_mode == "drh_pending":
         rows = [row for row in rows if _candidate_is_drh_pending(row)]
     elif selected_mode in {"archive", "archived", "archives"}:
-        rows = [row for row in rows if _candidate_is_archived(row) or bool((row.data or {}).get("recruitmentArchivedAt"))]
+        # Archives = dossiers restés du domaine Recrutement (refus, abandon, obsolète…).
+        # Un candidat transféré à la DRH ou recruté n'y figure jamais.
+        rows = [row for row in rows if _candidate_is_archived(row) and not _candidate_left_recruitment(row)]
+    elif selected_mode in {"pool", "vivier"}:
+        # Vivier Recrutement Groupe : tout ce qui relève encore du Recrutement (actifs, réserve,
+        # archives) — base des indicateurs et de la recherche.
+        rows = [row for row in rows if not _candidate_left_recruitment(row)]
     elif selected_mode in {"reserve", "reserves"}:
         rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row) and not _candidate_is_transmitted(row)]
     elif selected_mode in {"recruited", "recrutes", "recrutés", "candidats_recrutes"}:
@@ -339,6 +356,7 @@ def list_candidates_page(
             # Aligner la liste sur le compteur Recrutement : un dossier transmis reste
             # visible jusqu'à ce que l'utilisateur confirme l'action « Recruter ».
             if _candidate_is_active(row)
+            and not _candidate_is_transmitted(row)
             and not _candidate_is_reserve(row)
             and not bool((row.data if isinstance(row.data, dict) else {}).get("removedFromRecruitmentAt"))
         ]
@@ -669,6 +687,13 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
                     # section) ne pourrait plus jamais etre corrigee ni sauvee.
                     data.pop("fichePositionValideeAt", None)
                     data.pop("fichePositionValideeBy", None)
+            # Historique des ventilations et preuve du transfert DRH : écrits uniquement par
+            # les services dédiés, jamais par une fiche renvoyée par un client.
+            for server_owned in ("ventilations", "drhTransfer"):
+                if server_owned in persisted:
+                    data[server_owned] = persisted[server_owned]
+                else:
+                    data.pop(server_owned, None)
             for protected in ("fichePositionValideeAt", "fichePositionValideeBy"):
                 if protected in data:
                     if protected in persisted:
@@ -676,6 +701,8 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
                     else:
                         data.pop(protected, None)
         else:
+            data.pop("ventilations", None)
+            data.pop("drhTransfer", None)
             data.pop("sectionValidations", None)
             data.pop("fichePositionValidee", None)
             data.pop("fichePositionValideeAt", None)
@@ -752,26 +779,156 @@ def _candidate_decision_is_favorable(data: dict[str, Any] | None) -> bool:
     return normalized.casefold() == "favorable"
 
 
-def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | None = None):
-    row = get_or_404(db, Candidate, candidate_id)
+SOCIETY_REQUIRED = "SOCIETE_DESTINATAIRE_REQUISE"
+TRANSFER_TO_RETRY = "TRANSFERT_DRH_A_REPRENDRE"
+ALREADY_TRANSFERRED = "CANDIDAT_DEJA_TRANSFERE"
+
+
+def _business_error(status_code: int, code: str, message: str) -> HTTPException:
+    # Message lisible par tous les clients existants (detail texte) ; code canonique dans un en-tête.
+    return HTTPException(status_code=status_code, detail=message, headers={"X-Error-Code": code})
+
+
+def _locked_candidate(db: Session, candidate_id: int) -> Candidate:
+    row = db.execute(select(Candidate).where(Candidate.id == candidate_id).with_for_update()).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return row
+
+
+def known_societies(db: Session) -> list[str]:
+    """Sociétés réellement connues du système (aucune table de référence n'existe) : celles des
+    comptes utilisateurs, des employés et des candidats, dédoublonnées par clé canonique."""
+    from app.core.scope_policy import society_key
+
+    found: dict[str, str] = {}
+    def keep(value: Any) -> None:
+        label = str(value or "").strip()
+        if label and society_key(label) not in found:
+            found[society_key(label)] = label
+    for values in db.execute(select(User.authorized_societies)).scalars().all():
+        for value in values if isinstance(values, list) else []:
+            keep(value)
+    for value in db.execute(select(Employee.society).distinct()).scalars().all():
+        keep(value)
+    for value in db.execute(select(Candidate.society).distinct()).scalars().all():
+        keep(value)
+    return sorted(found.values())
+
+
+def ventilate_candidate(db: Session, candidate_id: int, society: str | None, *, reason: str | None = None,
+                        actor: Any | None = None, context: str = "ventilation", commit: bool = True) -> Candidate:
+    """Ventile le dossier vers une société destinataire, ou le remet au vivier Groupe
+    (society=None). Même candidate_id, rien n'est copié ni supprimé (entretiens, avis, documents,
+    historique conservés). Chaque changement est historisé dans le dossier et dans l'audit central."""
+    from app.core.audit import append_audit
+    from app.core.scope_policy import society_key
+
+    row = _locked_candidate(db, candidate_id)
+    # Même convention que la création de candidat et que les fiches employés : libellé en majuscules.
+    target = str(society or "").strip().upper() or None
+    if _candidate_left_recruitment(row):
+        raise _business_error(409, ALREADY_TRANSFERRED, "Dossier déjà transféré à la DRH : il ne peut plus être ventilé")
+    previous = str(row.society or "").strip() or None
+    if society_key(previous) == society_key(target):
+        return row
+    username = getattr(actor, "username", None) or "system"
+    data = dict(row.data) if isinstance(row.data, dict) else {}
+    entry = {"from": previous, "to": target, "at": datetime.utcnow().isoformat(), "by": username,
+             "reason": str(reason or "").strip()[:500] or None, "context": context}
+    data["ventilations"] = [*(data.get("ventilations") or [])[-199:], entry]
+    row.society = target
+    row.data = data
+    append_audit(db, action="recruitment.candidate.ventilation", resource="candidate", resource_id=row.id, result="success",
+                 user=actor, society=target or previous, old_state={"society": previous},
+                 new_state={"society": target, "reason": entry["reason"], "context": context})
+    if commit:
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+def transfer_candidate_to_drh(db: Session, candidate_id: int, *, actor: Any | None = None) -> dict[str, Any]:
+    """RECRUTER = finaliser le recrutement et transférer le dossier à la DRH de la société
+    destinataire. Le dossier entre dans le circuit DRH existant (« Contrats à établir ») : aucun
+    employé ni contrat n'est créé ici, la DRH les établit par son propre service.
+
+    Atomique (une seule transaction : le dossier ne quitte Recrutement que si le transfert est
+    validé) et idempotent (verrou de ligne ; un second appel renvoie le transfert existant)."""
+    from app.core.audit import append_audit
+
+    row = _locked_candidate(db, candidate_id)
     data = row.data if isinstance(row.data, dict) else {}
-    if row.status in ("archive", "embauche"):
+    username = getattr(actor, "username", None) or "system"
+
+    def result(already: bool) -> dict[str, Any]:
+        current = row.data if isinstance(row.data, dict) else {}
+        return {"candidate_id": row.id, "society": row.society, "status": row.status, "already_transferred": already,
+                "employee_id": current.get("convertedEmployeeId"), "transfer": current.get("drhTransfer")}
+
+    if _candidate_left_recruitment(row):
+        return result(True)                                          # double clic, retry réseau : aucun second effet
+    if _candidate_is_archived(row):
         raise HTTPException(status_code=409, detail="Ce dossier ne peut pas être transmis à la contractualisation")
+    if not str(row.society or "").strip():
+        raise _business_error(422, SOCIETY_REQUIRED, "Société destinataire requise : ventilez le candidat avant de le recruter")
     if not _candidate_decision_is_favorable(data):
         raise HTTPException(status_code=422, detail="Contrat refusé : seuls les candidats avec une décision Favorable peuvent être contractualisés")
-    row.status = "a_contractualiser"
-    row.data = {
-        **data,
-        "ficheACompleter": not bool(data.get("fichePositionValidee")),
-        "statut": "a_contractualiser",
-        "contractualisationAt": datetime.utcnow().isoformat(),
-        "contractualisationBy": username or "system",
-        "recruitmentArchivedAt": data.get("recruitmentArchivedAt") or datetime.utcnow().isoformat(),
-        "removedFromRecruitmentAt": data.get("removedFromRecruitmentAt") or datetime.utcnow().isoformat(),
-    }
-    db.commit()
+    now = datetime.utcnow().isoformat()
+    society, previous_status = row.society, row.status
+    try:
+        row.status = "a_contractualiser"
+        row.data = {
+            **data,
+            "ficheACompleter": not bool(data.get("fichePositionValidee")),
+            "statut": "a_contractualiser",
+            "contractualisationAt": now,
+            "contractualisationBy": username,
+            "recruitmentArchivedAt": data.get("recruitmentArchivedAt") or now,
+            "removedFromRecruitmentAt": data.get("removedFromRecruitmentAt") or now,
+            "drhTransfer": {"status": "done", "key": f"candidate-{row.id}", "at": now, "by": username, "society": society},
+        }
+        append_audit(db, action="recruitment.candidate.drh_transfer", resource="candidate", resource_id=row.id, result="success",
+                     user=actor, society=society, old_state={"status": previous_status},
+                     new_state={"status": "a_contractualiser", "society": society, "transfer_key": f"candidate-{row.id}"})
+        db.commit()
+    except SQLAlchemyError as exc:
+        # Rien n'a été validé : le dossier reste visible dans Recrutement, marqué « à reprendre ».
+        db.rollback()
+        failed = db.get(Candidate, candidate_id)
+        if failed is not None:
+            failed.data = {**(failed.data if isinstance(failed.data, dict) else {}),
+                           "drhTransfer": {"status": "failed", "at": now, "by": username, "society": society}}
+            append_audit(db, action="recruitment.candidate.drh_transfer", resource="candidate", resource_id=candidate_id,
+                         result="failure", user=actor, society=society, new_state={"error": _postgres_error_detail(exc)[:300]})
+            db.commit()
+        raise _business_error(409, TRANSFER_TO_RETRY, "Transfert DRH à reprendre : le dossier reste dans Recrutement") from exc
     db.refresh(row)
-    return row
+    return result(False)
+
+
+def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | None = None, actor: Any | None = None):
+    """Point d'entrée historique : même transfert DRH (mêmes préconditions, atomique, idempotent)."""
+    transfer_candidate_to_drh(db, candidate_id, actor=actor or SimpleNamespace(id=None, username=username or "system"))
+    return get_or_404(db, Candidate, candidate_id)
+
+
+def recruitment_stats(db: Session, *, society: str | None = None) -> dict[str, Any]:
+    """Statistique HISTORIQUE (pas une liste de dossiers) : transferts DRH du mois en cours."""
+    month = datetime.utcnow().strftime("%Y-%m")
+    from app.core.scope_policy import society_key
+
+    if society == "__unassigned__":
+        return {"month": month, "transferred_this_month": 0}         # un dossier transféré a toujours une société
+    count = 0
+    for row in db.execute(select(Candidate)).scalars().all():
+        if society and society_key(row.society) != society_key(society):
+            continue
+        data = row.data if isinstance(row.data, dict) else {}
+        at = str((data.get("drhTransfer") or {}).get("at") or data.get("contractualisationAt") or "")
+        if _candidate_left_recruitment(row) and at.startswith(month):
+            count += 1
+    return {"month": month, "transferred_this_month": count}
 
 
 def validate_candidate_final(db: Session, candidate_id: int, username: str | None = None):
@@ -908,6 +1065,10 @@ def create_candidate(db: Session, payload: Any, username: str | None = None):
         **initial_data,
         "auditTrail": [{"action": "creation", "by": username or "system", "at": datetime.utcnow().isoformat()}],
     }
+    if str(values.get("society") or "").strip():
+        # Dossier créé directement pour une société : première ligne de l'historique de ventilation.
+        values["data"]["ventilations"] = [{"from": None, "to": values["society"], "at": datetime.utcnow().isoformat(),
+                                           "by": username or "system", "reason": None, "context": "creation"}]
     row = Candidate(**values)
     db.add(row)
     db.flush()
@@ -916,7 +1077,8 @@ def create_candidate(db: Session, payload: Any, username: str | None = None):
     db.refresh(row)
     return row
 
-def update_candidate(db: Session, candidate_id: int, payload: Any, username: str | None = None):
+def update_candidate(db: Session, candidate_id: int, payload: Any, username: str | None = None, *,
+                     actor: Any | None = None, ventilation_context: str = "fiche"):
     row = get_or_404(db, Candidate, candidate_id)
     values = _candidate_values(payload, existing=row, partial=True)
     _ensure_candidate_not_duplicate(db, values, existing=row)
@@ -925,8 +1087,17 @@ def update_candidate(db: Session, candidate_id: int, payload: Any, username: str
     history.append({"action": "modification", "by": username or "system", "at": datetime.utcnow().isoformat()})
     updated_data["auditTrail"] = history
     values["data"] = updated_data
+    from app.core.scope_policy import society_key
+    society_change = "society" in values and society_key(values["society"]) != society_key(row.society)
+    new_society = values.pop("society", None) if society_change else None
+    if not society_change:
+        values.pop("society", None)                                   # même société : aucune écriture
     for key, value in values.items():
         setattr(row, key, value)
+    if society_change:
+        db.flush()
+        ventilate_candidate(db, row.id, new_society, actor=actor or SimpleNamespace(id=None, username=username or "system"),
+                            context=ventilation_context, commit=False)
     db.commit()
     db.refresh(row)
     return row
@@ -1059,6 +1230,9 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
             return employee
     if candidate.status != "a_contractualiser":
         raise HTTPException(status_code=422, detail="Le candidat doit être à contractualiser avant son recrutement")
+    if not str(candidate.society or "").strip():
+        # Un dossier DRH appartient toujours à une société destinataire (ventilation préalable).
+        raise _business_error(422, SOCIETY_REQUIRED, "Société destinataire requise : ventilez le candidat avant de le recruter")
     # La contractualisation ne rejoue pas la validation administrative des sept
     # sections. Les dossiers transmis par le module recrutement peuvent être
     # incomplets (source, filiation, contact d'urgence, etc.) sans bloquer la

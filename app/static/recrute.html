@@ -165,7 +165,7 @@ tr:last-child td{border-bottom:0}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
-<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261004-responsive-v6" media="screen">
+<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261004-group-pool-v7" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
@@ -197,7 +197,7 @@ tr:last-child td{border-bottom:0}
       <div class="brand"><div class="session-avatar" id="sessionAvatar" aria-hidden="true"></div><div class="brand-logo">REC</div><div><div class="brand-title">RECRUTEMENT</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
         <span id="societyBadge" class="society-badge hidden"></span>
-        <select id="societySelect" class="society-select hidden" onchange="onSocietyChange()"></select>
+        <select id="societySelect" class="society-select hidden" aria-label="Portefeuille de recrutement" onchange="onSocietyChange()"></select>
         <button class="logout" onclick="logout()">Déconnexion</button>
       </div>
     </div>
@@ -212,7 +212,6 @@ tr:last-child td{border-bottom:0}
         <button class="recruit-nav-btn" data-section="interviews" onclick="showRecruitSection('interviews')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-14 5 3 3 6-6"/></svg></span>Entretiens</button>
         <button class="recruit-nav-btn" data-section="announcements" onclick="showRecruitSection('announcements')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/></svg></span>Annonces</button>
         <button class="recruit-nav-btn" data-section="reserve" onclick="showRecruitSection('reserve')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-2a7 7 0 0 1 14 0v2"/><circle cx="12" cy="7" r="3"/><path d="m18 7 2 2 3-4"/></svg></span>Réserve de talents</button>
-        <button class="recruit-nav-btn" data-section="recruited" onclick="showRecruitSection('recruited')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg></span>Candidats recrutés</button>
         <button class="recruit-nav-btn" data-section="archive" onclick="showRecruitSection('archive')"><span class="recruit-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v13h14V8m-10 4h6"/></svg></span>Archives</button>
       </nav>
     </aside>
@@ -236,7 +235,6 @@ tr:last-child td{border-bottom:0}
       <div class="candidate-filterbar rec-filters" role="search" aria-label="Filtrer les candidats">
         <div class="search-box"><input id="searchInput" type="search" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
         <select id="positionFilter" aria-label="Filtrer par poste" onchange="applyCandidateFilters()"><option value="">Tous les postes</option></select>
-        <select id="candidateSocietyFilter" aria-label="Filtrer par société" onchange="applyCandidateFilters()"><option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option></select>
         <select id="opinionFilter" aria-label="Filtrer par avis" onchange="applyCandidateFilters()"><option value="">Tous les avis</option><option>Favorable</option><option>Défavorable</option><option>Instance</option><option>Non évalué</option></select>
         <button type="button" class="filter-reset" onclick="resetCandidateFilters()">Réinitialiser</button>
       </div>
@@ -286,7 +284,7 @@ tr:last-child td{border-bottom:0}
 
 <div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeCandidateForm()">
   <div class="modal">
-    <div class="modal-head"><div><h2 id="modalTitle">Fiche de renseignement candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">Renseignez l’identité, les coordonnées et le profil professionnel.</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateForm()">×</button></div>
+    <div class="modal-head"><div><h2 id="modalTitle">Fiche de renseignement candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">Renseignez l’identité, les coordonnées et le profil professionnel.</div><div id="candidateDestination" class="rec-destination hidden"></div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateForm()">×</button></div>
     <form id="candidateForm" onsubmit="event.preventDefault();submitCandidateForm()">
       <div class="field-grid">
         <section class="form-section"><div class="form-section-title">1. Identification du candidat</div><div class="form-section-sub">État civil et informations personnelles</div><div class="field-grid">
@@ -352,13 +350,22 @@ let searchTimer=null;
 const TABS=[
   {key:"new",label:"Nouvelles candidatures"},
   {key:"reserve",label:"Réserve"},
-  {key:"recruited",label:"Candidats recrutés"},
   {key:"archive",label:"Archives"}
 ];
 const RECRUTE_WILAYAS=[
   ["01","Adrar"],["02","Chlef"],["03","Laghouat"],["04","Oum El Bouaghi"],["05","Batna"],["06","Béjaïa"],["07","Biskra"],["08","Béchar"],["09","Blida"],["10","Bouira"],["11","Tamanrasset"],["12","Tébessa"],["13","Tlemcen"],["14","Tiaret"],["15","Tizi Ouzou"],["16","Alger"],["17","Djelfa"],["18","Jijel"],["19","Sétif"],["20","Saïda"],["21","Skikda"],["22","Sidi Bel Abbès"],["23","Annaba"],["24","Guelma"],["25","Constantine"],["26","Médéa"],["27","Mostaganem"],["28","M'Sila"],["29","Mascara"],["30","Ouargla"],["31","Oran"],["32","El Bayadh"],["33","Illizi"],["34","Bordj Bou Arreridj"],["35","Boumerdès"],["36","El Tarf"],["37","Tindouf"],["38","Tissemsilt"],["39","El Oued"],["40","Khenchela"],["41","Souk Ahras"],["42","Tipaza"],["43","Mila"],["44","Aïn Defla"],["45","Naâma"],["46","Aïn Témouchent"],["47","Ghardaïa"],["48","Relizane"],["49","Timimoun"],["50","Bordj Badji Mokhtar"],["51","Ouled Djellal"],["52","Béni Abbès"],["53","In Salah"],["54","In Guezzam"],["55","Touggourt"],["56","Djanet"],["57","El M'Ghair"],["58","El Meniaa"]
 ];
-const RECRUTE_SOCIETIES=["IRON GLOBAL SÉCURITÉ","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
+// V7 — Recrutement Groupe. `activeSociety` est un FILTRE DE PORTEFEUILLE : "" = tous les dossiers,
+// "__unassigned__" = non ventilés, sinon une société destinataire. Le vivier n'appartient à aucune société.
+const PORTFOLIO_UNASSIGNED="__unassigned__";
+let recruitmentKnownSocieties=[];
+function portfolioSociety(){return activeSociety===PORTFOLIO_UNASSIGNED?"":activeSociety}
+function inPortfolio(item,portfolio=activeSociety){
+  if(!portfolio)return true;
+  if(portfolio===PORTFOLIO_UNASSIGNED)return !String(item?.society||"").trim();
+  return recruitmentSocietyKey(item?.society)===recruitmentSocietyKey(portfolio);
+}
+function recruitmentCanVentilate(){const user=recruteSession?.user;return user?.recruitment_access===true&&user.recruitment_ventilation===true}
 const RECRUIT_ANNOUNCEMENTS_KEY="atlas_recruitment_announcements_v1";
 function normalizedLocation(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase()}
 function candidateWilayaCode(value){
@@ -394,7 +401,6 @@ const PAGE_SIZE=25;
 const tabState={
   new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
   reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
-  recruited:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
   archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"}
 };
 
@@ -459,18 +465,11 @@ async function enterApp(){
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"")+" · "+(user.role||"");
   document.getElementById("sessionAvatar").textContent=String(user.full_name||user.username||"").split(/\s+/).filter(Boolean).map(value=>value[0]).slice(0,2).join("").toUpperCase();
   const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
-  const badge=document.getElementById("societyBadge"),select=document.getElementById("societySelect");
-  if(societies.length>1){
-    select.innerHTML=societies.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
-    activeSociety=societies[0];
-    select.value=activeSociety;
-    select.classList.remove("hidden");
-    badge.classList.add("hidden");
-  }else{
-    activeSociety=societies[0]||"";
-    if(activeSociety){badge.textContent=activeSociety;badge.classList.remove("hidden")}
-    select.classList.add("hidden");
-  }
+  // Portefeuille par défaut : la première société du périmètre explicite (identité conservée),
+  // sinon l'ensemble du vivier Groupe. « Tous » et « Non ventilés » restent toujours accessibles.
+  activeSociety=societies[0]||"";
+  renderPortfolioSelect(societies);
+  Object.values(tabState).forEach(state=>{state.societyFilter=activeSociety});
   updateRecruitmentBrand();
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
@@ -480,6 +479,25 @@ async function enterApp(){
   document.getElementById("addCandidateBtn").classList.toggle("hidden",!recruitmentCan("create"));
   updateCandidatePageHeader();
   showRecruitSection(recruitSection);
+  loadRecruitmentPortfolios();
+}
+function renderPortfolioSelect(societies){
+  const select=document.getElementById("societySelect");
+  const list=[...new Map([...societies,portfolioSociety()].filter(Boolean).map(value=>[recruitmentSocietyKey(value),value])).values()];
+  select.innerHTML='<option value="">Tous les dossiers</option><option value="'+PORTFOLIO_UNASSIGNED+'">Non ventilés</option>'+list.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");
+  select.value=activeSociety;
+  select.classList.remove("hidden");
+  document.getElementById("societyBadge").classList.add("hidden");
+}
+async function loadRecruitmentPortfolios(){
+  // Sociétés réellement connues du serveur (aucune liste codée en dur) ; sans réponse exploitable,
+  // le sélecteur garde le périmètre explicite du compte.
+  try{
+    const result=await apiFetch("/api/drh/candidates/ventilation-targets");
+    if(!Array.isArray(result?.portfolios)||!recruteSession)return;
+    recruitmentKnownSocieties=result.portfolios.filter(Boolean);
+    renderPortfolioSelect(recruitmentKnownSocieties);
+  }catch(error){/* le filtre reste utilisable avec le périmètre du compte */}
 }
 const POSITIONS_FALLBACK=["Agent administratif","Agent d'entretien","Agent de bureau","Agent de prévention et de sécurité","Agent polyvalent","Cariste","Chauffeur","Chef d'équipe","Chef de groupe","Chef de poste","Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur","Maître-chien","Manutentionnaire","Magasinier","Superviseur"];
 let positionOptionsList=POSITIONS_FALLBACK;
@@ -487,7 +505,7 @@ const POSITION_SELECT_IDS=["fPosition","ctPosition"];
 async function loadPositionOptions(){
   let names=POSITIONS_FALLBACK;
   try{
-    const rows=await apiFetch("/api/irongs/positions"+(activeSociety?`?society=${encodeURIComponent(activeSociety)}`:""));
+    const rows=await apiFetch("/api/irongs/positions"+(portfolioSociety()?`?society=${encodeURIComponent(portfolioSociety())}`:""));
     if(Array.isArray(rows)&&rows.length)names=[...new Set(rows.map(r=>r.name).filter(Boolean))];
   }catch(e){/* garde la liste de repli locale */}
   positionOptionsList=names.sort((a,b)=>a.localeCompare(b,"fr"));
@@ -520,8 +538,9 @@ function recruitmentSocietyKey(value){
 }
 function updateRecruitmentBrand(){
   const host=document.getElementById("recruitmentBrand");if(!host)return;
-  const key=recruitmentSocietyKey(activeSociety),brand=RECRUITMENT_BRANDS[key];
-  const name=brand?.name||String(activeSociety||"").trim()||"Recrutement";
+  const key=recruitmentSocietyKey(portfolioSociety()),brand=RECRUITMENT_BRANDS[key];
+  // Aucun logo Groupe officiel n'existe : identité texte neutre hors société précise.
+  const name=brand?.name||String(portfolioSociety()||"").trim()||"RECRUTEMENT GROUPE";
   const visual=document.createElement(brand?.logo?"img":"span");
   if(brand?.logo){visual.src=brand.logo;visual.alt=name;visual.width=52;visual.height=52}
   else{visual.className="sidebar-brand-initials";visual.textContent=name.split(/\s+/).filter(Boolean).map(word=>word[0]).slice(0,3).join("").toUpperCase();visual.setAttribute("aria-hidden","true")}
@@ -534,7 +553,7 @@ function onSocietyChange(){
   recruitmentDashboardRequest++;recruitmentDashboardData=null;recruitmentDashboardPosition="";
   activeSociety=document.getElementById("societySelect").value||"";
   updateRecruitmentBrand();
-  Object.keys(tabState).forEach(k=>{tabState[k].page=1;tabState[k].request=(tabState[k].request||0)+1;tabState[k].items=[];if(tabState[k].societyFilter)tabState[k].societyFilter=activeSociety});
+  Object.keys(tabState).forEach(k=>{tabState[k].page=1;tabState[k].request=(tabState[k].request||0)+1;tabState[k].items=[];tabState[k].societyFilter=activeSociety});
   refreshRecruitCurrentSection();
 }
 function refreshRecruitCurrentSection(){
@@ -546,7 +565,7 @@ function refreshRecruitCurrentSection(){
 function populateFormSocieties(societies){
   const select=document.getElementById("fSociety");
   const authorized=Array.isArray(recruteSession?.user?.authorized_societies)?recruteSession.user.authorized_societies.filter(Boolean):[];
-  const list=[...new Set([...(authorized.length?authorized:societies),activeSociety].filter(Boolean))];
+  const list=[...new Set([...(authorized.length?authorized:societies),portfolioSociety()].filter(Boolean))];
   select.innerHTML=list.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")||'<option value="">—</option>';
 }
 
@@ -554,14 +573,14 @@ async function apiFetch(path,options={}){
   const response=await fetch(path,{...options,headers:{...(options.headers||{}),Authorization:"Bearer "+recruteSession.token}});
   if(response.status===401){logout();throw new Error("Session expirée")}
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(data.detail||"Une erreur est survenue");
+  if(!response.ok){const error=new Error(data.detail||"Une erreur est survenue");error.code=response.headers?.get?.("X-Error-Code")||"";throw error}
   return data;
 }
 
 function showRecruitSection(section,refresh=true){
   if(section!=="dashboard")recruitmentDashboardRequest++;
   if(section!=="interviews"){const host=document.getElementById("interviewsSection");host._request=(host._request||0)+1}
-  if(section==="reserve"||section==="archive"||section==="recruited"){
+  if(section==="reserve"||section==="archive"){
     recruitSection="candidates";
     sessionStorage.setItem("atlas_recrute_section",recruitSection);
     showRecruitSection("candidates",false);
@@ -588,7 +607,7 @@ function candidateInterview(item){return item?.data?.dernierEntretien||null}
 function candidateIsContractPending(item){return [item?.status,item?.data?.statut,item?.data?.status].some(value=>String(value||"").toLowerCase()==="a_contractualiser")}
 function recruitmentSocieties(selected=""){
   const authorized=Array.isArray(recruteSession?.user?.authorized_societies)?recruteSession.user.authorized_societies.filter(Boolean):[];
-  return [...new Set([...(authorized.length?authorized:RECRUTE_SOCIETIES),selected,activeSociety].filter(Boolean))];
+  return [...new Set([...(authorized.length?authorized:recruitmentKnownSocieties),selected,portfolioSociety()].filter(Boolean))];
 }
 function recruitmentSocietyOptions(selected=""){
   return '<option value="">— Choisir la société —</option>'+recruitmentSocieties(selected).map(value=>`<option value="${esc(value)}"${value===selected?" selected":""}>${esc(value)}</option>`).join("");
@@ -598,9 +617,9 @@ function dashboardDateTile(value){
   return match?`${match[3]}<br>${match[2]}`:"—";
 }
 function dashboardOpenCandidate(id,action="open"){
-  const item=[...(recruitmentDashboardData?.society===activeSociety?recruitmentDashboardData.items:[]),...tabState.new.items,...tabState.reserve.items,...tabState.recruited.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
+  const item=[...(recruitmentDashboardData?.society===activeSociety?recruitmentDashboardData.items:[]),...tabState.new.items,...tabState.reserve.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
   if(!item)return;
-  activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":tabState.recruited.items.some(row=>Number(row.id)===Number(id))?"recruited":"archive";
+  activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":"archive";
   if(action==="interview")openCandidateInterview(id);else openCandidateForm(id);
 }
 let recruitmentDashboardRequest=0;
@@ -625,7 +644,7 @@ function dashboardStage(item){
 const DASHBOARD_STAGES=[
   ["new","Nouvelles","#0064f5","new"],["screened","Présélection","#ed850c","new"],
   ["convoked","Convoqués","#7842ed","new"],["interview","Entretiens","#079bb8","new"],
-  ["transmitted","Transmis à la DRH","#5268aa","recruited"],["recruited","Recrutés","#139b57","recruited"]
+  ["reserve","Réserve","#22658b","reserve"]
 ];
 function dashboardIcon(key){
   const paths={candidates:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2m0-15a3 3 0 0 1 0 6m3 3a5 5 0 0 1 3 4v2"/>',screened:'<path d="M6 3h9l4 4v14H6Z"/><path d="M14 3v5h5M9 12h7m-7 4h5"/>',interviews:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18m-13 5h3"/>',reserve:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 13h18m-9-2v4"/>',recruited:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'};
@@ -655,13 +674,16 @@ async function renderRecruitDashboard(refresh=false){
     try{
       const rows=[];let page=1,pages=1;
       do{
-        const params=new URLSearchParams({page:String(page),page_size:"100",sort_key:"date",sort_direction:"desc"});
+        const params=new URLSearchParams({mode:"pool",page:String(page),page_size:"100",sort_key:"date",sort_direction:"desc"});
         if(society)params.set("society",society);
         const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
         if(!current())return;
         rows.push(...(result.items||[]));pages=result.pages||1;page++;
       }while(page<=pages);
-      recruitmentDashboardData={society,items:[...new Map(rows.filter(item=>!society||item.society===society).map(item=>[item.id,item])).values()]};
+      // Statistique historique des transferts DRH : jamais une liste de dossiers encore présents.
+      const stats=await apiFetch("/api/drh/candidates/recruitment-stats"+(society?`?society=${encodeURIComponent(society)}`:""));
+      if(!current())return;
+      recruitmentDashboardData={society,transferred:Number(stats?.transferred_this_month)||0,items:[...new Map(rows.filter(item=>inPortfolio(item,society)&&!["transmitted","recruited"].includes(dashboardStage(item))).map(item=>[item.id,item])).values()]};
     }catch(error){
       if(current()){host.removeAttribute("aria-busy");host.innerHTML=`<div class="dashboard-panel empty" role="alert">Tableau de bord indisponible : ${esc(error.message)}<br><button class="secondary" onclick="renderRecruitDashboard(true)">Réessayer</button></div>`}
       return;
@@ -674,18 +696,18 @@ async function renderRecruitDashboard(refresh=false){
   if(recruitmentDashboardPosition&&!positions.includes(recruitmentDashboardPosition))recruitmentDashboardPosition="";
   const rows=all.filter(item=>!recruitmentDashboardPosition||item.desired_position===recruitmentDashboardPosition).sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||""))||Number(b.id)-Number(a.id));
   // Keep existing candidate dialogs supplied with the already loaded real records.
-  for(const mode of ["new","reserve","recruited","archive"]){tabState[mode].items=all.filter(item=>{const stage=dashboardStage(item);return mode==="new"?["new","screened","convoked","interview"].includes(stage):mode==="recruited"?["transmitted","recruited"].includes(stage):stage===mode})}
+  for(const mode of ["new","reserve","archive"]){tabState[mode].items=all.filter(item=>{const stage=dashboardStage(item);return mode==="new"?["new","screened","convoked","interview"].includes(stage):stage===mode})}
   const scheduled=rows.filter(item=>{const c=candidateConvocation(item);return c&&["new","screened","convoked","interview"].includes(dashboardStage(item))&&!candidateInterview(item)?.valide&&`${c.date||""}T${c.heure||"23:59"}`>=`${today()}T${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",timeZone:"Africa/Algiers"})}`}).sort((a,b)=>`${candidateConvocation(a).date}T${candidateConvocation(a).heure||""}`.localeCompare(`${candidateConvocation(b).date}T${candidateConvocation(b).heure||""}`));
-  const announcements=getRecruitAnnouncements().filter(item=>(!society||item.society===society)&&item.status==="Publiée");
+  const announcements=getRecruitAnnouncements().filter(item=>(!portfolioSociety()||item.society===portfolioSociety())&&item.status==="Publiée");
   const create=recruitmentCan("create"),update=recruitmentCan("update");
   const count=stage=>rows.filter(item=>dashboardStage(item)===stage).length;
-  const kpis=[["Candidatures totales",rows.length,"#0064f5","candidates","dashboardGo()"],["En présélection",count("screened"),"#0064f5","screened","dashboardGo()"],["Entretiens planifiés",scheduled.length,"#ed850c","interviews","showRecruitSection('interviews')"],["En réserve",count("reserve"),"#22658b","reserve","dashboardGo('reserve')"],["Recrutés",count("recruited"),"#139b57","recruited","dashboardGo('recruited')"]];
+  const kpis=[["Candidatures totales",rows.length,"#0064f5","candidates","dashboardGo()"],["En présélection",count("screened"),"#0064f5","screened","dashboardGo()"],["Entretiens planifiés",scheduled.length,"#ed850c","interviews","showRecruitSection('interviews')"],["En réserve",count("reserve"),"#22658b","reserve","dashboardGo('reserve')"],["Transférés DRH ce mois",recruitmentDashboardData.transferred||0,"#139b57","recruited",""]];
   const candidateCard=item=>`<button class="pipeline-card" ${update?`onclick="dashboardOpenCandidate(${Number(item.id)})"`:'disabled'}><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><b>${esc(candidateFullName(item))}</b><span>${esc(item.desired_position||"Poste non renseigné")}</span><small>${esc(formatDateFr(candidateConvocation(item)?.date||item.created_at))}${candidateConvocation(item)?.heure?` · ${esc(candidateConvocation(item).heure)}`:""}</small></button>`;
   const sources=new Map();for(const item of rows){const value=String(item.data?.source||"").trim();if(value)sources.set(value,(sources.get(value)||0)+1)}
   const sourceTotal=[...sources.values()].reduce((a,b)=>a+b,0),sourceColors=["#2783ff","#20bc97","#ffac50","#9364e7","#8294b9"];
   let offset=0;const gradient=[...sources].map(([label,n],index)=>{const start=offset;offset+=n/sourceTotal*100;return `${sourceColors[index%sourceColors.length]} ${start}% ${offset}%`}).join(",");
   host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div>${create?`<button onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>`:""}<button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
-  <div class="dashboard-kpis">${kpis.map(([label,n,color,icon,action])=>`<button class="dashboard-kpi" style="--kpi-color:${color}" onclick="${action}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></button>`).join("")}</div>
+  <div class="dashboard-kpis">${kpis.map(([label,n,color,icon,action])=>action?`<button class="dashboard-kpi" style="--kpi-color:${color}" onclick="${action}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></button>`:`<div class="dashboard-kpi dashboard-kpi-static" style="--kpi-color:${color}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></div>`).join("")}</div>
   <div class="dashboard-grid"><section class="dashboard-panel pipeline-panel"><div class="dashboard-panel-head"><h3>Pipeline de recrutement</h3><select aria-label="Filtrer le pipeline par poste" onchange="dashboardSetPosition(this.value)"><option value="">Tous les postes</option>${positions.map(value=>`<option value="${esc(value)}"${value===recruitmentDashboardPosition?' selected':''}>${esc(value)}</option>`).join("")}</select></div><div class="dashboard-pipeline">${DASHBOARD_STAGES.map(([key,label,color,mode])=>{const items=rows.filter(item=>dashboardStage(item)===key);return `<section class="pipeline-column" style="--stage:${color}"><div class="pipeline-heading"><span><i></i>${label}</span><b>${items.length}</b></div><div class="pipeline-cards">${items.slice(0,3).map(candidateCard).join("")||'<div class="pipeline-empty">Aucune candidature</div>'}</div><button class="pipeline-all" onclick="dashboardGo('${mode}')">Voir toutes (${items.length}) →</button></section>`}).join("")}</div></section>
   <aside class="dashboard-right"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Voir tout</button></div><div class="dashboard-agenda">${scheduled.slice(0,4).map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${esc(c.heure||"—")}<small>${esc(formatDateFr(c.date))}</small></div><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(item.desired_position||"Poste non renseigné")}${c.lieu?` · ${esc(c.lieu)}`:""}</div></div>${update?`<button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)},'interview')">Ouvrir</button>`:""}</div>`}).join("")||'<div class="empty">Aucun entretien planifié.</div>'}</div></section>${create?'<section class="dashboard-publish"><div><h3>Publier une annonce</h3><p>Diffusez vos offres sur vos canaux de recrutement</p><button class="secondary" onclick="showRecruitSection(\'announcements\');openAnnouncementForm()">＋ Créer une annonce</button></div></section>':""}</aside></div>
   <div class="dashboard-bottom"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Candidatures récentes</h3><button onclick="dashboardGo()">Voir toutes</button></div><div class="dashboard-table-wrap"><table class="dashboard-recent"><thead><tr><th>Nom</th><th>Poste</th><th>Date</th><th>Statut</th>${update?'<th>Action</th>':""}</tr></thead><tbody>${rows.slice(0,5).map(item=>{const stage=dashboardStage(item),definition=DASHBOARD_STAGES.find(row=>row[0]===stage);return `<tr><td><b>${esc(candidateFullName(item))}</b></td><td>${esc(item.desired_position||"—")}</td><td>${esc(formatDateFr(item.created_at))}</td><td><span class="dashboard-status" style="--stage:${definition?.[2]||'#5268aa'}">${esc(definition?.[1]||(stage==="reserve"?"Réserve":"Archivé"))}</span></td>${update?`<td><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)})">Ouvrir</button></td>`:""}</tr>`}).join("")||`<tr><td colspan="${update?5:4}" class="empty">Aucune candidature récente.</td></tr>`}</tbody></table></div></section>
@@ -707,7 +729,7 @@ async function renderRecruitInterviews(refresh=false){
         const result=await apiFetch("/api/drh/candidates/page?"+params.toString());if(!current())return;
         items.push(...(result.items||[]));pages=result.pages||1;page++;
       }while(page<=pages);
-      tabState.new.items=items.filter(item=>!society||item.society===society);
+      tabState.new.items=items.filter(item=>inPortfolio(item,society));
     }catch(error){if(current()){host.removeAttribute("aria-busy");host.innerHTML=interviewPageHeader()+`<div class="table-card rec-table-card">${recruitmentErrorState(esc(error.message),"renderRecruitInterviews(true)")}</div>`}return}
   }
   if(!current())return;
@@ -761,7 +783,6 @@ function recruitmentAvisPill(value){
 const CANDIDATE_PAGES={
   new:["Gestion des candidatures","Recherchez, analysez et faites progresser chaque dossier.","Aucune candidature","Aucun dossier en cours pour le moment."],
   reserve:["Réserve de talents","Vivier de candidats validés, à mobiliser pour vos prochains besoins.","Réserve vide","Aucun candidat n’est actuellement placé en réserve."],
-  recruited:["Candidats recrutés","Dossiers transmis à la DRH et recrutements effectifs.","Aucun candidat recruté","Aucun dossier transmis à la DRH ou recruté pour le moment."],
   archive:["Archives","Dossiers clôturés, conservés pour consultation.","Aucune archive","Aucun dossier archivé."]
 };
 function updateCandidatePageHeader(){
@@ -773,7 +794,7 @@ function updateCandidatePageHeader(){
 }
 function candidateEmptyState(){
   const state=tabState[activeTab];
-  if(state.q||state.posteFilter||state.avisFilter||state.societyFilter)return recruitmentEmptyState({title:"Aucun résultat",text:"Aucun dossier ne correspond à ces filtres.",action:'<button type="button" class="secondary" onclick="resetCandidateFilters()">Réinitialiser les filtres</button>'});
+  if(state.q||state.posteFilter||state.avisFilter)return recruitmentEmptyState({title:"Aucun résultat",text:"Aucun dossier ne correspond à ces filtres.",action:'<button type="button" class="secondary" onclick="resetCandidateFilters()">Réinitialiser les filtres</button>'});
   const [, ,title,text]=CANDIDATE_PAGES[activeTab]||CANDIDATE_PAGES.new;
   return recruitmentEmptyState({title,text,action:activeTab==="new"&&recruitmentCan("create")?'<button type="button" class="primary" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>':""});
 }
@@ -811,10 +832,10 @@ function getRecruitAnnouncements(){
 }
 function saveRecruitAnnouncements(items){localStorage.setItem(RECRUIT_ANNOUNCEMENTS_KEY,JSON.stringify(items))}
 function announcementFormHTML(item={}){
-  const societies=[...new Set([...(recruteSession?.user?.authorized_societies||[]),...RECRUTE_SOCIETIES].filter(Boolean))];
+  const societies=recruitmentSocieties(item.society||"");
   return `<form id="announcementForm" class="table-card rec-form-card" onsubmit="event.preventDefault();saveRecruitAnnouncement(this)">
     <input type="hidden" name="id" value="${esc(item.id||"")}"><header class="rec-page-header"><div class="rec-page-heading"><h2>${item.id?"Modifier":"Nouvelle"} annonce</h2><p>Renseignez les informations utiles au recrutement.</p></div></header>
-    <div class="field-grid"><div><label for="annTitle">Intitulé du poste *</label><input id="annTitle" name="title" required value="${esc(item.title||"")}"></div><div><label for="annSociety">Société *</label><select id="annSociety" name="society" required>${societies.map(s=>`<option${(item.society||activeSociety)===s?" selected":""}>${esc(s)}</option>`).join("")}</select></div>
+    <div class="field-grid"><div><label for="annTitle">Intitulé du poste *</label><input id="annTitle" name="title" required value="${esc(item.title||"")}"></div><div><label for="annSociety">Société *</label><select id="annSociety" name="society" required>${societies.map(s=>`<option${(item.society||portfolioSociety())===s?" selected":""}>${esc(s)}</option>`).join("")}</select></div>
     <div><label for="annLocation">Lieu / site</label><input id="annLocation" name="location" value="${esc(item.location||"")}"></div><div><label for="annPositions">Nombre de postes *</label><input id="annPositions" name="positions" type="number" min="1" required value="${esc(item.positions||1)}"></div>
     <div><label for="annPublished">Date de publication</label><input id="annPublished" name="publishedAt" type="date" value="${esc(item.publishedAt||today())}"></div><div><label for="annDeadline">Date limite</label><input id="annDeadline" name="deadline" type="date" value="${esc(item.deadline||"")}"></div>
     <div><label for="annStatus">Statut</label><select id="annStatus" name="status"><option${item.status==="Brouillon"?" selected":""}>Brouillon</option><option${item.status==="Publiée"?" selected":""}>Publiée</option><option${item.status==="Clôturée"?" selected":""}>Clôturée</option></select></div><div><label for="annReference">Référence</label><input id="annReference" name="reference" value="${esc(item.reference||"")}" placeholder="REC-2026-001"></div>
@@ -870,7 +891,7 @@ async function shareRecruitAnnouncement(id){
 }
 function filteredRecruitAnnouncements(q="",status=""){
   q=String(q||"").toLowerCase();
-  return getRecruitAnnouncements().filter(item=>(!activeSociety||item.society===activeSociety)&&(!status||item.status===status)&&(!q||[item.title,item.society,item.location,item.reference].join(" ").toLowerCase().includes(q)));
+  return getRecruitAnnouncements().filter(item=>(!portfolioSociety()||item.society===portfolioSociety())&&(!status||item.status===status)&&(!q||[item.title,item.society,item.location,item.reference].join(" ").toLowerCase().includes(q)));
 }
 function announcementListHTML(items,filtered=false){
   const update=recruitmentCan("update"),remove=recruitmentCan("delete");
@@ -919,8 +940,8 @@ function onSearchInput(){
     loadTab(activeTab);
   },250);
 }
-function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilter=document.getElementById("positionFilter").value;state.avisFilter=document.getElementById("opinionFilter").value;state.societyFilter=document.getElementById("candidateSocietyFilter").value;state.page=1;loadTab(activeTab)}
-function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.societyFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";document.getElementById("candidateSocietyFilter").value="";loadTab(activeTab)}
+function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilter=document.getElementById("positionFilter").value;state.avisFilter=document.getElementById("opinionFilter").value;state.page=1;loadTab(activeTab)}
+function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";loadTab(activeTab)}
 async function loadTab(tab){
   const state=tabState[tab];
   const request=state.request=(state.request||0)+1;
@@ -1040,7 +1061,6 @@ function renderCounters(){
   const note=state.total>state.items.length?`<div class="rec-note">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
   const positionFilter=document.getElementById("positionFilter");if(positionFilter){positionFilter.innerHTML='<option value="">Tous les postes</option>'+[...posteCounts.keys()].sort((a,b)=>a.localeCompare(b,"fr")).map(label=>`<option value="${esc(label)}"${state.posteFilter===label?" selected":""}>${esc(label)}</option>`).join("")}
   const opinionFilter=document.getElementById("opinionFilter");if(opinionFilter)opinionFilter.value=state.avisFilter||"";
-  const societyFilter=document.getElementById("candidateSocietyFilter");if(societyFilter){societyFilter.innerHTML='<option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option>'+recruitmentSocieties().map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");societyFilter.value=state.societyFilter||""}
   const total=document.getElementById("candidateTotal");if(total)total.textContent=`${state.total} dossier${state.total>1?"s":""}`;
   // Sans dossier ni filtre rapide actif, la zone est masquée : l'écran vide reste compact.
   document.getElementById("countersRow").innerHTML=!state.items.length&&!state.avisFilter&&!state.posteFilter?"":`
@@ -1053,15 +1073,12 @@ function statusPill(item){
   const avis=(item.data&&item.data.avisDecision)||"";
   const convoque=!!(item.data&&item.data.derniereConvocation);
   if(activeTab==="archive"){
-    if(status==="a_contractualiser")return '<span class="pill pill-indigo">Transmis à la DRH</span>';
     if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
     if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
     return '<span class="pill pill-gray">Archivé</span>';
   }
-  if(activeTab==="recruited"){
-    if(status==="embauche")return '<span class="pill pill-green">Recruté</span>';
-    return '<span class="pill pill-indigo">Transmis à la DRH</span>';
-  }
+  // Transfert DRH non abouti : le dossier reste dans Recrutement, à reprendre.
+  if(item.data?.drhTransfer?.status==="failed")return '<span class="pill pill-red">Transfert DRH à reprendre</span>';
   if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
   if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
   if(avis==="Instance")return convoque?'<span class="pill pill-indigo">Convoqué</span>':'<span class="pill pill-amber">Instance</span>';
@@ -1076,7 +1093,7 @@ function avisClass(value){
 }
 function avisCell(item){
   const value=(item.data&&item.data.avisDecision)||"";
-  if(activeTab==="archive"||activeTab==="recruited"||!recruitmentCan("update")){
+  if(activeTab==="archive"||!recruitmentCan("update")){
     const pillClass=value==="Favorable"?"pill-green":value==="Défavorable"?"pill-red":value==="Instance"?"pill-amber":"pill-gray";
     return value?`<span class="pill ${pillClass}">${esc(value)}</span>`:"—";
   }
@@ -1090,16 +1107,16 @@ function avisCell(item){
 function rowActionItems(item){
   if(!recruitmentCan("update"))return [];
   const actions=[{label:"Ouvrir",onclick:`openCandidateForm(${item.id})`}];
-  const editable=activeTab!=="archive"&&activeTab!=="recruited";
+  const editable=activeTab!=="archive";
   if(editable)actions.push({label:"Convoquer",onclick:`openCandidateConvocation(${item.id})`});
   if(editable&&candidateConvocation(item))actions.push({label:"Entretien",onclick:`openCandidateInterview(${item.id})`});
   if(editable&&recruitmentCan("create")&&item.data?.avisDecision==="Favorable")actions.push({label:"Recruter",onclick:`openCandidateRecruitment(${item.id})`});
-  if(activeTab==="reserve"&&recruitmentCan("create"))actions.push({label:"Marquer prêt pour contrat",onclick:`markReadyForContract(${item.id})`});
+  if(editable&&recruitmentCanVentilate())actions.push({label:"Ventiler",onclick:`openCandidateVentilation(${item.id})`});
   return actions;
 }
 function rowActions(item){
   if(!recruitmentCan("update"))return "—";
-  const editable=activeTab!=="archive"&&activeTab!=="recruited";
+  const editable=activeTab!=="archive";
   const favorable=recruitmentCan("create")&&item.data?.avisDecision==="Favorable";
   return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" aria-label="Autres actions" aria-haspopup="menu" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
@@ -1180,7 +1197,7 @@ function openCandidateInterview(id){
   const previous=item.data?.dernierEntretien||{};const notes=previous.notes||{};
   const modal=document.createElement("div");modal.id="interviewModal";modal.className="modal-backdrop";
   const locked=previous.valide===true;
-  modal.innerHTML=`<div class="modal" style="max-width:820px"><div class="modal-head"><div><h2>Entretien du candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc((item.last_name||"")+" "+(item.first_name||""))} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" onclick="closeCandidateInterview()">×</button></div>${locked?'<div class="success show">Entretien validé — consultation uniquement.</div>':""}<form id="interviewForm"><fieldset ${locked?"disabled":""} style="border:0;padding:0;margin:0"><div class="field-grid"><div><label>Date de l’entretien</label><input name="date" type="date" value="${esc(previous.date||today())}" required></div><div><label>Recruteur</label><input name="recruteur" value="${esc(previous.recruteur||recruteSession?.user?.full_name||recruteSession?.user?.username||"")}" required></div><div><label>Présence</label><select name="presence" required>${["Présent","Absent","Reporté"].map(value=>`<option${(previous.presence||"Présent")===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Date de suivi</label><input name="dateSuivi" type="date" value="${esc(previous.dateSuivi||"")}"></div><div class="full"><label>Société de recrutement *</label><select name="societeRecrutement" required>${recruitmentSocietyOptions(previous.societeRecrutement||item.data?.societeRecrutement||item.society||activeSociety)}</select></div></div><div class="interview-grid">${INTERVIEW_CRITERIA.map(([key,label])=>`<label for="score_${key}">${esc(label)}</label><select class="interview-note" id="score_${key}" name="${key}" onchange="updateInterviewScore()">${interviewOptions(notes[key])}</select>`).join("")}</div><div class="interview-score"><span>Note globale de l’entretien</span><strong id="interviewAverage">0,00 / 10</strong></div><div class="field-grid"><div><label>Prétention salariale</label><input name="salaireSouhaite" value="${esc(previous.salaireSouhaite||item.data?.salaireSouhaite||"")}" placeholder="00 000,00 DZD"></div><div><label>Salaire proposé</label><input name="salairePropose" value="${esc(previous.salairePropose||"")}" placeholder="00 000,00 DZD"></div><div><label>Recommandation</label><select name="recommandation"><option value="">— Choisir —</option>${["Favorable","À revoir","Défavorable"].map(value=>`<option${previous.recommandation===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Prochaine étape</label><select name="prochaineEtape"><option value="">—</option>${["Recruter","Second entretien","Mettre en réserve","Refuser"].map(value=>`<option${previous.prochaineEtape===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Points forts</label><textarea name="pointsForts">${esc(previous.pointsForts||"")}</textarea></div><div><label>Points de vigilance</label><textarea name="pointsVigilance">${esc(previous.pointsVigilance||"")}</textarea></div><div class="full"><label>Appréciation du recruteur</label><textarea name="appreciation" placeholder="Synthèse et observations…">${esc(previous.appreciation||"")}</textarea></div></div></fieldset><div id="interviewError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateInterview()">Fermer</button>${locked?"":'<button type="button" class="secondary" onclick="saveCandidateInterview(this.form,false)">Enregistrer le brouillon</button><button type="button" class="primary" style="width:auto;margin-top:0" onclick="saveCandidateInterview(this.form,true)">Valider l’entretien</button>'}</div></form></div>`;
+  modal.innerHTML=`<div class="modal" style="max-width:820px"><div class="modal-head"><div><h2>Entretien du candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc((item.last_name||"")+" "+(item.first_name||""))} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" onclick="closeCandidateInterview()">×</button></div>${locked?'<div class="success show">Entretien validé — consultation uniquement.</div>':""}<form id="interviewForm"><fieldset ${locked?"disabled":""} style="border:0;padding:0;margin:0"><div class="field-grid"><div><label>Date de l’entretien</label><input name="date" type="date" value="${esc(previous.date||today())}" required></div><div><label>Recruteur</label><input name="recruteur" value="${esc(previous.recruteur||recruteSession?.user?.full_name||recruteSession?.user?.username||"")}" required></div><div><label>Présence</label><select name="presence" required>${["Présent","Absent","Reporté"].map(value=>`<option${(previous.presence||"Présent")===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Date de suivi</label><input name="dateSuivi" type="date" value="${esc(previous.dateSuivi||"")}"></div><div class="full"><label>Société de recrutement *</label><select name="societeRecrutement" required>${recruitmentSocietyOptions(previous.societeRecrutement||item.data?.societeRecrutement||item.society||portfolioSociety())}</select></div></div><div class="interview-grid">${INTERVIEW_CRITERIA.map(([key,label])=>`<label for="score_${key}">${esc(label)}</label><select class="interview-note" id="score_${key}" name="${key}" onchange="updateInterviewScore()">${interviewOptions(notes[key])}</select>`).join("")}</div><div class="interview-score"><span>Note globale de l’entretien</span><strong id="interviewAverage">0,00 / 10</strong></div><div class="field-grid"><div><label>Prétention salariale</label><input name="salaireSouhaite" value="${esc(previous.salaireSouhaite||item.data?.salaireSouhaite||"")}" placeholder="00 000,00 DZD"></div><div><label>Salaire proposé</label><input name="salairePropose" value="${esc(previous.salairePropose||"")}" placeholder="00 000,00 DZD"></div><div><label>Recommandation</label><select name="recommandation"><option value="">— Choisir —</option>${["Favorable","À revoir","Défavorable"].map(value=>`<option${previous.recommandation===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Prochaine étape</label><select name="prochaineEtape"><option value="">—</option>${["Recruter","Second entretien","Mettre en réserve","Refuser"].map(value=>`<option${previous.prochaineEtape===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Points forts</label><textarea name="pointsForts">${esc(previous.pointsForts||"")}</textarea></div><div><label>Points de vigilance</label><textarea name="pointsVigilance">${esc(previous.pointsVigilance||"")}</textarea></div><div class="full"><label>Appréciation du recruteur</label><textarea name="appreciation" placeholder="Synthèse et observations…">${esc(previous.appreciation||"")}</textarea></div></div></fieldset><div id="interviewError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateInterview()">Fermer</button>${locked?"":'<button type="button" class="secondary" onclick="saveCandidateInterview(this.form,false)">Enregistrer le brouillon</button><button type="button" class="primary" style="width:auto;margin-top:0" onclick="saveCandidateInterview(this.form,true)">Valider l’entretien</button>'}</div></form></div>`;
   modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateInterview()});document.body.appendChild(modal);updateInterviewScore();
 }
 function closeCandidateInterview(){document.getElementById("interviewModal")?.remove();interviewCandidate=null;}
@@ -1193,7 +1210,9 @@ async function saveCandidateInterview(form,valide){
   const previous=item.data?.dernierEntretien||{};const entretien={id:previous.id||"ent_"+Date.now(),date:form.date.value,recruteur:form.recruteur.value.trim(),presence:form.presence.value,dateSuivi:form.dateSuivi.value,societeRecrutement:form.societeRecrutement.value,notes,moyenne:Number(moyenne.toFixed(2)),bareme:10,recommandation:form.recommandation.value,prochaineEtape:form.prochaineEtape.value,salaireSouhaite:form.salaireSouhaite.value.trim(),salairePropose:form.salairePropose.value.trim(),pointsForts:form.pointsForts.value.trim(),pointsVigilance:form.pointsVigilance.value.trim(),appreciation:form.appreciation.value.trim(),valide:!!valide,createdAt:previous.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),createdBy:previous.createdBy||recruteSession?.user?.username||""};
   const data={...(item.data||{})};const history=Array.isArray(data.entretiens)?data.entretiens.slice():[];const existingIndex=history.findIndex(row=>row.id===entretien.id);if(existingIndex>=0)history[existingIndex]=entretien;else history.push(entretien);data.entretiens=history;data.dernierEntretien=entretien;
   if(valide){if(entretien.recommandation==="Favorable")data.avisDecision="Favorable";else if(entretien.recommandation==="Défavorable")data.avisDecision="Défavorable";else data.avisDecision="Instance";data.avisDate=entretien.date;data.avisRecruteur=entretien.recruteur;data.avisCommentaire=entretien.appreciation;}
-  data.societeRecrutement=entretien.societeRecrutement;const payload={data};if(valide&&entretien.recommandation==="Favorable")payload.society=entretien.societeRecrutement;
+  // La société retenue en entretien est une proposition ; elle ne devient la société destinataire
+  // (ventilation historisée côté serveur) que si le compte détient la permission de ventilation.
+  data.societeRecrutement=entretien.societeRecrutement;const payload={data};if(valide&&entretien.recommandation==="Favorable"&&recruitmentCanVentilate())payload.society=entretien.societeRecrutement;
   if(valide&&entretien.prochaineEtape==="Mettre en réserve"){
     data.fichePositionValidee=true;data.fichePositionValideeAt=new Date().toISOString();data.fichePositionValideeBy=recruteSession?.user?.username||"system";
     payload.status="reserve";
@@ -1216,9 +1235,9 @@ function renderList(){
   ${pageItems.map(item=>{
     const reserveDate=activeTab==="reserve"&&item.data?.fichePositionValideeAt?`<div class="rec-row-note">En réserve depuis le ${esc(formatDateFr(item.data.fichePositionValideeAt))}</div>`:"";
     return `<tr class="candidate-clickable-row" data-id="${item.id}" tabindex="0" aria-label="Ouvrir la fiche de ${esc(item.last_name||"")} ${esc(item.first_name||"")}" onclick="handleCandidateRowClick(event,${item.id})" onkeydown="handleCandidateRowKeydown(event,${item.id})">
-    <td class="rec-cell-main" data-label="Candidat"><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div><div class="rec-row-sub">${esc([item.society||"Non affecté",item.phone,formatDateFr(item.created_at)].filter(Boolean).join(" · "))}</div>${reserveDate}</div></div></td>
+    <td class="rec-cell-main" data-label="Candidat"><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div><div class="rec-row-sub">${esc([item.society||"Non ventilé",item.phone,formatDateFr(item.created_at)].filter(Boolean).join(" · "))}</div>${reserveDate}</div></div></td>
     <td data-label="Poste">${esc(item.desired_position||"—")}</td>
-    <td class="rec-col-secondary" data-label="Société"><span class="pill ${item.society?"pill-indigo":"pill-gray"}">${esc(item.society||"Non affecté")}</span></td>
+    <td class="rec-col-secondary" data-label="Société"><span class="pill ${item.society?"pill-indigo":"pill-gray"}">${esc(item.society||"Non ventilé")}</span></td>
     <td class="rec-col-secondary rec-cell-nowrap" data-label="Téléphone">${esc(item.phone||"—")}</td>
     <td data-label="Statut">${statusPill(item)}</td>
     <td class="rec-col-secondary rec-cell-date" data-label="Date">${esc(formatDateFr(item.created_at))}</td>
@@ -1251,12 +1270,44 @@ async function changeAvis(id,value){
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error");loadTab(activeTab)}
 }
-async function markReadyForContract(id){
+let ventilationCandidate=null;
+function candidateVentilationHistory(item){
+  const history=(Array.isArray(item?.data?.ventilations)?item.data.ventilations:[]).slice().reverse();
+  return history.length?`<div class="rec-history"><div class="rec-chip-label">Historique des ventilations</div><ol>${history.map(entry=>`<li><b>${esc(entry.to||"Vivier Groupe")}</b><span>${esc(formatDateFr(entry.at))}${entry.by?` · ${esc(entry.by)}`:""}${entry.reason?` · ${esc(entry.reason)}`:""}</span></li>`).join("")}</ol></div>`:"";
+}
+async function openCandidateVentilation(id){
+  if(!recruitmentCanVentilate())return;
+  const item=Object.values(tabState).flatMap(state=>state.items).find(row=>Number(row.id)===Number(id));
+  if(!item)return;
+  ventilationCandidate=item;
+  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
+  document.getElementById("ventilationModal")?.remove();
+  const modal=document.createElement("div");modal.id="ventilationModal";modal.className="modal-backdrop";
+  modal.innerHTML=`<div class="modal" style="max-width:560px"><div class="modal-head"><div><h2>Ventiler le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(fullName)} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateVentilation()">×</button></div><form onsubmit="event.preventDefault();saveCandidateVentilation(this)"><p class="rec-destination">Société destinataire actuelle : <b>${esc(item.society||"Non ventilé (vivier Groupe)")}</b></p><label for="ventilationSociety">Ventiler vers</label><select id="ventilationSociety" name="society" required disabled><option value="">Chargement…</option></select><label for="ventilationReason">Motif (facultatif)</label><input id="ventilationReason" name="reason" maxlength="500">${candidateVentilationHistory(item)}<div id="ventilationError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateVentilation()">Annuler</button><button type="submit" class="primary" disabled>Ventiler</button></div></form></div>`;
+  modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateVentilation()});document.body.appendChild(modal);
   try{
-    await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
-    showBanner('Candidat prêt pour contractualisation, archivé dans « Archives ». Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
-    loadTab(activeTab);
-  }catch(error){showBanner(esc(error.message),"error")}
+    // Uniquement les sociétés vers lesquelles ce compte peut légitimement ventiler (serveur).
+    const result=await apiFetch("/api/drh/candidates/ventilation-targets");
+    if(ventilationCandidate!==item)return;
+    const select=document.getElementById("ventilationSociety");if(!select)return;
+    const current=recruitmentSocietyKey(item.society);
+    const targets=(result?.societies||[]).filter(value=>recruitmentSocietyKey(value)!==current);
+    select.innerHTML='<option value="">— Choisir —</option>'+targets.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("")+(item.society?'<option value="__pool__">Retour au vivier Groupe</option>':"");
+    select.disabled=false;select.form.querySelector('button[type="submit"]').disabled=false;
+  }catch(error){const output=document.getElementById("ventilationError");if(output){output.textContent=error.message||"Sociétés indisponibles";output.classList.add("show")}}
+}
+function closeCandidateVentilation(){document.getElementById("ventilationModal")?.remove();ventilationCandidate=null;}
+async function saveCandidateVentilation(form){
+  const item=ventilationCandidate;if(!item)return;
+  const value=form.society.value;if(!value)return;
+  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
+  const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="VENTILATION…";
+  try{
+    await apiFetch(`/api/drh/candidates/${item.id}/ventilation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({society:value==="__pool__"?null:value,reason:form.reason.value.trim()||null})});
+    closeCandidateVentilation();
+    showBanner(value==="__pool__"?`Dossier de ${esc(fullName)} remis au vivier Groupe.`:`Dossier de ${esc(fullName)} ventilé vers ${esc(value)}.`,"success");
+    refreshRecruitCurrentSection();
+  }catch(error){const output=document.getElementById("ventilationError");if(output){output.textContent=error.message||"Ventilation impossible";output.classList.add("show")}button.disabled=false;button.textContent="Ventiler";}
 }
 let recruitmentCandidate=null;
 function openCandidateRecruitment(id){
@@ -1264,24 +1315,28 @@ function openCandidateRecruitment(id){
   if(!item)return;
   recruitmentCandidate=item;
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  const selected=item.data?.societeRecrutement||item.data?.dernierEntretien?.societeRecrutement||item.society||activeSociety;
+  const destination=String(item.society||"").trim();
   document.getElementById("recruitmentModal")?.remove();
   const modal=document.createElement("div");modal.id="recruitmentModal";modal.className="modal-backdrop";
-  modal.innerHTML=`<div class="modal" style="max-width:560px"><div class="modal-head"><div><h2>Recruter le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(fullName)} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" onclick="closeCandidateRecruitment()">×</button></div><form onsubmit="event.preventDefault();transmitCandidateToDrh(this)"><label>Société de recrutement *</label><select name="society" required>${recruitmentSocietyOptions(selected)}</select><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Le dossier sera transmis à la rubrique <b>Contrats à établir</b> de cette société. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p><div id="recruitmentError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px">Confirmer et transmettre</button></div></form></div>`;
+  // Recruter = finaliser le recrutement ET transférer le dossier à la DRH de la société destinataire.
+  const body=destination
+    ?`<p class="rec-destination">Société destinataire : <b>${esc(destination)}</b></p><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Le dossier sera transféré à la DRH de cette société (rubrique <b>Contrats à établir</b>) et quittera Recrutement. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p><div id="recruitmentError" class="error"${item.data?.drhTransfer?.status==="failed"?' style="display:block"':""}>${item.data?.drhTransfer?.status==="failed"?"Transfert DRH à reprendre : la tentative précédente n’a pas abouti.":""}</div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px">${item.data?.drhTransfer?.status==="failed"?"Réessayer le transfert":"Recruter et transférer à la DRH"}</button></div>`
+    :`<div class="error show" role="alert">Société destinataire requise : ce dossier n’est pas encore ventilé.</div><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Ventilez le candidat vers une société avant de le recruter.</p><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button>${recruitmentCanVentilate()?`<button type="button" class="primary" onclick="closeCandidateRecruitment();openCandidateVentilation(${Number(item.id)})">Ventiler</button>`:""}</div>`;
+  modal.innerHTML=`<div class="modal" style="max-width:560px"><div class="modal-head"><div><h2>Recruter le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(fullName)} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateRecruitment()">×</button></div><form onsubmit="event.preventDefault();transmitCandidateToDrh(this)">${body}</form></div>`;
   modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateRecruitment()});document.body.appendChild(modal);
 }
 function closeCandidateRecruitment(){document.getElementById("recruitmentModal")?.remove();recruitmentCandidate=null;}
 async function transmitCandidateToDrh(form){
   const item=recruitmentCandidate;if(!item)return;
+  const society=String(item.society||"").trim();if(!society)return;
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  const society=form.society.value;if(!society)return;
-  const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="TRANSMISSION…";
+  const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="TRANSFERT…";
   try{
-    await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({society,data:{...(item.data||{}),societeRecrutement:society}})});
-    await apiFetch(`/api/drh/candidates/${item.id}/marquer-contractualisation`,{method:"POST"});
-    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transmis à ${esc(society)}. Il est visible dans « Contrats à établir » et archivé dans « Archives ».`,"success");
+    // Transfert atomique et idempotent : un double clic ou un nouvel essai ne crée jamais deux dossiers.
+    await apiFetch(`/api/drh/candidates/${item.id}/transfer-drh`,{method:"POST"});
+    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transféré à la DRH de ${esc(society)} (« Contrats à établir »). Il n’apparaît plus dans Recrutement.`,"success");
     await loadTab(activeTab);
-  }catch(error){const output=document.getElementById("recruitmentError");if(output){output.textContent=error.message||"Transmission à la DRH impossible";output.classList.add("show")}button.disabled=false;button.textContent="Confirmer et transmettre";}
+  }catch(error){const output=document.getElementById("recruitmentError");if(output){output.textContent=error.message||"Transfert DRH impossible";output.classList.add("show")}button.disabled=false;button.textContent="Réessayer le transfert";}
 }
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
 const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
@@ -1436,7 +1491,7 @@ async function loadContractReadyCandidates(){
   if(!wrap)return;
   if(!wrap.hasChildNodes())wrap.innerHTML='<div class="empty">Chargement…</div>';
   try{
-    const params=new URLSearchParams({status:"a_contractualiser"});if(activeSociety)params.set("society",activeSociety);
+    const params=new URLSearchParams({status:"a_contractualiser"});if(portfolioSociety())params.set("society",portfolioSociety());
     const result=await apiFetch("/api/drh/candidates?"+params.toString());contractReadyCandidates=Array.isArray(result)?result:[];renderContractReadyCandidates();
   }catch(error){
     wrap.innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
@@ -1534,6 +1589,13 @@ function openCandidateForm(id){
     candidateField("fRecruteur",recruteSession?.user?.full_name||recruteSession?.user?.username||"");
     renderCandidatePhoto("");
     setExperienceRows([]);
+  }
+  const destination=document.getElementById("candidateDestination");
+  if(destination){
+    // Société destinataire du dossier (distincte de son existence dans le vivier Groupe).
+    const current=id?Object.values(tabState).flatMap(state=>state.items).find(row=>row.id===id):null;
+    destination.classList.toggle("hidden",!current);
+    destination.innerHTML=current?`Société destinataire : <b>${esc(current.society||"Non ventilé (vivier Groupe)")}</b>${recruitmentCanVentilate()&&activeTab!=="archive"?` <button type="button" class="secondary" onclick="closeCandidateForm();openCandidateVentilation(${Number(current.id)})">Ventiler</button>`:""}`:"";
   }
   const avisSelect=document.getElementById("fAvis");
   avisSelect.className="avis-select "+avisClass(avisSelect.value);

@@ -91,6 +91,12 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
         json={"data": {**created["data"], "avisDecision": "Favorable"}},
     )
     assert favorable.status_code == 200
+    # V7 : une candidature spontanée entre NON VENTILÉE ; le transfert DRH exige une société.
+    refused = client.post(f"/api/drh/candidates/{created['id']}/marquer-contractualisation", headers=auth_headers)
+    assert refused.status_code == 422 and refused.headers["X-Error-Code"] == "SOCIETE_DESTINATAIRE_REQUISE"
+    ventilated = client.post(f"/api/drh/candidates/{created['id']}/ventilation", headers=auth_headers,
+                             json={"society": "Iron Global Securite"})
+    assert ventilated.status_code == 200, ventilated.text
     transmitted = client.post(
         f"/api/drh/candidates/{created['id']}/marquer-contractualisation",
         headers=auth_headers,

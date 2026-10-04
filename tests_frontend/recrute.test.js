@@ -33,7 +33,7 @@ test("tableau de bord recrutement: indicateurs et accès rapides", () => {
   assert.match(source, /Nouvelles candidatures/);
   assert.match(source, /En présélection/);
   assert.match(source, /Entretiens planifiés/);
-  assert.match(source, /Transmis à la DRH/);
+  assert.match(source, /Transférés DRH ce mois/);
   assert.match(source, /Pipeline de recrutement/);
   assert.match(source, /Candidatures récentes/);
   assert.match(source, /Annonces actives/);
@@ -42,7 +42,7 @@ test("tableau de bord recrutement: indicateurs et accès rapides", () => {
 
 test("recrutement: transmet le candidat à la DRH sans créer employé ni contrat", () => {
   assert.match(source, /function transmitCandidateToDrh\(/);
-  assert.match(source, /marquer-contractualisation/);
+  assert.match(source, /\/transfer-drh/);
   assert.match(source, /Aucun employé ni contrat ne sera créé avant validation par la DRH/);
   assert.doesNotMatch(source, /onclick="openContractForCandidate\(\$\{item\.id\}\)">Recruter/);
   assert.doesNotMatch(source, /\{key:"contrat",label:"Contrat"\}/);
@@ -79,7 +79,11 @@ function dashboardContext(items=[],actions=['read','create','update']){
     candidateFullName:item=>`${item.last_name} ${item.first_name}`,candidateConvocation:item=>item.data?.derniereConvocation,
     candidateInterview:item=>item.data?.dernierEntretien,candidateIsContractPending:item=>[item.status,item.data?.statut,item.data?.status].includes('a_contractualiser'),
     showRecruitSection(section){this.recruitSection=section},switchTab(){}};
-  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('let recruitmentDashboardRequest='),source.indexOf('async function renderRecruitInterviews(')),ctx);
+  vm.createContext(ctx);
+  // Helpers de portefeuille V7 (réels) puis le renderer du tableau de bord.
+  vm.runInContext(source.slice(source.indexOf('function recruitmentSocietyKey('),source.indexOf('function updateRecruitmentBrand(')),ctx);
+  vm.runInContext(source.slice(source.indexOf('const PORTFOLIO_UNASSIGNED='),source.indexOf('function recruitmentCanVentilate(')),ctx);
+  vm.runInContext(source.slice(source.indexOf('let recruitmentDashboardRequest='),source.indexOf('async function renderRecruitInterviews(')),ctx);
   return ctx;
 }
 const candidate=(id,status='nouvelle',data={},society='A')=>({id,status,data,society,last_name:`Test ${id}`,first_name:'Fixture',desired_position:'Agent',created_at:`2026-10-${String(id).padStart(2,'0')}`});
@@ -87,17 +91,26 @@ test('dashboard V5: zero data preserves five KPIs and all operational panels',as
   const c=dashboardContext();await c.renderRecruitDashboard(true);
   const doc=c.document;assert.equal(doc.querySelectorAll('.dashboard-kpi').length,5);
   assert.deepEqual([...doc.querySelectorAll('.dashboard-kpi strong')].map(el=>el.textContent),['0','0','0','0','0']);
-  assert.equal(doc.querySelectorAll('.pipeline-column').length,6);
+  assert.equal(doc.querySelectorAll('.pipeline-column').length,5);
+  assert.deepEqual([...doc.querySelectorAll('.pipeline-heading>span')].map(el=>el.textContent),['Nouvelles','Présélection','Convoqués','Entretiens','Réserve']);
+  assert.deepEqual([...doc.querySelectorAll('.dashboard-kpi span')].map(el=>el.textContent),['Candidatures totales','En présélection','Entretiens planifiés','En réserve','Transférés DRH ce mois']);
   assert.match(doc.body.textContent,/Aucun entretien planifié/);assert.match(doc.body.textContent,/Aucune annonce publiée/);
   assert.equal(doc.querySelector('.dashboard-sources'),null);
 });
-test('dashboard V5: complete pagination, mutually exclusive stages, true recruited count and recent order',async()=>{
+test('dashboard V7: complete pagination, exclusive active stages, transferred files are a monthly statistic and never listed',async()=>{
   const items=[candidate(1),candidate(2,'nouvelle',{avisDecision:'Favorable'}),candidate(3,'nouvelle',{derniereConvocation:{date:'2099-10-05',heure:'10:00'}}),candidate(4,'nouvelle',{dernierEntretien:{valide:true}}),candidate(5,'a_contractualiser'),candidate(6,'embauche'),candidate(7,'reserve',{fichePositionValidee:true}),candidate(8,'archive')];
-  const c=dashboardContext();let calls=[];c.apiFetch=async url=>{calls.push(url);const page=Number(new URLSearchParams(url.split('?')[1]).get('page'));return {items:page===1?items.slice(0,4):items.slice(4),pages:2,total:8}};
+  const c=dashboardContext();let calls=[];c.apiFetch=async url=>{calls.push(url);if(url.includes('recruitment-stats'))return {transferred_this_month:4};const page=Number(new URLSearchParams(url.split('?')[1]).get('page'));return {items:page===1?items.slice(0,4):items.slice(4),pages:2,total:8}};
   await c.renderRecruitDashboard(true);
-  assert.equal(calls.length,2);assert.ok(calls.every(url=>url.includes('society=A')));
-  assert.deepEqual([...c.document.querySelectorAll('.dashboard-kpi strong')].map(el=>el.textContent),['8','1','1','1','1']);
-  assert.deepEqual([...c.document.querySelectorAll('.pipeline-heading>b')].map(el=>el.textContent),['1','1','1','1','1','1']);
+  const pages=calls.filter(url=>url.includes('/candidates/page'));
+  assert.equal(pages.length,2);assert.ok(pages.every(url=>url.includes('society=A')&&url.includes('mode=pool')));
+  assert.deepEqual(calls.filter(url=>url.includes('recruitment-stats')),['/api/drh/candidates/recruitment-stats?society=A']);
+  // Dossiers 5 (transmis) et 6 (recruté) : jamais comptés ni listés, même si une réponse les contenait.
+  assert.deepEqual([...c.document.querySelectorAll('.dashboard-kpi strong')].map(el=>el.textContent),['6','1','1','1','4']);
+  assert.deepEqual([...c.document.querySelectorAll('.pipeline-heading>b')].map(el=>el.textContent),['1','1','1','1','1']);
+  assert.doesNotMatch(c.document.body.textContent,/Test 5|Test 6|Recrutés|Transmis à la DRH/);
+  const transferred=c.document.querySelectorAll('.dashboard-kpi')[4];
+  assert.equal(transferred.tagName,'DIV','historical statistic, not a link to a list');assert.equal(transferred.getAttribute('onclick'),null);
+  assert.deepEqual([...c.tabState.new.items,...c.tabState.reserve.items,...c.tabState.archive.items].map(item=>item.id).sort(),[1,2,3,4,7,8]);
   assert.match(c.document.querySelector('.dashboard-recent tbody tr').textContent,/Test 8/);
   assert.equal(c.document.querySelectorAll('.dashboard-agenda-item').length,1);
 });
@@ -106,6 +119,19 @@ test('dashboard V5: strict company isolation for candidates and local announceme
   c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',status:'Publiée'},{title:'Annonce B',society:'B',status:'Publiée'}];
   await c.renderRecruitDashboard(true);assert.match(c.document.body.textContent,/Test 1/);assert.doesNotMatch(c.document.body.textContent,/Test 2|Annonce B/);
   c.activeSociety='B';await c.renderRecruitDashboard(true);assert.match(c.document.body.textContent,/Test 2|Annonce B/);assert.doesNotMatch(c.document.body.textContent,/Test 1|Annonce A/);
+});
+test('dashboard V7: portfolio filter — all files, unventilated files, one company',async()=>{
+  const items=[candidate(1),candidate(2,'nouvelle',{},'B'),candidate(3,'nouvelle',{},null)];
+  const c=dashboardContext(items);c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',status:'Publiée'},{title:'Annonce B',society:'B',status:'Publiée'}];
+  const urls=[];const fetch=c.apiFetch;c.apiFetch=async url=>{urls.push(url);return fetch(url)};
+  c.activeSociety='';await c.renderRecruitDashboard(true);
+  assert.match(c.document.body.textContent,/Test 1/);assert.match(c.document.body.textContent,/Test 2/);assert.match(c.document.body.textContent,/Test 3/);
+  assert.match(c.document.body.textContent,/Annonce A/);assert.match(c.document.body.textContent,/Annonce B/);
+  assert.ok(urls.every(url=>!url.includes('society=')));
+  c.activeSociety='__unassigned__';await c.renderRecruitDashboard(true);
+  assert.match(c.document.body.textContent,/Test 3/);assert.doesNotMatch(c.document.body.textContent,/Test 1|Test 2/);
+  assert.ok(urls.at(-1).includes('society=__unassigned__'));
+  assert.equal(c.document.querySelector('.dashboard-kpi strong').textContent,'1');
 });
 test('dashboard V5: permissions deny by default and hide create and edit controls',async()=>{
   const c=dashboardContext([candidate(1)],['read']);await c.renderRecruitDashboard(true);
@@ -118,7 +144,7 @@ test('dashboard V5: API failure displays an error, not false zero statistics',as
   assert.match(c.document.body.textContent,/Indisponible/);assert.equal(c.document.querySelectorAll('.dashboard-kpi').length,0);
 });
 test('dashboard V5: ignores old company and navigation responses',async()=>{
-  const c=dashboardContext();let pending=[];c.apiFetch=()=>new Promise(resolve=>pending.push(resolve));
+  const c=dashboardContext();let pending=[];c.apiFetch=url=>url.includes('recruitment-stats')?Promise.resolve({transferred_this_month:0}):new Promise(resolve=>pending.push(resolve));
   const a=c.renderRecruitDashboard(true);c.activeSociety='B';const b=c.renderRecruitDashboard(true);
   pending[1]({items:[candidate(2,'nouvelle',{},'B')],pages:1});await b;
   pending[0]({items:[candidate(1)],pages:1});await a;assert.match(c.document.body.textContent,/Test 2/);assert.doesNotMatch(c.document.body.textContent,/Test 1/);
@@ -159,7 +185,11 @@ test('sidebar identity: official assets follow canonical society keys and unknow
   }
   setSociety('IRON GLOBAL SOLUTION');assert.equal(host.querySelector('img').getAttribute('src'),'/static/iron-solution-logo.png');assert.equal(host.querySelector('img').alt,'IRON GLOBAL SOLUTION');assert.equal(host.textContent,'IRON GLOBAL SOLUTION');
   setSociety('SWORD CORPORATION');assert.equal(host.querySelector('img'),null);assert.equal(host.querySelector('.sidebar-brand-initials').textContent,'SC');assert.equal(host.querySelector('span:last-child').textContent,'SWORD CORPORATION');
-  setSociety('');assert.equal(host.querySelector('img'),null);assert.equal(host.querySelector('span:last-child').textContent,'Recrutement');
+  // Portefeuille « Tous » ou « Non ventilés » : identité texte neutre, aucun logo emprunté ni inventé.
+  for(const portfolio of ['','__unassigned__']){
+    setSociety(portfolio);assert.equal(host.querySelector('img'),null);assert.equal(host.querySelector('span:last-child').textContent,'RECRUTEMENT GROUPE');
+    assert.equal(host.querySelector('.sidebar-brand-initials').textContent,'RG');assert.equal(host.dataset.societyKey,'');
+  }
 });
 
 test('sidebar identity: company switches replace logo and label immediately before the existing data refresh',()=>{
@@ -179,7 +209,11 @@ test('sidebar identity: mono-company users see the right identity before the app
     ctx.apiFetch=async()=>({full_name:'Test',role:'recruteur',recruitment_access:true,authorized_actions:['read'],authorized_societies:[name]});
     let onReveal;const classes=doc.getElementById('appView').classList,remove=classes.remove.bind(classes);
     classes.remove=(value)=>{if(value==='hidden')onReveal={name:doc.getElementById('recruitmentBrand').textContent,src:doc.querySelector('#recruitmentBrand img')?.getAttribute('src')};remove(value)};
-    await ctx.enterApp();assert.deepEqual(onReveal,{name,src:`/static/${logo}`});assert.ok(doc.getElementById('societySelect').classList.contains('hidden'));assert.equal(doc.getElementById('societyBadge').textContent,name);
+    await ctx.enterApp();assert.deepEqual(onReveal,{name,src:`/static/${logo}`});
+    // V7 : le sélecteur est un filtre de portefeuille, toujours disponible, positionné sur la société du compte.
+    const select=doc.getElementById('societySelect');assert.equal(select.classList.contains('hidden'),false);assert.equal(select.value,name);
+    assert.deepEqual([...select.options].map(option=>[option.value,option.textContent]),[['','Tous les dossiers'],['__unassigned__','Non ventilés'],[name,name]]);
+    assert.ok(doc.getElementById('societyBadge').classList.contains('hidden'));
   }
 });
 
@@ -224,7 +258,7 @@ test('V6 candidatures: primary action lives in the page header, never in the fil
   assert.equal(header.querySelector('#importCandidatesBtn').className.includes('secondary'),true);
   const bar=doc.querySelector('#candidatesSection .candidate-filterbar');
   assert.equal(bar.querySelector('.primary'),null);
-  assert.deepEqual([...bar.children].map(el=>el.id||el.className),['search-box','positionFilter','candidateSocietyFilter','opinionFilter','filter-reset']);
+  assert.deepEqual([...bar.children].map(el=>el.id||el.className),['search-box','positionFilter','opinionFilter','filter-reset']);
   assert.equal(doc.querySelectorAll('#candidatesSection input[type="search"]').length,1);
   assert.ok(v6Css.includes('#appView[data-rec-section="candidates"] .header-search{display:none}'));
 });
@@ -239,7 +273,7 @@ test('V6 candidatures: table columns, labelled cells for mobile cards and second
   assert.deepEqual([...row.querySelectorAll('.rec-col-secondary')].map(cell=>cell.dataset.label),['Société','Téléphone','Date']);
   assert.match(row.querySelector('.rec-row-sub').textContent,/IRON GLOBAL SÉCURITÉ · 0550 · /);
   assert.deepEqual(texts(row.querySelectorAll('.rec-cell-actions button')),['Ouvrir','Convoquer','Recruter','⋮']);
-  assert.match(table.querySelectorAll('tbody tr')[1].querySelector('.rec-row-sub').textContent,/^Non affecté · /);
+  assert.match(table.querySelectorAll('tbody tr')[1].querySelector('.rec-row-sub').textContent,/^Non ventilé · /);
   assert.equal(app.doc.getElementById('candidateTotal').textContent,'2 dossiers');
   assert.deepEqual(texts(app.doc.querySelectorAll('#countersRow .rec-chip-label')),['Avis','Poste']);
   assert.deepEqual(texts(app.doc.querySelectorAll('#countersRow .rec-chip-group')[0].querySelectorAll('.counter-chip')),['Tous 2','Favorable 1','Défavorable 0','Instance 0','Non évalué 1']);
@@ -259,9 +293,14 @@ test('V6 candidatures: compact contextual empty states respect permissions and f
   assert.equal(readOnly.doc.querySelector('#listWrap .rec-empty-state button'),null);
 });
 
-test('V6 réserve, recrutés, archives: same shell, own identity, existing actions only',()=>{
+test('V6/V7 réserve et archives: same shell, own identity, existing actions only — no recruited stock',()=>{
   const app=v6Context();app.ctx.loadTab=()=>{};
-  const expected={reserve:['Réserve de talents','Réserve vide'],recruited:['Candidats recrutés','Aucun candidat recruté'],archive:['Archives','Aucune archive']};
+  // V7 : « Candidats recrutés » n'est plus un stock de recrute.irongs.com (ni onglet, ni entrée de navigation).
+  assert.equal(app.doc.querySelector('.recruit-nav-btn[data-section="recruited"]'),null);
+  assert.deepEqual([...app.run('TABS.map(tab=>tab.key)')],['new','reserve','archive']);
+  assert.equal(app.run('typeof tabState.recruited'),'undefined');
+  assert.doesNotMatch(source,/Candidats recrutés/);
+  const expected={reserve:['Réserve de talents','Réserve vide'],archive:['Archives','Aucune archive']};
   for(const [tab,[title,emptyTitle]] of Object.entries(expected)){
     app.setItems(tab,[]);app.run(`loadTab=()=>{};switchTab("${tab}",true);renderList()`);
     assert.equal(app.doc.getElementById('candidatePageTitle').textContent,title);
@@ -273,10 +312,7 @@ test('V6 réserve, recrutés, archives: same shell, own identity, existing actio
   }
   app.setItems('reserve',[v6Candidate(5,{fichePositionValideeAt:'2026-09-20T10:00:00',avisDecision:'Favorable'},{status:'reserve'})]);app.run('renderList()');
   assert.match(app.doc.querySelector('#listWrap .rec-row-note').textContent,/^En réserve depuis le /);
-  assert.deepEqual([...app.run('rowActionItems(tabState.reserve.items[0]).map(a=>a.label)')],['Ouvrir','Convoquer','Recruter','Marquer prêt pour contrat']);
-  app.setItems('recruited',[v6Candidate(6,{},{status:'embauche'}),v6Candidate(7,{},{status:'a_contractualiser'})]);app.run('renderList()');
-  assert.deepEqual(texts(app.doc.querySelectorAll('#listWrap td[data-label="Statut"]')),['Recruté','Transmis à la DRH']);
-  assert.deepEqual(texts(app.doc.querySelectorAll('#listWrap .rec-cell-actions button')),['Ouvrir','⋮','Ouvrir','⋮']);
+  assert.deepEqual([...app.run('rowActionItems(tabState.reserve.items[0]).map(a=>a.label)')],['Ouvrir','Convoquer','Recruter']);
   app.setItems('archive',[v6Candidate(8,{avisDecision:'Défavorable'})]);app.run('renderList()');
   assert.equal(app.doc.querySelector('#listWrap td[data-label="Avis"] select'),null);
   app.run('loadTab=()=>{};switchTab("new",true)');
@@ -378,4 +414,54 @@ test('V6 société active: switching company refreshes brand, counters and lists
   assert.equal(app.doc.getElementById('recruitmentBrand').textContent,'IRON GLOBAL SOLUTION');
   assert.deepEqual([...app.run('[tabState.new.items.length,tabState.new.page,tabState.new.societyFilter]')],[0,1,'IRON GLOBAL SOLUTION']);
   assert.deepEqual(calls,['new']);
+});
+
+// ── Recrutement Groupe V7 : vivier central, portefeuille, société destinataire ───────────────
+test('V7 portefeuille: the selector is a portfolio filter over the group pool, fed by the server',async()=>{
+  const app=v6Context();const {ctx,doc}=app;const urls=[];
+  ctx.apiFetch=async url=>{urls.push(url);
+    if(url==='/api/auth/me')return {full_name:'Admin',role:'admin',recruitment_access:true,recruitment_ventilation:true,authorized_actions:['read','create','update'],authorized_societies:[]};
+    if(url.includes('ventilation-targets'))return {can_ventilate:true,societies:['IRON GLOBAL SÉCURITÉ','IRON GLOBAL SOLUTION'],portfolios:['IRON GLOBAL SÉCURITÉ','IRON GLOBAL SOLUTION']};
+    return {items:[],total:0,pages:1,page:1}};
+  ctx.loadPositionOptions=()=>{};app.run('loadPositionOptions=()=>{};recruitSection="candidates"');
+  await ctx.enterApp();await new Promise(resolve=>setTimeout(resolve,0));
+  const select=doc.getElementById('societySelect');
+  // Compte sans périmètre explicite : tout le vivier Groupe par défaut, identité neutre.
+  assert.equal(select.value,'');assert.equal(select.getAttribute('aria-label'),'Portefeuille de recrutement');
+  assert.deepEqual([...select.options].map(option=>option.textContent),['Tous les dossiers','Non ventilés','IRON GLOBAL SÉCURITÉ','IRON GLOBAL SOLUTION']);
+  assert.equal(doc.getElementById('recruitmentBrand').textContent,'RGRECRUTEMENT GROUPE');assert.equal(doc.querySelector('#recruitmentBrand img'),null);
+  assert.doesNotMatch(source,/SWORD CORPORATION/,'no hard-coded company list');
+  const pages=()=>urls.filter(url=>url.includes('/candidates/page'));
+  assert.ok(pages().length&&pages().every(url=>!url.includes('society=')));
+  select.value='__unassigned__';app.run('onSocietyChange()');await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(pages().at(-1),/society=__unassigned__/);
+  assert.equal(doc.getElementById('recruitmentBrand').textContent,'RGRECRUTEMENT GROUPE');
+  assert.deepEqual([...app.run('[tabState.new.societyFilter,tabState.reserve.societyFilter,tabState.archive.societyFilter]')],['__unassigned__','__unassigned__','__unassigned__']);
+  select.value='IRON GLOBAL SOLUTION';app.run('onSocietyChange()');await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(pages().at(-1),/society=IRON\+GLOBAL\+SOLUTION/);
+  assert.equal(doc.querySelector('#recruitmentBrand img').getAttribute('src'),'/static/iron-solution-logo.png');
+  // Réinitialiser les filtres de liste ne quitte pas le portefeuille choisi.
+  app.run('resetCandidateFilters()');await new Promise(resolve=>setTimeout(resolve,0));
+  assert.match(pages().at(-1),/society=IRON\+GLOBAL\+SOLUTION/);
+  assert.equal(doc.getElementById('candidateSocietyFilter'),null,'one company control only: the portfolio filter');
+});
+
+test('V7 liste et fiche: destination company is shown, unventilated files are explicit, Ventiler follows the permission',()=>{
+  const app=v6Context();app.ctx.initializeCandidateLocation=()=>{};
+  app.setItems('new',[v6Candidate(1,{},{society:null}),v6Candidate(2,{avisDecision:'Favorable'},{society:'IRON GLOBAL SOLUTION'})]);
+  app.run('initializeCandidateLocation=()=>{};renderList()');
+  assert.deepEqual(texts(app.doc.querySelectorAll('#listWrap td[data-label="Société"]')),['Non ventilé','IRON GLOBAL SOLUTION']);
+  assert.deepEqual([...app.run('rowActionItems(tabState.new.items[0]).map(a=>a.label)')],['Ouvrir','Convoquer']);
+  app.run('openCandidateForm(1)');
+  const destination=app.doc.getElementById('candidateDestination');
+  assert.equal(destination.classList.contains('hidden'),false);
+  assert.match(destination.textContent,/Société destinataire : Non ventilé \(vivier Groupe\)/);
+  assert.equal(destination.querySelector('button'),null,'no ventilation without the permission');
+  app.run('recruteSession.user.recruitment_ventilation=true;openCandidateForm(2)');
+  assert.match(destination.textContent,/Société destinataire : IRON GLOBAL SOLUTION/);
+  assert.equal(destination.querySelector('button').textContent,'Ventiler');
+  assert.match(destination.querySelector('button').getAttribute('onclick'),/openCandidateVentilation\(2\)/);
+  assert.deepEqual([...app.run('rowActionItems(tabState.new.items[1]).map(a=>a.label)')],['Ouvrir','Convoquer','Recruter','Ventiler']);
+  app.run('openCandidateForm(null)');
+  assert.ok(destination.classList.contains('hidden'),'a new candidate enters the group pool unventilated');
 });

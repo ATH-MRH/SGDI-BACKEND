@@ -18,7 +18,7 @@ const SKIP = !puppeteer || !CHROME ? 'Chrome ou puppeteer-core indisponible' : f
 const SHOTS = process.env.RECRUTE_SCREENSHOT_DIR;
 
 const WIDTHS = [1600, 1440, 1280, 1024, 768, 430, 390];
-const SCREENS = ['dashboard', 'candidates', 'interviews', 'announcements', 'reserve', 'recruited', 'archive'];
+const SCREENS = ['dashboard', 'candidates', 'interviews', 'announcements', 'reserve', 'archive'];
 const SECURITE = 'IRON GLOBAL SÉCURITÉ', SOLUTION = 'IRON GLOBAL SOLUTION';
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -37,7 +37,7 @@ function fixtures(kind) {
       if (mode === 'new' && i % 3 === 0) data.derniereConvocation = { date: `2026-11-${String(1 + (i % 28)).padStart(2, '0')}`, heure: '09:30', lieu: 'Siège de la société' };
       if (mode === 'new' && i % 6 === 0) data.dernierEntretien = { date: '2026-10-02', moyenne: 7.5, bareme: 10, valide: i % 12 === 0, recruteur: 'Recruteur de test' };
       candidates.push({
-        id, mode, society, status: mode === 'reserve' ? 'reserve' : mode === 'recruited' ? (i % 2 ? 'embauche' : 'a_contractualiser') : 'nouvelle',
+        id, mode, society, status: mode === 'reserve' ? 'reserve' : mode === 'archive' ? 'archive' : 'nouvelle',
         last_name: i % 7 === 0 ? 'Fixture-Nom-Particulièrement-Long' : `Fixture${id}`, first_name: i % 5 === 0 ? 'Prénom Composé De Test' : 'Test',
         phone: `0550 00 ${String(id).padStart(2, '0')} 00`, email: i % 4 ? `fixture${id}@exemple.test` : '', desired_position: positions[i % positions.length],
         created_at: `2026-09-${String(1 + (i % 28)).padStart(2, '0')}T08:00:00`, data: { ...data, ...extra(i) },
@@ -45,7 +45,7 @@ function fixtures(kind) {
     }
   };
   add('new', SECURITE, 60); add('reserve', SECURITE, 30, () => ({ fichePositionValidee: true, fichePositionValideeAt: '2026-09-20T10:00:00' }));
-  add('recruited', SECURITE, 30); add('archive', SECURITE, 30, () => ({ archivedAt: '2026-09-25' }));
+  add('archive', SECURITE, 30, () => ({ archivedAt: '2026-09-25' }));
   add('new', SOLUTION, 8); add('new', null, 6);
   const announcements = Array.from({ length: 9 }, (_, i) => ({
     id: `ANN-${i}`, title: i % 4 === 0 ? 'Agent de prévention et de sécurité — site industriel de nuit' : `Poste de test ${i}`,
@@ -59,12 +59,32 @@ function startServer(state) {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
     const json = (body, status = 200) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(body)); };
-    if (url.pathname === '/api/auth/me') return json({ username: 'REC01', full_name: 'Recruteur De Test', role: 'recruteur', recruitment_access: true, authorized_actions: state.actions, authorized_societies: [SECURITE, SOLUTION] });
+    if (url.pathname === '/api/auth/me') return json({ username: 'REC01', full_name: 'Recruteur De Test', role: 'recruteur', recruitment_access: true, recruitment_ventilation: !!state.ventilation, authorized_actions: state.actions, authorized_societies: [SECURITE, SOLUTION] });
+    if (url.pathname === '/api/drh/candidates/ventilation-targets') return json({ can_ventilate: !!state.ventilation, societies: state.ventilation ? [SECURITE, SOLUTION] : [], portfolios: [SECURITE, SOLUTION] });
+    if (url.pathname === '/api/drh/candidates/recruitment-stats') return json({ month: '2026-10', transferred_this_month: state.data.candidates.filter(item => item.mode === 'transferred' && (!url.searchParams.get('society') || item.society === url.searchParams.get('society'))).length });
+    const action = url.pathname.match(/^\/api\/drh\/candidates\/(\d+)\/(ventilation|transfer-drh)$/);
+    if (action && request.method === 'POST') {
+      // Simulation minimale des règles serveur V7 (couvertes par tests/test_recruitment_group_pool_v7.py).
+      const item = state.data.candidates.find(row => row.id === Number(action[1]));
+      let raw = '';
+      request.on('data', chunk => { raw += chunk; });
+      return request.on('end', () => {
+        if (action[2] === 'ventilation') {
+          const body = JSON.parse(raw || '{}');
+          item.data.ventilations = [...(item.data.ventilations || []), { from: item.society, to: body.society, at: '2026-10-06T09:00:00', by: 'REC01', reason: body.reason }];
+          item.society = body.society;
+          return json({ status: 'success', data: item });
+        }
+        if (!item.society) { response.writeHead(422, { 'Content-Type': 'application/json', 'X-Error-Code': 'SOCIETE_DESTINATAIRE_REQUISE' }); return response.end(JSON.stringify({ detail: 'Société destinataire requise : ventilez le candidat avant de le recruter' })); }
+        item.mode = 'transferred';
+        return json({ status: 'success', data: { candidate_id: item.id, society: item.society, already_transferred: false } });
+      });
+    }
     if (url.pathname === '/api/irongs/positions') return json([]);
     if (url.pathname === '/api/drh/candidates/page') {
       if (state.fail) return json({ detail: 'Service indisponible (test)' }, 503);
       const q = url.searchParams, society = q.get('society'), mode = q.get('mode'), needle = (q.get('q') || '').toLowerCase();
-      let rows = state.data.candidates.filter(item => (!mode || item.mode === mode)
+      let rows = state.data.candidates.filter(item => item.mode !== 'transferred' && (!mode || mode === 'pool' || item.mode === mode)
         && (!society || (society === '__unassigned__' ? !item.society : item.society === society))
         && (!q.get('desired_position') || (item.desired_position || 'Poste non renseigné') === q.get('desired_position'))
         && (!q.get('recruiter_opinion') || (item.data.avisDecision || 'Non évalué') === q.get('recruiter_opinion'))
@@ -123,6 +143,7 @@ async function openApp(browser, base, announcements, width) {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(base + '/', { waitUntil: 'networkidle0' });
   await page.waitForSelector('#appView:not(.hidden)');
+  await page.evaluate(() => document.fonts.ready);                    // mesures après chargement des polices
   return { page, errors };
 }
 async function show(page, screen) {
@@ -136,18 +157,18 @@ async function shot(page, name) {
   await page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true });
 }
 
-async function withApp(kind, actions, run) {
-  const state = { data: fixtures(kind), actions, fail: false };
+async function withApp(kind, actions, run, ventilation = false) {
+  const state = { data: fixtures(kind), actions, fail: false, ventilation };
   const server = await startServer(state);
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-gpu'] });
   try { await run({ browser, base: `http://127.0.0.1:${server.address().port}`, state }); }
   finally { await browser.close(); server.close(); }
 }
 
-const TITLES = { dashboard: 'Recrutement', candidates: 'Gestion des candidatures', interviews: 'Entretiens', announcements: 'Annonces recrutement', reserve: 'Réserve de talents', recruited: 'Candidats recrutés', archive: 'Archives' };
+const TITLES = { dashboard: 'Recrutement', candidates: 'Gestion des candidatures', interviews: 'Entretiens', announcements: 'Annonces recrutement', reserve: 'Réserve de talents', archive: 'Archives' };
 
 for (const kind of ['many', 'empty']) {
-  test(`responsive Chrome — ${kind === 'many' ? 'données nombreuses' : 'données vides'} : 7 écrans × 7 largeurs sans débordement ni collision`, { skip: SKIP, timeout: 240000 }, async () => {
+  test(`responsive Chrome — ${kind === 'many' ? 'données nombreuses' : 'données vides'} : 6 écrans × 7 largeurs sans débordement ni collision`, { skip: SKIP, timeout: 240000 }, async () => {
     await withApp(kind, ['read', 'create', 'update', 'delete'], async ({ browser, base, state }) => {
       for (const width of WIDTHS) {
         const { page, errors } = await openApp(browser, base, state.data.announcements, width);
@@ -170,7 +191,7 @@ for (const kind of ['many', 'empty']) {
             assert.ok(await page.$('.main>section:not(.hidden) .rec-empty-state'), `${where} : état vide attendu`);
             assert.ok(layout.emptyHeight <= 220, `${where} : état vide trop haut (${layout.emptyHeight}px)`);
           }
-          if (kind === 'many' && ['candidates', 'reserve', 'recruited', 'archive'].includes(screen)) assert.match(layout.pagination, /page 1\/\d/, `${where} : pagination`);
+          if (kind === 'many' && ['candidates', 'reserve', 'archive'].includes(screen)) assert.match(layout.pagination, /page 1\/\d/, `${where} : pagination`);
           const wanted = { many: { 1440: SCREENS, 390: ['candidates', 'interviews'] }, empty: { 1440: ['candidates'], 390: ['candidates'] } }[kind][width] || [];
           if (wanted.includes(screen)) await shot(page, `${kind === 'many' ? '' : 'vide-'}${screen}-${width}`);
         }
@@ -207,7 +228,8 @@ test('responsive Chrome — candidatures : stabilité du layout, société activ
     await page.select('#societySelect', SECURITE);
     await show(page, 'candidates');
     await page.click('.filter-reset');
-    await page.waitForFunction(() => /74 dossiers/.test(document.getElementById('candidateTotal').textContent));
+    // Réinitialiser les filtres de liste conserve le portefeuille (60 dossiers Sécurité sur 74).
+    await page.waitForFunction(() => /60 dossiers/.test(document.getElementById('candidateTotal').textContent));
     assert.deepEqual(await geometry(), initial);
     assert.deepEqual(await brand(), { name: SECURITE, logo: '/static/iron-securite-logo.png' });
 
@@ -259,3 +281,91 @@ test('responsive Chrome — candidatures : stabilité du layout, société activ
     await page.close();
   });
 });
+
+test('Chrome réel — V7 : portefeuille Groupe, ventilation puis recrutement = transfert DRH (le dossier quitte Recrutement)', { skip: SKIP, timeout: 120000 }, async () => {
+  await withApp('many', ['read', 'create', 'update'], async ({ browser, base, state }) => {
+    const { page, errors } = await openApp(browser, base, state.data.announcements, 1440);
+    const total = () => page.$eval('#candidateTotal', el => el.textContent);
+    const brand = () => page.$eval('#recruitmentBrand', el => ({ name: el.querySelector('span:last-child').textContent, logo: el.querySelector('img')?.getAttribute('src') || null }));
+    const portfolio = async (value, expected) => { await page.select('#societySelect', value); await page.waitForFunction(text => document.getElementById('candidateTotal').textContent === text, {}, expected); };
+    await show(page, 'candidates');
+    assert.equal(await page.$('.recruit-nav-btn[data-section="recruited"]'), null);
+    assert.deepEqual(await page.$$eval('#tabs .tab-btn', tabs => tabs.map(tab => tab.textContent.replace(/\s*\d+$/, '').trim())), ['Nouvelles candidatures', 'Réserve', 'Archives']);
+    assert.deepEqual(await page.$$eval('#societySelect option', options => options.map(option => option.textContent)), ['Tous les dossiers', 'Non ventilés', SECURITE_LABEL(), SOLUTION_LABEL()]);
+
+    // Tous : identité Groupe neutre (aucun logo), tout le vivier.
+    await portfolio('', '74 dossiers');
+    assert.deepEqual(await brand(), { name: 'RECRUTEMENT GROUPE', logo: null });
+    // Non ventilés : dossiers sans société destinataire.
+    await portfolio('__unassigned__', '6 dossiers');
+    assert.deepEqual(await brand(), { name: 'RECRUTEMENT GROUPE', logo: null });
+    assert.deepEqual([...new Set(await page.$$eval('#listWrap td[data-label="Société"]', cells => cells.map(cell => cell.textContent.trim())))], ['Non ventilé']);
+
+    // Recruter un dossier non ventilé est impossible : l'interface propose de ventiler d'abord.
+    const name = await page.$eval('#listWrap tbody tr:has(.row-recruit) .cand-name', el => el.textContent.trim());
+    await page.click('#listWrap tbody tr:has(.row-recruit) .row-recruit');
+    await page.waitForSelector('#recruitmentModal');
+    assert.match(await page.$eval('#recruitmentModal', el => el.innerText), /Société destinataire requise/);
+    assert.equal(await page.$('#recruitmentModal button[type="submit"]'), null);
+    await page.click('#recruitmentModal .modal-actions .primary');
+    await page.waitForSelector('#ventilationSociety:not([disabled])');
+    assert.deepEqual(await page.$$eval('#ventilationSociety option', options => options.map(option => option.textContent)), ['— Choisir —', SECURITE_LABEL(), SOLUTION_LABEL()]);
+    await page.select('#ventilationSociety', SOLUTION_LABEL());
+    await page.type('#ventilationReason', 'Besoin site pilote');
+    await page.click('#ventilationModal button[type="submit"]');
+    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '5 dossiers' && !document.getElementById('ventilationModal'));
+    assert.match(await page.$eval('#banner', el => el.innerText), /ventilé vers IRON GLOBAL SOLUTION/);
+
+    // Le même dossier (même identifiant) est maintenant dans le portefeuille Solution, avec son historique.
+    await portfolio(SOLUTION_LABEL(), '9 dossiers');
+    assert.deepEqual(await brand(), { name: SOLUTION_LABEL(), logo: '/static/iron-solution-logo.png' });
+    await page.type('#searchInput', name.split(' ')[0]);
+    await page.waitForFunction(() => document.querySelectorAll('#listWrap tbody tr').length === 1);
+    await page.click('#listWrap tbody tr .kebab-btn');
+    await page.waitForSelector('#rowActionMenu');
+    assert.ok((await page.$$eval('#rowActionMenu .row-menu-item', items => items.map(item => item.textContent))).includes('Ventiler'));
+    await page.keyboard.press('Escape');
+
+    // Recruter = transférer à la DRH de la société destinataire ; le dossier sort de Recrutement.
+    await page.click('#listWrap tbody tr .row-recruit');
+    await page.waitForSelector('#recruitmentModal button[type="submit"]');
+    assert.match(await page.$eval('#recruitmentModal', el => el.innerText), /Société destinataire : IRON GLOBAL SOLUTION/);
+    await page.click('#recruitmentModal button[type="submit"]');
+    await page.waitForFunction(() => !document.getElementById('recruitmentModal') && document.querySelector('#listWrap .rec-empty-state'));
+    assert.match(await page.$eval('#banner', el => el.innerText), /transféré à la DRH de IRON GLOBAL SOLUTION.*n’apparaît plus dans Recrutement/s);
+    await page.click('#listWrap .rec-empty-state button');                 // réinitialiser la recherche
+    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '8 dossiers');
+    for (const tab of ['reserve', 'archive']) {
+      await show(page, tab);
+      assert.doesNotMatch(await page.$eval('#listWrap', el => el.innerText), new RegExp(name.split(' ')[0] + '\\b'), tab);
+    }
+    await page.select('#societySelect', '');
+    await show(page, 'dashboard');
+    const kpis = await page.$$eval('.dashboard-kpi', cards => cards.map(card => card.innerText.replace(/\s+/g, ' ').trim()));
+    assert.equal(kpis[0], 'Candidatures totales 133');                     // 134 dossiers moins le dossier transféré
+    assert.equal(kpis[4], 'Transférés DRH ce mois 1');
+    assert.deepEqual(await page.$$eval('.pipeline-heading>span', nodes => nodes.map(node => node.textContent)), ['Nouvelles', 'Présélection', 'Convoqués', 'Entretiens', 'Réserve']);
+    const layout = await page.evaluate(inspectLayout);
+    assert.ok(layout.scrollWidth <= layout.clientWidth);
+    assert.deepEqual(layout.outside, []);
+    assert.deepEqual(errors, []);
+    await page.close();
+  }, true);
+
+  // Sans permission de ventilation : l'action n'apparaît nulle part.
+  await withApp('many', ['read', 'create', 'update'], async ({ browser, base, state }) => {
+    const { page } = await openApp(browser, base, state.data.announcements, 1280);
+    await show(page, 'candidates');
+    await page.click('#listWrap tbody tr .kebab-btn');
+    await page.waitForSelector('#rowActionMenu');
+    assert.equal((await page.$$eval('#rowActionMenu .row-menu-item', items => items.map(item => item.textContent))).includes('Ventiler'), false);
+    await page.keyboard.press('Escape');
+    await page.click('#listWrap tbody tr .row-open');
+    await page.waitForSelector('#modalBackdrop:not(.hidden)');
+    assert.match(await page.$eval('#candidateDestination', el => el.innerText), /Société destinataire : IRON GLOBAL SÉCURITÉ/);
+    assert.equal(await page.$('#candidateDestination button'), null);
+    await page.close();
+  });
+});
+function SECURITE_LABEL() { return SECURITE; }
+function SOLUTION_LABEL() { return SOLUTION; }

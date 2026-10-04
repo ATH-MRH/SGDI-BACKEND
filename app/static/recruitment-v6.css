@@ -257,3 +257,15 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .pagin
 @media(prefers-reduced-motion:reduce){
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-skeleton-row :is(i,span){animation:none}
 }
+
+/* ── V7 Recrutement Groupe : société destinataire et historique des ventilations ── */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-destination{margin:12px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-destination b{color:var(--ink)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-history{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-history ol{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px;max-height:180px;overflow-y:auto}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-history li{display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-history li span{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:230px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-destination button{margin-left:8px;min-height:30px;padding:0 10px;font-size:11.5px;vertical-align:middle}
+/* Compteurs à chiffres de largeur fixe : un total qui change ne déplace pas la mise en page. */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-tabs .tab-btn .count,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .counter-chip .n,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-count{font-variant-numeric:tabular-nums}

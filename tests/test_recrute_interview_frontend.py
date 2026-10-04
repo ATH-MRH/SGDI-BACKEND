@@ -47,15 +47,18 @@ def test_favorable_candidate_gets_direct_green_recruit_action():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_recruitment_society_is_selected_and_transmitted():
+def test_recruitment_society_is_proposed_in_interview_and_transfer_uses_the_ventilated_society():
     assert 'name="societeRecrutement" required' in HTML
-    assert 'name="society" required' in HTML
-    assert 'societeRecrutement:society' in HTML
-    assert 'body:JSON.stringify({society,data:' in HTML
+    # V7 : « Recruter » ne choisit plus la société ; il transfère le dossier déjà ventilé.
+    assert '/transfer-drh`,{method:"POST"}' in HTML
+    assert 'Société destinataire requise' in HTML
+    assert 'body:JSON.stringify({society,data:' not in HTML
+    assert '/ventilation`,{method:"POST"' in HTML
 
 
 def test_candidate_pool_is_shared_until_favorable_interview():
-    assert '<option value="__unassigned__">Non affectés</option>' in HTML
+    # V7 : le vivier est celui du Groupe ; « Non ventilés » est un filtre de portefeuille.
+    assert "PORTFOLIO_UNASSIGNED+'\">Non ventilés</option>'" in HTML
     assert 'society:existing?.society||null' in HTML
     assert 'society:null,status:"nouvelle"' in HTML
-    assert 'if(valide&&entretien.recommandation==="Favorable")payload.society=' in HTML
+    assert 'if(valide&&entretien.recommandation==="Favorable"&&recruitmentCanVentilate())payload.society=' in HTML

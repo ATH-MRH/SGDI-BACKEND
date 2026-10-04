@@ -164,6 +164,7 @@ class UserOut(BaseModel):
     effective_modules: list[str] | None = None
     module_access_global: bool = False
     recruitment_access: bool = False
+    recruitment_ventilation: bool = False
 
     model_config = {"from_attributes": True}
 

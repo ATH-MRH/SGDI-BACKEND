@@ -743,11 +743,11 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserOut)
-def me(user=Depends(current_user)):
+def me(user=Depends(current_user), db: Session = Depends(get_db)):
     # Expose the existing server policy; the browser must not reconstruct grants
     # from cached profiles or interpret an empty list as unrestricted access.
     from app.modules.auth.dependencies import _legacy_module_keys, _normalized_module_keys
-    from app.modules.drh.routes import _ensure_recruitment_access
+    from app.modules.drh.routes import _can_ventilate, _ensure_recruitment_access
 
     result = UserOut.model_validate(user).model_dump()
     result["module_access_global"] = is_admin_role(user.role)
@@ -758,6 +758,7 @@ def me(user=Depends(current_user)):
     try:
         _ensure_recruitment_access(user)
         result["recruitment_access"] = True
+        result["recruitment_ventilation"] = _can_ventilate(db, user)
     except HTTPException:
         result["recruitment_access"] = False
     result["has_validation_password"] = bool(user.validation_password_hash)

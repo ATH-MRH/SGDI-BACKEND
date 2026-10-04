@@ -13,6 +13,9 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel, Field
+
+from app.core.audit import append_audit
 from app.db.session import get_db
 from app.core.config import settings
 from app.core.photo_storage import DOCS_DIR, UPLOADS_ROOT
@@ -715,6 +718,86 @@ def candidate_contact_duplicates(
     )
 
 
+def _can_ventilate(db: Session, user: User) -> bool:
+    """Ventilation = action sensible, refusée par défaut : administrateur global ou permission
+    granulaire centrale recruitment / contractualization / update."""
+    from app.core.granular_permissions import is_global_administrator, load_feature_permissions
+
+    return is_global_administrator(user) or any(
+        grant.module_key == "recruitment" and grant.feature_key == "contractualization" and grant.action_key == "update"
+        for grant in load_feature_permissions(db, user.id))
+
+
+def _require_ventilation(db: Session, user: User, candidate_id: int | None = None) -> None:
+    if _can_ventilate(db, user):
+        return
+    append_audit(db, action="authorization.recruitment.ventilation", resource="candidate", resource_id=candidate_id,
+                 result="refused", user=user)
+    db.commit()
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission de ventilation requise")
+
+
+def _ventilation_targets(db: Session, user: User) -> list[str]:
+    """Sociétés vers lesquelles ce compte peut ventiler : son périmètre explicite, ou — pour un
+    périmètre global — les sociétés réellement connues du système."""
+    from app.core.scope_policy import ScopeKind, authorized_society_values, society_scope
+
+    if society_scope(user).kind is ScopeKind.GLOBAL:
+        return service.known_societies(db)
+    return authorized_society_values(user)
+
+
+def _ventilation_target(db: Session, user: User, society: str | None) -> str | None:
+    key = _society_key(society)
+    if not key:
+        return None                                                   # retour au vivier Groupe
+    for label in _ventilation_targets(db, user):
+        if _society_key(label) == key:
+            return label
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée pour la ventilation")
+
+
+class CandidateVentilationIn(BaseModel):
+    society: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/candidates/ventilation-targets")
+def candidate_ventilation_targets(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
+    allowed = _can_ventilate(db, user)
+    societies = _ventilation_targets(db, user)
+    # `portfolios` alimente le filtre de portefeuille (lecture) ; `societies` les cibles de ventilation.
+    return {"can_ventilate": allowed, "societies": societies if allowed else [], "portfolios": societies}
+
+
+@router.get("/candidates/recruitment-stats")
+def candidate_recruitment_stats(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
+    return service.recruitment_stats(db, society=society.strip() if society else None)
+
+
+@router.post("/candidates/{candidate_id}/ventilation")
+def ventilate_candidate(candidate_id: int, payload: CandidateVentilationIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Ventile le dossier vers une société, ou le remet au vivier Groupe (society vide)."""
+    _ensure_recruitment_access(user)
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _require_ventilation(db, user, candidate_id)
+    if existing.society and _ventilation_target(db, user, existing.society) is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée pour la ventilation")
+    target = _ventilation_target(db, user, payload.society)
+    return _action_success(service.ventilate_candidate(db, candidate_id, target, reason=payload.reason, actor=user))
+
+
+@router.post("/candidates/{candidate_id}/transfer-drh")
+def transfer_candidate_to_drh(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Recruter : transfert atomique et idempotent du dossier à la DRH de la société destinataire."""
+    _ensure_recruitment_access(user)
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, existing.society)
+    return _action_success(service.transfer_candidate_to_drh(db, candidate_id, actor=user))
+
+
 def _action_success(data):
     return {"status": "success", "data": jsonable_encoder(data)}
 
@@ -730,9 +813,16 @@ def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), us
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
-    if payload.society is not None:
+    if "society" in payload.model_fields_set and _society_key(payload.society) != _society_key(existing.society):
+        # Changer la société destinataire est une ventilation : même permission, même périmètre,
+        # même historique que l'action dédiée.
+        _require_ventilation(db, user, candidate_id)
+        if existing.society:
+            _ventilation_target(db, user, existing.society)
+        payload.society = _ventilation_target(db, user, payload.society)
+    elif payload.society is not None:
         _ensure_society_allowed(user, payload.society)
-    return _action_success(service.update_candidate(db, candidate_id, payload, username=user.username))
+    return _action_success(service.update_candidate(db, candidate_id, payload, username=user.username, actor=user))
 
 
 @router.post("/candidates/validate-section")
@@ -818,7 +908,7 @@ def marquer_contractualisation(candidate_id: int, db: Session = Depends(get_db),
     _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
-    return _action_success(service.marquer_a_contractualiser(db, candidate_id, username=user.username))
+    return _action_success(service.marquer_a_contractualiser(db, candidate_id, username=user.username, actor=user))
 
 
 @router.delete("/candidates/{candidate_id}")
