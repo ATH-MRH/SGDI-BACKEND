@@ -140,19 +140,6 @@ tr:last-child td{border-bottom:0}
 .form-section{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px;background:#fbfdff}
 .form-section-title{font-size:14px;font-weight:950;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
 .form-section-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
-#modalBackdrop .modal{font-family:Arial,sans-serif}
-#candidateForm{font-family:Arial,sans-serif;font-size:9px}
-#candidateForm label{font-family:Arial,sans-serif;font-size:9px;margin:7px 0 4px;letter-spacing:.035em}
-#candidateForm input,#candidateForm select,#candidateForm textarea{font-family:Arial,sans-serif;font-size:9px;border-radius:7px;padding-left:8px;padding-right:8px}
-#candidateForm input,#candidateForm select{height:29px}
-#candidateForm textarea{min-height:48px;padding-top:6px;padding-bottom:6px}
-#candidateForm .field-grid{gap:0 10px}
-#candidateForm .form-section{padding:11px 13px;margin-top:8px;border-radius:12px}
-#candidateForm .form-section-title{font-family:Arial,sans-serif;font-size:11px;margin-bottom:2px}
-#candidateForm .form-section-sub{font-family:Arial,sans-serif;font-size:9px;margin-bottom:5px}
-#candidateForm .photo-preview{width:76px;height:88px;border-radius:11px;font-size:10px}
-#candidateForm .photo-field{gap:11px}
-#candidateForm .checkbox-row,#candidateForm .exp-add-btn{font-family:Arial,sans-serif;font-size:9px}
 .photo-field{display:flex;align-items:center;gap:15px}.photo-preview{width:94px;height:110px;border:2px dashed #bfd1e3;border-radius:14px;object-fit:cover;background:#eef4f9;display:grid;place-items:center;color:#789;font-weight:900;overflow:hidden}.photo-preview img{width:100%;height:100%;object-fit:cover}
 .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:750;color:#42566f}.checkbox-row input{width:auto;height:auto}
 .exp-table{display:flex;flex-direction:column;gap:6px}
@@ -178,9 +165,10 @@ tr:last-child td{border-bottom:0}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
+<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261004-responsive-v6" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5">
+<body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE RECRUTEMENT</span><h2>Vos candidatures.<br>Un suivi clair.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Candidats</strong><small>Retrouvez les profils</small></div><div><b>02</b><strong>Entretiens</strong><small>Organisez les échanges</small></div><div><b>03</b><strong>Recrutement</strong><small>Suivez les candidatures</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
@@ -205,7 +193,7 @@ tr:last-child td{border-bottom:0}
 <section id="appView" class="app hidden">
   <header class="top">
     <div class="top-row">
-      <form class="header-search" onsubmit="event.preventDefault();dashboardSearch(this)"><input name="query" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, téléphone, poste…)"><button type="submit" aria-label="Lancer la recherche">⌕</button></form>
+      <form class="header-search" onsubmit="event.preventDefault();dashboardSearch(this)"><input name="query" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, téléphone, poste…)"><button type="submit" aria-label="Lancer la recherche"><svg class="rec-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></form>
       <div class="brand"><div class="session-avatar" id="sessionAvatar" aria-hidden="true"></div><div class="brand-logo">REC</div><div><div class="brand-title">RECRUTEMENT</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
         <span id="societyBadge" class="society-badge hidden"></span>
@@ -232,21 +220,28 @@ tr:last-child td{border-bottom:0}
       <div id="banner"></div>
       <section id="dashboardSection" class="hidden"></section>
       <section id="interviewsSection" class="hidden"></section>
-      <section id="candidatesSection">
-       <div class="candidate-page-head"><div><h2>Gestion des candidatures</h2><p>Recherchez, analysez et faites progresser chaque dossier dans le parcours de recrutement.</p></div><div id="candidateTotal" class="candidate-total">0 dossier</div></div>
-       <div id="countersRow" class="counters-row"></div>
-       <div class="tabs" id="tabs"></div>
+      <section id="candidatesSection" class="rec-page">
+       <header class="rec-page-header">
+        <div class="rec-page-heading"><h2 id="candidatePageTitle">Gestion des candidatures</h2><p id="candidatePageSubtitle">Recherchez, analysez et faites progresser chaque dossier.</p></div>
+        <div class="rec-page-actions">
+          <span id="candidateTotal" class="rec-count">0 dossier</span>
+          <button type="button" class="rec-icon-btn" id="refreshCandidatesBtn" aria-label="Actualiser la liste" title="Actualiser" onclick="loadTab(activeTab)"><svg class="rec-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+          <button type="button" class="secondary hidden" id="importCandidatesBtn" onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>
+          <button type="button" class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
+        </div>
+       </header>
+       <nav class="tabs rec-tabs" id="tabs" aria-label="États du dossier"></nav>
        <div id="candidatesView">
-      <div class="candidate-filterbar">
-        <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
+      <div id="countersRow" class="rec-quick-filters"></div>
+      <div class="candidate-filterbar rec-filters" role="search" aria-label="Filtrer les candidats">
+        <div class="search-box"><input id="searchInput" type="search" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
         <select id="positionFilter" aria-label="Filtrer par poste" onchange="applyCandidateFilters()"><option value="">Tous les postes</option></select>
         <select id="candidateSocietyFilter" aria-label="Filtrer par société" onchange="applyCandidateFilters()"><option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option></select>
         <select id="opinionFilter" aria-label="Filtrer par avis" onchange="applyCandidateFilters()"><option value="">Tous les avis</option><option>Favorable</option><option>Défavorable</option><option>Instance</option><option>Non évalué</option></select>
         <button type="button" class="filter-reset" onclick="resetCandidateFilters()">Réinitialiser</button>
-        <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
       </div>
-      <div class="table-card">
-        <div id="listWrap" class="candidate-table-wrap"><div class="empty">Chargement…</div></div>
+      <div class="table-card rec-table-card">
+        <div id="listWrap" class="candidate-table-wrap"><div class="rec-state" role="status">Chargement…</div></div>
         <div class="pagination" id="pagination"></div>
       </div>
        </div>
@@ -291,7 +286,7 @@ tr:last-child td{border-bottom:0}
 
 <div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeCandidateForm()">
   <div class="modal">
-    <div class="modal-head"><div><h2 id="modalTitle">Fiche de renseignement candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">Renseignez l’identité, les coordonnées et le profil professionnel.</div></div><button class="modal-close" onclick="closeCandidateForm()">✕</button></div>
+    <div class="modal-head"><div><h2 id="modalTitle">Fiche de renseignement candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">Renseignez l’identité, les coordonnées et le profil professionnel.</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateForm()">×</button></div>
     <form id="candidateForm" onsubmit="event.preventDefault();submitCandidateForm()">
       <div class="field-grid">
         <section class="form-section"><div class="form-section-title">1. Identification du candidat</div><div class="form-section-sub">État civil et informations personnelles</div><div class="field-grid">
@@ -316,7 +311,6 @@ tr:last-child td{border-bottom:0}
           <div><label for="fShirtSize">Taille chemise</label><select id="fShirtSize"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option></select></div><div><label for="fLanguages">Langues parlées</label><input id="fLanguages" placeholder="Arabe, Français…"></div>
           <div class="full"><label>Expérience professionnelle</label>
             <div class="exp-table">
-              <div class="exp-head"><span>Société</span><span>Du</span><span>Au</span><span>Poste</span><span>Motif de départ</span><span></span></div>
               <div id="experienceRows"></div>
               <button type="button" class="exp-add-btn" onclick="addExperienceRow()">+ Ajouter une ligne</button>
             </div>
@@ -484,6 +478,7 @@ async function enterApp(){
   loadPositionOptions();
   renderTabs();
   document.getElementById("addCandidateBtn").classList.toggle("hidden",!recruitmentCan("create"));
+  updateCandidatePageHeader();
   showRecruitSection(recruitSection);
 }
 const POSITIONS_FALLBACK=["Agent administratif","Agent d'entretien","Agent de bureau","Agent de prévention et de sécurité","Agent polyvalent","Cariste","Chauffeur","Chef d'équipe","Chef de groupe","Chef de poste","Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur","Maître-chien","Manutentionnaire","Magasinier","Superviseur"];
@@ -576,11 +571,14 @@ function showRecruitSection(section,refresh=true){
   }
   recruitSection=["dashboard","candidates","interviews","announcements"].includes(section)?section:"candidates";
   sessionStorage.setItem("atlas_recrute_section",recruitSection);
+  const appView=document.getElementById("appView");if(appView)appView.dataset.recSection=recruitSection;
   document.querySelectorAll(".recruit-nav-btn").forEach(button=>button.classList.toggle("active",button.dataset.section===recruitSection));
   document.getElementById("dashboardSection").classList.toggle("hidden",recruitSection!=="dashboard");
   document.getElementById("interviewsSection").classList.toggle("hidden",recruitSection!=="interviews");
   document.getElementById("candidatesSection").classList.toggle("hidden",recruitSection!=="candidates");
   document.getElementById("announcementsSection").classList.toggle("hidden",recruitSection!=="announcements");
+  // Une section masquée n'est jamais laissée « en cours de chargement » (requête abandonnée).
+  for(const [name,id] of [["dashboard","dashboardSection"],["interviews","interviewsSection"]])if(recruitSection!==name)document.getElementById(id).removeAttribute("aria-busy");
   showBanner("");
   if(refresh)refreshRecruitCurrentSection();
 }
@@ -686,7 +684,7 @@ async function renderRecruitDashboard(refresh=false){
   const sources=new Map();for(const item of rows){const value=String(item.data?.source||"").trim();if(value)sources.set(value,(sources.get(value)||0)+1)}
   const sourceTotal=[...sources.values()].reduce((a,b)=>a+b,0),sourceColors=["#2783ff","#20bc97","#ffac50","#9364e7","#8294b9"];
   let offset=0;const gradient=[...sources].map(([label,n],index)=>{const start=offset;offset+=n/sourceTotal*100;return `${sourceColors[index%sourceColors.length]} ${start}% ${offset}%`}).join(",");
-  host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">⚑ Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div>${create?`<button onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>`:""}<button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
+  host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div>${create?`<button onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>`:""}<button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
   <div class="dashboard-kpis">${kpis.map(([label,n,color,icon,action])=>`<button class="dashboard-kpi" style="--kpi-color:${color}" onclick="${action}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></button>`).join("")}</div>
   <div class="dashboard-grid"><section class="dashboard-panel pipeline-panel"><div class="dashboard-panel-head"><h3>Pipeline de recrutement</h3><select aria-label="Filtrer le pipeline par poste" onchange="dashboardSetPosition(this.value)"><option value="">Tous les postes</option>${positions.map(value=>`<option value="${esc(value)}"${value===recruitmentDashboardPosition?' selected':''}>${esc(value)}</option>`).join("")}</select></div><div class="dashboard-pipeline">${DASHBOARD_STAGES.map(([key,label,color,mode])=>{const items=rows.filter(item=>dashboardStage(item)===key);return `<section class="pipeline-column" style="--stage:${color}"><div class="pipeline-heading"><span><i></i>${label}</span><b>${items.length}</b></div><div class="pipeline-cards">${items.slice(0,3).map(candidateCard).join("")||'<div class="pipeline-empty">Aucune candidature</div>'}</div><button class="pipeline-all" onclick="dashboardGo('${mode}')">Voir toutes (${items.length}) →</button></section>`}).join("")}</div></section>
   <aside class="dashboard-right"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Voir tout</button></div><div class="dashboard-agenda">${scheduled.slice(0,4).map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${esc(c.heure||"—")}<small>${esc(formatDateFr(c.date))}</small></div><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(item.desired_position||"Poste non renseigné")}${c.lieu?` · ${esc(c.lieu)}`:""}</div></div>${update?`<button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)},'interview')">Ouvrir</button>`:""}</div>`}).join("")||'<div class="empty">Aucun entretien planifié.</div>'}</div></section>${create?'<section class="dashboard-publish"><div><h3>Publier une annonce</h3><p>Diffusez vos offres sur vos canaux de recrutement</p><button class="secondary" onclick="showRecruitSection(\'announcements\');openAnnouncementForm()">＋ Créer une annonce</button></div></section>':""}</aside></div>
@@ -696,11 +694,12 @@ async function renderRecruitDashboard(refresh=false){
 }
 async function renderRecruitInterviews(refresh=false){
   const host=document.getElementById("interviewsSection");
-  if(!host.hasChildNodes())host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
+  if(!host.hasChildNodes())host.innerHTML=interviewPageHeader()+`<div class="table-card rec-table-card">${recruitmentListSkeleton()}</div>`;
   const society=activeSociety,request=host._request=(host._request||0)+1;
-  if(!recruitmentCan("read")){host.innerHTML='<div class="empty">Accès réservé au recrutement / DRH.</div>';return}
+  if(!recruitmentCan("read")){host.innerHTML='<div class="rec-state" role="alert">Accès réservé au recrutement / DRH.</div>';return}
   const current=()=>request===host._request&&society===activeSociety&&recruitSection==="interviews"&&!!recruteSession;
   if(refresh){
+    host.setAttribute("aria-busy","true");
     try{
       const items=[];let page=1,pages=1;
       do{
@@ -709,11 +708,74 @@ async function renderRecruitInterviews(refresh=false){
         items.push(...(result.items||[]));pages=result.pages||1;page++;
       }while(page<=pages);
       tabState.new.items=items.filter(item=>!society||item.society===society);
-    }catch(error){if(current())host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+    }catch(error){if(current()){host.removeAttribute("aria-busy");host.innerHTML=interviewPageHeader()+`<div class="table-card rec-table-card">${recruitmentErrorState(esc(error.message),"renderRecruitInterviews(true)")}</div>`}return}
   }
   if(!current())return;
-  const rows=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>String(candidateConvocation(a)?.date||candidateInterview(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||candidateInterview(b)?.date||"")));
-  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th><th>Recruteur</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?.valide?'<span class="pill pill-green">Validé</span>':e?'<span class="pill pill-amber">Brouillon</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / ${e.bareme||5}`:"—"}</td><td>${recruitmentCan("update")?`<button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?.valide?"Consulter":e?"Continuer":"Démarrer"}</button>`:"—"}</td><td>${esc(e?.recruteur||"—")}</td></tr>`}).join(""):`<tr><td colspan="8" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
+  host.removeAttribute("aria-busy");
+  const when=item=>`${candidateInterview(item)?.date||candidateConvocation(item)?.date||""}T${candidateConvocation(item)?.heure||""}`;
+  const all=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>when(a).localeCompare(when(b)));
+  if(recruitInterviewFilter&&!all.some(item=>interviewState(item)===recruitInterviewFilter))recruitInterviewFilter="";
+  const rows=all.filter(item=>!recruitInterviewFilter||interviewState(item)===recruitInterviewFilter);
+  const update=recruitmentCan("update");
+  const chip=(key,label,count)=>`<button type="button" class="counter-chip${recruitInterviewFilter===key?" active":""}" aria-pressed="${recruitInterviewFilter===key?"true":"false"}" onclick="setInterviewFilter('${key}')">${label} <span class="n">${count}</span></button>`;
+  host.innerHTML=interviewPageHeader(all.length)+`<div class="rec-quick-filters"><div class="rec-chip-group" role="group" aria-label="Filtrer par état"><span class="rec-chip-label">État</span><div class="rec-chips">${chip("","Tous",all.length)}${INTERVIEW_STATES.map(([key,label])=>chip(key,label,all.filter(item=>interviewState(item)===key).length)).join("")}</div></div></div>
+  <div class="table-card rec-table-card">${rows.length?`<div class="candidate-table-wrap"><table class="rec-table"><thead><tr><th>Date et heure</th><th>Candidat</th><th>Poste</th><th class="rec-col-secondary">Lieu</th><th>État</th><th class="rec-col-secondary">Note</th><th>Avis</th><th class="rec-col-secondary">Recruteur</th>${update?'<th class="rec-col-actions">Action</th>':""}</tr></thead><tbody>${rows.map(item=>{
+    const c=candidateConvocation(item)||{};const e=candidateInterview(item);const state=INTERVIEW_STATES.find(row=>row[0]===interviewState(item));
+    const note=e?`${String(e.moyenne??"—").replace(".",",")} / ${e.bareme||5}`:"";
+    return `<tr><td class="rec-cell-when" data-label="Date et heure"><div class="rec-datetime"><strong>${esc(formatDateFr(e?.date||c.date))}</strong><span>${esc(c.heure||"—")}</span></div></td>
+    <td class="rec-cell-main" data-label="Candidat"><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div><div class="rec-row-sub">${esc([c.lieu,note?`Note ${note}`:"",e?.recruteur].filter(Boolean).join(" · "))}</div></td>
+    <td data-label="Poste">${esc(item.desired_position||"—")}</td>
+    <td class="rec-col-secondary" data-label="Lieu">${esc(c.lieu||"—")}</td>
+    <td data-label="État"><span class="pill ${state[2]}">${state[3]}</span></td>
+    <td class="rec-col-secondary" data-label="Note">${esc(note||"—")}</td>
+    <td data-label="Avis">${recruitmentAvisPill(item.data?.avisDecision)}</td>
+    <td class="rec-col-secondary" data-label="Recruteur">${esc(e?.recruteur||"—")}</td>
+    ${update?`<td class="rec-cell-actions" data-label="Action"><div class="row-actions"><button type="button" class="row-open" onclick="dashboardOpenCandidate(${Number(item.id)},'interview')">${e?.valide?"Consulter":e?"Continuer":"Démarrer"}</button></div></td>`:""}</tr>`}).join("")}</tbody></table></div>`
+    :recruitmentEmptyState({title:all.length?"Aucun résultat":"Aucun entretien",text:all.length?"Aucun entretien ne correspond à cet état.":"Les convocations planifiées et les comptes rendus apparaîtront ici."})}</div>`;
+}
+let recruitInterviewFilter="";
+const INTERVIEW_STATES=[["planned","Planifiés","pill-indigo","Planifié"],["draft","Brouillons","pill-amber","Brouillon"],["validated","Validés","pill-green","Validé"]];
+function interviewState(item){const interview=candidateInterview(item);return interview?.valide?"validated":interview?"draft":"planned"}
+function setInterviewFilter(value){recruitInterviewFilter=value;renderRecruitInterviews(false)}
+function interviewPageHeader(total=null){
+  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><div class="rec-page-actions">${total===null?"":`<span class="rec-count">${total} entretien${total>1?"s":""}</span>`}<button type="button" class="rec-icon-btn" aria-label="Actualiser les entretiens" title="Actualiser" onclick="renderRecruitInterviews(true)">${recruitmentIcon("refresh")}</button></div></header>`;
+}
+// ── Composants communs Recrutement V6 (présentation uniquement) ──────────────────────────
+function recruitmentIcon(name){
+  const paths={refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',empty:'<path d="M4 13h4l2 3h4l2-3h4"/><path d="M4 13 6.5 5h11L20 13v6H4Z"/>',alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 3.5v.5"/>'};
+  return `<svg class="rec-icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name]||""}</svg>`;
+}
+function recruitmentEmptyState({title,text,action=""}){
+  return `<div class="rec-empty-state" role="status"><span class="rec-empty-icon">${recruitmentIcon("empty")}</span><div class="rec-empty-text"><strong>${title}</strong><p>${text}</p></div>${action}</div>`;
+}
+function recruitmentErrorState(message,retry=""){
+  return `<div class="rec-empty-state rec-error-state" role="alert"><span class="rec-empty-icon">${recruitmentIcon("alert")}</span><div class="rec-empty-text"><strong>Données indisponibles</strong><p>${message}</p></div>${retry?`<button type="button" class="secondary" onclick="${retry}">Réessayer</button>`:""}</div>`;
+}
+function recruitmentListSkeleton(){
+  return `<div class="rec-skeleton-list" role="status" aria-busy="true" aria-label="Chargement">${Array.from({length:4},()=>'<div class="rec-skeleton-row"><i></i><span></span><span></span><span></span></div>').join("")}</div>`;
+}
+function recruitmentAvisPill(value){
+  const pillClass=value==="Favorable"?"pill-green":value==="Défavorable"?"pill-red":value==="Instance"?"pill-amber":"pill-gray";
+  return `<span class="pill ${pillClass}">${esc(value||"Non évalué")}</span>`;
+}
+const CANDIDATE_PAGES={
+  new:["Gestion des candidatures","Recherchez, analysez et faites progresser chaque dossier.","Aucune candidature","Aucun dossier en cours pour le moment."],
+  reserve:["Réserve de talents","Vivier de candidats validés, à mobiliser pour vos prochains besoins.","Réserve vide","Aucun candidat n’est actuellement placé en réserve."],
+  recruited:["Candidats recrutés","Dossiers transmis à la DRH et recrutements effectifs.","Aucun candidat recruté","Aucun dossier transmis à la DRH ou recruté pour le moment."],
+  archive:["Archives","Dossiers clôturés, conservés pour consultation.","Aucune archive","Aucun dossier archivé."]
+};
+function updateCandidatePageHeader(){
+  const [title,subtitle]=CANDIDATE_PAGES[activeTab]||CANDIDATE_PAGES.new;
+  const heading=document.getElementById("candidatePageTitle"),text=document.getElementById("candidatePageSubtitle");
+  if(heading)heading.textContent=title;if(text)text.textContent=subtitle;
+  document.getElementById("candidatesSection")?.setAttribute("data-rec-tab",activeTab);
+  document.getElementById("importCandidatesBtn")?.classList.toggle("hidden",activeTab!=="new"||!recruitmentCan("create"));
+}
+function candidateEmptyState(){
+  const state=tabState[activeTab];
+  if(state.q||state.posteFilter||state.avisFilter||state.societyFilter)return recruitmentEmptyState({title:"Aucun résultat",text:"Aucun dossier ne correspond à ces filtres.",action:'<button type="button" class="secondary" onclick="resetCandidateFilters()">Réinitialiser les filtres</button>'});
+  const [, ,title,text]=CANDIDATE_PAGES[activeTab]||CANDIDATE_PAGES.new;
+  return recruitmentEmptyState({title,text,action:activeTab==="new"&&recruitmentCan("create")?'<button type="button" class="primary" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>':""});
 }
 function normalizeExcelHeader(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
 function excelCell(row,names){
@@ -741,7 +803,7 @@ async function importRecruitmentExcel(input){
       try{await apiFetch("/api/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});created++}catch(error){errors.push(`ligne ${index+2}: ${error.message}`)}
     }
     showBanner(`${created} candidat(s) importé(s)${errors.length?` · ${errors.length} ligne(s) non importée(s)`:""}.`,errors.length&&created===0?"error":"success");
-    await renderRecruitDashboard(true);
+    if(recruitSection==="dashboard")await renderRecruitDashboard(true);else refreshRecruitCurrentSection();
   }catch(error){showBanner(esc(error.message||"Import Excel impossible"),"error")}finally{input.value=""}
 }
 function getRecruitAnnouncements(){
@@ -750,14 +812,14 @@ function getRecruitAnnouncements(){
 function saveRecruitAnnouncements(items){localStorage.setItem(RECRUIT_ANNOUNCEMENTS_KEY,JSON.stringify(items))}
 function announcementFormHTML(item={}){
   const societies=[...new Set([...(recruteSession?.user?.authorized_societies||[]),...RECRUTE_SOCIETIES].filter(Boolean))];
-  return `<form id="announcementForm" class="table-card" style="padding:18px;margin-bottom:14px" onsubmit="event.preventDefault();saveRecruitAnnouncement(this)">
-    <input type="hidden" name="id" value="${esc(item.id||"")}"><div class="section-head"><div><h2 style="font-size:17px">${item.id?"Modifier":"Nouvelle"} annonce</h2><p>Renseignez les informations utiles au recrutement.</p></div><button type="button" class="secondary" onclick="renderRecruitAnnouncements()">Annuler</button></div>
-    <div class="field-grid"><div><label>Intitulé du poste *</label><input name="title" required value="${esc(item.title||"")}"></div><div><label>Société *</label><select name="society" required>${societies.map(s=>`<option${(item.society||activeSociety)===s?" selected":""}>${esc(s)}</option>`).join("")}</select></div>
-    <div><label>Lieu / site</label><input name="location" value="${esc(item.location||"")}"></div><div><label>Nombre de postes *</label><input name="positions" type="number" min="1" required value="${esc(item.positions||1)}"></div>
-    <div><label>Date de publication</label><input name="publishedAt" type="date" value="${esc(item.publishedAt||today())}"></div><div><label>Date limite</label><input name="deadline" type="date" value="${esc(item.deadline||"")}"></div>
-    <div><label>Statut</label><select name="status"><option${item.status==="Brouillon"?" selected":""}>Brouillon</option><option${item.status==="Publiée"?" selected":""}>Publiée</option><option${item.status==="Clôturée"?" selected":""}>Clôturée</option></select></div><div><label>Référence</label><input name="reference" value="${esc(item.reference||"")}" placeholder="REC-2026-001"></div>
-    <div class="full"><label>Description et critères</label><textarea name="description" style="min-height:100px">${esc(item.description||"")}</textarea></div></div>
-    <div class="modal-actions"><button class="primary" type="submit">Enregistrer l’annonce</button></div></form>`;
+  return `<form id="announcementForm" class="table-card rec-form-card" onsubmit="event.preventDefault();saveRecruitAnnouncement(this)">
+    <input type="hidden" name="id" value="${esc(item.id||"")}"><header class="rec-page-header"><div class="rec-page-heading"><h2>${item.id?"Modifier":"Nouvelle"} annonce</h2><p>Renseignez les informations utiles au recrutement.</p></div></header>
+    <div class="field-grid"><div><label for="annTitle">Intitulé du poste *</label><input id="annTitle" name="title" required value="${esc(item.title||"")}"></div><div><label for="annSociety">Société *</label><select id="annSociety" name="society" required>${societies.map(s=>`<option${(item.society||activeSociety)===s?" selected":""}>${esc(s)}</option>`).join("")}</select></div>
+    <div><label for="annLocation">Lieu / site</label><input id="annLocation" name="location" value="${esc(item.location||"")}"></div><div><label for="annPositions">Nombre de postes *</label><input id="annPositions" name="positions" type="number" min="1" required value="${esc(item.positions||1)}"></div>
+    <div><label for="annPublished">Date de publication</label><input id="annPublished" name="publishedAt" type="date" value="${esc(item.publishedAt||today())}"></div><div><label for="annDeadline">Date limite</label><input id="annDeadline" name="deadline" type="date" value="${esc(item.deadline||"")}"></div>
+    <div><label for="annStatus">Statut</label><select id="annStatus" name="status"><option${item.status==="Brouillon"?" selected":""}>Brouillon</option><option${item.status==="Publiée"?" selected":""}>Publiée</option><option${item.status==="Clôturée"?" selected":""}>Clôturée</option></select></div><div><label for="annReference">Référence</label><input id="annReference" name="reference" value="${esc(item.reference||"")}" placeholder="REC-2026-001"></div>
+    <div class="full"><label for="annDescription">Description et critères</label><textarea id="annDescription" name="description" class="rec-textarea-lg">${esc(item.description||"")}</textarea></div></div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="renderRecruitAnnouncements()">Annuler</button><button class="primary" type="submit">Enregistrer l’annonce</button></div></form>`;
 }
 function openAnnouncementForm(id=""){
   if(!recruitmentCan(id?"update":"create"))return;
@@ -810,19 +872,22 @@ function filteredRecruitAnnouncements(q="",status=""){
   q=String(q||"").toLowerCase();
   return getRecruitAnnouncements().filter(item=>(!activeSociety||item.society===activeSociety)&&(!status||item.status===status)&&(!q||[item.title,item.society,item.location,item.reference].join(" ").toLowerCase().includes(q)));
 }
-function announcementListHTML(items){
-  return items.map(item=>`<article class="announcement-card"><div><h3>${esc(item.title)}</h3><div class="announcement-meta"><span>${esc(item.society)}</span><span>${esc(item.location||"Lieu non renseigné")}</span><span>${item.positions} poste(s)</span><span>Limite : ${formatDateFr(item.deadline)}</span><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></div></div><div class="announcement-actions">${recruitmentCan("update")?`<button class="primary" data-share-announcement="${esc(item.id)}" onclick="shareRecruitAnnouncement('${jsStr(item.id)}')">Publier / Partager</button><button class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Clôturée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}`:""}${recruitmentCan("delete")?`<button class="danger" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button>`:""}</div></article>`).join("")||'<div class="table-card empty">Aucune annonce pour ce filtre.</div>';
+function announcementListHTML(items,filtered=false){
+  const update=recruitmentCan("update"),remove=recruitmentCan("delete");
+  return items.map(item=>`<article class="announcement-card rec-card"><header class="rec-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.society)}</p></div><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></header><dl class="rec-card-meta"><div><dt>Lieu</dt><dd>${esc(item.location||"Non renseigné")}</dd></div><div><dt>Postes</dt><dd>${esc(item.positions||1)}</dd></div><div><dt>Publication</dt><dd>${esc(formatDateFr(item.publishedAt))}</dd></div><div><dt>Date limite</dt><dd>${esc(formatDateFr(item.deadline))}</dd></div>${item.reference?`<div><dt>Référence</dt><dd>${esc(item.reference)}</dd></div>`:""}</dl>${update||remove?`<footer class="announcement-actions rec-card-actions">${update?`<button type="button" class="secondary rec-btn-strong" data-share-announcement="${esc(item.id)}" onclick="shareRecruitAnnouncement('${jsStr(item.id)}')">Publier / Partager</button><button type="button" class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Clôturée"?`<button type="button" class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}`:""}${remove?`<button type="button" class="danger rec-btn-quiet" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button>`:""}</footer>`:""}</article>`).join("")
+    ||recruitmentEmptyState(filtered?{title:"Aucun résultat",text:"Aucune annonce ne correspond à cette recherche."}:{title:"Aucune annonce",text:"Aucune annonce enregistrée pour la société active.",action:recruitmentCan("create")?'<button type="button" class="primary" onclick="openAnnouncementForm()">+ Nouvelle annonce</button>':""});
 }
 function filterRecruitAnnouncements(){
   const q=document.getElementById("announcementSearch")?.value||"";const status=document.getElementById("announcementStatus")?.value||"";
-  const list=document.getElementById("announcementList");if(list)list.innerHTML=announcementListHTML(filteredRecruitAnnouncements(q,status));
+  const list=document.getElementById("announcementList");if(list)list.innerHTML=announcementListHTML(filteredRecruitAnnouncements(q,status),!!(q||status));
 }
 function renderRecruitAnnouncements(){
   const host=document.getElementById("announcementsSection");
   const items=filteredRecruitAnnouncements();
-  host.innerHTML=`<div class="section-head"><div><h2>Annonces recrutement</h2><p>Créez, publiez et clôturez les besoins de recrutement.</p></div>${recruitmentCan("create")?'<button class="primary" onclick="openAnnouncementForm()">+ Nouvelle annonce</button>':""}</div>
-    <div class="announcement-toolbar"><input id="announcementSearch" placeholder="Rechercher une annonce…" oninput="filterRecruitAnnouncements()"><select id="announcementStatus" onchange="filterRecruitAnnouncements()"><option value="">Tous les statuts</option>${["Brouillon","Publiée","Clôturée"].map(s=>`<option>${s}</option>`).join("")}</select></div>
-    <div id="announcementList" class="announcement-list">${announcementListHTML(items)}</div>`;
+  host.innerHTML=`<header class="rec-page-header"><div class="rec-page-heading"><h2>Annonces recrutement</h2><p>Créez, publiez et clôturez les besoins de recrutement.</p></div><div class="rec-page-actions"><span class="rec-count">${items.length} annonce${items.length>1?"s":""}</span>${recruitmentCan("create")?'<button type="button" class="primary" onclick="openAnnouncementForm()">+ Nouvelle annonce</button>':""}</div></header>
+    <div class="announcement-toolbar rec-filters" role="search" aria-label="Filtrer les annonces"><input id="announcementSearch" type="search" aria-label="Rechercher une annonce" placeholder="Rechercher une annonce…" oninput="filterRecruitAnnouncements()"><select id="announcementStatus" aria-label="Filtrer par statut" onchange="filterRecruitAnnouncements()"><option value="">Tous les statuts</option>${["Brouillon","Publiée","Clôturée"].map(s=>`<option>${s}</option>`).join("")}</select></div>
+    <div id="announcementList" class="announcement-list rec-card-grid">${announcementListHTML(items)}</div>
+    <p class="rec-note">Annonces enregistrées sur ce navigateur.</p>`;
 }
 
 function renderTabs(){
@@ -842,6 +907,7 @@ function switchTab(tab,force){
   if(isContract){loadContractReadyCandidates();return}
   document.getElementById("searchInput").value=tabState[tab].q||"";
   document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new"||!recruitmentCan("create"));
+  updateCandidatePageHeader();
   loadTab(tab);
 }
 function onSearchInput(){
@@ -859,7 +925,7 @@ async function loadTab(tab){
   const state=tabState[tab];
   const request=state.request=(state.request||0)+1;
   const wrap=document.getElementById("listWrap");
-  if(tab===activeTab&&wrap.dataset.loadedTab!==tab)wrap.innerHTML='<div class="empty">Chargement…</div>';
+  if(tab===activeTab&&wrap.dataset.loadedTab!==tab)wrap.innerHTML=recruitmentListSkeleton();
   try{
     const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:String(PAGE_SIZE)});
     if(state.societyFilter)params.set("society",state.societyFilter);
@@ -880,7 +946,7 @@ async function loadTab(tab){
       if(window.scrollX!==x||window.scrollY!==y)window.scrollTo(x,y);
     }
   }catch(error){
-    if(request===state.request&&tab===activeTab)document.getElementById("listWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
+    if(request===state.request&&tab===activeTab){const wrap=document.getElementById("listWrap");wrap.innerHTML=recruitmentErrorState(`Erreur de chargement : ${esc(error.message)}`,"loadTab(activeTab)");delete wrap.dataset.loadedTab}
   }
 }
 function matchesSearch(item,q){
@@ -964,21 +1030,22 @@ function renderCounters(){
   });
   const posteChips=[...posteCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([label,count])=>
     `<button type="button" class="counter-chip${state.posteFilter===label?" active":""}" onclick="setPosteFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`
-  ).join("")||'<span style="font-size:12px;color:var(--muted)">—</span>';
-  const tousAvisChip=`<button type="button" class="counter-chip${state.avisFilter?"":" active"}" onclick="setAvisFilter('')">Tous <span class="n">${state.items.length}</span></button>`;
+  ).join("");
+  const tousAvisChip=`<button type="button" class="counter-chip${state.avisFilter?"":" active"}" aria-pressed="${state.avisFilter?"false":"true"}" onclick="setAvisFilter('')">Tous <span class="n">${state.items.length}</span></button>`;
   const avisChips=tousAvisChip+["Favorable","Défavorable","Instance","Non évalué"].map(label=>{
     const count=avisCounts.get(label)||0;
     const cls=label==="Favorable"?"favorable":label==="Défavorable"?"defavorable":label==="Instance"?"instance":"";
-    return `<button type="button" class="counter-chip ${cls}${state.avisFilter===label?" active":""}" onclick="setAvisFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`;
+    return `<button type="button" class="counter-chip ${cls}${state.avisFilter===label?" active":""}" aria-pressed="${state.avisFilter===label?"true":"false"}" onclick="setAvisFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`;
   }).join("");
-  const note=state.total>state.items.length?`<div class="full" style="font-size:11px;color:var(--muted);margin-top:2px">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
+  const note=state.total>state.items.length?`<div class="rec-note">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
   const positionFilter=document.getElementById("positionFilter");if(positionFilter){positionFilter.innerHTML='<option value="">Tous les postes</option>'+[...posteCounts.keys()].sort((a,b)=>a.localeCompare(b,"fr")).map(label=>`<option value="${esc(label)}"${state.posteFilter===label?" selected":""}>${esc(label)}</option>`).join("")}
   const opinionFilter=document.getElementById("opinionFilter");if(opinionFilter)opinionFilter.value=state.avisFilter||"";
   const societyFilter=document.getElementById("candidateSocietyFilter");if(societyFilter){societyFilter.innerHTML='<option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option>'+recruitmentSocieties().map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");societyFilter.value=state.societyFilter||""}
   const total=document.getElementById("candidateTotal");if(total)total.textContent=`${state.total} dossier${state.total>1?"s":""}`;
-  document.getElementById("countersRow").innerHTML=`
-    <div class="counter-group"><div class="counter-group-title">Par poste</div><div class="counter-chips">${posteChips}</div></div>
-    <div class="counter-group"><div class="counter-group-title">Par avis</div><div class="counter-chips">${avisChips}</div></div>
+  // Sans dossier ni filtre rapide actif, la zone est masquée : l'écran vide reste compact.
+  document.getElementById("countersRow").innerHTML=!state.items.length&&!state.avisFilter&&!state.posteFilter?"":`
+    <div class="rec-chip-group" role="group" aria-label="Filtrer par avis"><span class="rec-chip-label">Avis</span><div class="rec-chips">${avisChips}</div></div>
+    ${posteCounts.size?`<div class="rec-chip-group" role="group" aria-label="Filtrer par poste"><span class="rec-chip-label">Poste</span><div class="rec-chips">${posteChips}</div></div>`:""}
     ${note}`;
 }
 function statusPill(item){
@@ -1034,7 +1101,7 @@ function rowActions(item){
   if(!recruitmentCan("update"))return "—";
   const editable=activeTab!=="archive"&&activeTab!=="recruited";
   const favorable=recruitmentCan("create")&&item.data?.avisDecision==="Favorable";
-  return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
+  return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" aria-label="Autres actions" aria-haspopup="menu" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
 function handleCandidateRowClick(event,id){if(event.target.closest("button,select,input,a,textarea"))return;openCandidateForm(id)}
 function handleCandidateRowKeydown(event,id){if((event.key==="Enter"||event.key===" ")&&!event.target.closest("button,select,input,a,textarea")){event.preventDefault();openCandidateForm(id)}}
@@ -1139,23 +1206,25 @@ function renderList(){
   const state=tabState[activeTab];
   const filtered=filteredItems(activeTab);
   if(!filtered.length){
-    document.getElementById("listWrap").innerHTML='<div class="empty">Aucun candidat.</div>';
+    document.getElementById("listWrap").innerHTML=candidateEmptyState();
     return;
   }
   const pageItems=filtered;
-  document.getElementById("listWrap").innerHTML=`<table><thead><tr>
-    <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th>${sortableHeader("society","Société")}</th><th>${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th>${sortableHeader("date","Date")}</th><th>Actions</th><th>${sortableHeader("avis","Avis")}</th>
+  document.getElementById("listWrap").innerHTML=`<table class="rec-table rec-table-sortable"><thead><tr>
+    <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th class="rec-col-secondary">${sortableHeader("society","Société")}</th><th class="rec-col-secondary">${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th class="rec-col-secondary">${sortableHeader("date","Date")}</th><th>${sortableHeader("avis","Avis")}</th><th class="rec-col-actions">Actions</th>
   </tr></thead><tbody>
-  ${pageItems.map(item=>`<tr class="candidate-clickable-row" data-id="${item.id}" tabindex="0" aria-label="Ouvrir la fiche de ${esc(item.last_name||"")} ${esc(item.first_name||"")}" onclick="handleCandidateRowClick(event,${item.id})" onkeydown="handleCandidateRowKeydown(event,${item.id})">
-    <td><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div></div></div></td>
-    <td>${esc(item.desired_position||"—")}</td>
-    <td><span class="pill ${item.society?"pill-indigo":"pill-gray"}">${esc(item.society||"Non affecté")}</span></td>
-    <td>${esc(item.phone||"—")}</td>
-    <td>${statusPill(item)}</td>
-    <td style="font-size:11px;color:var(--muted);white-space:nowrap">${esc(formatDateFr(item.created_at))}</td>
-    <td>${rowActions(item)}</td>
-    <td>${avisCell(item)}</td>
-  </tr>`).join("")}
+  ${pageItems.map(item=>{
+    const reserveDate=activeTab==="reserve"&&item.data?.fichePositionValideeAt?`<div class="rec-row-note">En réserve depuis le ${esc(formatDateFr(item.data.fichePositionValideeAt))}</div>`:"";
+    return `<tr class="candidate-clickable-row" data-id="${item.id}" tabindex="0" aria-label="Ouvrir la fiche de ${esc(item.last_name||"")} ${esc(item.first_name||"")}" onclick="handleCandidateRowClick(event,${item.id})" onkeydown="handleCandidateRowKeydown(event,${item.id})">
+    <td class="rec-cell-main" data-label="Candidat"><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div><div class="rec-row-sub">${esc([item.society||"Non affecté",item.phone,formatDateFr(item.created_at)].filter(Boolean).join(" · "))}</div>${reserveDate}</div></div></td>
+    <td data-label="Poste">${esc(item.desired_position||"—")}</td>
+    <td class="rec-col-secondary" data-label="Société"><span class="pill ${item.society?"pill-indigo":"pill-gray"}">${esc(item.society||"Non affecté")}</span></td>
+    <td class="rec-col-secondary rec-cell-nowrap" data-label="Téléphone">${esc(item.phone||"—")}</td>
+    <td data-label="Statut">${statusPill(item)}</td>
+    <td class="rec-col-secondary rec-cell-date" data-label="Date">${esc(formatDateFr(item.created_at))}</td>
+    <td data-label="Avis">${avisCell(item)}</td>
+    <td class="rec-cell-actions" data-label="Actions">${rowActions(item)}</td>
+  </tr>`}).join("")}
   </tbody></table>`;
 }
 function renderPagination(){
@@ -1398,12 +1467,12 @@ function candidateField(id,value){const el=document.getElementById(id);if(el)el.
 function experienceRowHTML(row){
   row=row||{};
   return `<div class="exp-row">
-    <input class="exp-societe" placeholder="Société" value="${esc(row.societe||"")}">
-    <input class="exp-du" type="date" value="${esc(row.du||"")}">
-    <input class="exp-au" type="date" value="${esc(row.au||"")}">
-    <input class="exp-poste" placeholder="Poste" value="${esc(row.poste||"")}">
-    <input class="exp-motif" placeholder="Motif de départ" value="${esc(row.motif||"")}">
-    <button type="button" class="exp-row-remove" onclick="this.closest('.exp-row').remove()" title="Supprimer cette ligne">✕</button>
+    <label class="exp-field exp-field-societe"><span>Société</span><input class="exp-societe" value="${esc(row.societe||"")}"></label>
+    <label class="exp-field exp-field-poste"><span>Poste</span><input class="exp-poste" value="${esc(row.poste||"")}"></label>
+    <label class="exp-field exp-field-du"><span>Du</span><input class="exp-du" type="date" value="${esc(row.du||"")}"></label>
+    <label class="exp-field exp-field-au"><span>Au</span><input class="exp-au" type="date" value="${esc(row.au||"")}"></label>
+    <label class="exp-field exp-field-motif"><span>Motif de départ</span><input class="exp-motif" value="${esc(row.motif||"")}"></label>
+    <button type="button" class="exp-row-remove" onclick="this.closest('.exp-row').remove()" title="Supprimer cette ligne" aria-label="Supprimer cette ligne">×</button>
   </div>`;
 }
 function addExperienceRow(row){
