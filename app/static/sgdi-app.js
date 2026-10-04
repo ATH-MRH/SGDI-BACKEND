@@ -8582,6 +8582,12 @@ function normalizeCentralPage(view){
   // font partie des KPI et son bandeau possède déjà son propre habillage. Ne pas
   // lui appliquer le nettoyage générique des emojis/titres des anciennes vues.
   if(view.querySelector(".dp-clean-page"))return;
+  // OPS → Sites (command center) possède tout son DOM : sa racine contient le h1, donc le
+  // normalisateur d'en-tête la prenait pour un bandeau de page (classe .module-page-header :
+  // fond blanc, flex) et rangeait ses KPI en « actions » — la grille cassait au premier
+  // renderView suivant le chargement. Le premier rendu, asynchrone, n'est jamais normalisé :
+  // les rendus suivants doivent produire exactement le même DOM.
+  if(view.querySelector(".ops-sites-cc"))return;
   const iconPattern=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
   const walker=document.createTreeWalker(view,NodeFilter.SHOW_TEXT,{acceptNode(node){
     const parent=node.parentElement;

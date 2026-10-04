@@ -25,7 +25,7 @@ const situation = () => new Map([[1, 4, 3, 1, 0], [2, 3, 10, 0, 7], [3, 2, 2, 0,
 
 function boot(t, { transverse = 'ops', session = {}, db = {} } = {}) {
   const r = loadSgdiApp(['emptyDB', 'renderOpsSitesCommandCenter', 'opsSitesCcEnabled', 'opsSitesCcFilter', 'opsSitesCcReset', 'opsSitesCcQuick', 'opsSitesCcSetView',
-    'opsSitesCcSetLayout', 'opsSitesCcToggleDetail', 'opsSitesCcLoadingHTML', 'opsSitesCcMapStyle', 'renderSites', 'sgdiMapLibreStyle']);
+    'opsSitesCcSetLayout', 'opsSitesCcToggleDetail', 'opsSitesCcLoadingHTML', 'opsSitesCcMapStyle', 'renderSites', 'sgdiMapLibreStyle', 'normalizeCentralPage']);
   assert.ifError(r.loadError);
   t.after(() => r.window.close());
   const w = r.window;
@@ -208,4 +208,58 @@ test('Sites Command Center — métier Sites intact (fonctions existantes non mo
   for (const line of block.split('\n')) {
     if (/^\s*(#view|body\.atlas-ui)/.test(line)) assert.match(line, /\.ops-sites-cc/, 'style confiné au command center: ' + line.slice(0, 80));
   }
+});
+
+// Régression production : la page était correcte au chargement puis sa grille cassait (fond blanc,
+// titre et onglets déplacés, 7 KPI en colonne) dès qu'un rafraîchissement relançait renderView.
+// renderView passe normalizeCentralPage sur la vue ; le normalisateur d'en-tête prenait la racine
+// du command center (elle contient le h1) pour un bandeau de page.
+test('OPS Sites V3 reste stable après chargement asynchrone', t => {
+  const ctx = boot(t);
+  // 1. Premier rendu : celui du chargement asynchrone (écrit dans la vue sans normalisation).
+  const root = render(ctx);
+  const structure = () => ({
+    rootClass: ctx.view.querySelector('.ops-sites-cc').className,
+    html: ctx.view.innerHTML,
+    kpiParents: new Set([...ctx.view.querySelectorAll('.ops-sites-cc-kpi')].map(el => el.parentElement.className)),
+    kpis: ctx.view.querySelectorAll('.ops-sites-cc-kpis > .ops-sites-cc-kpi').length,
+    generic: ctx.view.querySelectorAll('.module-page-header,.module-page-header-actions,.module-page-header-copy,.module-title-clean').length,
+  });
+  const expected = structure();
+  assert.equal(expected.rootClass, 'ops-sites-cc');
+  assert.ok(expected.kpis >= 6, 'tous les KPI Sites sont dans la rangée (missions masqué sans compteur serveur)');
+  assert.equal(expected.generic, 0);
+  // 2. Les requêtes se résolvent, les callbacks relancent renderView : la vue est renormalisée
+  //    (plusieurs fois : compteurs, situation des sites, rafraîchissement périodique).
+  for (let pass = 0; pass < 3; pass++) {
+    ctx.T().normalizeCentralPage(ctx.view);
+    const now = structure();
+    assert.equal(now.rootClass, 'ops-sites-cc', 'la racine ne devient jamais un bandeau de page générique');
+    assert.equal(now.generic, 0, 'aucune classe du layout générique réappliquée');
+    assert.deepEqual([...now.kpiParents], ['ops-sites-cc-kpis'], 'les KPI restent dans leur rangée, jamais déplacés en « actions »');
+    assert.equal(now.kpis, expected.kpis);
+    assert.equal(now.html, expected.html, 'DOM strictement identique au premier rendu');
+  }
+  // 3. Un nouveau rendu complet (retour sur la route, nouvelles données) puis normalisation : même structure.
+  render(ctx);
+  ctx.T().normalizeCentralPage(ctx.view);
+  assert.equal(structure().html, expected.html);
+  assert.equal(root.ownerDocument.querySelectorAll('#view .ops-sites-cc').length, 1, 'un seul command center');
+  assert.ok(ctx.view.classList.contains('module-view'), 'la vue garde sa classe de module');
+  // 4. Les changements de vue (Carte → Liste → Analytique → Carte) ne réintroduisent rien.
+  for (const mode of ['liste', 'analytique', 'carte']) {
+    ctx.T().opsSitesCcSetView(mode);
+    ctx.T().normalizeCentralPage(ctx.view);
+    assert.equal(ctx.view.querySelector('.ops-sites-cc').className, 'ops-sites-cc');
+    assert.equal(ctx.view.querySelectorAll('.module-page-header,.module-page-header-actions').length, 0);
+  }
+});
+
+test('le normalisateur générique continue de s\'appliquer aux autres pages', t => {
+  const ctx = boot(t);
+  ctx.view.innerHTML = '<div><h1>titre de page</h1><button class="btn">Action</button></div><table></table>';
+  ctx.T().normalizeCentralPage(ctx.view);
+  assert.ok(ctx.view.firstElementChild.classList.contains('module-page-header'), 'en-tête générique toujours normalisé');
+  assert.ok(ctx.view.querySelector('.module-page-header-actions .btn'));
+  assert.ok(ctx.view.querySelector('table').classList.contains('module-table-clean'));
 });
