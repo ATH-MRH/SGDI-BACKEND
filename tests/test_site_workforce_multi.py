@@ -260,16 +260,44 @@ def test_dashboard_and_personnel_query_count_does_not_grow_with_sites(client, db
     assert body["total"] == 150 and len(body["items"]) == 25
 
 
+WORKSPACE = "/api/site-workforce/attendance/workspace"
+
+
+def test_monthly_workspace_requires_month_and_enforces_site_scope(client, world):
+    """Workspace mensuel BEO : `month` (AAAA-MM) est obligatoire par contrat, et un mois valide
+    n'ouvre rien de plus que le périmètre du compte — site autorisé 200, site/société hors
+    périmètre 403, exactement comme les autres routes du module."""
+    ce01 = world["account"]("ce01", "AB", ["A1", "A2", "B1"])
+    month = date.today().strftime("%Y-%m")
+
+    def get(**params):
+        return client.get(WORKSPACE, headers=ce01, params=params)
+
+    assert get().status_code == 422
+    assert get(month=str(date.today())).status_code == 422  # un jour n'est pas un mois
+    r = get(month=month)
+    assert r.status_code == 200, r.text
+    assert r.json()["month"] == month
+    for key in ("A1", "A2", "B1"):
+        assert get(month=month, site_id=world["sites"][key]).status_code == 200, key
+    assert get(month=month, site_id=world["sites"]["C1"]).status_code == 403
+    assert get(month=month, society=world["socs"]["C"]).status_code == 403
+
+
 def test_production_ce01_multi_site_account_reaches_every_endpoint(client, world):
     """Bug production : CE01 multi-sites était bloqué par « exactement un site ». Toutes les
     routes GET du module (énumérées depuis l'application, jamais une liste figée) répondent
     200 sur le périmètre agrégé, 200 sur chaque site autorisé, 403 sur un site forgé."""
     from app.main import app
     ce01 = world["account"]("ce01", "AB", ["A1", "A2", "B1"])
-    extra = {"/api/site-workforce/attendance": {"presence_date": str(date.today())}}
+    # Paramètres de requête OBLIGATOIRES par contrat (jamais un contournement du périmètre) :
+    # le pointage journalier exige son jour, le workspace mensuel son mois au format AAAA-MM.
+    extra = {"/api/site-workforce/attendance": {"presence_date": str(date.today())},
+             WORKSPACE: {"month": date.today().strftime("%Y-%m")}}
     paths = sorted({r.path for r in app.routes if getattr(r, "path", "").startswith("/api/site-workforce")
                     and "GET" in getattr(r, "methods", set()) and "{" not in r.path})
     assert len(paths) >= 12, paths
+    assert WORKSPACE in paths, paths
     for path in paths:
         params = extra.get(path, {})
         r = client.get(path, headers=ce01, params=params)
