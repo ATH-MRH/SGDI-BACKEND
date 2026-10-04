@@ -10,7 +10,9 @@ l'historique des pointages ni du Planning intelligent.
 
 Une affectation POSTE_CONTINU désigne explicitement son groupe (A / B / C / D) et son modèle
 officiel (`rotation_templates.official = 1`). Le cycle est ANCRÉ PAR SITE, pour tous les groupes à
-la fois : `SiteRotation.start_date` est le jour J1 du groupe de décalage 0. Sans régime explicite
+la fois : `SiteRotation.start_date` est le jour J1 du groupe A (Matin 06:00–14:00). Cette date
+n'est jamais inventée : une affectation postée peut être préparée avant l'ancrage du site, et
+`official_shift` répond alors « ROTATION_NOT_CONFIGURED » sans aucune vacation. Sans régime explicite
 (affectations historiques), rien ne change : `official_shift` répond « LEGACY » et les règles
 existantes continuent de s'appliquer.
 
@@ -54,7 +56,9 @@ STATUS_OFFICIAL = "OFFICIAL"
 STATUS_NORMAL = "NORMAL"
 STATUS_LEGACY = "LEGACY"
 STATUS_NO_ASSIGNMENT = "NO_ASSIGNMENT"
-STATUS_NOT_CONFIGURED = "NOT_CONFIGURED"
+# Affectation postée préparée (régime, groupe, modèle explicites) sur un site dont le cycle n'est
+# pas encore ancré : aucun planning n'est calculé ni deviné.
+STATUS_NOT_CONFIGURED = "ROTATION_NOT_CONFIGURED"
 
 
 def _cycle_day(shift: str) -> dict[str, str]:
@@ -177,18 +181,15 @@ def is_posted(assignment: Assignment | None) -> bool:
 
 
 def validate_posted_assignment(db: Session, *, site_id: int, group_code: str | None, rotation_id: int | None) -> None:
-    """Une affectation POSTE_CONTINU nomme explicitement son groupe et son modèle officiel,
-    lequel doit être en service sur le site (ancrage du cycle)."""
+    """Une affectation POSTE_CONTINU nomme explicitement son groupe et son modèle officiel.
+    L'ancrage du cycle sur le site n'est PAS exigé : l'affectation peut être préparée avant ;
+    le planning officiel reste alors « ROTATION_NOT_CONFIGURED »."""
     rotation = db.get(RotationTemplate, rotation_id) if rotation_id else None
     if rotation is None or not rotation.official:
         raise ValueError("Travail posté : le modèle de rotation officiel est obligatoire")
     validate_model(rotation)
     if str(group_code or "") not in (rotation.group_offsets or {}) or group_code not in GROUPS:
         raise ValueError("Travail posté : le groupe doit être A, B, C ou D")
-    linked = db.execute(select(SiteRotation.id).where(SiteRotation.site_id == site_id, SiteRotation.rotation_id == rotation.id,
-                                                      SiteRotation.active == 1).limit(1)).first()
-    if not linked:
-        raise ValueError("Travail posté : le modèle officiel n'est pas en service sur ce site")
 
 
 # ── Source officielle ────────────────────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ def shift_on(db: Session, assignment: Assignment, work_date: date) -> dict[str, 
         return {**out, "reason": "Groupe absent du modèle officiel"}
     anchor = site_anchor(db, assignment.site_id, rotation.id, work_date)
     if anchor is None:
-        return {**out, "reason": "Modèle officiel non en service sur ce site à cette date"}
+        return {**out, "reason": "Rotation non configurée : cycle officiel non ancré sur ce site à cette date"}
     index = ((work_date - anchor.start_date).days + int(rotation.group_offsets[assignment.group_code])) % rotation.cycle_length
     day = rotation.cycle_days[index]
     shift = shift_of(day)
@@ -271,12 +272,13 @@ def official_shift(db: Session, *, employee_id: int, site_id: int, at: datetime)
 
 def legacy_rotation(db: Session, assignment: Assignment, work_date: date) -> dict[str, Any] | None:
     """Vacation officielle au format du moteur historique (`rotation_for_date`), pour que les
-    écrans existants lisent la même vérité. None si l'affectation n'est pas en travail posté."""
+    écrans existants lisent la même vérité. None si l'affectation n'est pas en travail posté ;
+    `known: False` si la rotation n'est pas configurée (ni travaillé ni repos : rien n'est déduit)."""
     if not is_posted(assignment):
         return None
     plan = shift_on(db, assignment, work_date)
     if not plan["official"]:
-        return {"known": False, "on": False, "period": "", "faction": "repos", "recovery": 0, "start_time": "", "end_time": ""}
+        return {"known": False, "on": None, "period": "", "faction": "", "recovery": 0, "start_time": "", "end_time": ""}
     working = bool(plan["working"])
     period = _LEGACY_STATUS[plan["shift"]] if working else "recuperation"
     return {"known": True, "on": working, "period": period, "faction": period if working else "repos",

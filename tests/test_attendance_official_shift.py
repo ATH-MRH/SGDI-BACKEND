@@ -17,7 +17,7 @@ from app.modules.auth.models import AuditEvent
 from app.modules.drh.models import Employee
 from app.modules.irongs import sql_bridge
 from app.modules.ops import service as ops_service
-from app.modules.ops.models import Assignment, RotationTemplate, Site, SiteRotation
+from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site, SiteRotation
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 
 TZ = ZoneInfo("Africa/Algiers")
@@ -245,7 +245,7 @@ def test_no_assignment_and_unanchored_site_are_reported_not_guessed(db):
     db.commit()
     assert official.official_shift(db, employee_id=emp.id, site_id=other.id, at=_at(ANCHOR, "12:00"))["status"] == "NO_ASSIGNMENT"
     before = _shift(db, emp, site, ANCHOR - timedelta(days=3))        # avant la mise en service du modèle sur le site
-    assert before["status"] == "NOT_CONFIGURED" and before["official"] is False and before["shift"] is None
+    assert before["status"] == "ROTATION_NOT_CONFIGURED" and before["official"] is False and before["shift"] is None
     assert before["regime"] == "POSTE_CONTINU" and before["group"] == "A"
     assert core.planned_day(db, db.get(Assignment, before["assignment_id"]), site, ANCHOR - timedelta(days=3))["known"] is False
 
@@ -340,13 +340,68 @@ def test_api_creates_posted_assignment_only_when_fully_explicit(client, db, auth
     assert client.delete(f"/api/ops/site-rotations/{link.id}", headers=auth_headers).status_code == 409
 
 
-def test_api_posted_assignment_needs_the_model_in_service_on_the_site(client, db, auth_headers):
-    site, emp = _site(db, linked=False), _employee(db)
+def test_api_posted_assignment_can_be_prepared_before_the_site_is_anchored(client, db, auth_headers):
+    site, emp = _site(db, linked=False, rotation_system="3x8"), _employee(db)
     model = official.ensure_official_model(db)
     db.commit()
-    payload = _payload(emp, site, work_regime="POSTE_CONTINU", group_code="A", rotation_id=model.id)
-    assert client.post("/api/ops/assignments", headers=auth_headers, json=payload).status_code == 400
-    assert db.execute(select(Assignment).where(Assignment.employee_id == emp.id)).first() is None
+    payload = _payload(emp, site, work_regime="POSTE_CONTINU", group_code="B", rotation_id=model.id)
+    # L'explicite reste obligatoire : sans groupe ou sans modèle, refus même en préparation.
+    assert client.post("/api/ops/assignments", headers=auth_headers, json={k: v for k, v in payload.items() if k != "group_code"}).status_code == 422
+    assert client.post("/api/ops/assignments", headers=auth_headers, json={k: v for k, v in payload.items() if k != "rotation_id"}).status_code == 422
+    created = client.post("/api/ops/assignments", headers=auth_headers, json=payload)
+    assert created.status_code == 200, created.text
+    assert (created.json()["work_regime"], created.json()["group_code"], created.json()["rotation_id"]) == ("POSTE_CONTINU", "B", model.id)
+
+    url = f"/api/attendance/official-shift?employee_id={emp.id}&site_id={site.id}&at=2026-10-01T15:00:00"
+    out = client.get(url, headers=auth_headers).json()
+    assert out["status"] == "ROTATION_NOT_CONFIGURED" and out["official"] is False and "non configurée" in out["reason"]
+    assert (out["regime"], out["group"], out["model"]["code"]) == ("POSTE_CONTINU", "B", official.OFFICIAL_MODEL_CODE)
+    for key in ("shift", "shift_label", "working", "in_progress", "work_date", "cycle_day", "scheduled_start", "scheduled_end", "normal_minutes"):
+        assert out[key] is None, key
+    assert out["model"]["anchor_date"] is None
+
+    # Un gabarit NON officiel reste soumis à la règle historique (rotation active sur le site).
+    template = RotationTemplate(code=f"R{_tag()}", name="Historique", cycle_length=7, active=1, group_offsets={"A": 0},
+                                cycle_days=[{"status": "travail"}] * 7)
+    db.add(template); db.commit()
+    assert client.post("/api/ops/assignments", headers=auth_headers, json=_payload(emp, site, rotation_id=template.id)).status_code == 400
+
+    # Dès que le site est ancré, le planning officiel s'applique sans toucher à l'affectation.
+    linked = client.post("/api/ops/site-rotations", headers=auth_headers,
+                         json={"site_id": site.id, "rotation_id": model.id, "start_date": ANCHOR.isoformat()})
+    assert linked.status_code == 201, linked.text
+    out = client.get(url, headers=auth_headers).json()
+    assert (out["status"], out["shift"], out["cycle_day"], out["model"]["anchor_date"]) == ("OFFICIAL", "APRES_MIDI", 3, ANCHOR.isoformat())
+
+
+def test_unanchored_posted_assignment_triggers_no_posted_computation(db):
+    site, emp = _site(db, linked=False, rotation_system="24/48"), _employee(db)
+    row = _assign(db, emp, site, regime=official.REGIME_POSTE_CONTINU, group="A", start=ANCHOR)
+    db.commit()
+    model = db.get(RotationTemplate, row.rotation_id)
+    for i in range(8):
+        day = ANCHOR + timedelta(days=i)
+        plan = _shift(db, emp, site, day)
+        assert plan["status"] == "ROTATION_NOT_CONFIGURED" and plan["shift"] is None and plan["scheduled_start"] is None
+        assert plan["cycle_day"] is None and plan["normal_minutes"] is None and plan["in_progress"] is None
+        # Ni le cycle officiel (qui serait ancré sur la date d'affectation), ni le moteur du site.
+        assert core.planned_day(db, row, site, day) == {"known": False, "on": None, "period": "", "start_time": "", "end_time": ""}
+        rot = ops_service.assignment_rotation_for_date(db, row, site, model, day)
+        assert rot["known"] is False and rot["on"] is None and "cycle_day" not in rot
+    # Durée autorisée : règle historique du site (24/48 ⇒ 24 h), pas les 480 min du travail posté.
+    assert core.authorized_work_minutes(db, row, site, ANCHOR) == 24 * 60
+
+    generated = ops_service.generate_rotation_daily_presence(db, SimpleNamespace(presence_date=ANCHOR, site_id=site.id, society=None))
+    assert db.execute(select(DailyPresence).where(DailyPresence.employee_id == emp.id)).first() is None
+    assert emp.id not in {item["employee_id"] for item in ops_service.standby_personnel(db, ANCHOR, site_id=site.id)}
+    assert emp.code not in str(generated)
+
+    # Pointage accepté (le fait est enregistré) mais aucune anomalie de planning n'est inventée.
+    for hhmm in ("09:30", "18:10"):
+        core.record_scan(db, employee=emp, source="QR", actor=SimpleNamespace(id=None, username="PTG"), idempotency_key=f"k-{_tag()}",
+                         now=_at(ANCHOR, hhmm))
+    types = {a.anomaly_type for a in db.execute(select(AttendanceAnomaly).where(AttendanceAnomaly.employee_id == emp.id)).scalars()}
+    assert not types & {"LATE", "OFF_SCHEDULE", "OVERTIME"}
 
 
 def test_api_legacy_and_normal_assignments_are_unchanged(client, db, auth_headers):

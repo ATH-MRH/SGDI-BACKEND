@@ -26,17 +26,26 @@ Cycle de 8 jours : J1-J2 `MATIN` 06:00→14:00 · J3-J4 `APRES_MIDI` 14:00→22:
 jour 1 Matin, 1 Après-midi, 1 Nuit, 1 OFF : le groupe de référence étant à 0, les trois autres sont
 nécessairement à 2, 4 et 6 jours (6 ordres possibles). Le modèle retient l'ordre de relève
 A → B → C → D (`A:0, B:2, C:4, D:6`) : le jour où A est du Matin, B est d'Après-midi, C de Nuit,
-D en repos. **Cet ordre est une convention à confirmer par l'exploitation.**
+D en repos. Ordre confirmé par l'exploitation.
 
 **Ancrage par site.** Le cycle est commun aux quatre groupes d'un site : `site_rotations.start_date`
 (lien site ↔ modèle officiel) est le jour J1 du groupe A. Cette date est une donnée d'exploitation,
-saisie site par site ; sans lien, aucune affectation postée n'est acceptée sur le site, et avant
-cette date le planning officiel répond `NOT_CONFIGURED` (rien n'est deviné).
+saisie site par site et **jamais inventée**. L'ordre A → B → C → D et cette règle d'ancrage sont
+confirmés par l'exploitation.
+
+**Rotation non configurée.** Une affectation `POSTE_CONTINU` peut être préparée (régime, groupe et
+modèle explicites) avant que le site ait sa date d'ancrage. Tant que le lien n'existe pas — ou pour
+une date antérieure à l'ancrage — `official_shift` répond `ROTATION_NOT_CONFIGURED` : régime, groupe
+et modèle sont renvoyés, mais aucune vacation, aucun horaire, aucun jour de cycle. Aucun calcul
+posté n'est exécuté : pas d'anomalie de retard ni de jour non travaillé, pas de présence ni de repos
+générés par OPS, durée autorisée selon la règle historique du site. L'interface devra afficher
+« Rotation non configurée ». Dès que le site est ancré, le planning officiel s'applique sans autre
+action.
 
 ## Source officielle
 
 `app/modules/attendance/official.py::official_shift(db, employee_id=, site_id=, at=)` →
-`status` (`OFFICIAL` / `NORMAL` / `LEGACY` / `NO_ASSIGNMENT` / `NOT_CONFIGURED`), `regime`, `group`,
+`status` (`OFFICIAL` / `NORMAL` / `LEGACY` / `NO_ASSIGNMENT` / `ROTATION_NOT_CONFIGURED`), `regime`, `group`,
 `shift`, `working`, `in_progress`, `work_date`, `cycle_day`, `scheduled_start`, `scheduled_end`,
 `normal_minutes` (480, ou 0 en `OFF`), `model` (`id`, `code`, `version`, `anchor_date`).
 

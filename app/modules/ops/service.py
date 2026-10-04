@@ -347,6 +347,11 @@ def generate_rotation_daily_presence(db: Session, payload: Any, site_ids: list[i
         active_site_ids.add(site.id)
         rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
         rot = assignment_rotation_for_date(db, assignment, site, rotation, presence_date)
+        if rot.get("known") is False:
+            # Travail posté dont la rotation n'est pas configurée sur le site : ni présence ni
+            # repos générés (aucun planning n'est inventé).
+            skipped += 1
+            continue
         rotation_name = rotation.name if rotation else site.rotation_system
         existing = db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date, DailyPresence.employee_id == assignment.employee_id).order_by(DailyPresence.id.desc())).scalars().first()
         if not rot["on"]:
@@ -423,7 +428,7 @@ def standby_personnel(db: Session, presence_date: date, society: str | None = No
             continue
         rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
         rot = assignment_rotation_for_date(db, assignment, site, rotation, presence_date)
-        if rot["on"]:
+        if rot["on"] or rot.get("known") is False:
             continue
         rows.append({
             "employee_id": employee.id,

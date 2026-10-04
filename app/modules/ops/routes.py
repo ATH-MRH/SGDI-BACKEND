@@ -390,7 +390,8 @@ def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTas
     if payload.rotation_id:
         rotation = db.get(RotationTemplate, payload.rotation_id)
         link = db.execute(select(SiteRotation).where(SiteRotation.site_id == payload.site_id, SiteRotation.rotation_id == payload.rotation_id, SiteRotation.active == 1)).scalars().first()
-        if not rotation or not link:
+        # Modèle officiel : l'affectation postée peut être préparée avant l'ancrage du site.
+        if not rotation or (not link and not rotation.official):
             raise HTTPException(status_code=400, detail="Cette rotation n'est pas active sur ce site")
     if payload.work_regime == official_shifts.REGIME_POSTE_CONTINU:
         if "group_code" not in payload.model_fields_set:
