@@ -1,0 +1,87 @@
+ABANDON POSTE — fonctionnement et validation
+
+Configuration
+ATTENDANCE_ABANDON_THRESHOLD_MINUTES (entier >= 1, défaut 60).
+Le serveur prend son heure sous le verrou de l'employé, dans le fuseau
+Attendance Core (Africa/Algiers), puis compare une durée exacte à ce seuil.
+60 minutes pile sont acceptées ; 59 min 59 s sont refusées. L'heure fournie
+par le client est ignorée. La modale montre une prévisualisation serveur ;
+le POST recalcule les valeurs lors de la confirmation.
+
+Vacation et présence
+La vacation est l'instantané counted de l'événement ARRIVAL existant.
+shift_id désigne cet événement d'arrivée ; le planning n'est jamais recréé.
+Une entrée sans instantané valide (ancienne entrée ou rotation non configurée)
+est refusée. Il faut une prise de service ouverte, la vacation commencée et
+non terminée, une affectation valide, le bon site et la bonne société.
+Le départ DEPARTURE passe par Attendance Core : DailyPresence reste PRESENT,
+l'arrivée réelle reste dans le journal et dans scanArrivee, le départ réel
+clôt le temps comptabilisé. Aucun changement des règles de paie.
+
+Transaction, audit, idempotence
+Le départ réel, ABANDON_POSTE, l'anomalie, les alertes et l'audit sont écrits
+dans une transaction. Une erreur avant commit annule l'ensemble.
+PostgreSQL utilise le verrou d'employé existant ; SQLite utilise BEGIN
+IMMEDIATE pour obtenir une transaction réelle avant les savepoints.
+ABANDON_POSTE utilise la contrainte existante (source, idempotency_key),
+avec source=POINTEUR et clé abandon:<employee_id>:<arrival_event_id>.
+Un retry après commit renvoie le même événement et ses mêmes alertes.
+Les événements et l'audit ne sont pas corrigés après leur enregistrement.
+
+Transmission OPS / DRH
+Deux alertes dans le cockpit transverse existant, avec règles
+attendance.abandon_poste.ops et attendance.abandon_poste.drh.
+Elles contiennent l'employé, le matricule, la société, le site, la date/heure
+de départ, la fin prévue, l'écart, le motif et le pointeur. Les preuves et
+l'historique utilisent AlertEvidence et AlertHistory existants.
+Le catalogue est initialisé avec commit=False dans cette transaction,
+avec gestion des courses sur son unicité. CREATED signifie alerte durable
+créée, pas accusé de lecture. Pas d'e-mail ni de nouveau système de queue.
+
+API
+GET /api/portal/attendance-manual/abandon/context
+  employee_id, site_id optionnel ; aperçu serveur en lecture seule.
+POST /api/portal/attendance-manual/abandon
+  employee_id, site_id, society, shift_id, observation (1 à 500 caractères).
+  Motif obligatoire, permission explicite attendance/manual_entry/create,
+  ou administrateur global suivant le RBAC existant ; périmètre site/société.
+GET /api/attendance/business-events
+  day, society, site_id, employee_id, event_type (défaut ABANDON_POSTE),
+  page et page_size (maximum 200). Permissions et périmètres du cockpit.
+  day filtre la date réelle de l'événement dans le fuseau métier.
+  presence_date garde le jour de début de vacation, distinct après minuit.
+GET /api/portal/attendance-manual/context
+  Ajout du seuil configuré pour l'affichage de la fiche manuelle.
+Aucune interface BRQ créée.
+
+Modèles
+Réutilisation : AttendanceEvent, AttendanceAnomaly, DailyPresence,
+AttendanceSheetLine (via le départ existant), AlertRule, Alert,
+AlertEvidence, AlertHistory, AuditEvent. Employee / Assignment / Site /
+SiteRotation et le planning officiel restent les références métier.
+La société est une valeur canonique society dans ce schéma ; pas de
+company_id artificiel. Aucun nouveau modèle ni migration de schéma.
+
+UI
+Trois actions alignées de même taille, vert / rouge / orange.
+Modale compacte avec contexte serveur et motif obligatoire, verrouillage
+des actions en vol, annulation, focus et clavier ; résultat avec départ
+réel, écart recalculé et état de création des alertes OPS / DRH.
+
+Validation
+python3 -m pytest tests/test_attendance_abandon.py -q
+npm test
+npm run test:pointeur-abandon-chrome
+npm run test:pointeur-v5-chrome
+Tests additionnels : Attendance Core / API / portail / counted / maintien /
+récap / alertes / contrôle poste / permissions / feuilles / écarts / planning /
+fuseau métier. Les tests PostgreSQL exigent ATTENDANCE_PG_URL, qui doit
+désigner une base JETABLE explicitement configurée.
+
+Limite préexistante des tests combinés
+Le test test_kpis_count_people_and_never_events affiche 2 anomalies au lieu
+de 1 lorsqu'il suit les autres modules. Même échec reproduit dans une copie
+isolée de HEAD initial 7b1ce8136a96bce8dd043b1f2fd08ad909a815da.
+Le module tests/test_pointeur_control_post.py passe seul (17 tests).
+Aucune correction des règles métier ou du compteur n'a été introduite pour
+masquer cet échec d'isolation des tests. À traiter dans un lot de tests séparé.

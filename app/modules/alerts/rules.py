@@ -20,7 +20,14 @@ MISSING_CHECKOUT_THRESHOLD_MINUTES = 12 * 60  # 12h après l'arrivée sans dépa
 # app/modules/drh/service.py, ex. ligne 178 : Employee.status.in_(["actif","active"])).
 CONTRACT_RELEVANT_EMPLOYEE_STATUSES: frozenset[str] = frozenset({"actif", "active"})
 
+ABANDON_RULES = {"OPS": "attendance.abandon_poste.ops", "DRH": "attendance.abandon_poste.drh"}
+
 RULE_CATALOG: tuple[dict, ...] = (
+    *({"rule_key": key, "rule_version": 1, "label": "Abandon de poste · " + audience,
+       "description": "Abandon validé par le pointeur", "module_key": audience.lower(),
+       "feature_key": None, "enabled": True, "severity_base": "warning",
+       "configuration_json": {"event_type": "ABANDON_POSTE", "audience": audience}}
+      for audience, key in ABANDON_RULES.items()),
     {
         "rule_key": RULE_CONTRACT_EXPIRING,
         "rule_version": 1,

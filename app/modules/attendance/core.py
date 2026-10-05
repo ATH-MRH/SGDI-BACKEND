@@ -358,6 +358,7 @@ def record_scan(
     now: datetime | None = None,
     intent: str | None = None,
     manual_entry_allowed: bool = False,
+    abandon_shift_id: int | None = None,
 ) -> dict[str, Any]:
     """Enregistre un pointage (arrivée ou départ déterminé par l'état métier réel) et met à
     jour la journée DailyPresence. Renvoie la réponse affichée par le terminal."""
@@ -371,6 +372,9 @@ def record_scan(
     explicit_now = now
     actor_label = getattr(actor, "username", None) or ""
     actor_id = getattr(actor, "id", None)
+    if abandon_shift_id is not None and (
+            not isinstance(observation, str) or not observation.strip() or len(observation) > 500):
+        raise HTTPException(422, "Motif / observation obligatoire (500 caractères maximum)")
     observation = str(observation or "").strip()[:500]
     assignment = active_assignment(db, employee.id)
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
@@ -381,6 +385,12 @@ def record_scan(
         if previous:
             return _duplicate_response(previous, employee, site_name, "Déjà enregistré")
 
+    if abandon_shift_id is not None and db.get_bind().dialect.name == "sqlite":
+        # sqlite3 diffère BEGIN jusqu'à une écriture : ouvrir une transaction réelle
+        # avant les SAVEPOINTs et sérialiser les confirmations comme le verrou PostgreSQL.
+        connection = db.connection()
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
     _lock_employee(db, employee.id)
     # Horodatage pris SOUS le verrou : une requête parallèle validée juste avant a forcément
     # une heure antérieure (sinon l'écart devient négatif et l'anti-rebond ne s'applique plus).
@@ -392,9 +402,27 @@ def record_scan(
     events = _last_scan_events(db, employee.id)
     last_event = events[-1] if events else None
 
+    abandon_details = None
+    if abandon_shift_id is not None:
+        from app.modules.attendance import abandon
+        if source != SOURCE_MANUAL or not manual_entry_allowed:
+            raise HTTPException(403, "Saisie manuelle non autorisée")
+        if not observation:
+            raise HTTPException(422, "Motif / observation obligatoire")
+        previous_abandon = abandon.existing(db, employee.id, abandon_shift_id)
+        if previous_abandon:
+            return abandon.response(previous_abandon, duplicate=True)
+        abandon_details = abandon.context(db, employee, now=now)
+        if abandon_details["shift_id"] != abandon_shift_id:
+            raise HTTPException(409, "La vacation concernée a changé : rechargez la confirmation")
+        if not abandon_details["applicable"]:
+            raise HTTPException(409, "Abandon de poste non applicable : il reste "
+                f"{int(abandon_details['remaining_minutes'])} minutes avant la fin prévue du service. "
+                f"Le seuil requis est de {abandon_details['threshold_minutes']} minutes.")
+
     # Anti-rebond : double scan, visage resté devant la caméra, retry réseau.
     gap = timedelta(seconds=max(0, settings.attendance_min_event_gap_seconds))
-    if last_event and abs(now - to_local(last_event.occurred_at)) < gap:
+    if abandon_details is None and last_event and abs(now - to_local(last_event.occurred_at)) < gap:
         return _duplicate_response(last_event, employee, site_name, "Déjà enregistré")
 
     last_arrival = next((e for e in reversed(events) if e.event_type == EVENT_ARRIVAL), None)
@@ -404,6 +432,8 @@ def record_scan(
         last_arrival if last_event is last_arrival and last_arrival_at is not None
         and timedelta(0) <= now - last_arrival_at <= open_cycle_max else None
     )
+    if abandon_details is not None and open_arrival is None:
+        raise HTTPException(409, "Vacation sans prise de service ouverte valide")
     event_type = EVENT_DEPARTURE if open_arrival else EVENT_ARRIVAL
     cycle_number = sum(1 for e in events if e.event_type == EVENT_ARRIVAL) + (1 if event_type == EVENT_ARRIVAL else 0)
     presence_day = now.date()
@@ -591,7 +621,11 @@ def record_scan(
                  new_state={"type": event_type, "source": source, "site_id": event.site_id,
                             "presence_date": presence_day.isoformat(), "device_id": device_id,
                             **({"shift_kind": counted.get("kind", counted_time.KIND_NORMAL), "entry_status": counted["entry_status"]} if counted is not None else {})})
+    if abandon_details is not None:
+        business_event = abandon.record(db, departure=event, employee=employee, actor=actor, details=abandon_details)
     db.commit()
+    if abandon_details is not None:
+        return abandon.response(business_event)
 
     duration_label = ""
     if worked_minutes is not None:

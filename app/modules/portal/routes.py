@@ -1420,10 +1420,53 @@ def manual_attendance_context(employee_id: int, site_id: int | None = None, db: 
                      "poste": employee.position or ""},
         "site": {"id": site.id, "name": site.name} if site else None, "group": assignment.group_code if assignment else None,
         "extra_shift": counted_time.view({"counted": extra}) if extra else None,
+        "abandon_threshold_minutes": attendance_core.settings.attendance_abandon_threshold_minutes,
         "manual_entry_allowed": allowed, "intent": counted_time.INTENT_EXTRA_ENTRY if extra else None,
         "reason_required": bool(extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL),
         "audited": True, **attendance_core.operational_clock(now),
     }
+
+
+def _abandon_employee(db, scanner, employee_id, site_id):
+    if not _manual_entry_granted(db, scanner):
+        raise HTTPException(403, "Saisie manuelle non autorisée")
+    employee = employee_by_ref(db, employee_id)
+    if not employee:
+        raise HTTPException(404, "Employé introuvable")
+    _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_employee_on_selected_site(db, employee, site_id)
+    assignment = attendance_core.active_assignment(db, employee.id)
+    if not assignment or not assignment.site_id:
+        raise HTTPException(409, "Aucune affectation valide")
+    _attendance_selected_sites(db, scanner, assignment.site_id)
+    if site_id is not None and assignment.site_id != site_id:
+        raise HTTPException(409, "Site différent de la vacation concernée")
+    return employee
+
+
+@router.get("/attendance-manual/abandon/context")
+def abandon_attendance_context(employee_id: int, site_id: int | None = None,
+                               db: Session = Depends(get_db), scanner: User = Depends(current_user)):
+    from app.modules.attendance import abandon
+    employee = _abandon_employee(db, scanner, employee_id, site_id)
+    return abandon.context(db, employee)
+
+
+@router.post("/attendance-manual/abandon", status_code=201)
+def abandon_employee_attendance(payload: dict[str, Any], db: Session = Depends(get_db),
+                                scanner: User = Depends(current_user)):
+    from app.core.scope_policy import society_key
+    employee = _abandon_employee(db, scanner, payload.get("employee_id"), payload.get("site_id"))
+    if payload.get("society") is not None and society_key(payload["society"]) != society_key(employee.society):
+        raise HTTPException(409, "Société différente de la vacation concernée")
+    shift_id = payload.get("shift_id")
+    if isinstance(shift_id, bool) or not isinstance(shift_id, int) or shift_id < 1:
+        raise HTTPException(422, "Vacation concernée obligatoire")
+    observation = payload.get("observation")
+    if not isinstance(observation, str) or not observation.strip() or len(observation) > 500:
+        raise HTTPException(422, "Motif / observation obligatoire (500 caractères maximum)")
+    return attendance_core.record_scan(db, employee=employee, source=SOURCE_MANUAL, actor=scanner,
+        idempotency_key=None, observation=observation, manual_entry_allowed=True, abandon_shift_id=shift_id)
 
 
 @router.post("/attendance-manual/scan", status_code=status.HTTP_201_CREATED)

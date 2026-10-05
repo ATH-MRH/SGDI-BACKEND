@@ -7,7 +7,7 @@ Lecture et pilotage de la présence canonique (DailyPresence + journal d'événe
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -937,3 +937,37 @@ def create_rotation_decision(
                             "reason": decision.reason})
     db.commit()
     return projection.decision_out(decision, employee)
+
+
+@router.get("/business-events")
+def business_events(day: date | None = None, society: str | None = None, site_id: int | None = None,
+                    employee_id: int | None = None, event_type: str = "ABANDON_POSTE",
+                    page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200),
+                    db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Lecture filtrée pour le futur BRQ ; permissions et périmètres du cockpit existant."""
+    from app.modules.alerts.routes import _require_view_access, _allowed_societies, _allowed_site_ids
+    _require_view_access(user)
+    societies, sites = _allowed_societies(user), _allowed_site_ids(user)
+    stmt = select(AttendanceEvent).where(AttendanceEvent.event_type == event_type)
+    if societies is not None:
+        stmt = stmt.where(AttendanceEvent.society.in_(societies))
+    if sites is not None:
+        stmt = stmt.where(AttendanceEvent.site_id.in_(sites))
+    if day is not None:
+        start = datetime.combine(day, time.min, core.TZ)
+        stmt = stmt.where(AttendanceEvent.occurred_at >= core.to_utc_naive(start),
+                          AttendanceEvent.occurred_at < core.to_utc_naive(start + timedelta(days=1)))
+    for value, column in ((society, AttendanceEvent.society),
+                          (site_id, AttendanceEvent.site_id), (employee_id, AttendanceEvent.employee_id)):
+        if value is not None:
+            stmt = stmt.where(column == value)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    events = db.scalars(stmt.order_by(AttendanceEvent.occurred_at.desc(), AttendanceEvent.id.desc())
+                       .offset((page - 1) * page_size).limit(page_size)).all()
+    return {"total": total, "page": page, "items": [
+        {"event_id": e.id, "event_type": e.event_type, "employee_id": e.employee_id, "society": e.society,
+         "site_id": e.site_id, "presence_date": e.presence_date.isoformat(),
+         "event_date": core.to_local(e.occurred_at).date().isoformat(),
+         "actual_departure_at": core.to_local(e.occurred_at).isoformat(), "source": e.source,
+         "created_at": e.created_at.isoformat(), "recorded_by_user_id": e.actor_user_id,
+         "observation": e.observation, "details": e.data} for e in events]}

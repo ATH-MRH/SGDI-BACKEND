@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # Attendance Core — anti-rebond : un nouvel événement du même employé moins de N secondes
     # après le précédent (double scan, visage resté devant la caméra, retry réseau) est rendu
     # comme « déjà enregistré », sans effet. Un vrai départ reste possible au-delà.
+    attendance_abandon_threshold_minutes: int = Field(default=60, ge=1)
     attendance_min_event_gap_seconds: int = 300
     # Tolérance métier avant qu'une arrivée soit signalée en retard par rapport à l'horaire
     # prévu du planning (rotation). Réglage d'exploitation, pas une règle légale.

@@ -10,13 +10,14 @@ from datetime import datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.modules.alerts.models import Alert, AlertEvidence, AlertHistory, AlertRule, DetectionRun
 from app.modules.alerts.rules import RULE_CATALOG
 from app.modules.ops.models import DailyPresence
 
 
-def ensure_rule_catalog(db: Session) -> None:
+def ensure_rule_catalog(db: Session, *, commit: bool = True) -> None:
     """Seed idempotent du catalogue de règles depuis rules.RULE_CATALOG. Jamais
     fait par la migration (voir 20260913_0035_alert_foundation.py) : la
     migration crée seulement la structure, ce seed applicatif est rejouable
@@ -30,9 +31,17 @@ def ensure_rule_catalog(db: Session) -> None:
         key = (entry["rule_key"], entry["rule_version"])
         if key in existing:
             continue
-        db.add(AlertRule(**entry))
-        changed = True
-    if changed:
+        try:
+            with db.begin_nested():
+                db.add(AlertRule(**entry))
+                db.flush()
+            changed = True
+        except IntegrityError:
+            # Un autre enregistrement a initialisé le catalogue entre-temps.
+            if db.scalar(select(AlertRule.id).where(AlertRule.rule_key == entry["rule_key"],
+                                                   AlertRule.rule_version == entry["rule_version"])) is None:
+                raise
+    if changed and commit:
         db.commit()
 
 
