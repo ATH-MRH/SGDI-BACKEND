@@ -856,8 +856,8 @@ let historyRefreshTimer=null;
 let planningEvents=[];
 let planningRefreshTimer=null;
 let isLoggingOut=false;
-// Poste de sécurité : relève des passages acceptés (~2 s), affichage du dernier pendant 12 s.
-// LAST_SCAN_DISPLAY_MS : durée d'affichage de la carte flottante de résultat (V5.1 : 6 s, fermeture manuelle possible).
+// Poste de sécurité : relève des passages acceptés (~2 s), affichage du dernier pendant 6 s dans la
+// carte flottante de résultat (LAST_SCAN_DISPLAY_MS ; fermeture manuelle possible).
 const LIVE_POLL_MS=2000,LAST_SCAN_DISPLAY_MS=6000;
 let liveTimer=null,liveCursor=null,liveRefusalCursor=null,liveBusy=false,serverSummary=null,lastScanTimer=null,lastScanShownId="";
 const portraitUrls={};
