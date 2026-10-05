@@ -69,6 +69,9 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/site-workforce", frozenset({"site_workforce"})),
     # Centre de contrôle du pointage + onglet Pointages de l'Employé 360.
     ("/api/attendance", frozenset({"pointage", "ops", "drh"})),
+    # Saisie manuelle du pointeur : la permission fine ne réactive pas un module
+    # révoqué. Couvre recherche/contexte, PRÉSENT, ABSENT et ABANDON POSTE.
+    ("/api/portal/attendance-manual", frozenset({"pointage", "pointeur"})),
     # Biométrie : terminal (reconnaissance) + administration ; actions sensibles soumises en
     # plus à une permission biométrique explicite (app/modules/biometrics/routes.py).
     ("/api/biometrics", frozenset({"pointage", "pointeur", "ops", "drh"})),

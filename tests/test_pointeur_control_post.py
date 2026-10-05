@@ -203,6 +203,12 @@ def test_manual_context_and_explicit_extra_shift_intent(client, db, auth_headers
 
 
 def test_manual_context_after_the_window_requires_a_reason(client, db, auth_headers, restricted_headers, monkeypatch):
+    # Le contexte teste la permission fine sur un compte autorisé au module.
+    from app.modules.auth.models import User
+    scanner = db.scalar(select(User).where(User.username == "testops"))
+    previous_modules = scanner.authorized_modules
+    scanner.authorized_modules = [*previous_modules, "pointage"]
+    db.commit()
     emp, site = _setup(db, group="A")
     _scan(db, emp, ANCHOR, "05:50")
     _scan(db, emp, ANCHOR, "14:03")
@@ -211,5 +217,7 @@ def test_manual_context_after_the_window_requires_a_reason(client, db, auth_head
     allowed = client.get(url, headers=auth_headers).json()
     assert (allowed["extra_shift"]["entry_status"], allowed["reason_required"]) == ("EXTRA_MANUAL", True)
     denied = client.get(url, headers=restricted_headers).json()
+    scanner.authorized_modules = previous_modules
+    db.commit()
     assert (denied["extra_shift"]["entry_status"], denied["manual_entry_allowed"], denied["reason_required"]) == ("MANUAL_ENTRY_REQUIRED", False, False)
     assert client.get(url).status_code in (401, 403)

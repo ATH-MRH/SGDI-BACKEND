@@ -180,10 +180,18 @@ def test_manual_entry_does_not_bypass_the_forbidden_half_hour(db):
 
 
 def test_manual_route_checks_the_manual_entry_permission(client, db, auth_headers, restricted_headers, monkeypatch):
+    # Tester la permission fine APRÈS la barrière module, sans accès global.
+    from app.modules.auth.models import User
+    scanner = db.scalar(select(User).where(User.username == "testops"))
+    previous_modules = scanner.authorized_modules
+    scanner.authorized_modules = [*previous_modules, "pointage"]
+    db.commit()
     emp, site = _morning_done(db)
     monkeypatch.setattr(core, "_now_local", lambda: _ts(ANCHOR, "15:10"))
     payload = {"employee_id": emp.id, "site_id": site.id, "action": "present", "observation": "Maintien demandé"}
     denied = client.post("/api/portal/attendance-manual/scan", headers=restricted_headers, json=payload)
+    scanner.authorized_modules = previous_modules
+    db.commit()
     assert denied.status_code == 403 and denied.headers["X-Attendance-Code"] == "MANUAL_ENTRY_REQUIRED", denied.text
     granted = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json=payload)
     assert granted.status_code == 201, granted.text

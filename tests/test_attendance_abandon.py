@@ -195,7 +195,7 @@ def test_rbac_real_feature_grant_and_scoped_reads(client, db, monkeypatch):
     user = User(username="AB"+_tag(), full_name="Pointeur test", role="pointeur", access_level="H2", is_active=True,
                 supervisor_read_only=False,
                 password_hash=hash_password("testpass123"), authorized_societies=[emp.society],
-                authorized_sites=[other_site.id], authorized_modules=["attendance"], authorized_structures=["pointage"])
+                authorized_sites=[other_site.id], authorized_modules=["pointeur"], authorized_structures=["pointage"])
     db.add(user); db.commit()
     headers = {"Authorization": "Bearer "+create_access_token(subject=str(user.id))}
     monkeypatch.setattr(core, "_now_local", lambda: _ts(ANCHOR, "20:35"))
