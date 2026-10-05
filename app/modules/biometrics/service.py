@@ -12,6 +12,7 @@ Principes (docs/biometrics.md) :
 from __future__ import annotations
 
 import hashlib
+import json
 import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -759,9 +760,20 @@ def match_and_record(db: Session, *, source: FacialSource, decision: FrameDecisi
         )
     except HTTPException as exc:
         db.rollback()
-        return {**base, "state": "REFUSED", "recorded": False, "message": str(exc.detail), "employee": _person(top_employee)}
+        # Refus décidé par Attendance Core : son code et son motif structuré sont transmis tels
+        # quels à l'écran (le facial ne décide ni n'interprète aucune règle de pointage).
+        headers = exc.headers or {}
+        refusal = None
+        if headers.get("X-Attendance-Refusal"):
+            try:
+                refusal = json.loads(headers["X-Attendance-Refusal"])
+            except ValueError:
+                refusal = None
+        return {**base, "state": "REFUSED", "recorded": False, "message": str(exc.detail), "employee": _person(top_employee),
+                **({"code": headers["X-Attendance-Code"], "refusal": refusal} if headers.get("X-Attendance-Code") else {})}
     return {**base, "state": "ALREADY_RECORDED" if result.get("duplicate") else "ATTENDANCE_RECORDED",
             "recorded": not result.get("duplicate"), "message": "POINTAGE ENREGISTRÉ",
+            **({"counted": result["counted"]} if result.get("counted") else {}),
             "employee": _person(top_employee), "action": "ENTRÉE" if result["action"] == "arrivee" else "SORTIE",
             "heure": result["heure"][:5], "site": result.get("site"), "confidence": round(top_score, 4)}
 

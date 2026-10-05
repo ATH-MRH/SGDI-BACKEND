@@ -115,7 +115,9 @@ test('zone centrale : attente dessinée → fiche du dernier pointage → retour
 test('État du système : uniquement des états réels (lecteur, réseau, relève) ; jamais « base de données » ni « sécurité »', async () => {
   const t = boot(); await ready(t);
   const d = t.d;
-  assert.deepEqual([...d.querySelectorAll('#systemCard dt')].map((e) => e.textContent), ['Lecteur QR', 'Réseau', 'Temps réel']);
+  // « Caméra » et « Reconnaissance faciale » n'apparaissent qu'en mode facial (états réels du moteur).
+  assert.deepEqual([...d.querySelectorAll('#systemCard .system-item:not(.hidden) dt')].map((e) => e.textContent), ['Lecteur QR', 'Réseau', 'Temps réel']);
+  assert.deepEqual([...d.querySelectorAll('#systemCard .system-item.hidden dt')].map((e) => e.textContent), ['Caméra', 'Reconnaissance faciale']);
   assert.doesNotMatch(d.getElementById('systemCard').textContent, /base de données|sécurité|stable|connectée/i);
   await t.T().pollLive();
   assert.deepEqual(t.sys('sysReader'), ['Douchette USB à l\'écoute', 'ok']);

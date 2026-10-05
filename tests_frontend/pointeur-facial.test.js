@@ -9,10 +9,10 @@ const { loadPointeur } = require('./load-pointeur');
 const FACIAL_SRC = fs.readFileSync(path.join(__dirname, '../app/static/pointeur-facial.js'), 'utf8');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function boot({ status = { enabled: true, engine_available: true }, cameras, results = [] } = {}) {
+async function boot({ status = { enabled: true, engine_available: true }, cameras, results = [], site = '12' } = {}) {
   const calls = [];
   let n = 0;
-  const cams = cameras || [{ id: 7, name: 'CAM-ENTREE-01', location: 'Entrée principale', adapter: 'DAHUA', usage: 'ATTENDANCE', role: 'ENTRY', is_default: true, active: true }];
+  const cams = cameras || [{ id: 7, site_id: 12, name: 'CAM-ENTREE-01', location: 'Entrée principale', adapter: 'DAHUA', usage: 'ATTENDANCE', role: 'ENTRY', is_default: true, active: true, facial_attendance_enabled: true }];
   const fetch = async (url, opts = {}) => {
     const u = new URL(url, 'https://pointeur.irongs.com');
     calls.push({ path: u.pathname, method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null, auth: (opts.headers || {}).Authorization });
@@ -30,6 +30,7 @@ async function boot({ status = { enabled: true, engine_available: true }, camera
   w.URL.revokeObjectURL = () => {};
   await wait(50); // laisser passer l'initialisation de la page (DOMContentLoaded) avant la session
   w.__pointeurTest.setSession({ token: 'tok', username: 'PTG01' });
+  w.__pointeurTest.setSelectedSite(site);                          // le facial exige le site actif du poste
   w.eval(FACIAL_SRC);
   return { ...ctx, w, d: w.document, calls, recognizeCalls: () => calls.filter((c) => c.path.endsWith('/recognize')) };
 }
@@ -48,7 +49,7 @@ test('caméra qui tourne sans passage : ce n\'est jamais une activité utilisate
 test('désactivé : message clair, aucune tentative de reconnaissance', async () => {
   const r = await boot({ status: { enabled: false, engine_available: false } });
   await r.w.PointeurFacial.start();
-  assert.match(r.d.getElementById('faceStatus').textContent, /POINTAGE FACIAL NON ACTIVÉ/);
+  assert.match(r.d.getElementById('faceStatus').textContent, /RECONNAISSANCE FACIALE DÉSACTIVÉE/);
   assert.equal(r.recognizeCalls().length, 0);
   r.w.close();
 });
