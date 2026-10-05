@@ -564,6 +564,16 @@ body.ptr-v5 .v5-facts dt{color:var(--ptr-muted);font-weight:600}
 body.ptr-v5 .v5-facts dd{margin:0;font-weight:800;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
 body.ptr-v5 .v5-reason{margin:10px 0 0;font-size:15px;font-weight:700;color:var(--ptr-ink)}
 body.ptr-v5 .v5-inline-btn{min-height:44px;margin-top:10px;padding:0 16px;border:0;border-radius:12px;background:var(--ptr-blue);color:#fff;font-weight:800;font-size:13px;letter-spacing:.04em;cursor:pointer}
+/* Pointage facial intégré à la zone de pointage : cadre vidéo stable, état compact sans caméra. */
+body.ptr-v5 #scannerCard .face-view{padding:0;max-width:none;margin:14px 0 0}
+body.ptr-v5 .face-title{font-size:13px;font-weight:900;letter-spacing:.08em;color:var(--ptr-blue)}
+body.ptr-v5 #scannerCard .face-stage{width:100%;max-width:560px;margin:12px auto;aspect-ratio:16/9;border-radius:14px}
+body.ptr-v5 #scannerCard .face-view.no-video .face-stage{display:none}
+body.ptr-v5 #scannerCard .face-status{font-size:17px;padding:14px;border-radius:14px;margin-bottom:14px}
+body.ptr-v5 #scannerCard .face-status small{font-size:13px}
+body.ptr-v5 #scannerCard.facial-mode .last-scan.is-idle .scan-visual{display:none}
+body.ptr-v5 #scannerCard.facial-mode .last-scan.is-idle{min-height:0}
+body.ptr-v5 #scannerCard.facial-mode :is(#usbReader,#reader,#restartBtn,#cameraModeBtn,.station-foot){display:none!important}
 /* Colonne droite */
 body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:16px 18px}
 body.ptr-v5 .v5-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;overflow-x:hidden}
@@ -716,6 +726,13 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <div class="last-scan-idle"><div class="scan-visual" aria-hidden="true"><span class="scan-ring"></span><span class="scan-ring scan-ring-2"></span><div class="scan-device"><i class="scan-corner tl"></i><i class="scan-corner tr"></i><i class="scan-corner bl"></i><i class="scan-corner br"></i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg><span class="scan-line"></span></div></div><div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>
             <div class="last-scan-idle-hint">Présentez le QR à la douchette, ou utilisez la reconnaissance faciale ou la saisie manuelle.</div></div>
         </div>
+        <!-- Pointage facial automatique : même zone centrale, moteur facial existant (pointeur-facial.js). -->
+        <section id="faceView" class="face-view hidden" aria-live="polite">
+          <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Aucune action : présentez-vous face à la caméra.</p></div>
+            <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
+          <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
+          <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
+        </section>
         <div id="usbReader" class="usb-reader hidden">
           <div id="usbReaderSociety" class="idle-society hidden"></div>
           <div class="usb-icon">▣</div>
@@ -733,7 +750,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         </div>
         <div class="action-row">
           <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
-          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ UTILISER LA CAMÉRA</button>
+          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ LIRE LE QR AVEC LA CAMÉRA</button>
           <button id="generateQrBtn" class="secondary generate-qr-btn ptr-legacy" tabindex="-1" aria-hidden="true">▦ GÉNÉRER UN QR SITE</button>
         </div>
         <div class="station-foot"><i class="dot" aria-hidden="true"></i><p class="scanner-hint" id="scannerHint">La validation est automatique.</p></div>
@@ -786,6 +803,8 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         <div class="system-title">État du système</div>
         <dl class="system-list">
           <div class="system-item" id="sysReader"><dt>Lecteur QR</dt><dd>—</dd></div>
+          <div class="system-item hidden" id="sysCamera"><dt>Caméra</dt><dd>—</dd></div>
+          <div class="system-item hidden" id="sysFace"><dt>Reconnaissance faciale</dt><dd>—</dd></div>
           <div class="system-item" id="sysNetwork"><dt>Réseau</dt><dd>—</dd></div>
           <div class="system-item" id="sysLive"><dt>Temps réel</dt><dd>—</dd></div>
         </dl>
@@ -799,14 +818,6 @@ body.ptr-v5.has-post .shift-staffing{order:3}
     </section>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
-  <section id="faceView" class="face-view hidden" aria-live="polite">
-    <div class="face-card">
-      <div class="face-head"><div><div class="scanner-title">Pointage facial automatique</div><p class="scanner-hint">Aucune action : présentez-vous face à la caméra.</p></div>
-        <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
-      <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
-      <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
-    </div>
-  </section>
 </section>
 
 <div id="abandonOverlay" class="abandon-overlay hidden">
@@ -1051,6 +1062,8 @@ async function changeAttendanceSite(value){
   if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
   // Un changement de site ne doit pas rallumer la caméra QR derrière Planning ou Facial
   // (ces vues utilisent leurs propres cycles caméra).
+  // En mode facial : l'ancien contexte est arrêté, puis la caméra du NOUVEAU site est recherchée.
+  if(facialMode){window.PointeurFacial&&PointeurFacial.restart();return}
   if(!document.querySelector("main.main").classList.contains("hidden"))requestAnimationFrame(setupScanMode);
 }
 async function enterApp(){
@@ -1185,10 +1198,11 @@ async function fillLastScanPhoto(employee,token){
 // Poste V3 — état d'attente : scanner dessiné en CSS (représentation ; le moteur de lecture est inchangé).
 const LAST_SCAN_IDLE_VISUAL='<div class="scan-visual" aria-hidden="true"><span class="scan-ring"></span><span class="scan-ring scan-ring-2"></span><div class="scan-device"><i class="scan-corner tl"></i><i class="scan-corner tr"></i><i class="scan-corner bl"></i><i class="scan-corner br"></i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg><span class="scan-line"></span></div></div>';
 function lastScanIdleHTML(){
-  const hint=cameraMode?"Présentez le QR devant la caméra, ou utilisez la reconnaissance faciale ou la saisie manuelle."
+  const hint=facialMode?"Présentez-vous face à la caméra. La reconnaissance est automatique."
+    :cameraMode?"Présentez le QR devant la caméra, ou utilisez la reconnaissance faciale ou la saisie manuelle."
     :"Présentez le QR à la douchette, ou utilisez la reconnaissance faciale ou la saisie manuelle.";
   const cur=postState&&postState.current,shift=cur?'<div class="last-scan-idle-shift" id="idleShift">Vacation actuelle : '+esc(cur.start)+' → '+esc(cur.end)+' · Groupe '+esc(cur.group)+'</div>':'';
-  return '<div class="last-scan-idle">'+LAST_SCAN_IDLE_VISUAL+'<div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">EN ATTENTE DU PROCHAIN POINTAGE</div>'+shift+'<div class="last-scan-idle-hint">'+esc(hint)+'</div></div>';
+  return '<div class="last-scan-idle">'+LAST_SCAN_IDLE_VISUAL+'<div class="last-scan-idle-dot"></div><div class="last-scan-idle-title">'+(facialMode?"EN ATTENTE D’UN VISAGE":"EN ATTENTE DU PROCHAIN POINTAGE")+'</div>'+shift+'<div class="last-scan-idle-hint">'+esc(hint)+'</div></div>';
 }
 // ══ Poste de contrôle V5 ═══════════════════════════════════════════════════════════════════
 // Tout ce qui est affiché vient du serveur (`post` du flux live : planning officiel + Attendance
@@ -1317,7 +1331,17 @@ function renderSystemState(){
   const online=navigator.onLine!==false;
   const restart=document.getElementById("restartBtn");
   const reader=cameraMode?(scanner?["Caméra active","ok"]:(restart&&!restart.classList.contains("hidden")?["Caméra indisponible","bad"]:["Ouverture de la caméra…","pending"])):["Douchette USB à l'écoute","ok"];
-  setSystemItem("sysReader",reader[0],reader[1]);
+  setSystemItem("sysReader",facialMode?"En pause (mode facial)":reader[0],facialMode?"pending":reader[1]);
+  // Mode facial : états réellement connus du moteur (jamais supposés).
+  const face=window.PointeurFacial||{},camItem=document.getElementById("sysCamera"),faceItem=document.getElementById("sysFace");
+  if(camItem&&faceItem){
+    camItem.classList.toggle("hidden",!facialMode);faceItem.classList.toggle("hidden",!facialMode);
+    if(facialMode){
+      const cam={ACTIVE:["Active","ok"],SEARCHING:["Recherche…","pending"],UNAVAILABLE:["Non disponible","bad"],NONE:["Non disponible","bad"]}[face.cameraState]||["—","pending"];
+      const eng={ACTIVE:["Active","ok"],INIT:["Initialisation","pending"],ERROR:["Erreur","bad"],DISABLED:["Désactivée","bad"]}[face.engineState]||["—","pending"];
+      setSystemItem("sysCamera",cam[0],cam[1]);setSystemItem("sysFace",eng[0],eng[1]);
+    }
+  }
   setSystemItem("sysNetwork",online?"En ligne":"Hors ligne",online?"ok":"bad");
   const time=liveOkAt?new Date(liveOkAt+opsClockOffset).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone}):"";
   const live=!online?["Suspendu (hors ligne)","bad"]:liveState==="ok"?["Actif · relève "+time,"ok"]:liveState==="error"?["Interrompu · nouvel essai automatique","bad"]:["En attente","pending"];
@@ -1333,11 +1357,23 @@ function renderSystemState(){
 // Cartes de mode : reflet de l'état existant (panneau de saisie manuelle ouvert ou non).
 function syncModeCards(){
   const manual=isManualPanelOpen();
-  [["qrModeBtn",!manual],["manualModeBtn",manual]].forEach(([id,on])=>{const el=document.getElementById(id);if(el){el.classList.toggle("active",on);el.setAttribute("aria-pressed",String(on))}});
+  [["qrModeBtn",!manual&&!facialMode],["faceModeBtn",facialMode&&!manual],["manualModeBtn",manual]].forEach(([id,on])=>{const el=document.getElementById(id);if(el){el.classList.toggle("active",on);el.setAttribute("aria-pressed",String(on))}});
 }
 function selectQrMode(){
   if(isManualPanelOpen())closeManualPanel();
+  if(facialMode){showPointerSection("scan");return}                 // quitte le facial : caméra, détection et minuteurs arrêtés
   setupScanMode();
+}
+// Mode FACIAL : un clic l'active dans la zone centrale ; le reste du poste (vacation, KPI, à
+// traiter) reste affiché. Le site utilisé est celui du poste, sans nouvelle sélection.
+let facialMode=false;
+function setFacialMode(on){
+  facialMode=!!on;
+  document.getElementById("scannerCard").classList.toggle("facial-mode",facialMode);
+  document.getElementById("faceView").classList.toggle("hidden",!facialMode);
+  const idle=document.getElementById("lastScanCard");
+  if(idle&&idle.classList.contains("is-idle")){idle.__idle=null;idle.innerHTML=lastScanIdleHTML()}
+  syncModeCards();renderSystemState();
 }
 // Écart de rotation (planning intelligent) : information ajoutée à la fiche normale. Le pointage
 // est déjà enregistré ; le poste n'offre aucune action sur le planning.
@@ -1417,12 +1453,18 @@ function showPointerSection(section){
   // Cycle de vie strict (§ changement de vue) : une seule vue active, aucune caméra
   // laissée ouverte — scanner QR et facial de production s'excluent mutuellement.
   const planning=section==="planning",facial=section==="facial";
-  document.querySelector("main.main").classList.toggle("hidden",planning||facial);document.getElementById("planningView").classList.toggle("hidden",!planning);
-  document.getElementById("faceView").classList.toggle("hidden",!facial);
+  document.querySelector("main.main").classList.toggle("hidden",planning);document.getElementById("planningView").classList.toggle("hidden",!planning);
   document.getElementById("faceNav").classList.toggle("active",facial);
   document.getElementById("scanNav").classList.toggle("active",!planning&&!facial);document.getElementById("planningNav").classList.toggle("active",planning);
-  if(facial){stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;window.PointeurFacial&&PointeurFacial.start();return}
+  if(facial){
+    stopScanner();clearInterval(planningRefreshTimer);planningRefreshTimer=null;
+    if(isManualPanelOpen())closeManualPanel();
+    setFacialMode(true);
+    window.PointeurFacial&&PointeurFacial.start();
+    return;
+  }
   window.PointeurFacial&&PointeurFacial.stop();
+  setFacialMode(false);
   if(planning){stopScanner();loadPlanning();clearInterval(planningRefreshTimer);planningRefreshTimer=setInterval(loadPlanning,30000)}else{clearInterval(planningRefreshTimer);planningRefreshTimer=null;setupScanMode()}
 }
 async function loadPlanning(){
@@ -1455,6 +1497,7 @@ async function logout(){
     stopIdleWatch();
     await stopScanner();
     window.PointeurFacial&&PointeurFacial.stop();
+    setFacialMode(false);
       clearInterval(headerClockTimer);headerClockTimer=null;
     clearInterval(historyRefreshTimer);historyRefreshTimer=null;
     clearInterval(planningRefreshTimer);planningRefreshTimer=null;
@@ -1473,6 +1516,7 @@ async function logout(){
   }
 }
 function setupScanMode(){
+  if(facialMode)return;                                            // le facial est actif : aucun lecteur QR en arrière-plan
   cameraMode=isMobileDevice();
   const usb=document.getElementById("usbReader"),reader=document.getElementById("reader"),cameraButton=document.getElementById("cameraModeBtn");
   if(cameraMode){
@@ -1690,6 +1734,7 @@ function isManualPanelOpen(){return !document.getElementById("manualPanel").clas
 function toggleManualPanel(){
   const panel=document.getElementById("manualPanel");
   if(panel.classList.contains("hidden")){
+    if(facialMode)showPointerSection("scan");                      // la saisie manuelle arrête le facial
     panel.classList.remove("hidden");
     document.getElementById("scannerCard").classList.add("manual-mode");
     resetManualPanel();

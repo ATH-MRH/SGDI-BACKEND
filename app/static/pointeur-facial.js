@@ -7,6 +7,10 @@
  * exposés). Le terminal n'envoie JAMAIS d'image pour pointer : une image fournie par un
  * navigateur pourrait être une photo injectée, que le liveness passif ne couvre pas
  * (docs/biometrics.md). Les caméras « terminal » servent uniquement à l'enrôlement supervisé.
+ *
+ * Le module est intégré à la zone de pointage du poste (pointeur.html) : il n'identifie que la
+ * personne. ENTRÉE / SORTIE, vacation, fenêtres et refus sont décidés par Attendance Core ; leur
+ * affichage est celui du poste (fiche du dernier pointage), commun au QR et à la saisie manuelle.
  */
 (function () {
   "use strict";
@@ -17,6 +21,8 @@
   const F = {
     running: false, busy: false, camera: null, cameras: [], timer: null,
     previewTimer: null, previewUrl: null, cooldownUntil: 0, lastState: "",
+    // État réellement connu, affiché dans « État du système » : jamais supposé.
+    cameraState: "OFF", engineState: "OFF", siteId: "", generation: 0,
   };
   window.PointeurFacial = F;
 
@@ -52,6 +58,17 @@
     box.innerHTML = html;
   }
 
+  // Caméra : SEARCHING | ACTIVE | UNAVAILABLE | NONE | OFF — moteur : INIT | ACTIVE | ERROR | DISABLED | OFF.
+  function setSystem(camera, engine) {
+    if (camera) F.cameraState = camera;
+    if (engine) F.engineState = engine;
+    const view = $("faceView");
+    // Sans source vidéo réelle, aucun grand cadre noir : état compact.
+    if (view) view.classList.toggle("no-video", F.cameraState !== "ACTIVE" && F.cameraState !== "SEARCHING" && F.cameraState !== "UNAVAILABLE");
+    if (typeof renderSystemState === "function") renderSystemState();
+  }
+  const refreshPost = () => { if (typeof pollLive === "function") pollLive(); };
+
   const MESSAGES = {
     NO_FACE: "PRÊT — placez-vous face à la caméra",
     MULTIPLE_FACES: "PLUSIEURS VISAGES DÉTECTÉS<br><small>Présentez-vous individuellement.</small>",
@@ -71,8 +88,9 @@
       const already = s === "ALREADY_RECORDED";
       setStatus(already ? "ALREADY" : "SUCCESS", `<div class="face-check">${already ? "✓ DÉJÀ ENREGISTRÉ" : "✓ POINTAGE ENREGISTRÉ"}</div>
         <div class="face-name">${esc(e.nom)} ${esc(e.prenom)}</div>
-        <div class="face-meta">Matricule ${esc(e.matricule)} · <b>${esc(result.action || "")}</b> · ${esc(result.heure || "")}${result.site ? " · " + esc(result.site) : ""}</div>`);
+        <div class="face-meta">Matricule ${esc(e.matricule)}${e.poste ? " · " + esc(e.poste) : ""} · <b>${esc(result.action || "")}</b> · ${esc(result.heure || "")}${result.site ? " · " + esc(result.site) : ""}</div>`);
       F.cooldownUntil = Date.now() + RESULT_MS;
+      refreshPost();                                                  // fiche du poste : réel / planifié / comptabilisé
       return;
     }
     if (s === "UNKNOWN_FACE") {
@@ -84,8 +102,16 @@
       return;
     }
     if (s === "REFUSED") {
-      setStatus("REFUSED", `<div class="face-check">POINTAGE REFUSÉ</div><small>${esc(result.message)}</small>`);
+      const e = result.employee || {};
+      const who = e.nom ? `<div class="face-name">${esc(e.nom)} ${esc(e.prenom)}</div><div class="face-meta">Matricule ${esc(e.matricule)}${e.poste ? " · " + esc(e.poste) : ""}</div>` : "";
+      setStatus("REFUSED", `<div class="face-check">POINTAGE REFUSÉ</div>${who}<small>${esc(result.message)}</small><small>Aucun mouvement enregistré.</small>`);
+      // Refus d'Attendance Core : même fiche détaillée que pour le QR et la saisie manuelle.
+      if (result.code && result.refusal && typeof showLastRefusal === "function") {
+        showLastRefusal({ id: "f" + Date.now(), heure: new Date().toTimeString().slice(0, 8), code: result.code, message: result.message,
+          employee: Object.assign({}, e, { fonction: e.poste }), counted: result.refusal, terminal: F.camera ? F.camera.name : null });
+      }
       F.cooldownUntil = Date.now() + RESULT_MS;
+      refreshPost();
       return;
     }
     const reasons = (result.reasons || []).filter(Boolean);
@@ -103,20 +129,31 @@
   async function tick() {
     F.timer = null;
     if (!F.running) return;
+    // Verrou : une seule reconnaissance à la fois, et aucune pendant l'affichage d'un résultat.
     if (F.busy || Date.now() < F.cooldownUntil) { schedule(250); return; }
     F.busy = true;
+    const generation = F.generation;                                  // contexte (site, caméra) de CETTE tentative
+    const current = () => F.running && generation === F.generation;
     try {
       const body = { burst_id: uuid() };
       const result = await api(`/biometrics/cameras/${F.camera.id}/recognize`, { method: "POST", body });
-      if (F.running) render(result);
+      if (current()) { setSystem("ACTIVE", "ACTIVE"); render(result); }
     } catch (error) {
-      if (F.running) {
-        setStatus("ERROR", `<div class="face-check">CONNEXION INDISPONIBLE</div><small>${esc(error.message)}</small>`);
-        F.cooldownUntil = Date.now() + ERROR_RETRY_MS;
+      if (current()) {
+        const disabled = error.status === 409 && /non activé/i.test(error.message || "");
+        if (disabled) {
+          F.stop();
+          setStatus("DISABLED", `<div class="face-check">RECONNAISSANCE FACIALE DÉSACTIVÉE</div><small>pour ce site. Utilisez le QR ou la saisie manuelle.</small>`);
+          setSystem("NONE", "DISABLED");
+        } else {
+          setStatus("ERROR", `<div class="face-check">CONNEXION INDISPONIBLE</div><small>${esc(error.message)}</small>`);
+          setSystem(error.status === 502 ? "UNAVAILABLE" : null, "ERROR");
+          F.cooldownUntil = Date.now() + ERROR_RETRY_MS;
+        }
       }
     } finally {
       F.busy = false;
-      schedule(TICK_MS);
+      if (current()) schedule(TICK_MS);
     }
   }
 
@@ -148,24 +185,47 @@
     if (!F.camera) return;
     try { localStorage.setItem("atlas_pointer_face_camera", String(F.camera.id)); } catch (e) { /* stockage indisponible */ }
     $("faceCameraLabel").textContent = `${F.camera.name}${F.camera.location ? " · " + F.camera.location : ""}`;
-    try { await openCamera(); } catch (e) { setStatus("ERROR", `<div class="face-check">CAMÉRA INDISPONIBLE</div><small>${esc(e.message || "Autorisez la caméra")}</small>`); }
+    try { await openCamera(); setSystem("ACTIVE"); } catch (e) { setSystem("UNAVAILABLE"); setStatus("ERROR", `<div class="face-check">CAMÉRA INDISPONIBLE</div><small>${esc(e.message || "Autorisez la caméra")}</small>`); }
   };
 
   F.start = async function () {
     if (F.running) return;
+    const generation = ++F.generation;
+    const stale = () => generation !== F.generation;
+    F.siteId = String(site() || "");
+    // Le facial automatique exige un site précis : jamais de caméra choisie arbitrairement.
+    if (!F.siteId) {
+      setStatus("SITE", `<div class="face-check">SÉLECTIONNEZ UN SITE</div><small>Le pointage facial automatique nécessite un site précis.</small>`);
+      setSystem("NONE", "OFF");
+      return;
+    }
     F.running = true;
     setStatus("READY", "Initialisation…");
+    setSystem("SEARCHING", "INIT");
     try {
       const status = await api("/biometrics/status");
+      if (stale()) return;
       if (!status.enabled || !status.engine_available) {
-        setStatus("DISABLED", `<div class="face-check">POINTAGE FACIAL NON ACTIVÉ</div><small>Utilisez le QR ou la saisie manuelle.</small>`);
+        setStatus("DISABLED", `<div class="face-check">RECONNAISSANCE FACIALE DÉSACTIVÉE</div><small>Utilisez le QR ou la saisie manuelle.</small>`);
+        setSystem("NONE", "DISABLED");
         F.running = false;
         return;
       }
-      const all = await api("/biometrics/cameras" + (site() ? "?site_id=" + encodeURIComponent(site()) : ""));
-      F.cameras = all.filter((c) => c.active && c.adapter !== "TERMINAL" && (c.usage === "ATTENDANCE" || c.usage === "ATTENDANCE_AND_ENROLLMENT"));
-      if (!F.cameras.length) {
+      const all = await api("/biometrics/cameras?site_id=" + encodeURIComponent(F.siteId));
+      if (stale()) return;
+      // Caméras de POINTAGE du site, lues par le serveur — jamais la caméra locale du poste.
+      const usable = all.filter((c) => c.active && c.adapter !== "TERMINAL" && String(c.site_id == null ? F.siteId : c.site_id) === F.siteId
+        && (c.usage === "ATTENDANCE" || c.usage === "ATTENDANCE_AND_ENROLLMENT"));
+      F.cameras = usable.filter((c) => c.facial_attendance_enabled !== false);
+      if (!usable.length) {
         setStatus("DISABLED", `<div class="face-check">AUCUNE CAMÉRA DE POINTAGE</div><small>Aucune caméra active n'est déclarée pour ce site.</small>`);
+        setSystem("NONE", "OFF");
+        F.running = false;
+        return;
+      }
+      if (!F.cameras.length) {
+        setStatus("DISABLED", `<div class="face-check">RECONNAISSANCE FACIALE DÉSACTIVÉE</div><small>pour ce site. Utilisez le QR ou la saisie manuelle.</small>`);
+        setSystem("NONE", "DISABLED");
         F.running = false;
         return;
       }
@@ -177,10 +237,14 @@
       select.value = String(preferred.id);
       select.classList.toggle("hidden", F.cameras.length < 2);
       await F.selectCamera(preferred.id);
+      if (stale()) return;
       setStatus("READY", MESSAGES.NO_FACE);
+      setSystem(null, "ACTIVE");
       schedule(300);
     } catch (error) {
+      if (stale()) return;
       setStatus("ERROR", `<div class="face-check">INDISPONIBLE</div><small>${esc(error.message)}</small>`);
+      setSystem("UNAVAILABLE", "ERROR");
       F.running = false;
     }
   };
@@ -190,9 +254,25 @@
     if (F.previewUrl) { URL.revokeObjectURL(F.previewUrl); F.previewUrl = null; }
   };
 
+  // Arrêt complet : plus aucune détection, aucun aperçu, aucun minuteur ; une réponse encore en
+  // vol est ignorée (génération périmée).
   F.stop = function () {
     F.running = false;
+    F.generation++;
     clearTimeout(F.timer); F.timer = null;
+    F.cooldownUntil = 0;
     F.stopMedia();
+    F.camera = null; F.cameras = [];
+    const img = $("facePreview");
+    if (img) { img.classList.add("hidden"); img.removeAttribute("src"); }
+    const label = $("faceCameraLabel");
+    if (label) label.textContent = "—";
+    setSystem("OFF", "OFF");
+  };
+
+  // Changement de site : le contexte précédent est arrêté avant de chercher la caméra du nouveau.
+  F.restart = function () {
+    F.stop();
+    return F.start();
   };
 })();
