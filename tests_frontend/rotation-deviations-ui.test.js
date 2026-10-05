@@ -22,13 +22,13 @@ test('Pointeur : fiche normale + ROTATION INHABITUELLE (attendu / observé), poi
   t.after(() => p.window.close());
   const d = p.window.document;
   p.T().showLastScan({ ...EVENT, rotation_alert: ALERT });
-  const card = d.getElementById('lastScanCard');
-  assert.match(card.textContent, /ADDA Ibrahim[\s\S]*K162[\s\S]*ENTRÉE ENREGISTRÉE[\s\S]*14:02:11[\s\S]*ÉTAT ACTUEL : PRÉSENT/);
+  const card = d.getElementById('scanResultCard');
+  assert.match(card.textContent, /ENTRÉE ENREGISTRÉE[\s\S]*ADDA Ibrahim[\s\S]*K162[\s\S]*14:02:11[\s\S]*ÉTAT ACTUEL : PRÉSENT/);
   const box = card.querySelector('.last-scan-rotation');
   assert.equal(box.getAttribute('role'), 'alert');
   assert.match(box.textContent, /⚠ ROTATION INHABITUELLE\s*Attendu\s*Groupe A · 06:00–14:00\s*Observé\s*Groupe B · 14:00–22:00\s*POINTAGE ENREGISTRÉ/);
   assert.equal(card.classList.contains('is-entry'), true, 'le pointage reste une entrée acceptée, pas un refus');
-  assert.equal(card.querySelectorAll('button,input,select,a').length, 0, 'le poste ne pilote pas le planning');
+  assert.equal(card.querySelectorAll('button:not(.sr-close),input,select,a').length, 0, 'le poste ne pilote pas le planning (seul bouton : fermer la carte)');
 });
 
 test('Pointeur : pointage conforme ou site sans planning actif ⇒ fiche inchangée ; texte échappé', (t) => {

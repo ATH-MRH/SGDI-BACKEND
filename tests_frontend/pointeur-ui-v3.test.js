@@ -31,7 +31,7 @@ function boot() {
   const ctx = loadPointeur({ session: SESSION, fetch, url: 'https://pointeur.irongs.com/' });
   const w = ctx.window, d = w.document;
   const real = w.setTimeout.bind(w), idle = [];
-  w.setTimeout = (fn, ms, ...rest) => (ms === 12000 ? (idle.push(fn), idle.length) : real(fn, ms, ...rest));
+  w.setTimeout = (fn, ms, ...rest) => (ms === 6000 ? (idle.push(fn), idle.length) : real(fn, ms, ...rest));
   return { ...ctx, w, d, idle, setLive: (fn) => { live = fn; }, sys: (id) => { const el = d.getElementById(id); return [el.querySelector('dd').textContent, el.dataset.tone]; } };
 }
 const opened = [];
@@ -86,29 +86,30 @@ test('modes de pointage : trois cartes, chacune branchée sur le mécanisme EXIS
   assert.match(HTML, /body\.ptr-v3 \.ptr-legacy\{display:none!important\}/);
 });
 
-test('zone centrale : attente dessinée → fiche du dernier pointage → retour à l\'attente (comportement V2 inchangé)', async () => {
+test('zone centrale : attente dessinée, toujours en place ; le dernier pointage s\'affiche dans la carte flottante puis disparaît', async () => {
   const t = boot(); await ready(t);
-  const card = t.d.getElementById('lastScanCard');
-  assert.ok(card.classList.contains('is-idle'));
-  assert.ok(card.querySelector('.scan-visual .scan-device .scan-line'), 'scanner dessiné en CSS');
-  assert.match(card.textContent, /EN ATTENTE DU PROCHAIN POINTAGE/);
-  assert.match(card.textContent, /douchette.*reconnaissance faciale.*saisie manuelle/i);
+  const zone = t.d.getElementById('lastScanCard'), card = t.d.getElementById('scanResultCard'), waiting = zone.firstElementChild;
+  assert.ok(zone.classList.contains('is-idle')); assert.equal(card.classList.contains('is-open'), false);
+  assert.ok(zone.querySelector('.scan-visual .scan-device .scan-line'), 'scanner dessiné en CSS');
+  assert.match(zone.textContent, /EN ATTENTE DU PROCHAIN POINTAGE/);
+  assert.match(zone.textContent, /douchette.*reconnaissance faciale.*saisie manuelle/i);
   await t.T().pollLive();
   t.setLive(() => ({ status: 200, body: { latest_event_id: 42, events: [EVENT(42, 'ENTREE')], latest_refusal_id: 7, refusals: [], summary: { ...SUMMARY, entries_today: 3, present_now: 1 } } }));
   await t.T().pollLive(); await tick(20);
-  assert.ok(card.classList.contains('is-entry'));
+  assert.ok(card.classList.contains('is-open') && card.classList.contains('is-entry'));
+  assert.equal(zone.firstElementChild, waiting, 'la zone d\'attente n\'est pas redessinée par un pointage');
   for (const text of [/ADDA/, /K162/, /MAGASINIER/, /HAMOUL 01/, /ENTRÉE ENREGISTRÉE/, /14:32:26/, /ÉTAT ACTUEL : PRÉSENT/, /IDENTIFIÉ/]) assert.match(card.textContent, text);
   assert.equal(card.querySelector('img[src=""],img:not([src])'), null, 'jamais d\'image cassée');
   assert.equal(t.d.getElementById('entrantCount').textContent, '03');
-  assert.equal(t.T().LAST_SCAN_DISPLAY_MS, 12000, 'durée d\'affichage inchangée');
-  t.idle.at(-1)();                                               // fin des 12 s
-  assert.ok(card.classList.contains('is-idle'));
-  assert.ok(card.querySelector('.scan-visual'), 'le scanner d\'attente revient');
+  assert.equal(t.T().LAST_SCAN_DISPLAY_MS, 6000, 'durée d\'affichage de la carte flottante (V5.1)');
+  t.idle.at(-1)();                                               // fin des 6 s
+  assert.equal(card.classList.contains('is-open'), false);
+  assert.ok(zone.querySelector('.scan-visual'), 'le scanner d\'attente est resté en place');
   // Refus : fiche rouge, aucun mouvement.
   t.setLive(() => ({ status: 200, body: { latest_event_id: 42, events: [], latest_refusal_id: 8, summary: SUMMARY,
     refusals: [{ id: 8, heure: '14:40:00', label: 'EMPLOYÉ SUSPENDU', terminal: 'TABLETTTE HAMOUL 01', employee: EMP }] } }));
   await t.T().pollLive(); await tick(20);
-  assert.ok(card.classList.contains('is-refused'));
+  assert.ok(card.classList.contains('is-refused')); assert.equal(card.getAttribute('role'), 'alert');
   assert.match(card.textContent, /POINTAGE REFUSÉ[\s\S]*EMPLOYÉ SUSPENDU[\s\S]*AUCUN MOUVEMENT ENREGISTRÉ/);
 });
 

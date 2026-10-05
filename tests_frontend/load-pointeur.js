@@ -43,6 +43,7 @@ function buildHtml() {
   getPost: () => postState, setPost: (v) => { postState = v; renderPost(); },
   setManualResults: (v) => { manualResults = v; }, getManualContext: () => manualContext,
   loadActiveSheet, renderLiveFeed, rotationAlertHTML, setLiveFilter, loadHistory, getActiveSheet: () => activeSheet,
+  showResult, closeScanResult,
 };
 `;
   return RAW_HTML.replace(/(<script>)([\s\S]*?)(<\/script>)/, (match, open, body, close) => open + body + suffix + close);

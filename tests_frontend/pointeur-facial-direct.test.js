@@ -151,13 +151,13 @@ test('refus d\'Attendance Core : motif réel affiché avec la fiche V5, aucun mo
   const r = await boot({ recognize: () => ({ state: 'REFUSED', recorded: false, employee: E(2), message: 'Nouvelle entrée refusée : nouvelle entrée possible de 14:30 à 14:45.', code: 'EXTRA_BEFORE_WINDOW', refusal }) });
   r.d.getElementById('faceModeBtn').click(); await wait(600);
   assert.match(r.text('faceStatus'), /POINTAGE REFUSÉ AGENT2 Test Matricule M002.*Aucun mouvement enregistré\./);
-  const card = r.text('lastScanCard');
+  const card = r.text('scanResultCard');
   assert.match(card, /POINTAGE REFUSÉ.*AGENT2 Test.*NOUVELLE ENTRÉE NON AUTORISÉE.*Vacation précédente 06:00 → 14:00 Sortie enregistrée 14:04 Nouvelle entrée possible 14:30 → 14:45.*AUCUN MOUVEMENT ENREGISTRÉ/);
   r.close();
   const early = await boot({ recognize: () => ({ state: 'REFUSED', recorded: false, employee: E(2), message: 'Pointage hors fenêtre', code: 'EARLY_OUTSIDE_WINDOW',
     refusal: { code: 'EARLY_OUTSIDE_WINDOW', kind: 'NORMAL', scheduled_start: iso('14:00'), window_opens_at: iso('13:30'), actual_entry: iso('13:21') } }) });
   early.d.getElementById('faceModeBtn').click(); await wait(600);
-  assert.match(early.text('lastScanCard'), /ARRIVÉE HORS FENÊTRE.*Votre vacation commence à 14:00\..*Pointage autorisé à partir de 13:30/);
+  assert.match(early.text('scanResultCard'), /ARRIVÉE HORS FENÊTRE.*Votre vacation commence à 14:00\..*Pointage autorisé à partir de 13:30/);
   early.close();
 });
 
@@ -166,7 +166,7 @@ test('visage inconnu : aucun mouvement, aucun rattachement, secours par la saisi
   r.d.getElementById('faceModeBtn').click(); await wait(600);
   assert.match(r.text('faceStatus'), /VISAGE INCONNU Aucun pointage n'a été enregistré\./);
   assert.doesNotMatch(r.text('faceStatus'), /AGENT|Matricule/);
-  assert.match(r.text('lastScanCard'), /EN ATTENTE D’UN VISAGE/, 'aucune fiche de pointage');
+  assert.match(r.text('lastScanCard'), /EN ATTENTE D’UN VISAGE/); assert.equal(r.d.getElementById('scanResultCard').classList.contains('is-open'), false, 'aucune fiche de pointage');
   r.d.getElementById('faceFallbackBtn').click(); await wait(50);
   assert.equal(r.T.getFacialMode(), false); assert.ok(visible(r, 'manualPanel')); assert.equal(r.F().running, false);
   r.close();

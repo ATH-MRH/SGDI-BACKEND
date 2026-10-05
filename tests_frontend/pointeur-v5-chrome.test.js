@@ -50,7 +50,7 @@ const PROBE = `
     const grid=document.querySelector('.work-grid').getBoundingClientRect();
     return {scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,bodyScrollWidth:document.body.scrollWidth,
       boxes:Object.fromEntries(ids.map(id=>[id,box(id)])),kpis,grid:Math.round(grid.width),hasPost:document.body.classList.contains('has-post'),
-      present:document.querySelectorAll('#presentNowList .v5-person').length,card:document.getElementById('lastScanCard').className,
+      present:document.querySelectorAll('#presentNowList .v5-person').length,card:document.getElementById('scanResultCard').className,
       banner:document.getElementById('shiftBanner').innerText.replace(/\\s+/g,' ').replace(/Dans .*/,''),
       headerCollision:(()=>{const vis=el=>{const r=el.getBoundingClientRect(),st=getComputedStyle(el);return r.width>0&&r.height>0&&st.display!=='none'&&st.visibility!=='hidden'};
         const hit=sel=>{const b=[...document.querySelectorAll(sel)].filter(vis).map(el=>el.getBoundingClientRect());return b.some((x,i)=>b.slice(i+1).some(y=>x.left<y.right-1&&y.left<x.right-1&&x.top<y.bottom-1&&y.top<x.bottom-1))};
@@ -139,7 +139,7 @@ for (const width of WIDTHS) {
     // Changement d'état des données (12 s) : le haut de page et les largeurs ne bougent pas.
     assert.equal(out.t12.present, 14); assert.equal(out.t6.present, 9); assert.equal(out.t30.present, 9);
     assert.match(out.t12.card, /is-refused/, 'refus affiché pendant le changement d\'état');
-    assert.match(out.t30.card, /is-idle/, 'retour à l\'attente');
+    assert.doesNotMatch(out.t30.card, /is-open/, 'carte flottante refermée');
     for (const key of ['t12', 't24', 't30']) {
       for (const id of ['shiftBanner', 'postKpis']) assert.deepEqual(out[key].boxes[id], out.t6.boxes[id], `${id} stable (${key})`);
       for (const id of Object.keys(out.t6.boxes)) assert.equal(out[key].boxes[id].width, out.t6.boxes[id].width, `${id} : largeur stable (${key})`);

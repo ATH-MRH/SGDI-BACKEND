@@ -37,9 +37,11 @@ function boot({ live = [], portrait = 200, photoBroken = false } = {}) {
   // Images : chargement simulé (réussi, sauf photo source « cassée »).
   Object.defineProperty(w.HTMLImageElement.prototype, 'src', { configurable: true, set(v) { this.setAttribute('src', v); setTimeout(() => { if (photoBroken && !String(v).startsWith('blob:')) this.onerror && this.onerror(); else this.onload && this.onload(); }, 0); }, get() { return this.getAttribute('src'); } });
   const real = w.setTimeout.bind(w), idle = [];
-  w.setTimeout = (fn, ms, ...rest) => (ms === 12000 ? (idle.push(fn), idle.length) : real(fn, ms, ...rest));
-  const card = () => w.document.getElementById('lastScanCard');
-  return { ...ctx, w, calls, idle, card, text: () => card().innerHTML.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(), live: (p) => calls.filter((c) => c.path === '/api/portal/attendance-live').map((c) => c.search) };
+  w.setTimeout = (fn, ms, ...rest) => (ms === 6000 ? (idle.push(fn), idle.length) : real(fn, ms, ...rest));
+  // V5.1 : le résultat s'affiche dans la carte flottante ; #lastScanCard reste la zone d'attente.
+  const card = () => w.document.getElementById('scanResultCard');
+  const zone = () => w.document.getElementById('lastScanCard').textContent;
+  return { ...ctx, w, calls, idle, card, zone, text: () => card().innerHTML.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(), live: (p) => calls.filter((c) => c.path === '/api/portal/attendance-live').map((c) => c.search) };
 }
 
 const opened = [];
@@ -64,8 +66,8 @@ test('Mode Test retiré du poste de sécurité ; navigation Scanner / Planning /
 test('démarrage : ancien passage NON réaffiché, compteurs du serveur ; relève authentifiée ~2 s', async () => {
   const t = boot({ live: [{ latest_event_id: 41, events: [EVENT(41, 'ENTREE')], latest_refusal_id: 7, refusals: [], summary: SUMMARY }] });
   await ready(t);
-  assert.ok(t.card().classList.contains('is-idle'));
-  assert.match(t.text(), /EN ATTENTE DU PROCHAIN POINTAGE/);
+  assert.equal(t.card().classList.contains('is-open'), false);
+  assert.match(t.zone(), /EN ATTENTE DU PROCHAIN POINTAGE/);
   assert.deepEqual(['entrantCount', 'sortantCount', 'presentCount', 'absentCount'].map((id) => t.w.document.getElementById(id).textContent), ['03', '01', '02', '01']);
   const first = t.calls.find((c) => c.path === '/api/portal/attendance-live');
   assert.equal(first.auth, 'Bearer tok-ptg');
@@ -91,8 +93,9 @@ test('ENTRÉE faciale acceptée : fiche complète, IDENTIFIÉ, PRÉSENT, portrai
   assert.ok(t.calls.some((c) => c.path === '/api/portal/attendance-feed'), 'Pointage en direct rafraîchi');
   assert.equal(t.w.document.getElementById('entrantCount').textContent, '04');
   assert.equal(t.idle.length, 1);
-  t.idle.shift()();                                                              // 12 s plus tard
-  assert.ok(t.card().classList.contains('is-idle') && /EN ATTENTE DU PROCHAIN POINTAGE/.test(t.text()));
+  assert.match(t.zone(), /EN ATTENTE DU PROCHAIN POINTAGE/, 'la zone de pointage reste en attente sous la carte');
+  t.idle.shift()();                                                              // 6 s plus tard
+  assert.ok(!t.card().classList.contains('is-open') && t.text() === '' && /EN ATTENTE DU PROCHAIN POINTAGE/.test(t.zone()));
   t.dom.window.close();
 });
 
@@ -103,9 +106,9 @@ test('SORTIE : présentation distincte, état SORTI ; un nouveau passage remplac
   await ready(t);
   await t.T().pollLive(); await tick(20);
   assert.match(t.text(), /BENALI Karim/);
-  await t.T().pollLive(); await tick(20);                                        // avant la fin des 12 s
+  await t.T().pollLive(); await tick(20);                                        // avant la fin des 6 s
   assert.ok(t.card().classList.contains('is-exit') && !t.card().classList.contains('is-entry'));
-  assert.match(t.text(), /SORTIE ENREGISTRÉE 04:17:29/);
+  assert.match(t.text(), /^SORTIE ENREGISTRÉE.*04:17:29/);
   assert.match(t.text(), /ÉTAT ACTUEL : SORTI/);
   assert.doesNotMatch(t.text(), /PRÉSENT/);
   assert.doesNotMatch(t.text(), /BENALI/);
@@ -118,7 +121,7 @@ test('QR et saisie manuelle : même écran, libellé de la source', async () => 
       { latest_event_id: 2, events: [EVENT(2, 'ENTREE', { source, terminal: null })], latest_refusal_id: 0, refusals: [], summary: SUMMARY }] });
     await ready(t);
     await t.T().pollLive(); await tick(20);
-    assert.match(t.text(), new RegExp(`^${badge}`));
+    assert.match(t.text(), new RegExp(`^ENTRÉE ENREGISTRÉE ${badge}`));
     assert.doesNotMatch(t.text(), /Terminal/);
     t.dom.window.close();
   }
@@ -131,7 +134,7 @@ test('refus (employé suspendu reconnu) : POINTAGE REFUSÉ, aucun mouvement', as
   await t.T().pollLive(); await tick(20);
   assert.match(t.live().at(-1), /after_refusal_id=7/);
   assert.ok(t.card().classList.contains('is-refused'));
-  assert.match(t.text(), /POINTAGE REFUSÉ ADDA IBRAHIM/);
+  assert.match(t.text(), /^POINTAGE REFUSÉ.*ADDA IBRAHIM/);
   assert.match(t.text(), /EMPLOYÉ SUSPENDU 05:01:02/);
   assert.match(t.text(), /AUCUN MOUVEMENT ENREGISTRÉ/);
   t.dom.window.close();

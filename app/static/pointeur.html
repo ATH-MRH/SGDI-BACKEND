@@ -30,18 +30,9 @@ button,input{font:inherit}
 .last-scan-photo{width:168px;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:#fff;border:1px solid var(--line);display:grid;place-items:center}
 .last-scan-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .last-scan-initials{font-size:46px;font-weight:900;color:var(--navy)}
-.last-scan-badge{display:inline-block;border-radius:999px;padding:5px 14px;font-weight:900;letter-spacing:.08em;font-size:13px;color:#fff;background:var(--green)}
 .last-scan-name{font-size:28px;font-weight:900;line-height:1.1;margin:10px 0 8px;overflow-wrap:anywhere}
-.last-scan-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:14px}.last-scan-meta dt{color:var(--muted);font-weight:700}.last-scan-meta dd{margin:0;font-weight:800;overflow-wrap:anywhere}
-.last-scan-move{margin-top:14px;padding:12px 14px;border-radius:14px;font-weight:900}
-.last-scan-move b{display:block;font-size:22px;letter-spacing:.02em}.last-scan-move span{font-size:30px;font-variant-numeric:tabular-nums}
-.last-scan-state{margin-top:8px;font-weight:900;font-size:16px}
 .last-scan-rotation{margin-top:12px;padding:12px 14px;border-radius:14px;border:2px solid #f59e0b;background:#fffbeb;color:#78350f;font-weight:800}
 .last-scan-rotation b{display:block;font-size:18px;letter-spacing:.02em}.last-scan-rotation dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0}.last-scan-rotation dt{font-weight:700;opacity:.8}.last-scan-rotation dd{margin:0}.last-scan-rotation small{font-weight:900;letter-spacing:.04em}
-.last-scan.is-entry{border-color:var(--green);background:#f0fdf4}.last-scan.is-entry .last-scan-move{background:#dcfce7;color:#14532d}
-.last-scan.is-exit{border-color:var(--blue);background:#eff6ff}.last-scan.is-exit .last-scan-badge{background:var(--blue)}.last-scan.is-exit .last-scan-move{background:#dbeafe;color:#1e3a8a}
-.last-scan.is-refused{border-color:var(--red);background:#fef2f2}.last-scan.is-refused .last-scan-badge{background:var(--red)}.last-scan.is-refused .last-scan-move{background:#fee2e2;color:#7f1d1d}
-@media (max-width:759px){.last-scan-body{grid-template-columns:1fr;justify-items:center;text-align:center}.last-scan-photo{width:140px}.last-scan-name{font-size:22px}.last-scan-meta{text-align:left}}
 .login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
 .login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
 .logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900}
@@ -92,8 +83,6 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .idle-society{font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.85;position:relative;margin-bottom:10px}
 .usb-reader{min-height:310px;border-radius:18px;background:linear-gradient(145deg,#031f3e,#07549a);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;position:relative;overflow:hidden}
 .usb-reader:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(77,174,255,.3),transparent 48%);pointer-events:none}.usb-icon{font-size:72px;position:relative}.usb-title{font-size:24px;font-weight:950;margin-top:10px;position:relative}.usb-hint{font-size:14px;opacity:.8;max-width:440px;margin-top:7px;position:relative}.usb-ready{margin-top:20px;border:1px solid rgba(134,239,172,.55);background:rgba(22,163,74,.22);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;position:relative}.wedge-input{position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:0}
-.result{display:none;margin-top:14px;border-radius:17px;padding:15px;border:1px solid}
-.result.show{display:block}.result.success{background:#dcfce7;border-color:#86efac;color:#14532d}.result.error{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}.result.warning{background:#fef3c7;border-color:#fcd34d;color:#78350f}
 .result-kicker{font-size:11px;font-weight:900;letter-spacing:.08em}.result-name{font-size:19px;font-weight:950;margin:3px 0}.result-meta{font-size:13px;font-weight:650}
 .employee-result{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}.employee-photo{width:172px;height:172px;border-radius:24px;object-fit:cover;border:4px solid rgba(255,255,255,.8);box-shadow:0 8px 20px rgba(15,23,42,.15);background:#fff}.employee-photo-fallback{width:172px;height:172px;border-radius:24px;display:grid;place-items:center;background:#fff;color:var(--navy);font-size:50px;font-weight:950;border:4px solid rgba(255,255,255,.8)}.result-company{font-size:12px;margin-top:7px;font-weight:800}.result-status{display:inline-block;margin-top:8px;background:#16a34a;color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:950}
 .manual-panel{margin:0;padding:0}.manual-heading{text-align:center;font-size:22px;font-weight:950;padding:12px 0 10px;border-bottom:1px dashed var(--line);margin-bottom:20px}
@@ -109,7 +98,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .manual-feedback{display:none;max-width:520px;margin:14px auto 0;padding:11px 14px;border-radius:12px;font-size:13px;font-weight:850;text-align:center}.manual-feedback.show{display:block}.manual-feedback.success{background:#dcfce7;color:#166534;border:1px solid #86efac}.manual-feedback.error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
 .manual-back{width:100%;border:0;background:none;color:var(--muted);font-weight:800;padding:8px;cursor:pointer;font-size:13px}
 .scanner-card.manual-mode{min-height:calc(100vh - 145px)}
-.scanner-card.manual-mode>.scanner-title,.scanner-card.manual-mode>.scanner-hint,.scanner-card.manual-mode>#usbReader,.scanner-card.manual-mode>#reader,.scanner-card.manual-mode>#restartBtn,.scanner-card.manual-mode>.action-row,.scanner-card.manual-mode>.generate-qr-btn,.scanner-card.manual-mode>#result{display:none!important}
+.scanner-card.manual-mode>.scanner-title,.scanner-card.manual-mode>.scanner-hint,.scanner-card.manual-mode>#usbReader,.scanner-card.manual-mode>#reader,.scanner-card.manual-mode>#restartBtn,.scanner-card.manual-mode>.action-row,.scanner-card.manual-mode>.generate-qr-btn{display:none!important}
 .scanner-card.manual-mode #manualSearchStep{max-width:620px;margin:55px auto 0}
 .scanner-card.manual-mode #manualCardStep{padding-top:0;text-align:center}
 .scanner-card.manual-mode .employee-photo,.scanner-card.manual-mode .employee-photo-fallback{width:240px;height:240px;border-radius:30px;font-size:64px}
@@ -189,8 +178,6 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 @media(max-width:1099px),(orientation:portrait){
   .conn-label{display:none}
   .conn-pill{padding:7px}
-  .result{position:fixed;left:0;right:0;bottom:0;z-index:70;display:block;margin:0;border-radius:22px 22px 0 0;max-height:74vh;overflow:auto;transform:translateY(106%);transition:transform .32s cubic-bezier(.22,1,.36,1);box-shadow:0 -20px 50px rgba(0,0,0,.28);pointer-events:none}
-  .result.show{transform:translateY(0);pointer-events:auto}
 }
 /* LOT SÉCURITÉ — auto-déconnexion 30s d'inactivité (pointage.irongs.com /
    pointeur.irongs.com uniquement). Pas de popup navigateur natif. */
@@ -340,17 +327,7 @@ body.ptr-v3 .last-scan-body{animation:ptrIn .28s ease both}
 @keyframes ptrIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 body.ptr-v3 .last-scan-photo{border-radius:16px;border-color:var(--ptr-line);box-shadow:0 10px 24px #0a2d6b1f}
 body.ptr-v3 .last-scan-initials{color:var(--ptr-kpi-1)}
-body.ptr-v3 .last-scan-badge{background:var(--ptr-green);font-size:12px;letter-spacing:.09em}
 body.ptr-v3 .last-scan-name{font-weight:800;color:var(--ptr-ink)}
-body.ptr-v3 .last-scan-meta dt{color:var(--ptr-muted)}
-body.ptr-v3 .last-scan.is-entry{border-color:var(--ptr-green);background:linear-gradient(180deg,var(--ptr-green-soft),var(--ptr-surface) 70%)}
-body.ptr-v3 .last-scan.is-entry .last-scan-move{background:var(--ptr-green-soft);color:var(--ptr-green-ink);border:1px solid #15a05a40}
-body.ptr-v3 .last-scan.is-exit{border-color:var(--ptr-orange);background:linear-gradient(180deg,var(--ptr-orange-soft),var(--ptr-surface) 70%)}
-body.ptr-v3 .last-scan.is-exit .last-scan-badge{background:var(--ptr-orange)}
-body.ptr-v3 .last-scan.is-exit .last-scan-move{background:var(--ptr-orange-soft);color:var(--ptr-orange-ink);border:1px solid #e9820c47}
-body.ptr-v3 .last-scan.is-refused{border-color:var(--ptr-red);background:linear-gradient(180deg,var(--ptr-red-soft),var(--ptr-surface) 70%)}
-body.ptr-v3 .last-scan.is-refused .last-scan-badge{background:var(--ptr-red)}
-body.ptr-v3 .last-scan.is-refused .last-scan-move{background:var(--ptr-red-soft);color:var(--ptr-red-ink);border:1px solid #dc3f4c47}
 /* L'attente dessinée remplace l'ancien panneau « douchette » ; la caméra QR reste telle quelle */
 body.ptr-v3 #usbReader{display:none!important}
 body.ptr-v3 #reader{border-radius:18px;min-height:300px;margin-bottom:16px;background:linear-gradient(150deg,var(--ptr-navy-1),var(--ptr-navy-3))}
@@ -521,27 +498,32 @@ body.ptr-v5 .v5-shift-note{margin:6px 0 0;font-size:14px;font-weight:600;color:v
 body.ptr-v5 .v5-maintien{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:11px 18px;margin:0 0 14px;border:1px solid #f3d9ad;border-radius:14px;background:var(--ptr-orange-soft);color:var(--ptr-orange-ink);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
 body.ptr-v5 .v5-maintien b{font-weight:900;letter-spacing:.04em}
 /* KPI personnes */
-body.ptr-v5 .v5-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 14px}
-body.ptr-v5 .v5-kpi{padding:14px 16px;border-left:4px solid var(--ptr-blue)}
-body.ptr-v5 .v5-kpi small{display:block;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-muted);overflow-wrap:anywhere}
-body.ptr-v5 .v5-kpi b{display:block;margin-top:4px;font-size:32px;line-height:1.05;font-weight:900;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
-body.ptr-v5 .v5-kpi span{display:block;margin-top:2px;font-size:11.5px;color:var(--ptr-muted)}
-body.ptr-v5 .v5-kpi[data-tone="green"]{border-left-color:var(--ptr-green)}
-body.ptr-v5 .v5-kpi[data-tone="orange"]{border-left-color:var(--ptr-orange)}
-body.ptr-v5 .v5-kpi[data-tone="red"]{border-left-color:var(--ptr-red)}
-body.ptr-v5 .v5-kpi[data-tone="muted"]{border-left-color:var(--ptr-line-strong)}
+/* V5.1 — une seule barre compacte (≈ 56 px) : libellé + valeur, les filets viennent du fond de la grille. */
+body.ptr-v5 .v5-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;margin:0 0 8px;border:1px solid var(--ptr-line);border-radius:14px;background:var(--ptr-line);box-shadow:0 2px 10px #0a2d6b0a;overflow:hidden}
+body.ptr-v5 .v5-kpi{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:10px;min-width:0;min-height:54px;padding:7px 14px 7px 16px;background:var(--ptr-surface);box-shadow:inset 3px 0 0 var(--kpi-tone,var(--ptr-blue))}
+body.ptr-v5 .v5-kpi small{grid-column:1;font-size:11px;line-height:1.2;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ptr-muted);overflow-wrap:anywhere}
+body.ptr-v5 .v5-kpi b{grid-column:2;grid-row:1/span 2;font-size:26px;line-height:1;font-weight:900;color:var(--kpi-ink,var(--ptr-ink));font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-kpi span{grid-column:1;grid-row:2;margin-top:1px;font-size:10.5px;line-height:1.2;color:var(--ptr-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.ptr-v5 .v5-kpi[data-tone="blue"]{--kpi-ink:var(--ptr-blue)}
+body.ptr-v5 .v5-kpi[data-tone="green"]{--kpi-tone:var(--ptr-green);--kpi-ink:var(--ptr-green-ink)}
+body.ptr-v5 .v5-kpi[data-tone="orange"]{--kpi-tone:var(--ptr-orange);--kpi-ink:var(--ptr-orange-ink)}
+body.ptr-v5 .v5-kpi[data-tone="red"]{--kpi-tone:var(--ptr-red);--kpi-ink:var(--ptr-red-ink)}
+body.ptr-v5 .v5-kpi[data-tone="muted"]{--kpi-tone:var(--ptr-line-strong)}
 /* Activité du jour : mouvements, discrets — jamais confondus avec les KPI personnes */
-body.ptr-v5.has-post .status-row{flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:10px!important;margin:0 0 14px!important}
-body.ptr-v5.has-post .presence-summary{display:flex!important;flex:0 1 auto;gap:8px;padding:0!important;background:transparent!important;box-shadow:none!important;border:0!important}
-body.ptr-v5.has-post .presence-summary button{min-height:44px;padding:6px 12px!important;border:1px solid var(--ptr-line)!important;border-radius:12px!important;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;box-shadow:none!important}
+body.ptr-v5.has-post .status-row{flex-direction:row!important;flex-wrap:wrap;align-items:center!important;gap:6px 8px!important;margin:0 0 10px!important}
+body.ptr-v5.has-post .presence-summary{display:flex!important;flex:0 1 auto;width:auto;justify-content:flex-start;gap:6px;padding:0!important;background:transparent!important;box-shadow:none!important;border:0!important}
+body.ptr-v5.has-post .presence-summary button{min-height:30px;padding:2px 10px!important;border:1px solid var(--ptr-line)!important;border-radius:999px!important;background:var(--ptr-surface)!important;color:var(--ptr-ink)!important;box-shadow:none!important}
 body.ptr-v5.has-post .presence-summary button::before{display:none!important}
 body.ptr-v5.has-post .presence-summary button :is(small,b){color:inherit!important}
-body.ptr-v5.has-post .presence-summary button b{font-size:18px!important}
+body.ptr-v5.has-post .presence-summary .kpi-txt{display:flex;align-items:baseline;gap:6px}
+body.ptr-v5.has-post .presence-summary button small{margin:0!important;font-size:12px!important}
+body.ptr-v5.has-post .presence-summary button b{font-size:15px!important}
+body.ptr-v5.has-post .v5-day-suffix{display:none}
 body.ptr-v5.has-post .presence-summary .kpi-ico{display:none}
 body.ptr-v5.has-post .presence-summary button:is([data-live-filter="presents"],[data-live-filter="absents"]){display:none!important}
 body.ptr-v5 .v5-activity-label{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-muted)}
-body.ptr-v5 .v5-activity-chip{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:6px 12px;border:1px solid var(--ptr-line);border-radius:12px;background:var(--ptr-surface);font-size:12.5px;color:var(--ptr-ink-2)}
-body.ptr-v5 .v5-activity-chip b{font-size:18px;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
+body.ptr-v5 .v5-activity-chip{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:2px 10px;border:1px solid var(--ptr-line);border-radius:999px;background:var(--ptr-surface);font-size:12px;color:var(--ptr-ink-2)}
+body.ptr-v5 .v5-activity-chip b{font-size:15px;color:var(--ptr-ink);font-variant-numeric:tabular-nums}
 body.ptr-v5:not(.has-post) :is(.v5-activity-label,.v5-activity-chip,#presentNowCard,#todoCard,#movementsCard,#postKpis,#shiftBanner){display:none}
 body.ptr-v5.has-post #liveFeedCard{display:none}
 /* Zone de pointage */
@@ -562,6 +544,40 @@ body.ptr-v5 #scannerCard .face-status small{font-size:13px}
 body.ptr-v5 #scannerCard.facial-mode .last-scan.is-idle .scan-visual{display:none}
 body.ptr-v5 #scannerCard.facial-mode .last-scan.is-idle{min-height:0}
 body.ptr-v5 #scannerCard.facial-mode :is(#usbReader,#reader,#restartBtn,#cameraModeBtn,.station-foot){display:none!important}
+/* ══ V5.1 — résultat de pointage : carte flottante temporaire, HORS FLUX (un pointage ne déplace rien) ══
+   z-index 900 : au-dessus du contenu, sous le header collant (1000) et l'alerte d'inactivité (5000).
+   --sr-x / --sr-top sont posés par placeScanResult() : centrée sur la colonne Pointage, bornée à l'écran. */
+body.ptr-v5 .scan-result{--sr-tone:var(--ptr-green);--sr-soft:var(--ptr-green-soft);--sr-ink:var(--ptr-green-ink);--sr-mark:"✓";display:none;position:fixed;z-index:900;top:var(--sr-top,96px);left:var(--sr-x,50%);transform:translateX(-50%);box-sizing:border-box;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;padding:10px 14px 14px;border:1.5px solid var(--sr-tone);border-radius:16px;background:var(--sr-soft);color:var(--ptr-ink);box-shadow:0 18px 48px #0a2d6b3d}
+body.ptr-v5 .scan-result.is-open{display:block;animation:srIn .2s ease}
+@keyframes srIn{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+body.ptr-v5 .scan-result.is-exit{--sr-tone:var(--ptr-blue);--sr-soft:var(--ptr-blue-soft);--sr-ink:var(--ptr-blue)}
+body.ptr-v5 .scan-result.is-maintien{--sr-tone:var(--ptr-orange);--sr-soft:var(--ptr-orange-soft);--sr-ink:var(--ptr-orange-ink)}
+body.ptr-v5 .scan-result.is-refused{--sr-tone:var(--ptr-red);--sr-soft:var(--ptr-red-soft);--sr-ink:var(--ptr-red-ink);--sr-mark:"✕"}
+body.ptr-v5 .sr-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+body.ptr-v5 .sr-title{flex:1;min-width:0;font-size:15px;font-weight:900;letter-spacing:.04em;color:var(--sr-ink);overflow-wrap:anywhere}
+body.ptr-v5 .sr-title::before{content:var(--sr-mark);margin-right:8px}
+body.ptr-v5 .sr-source{flex:none;padding:3px 9px;border-radius:999px;background:var(--sr-tone);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.06em}
+body.ptr-v5 .sr-close{flex:none;display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:50%;background:#0a2d6b14;color:var(--ptr-ink);font-size:21px;line-height:1;cursor:pointer}
+body.ptr-v5 .sr-close:hover{background:#0a2d6b29}
+body.ptr-v5 .scan-result .last-scan-body{gap:14px;align-items:start}
+body.ptr-v5 .scan-result .last-scan-photo{width:96px;aspect-ratio:4/5;border-radius:12px;box-shadow:0 4px 12px #0a2d6b1f}
+body.ptr-v5 .scan-result .last-scan-initials{font-size:30px}
+body.ptr-v5 .scan-result .last-scan-name{margin:0;font-size:19px;line-height:1.15}
+body.ptr-v5 .sr-info{min-width:0}
+body.ptr-v5 .sr-sub{margin-top:2px;font-size:13.5px;font-weight:700;color:var(--ptr-ink-2);overflow-wrap:anywhere}
+body.ptr-v5 .sr-site{margin-top:1px;font-size:12px;color:var(--ptr-muted);overflow-wrap:anywhere}
+body.ptr-v5 .sr-motif{margin-top:6px;font-size:14px;font-weight:900;letter-spacing:.03em;color:var(--sr-ink)}
+body.ptr-v5 .sr-time{margin-top:5px;font-size:24px;line-height:1.1;font-weight:900;font-variant-numeric:tabular-nums}
+body.ptr-v5 .scan-result .v5-facts{margin-top:6px;gap:2px 12px;font-size:12.5px}
+body.ptr-v5 .scan-result .v5-reason{margin-top:6px;font-size:13.5px}
+body.ptr-v5 .scan-result .v5-inline-btn{min-height:38px;margin-top:8px}
+body.ptr-v5 .scan-result .last-scan-rotation{margin-top:8px;padding:8px 10px;border-width:1px;border-radius:10px;font-size:12.5px}
+body.ptr-v5 .scan-result .last-scan-rotation b{font-size:13.5px}
+body.ptr-v5 .sr-warn{margin:6px 0 0;font-size:13px;font-weight:900;color:var(--ptr-orange-ink)}
+body.ptr-v5 .sr-state{margin-top:6px;font-size:13px;font-weight:900;letter-spacing:.03em;color:var(--sr-ink)}
+body.ptr-v5 .scan-result.no-photo .last-scan-body{grid-template-columns:minmax(0,1fr)}
+@media(max-width:1023px){body.ptr-v5 .scan-result{width:min(520px,calc(100vw - 24px))}}
+@media(prefers-reduced-motion:reduce){body.ptr-v5 .scan-result.is-open{animation:none}}
 /* Colonne droite */
 body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:16px 18px}
 body.ptr-v5 .v5-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;overflow-x:hidden}
@@ -616,14 +632,17 @@ body.ptr-v5.has-post .shift-staffing{order:3}
   body.ptr-v5 .top-actions{grid-column:1/-1;justify-content:flex-start}
 }
 @media(max-width:1279px){
-  body.ptr-v5 .v5-kpi b{font-size:27px}
+  body.ptr-v5 .v5-kpi b{font-size:23px}
   body.ptr-v5 .v5-shift-name{font-size:24px}
   body.ptr-v5 .v5-shift-hours{font-size:20px}
 }
 @media(max-width:959px){
   body.ptr-v5 .v5-shift{grid-template-columns:minmax(0,1fr)}
   body.ptr-v5 .v5-relief{padding:12px 0 0;border-left:0;border-top:1px solid var(--ptr-line)}
-  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+  /* 3 KPI puis 2, sans case vide : grille de 6, les deux derniers prennent une demi-ligne. */
+  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}
+  body.ptr-v5 .v5-kpi{grid-column:span 2;min-height:48px}
+  body.ptr-v5 .v5-kpi:nth-child(n+4){grid-column:span 3}
   /* Ordre mobile / tablette étroite : À traiter avant Présents. */
   body.ptr-v5.has-post #todoCard{order:-2}
   body.ptr-v5.has-post #presentNowCard{order:-1}
@@ -636,9 +655,25 @@ body.ptr-v5.has-post .shift-staffing{order:3}
   body.ptr-v5 .brand-logo-img{height:34px;max-width:96px}
   body.ptr-v5 .brand-sub{display:none}
   body.ptr-v5 .v5-shift{padding:14px}
-  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  body.ptr-v5 .v5-kpi{padding:11px 12px}
-  body.ptr-v5 .v5-kpi b{font-size:25px}
+  body.ptr-v5 .v5-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.ptr-v5 .v5-kpi,body.ptr-v5 .v5-kpi:nth-child(n+4){grid-column:auto;min-height:44px;padding:6px 10px 6px 12px}
+  body.ptr-v5 .v5-kpi:last-child:nth-child(odd){grid-column:1/-1}
+  body.ptr-v5 .v5-kpi b{font-size:22px}
+  body.ptr-v5.has-post .status-row{gap:4px!important}
+  body.ptr-v5 .v5-activity-label{font-size:9.5px;letter-spacing:.02em}
+  body.ptr-v5.has-post .presence-summary{gap:4px}
+  body.ptr-v5.has-post .presence-summary button,body.ptr-v5 .v5-activity-chip{gap:4px;padding:2px 7px!important}
+  body.ptr-v5.has-post .presence-summary .kpi-txt{gap:4px}
+  body.ptr-v5.has-post .presence-summary button small,body.ptr-v5 .v5-activity-chip{font-size:11.5px!important}
+  body.ptr-v5 .scan-result{padding:10px 12px 12px}
+  /* Mobile : photo + identité en haut, résultat dessous sur toute la largeur. */
+  body.ptr-v5 .scan-result .last-scan-body{gap:0 12px}
+  body.ptr-v5 .scan-result .sr-info{display:contents}
+  body.ptr-v5 .scan-result .last-scan-photo{width:60px;grid-row:1/span 3}
+  body.ptr-v5 .scan-result .sr-info>:not(.last-scan-name,.sr-sub,.sr-site){grid-column:1/-1}
+  body.ptr-v5 .scan-result .last-scan-initials{font-size:22px}
+  body.ptr-v5 .scan-result .last-scan-name{font-size:17px}
+  body.ptr-v5 .sr-time{font-size:20px}
   body.ptr-v5 .v5-moves{grid-template-columns:minmax(0,1fr);max-height:none}
   body.ptr-v5 .v5-move{grid-template-columns:max-content max-content minmax(0,1fr);row-gap:2px}
   body.ptr-v5 .v5-move em{grid-column:1/-1;justify-self:start}
@@ -689,21 +724,22 @@ body.ptr-v5.has-post .shift-staffing{order:3}
     <div id="maintienBanner" class="v5-maintien hidden" role="status"></div>
     <div id="postKpis" class="v5-kpis" aria-label="Personnes sur la vacation active"></div>
     <div class="status-row">
-      <span class="v5-activity-label">Activité du jour (mouvements)</span>
+      <span class="v5-activity-label">Activité du jour</span>
       <div id="shiftStaffing" class="shift-staffing"><span class="shift-staffing-empty">Chargement de l’effectif contractuel…</span></div>
       <div class="presence-summary">
-        <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></span><span class="kpi-txt"><small>Entrées aujourd’hui</small><b id="entrantCount">00</b></span></button>
-        <button type="button" data-live-filter="sorties" onclick="setLiveFilter('sorties')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17M15 17H7V9"/></svg></span><span class="kpi-txt"><small>Sorties aujourd’hui</small><b id="sortantCount">00</b></span></button>
+        <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></span><span class="kpi-txt"><small>Entrées<span class="v5-day-suffix"> aujourd’hui</span></small><b id="entrantCount">00</b></span></button>
+        <button type="button" data-live-filter="sorties" onclick="setLiveFilter('sorties')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 7 7 17M15 17H7V9"/></svg></span><span class="kpi-txt"><small>Sorties<span class="v5-day-suffix"> aujourd’hui</span></small><b id="sortantCount">00</b></span></button>
         <button type="button" data-live-filter="presents" onclick="setLiveFilter('presents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.9-3.6 10.1-3.6 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.4M17.5 14.6c1.7.6 2.8 2 3 4.4"/></svg></span><span class="kpi-txt"><small>Présents sur site</small><b id="presentCount">00</b></span></button>
         <button type="button" data-live-filter="absents" onclick="setLiveFilter('absents')"><span class="kpi-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.2"/><path d="M4 19c.9-3.6 6-4.4 8.6-2.8"/><path d="m16 15 5 5M21 15l-5 5"/></svg></span><span class="kpi-txt"><small>Absents aujourd’hui</small><b id="absentCount">00</b></span></button>
       </div>
-      <span class="v5-activity-chip" title="Tentatives refusées aujourd'hui : aucun mouvement enregistré">Tentatives refusées <b id="refusedCount">0</b></span>
+      <span class="v5-activity-chip" title="Tentatives refusées aujourd'hui : aucun mouvement enregistré">Refus <b id="refusedCount">0</b></span>
     </div>
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
     <div class="work-grid">
       <section id="scannerCard" class="scanner-card">
         <!-- POSTE DE SÉCURITÉ : dernier passage ACCEPTÉ par Attendance Core (facial, QR, saisie),
-             affiché automatiquement — aucun clic, aucune recherche. -->
+             affiché automatiquement dans la carte flottante #scanResultCard — aucun clic, aucune
+             recherche. Cette zone reste l'attente : un pointage ne déplace rien. -->
         <div class="station-head">
           <span class="station-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span>
           <div class="station-titles"><div class="scanner-title" id="scannerTitle">Pointage</div>
@@ -742,7 +778,6 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="generateQrBtn" class="secondary generate-qr-btn ptr-legacy" tabindex="-1" aria-hidden="true">▦ GÉNÉRER UN QR SITE</button>
         </div>
         <div class="station-foot"><i class="dot" aria-hidden="true"></i><p class="scanner-hint" id="scannerHint">La validation est automatique.</p></div>
-        <div id="result" class="result"></div>
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
           <div id="manualSearchStep">
@@ -799,6 +834,8 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         <span class="v5-filters" role="group" aria-label="Filtrer les mouvements"><button type="button" data-move-filter="all" class="active" onclick="setMovementFilter('all')">Tous</button><button type="button" data-move-filter="ENTREE" onclick="setMovementFilter('ENTREE')">Entrées</button><button type="button" data-move-filter="SORTIE" onclick="setMovementFilter('SORTIE')">Sorties</button><button type="button" data-move-filter="REFUS" onclick="setMovementFilter('REFUS')">Refus</button><button type="button" data-move-filter="MAINTIEN" onclick="setMovementFilter('MAINTIEN')">Maintiens</button></span></h2>
       <div id="movementsList" class="v5-moves"></div>
     </section>
+    <!-- V5.1 — résultat du dernier pointage : carte flottante temporaire, hors flux. -->
+    <div id="scanResultCard" class="scan-result" role="status" aria-live="polite" aria-atomic="true"></div>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
 </section>
@@ -820,7 +857,8 @@ let planningEvents=[];
 let planningRefreshTimer=null;
 let isLoggingOut=false;
 // Poste de sécurité : relève des passages acceptés (~2 s), affichage du dernier pendant 12 s.
-const LIVE_POLL_MS=2000,LAST_SCAN_DISPLAY_MS=12000;
+// LAST_SCAN_DISPLAY_MS : durée d'affichage de la carte flottante de résultat (V5.1 : 6 s, fermeture manuelle possible).
+const LIVE_POLL_MS=2000,LAST_SCAN_DISPLAY_MS=6000;
 let liveTimer=null,liveCursor=null,liveRefusalCursor=null,liveBusy=false,serverSummary=null,lastScanTimer=null,lastScanShownId="";
 const portraitUrls={};
 
@@ -1043,7 +1081,7 @@ async function enterApp(){
   startHeaderClock();
   updateConnPill();
   startIdleWatch();
-  try{await loadAttendanceSites()}catch(error){showResult({message:error.message||"Sites indisponibles"},"error")}
+  try{await loadAttendanceSites()}catch(error){showResult({title:"SITES INDISPONIBLES",message:error.message||"Sites indisponibles"},"error")}
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
   historyRefreshTimer=setInterval(refreshPointeurData,15000);
@@ -1109,7 +1147,7 @@ function startLivePolling(){
   clearInterval(liveTimer);liveCursor=null;liveRefusalCursor=null;serverSummary=null;
   pollLive();liveTimer=setInterval(pollLive,LIVE_POLL_MS);
 }
-function stopLivePolling(){clearInterval(liveTimer);liveTimer=null;clearTimeout(lastScanTimer)}
+function stopLivePolling(){clearInterval(liveTimer);liveTimer=null;closeScanResult()}
 async function pollLive(){
   if(!pointerSession?.token||liveBusy)return;
   liveBusy=true;
@@ -1218,7 +1256,7 @@ function renderPost(){
     if(m)setHTML("maintienBanner",'<b>MAINTIENS — VACATION '+esc(m.previous.start)+' → '+esc(m.previous.end)+'</b><span>Nouvelle entrée autorisée : '+esc(m.opens)+' → '+esc(m.closes)+'</span><span>'+(m.state==="OPEN"?"Fermeture dans ":"Ouverture dans ")+'<b id="maintienCountdown"></b></span>');
   }
   const k=post.kpi||{},num=v=>v==null?"—":String(v);
-  const kpi=(label,value,tone,hint)=>'<div class="v5-card v5-kpi" data-tone="'+tone+'"><small>'+label+'</small><b>'+esc(num(value))+'</b>'+(hint?'<span>'+esc(hint)+'</span>':'')+'</div>';
+  const kpi=(label,value,tone,hint)=>'<div class="v5-kpi" data-tone="'+tone+'"><small>'+label+'</small><b>'+esc(num(value))+'</b>'+(hint?'<span title="'+esc(hint)+'">'+esc(hint)+'</span>':'')+'</div>';
   setHTML("postKpis",kpi("Attendus",k.expected,"blue",post.current?"Groupe "+post.current.group:"")+kpi("Présents",k.present,"green","personnes uniques")
     +kpi("Absents / non pointés",k.absent,k.absent?"red":"muted",k.excused?k.excused+" en congé, maladie ou mission":"")+kpi("En maintien",k.maintien,k.maintien?"orange":"muted","")+kpi("Anomalies",k.anomalies,k.anomalies?"red":"muted","à traiter"));
   const refused=document.getElementById("refusedCount");if(refused)refused.textContent=String((post.activity||{}).refused_today||0);
@@ -1277,14 +1315,44 @@ function operationalError(response,data){
   if(data.detail&&typeof data.detail!=="string")console.warn("Pointage refusé",response.status,data.detail);
   return error;
 }
-function scheduleLastScanIdle(){
-  clearTimeout(lastScanTimer);
-  lastScanTimer=setTimeout(()=>{
-    const card=document.getElementById("lastScanCard");if(!card)return;
-    lastScanShownId="";card.className="last-scan is-idle";
-    card.innerHTML=lastScanIdleHTML();
-  },LAST_SCAN_DISPLAY_MS);
+// ══ V5.1 — résultat de pointage : carte flottante temporaire, hors flux ════════════════════
+// Une seule carte : un nouveau résultat remplace le contenu. Elle se ferme seule après
+// LAST_SCAN_DISPLAY_MS, par le bouton × ou Échap. La zone de pointage n'est jamais redessinée.
+let overtimeFor="";
+function placeScanResult(card){
+  const host=document.getElementById("scannerCard"),zone=document.getElementById("lastScanCard"),head=document.querySelector("#appView>.top");
+  const h=host?host.getBoundingClientRect():null;if(!h||!h.width)return;
+  const z=zone?zone.getBoundingClientRect():h,half=card.offsetWidth/2,vw=document.documentElement.clientWidth;
+  const floor=(head&&getComputedStyle(head).position==="sticky"?Math.max(0,head.getBoundingClientRect().bottom):0)+8;
+  const x=Math.min(Math.max(h.left+h.width/2,half+12),vw-half-12);
+  const top=Math.max(floor,Math.min((z.height?z.top:h.top)+8,window.innerHeight-card.offsetHeight-12));
+  card.style.setProperty("--sr-x",Math.round(x)+"px");card.style.setProperty("--sr-top",Math.round(top)+"px");
 }
+function scanResultHTML(o){
+  return '<div class="sr-head"><b class="sr-title">'+esc(o.title)+'</b>'+(o.source?'<span class="sr-source">'+esc(o.source)+'</span>':'')
+    +'<button type="button" class="sr-close" aria-label="Fermer le résultat" title="Fermer" onclick="closeScanResult()">×</button></div>'
+    +'<div class="last-scan-body">'+(o.name?lastScanPhotoHTML(o.name):'')+'<div class="sr-info">'
+    +(o.name?'<div class="last-scan-name">'+esc(o.name)+'</div>':'')+(o.sub?'<div class="sr-sub">'+esc(o.sub)+'</div>':'')+(o.site?'<div class="sr-site">'+esc(o.site)+'</div>':'')
+    +(o.motif?'<div class="sr-motif">'+esc(o.motif)+'</div>':'')+(o.time?'<div class="sr-time">'+esc(o.time)+'</div>':'')+(o.extra||'')
+    +(o.state?'<div class="sr-state">'+esc(o.state)+'</div>':'')+'</div></div>';
+}
+function openScanResult(tone,token,o){
+  const card=document.getElementById("scanResultCard");if(!card)return false;
+  lastScanShownId=token;
+  card.className="scan-result is-open is-"+tone+(o.name?"":" no-photo");
+  card.setAttribute("role",tone==="refused"?"alert":"status");
+  card.dataset.matricule=o.matricule||"";
+  card.innerHTML=scanResultHTML(o);
+  placeScanResult(card);
+  scheduleLastScanIdle();
+  return true;
+}
+function closeScanResult(){
+  clearTimeout(lastScanTimer);lastScanShownId="";overtimeFor="";
+  const card=document.getElementById("scanResultCard");if(!card)return;
+  card.className="scan-result";card.innerHTML="";
+}
+function scheduleLastScanIdle(){clearTimeout(lastScanTimer);lastScanTimer=setTimeout(closeScanResult,LAST_SCAN_DISPLAY_MS)}
 // Poste V3 — ÉTAT DU SYSTÈME : uniquement des faits connus du navigateur (réseau, mode de
 // lecture, dernière relève attendance-live). La douchette USB émule un clavier : sa présence
 // physique n'est pas détectable, on affiche donc « à l'écoute », jamais « connectée ».
@@ -1352,23 +1420,16 @@ function rotationAlertHTML(alert){
   return `<div class="last-scan-rotation" role="alert"><b>⚠ ROTATION INHABITUELLE</b><dl><dt>Attendu</dt><dd>${side(alert.expected)}</dd><dt>Observé</dt><dd>${side(alert.observed)}</dd></dl><small>POINTAGE ENREGISTRÉ</small></div>`;
 }
 function showLastScan(event){
-  const card=document.getElementById("lastScanCard");if(!card||!event)return;
+  if(!event)return;
   const token="e"+event.id;if(lastScanShownId===token){scheduleLastScanIdle();return}
-  lastScanShownId=token;
   const e=event.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",entry=event.type==="ENTREE";
   const badge=event.source==="FACIAL"?"IDENTIFIÉ":event.source==="QR"?"QR VALIDÉ":event.source==="MANUAL"?"SAISIE MANUELLE":String(event.source_label||"POINTAGE").toUpperCase();
-  const state=event.state==="PRESENT"?"PRÉSENT":"SORTI";
-  card.className="last-scan "+(entry?"is-entry":"is-exit");
-  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
-    <span class="last-scan-badge">${esc(badge)}</span>
-    <div class="last-scan-name">${esc(name)}</div>
-    <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>
-      <dt>Site</dt><dd>${esc(event.site||e.site||"—")}</dd><dt>Société</dt><dd>${esc(e.societe||"—")}</dd>${event.terminal?`<dt>Terminal</dt><dd>${esc(event.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${countedTitle(event,entry)}</b><span>${esc(event.heure||"")}</span></div>
-    ${countedFactsHTML(event,entry)}
-    <div class="last-scan-state">ÉTAT ACTUEL : ${countedState(event,state)}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`;
+  const state=event.state==="PRESENT"?"PRÉSENT":"SORTI",maintien=entry&&event.counted&&event.counted.kind==="EXTRA_SHIFT";
+  const overtime=!entry&&overtimeFor&&overtimeFor===e.matricule?'<p class="sr-warn">⚠ VOLUME HORAIRE DÉPASSÉ</p>':"";
+  if(!openScanResult(maintien?"maintien":entry?"entry":"exit",token,{title:countedTitle(event,entry),source:badge,name,matricule:String(e.matricule||""),sub:[e.matricule,e.fonction||e.poste].filter(Boolean).join(" · "),
+    site:[event.site||e.site,e.societe,event.terminal].filter(Boolean).join(" · "),time:event.heure,
+    extra:countedFactsHTML(event,entry)+overtime+rotationAlertHTML(event.rotation_alert),state:"ÉTAT ACTUEL : "+countedState(event,state)}))return;
   fillLastScanPhoto(e,token);
-  scheduleLastScanIdle();
 }
 function countedTitle(event,entry){
   const c=event.counted;
@@ -1393,19 +1454,12 @@ function countedFactsHTML(event,entry){
   return '<dl class="v5-facts">'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>';
 }
 function showLastRefusal(refusal){
-  const card=document.getElementById("lastScanCard");if(!card||!refusal)return;
-  const token="r"+refusal.id;lastScanShownId=token;
-  const e=refusal.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
-  card.className="last-scan is-refused";
-  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
-    <span class="last-scan-badge">POINTAGE REFUSÉ</span>
-    <div class="last-scan-name">${esc(name)}</div>
-    <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>${refusal.terminal?`<dt>Terminal</dt><dd>${esc(refusal.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${esc((refusalBlockHTML(refusal)||{}).title||refusal.label||"POINTAGE REFUSÉ")}</b><span>${esc(refusal.heure||"")}</span></div>
-    ${(refusalBlockHTML(refusal)||{}).body||(refusal.message?'<p class="v5-reason">'+esc(refusal.message)+'</p>':"")}
-    <div class="last-scan-state">AUCUN MOUVEMENT ENREGISTRÉ</div></div></div>`;
+  if(!refusal)return;
+  const token="r"+refusal.id,e=refusal.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
+  const block=refusalBlockHTML(refusal)||{},motif=block.title||refusal.label||"";
+  if(!openScanResult("refused",token,{title:"POINTAGE REFUSÉ",name,sub:[e.matricule,e.fonction||e.poste].filter(Boolean).join(" · "),site:refusal.terminal||"",
+    motif:motif==="POINTAGE REFUSÉ"?"":motif,time:refusal.heure,extra:block.body||(refusal.message?'<p class="v5-reason">'+esc(refusal.message)+'</p>':""),state:"AUCUN MOUVEMENT ENREGISTRÉ"}))return;
   fillLastScanPhoto(e,token);
-  scheduleLastScanIdle();
 }
 function renderCounters(){
   if(!serverSummary)return false;
@@ -1640,7 +1694,8 @@ async function onQr(token){
     pollLive();                                                   // la fiche « Dernier pointage » suit sans attendrenavigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){
     if(error.refusal)showLastRefusal({id:"x"+Date.now(),heure:opsStamp().slice(11,19),...error.refusal});
-    showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
+    else showResult({message:error.message||"QR invalide"},"error");
+    playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
 function playTone(success){
@@ -1654,15 +1709,19 @@ function playTone(success){
     oscillator.start();oscillator.stop(ctx.currentTime+duration);oscillator.onended=()=>ctx.close();
   }catch(e){}
 }
+// Retour immédiat d'un scan (QR, saisie manuelle) et erreurs sans motif structuré : même carte
+// flottante. La relève live qui suit y pose la fiche complète (temps comptabilisé, état).
 function showResult(data,type){
-  const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"||type==="warning"){
-    const action=data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE";
-    const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
-    const photo=data.photo?`<img class="employee-photo" src="${esc(data.photo)}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
-    el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
-  }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
-  clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
+    const card=document.getElementById("scanResultCard"),exit=data.action==="depart";
+    overtimeFor=data.overtime?data.matricule:"";
+    // La relève a déjà affiché la fiche complète de cette personne : on ne la remplace pas par moins.
+    if(card&&card.classList.contains("is-open")&&lastScanShownId.startsWith("e")&&card.dataset.matricule===String(data.matricule||""))return;
+    openScanResult(exit?"exit":"entry","s"+Date.now(),{title:exit?"SORTIE ENREGISTRÉE":"ENTRÉE ENREGISTRÉE",name:data.name,sub:[data.matricule,data.poste].filter(Boolean).join(" · "),
+      site:[data.site,data.societe].filter(Boolean).join(" · "),time:data.heure,extra:data.overtime?'<p class="sr-warn">⚠ VOLUME HORAIRE DÉPASSÉ</p>':""});
+    const box=document.getElementById("lastScanPhoto");
+    if(box&&data.photo){const img=new Image();img.alt="Photo de "+data.name;img.onload=()=>{if(document.getElementById("lastScanPhoto")===box){box.innerHTML="";box.appendChild(img)}};img.src=data.photo}
+  }else openScanResult("refused","x"+Date.now(),{title:data.title||"POINTAGE REFUSÉ",extra:'<p class="v5-reason">'+esc(data.message)+'</p>',state:data.title?"":"AUCUN MOUVEMENT ENREGISTRÉ"});
 }
 function renderHistory(){
   const todayRows=sessionScans.filter(row=>row.date===localDate());
@@ -1832,7 +1891,9 @@ async function confirmManualPointage(action="present",options={}){
     const block=error.refusal?refusalBlockHTML(error.refusal):null;
     if(block)feedback.innerHTML='<b>'+esc(block.title)+'</b>'+block.body+'<p class="v5-reason">Aucun mouvement enregistré.</p>';else feedback.textContent=message;
     feedback.className="manual-feedback show error";
-    showResult({message},"error");playTone(false);navigator.vibrate?.(180);
+    if(error.refusal)showLastRefusal({id:"m"+Date.now(),heure:opsStamp().slice(11,19),employee:manualSelected,...error.refusal});
+    else showResult({message},"error");
+    playTone(false);navigator.vibrate?.(180);
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
   }finally{
     scanBusy=false;
@@ -1858,6 +1919,8 @@ document.getElementById("wedgeInput").addEventListener("input",event=>{
   qrKeyBuffer=event.target.value;
   qrLastKeyAt=Date.now();
 });
+document.addEventListener("keydown",event=>{if(event.key==="Escape"&&lastScanShownId)closeScanResult()});
+window.addEventListener("resize",()=>{const card=document.getElementById("scanResultCard");if(card&&card.classList.contains("is-open"))placeScanResult(card)});
 document.addEventListener("keydown",event=>{
   if(!pointerSession||cameraMode||event.ctrlKey||event.metaKey||event.altKey)return;
   if(isManualPanelOpen())return;

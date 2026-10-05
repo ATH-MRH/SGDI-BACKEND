@@ -152,22 +152,22 @@ test('entrée, sortie et maintien : heure réelle, horaire planifié et temps co
   const base = { date: '2026-10-01', source: 'QR', source_label: 'QR', site: 'SITE TEST', site_id: 12, employee: E1 };
   const counted = { kind: 'NORMAL', group: 'B', scheduled_start: iso('14:00'), scheduled_end: iso('22:00'), actual_entry: '2026-10-01T13:37:24+01:00', counted_start: iso('14:00') };
   t.T().showLastScan({ ...base, id: 71, type: 'ENTREE', heure: '13:37:24', state: 'PRESENT', counted });
-  let card = t.text('lastScanCard');
+  let card = t.text('scanResultCard');
   assert.match(card, /ADDA IBRAHIM/); assert.match(card, /ENTRÉE ENREGISTRÉE/); assert.match(card, /Groupe B/);
   assert.match(card, /Pointage réel 13:37:24 Début planifié 14:00 Temps comptabilisé à partir de 14:00/); assert.match(card, /ÉTAT ACTUEL : PRÉSENT/);
   t.T().showLastScan({ ...base, id: 72, type: 'SORTIE', heure: '22:18:13', state: 'SORTI', counted: { ...counted, actual_exit: '2026-10-01T22:18:13+01:00', counted_end: iso('22:00'), counted_minutes: 480 } });
-  card = t.text('lastScanCard');
+  card = t.text('scanResultCard');
   assert.match(card, /SORTIE ENREGISTRÉE/); assert.match(card, /Pointage réel 22:18:13 Fin planifiée 22:00 Temps comptabilisé jusqu’à 22:00 Durée comptabilisée 8 h 00/);
   assert.match(card, /VACATION TERMINÉE/);
   t.T().showLastScan({ ...base, id: 73, type: 'ENTREE', heure: '14:34:00', state: 'PRESENT', employee: E2, counted: { kind: 'EXTRA_SHIFT', group: 'A', scheduled_start: iso('14:00'), scheduled_end: iso('22:00'), actual_entry: '2026-10-01T14:34:00+01:00', counted_start: iso('14:34') } });
-  card = t.text('lastScanCard');
+  card = t.text('scanResultCard');
   assert.match(card, /MAINTIEN ENREGISTRÉ/); assert.match(card, /Deuxième vacation 14:00 → 22:00 Début réel 14:34:00 Temps comptabilisé à partir de 14:34/); assert.match(card, /EN MAINTIEN/);
 });
 
 test('refus : motif réel d\'Attendance Core, jamais « fraude », jamais un message générique seul', async () => {
   const t = await ready(boot({ live: [LIVE(POST())] }));
   const prev = { scheduled_start: iso('06:00'), scheduled_end: iso('14:00'), actual_exit: iso('14:04') };
-  const show = (code, counted, extra = {}) => { t.T().showLastRefusal({ id: code, heure: '14:10:00', label: 'x', code, employee: E1, counted, ...extra }); return t.text('lastScanCard'); };
+  const show = (code, counted, extra = {}) => { t.T().showLastRefusal({ id: code, heure: '14:10:00', label: 'x', code, employee: E1, counted, ...extra }); return t.text('scanResultCard'); };
   let card = show('EXTRA_BEFORE_WINDOW', { kind: 'EXTRA_SHIFT', scheduled_start: iso('14:00'), window_opens_at: iso('14:30'), window_closes_at: iso('14:45'), previous: prev });
   assert.match(card, /POINTAGE REFUSÉ/); assert.match(card, /ADDA IBRAHIM/); assert.match(card, /NOUVELLE ENTRÉE NON AUTORISÉE/);
   assert.match(card, /Vacation précédente 06:00 → 14:00 Sortie enregistrée 14:04 Nouvelle entrée possible 14:30 → 14:45/); assert.match(card, /AUCUN MOUVEMENT ENREGISTRÉ/);
@@ -177,10 +177,10 @@ test('refus : motif réel d\'Attendance Core, jamais « fraude », jamais un mes
   assert.match(card, /VACATION PRÉCÉDENTE NON CLÔTURÉE/); assert.match(card, /La sortie de la première vacation doit être enregistrée avant l’ouverture d’une deuxième vacation/);
   card = show('MANUAL_ENTRY_REQUIRED', { window_closes_at: iso('14:45'), previous: prev });
   assert.match(card, /FENÊTRE DE MAINTIEN TERMINÉE/); assert.match(card, /SAISIE MANUELLE PAR LE POINTEUR REQUISE/);
-  assert.equal(t.d.querySelector('#lastScanCard .v5-inline-btn'), null, 'sans permission : aucun bouton');
+  assert.equal(t.d.querySelector('#scanResultCard .v5-inline-btn'), null, 'sans permission : aucun bouton');
   t.T().setPost(POST({ permissions: { manual_entry: true } }));
   show('MANUAL_ENTRY_REQUIRED', { window_closes_at: iso('14:45'), previous: prev });
-  assert.equal(t.d.querySelector('#lastScanCard .v5-inline-btn').textContent, 'SAISIE MANUELLE');
+  assert.equal(t.d.querySelector('#scanResultCard .v5-inline-btn').textContent, 'SAISIE MANUELLE');
   // Refus d'un terminal sans code : le motif fourni est affiché, pas seulement un libellé.
   assert.match(show(null, null, { label: 'EMPLOYÉ SUSPENDU', message: 'Pointage refusé : employé suspendu' }), /EMPLOYÉ SUSPENDU.*Pointage refusé : employé suspendu/);
   assert.doesNotMatch(HTML, /fraude/i);
@@ -191,7 +191,7 @@ test('scan refusé : le motif structuré de la réponse est affiché, jamais une
   const t = await ready(boot({ live: [LIVE(POST())], routes: { '/api/portal/attendance-qr/scan': async () => ({ ok: false, status: 409, headers: { get: (h) => (h === 'X-Attendance-Refusal' ? JSON.stringify(refusal) : null) }, json: async () => ({ detail: refusal.message }) }) } }));
   await t.T().onQr('qr-token');
   await tick();
-  assert.match(t.text('lastScanCard'), /NOUVELLE ENTRÉE NON AUTORISÉE.*Nouvelle entrée possible 14:30 → 14:45.*AUCUN MOUVEMENT ENREGISTRÉ/);
+  assert.match(t.text('scanResultCard'), /NOUVELLE ENTRÉE NON AUTORISÉE.*Nouvelle entrée possible 14:30 → 14:45.*AUCUN MOUVEMENT ENREGISTRÉ/);
   const resp = (status, detail) => ({ status, headers: { get: () => null } });
   const warn = t.w.console.warn; t.w.console.warn = () => {};
   assert.equal(t.T().operationalError(resp(500), { detail: [{ loc: ['body'], msg: 'Traceback' }] }).message, 'Service momentanément indisponible. Réessayez dans un instant.');

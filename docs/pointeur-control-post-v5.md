@@ -41,6 +41,25 @@ Sans site unique sélectionné, `post` est absent : l'écran historique reste af
 enregistré ». Le refus d'un scan direct est lu dans l'en-tête `X-Attendance-Refusal` (le champ
 `detail` reste le texte historique). Aucune erreur technique brute n'est affichée.
 
+## V5.1 — KPI compacts et résultat en surimpression (affichage uniquement)
+
+Aucune règle, aucun appel ni aucune donnée ne change : seuls le HTML, le CSS et le rendu évoluent.
+
+- **KPI** : une barre unique au lieu de cinq cartes (≈ 56 px sur une ligne dès 1024 px ; 3 + 2 sur
+  tablette ; 2 colonnes sur mobile). Libellé, valeur et petit sous-libellé ; mêmes couleurs
+  sémantiques (rouge / orange seulement quand la valeur est non nulle).
+- **Activité du jour** : une ligne de 30 px — `Entrées`, `Sorties`, `Refus`.
+- **Résultat d'un pointage** : carte flottante `#scanResultCard` (`position: fixed`, hors flux,
+  560 px au plus, 520 px sur tablette, 12 px de marge sur mobile), centrée sur la colonne Pointage.
+  Elle ne déplace rien : la zone d'attente `#lastScanCard`, les modes, le formulaire de saisie
+  manuelle et la colonne de droite restent en place. Verte (entrée), bleue (sortie), orange
+  (maintien), rouge (refus, `role="alert"`). Une seule carte : un nouveau résultat remplace le
+  contenu. Le retour immédiat d'un scan et la fiche complète de la relève passent par la même carte.
+- **Durée** : `LAST_SCAN_DISPLAY_MS` = **6 s** (12 s auparavant, quand la fiche occupait la zone
+  centrale). Fermeture immédiate par le bouton × ou la touche Échap ; le focus n'est jamais déplacé.
+- **Niveau** : `z-index` 900 — au-dessus du contenu, sous le header collant (1000) et sous l'alerte
+  d'inactivité (5000).
+
 ## Intention explicite de maintien
 
 `GET /api/portal/attendance-manual/context?employee_id=&site_id=` (lecture seule) donne, pour
@@ -64,6 +83,9 @@ repartent pas à zéro. Horloge et date : temps métier du serveur (lot 3).
 `tests_frontend/pointeur-v5.test.js` (jsdom) · `npm run test:pointeur-v5-chrome` (Chrome réel,
 1600 → 390 px : aucun débordement, 65/35 puis une colonne, header sans collision, mise en page
 stable sur 30 s de rafraîchissements avec changement d'état).
+`tests_frontend/pointeur-compact-ui.test.js` (jsdom) et `pointeur-compact-ui-chrome.test.js` (même
+commande Chrome) : hauteurs de la barre KPI avec 0 / 9 / 99 / 999, carte flottante pour chaque type
+de résultat, aucun déplacement de la mise en page en QR, saisie manuelle et facial.
 
 ## Hors périmètre
 

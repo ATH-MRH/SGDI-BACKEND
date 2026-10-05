@@ -46,7 +46,7 @@ function boot(url = 'https://pointeur.irongs.com/') {
       w.dispatchEvent(new w.Event('pageshow'));
     },
     connected: () => !!T().getSession() && !w.document.getElementById('appView').classList.contains('hidden'),
-    card: () => w.document.getElementById('lastScanCard'),
+    card: () => w.document.getElementById('scanResultCard'),
     liveCalls: () => calls.filter((p) => p === '/api/portal/attendance-live').length,
   };
 }
