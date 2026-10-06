@@ -5190,7 +5190,7 @@ const DRH_PORTAL_HOME_CARDS={
   "fiches":{title:"Fiche de position",hint:"Informations employés",tone:"orange",icon:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5z"/>'},
   "drh/conges":{title:"Congés",hint:"Demandes et suivi",tone:"cyan",icon:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'},
   "effectif/recap":{title:"GRH",hint:"Administration RH",tone:"rose",icon:'<path d="M6 20v-6M12 20V5M18 20v-9"/>'},
-  "demandes_personnel/dashboard":{title:"Demandes personnel",hint:"Réception des demandes",tone:"indigo",icon:'<rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9 4.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.5M9 11h6M9 15h4"/>'}
+  "demandes_personnel/dashboard":{title:"Demandes personnel",hint:"Gestion des demandes du personnel",tone:"indigo",icon:'<rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9 4.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.5M9 11h6M9 15h4"/>'}
 };
 function drhPortalHomeIcon(paths){
   return `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
