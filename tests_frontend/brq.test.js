@@ -139,7 +139,7 @@ test("dedicated BRQ host, navigation, and route are wired into the ERP shell", (
   assert.match(SHELL_CSS, /\.sgdi-login-page-brq/);
   assert.match(SHELL_CSS, /\.sgdi-login-page-brq \.sgdi-login-brand img/);
   assert.match(SHELL_CSS, /\.sgdi-login-page-brq \.login-admin-system-shortcut\{display:none!important\}/);
-  assert.match(SHELL_CSS, /body:has\(\.brq-page\) button\[aria-label="Ouvrir l'assistant ATLAS"\]\{display:none!important\}/);
+  assert.match(SHELL_CSS, /body:has\(\.brq-page\) button\[aria-label="Ouvrir l'assistant ATLAS"\],[\s\S]*body:has\(\.module-host-brq\) button\[aria-label="Ouvrir l'assistant ATLAS"\]\{display:none!important\}/);
   assert.match(SHELL_SRC, /sgdiPullState\(\{render:false,silent:true,force:true,deferSql:true,deferSecondary:true\}\)/);
 });
 
