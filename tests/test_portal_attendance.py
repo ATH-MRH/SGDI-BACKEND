@@ -273,7 +273,7 @@ def _pointer_headers_for_site(client, db, site_id, *, username="pointer-staffing
 
     pointer = User(
         username=username, full_name="Pointeur staffing", role="ops", access_level="H2",
-        authorized_societies=[], authorized_sites=[site_id], authorized_structures=["pointage"],
+        authorized_societies=[SOCIETY], authorized_sites=[site_id], authorized_structures=["pointage"],
         password_hash=hash_password("pointerpass"), is_active=True,
     )
     db.add(pointer); db.commit()
@@ -834,7 +834,7 @@ def test_attendance_feed_site_restricted_supervisor_only_sees_own_site(client, a
         full_name="Attendance Supervisor",
         role="ops",
         access_level="H2",
-        authorized_societies=[],
+        authorized_societies=[SOCIETY],
         authorized_sites=[mine],
         authorized_structures=[],
         password_hash=hash_password("supervisorpass"),
@@ -866,7 +866,7 @@ def test_manual_search_and_scan_respect_pointer_site_scope(client, auth_headers,
     _assign(client, auth_headers, emp_other, other)
     pointer = User(
         username="pointer-site-scope", full_name="Pointeur site", role="ops", access_level="H2",
-        authorized_societies=[], authorized_sites=[mine], authorized_structures=["pointage"],
+        authorized_societies=[SOCIETY], authorized_sites=[mine], authorized_structures=["pointage"],
         password_hash=hash_password("pointerpass"), is_active=True,
     )
     db.add(pointer); db.commit()
