@@ -17,6 +17,7 @@ from app.core.scope_policy import (
 )
 from app.modules.attendance import core
 from app.modules.attendance.models import EVENT_ABANDON, AttendanceEvent
+from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs.sql_bridge import flatten_employee_extra
 from app.modules.ops.models import Assignment, DailyPresence, Site
@@ -143,7 +144,7 @@ def _availability(day: date, presence: DailyPresence | None, plan: dict[str, Any
 
 def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
           presence: DailyPresence | None, plan: dict[str, Any], abandon: AttendanceEvent | None,
-          now: datetime) -> dict[str, Any]:
+          now: datetime, client_name: str = "") -> dict[str, Any]:
     exit_date, exit_status = _exit_date(employee)
     planned = bool(plan.get("known") and plan.get("on") is True)
     raw_state = _status(presence, plan, day, now)
@@ -159,6 +160,7 @@ def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
         "nom": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
         "fonction": assignment.position or employee.position or "",
         "society": _site_society(site) or employee.society or "",
+        "client": client_name,
         "site_id": site.id,
         "site": site.name or site.indicatif or "",
         "wilaya": site.wilaya or "",
@@ -180,6 +182,36 @@ def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
         "departure": (presence.departure_time or "") if presence else "",
         "abandon": _abandon_card(abandon) if abandon else None,
     }
+
+
+def _matches_report_filters(item: dict[str, Any], *, client: str | None,
+                            site: str | None, fonction: str | None,
+                            vacation: str | None) -> bool:
+    def contains(value: Any, query: str | None) -> bool:
+        clean_query = (query or "").strip().casefold()
+        return not clean_query or clean_query in str(value or "").casefold()
+
+    if not contains(item.get("client"), client):
+        return False
+    if site:
+        site_query = site.strip().casefold()
+        site_id = item.get("site_id")
+        if site_query.isdigit():
+            if str(site_id or "") != site_query:
+                return False
+        elif not contains(item.get("site"), site):
+            return False
+    if not contains(item.get("fonction"), fonction):
+        return False
+    if vacation:
+        planning = item.get("planning") if isinstance(item.get("planning"), dict) else {}
+        vacation_text = " ".join(
+            str(planning.get(key) or "")
+            for key in ("period", "start_time", "end_time")
+        )
+        if vacation.casefold() not in vacation_text.casefold():
+            return False
+    return True
 
 
 def _abandon_card(event: AttendanceEvent) -> dict[str, Any]:
@@ -260,9 +292,16 @@ def _filter_abandon_society(event: AttendanceEvent, employee: Employee, site: Si
 
 
 def build_report(db: Session, user: Any, *, day: date, society: str | None = None,
-                 wilaya: str | None = None, site_id: int | None = None) -> dict[str, Any]:
+                 wilaya: str | None = None, site_id: int | None = None,
+                 client: str | None = None, site: str | None = None,
+                 fonction: str | None = None, vacation: str | None = None) -> dict[str, Any]:
     now = core._now_local()
     sites, societies = _visible_sites(db, user, society=society, wilaya=wilaya, site_id=site_id)
+    client_ids = {item.client_id for item in sites.values() if item.client_id is not None}
+    clients = {
+        item.id: item.name
+        for item in db.execute(select(Client).where(Client.id.in_(client_ids or {-1}))).scalars()
+    }
     assignments = _query_assignments(db, day, sites)
     latest: dict[int, Assignment] = {}
     for assignment in assignments:
@@ -305,12 +344,12 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
     rows: list[dict[str, Any]] = []
     for employee_id, assignment in latest.items():
         employee = employees.get(employee_id)
-        site = sites.get(assignment.site_id)
+        site_row = sites.get(assignment.site_id)
         employee_status = str(employee.status or "").strip().casefold() if employee else ""
         exit_date, _exit_status = _exit_date(employee) if employee else (None, "INCOMPLET")
         if (
             employee is None
-            or site is None
+            or site_row is None
             or (
                 employee_status not in ACTIVE_EMPLOYEE_STATUSES
                 and not (
@@ -319,54 +358,81 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
                     and exit_date >= day
                 )
             )
-            or not _filter_employee_society(employee, site, societies)
+            or not _filter_employee_society(employee, site_row, societies)
         ):
             continue
         if exit_date is not None and exit_date < day:
             continue
-        plan = core.planned_day(db, assignment, site, day)
+        plan = core.planned_day(db, assignment, site_row, day)
         rows.append(_card(
-            employee, assignment, site, day, presences.get(employee_id), plan,
-            abandons_by_employee.get(employee_id), now,
+            employee, assignment, site_row, day, presences.get(employee_id), plan,
+            abandons_by_employee.get(employee_id), now, clients.get(site_row.client_id, ""),
         ))
+
+    rows = [
+        item for item in rows
+        if _matches_report_filters(
+            item, client=client, site=site, fonction=fonction, vacation=vacation,
+        )
+    ]
+    rows_by_employee = {item["employee_id"]: item for item in rows}
+    if any((client, site, fonction, vacation)):
+        abandon_events = [
+            event for event in abandon_events if event.employee_id in rows_by_employee
+        ]
+    abandon_rows = []
+    for event in abandon_events:
+        employee = employees[event.employee_id]
+        event_site = sites.get(event.site_id)
+        row = rows_by_employee.get(event.employee_id)
+        abandon_rows.append({
+            "employee_id": event.employee_id,
+            "matricule": employee.code or "",
+            "nom": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
+            "fonction": row["fonction"] if row else employee.position or "",
+            "society": event.society or "",
+            "client": row["client"] if row else clients.get(event_site.client_id, "") if event_site else "",
+            "site_id": event.site_id,
+            "site": (event_site.name or event_site.indicatif or "") if event_site else "",
+            "wilaya": event_site.wilaya or "" if event_site else "",
+            "state": "abandon_poste",
+            "expected": False,
+            "available": False,
+            "date_sortie": None,
+            "sortie_date_status": None,
+            "planning": row["planning"] if row else {},
+            "arrival": row["arrival"] if row else "",
+            "departure": row["departure"] if row else "",
+            "abandon": _abandon_card(event),
+        })
+    sortants = _sortants(
+        db, user, day, society, wilaya, site_id, sites, societies, clients,
+    )
+    sortants = [
+        item for item in sortants
+        if _matches_report_filters(
+            item, client=client, site=site, fonction=fonction, vacation=vacation,
+        )
+    ]
 
     return {
         "date": day,
         "timezone": core.TZ_NAME,
-        "filters": {"society": society, "wilaya": wilaya, "site_id": site_id},
+        "filters": {
+            "society": society, "wilaya": wilaya, "site_id": site_id,
+            "client": client, "site": site, "fonction": fonction, "vacation": vacation,
+        },
         "items": rows,
         "abandon_events": abandon_events,
-        "abandon_rows": [
-            {
-                "employee_id": event.employee_id,
-                "matricule": employees[event.employee_id].code or "",
-                "nom": f"{employees[event.employee_id].last_name or ''} {employees[event.employee_id].first_name or ''}".strip(),
-                "fonction": employees[event.employee_id].position or "",
-                "society": event.society or "",
-                "site_id": event.site_id,
-                "site": (sites[event.site_id].name or sites[event.site_id].indicatif or "")
-                        if event.site_id in sites else "",
-                "wilaya": sites[event.site_id].wilaya or "" if event.site_id in sites else "",
-                "state": "abandon_poste",
-                "expected": False,
-                "available": False,
-                "date_sortie": None,
-                "sortie_date_status": None,
-                "planning": {},
-                "arrival": "",
-                "departure": "",
-                "abandon": _abandon_card(event),
-            }
-            for event in abandon_events if event.employee_id in employees
-        ],
-        "sortants": _sortants(db, user, day, society, wilaya, site_id, sites, societies),
+        "abandon_rows": abandon_rows,
+        "sortants": sortants,
         "now": now,
     }
 
 
 def _sortants(db: Session, user: Any, day: date, society: str | None, wilaya: str | None,
               site_id: int | None, sites: dict[int, Site],
-              societies: list[str] | None) -> list[dict[str, Any]]:
+              societies: list[str] | None, clients: dict[int, str]) -> list[dict[str, Any]]:
     employees = db.execute(select(Employee).order_by(Employee.id)).scalars().all()
     if not employees:
         return []
@@ -409,6 +475,7 @@ def _sortants(db: Session, user: Any, day: date, society: str | None, wilaya: st
             "nom": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
             "fonction": (assignment.position if assignment else None) or employee.position or "",
             "society": (site and _site_society(site)) or employee.society or "",
+            "client": clients.get(site.client_id, "") if site else "",
             "site_id": site.id if site else None,
             "site": (site.name or site.indicatif or "") if site else "",
             "wilaya": (site.wilaya or "") if site else employee.wilaya or "",
@@ -443,11 +510,30 @@ def situation(report: dict[str, Any]) -> dict[str, Any]:
     planned_count = len(expected)
     present_count = len(present)
     available_count = sum(1 for item in expected if item["available"])
+    abandon_ids = {event.employee_id for event in report["abandon_events"]}
+    groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in items:
+        key = (item["site"], item["wilaya"], item["fonction"])
+        group = groups.setdefault(key, {
+            "site": item["site"], "wilaya": item["wilaya"], "fonction": item["fonction"],
+            "effectif_prevu": 0, "presents": 0, "absents": 0,
+            "abandons_poste": 0, "effectif_disponible": 0,
+        })
+        if item["expected"]:
+            group["effectif_prevu"] += 1
+            group["presents"] += item["state"] == "present"
+            group["absents"] += item["state"] == "absent" and item["employee_id"] not in abandon_ids
+            group["abandons_poste"] += item["employee_id"] in abandon_ids
+            group["effectif_disponible"] += bool(item["available"])
     return {
         "date": report["date"],
         "timezone": report["timezone"],
         "filters": report["filters"],
         "items": items,
+        "site_function": list(groups.values()),
+        "absence_items": collection_items(report, "absences"),
+        "abandon_items": report["abandon_rows"],
+        "sortant_items": report["sortants"],
         "notes": [
             "Les abandons de poste proviennent exclusivement des événements Attendance existants.",
             "La présence historique est conservée après un abandon; la disponibilité cesse à l'heure réelle du départ.",

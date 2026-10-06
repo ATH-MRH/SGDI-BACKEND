@@ -1,6 +1,10 @@
 /* BRQ V1 — reporting views backed exclusively by the read-only BRQ API. */
 let brqRequestGeneration = 0;
-let brqFilters = { date: "", society: "", wilaya: "", site_id: "" };
+let brqFilters = {
+  date: "", society: typeof session !== "undefined" ? String(session?.societe || "") : "",
+  wilaya: "", client: "", site: "",
+  fonction: "", vacation: "",
+};
 
 const BRQ_VIEWS = {
   situation: { label: "Situation des effectifs", endpoint: "situation" },
@@ -41,6 +45,15 @@ function brqEnsureStyles() {
     .brq-filters{display:grid;grid-template-columns:repeat(4,minmax(135px,1fr)) auto;gap:10px;align-items:end}
     .brq-field{display:grid;gap:5px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b}
     .brq-field input{min-width:0;width:100%;height:39px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;color:#10243d;font-size:13px;letter-spacing:normal;text-transform:none}
+    .brq-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .brq-summary-grid>.brq-panel:first-child,.brq-summary-grid>.brq-panel:last-child{grid-column:1/-1}
+    .brq-summary-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .brq-summary-split>section+section{border-left:1px solid #e2e8f0}
+    .brq-mini-table{width:100%;border-collapse:collapse;font-size:12px}
+    .brq-mini-table th{background:#f8fafc;color:#64748b;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:10px 12px}
+    .brq-mini-table td{padding:10px 12px;border-top:1px solid #edf1f5;vertical-align:top}
+    .brq-mini-table-wrap{overflow:auto}
+    .brq-kpi small{display:block;margin-top:5px;font-size:10px;font-weight:700;color:#64748b}
     .brq-tabs{display:flex;gap:7px;flex-wrap:wrap}
     .brq-tab{border:1px solid #d5dee8;border-radius:999px;padding:8px 12px;background:#f8fafc;color:#475569;font-size:12px;font-weight:850;text-decoration:none}
     .brq-tab[aria-current=page]{background:#0f766e;border-color:#0f766e;color:#fff}
@@ -61,7 +74,8 @@ function brqEnsureStyles() {
     .brq-state--present{background:#dcfce7;color:#166534}.brq-state--absent,.brq-state--abandon_poste{background:#fee2e2;color:#991b1b}
     .brq-empty,.brq-error{padding:28px;text-align:center;color:var(--brq-muted);font-size:13px}
     .brq-error{color:#b91c1c}
-    @media(max-width:820px){.brq-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.brq-filters .brq-button{grid-column:span 2}}
+    @media(max-width:820px){.brq-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.brq-filters .brq-button{grid-column:span 2}.brq-summary-grid{grid-template-columns:1fr}.brq-summary-grid>.brq-panel:first-child,.brq-summary-grid>.brq-panel:last-child{grid-column:auto}}
+    @media(max-width:560px){.brq-summary-split{grid-template-columns:1fr}.brq-summary-split>section+section{border-left:0;border-top:1px solid #e2e8f0}}
     @media(max-width:480px){.brq-head{padding:16px}.brq-filters{grid-template-columns:1fr}.brq-filters .brq-button{grid-column:auto}.brq-heading{display:grid}}
   `;
   document.head.appendChild(style);
@@ -69,7 +83,7 @@ function brqEnsureStyles() {
 
 function brqQuery(filters = brqFilters) {
   const params = new URLSearchParams();
-  for (const key of ["date", "society", "wilaya", "site_id"]) {
+  for (const key of ["date", "society", "wilaya", "client", "site", "fonction", "vacation"]) {
     const value = String(filters[key] || "").trim();
     if (value) params.set(key, value);
   }
@@ -91,7 +105,10 @@ function brqFilterHTML() {
     <label class="brq-field">Date<input type="date" name="date" value="${brqEscape(brqFilters.date)}"></label>
     <label class="brq-field">Société<input name="society" maxlength="180" value="${brqEscape(brqFilters.society)}" placeholder="Toutes les sociétés"></label>
     <label class="brq-field">Wilaya<input name="wilaya" maxlength="120" value="${brqEscape(brqFilters.wilaya)}" placeholder="Toutes les wilayas"></label>
-    <label class="brq-field">Site ID<input name="site_id" type="number" min="1" step="1" value="${brqEscape(brqFilters.site_id)}" placeholder="Tous les sites"></label>
+    <label class="brq-field">Client<input name="client" maxlength="180" value="${brqEscape(brqFilters.client)}" placeholder="Tous les clients"></label>
+    <label class="brq-field">Site<input name="site" maxlength="180" value="${brqEscape(brqFilters.site)}" placeholder="Tous les sites"></label>
+    <label class="brq-field">Fonction<input name="fonction" maxlength="150" value="${brqEscape(brqFilters.fonction)}" placeholder="Toutes les fonctions"></label>
+    <label class="brq-field">Vacation<input name="vacation" maxlength="120" value="${brqEscape(brqFilters.vacation)}" placeholder="Toutes les vacations"></label>
     <button class="brq-button brq-button--primary" type="submit">Appliquer</button>
   </form>`;
 }
@@ -135,13 +152,68 @@ function brqKpisHTML(kpis = {}) {
     ["presents", "Présents"],
     ["absents", "Absents"],
     ["abandons_poste", "Abandons de poste"],
-    ["sortants", "Sortants du jour"],
+    ["sortants", "Sortants"],
     ["couverture_pct", "Taux de couverture"],
-    ["ecart", "Écart"],
+    ["ecart", "Écart effectif"],
   ];
   return `<div class="brq-kpis">${labels.map(([key, label]) =>
     `<div class="brq-kpi"><span>${brqEscape(label)}</span><strong>${kpis[key] == null ? "—" : brqEscape(key === "couverture_pct" ? `${kpis[key]} %` : kpis[key])}${key === "couverture_pct" && kpis.effectif_disponible != null ? `<small>${brqEscape(kpis.effectif_disponible)} disponible(s) / ${brqEscape(kpis.effectif_prevu)} prévu(s)</small>` : ""}</strong></div>`
   ).join("")}</div>`;
+}
+
+function brqMiniRowsHTML(items, emptyMessage) {
+  if (!items.length) return `<tr><td colspan="5"><div class="brq-empty">${brqEscape(emptyMessage)}</div></td></tr>`;
+  return items.map(item => {
+    const planning = item.planning || {};
+    const sortie = item.date_sortie ? new Date(`${item.date_sortie}T00:00:00`).toLocaleDateString("fr-FR") : "";
+    return `<tr>
+      <td><strong>${brqEscape(item.nom || "—")}</strong><br><span>${brqEscape(item.matricule || "—")}</span></td>
+      <td>${brqEscape(item.site || "—")}${item.wilaya ? `<br><span>${brqEscape(item.wilaya)}</span>` : ""}</td>
+      <td>${brqEscape(item.fonction || "—")}</td>
+      <td>${brqEscape(item.state ? brqFormatState(item.state) : "—")}</td>
+      <td>${brqEscape(item.abandon?.actual_departure_at || sortie || [planning.start_time, planning.end_time].filter(Boolean).join(" – ") || "—")}</td>
+    </tr>`;
+  }).join("");
+}
+
+function brqMiniTable(items, emptyMessage) {
+  return `<div class="brq-mini-table-wrap"><table class="brq-mini-table">
+    <thead><tr><th>Employé</th><th>Site</th><th>Fonction</th><th>État</th><th>Vacation / date</th></tr></thead>
+    <tbody>${brqMiniRowsHTML(items, emptyMessage)}</tbody>
+  </table></div>`;
+}
+
+function brqSituationSectionsHTML(data) {
+  const breakdown = Array.isArray(data.site_function) ? data.site_function : [];
+  const absences = Array.isArray(data.absence_items) ? data.absence_items : [];
+  const abandons = Array.isArray(data.abandon_items) ? data.abandon_items : [];
+  const sortants = Array.isArray(data.sortant_items) ? data.sortant_items : [];
+  const breakdownRows = breakdown.length ? breakdown.map(item => `<tr>
+    <td><strong>${brqEscape(item.site || "—")}</strong>${item.wilaya ? `<br><span>${brqEscape(item.wilaya)}</span>` : ""}</td>
+    <td>${brqEscape(item.fonction || "—")}</td>
+    <td>${brqEscape(item.effectif_prevu ?? 0)}</td>
+    <td>${brqEscape(item.presents ?? 0)}</td>
+    <td>${brqEscape(item.absents ?? 0)}</td>
+    <td>${brqEscape(item.abandons_poste ?? 0)}</td>
+    <td>${brqEscape(item.effectif_disponible ?? 0)}</td>
+  </tr>`).join("") : `<tr><td colspan="7"><div class="brq-empty">Aucune donnée pour ces filtres.</div></td></tr>`;
+  return `<div class="brq-summary-grid">
+    <section class="brq-panel">
+      <div class="brq-panel-head"><h2>Répartition par site et fonction</h2><span>${breakdown.length} groupe(s)</span></div>
+      <div class="brq-mini-table-wrap"><table class="brq-mini-table"><thead><tr><th>Site / Wilaya</th><th>Fonction</th><th>Prévu</th><th>Présents</th><th>Absents</th><th>Abandons</th><th>Disponibles</th></tr></thead><tbody>${breakdownRows}</tbody></table></div>
+    </section>
+    <section class="brq-panel">
+      <div class="brq-panel-head"><h2>Absences / Abandons</h2></div>
+      <div class="brq-summary-split">
+        <section><div class="brq-panel-head"><h2>Absences</h2><span>${absences.length}</span></div>${brqMiniTable(absences, "Aucune absence pour ces filtres.")}</section>
+        <section><div class="brq-panel-head"><h2>Abandons de poste</h2><span>${abandons.length}</span></div>${brqMiniTable(abandons, "Aucun abandon pour ces filtres.")}</section>
+      </div>
+    </section>
+    <section class="brq-panel">
+      <div class="brq-panel-head"><h2>Sortants</h2><span>${sortants.length} ligne(s)</span></div>
+      ${brqMiniTable(sortants, "Aucun sortant pour ces filtres.")}
+    </section>
+  </div>`;
 }
 
 function brqPageHTML(view, data) {
@@ -158,6 +230,7 @@ function brqPageHTML(view, data) {
       ${brqFilterHTML()}
     </section>
     ${kpis}
+    ${view === "situation" ? brqSituationSectionsHTML(data) : ""}
     <section class="brq-panel">
       <div class="brq-panel-head"><h2>${brqEscape(config.label)}</h2><span>${brqEscape(data.total ?? items.length)} ligne(s) · ${brqEscape(data.date || brqFilters.date)}</span></div>
       <div class="brq-table-wrap"><table class="brq-table"><thead><tr>
@@ -172,7 +245,10 @@ function brqApplyFilters(form) {
     date: form.elements.date.value || brqDefaultDate(),
     society: form.elements.society.value.trim(),
     wilaya: form.elements.wilaya.value.trim(),
-    site_id: form.elements.site_id.value.trim(),
+    client: form.elements.client.value.trim(),
+    site: form.elements.site.value.trim(),
+    fonction: form.elements.fonction.value.trim(),
+    vacation: form.elements.vacation.value.trim(),
   };
   if (typeof renderView === "function") renderView();
 }
@@ -202,6 +278,9 @@ window.SGDIModules.registerModule({
   key: "brq",
   routes: ["brq"],
   init() {
+    if (!brqFilters.society && typeof session !== "undefined" && session?.societe) {
+      brqFilters.society = String(session.societe);
+    }
     brqFilters.date = brqFilters.date || brqDefaultDate();
   },
   destroy() {

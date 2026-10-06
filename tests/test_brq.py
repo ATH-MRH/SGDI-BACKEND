@@ -8,6 +8,7 @@ from app.modules.attendance import core
 from app.modules.attendance.models import AttendanceEvent, EVENT_ABANDON, SOURCE_SYSTEM
 from app.modules.auth.models import User
 from app.modules.brq import service
+from app.modules.commercial.models import Client
 from app.modules.ops.models import Assignment, DailyPresence
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401
 from tests.test_attendance_counted_time import ANCHOR, _scan, _setup, _ts
@@ -177,6 +178,51 @@ def test_multiple_abandons_on_one_site_are_aggregated_without_dropping_present_c
     assert result["kpis"]["effectif_disponible"] == 0
     assert result["kpis"]["couverture_pct"] == 0
     assert result["kpis"]["ecart"] == -2
+
+
+def test_situation_provides_site_function_and_operational_sections(db, monkeypatch):
+    employee, site = _setup(db)
+    assignment = db.scalar(select(Assignment).where(Assignment.employee_id == employee.id))
+    assignment.position = "Agent de sécurité"
+    _scan(db, employee, ANCHOR, "14:00")
+    monkeypatch.setattr(core, "_now_local", lambda: _ts(ANCHOR, "19:00"))
+    db.commit()
+
+    result = service.situation(service.build_report(db, _admin(db), day=ANCHOR, site_id=site.id))
+
+    assert result["site_function"] == [{
+        "site": site.name, "wilaya": site.wilaya or "", "fonction": "Agent de sécurité",
+        "effectif_prevu": 1, "presents": 1, "absents": 0, "abandons_poste": 0,
+        "effectif_disponible": 1,
+    }]
+    assert result["absence_items"] == []
+    assert result["abandon_items"] == []
+    assert result["sortant_items"] == []
+
+
+def test_report_filters_by_real_client_site_function_and_planned_vacation(db):
+    employee, site = _setup(db)
+    assignment = db.scalar(select(Assignment).where(Assignment.employee_id == employee.id))
+    assignment.position = "Agent de sécurité"
+    client = Client(name=f"Client BRQ {employee.id}", society=employee.society, status="actif")
+    db.add(client)
+    db.flush()
+    site.client_id = client.id
+    db.commit()
+
+    report = service.build_report(
+        db, _admin(db), day=ANCHOR,
+        client=client.name, site=site.name, fonction="Agent", vacation="14:00",
+    )
+    assert [item["employee_id"] for item in report["items"]] == [employee.id]
+    assert report["items"][0]["client"] == client.name
+    assert report["filters"]["client"] == client.name
+    assert report["filters"]["site"] == site.name
+
+    excluded = service.build_report(
+        db, _admin(db), day=ANCHOR, site_id=site.id, fonction="Autre fonction",
+    )
+    assert excluded["items"] == []
 
 
 def test_abandon_events_respect_the_authorized_society_scope(db):

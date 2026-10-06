@@ -12,6 +12,7 @@ class BRQItem(BaseModel):
     nom: str = ""
     fonction: str = ""
     society: str = ""
+    client: str = ""
     site_id: int | None = None
     site: str = ""
     wilaya: str = ""
@@ -38,4 +39,8 @@ class BRQSituation(BaseModel):
     kpis: dict[str, int | float | None]
     filters: dict[str, Any]
     items: list[BRQItem]
+    site_function: list[dict[str, Any]] = Field(default_factory=list)
+    absence_items: list[BRQItem] = Field(default_factory=list)
+    abandon_items: list[BRQItem] = Field(default_factory=list)
+    sortant_items: list[BRQItem] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)

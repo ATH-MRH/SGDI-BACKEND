@@ -14,7 +14,8 @@ router = APIRouter()
 
 
 def _report(db: Session, user: User, day: date | None, society: str | None,
-            wilaya: str | None, site_id: int | None) -> dict[str, Any]:
+            wilaya: str | None, site_id: int | None, client: str | None,
+            site: str | None, fonction: str | None, vacation: str | None) -> dict[str, Any]:
     from app.modules.attendance import core
 
     return service.build_report(
@@ -24,6 +25,10 @@ def _report(db: Session, user: User, day: date | None, society: str | None,
         society=society,
         wilaya=wilaya,
         site_id=site_id,
+        client=client,
+        site=site,
+        fonction=fonction,
+        vacation=vacation,
     )
 
 
@@ -40,8 +45,13 @@ def _list(report: dict[str, Any], view: str) -> dict[str, Any]:
 def _filters(date: date | None = Query(None, alias="date"),
              society: str | None = Query(None, max_length=180),
              wilaya: str | None = Query(None, max_length=120),
-             site_id: int | None = Query(None, ge=1)) -> tuple[date | None, str | None, str | None, int | None]:
-    return date, society, wilaya, site_id
+             site_id: int | None = Query(None, ge=1),
+             client: str | None = Query(None, max_length=180),
+             site: str | None = Query(None, max_length=180),
+             fonction: str | None = Query(None, max_length=150),
+             vacation: str | None = Query(None, max_length=120)
+             ) -> tuple[date | None, str | None, str | None, int | None, str | None, str | None, str | None, str | None]:
+    return date, society, wilaya, site_id, client, site, fonction, vacation
 
 
 @router.get("/situation", response_model=BRQSituation)

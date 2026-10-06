@@ -2792,7 +2792,7 @@ async function sgdiBackgroundSqlSync(options){
       if(token!==sgdiAuthToken())return;
       try{renderSidebar()}catch(_e){}
       try{refreshModuleCountersRibbon()}catch(_e){}
-      try{if(typeof renderView==="function")renderView()}catch(_e){}
+      try{if(opt.render!==false&&document.getElementById("view")&&typeof renderView==="function")renderView()}catch(_e){}
     });
   });
   sgdiSqlSyncInProgress=pending;
@@ -3978,7 +3978,7 @@ async function login(u,p,opt={}){
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       db=db||loadDB();
-      sgdiPullState({render:true,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
+      sgdiPullState({render:false,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
@@ -7087,7 +7087,7 @@ function mergeSidebarCustomItems(module,items){
 }
 function sidebarItemsWithAgendaShortcut(module,items){
   const base=(items||[]).slice();
-  if(["agenda","global"].includes(String(module||"")))return base;
+  if(["agenda","global","brq"].includes(String(module||"")))return base;
   if(base.some(item=>String(item.route||"").startsWith("agenda")))return base;
   if(!canAccess("agenda"))return base;
   base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"AUTRES"});
@@ -9111,7 +9111,7 @@ function sgdiLoginStoryHTML(key){
     paie:["PAIE","Votre paie.","Un suivi maîtrisé.",[["Salaires","Préparez les éléments"],["Bulletins","Éditez les documents"],["Grilles","Consultez les barèmes"]]],
     conges:["CONGÉS","Vos congés.","Une organisation simple.",[["Demandes","Préparez vos demandes"],["Suivi","Consultez les décisions"],["Planning","Organisez les absences"]]],
     agenda:["AGENDA","Vos rendez-vous.","Une vision d’ensemble.",[["Planning","Organisez votre journée"],["Rappels","Retrouvez vos priorités"],["Échéances","Suivez vos engagements"]]],
-    brq:["RAPPORTS QUOTIDIENS","Vos équipes.","Une situation consolidée.",[["Effectifs","Consultez le prévu"],["Présences","Suivez la couverture"],["Sorties","Repérez les départs"]]],
+    brq:["BRQ · BULLETIN DE RENSEIGNEMENT QUOTIDIEN","Situation des effectifs.","Présences et sorties.",[["Effectifs","Consultez le prévu"],["Présences","Suivez la couverture"],["Sortants","Repérez les départs"]]],
     admin:["ADMINISTRATION","Votre organisation.","Un pilotage centralisé.",[["Comptes","Gérez les utilisateurs"],["Sociétés","Retrouvez les périmètres"],["Modules","Organisez les accès"]]],
     atlas:["PORTAIL ATLAS","Votre activité.","Une vision d’ensemble.",[["Sociétés","Retrouvez vos périmètres"],["Équipes","Suivez votre organisation"],["Modules","Accédez à vos outils"]]]
   };
@@ -9121,13 +9121,13 @@ function sgdiLoginStoryHTML(key){
 function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
   if(isDhlHost()){renderDhlLogin();return}
-  const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
+  const dedicatedTitle=hostCfg?.key==="brq"?"BRQ – Bulletin de Renseignement Quotidien":hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":hostCfg?.key==="brq"?"Effectifs · présences · absences · sorties":"Suite de gestion intégrée";
   sgdiApplyBrowserTitle();
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page sgdi-login-page-unified${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
     <main class="sgdi-login-main">
-      <section class="sgdi-login-visual" aria-label="Présentation ${hostCfg?.key==="ops"?"ATLAS OPS":"ATLAS"}">
-        <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
+      <section class="sgdi-login-visual" aria-label="Présentation ${hostCfg?.key==="brq"?"IRON Global BRQ":hostCfg?.key==="ops"?"ATLAS OPS":"ATLAS"}">
+        ${hostCfg?.key==="brq"?`<div class="sgdi-login-brand"><img src="/static/iron-securite-logo.png" alt="IRON Global Sécurité"></div>`:`<div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>`}
         <p class="sgdi-login-kicker">${escapeHTML(dedicatedKicker)}</p>
         ${sgdiLoginStoryHTML(hostCfg?.key)}
 
