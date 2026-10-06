@@ -53,7 +53,7 @@ function brqEnsureStyles() {
     .brq-panel-head h2{font-size:15px;font-weight:900;margin:0}
     .brq-panel-head span{font-size:12px;color:var(--brq-muted)}
     .brq-table-wrap{overflow:auto}
-    .brq-table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}
+    .brq-table{width:100%;border-collapse:collapse;min-width:900px;font-size:12px}
     .brq-table th{background:#f8fafc;color:#64748b;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;padding:11px 13px;white-space:nowrap}
     .brq-table td{padding:12px 13px;border-top:1px solid #edf1f5;vertical-align:top}
     .brq-table tr:hover td{background:#fbfdff}
@@ -110,7 +110,7 @@ function brqFormatState(value) {
 }
 
 function brqRowsHTML(items) {
-  if (!items.length) return `<tr><td colspan="8"><div class="brq-empty">Aucune donnée pour ces filtres.</div></td></tr>`;
+  if (!items.length) return `<tr><td colspan="9"><div class="brq-empty">Aucune donnée pour ces filtres.</div></td></tr>`;
   return items.map(item => {
     const planning = item.planning || {};
     const state = String(item.state || "");
@@ -121,6 +121,7 @@ function brqRowsHTML(items) {
       <td>${brqEscape(item.site || "—")}<br><span>${brqEscape(item.wilaya || "")}</span></td>
       <td>${brqEscape(item.fonction || "—")}</td>
       <td><span class="brq-state brq-state--${brqEscape(state)}">${brqEscape(brqFormatState(state))}</span></td>
+      <td>${item.available == null ? "—" : item.available ? "Disponible" : "Indisponible"}</td>
       <td>${brqEscape(planning.start_time || "—")} – ${brqEscape(planning.end_time || "—")}</td>
       <td>${brqEscape(item.arrival || "—")}</td>
       <td>${brqEscape(departure || "—")}</td>
@@ -135,11 +136,11 @@ function brqKpisHTML(kpis = {}) {
     ["absents", "Absents"],
     ["abandons_poste", "Abandons de poste"],
     ["sortants", "Sortants du jour"],
-    ["couverture_pct", "Couverture"],
+    ["couverture_pct", "Taux de couverture"],
     ["ecart", "Écart"],
   ];
   return `<div class="brq-kpis">${labels.map(([key, label]) =>
-    `<div class="brq-kpi"><span>${brqEscape(label)}</span><strong>${kpis[key] == null ? "—" : brqEscape(key === "couverture_pct" ? `${kpis[key]} %` : kpis[key])}</strong></div>`
+    `<div class="brq-kpi"><span>${brqEscape(label)}</span><strong>${kpis[key] == null ? "—" : brqEscape(key === "couverture_pct" ? `${kpis[key]} %` : kpis[key])}${key === "couverture_pct" && kpis.effectif_disponible != null ? `<small>${brqEscape(kpis.effectif_disponible)} disponible(s) / ${brqEscape(kpis.effectif_prevu)} prévu(s)</small>` : ""}</strong></div>`
   ).join("")}</div>`;
 }
 
@@ -152,7 +153,6 @@ function brqPageHTML(view, data) {
   return `<div class="brq-page">
     <section class="brq-head">
       <div class="brq-heading"><div><h1>${brqEscape(config.label)}</h1><p>Rapport en lecture seule · Données issues des modules RH, OPS et Pointage.</p></div>
-        <div class="brq-actions"><button type="button" class="brq-button" onclick="brqExport('${brqEscape(view)}')">Exporter CSV</button></div>
       </div>
       <nav class="brq-tabs" aria-label="Rubriques BRQ">${brqNavHTML(view)}</nav>
       ${brqFilterHTML()}
@@ -161,7 +161,7 @@ function brqPageHTML(view, data) {
     <section class="brq-panel">
       <div class="brq-panel-head"><h2>${brqEscape(config.label)}</h2><span>${brqEscape(data.total ?? items.length)} ligne(s) · ${brqEscape(data.date || brqFilters.date)}</span></div>
       <div class="brq-table-wrap"><table class="brq-table"><thead><tr>
-        <th>Employé</th><th>Société</th><th>Site / Wilaya</th><th>Fonction</th><th>État</th><th>Vacation</th><th>Arrivée</th><th>Départ</th>
+        <th>Employé</th><th>Société</th><th>Site / Wilaya</th><th>Fonction</th><th>État</th><th>Disponibilité</th><th>Vacation</th><th>Arrivée</th><th>Départ</th>
       </tr></thead><tbody>${brqRowsHTML(items)}</tbody></table></div>
     </section>${notes}
   </div>`;
@@ -195,32 +195,6 @@ async function renderBrqPage(viewElement, requestedView = "situation") {
     if (generation !== brqRequestGeneration || !viewElement.isConnected) return;
     const message = error?.message || String(error);
     viewElement.innerHTML = `<div class="brq-page"><div class="brq-head"><h1>${brqEscape(BRQ_VIEWS[view].label)}</h1>${brqFilterHTML()}<div class="brq-error" role="alert">Chargement impossible : ${brqEscape(message)}<br><button type="button" class="brq-button" onclick="renderView()">Réessayer</button></div></div></div>`;
-  }
-}
-
-async function brqExport(view) {
-  const selected = brqCurrentViewName(view);
-  try {
-    const query = new URLSearchParams({ view: selected });
-    const filters = brqQuery();
-    if (filters) new URLSearchParams(filters).forEach((value, key) => query.set(key, value));
-    const result = await window.SGDI_API.request(`/api/brq/export?${query}`, { method: "GET" });
-    const rows = Array.isArray(result?.items) ? result.items : [];
-    const columns = ["matricule", "nom", "fonction", "society", "site", "wilaya", "state", "expected", "date_sortie", "arrival", "departure"];
-    const csvCell = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const csv = [columns, ...rows.map(row => columns.map(key => row[key]))]
-      .map(row => row.map(csvCell).join(";")).join("\r\n");
-    const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `brq-${selected}-${brqFilters.date}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    const message = error?.message || String(error);
-    if (typeof toast === "function") toast(`Export BRQ impossible : ${message}`, "error");
-    else console.error("Export BRQ impossible", error);
   }
 }
 

@@ -4907,6 +4907,19 @@ body:has(.sgdi-login-page-unified),html:has(.sgdi-login-page-unified),body:has(.
 .sgdi-login-page-unified .login-admin-system-shortcut{font-size:12px!important;right:24px!important;bottom:20px!important}
 @media(max-width:860px){.sgdi-login-page-unified .sgdi-login-main{width:min(540px,calc(100% - 32px))!important;grid-template-columns:1fr!important;gap:28px!important;padding:32px 0 90px!important}.sgdi-login-page-unified .sgdi-login-brand{font-size:40px!important}.sgdi-login-story{margin-top:18px}.sgdi-login-story h2{font-size:28px;margin-bottom:0}.sgdi-login-flow,.sgdi-login-story>p{display:none}.sgdi-login-page-unified .sgdi-login-panel{padding:26px!important}}
 
+.sgdi-login-page-brq{background:radial-gradient(ellipse at 12% 8%,#1b4f83 0,transparent 52%),linear-gradient(125deg,#071a34,#0b3155)!important}
+body:has(.sgdi-login-page-brq),html:has(.sgdi-login-page-brq),body:has(.sgdi-login-page-brq) #app{background:#071a34!important}
+.sgdi-login-page-brq .sgdi-login-brand i{color:#f0bd54!important}
+.sgdi-login-page-brq .sgdi-login-kicker{display:inline-flex!important;align-items:center;border-left:3px solid #f0bd54;padding:8px 12px;margin:20px 0 0!important;border-radius:0 8px 8px 0;background:#ffffff0c;color:#e6efff!important;font-size:12px!important;font-weight:700;letter-spacing:.04em}
+.sgdi-login-page-brq .sgdi-login-eyebrow{color:#f0bd54!important}
+.sgdi-login-page-brq .sgdi-login-flow>div{background:linear-gradient(140deg,#ffffff18,#ffffff08);border-color:#ffffff30}
+.sgdi-login-page-brq .sgdi-login-flow b{background:#f0bd5424;color:#ffd783}
+.sgdi-login-page-brq .sgdi-login-chip{color:#174776!important;background:#eaf2fc!important}
+.sgdi-login-page-brq .sgdi-login-form .sgdi-login-field input:focus{border-color:#2768a8!important;box-shadow:0 0 0 3px #2768a81b!important}
+.sgdi-login-page-brq .sgdi-login-remember input{accent-color:#2768a8!important}
+.sgdi-login-page-brq .sgdi-login-submit{background:linear-gradient(105deg,#174776,#2768a8)!important;box-shadow:0 7px 18px #17477630!important}
+.sgdi-login-page-brq .sgdi-login-forgot{color:#315f8a!important}
+
 /* ----- MODERN SOCIETY SELECTOR + COMPANY PORTAL ----- */
 body:has(.sgdi-societe-page),
 html:has(.sgdi-societe-page),

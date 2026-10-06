@@ -72,12 +72,3 @@ def abandons_poste(filters: tuple = Depends(_filters), db: Session = Depends(get
 def sortants(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
              user: User = Depends(current_user)) -> dict[str, Any]:
     return _list(_report(db, user, *filters), "sortants")
-
-
-@router.get("/export")
-def export(view: str = Query(..., pattern=r"^(situation|presences|absences|abandons-poste|sortants)$"),
-           filters: tuple = Depends(_filters), db: Session = Depends(get_db),
-           user: User = Depends(current_user)) -> dict[str, Any]:
-    report = _report(db, user, *filters)
-    items = service.situation(report)["items"] if view == "situation" else service.collection_items(report, view)
-    return {"date": report["date"], "view": view, "items": items}

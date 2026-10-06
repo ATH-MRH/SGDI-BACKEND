@@ -8,6 +8,7 @@ const ROOT = path.join(__dirname, "..");
 const MODULE_SRC = fs.readFileSync(path.join(ROOT, "app/static/js/modules/brq.js"), "utf8");
 const REGISTRY_SRC = fs.readFileSync(path.join(ROOT, "app/static/js/core/module-registry.js"), "utf8");
 const SHELL_SRC = fs.readFileSync(path.join(ROOT, "app/static/sgdi-app.js"), "utf8");
+const SHELL_CSS = fs.readFileSync(path.join(ROOT, "app/static/sgdi-app.css"), "utf8");
 
 function setupDom(request) {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="view"></div></body></html>', {
@@ -38,10 +39,10 @@ test("BRQ renders the read-only report from its scoped API endpoint", async () =
     return {
       date: "2026-10-01",
       total: 1,
-      kpis: { effectif_prevu: 1, presents: 1, absents: 0, abandons_poste: 0, sortants: 0, couverture_pct: 100, ecart: 0 },
+      kpis: { effectif_prevu: 1, presents: 1, absents: 0, abandons_poste: 0, sortants: 0, effectif_disponible: 1, couverture_pct: 100, ecart: 0 },
       filters: {},
       notes: [],
-      items: [{ matricule: "BRQ-1", nom: "Test Employé", society: "Société A", site: "Site A", state: "present", expected: true, planning: { start_time: "14:00", end_time: "22:00" } }],
+      items: [{ matricule: "BRQ-1", nom: "Test Employé", society: "Société A", site: "Site A", state: "present", expected: true, available: true, planning: { start_time: "14:00", end_time: "22:00" } }],
     };
   });
   const target = dom.window.document.getElementById("view");
@@ -51,8 +52,10 @@ test("BRQ renders the read-only report from its scoped API endpoint", async () =
   assert.match(calls[0][0], /^\/api\/brq\/situation\?date=2026-10-01$/);
   assert.equal(calls[0][1].method, "GET");
   assert.match(target.textContent, /Effectif prévu/);
+  assert.match(target.textContent, /Disponible/);
   assert.match(target.textContent, /Test Employé/);
-  assert.match(target.innerHTML, /Exporter CSV/);
+  assert.doesNotMatch(target.innerHTML, /export|csv/i);
+  assert.match(target.innerHTML, /Présence historique|Disponibilité|Disponible/);
   dom.window.close();
 });
 
@@ -83,4 +86,15 @@ test("dedicated BRQ host, navigation, and route are wired into the ERP shell", (
   assert.match(SHELL_SRC, /case"brq":if\(typeof renderBrqPage==="function"\)/);
   assert.match(SHELL_SRC, /route:"brq\/abandons-poste"/);
   assert.match(SHELL_SRC, /\{key:"brq",label:"Rapports quotidiens \(BRQ\)",host:"brq\.irongs\.com"\}/);
+  assert.match(SHELL_SRC, /sgdi-login-page-\$\{escapeHTML\(hostCfg\.key\)\}/);
+  assert.match(SHELL_SRC, /brq:\["RAPPORTS QUOTIDIENS","Vos équipes\."/);
+  assert.match(SHELL_CSS, /\.sgdi-login-page-brq/);
+});
+
+test("BRQ login reuses the shared ERP login endpoint and token", () => {
+  assert.match(SHELL_SRC, /const SGDI_API_TOKEN_KEY\s*=\s*"sgdi_api_token_v1"/);
+  assert.match(SHELL_SRC, /login:async\(username,password\)=>\{\s*const r=await sgdiApi\("\/auth\/login",\{method:"POST",body:\{username,password\},legacy:false\}\)/);
+  assert.match(SHELL_SRC, /sessionStorage\.setItem\(SGDI_API_TOKEN_KEY,token\)/);
+  assert.match(SHELL_SRC, /async function login\(u,p,opt=\{\}\)\{\s*u=String\(u\|\|""\)\.trim\(\);[\s\S]*window\.SGDI_API\.auth\.login\(u,p\)/);
+  assert.doesNotMatch(SHELL_SRC, /brq[^;\n]{0,100}(?:new\s+JWT|password_hash|second.?auth)/i);
 });

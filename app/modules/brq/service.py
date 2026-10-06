@@ -80,6 +80,67 @@ def _status(row: DailyPresence | None, plan: dict[str, Any], day: date, now: dat
     return "absent" if local_now >= cutoff else "non_pointe"
 
 
+def _planned_bounds(day: date, plan: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
+    try:
+        start_time = time.fromisoformat(str(plan.get("start_time") or ""))
+        end_time = time.fromisoformat(str(plan.get("end_time") or ""))
+    except ValueError:
+        return None, None
+    start = datetime.combine(day, start_time, tzinfo=core.TZ)
+    end = datetime.combine(day, end_time, tzinfo=core.TZ)
+    if end <= start:
+        end += timedelta(days=1)
+    return start, end
+
+
+def _local_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=core.TZ) if parsed.tzinfo is None else parsed.astimezone(core.TZ)
+
+
+def _availability(day: date, presence: DailyPresence | None, plan: dict[str, Any],
+                  abandon: AttendanceEvent | None, now: datetime, *, expected: bool,
+                  state: str) -> bool:
+    if not expected or state != "present" or presence is None:
+        return False
+
+    local_now = now.astimezone(core.TZ)
+    _shift_start, shift_end = _planned_bounds(day, plan)
+    if day < local_now.date():
+        evaluated_at = shift_end or datetime.combine(day, time.max, tzinfo=core.TZ)
+    else:
+        evaluated_at = local_now
+
+    arrival_time = str(presence.arrival_time or "").strip()
+    if arrival_time:
+        try:
+            arrival_clock = time.fromisoformat(arrival_time)
+        except ValueError:
+            arrival_clock = None
+        if arrival_clock is not None:
+            arrival_day = day
+            start, end = _planned_bounds(day, plan)
+            if start is not None and end is not None and end.date() > day and arrival_clock < start.timetz().replace(tzinfo=None):
+                arrival_day += timedelta(days=1)
+            arrival_at = datetime.combine(arrival_day, arrival_clock, tzinfo=core.TZ)
+            if arrival_at > evaluated_at:
+                return False
+
+    if abandon is not None:
+        data = abandon.data if isinstance(abandon.data, dict) else {}
+        actual_departure = _local_timestamp(data.get("actual_departure_at"))
+        if actual_departure is None:
+            actual_departure = core.to_local(abandon.occurred_at)
+        if actual_departure <= evaluated_at:
+            return False
+    return True
+
+
 def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
           presence: DailyPresence | None, plan: dict[str, Any], abandon: AttendanceEvent | None,
           now: datetime) -> dict[str, Any]:
@@ -91,6 +152,7 @@ def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
         state = "abandon_poste"
     elif raw_state == "present" and not planned:
         state = "presence_hors_planning"
+    expected = planned and (exit_date is None or exit_date > day)
     return {
         "employee_id": employee.id,
         "matricule": employee.code or "",
@@ -101,7 +163,10 @@ def _card(employee: Employee, assignment: Assignment, site: Site, day: date,
         "site": site.name or site.indicatif or "",
         "wilaya": site.wilaya or "",
         "state": state,
-        "expected": planned and (exit_date is None or exit_date >= day),
+        "expected": expected,
+        "available": _availability(
+            day, presence, plan, abandon, now, expected=expected, state=raw_state,
+        ),
         "date_sortie": exit_date,
         "sortie_date_status": exit_status,
         "planning": {
@@ -234,7 +299,7 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
     ]
     abandons_by_employee: dict[int, AttendanceEvent] = {}
     for event in abandon_events:
-        abandons_by_employee[event.employee_id] = event
+        abandons_by_employee.setdefault(event.employee_id, event)
     abandoned_employee_ids = {event.employee_id for event in abandon_events}
 
     rows: list[dict[str, Any]] = []
@@ -284,6 +349,7 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
                 "wilaya": sites[event.site_id].wilaya or "" if event.site_id in sites else "",
                 "state": "abandon_poste",
                 "expected": False,
+                "available": False,
                 "date_sortie": None,
                 "sortie_date_status": None,
                 "planning": {},
@@ -376,6 +442,7 @@ def situation(report: dict[str, Any]) -> dict[str, Any]:
     exits_today = [item for item in report["sortants"] if item["state"] == "sortie_effective"]
     planned_count = len(expected)
     present_count = len(present)
+    available_count = sum(1 for item in expected if item["available"])
     return {
         "date": report["date"],
         "timezone": report["timezone"],
@@ -383,8 +450,9 @@ def situation(report: dict[str, Any]) -> dict[str, Any]:
         "items": items,
         "notes": [
             "Les abandons de poste proviennent exclusivement des événements Attendance existants.",
-            "La couverture journalière applique présents / effectif prévu; un abandon est présenté séparément et n'est pas pondéré partiellement.",
-            "Une sortie est effective à compter de sa dateSortie; le salarié reste compté jusqu'à cette date incluse.",
+            "La présence historique est conservée après un abandon; la disponibilité cesse à l'heure réelle du départ.",
+            "Pour une date passée, la disponibilité est évaluée à la fin de la vacation planifiée; pour aujourd'hui, à l'instant de consultation.",
+            "À partir de dateSortie, le salarié est exclu de l'effectif prévu; les sortants du jour restent visibles à cette date exacte.",
         ],
         "kpis": {
             "effectif_prevu": planned_count,
@@ -394,8 +462,9 @@ def situation(report: dict[str, Any]) -> dict[str, Any]:
             "planning_non_defini": sum(1 for item in items if item["state"] == "planning_non_defini"),
             "abandons_poste": len(report["abandon_events"]),
             "sortants": len(exits_today),
-            "couverture_pct": round(present_count * 100 / planned_count, 1) if planned_count else None,
-            "ecart": present_count - planned_count,
+            "effectif_disponible": available_count,
+            "couverture_pct": round(available_count * 100 / planned_count, 1) if planned_count else None,
+            "ecart": available_count - planned_count,
         },
     }
 
