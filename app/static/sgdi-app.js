@@ -4937,6 +4937,20 @@ function sgdiModuleHostConfigs(){
         {label:"EFFECTIF PAIE",route:"effectif/recap"}
       ]
     },
+    brq:{
+      key:"brq",
+      title:"Bureau des Rapports Quotidiens",
+      context:"Situation des effectifs et suivi quotidien",
+      homeRoute:"brq",
+      skipPortal:true,
+      sections:[
+        {label:"SITUATION DES EFFECTIFS",route:"brq"},
+        {label:"PRÉSENCES",route:"brq/presences"},
+        {label:"ABSENCES",route:"brq/absences"},
+        {label:"ABANDONS DE POSTE",route:"brq/abandons-poste"},
+        {label:"SORTANTS",route:"brq/sortants"}
+      ]
+    },
     conges:{
       key:"conges",
       title:"Portail CONGÉS",
@@ -5272,6 +5286,7 @@ const MODULE_META={
   pointage:{icon:"🕒",label:"POINTAGE",color:"#0ea5e9"},
   secretariat:{icon:"✉️", label:"SECRÉTARIAT",color:"#475569"},
   agenda:{icon:"📅", label:"AGENDA",color:"#2563eb"},
+  brq:{icon:"📊",label:"BRQ",color:"#0f766e"},
 };
 function topbarStructureIcon(key){
   return (MODULE_META[key]?.icon)||"•";
@@ -6660,6 +6675,7 @@ function renderInternal(options={}){
       admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard","alerts"],
       pointage:["pointage","sites","incidents","demandes_structure","documents","agenda"],
       paie:["paie","effectif","agents","demandes_structure","documents","agenda"],
+      brq:["brq"],
       conges:["drh","conges","effectif","agents","documents","agenda"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents","agenda"],
       superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents","agenda"],
@@ -6680,8 +6696,8 @@ function renderInternal(options={}){
   }
   const app=document.getElementById("app");
   const isTrans=!!session.transverse;
-  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",superviseur:"MODULE SUPERVISEUR",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
-  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",superviseur:"Supervision terrain · Sites autorisés · Pointage",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
+  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",superviseur:"MODULE SUPERVISEUR",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",brq:"RAPPORTS QUOTIDIENS",global:"🌐 SITUATION GÉNÉRALE"};
+  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",superviseur:"Supervision terrain · Sites autorisés · Pointage",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",brq:"Situation quotidienne des effectifs · Présences · Absences · Sorties",global:"Toutes sociétés confondues — Vue consolidée groupe"};
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
   const shellSidebarClass=sgdiIsMobileViewport()
@@ -7499,6 +7515,13 @@ function renderSidebar(){
       paie:[
         {label:"TABLEAU DE BORD PAIE",route:"paie/dashboard",aliases:["paie"],group:"PILOTAGE"},
         {label:"EFFECTIF PAIE",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL"}
+      ],
+      brq:[
+        {label:"SITUATION DES EFFECTIFS",route:"brq",group:"BRQ"},
+        {label:"PRÉSENCES",route:"brq/presences",group:"SUIVI QUOTIDIEN"},
+        {label:"ABSENCES",route:"brq/absences",group:"SUIVI QUOTIDIEN"},
+        {label:"ABANDONS DE POSTE",route:"brq/abandons-poste",group:"SUIVI QUOTIDIEN"},
+        {label:"SORTANTS",route:"brq/sortants",group:"SUIVI RH"}
       ],
       global:[
         {label:"SITUATION GÉNÉRALE",route:"global-dashboard",group:"PILOTAGE"},
@@ -8940,6 +8963,7 @@ function renderView(){
       case"secretariat":renderSecretariat(view,sub||"dashboard",arg);break;
       case"agenda":renderAgenda(view,sub||"dashboard",arg);break;
       case"paie":renderPaie(view,sub||"dashboard",arg);break;
+      case"brq":if(typeof renderBrqPage==="function")renderBrqPage(view,sub||"situation");else view.innerHTML=`<div class="card p-6 text-red-700">Le module BRQ n'est pas disponible.</div>`;break;
       case"rapports":renderRapports(view);break;
       case"parametres":if(sub==="log")renderUnlockLog(view);else renderParametres(view);break;
       case"global-dashboard":renderGlobalDashboard(view);break;
@@ -9087,6 +9111,7 @@ function sgdiLoginStoryHTML(key){
     paie:["PAIE","Votre paie.","Un suivi maîtrisé.",[["Salaires","Préparez les éléments"],["Bulletins","Éditez les documents"],["Grilles","Consultez les barèmes"]]],
     conges:["CONGÉS","Vos congés.","Une organisation simple.",[["Demandes","Préparez vos demandes"],["Suivi","Consultez les décisions"],["Planning","Organisez les absences"]]],
     agenda:["AGENDA","Vos rendez-vous.","Une vision d’ensemble.",[["Planning","Organisez votre journée"],["Rappels","Retrouvez vos priorités"],["Échéances","Suivez vos engagements"]]],
+    brq:["RAPPORTS QUOTIDIENS","Vos équipes.","Une situation consolidée.",[["Effectifs","Consultez le prévu"],["Présences","Suivez la couverture"],["Sorties","Repérez les départs"]]],
     admin:["ADMINISTRATION","Votre organisation.","Un pilotage centralisé.",[["Comptes","Gérez les utilisateurs"],["Sociétés","Retrouvez les périmètres"],["Modules","Organisez les accès"]]],
     atlas:["PORTAIL ATLAS","Votre activité.","Une vision d’ensemble.",[["Sociétés","Retrouvez vos périmètres"],["Équipes","Suivez votre organisation"],["Modules","Accédez à vos outils"]]]
   };
@@ -9097,7 +9122,7 @@ function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
   if(isDhlHost()){renderDhlLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
-  const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":"Suite de gestion intégrée";
+  const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":hostCfg?.key==="brq"?"Effectifs · présences · absences · sorties":"Suite de gestion intégrée";
   sgdiApplyBrowserTitle();
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page sgdi-login-page-unified${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
     <main class="sgdi-login-main">
@@ -19276,7 +19301,7 @@ const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_LOGIN_MODULES=[
-  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
+  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"brq",label:"Rapports quotidiens (BRQ)",host:"brq.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
   {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
   {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Gestion du pointage",host:"pointage.irongs.com",description:"Gestion des présences, contrôle, statistiques et administration du pointage"},
   {key:"pointeur",label:"Pointage",host:"pointeur.irongs.com",description:"Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
