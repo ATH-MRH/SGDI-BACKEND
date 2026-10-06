@@ -39,7 +39,7 @@ const PROBE = `
     banner:shown(document.getElementById('shiftBanner')),kpis:document.querySelectorAll('#postKpis .v5-kpi').length,
     qrBits:['usbReader','reader','cameraModeBtn'].filter(id=>shown(document.getElementById(id))),pressed:document.getElementById('faceModeBtn').getAttribute('aria-pressed'),
     host:location.pathname,boxes:Object.fromEntries(['shiftBanner','postKpis','scannerCard','faceView'].map(id=>[id,box(id)])),
-    outside:[...document.querySelectorAll('#appView *')].filter(el=>{const r=el.getBoundingClientRect();return shown(el)&&!el.closest('.hidden')&&!el.closest('.v5-list,.v5-moves,.live-feed-list,.wedge-input')&&(r.right>document.documentElement.clientWidth+1||r.left<-1)}).map(el=>el.tagName+'.'+String(el.className).split(' ')[0]).slice(0,5)});
+    outside:[...document.querySelectorAll('#appView *')].filter(el=>{const r=el.getBoundingClientRect();return shown(el)&&!el.closest('.hidden')&&!el.closest('.v5-list,.v5-moves,.live-feed-list,.wedge-input,.tracking-scroll')&&(r.right>document.documentElement.clientWidth+1||r.left<-1)}).map(el=>el.tagName+'.'+String(el.className).split(' ')[0]).slice(0,5)});
   const out={};
   setTimeout(()=>{out.before=sample();document.getElementById('faceModeBtn').click()},6000);
   setTimeout(()=>{out.after=sample()},10000);
@@ -111,7 +111,7 @@ for (const width of WIDTHS) {
         const s = out[key];
         assert.equal(s.facial, true, `${key} : mode facial actif après UN clic`);
         assert.equal(s.faceView, true); assert.equal(s.pressed, 'true'); assert.equal(s.host, '/app', 'aucune redirection');
-        assert.ok(s.banner && s.kpis === 5, `${key} : vacation et KPI toujours affichés`);
+        assert.ok(!s.banner && s.kpis === 5, `${key} : bandeau supprimé, KPI toujours affichés`);
         assert.deepEqual(s.qrBits, [], `${key} : aucun élément du lecteur QR visible`);
         assert.equal(s.clientWidth, width); assert.ok(s.scrollWidth <= s.clientWidth && s.bodyScrollWidth <= s.clientWidth, `${key} : débordement horizontal`);
         assert.deepEqual(s.outside, [], `${key} : éléments hors écran`);

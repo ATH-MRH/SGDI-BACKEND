@@ -1,0 +1,102 @@
+POSTE DE POINTAGE MONO / BI-ÉCRAN — RAPPORT DE RÉALISATION
+Date : 6 octobre 2026 (Africa/Algiers)
+Branche : feat/pointeur-dual-screen-ui
+Base : 2833099803fcd4149eea9b6aa4e0070d5f72e2f8
+
+PÉRIMÈTRE
+Travail local sur le poste existant. Aucun merge, push ou déploiement.
+Aucune intervention sur les données, les services ou la configuration production.
+Aucune migration. Attendance Core et la logique ABANDON POSTE restent inchangés.
+
+INTERFACE
+- Header compact et fixe : logo, date et horloge existante, Société, Site,
+  scanner, utilisateur, plein écran et déconnexion.
+- Bandeau Vacation supprimé. Les informations de maintien nécessaires aux
+  décisions de pointage restent disponibles dans le contexte métier existant.
+- Deux blocs indépendants, ratio 2:1 ; débordements gérés à l'intérieur des blocs.
+- Trois modes existants : QR, facial, manuel. Recherche intégrée sous les modes.
+- Fiche employé compacte, photo/initiales et quatre informations sans répétitions.
+- Barre horizontale verte / rouge / orange. Aucun raccourci F1/F2/F3 : ces touches
+  peuvent être réservées au navigateur ou au poste terminal.
+- Cinq compteurs canoniques compacts ; liste des présents avec scroll interne.
+- Lien Voir tous les présents : affiche les présents canoniques, y compris une
+  vacation commencée la veille, dans le tableau inférieur.
+- Aujourd'hui : une situation par employé/jour, première entrée et dernière sortie.
+  La synthèse est calculée sur le journal avant de limiter les mouvements retournés.
+- Entrées, Sorties (durée et type de sortie persistés) et Anomalies existantes.
+- Actions de saisie manuelle requise conservées sur le poste principal.
+
+SOCIÉTÉ / SITE / RBAC
+Le catalogue vient de /api/portal/attendance-sites, enrichi du libellé société.
+Aucune société, aucun site ni utilisateur opérationnel n'est codé en dur.
+Le choix Toutes les sociétés recouvre seulement le périmètre autorisé.
+Le filtre société est transmis aux lectures ; sites et société sont intersectés
+sur le serveur. Une société injectée non autorisée renvoie 403.
+La recherche filtre avant LIMIT 8, et ne renvoie pas l'affectation d'un site interdit.
+Les écritures QR / manuelles transmettent le filtre société ; le serveur contrôle
+la société de l'employé et l'affectation canonique utilisée par Attendance Core.
+Un périmètre société vide d'un compte restreint n'est pas un accès global.
+Les administrateurs à accès global explicite conservent leur comportement existant.
+Les fixtures historiques de lecteurs restreints sont mises en conformité avec
+l'exigence société ET site explicites ; aucune permission production n'est modifiée.
+Le correctif module + permission fine ABANDON conserve ses tests de non-régression.
+
+FENÊTRE DÉTACHÉE
+Route : /pointeur/suivi. Même application et même session, présentation de suivi seule.
+Fenêtre navigateur nominative : atlas-pointeur-suivi. Un deuxième clic la rappelle ;
+après fermeture, un clic la rouvre. Le tableau principal reste disponible.
+Filtres Société, Site, Date et Recherche ; Actualiser et plein écran volontaire.
+Aucune caméra ni scanner démarré par la vue détachée.
+Les colonnes supplémentaires utilisent les mêmes données autorisées du serveur.
+Le navigateur peut ouvrir la fenêtre en onglet selon ses préférences. La disposition
+physique sur le deuxième moniteur est une action de l'utilisateur.
+
+TEMPS RÉEL / PERFORMANCE
+Le mécanisme existant attendance-live est réutilisé : 2 s sur le poste principal,
+5 s sur la fenêtre de suivi ; historique périodique à 15 s et rafraîchissement
+lors d'un nouveau mouvement. Aucun WebSocket, SSE ou système de diffusion parallèle.
+Le changement de Société/Site est partagé via le storage natif du navigateur.
+Les données métier sont toujours relues depuis le serveur dans chaque fenêtre.
+Les réponses correspondant à un ancien filtre ne remplacent pas la sélection courante.
+Le rendu du tableau utilise setHTML : aucune réécriture si le contenu est inchangé.
+Limites explicites : 200 mouvements, 200 situations journalières, 200 anomalies.
+Les compteurs portent sur le périmètre complet, pas sur les seules lignes affichées.
+La vue multi-sites réutilise control_post par site pour garder les KPI canoniques.
+
+CHANGEMENTS BACKEND
+- app/modules/portal/routes.py : scope société/site, catalogue, recherche avant limite,
+  date du journal, synthèse quotidienne optionnelle, métadonnées source/durée/sortie,
+  endpoint en lecture /attendance-anomalies.
+- app/modules/attendance/live.py : agrégation des postes pour le périmètre multi-sites.
+- app/main.py : alias /pointeur/suivi vers la même page.
+Les clients existants de attendance-feed gardent une liste. Seul include_daily=true
+active l'enveloppe events/daily et les indicateurs de limitation.
+Aucun changement de schéma, du seuil ABANDON, du motif obligatoire ou des alertes OPS/DRH.
+
+VALIDATION
+Backend : pytest tests/test_pointeur_dual_screen.py tests/test_abandon_module_rbac.py
+ tests/test_attendance_abandon.py tests/test_pointeur_application_access.py
+ tests/test_pointeur_control_post.py tests/test_attendance_core.py
+ tests/test_attendance_counted_time.py tests/test_portal_attendance.py
+ tests/test_pointeur_facial_direct.py tests/test_pointer_users.py
+Résultat : 202 tests passés, base SQLite locale isolée.
+Frontend : npm test (suite complète, comprenant pointeur-dual-screen.test.js).
+Résultat : 988 tests passés. Contrôles ciblés après les derniers ajustements :
+19 tests contexte/ABANDON et 3 tests de scope/fenêtre passés.
+Chrome : node --test tests_frontend/pointeur-dual-screen-chrome.test.js
+ tests_frontend/pointeur-abandon-chrome.test.js tests_frontend/pointeur-facial-chrome.test.js
+Résultat Chrome : 16 tests passés.
+Résolutions principales : 1920x1080, 1600x900, 1440x900, 1366x768 ; aussi 390x844.
+Couverture : absence de scroll global/débordement, ratio des blocs, filtre société/site,
+fiche et boutons compacts, fenêtre réutilisée puis rouverte, mise à jour automatique,
+plein écran, modale/motif et parcours facial. Les tests Chrome utilisent des fixtures.
+Le point d'entrée historique pointeur-v5-chrome teste désormais la géométrie actuelle.
+
+LIMITES DE VALIDATION
+Le visuel de référence annoncé n'était pas joint. La disposition suit la mission
+écrite ; la fidélité à ce visuel reste à confirmer lors de sa mise à disposition.
+Aucune caméra, douchette physique ni paire de moniteurs réels n'a été utilisée.
+Les parcours sont testés via moteurs existants et fixtures, sans faux pointage production.
+Aucune nouvelle validation PostgreSQL de ce lot : contrôles backend exécutés sur SQLite.
+Un périmètre multi-sites très étendu nécessite une mesure de charge sur environnement
+de recette ; aucun test de charge n'a été exécuté sur la production.

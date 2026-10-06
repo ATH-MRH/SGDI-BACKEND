@@ -948,6 +948,7 @@ def pointeur_manifest() -> FileResponse:
     )
 
 
+@app.get("/pointeur/suivi", include_in_schema=False)
 @app.get("/pointeur", include_in_schema=False, name="pointer_mobile")
 def pointer_mobile() -> FileResponse:
     return FileResponse(

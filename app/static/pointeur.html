@@ -662,6 +662,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
 <script defer src="/static/pointeur-facial.js?v=1"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
+<link rel="stylesheet" href="/static/pointeur-workstation.css">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -687,17 +688,18 @@ body.ptr-v5.has-post .shift-staffing{order:3}
       <div class="brand"><img class="brand-logo-img" src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><div><div class="brand-title">POSTE DE POINTAGE</div><div class="brand-sub">Contrôle des présences en temps réel</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
-        <div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
+        <div class="site-control society-control"><span class="site-control-label">SOCIÉTÉ</span><select id="societySelector" class="site-selector" aria-label="Sélectionner la société" onchange="changeAttendanceSociety(this.value)"></select></div><div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
         <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> Scanner actif</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
-        <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
+        <button class="fullscreen" onclick="togglePointerFullscreen()" title="Plein écran">⛶</button><button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
       </div>
     </div>
   </header>
   <main class="main">
     <!-- Poste de contrôle V5 : tout vient du flux live (planning officiel + Attendance Core). -->
-    <section id="shiftBanner" class="v5-card v5-shift" aria-live="polite"></section>
+
+    <section class="station-upper">
     <div id="maintienBanner" class="v5-maintien hidden" role="status"></div>
     <div id="postKpis" class="v5-kpis" aria-label="Personnes sur la vacation active"></div>
     <div class="status-row">
@@ -748,6 +750,9 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="faceModeBtn" type="button" class="mode-card" onclick="showPointerSection('facial')"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="10" r="2.6"/><path d="M7.6 17c.8-2.8 8-2.8 8.8 0"/></svg></span><b>Reconnaissance faciale</b><small>Détection automatique</small></button>
           <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code employé</small></button>
         </div>
+        <div class="pointer-search">
+            <input id="manualQuery" autocomplete="off" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
+            <button type="button" class="manual-search-button" onclick="activateInlineManualSearch();runManualSearch(document.getElementById('manualQuery').value.trim())">Rechercher</button></div>
         <div class="action-row">
           <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
           <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ LIRE LE QR AVEC LA CAMÉRA</button>
@@ -758,9 +763,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
           <div id="manualSearchStep">
-            <label for="manualQuery">Code ou nom / prénom de l'employé</label>
-            <input id="manualQuery" autocomplete="off" placeholder="Ex. PTG04 ou Belkacem" oninput="onManualQueryInput()">
-            <div id="manualResults" class="manual-results"></div>
+<div id="manualResults" class="manual-results"></div>
             <label for="manualObservation">Observation</label>
             <textarea id="manualObservation" class="manual-observation" maxlength="500"></textarea>
           </div>
@@ -771,9 +774,9 @@ body.ptr-v5.has-post .shift-staffing{order:3}
             <div class="manual-actions">
               <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
               <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
-              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="openAbandonModal()"><span aria-hidden="true">↪</span><span>ABANDON<br>POSTE</span></button>
+              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="openAbandonModal()"><span aria-hidden="true">↪</span><span>ABANDON POSTE</span></button>
             </div>
-            <div class="abandon-caption"><span id="abandonThresholdCaption">Départ anticipé (≥ 60 min)</span><br>Quitte le site avant la fin du service</div>
+            <div class="abandon-caption"><span id="abandonThresholdCaption">Départ anticipé (≥ 60 min)</span> · Quitte le site avant la fin du service</div>
             <p class="abandon-info">Un abandon de poste est automatiquement transmis à OPS et DRH et sera enregistré dans le BRQ.</p>
             <div id="manualFeedback" class="manual-feedback" role="status" aria-live="polite"></div>
             <button class="manual-back" onclick="resetManualPanel()">← Changer d'employé</button>
@@ -783,7 +786,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
       <div class="side-col">
       <section id="presentNowCard" class="v5-card" aria-label="Présents actuellement">
         <h2 class="v5-title">Présents actuellement <span id="presentNowCount" class="v5-count">0</span></h2>
-        <div id="presentNowList" class="v5-list"></div>
+        <div id="presentNowList" class="v5-list"></div><button class="see-present" onclick="showAllPresent()">Voir tous les présents →</button>
       </section>
       <section id="todoCard" class="v5-card" aria-label="À traiter">
         <h2 class="v5-title">À traiter <span id="todoCount" class="v5-count">0</span></h2>
@@ -811,10 +814,13 @@ body.ptr-v5.has-post .shift-staffing{order:3}
       </section>
       </div>
     </div>
+    </section>
     <section id="movementsCard" class="v5-card" aria-label="Derniers mouvements">
-      <h2 class="v5-title">Derniers mouvements
-        <span class="v5-filters" role="group" aria-label="Filtrer les mouvements"><button type="button" data-move-filter="all" class="active" onclick="setMovementFilter('all')">Tous</button><button type="button" data-move-filter="ENTREE" onclick="setMovementFilter('ENTREE')">Entrées</button><button type="button" data-move-filter="SORTIE" onclick="setMovementFilter('SORTIE')">Sorties</button><button type="button" data-move-filter="REFUS" onclick="setMovementFilter('REFUS')">Refus</button><button type="button" data-move-filter="MAINTIEN" onclick="setMovementFilter('MAINTIEN')">Maintiens</button></span></h2>
-      <div id="movementsList" class="v5-moves"></div>
+      <div class="tracking-toolbar"><div class="tracking-tabs" role="tablist" aria-label="Suivi des pointages">
+        <button role="tab" aria-selected="true" data-tracking-tab="today" onclick="setTrackingTab('today')">Aujourd’hui</button><button role="tab" aria-selected="false" data-tracking-tab="entries" onclick="setTrackingTab('entries')">Entrées</button><button role="tab" aria-selected="false" data-tracking-tab="exits" onclick="setTrackingTab('exits')">Sorties</button><button role="tab" aria-selected="false" data-tracking-tab="anomalies" onclick="setTrackingTab('anomalies')">Anomalies</button></div>
+        <div class="tracking-controls"><input id="trackingSearch" aria-label="Recherche employé dans le suivi" placeholder="Recherche employé" oninput="renderTracking()"><select id="trackingSite" aria-label="Site du suivi" onchange="changeAttendanceSite(this.value)"></select><input id="trackingDate" type="date" aria-label="Date du suivi" onchange="loadHistory();loadAttendanceAnomalies()"><button onclick="refreshPointeurData()">Actualiser</button><button id="detachTracking" onclick="openTrackingWindow()">Ouvrir dans une nouvelle fenêtre ↗</button></div></div>
+      <div id="trackingStatus" role="status"></div><div class="tracking-scroll"><table id="trackingTable"><thead id="trackingHead"></thead><tbody id="trackingBody"></tbody></table></div>
+      <div id="movementsList" class="v5-moves hidden"></div>
     </section>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
@@ -839,6 +845,8 @@ let pointerSession=null;
 let scanner=null;
 let scanBusy=false;
 let sessionScans=[];
+let trackingEvents=[];
+let trackingDailyServer=null;
 let liveFeedFilter="";
 let selectedSiteId="";
 let qrKeyBuffer="";
@@ -1057,7 +1065,7 @@ async function changeAttendanceSite(value){
   const nextSiteId=String(value||"");
   selectedSiteId=nextSiteId;localStorage.setItem("atlas_pointer_site",selectedSiteId);
   liveFeedFilter="";activeSheet=null;updateSelectedSiteLabel();resetManualPanel();
-  await Promise.all([loadHistory(),loadActiveSheet(),loadAttendanceAlerts(),loadShiftStaffing()]);
+  await Promise.all([loadHistory(),loadAttendanceAnomalies(),loadActiveSheet(),loadAttendanceAlerts(),loadShiftStaffing()]);
   if(pointerSession)startLivePolling();
   if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
   // Un changement de site ne doit pas rallumer la caméra QR derrière Planning ou Facial
@@ -1081,18 +1089,20 @@ async function enterApp(){
   startLivePolling();
   requestAnimationFrame(setupScanMode);
 }
-function refreshPointeurData(){loadHistory();loadActiveSheet();loadAttendanceAlerts();loadShiftStaffing()}
+function refreshPointeurData(){loadHistory();loadAttendanceAnomalies();loadActiveSheet();loadAttendanceAlerts();loadShiftStaffing()}
 // Feuille de présence de la rotation EN COURS (serveur) : « Pointage en direct » n'affiche que
 // cette feuille — une ligne par employé — et non l'historique de la journée. Un site sans
 // paramètres de rotation renvoie configured=false : l'affichage historique est conservé.
 let activeSheet=null;
 async function loadActiveSheet(){
   if(!pointerSession?.token)return;
+  const requestScope=siteQuery();
   try{
     const response=await fetch("/api/portal/attendance-sheet"+siteQuery(),{cache:"no-store",headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)return;                                      // on garde la dernière feuille connue
     const data=await response.json();
+    if(requestScope!==siteQuery())return;
     activeSheet=data&&data.configured&&data.sheet?data:null;
     renderLiveFeed();
   }catch(e){/* réseau : nouvel essai au prochain rafraîchissement */}
@@ -1108,11 +1118,13 @@ async function loadShiftStaffing(){
   // validé et lié affiche explicitement "CONTRAT DC NON CONFIGURÉ", jamais un quota
   // OPS présenté comme s'il était contractuel (voir LOT ERP — bascule DC).
   const host=document.getElementById("shiftStaffing");if(!host||!pointerSession?.token)return;
+  const requestScope=siteQuery();
   try{
     const response=await fetch("/api/portal/attendance-staffing"+siteQuery(),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Effectif contractuel indisponible");
-    const data=await response.json(),sites=Array.isArray(data.sites)?data.sites:[];
+    const data=await response.json();if(requestScope!==siteQuery())return;
+    const sites=Array.isArray(data.sites)?data.sites:[];
     const contractual=data.contractual&&typeof data.contractual==="object"?data.contractual:{source:data.source,configured:data.source==="dc",requirements:data.requirements||{}};
     const requirements=contractual.requirements||{};
     const configuredSites=sites.filter(s=>s&&s.configured);
@@ -1144,9 +1156,11 @@ function stopLivePolling(){clearInterval(liveTimer);liveTimer=null;clearTimeout(
 async function pollLive(){
   if(!pointerSession?.token||liveBusy)return;
   liveBusy=true;
+  const requestScope=siteQuery();
   try{
     const params=new URLSearchParams();
     if(selectedSiteId)params.set("site_id",selectedSiteId);
+    if(selectedSociety)params.set("society",selectedSociety);
     if(liveCursor!==null)params.set("after_id",String(liveCursor));
     if(liveRefusalCursor!==null)params.set("after_refusal_id",String(liveRefusalCursor));
     const response=await fetch("/api/portal/attendance-live?"+params.toString(),{cache:"no-store",headers:{Authorization:"Bearer "+pointerSession.token}});
@@ -1155,6 +1169,7 @@ async function pollLive(){
     if(response.status===401||response.status===403){logout();return}
     if(!response.ok){setLiveState("error");return}
     const data=await response.json();
+    if(requestScope!==siteQuery())return;
     syncOpsClock(data);
     setLiveState("ok");
     serverSummary=data.summary||null;
@@ -1164,7 +1179,7 @@ async function pollLive(){
     renderCounters();
     if(first)return;                                             // au démarrage : on n'affiche pas un ancien passage
     const events=Array.isArray(data.events)?data.events:[],refusals=Array.isArray(data.refusals)?data.refusals:[];
-    if(events.length){loadHistory();loadActiveSheet();showLastScan(events[events.length-1])}
+    if(events.length){loadHistory();loadAttendanceAnomalies();loadActiveSheet();showLastScan(events[events.length-1])}
     else if(refusals.length)showLastRefusal(refusals[refusals.length-1]);
   }catch(e){setLiveState("error")/* réseau : la pastille de connexion l'indique ; nouvel essai au prochain tour */}
   finally{liveBusy=false}
@@ -1241,8 +1256,7 @@ function renderPost(){
   const post=postState;
   document.body.classList.toggle("has-post",!!post);
   if(!post)return;
-  const banner=shiftBannerHTML(post),bannerEl=setHTML("shiftBanner",banner.html);
-  if(bannerEl&&bannerEl.className!==banner.cls)bannerEl.className=banner.cls;
+
   const m=post.maintien,mEl=document.getElementById("maintienBanner");
   if(mEl){
     mEl.classList.toggle("hidden",!m);
@@ -1604,11 +1618,13 @@ function recordScanEntry(data){
 let presenceAlertsData=[];
 async function loadAttendanceAlerts(){
   if(!pointerSession?.token)return;
+  const requestScope=siteQuery();
   try{
     const response=await fetch("/api/portal/attendance-alerts"+siteQuery(),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Alertes indisponibles");
     const data=await response.json();
+    if(requestScope!==siteQuery())return;
     presenceAlertsData=data.presence_alerts||[];
     renderLiveFeed();
   }catch(error){console.warn("Alertes de présence indisponibles",error)}
@@ -1633,11 +1649,15 @@ function lampHTMLForMatricule(matricule){
 }
 async function loadHistory(){
   if(!pointerSession?.token)return;
+  const requestScope=siteQuery();
   try{
-    const response=await fetch("/api/portal/attendance-feed?limit=200"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-feed?limit=200&include_daily=true"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Historique indisponible");
-    const events=await response.json();
+    const payload=await response.json();
+    if(requestScope!==siteQuery())return;
+    const events=Array.isArray(payload)?payload:(payload.events||[]);
+    trackingDailyServer=Array.isArray(payload.daily)?payload.daily:null;
     const grouped=new Map();
     (Array.isArray(events)?events:[]).forEach(event=>{
       const at=String(event.scanned_at||"");
@@ -1651,6 +1671,9 @@ async function loadHistory(){
       else if(event.action==="depart")row.depart=time;
       else row.arrivee=time;
     });
+    trackingEvents=Array.isArray(events)?events:[];
+    document.getElementById("trackingStatus").textContent=(payload.events_limited||payload.daily_limited||events.length>=200)?"Suivi limité à 200 lignes par vue ; les compteurs couvrent le périmètre complet.":"";
+    renderTracking();
     sessionScans=[...grouped.values()].sort((a,b)=>String(b.sortAt||"").localeCompare(String(a.sortAt||""))).slice(0,200);
     renderHistory();
   }catch(error){console.warn("Historique pointeur 48 h indisponible",error)}
@@ -1663,7 +1686,7 @@ async function onQr(token){
   if(scanBusy)return;
   scanBusy=true;
   try{
-    const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null})});
+    const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null,society:selectedSociety||null})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,data);
@@ -1773,10 +1796,13 @@ function onManualQueryInput(){
   manualSearchTimer=setTimeout(()=>runManualSearch(query),300);
 }
 async function runManualSearch(query){
+  clearTimeout(manualSearchTimer);
+  const requestScope=siteQuery();
   try{
     const response=await fetch("/api/portal/attendance-manual/search?q="+encodeURIComponent(query)+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     const rows=await response.json().catch(()=>[]);
+    if(requestScope!==siteQuery()||query!==document.getElementById("manualQuery").value.trim())return;
     manualResults=Array.isArray(rows)?rows:[];
     renderManualResults();
   }catch(e){document.getElementById("manualResults").innerHTML='<div class="manual-empty">Recherche indisponible.</div>'}
@@ -1792,7 +1818,7 @@ function selectManualResult(index){
   if(!manualSelected)return;
   const initials=[manualSelected.prenom,manualSelected.nom].filter(Boolean).map(v=>v[0]).join("").toUpperCase();
   const photo=manualSelected.photo?`<img class="employee-photo" src="${esc(manualSelected.photo)}" alt="Photo de ${esc(manualSelected.nom)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
-  document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><div class="result-meta">CODE ${esc(manualSelected.matricule)} · ${esc(manualSelected.site||"Site non renseigné")}</div><div class="result-company">${esc(manualSelected.societe||"Société non renseignée")}${manualSelected.poste?" · "+esc(manualSelected.poste):""}</div></div></div>`;
+  document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><dl class="employee-facts"><dt>Code</dt><dd>${esc(manualSelected.matricule)}</dd><dt>Fonction</dt><dd>${esc(manualSelected.poste||"—")}</dd><dt>Société</dt><dd>${esc(manualSelected.societe||"—")}</dd><dt>Site</dt><dd>${esc(manualSelected.site||"—")}</dd></dl><span class="employee-found">● Employé trouvé</span></div></div>`;
   document.getElementById("manualSearchStep").classList.add("hidden");
   document.getElementById("manualCardStep").classList.remove("hidden");
   loadManualContext(manualSelected);
@@ -1811,7 +1837,7 @@ async function loadManualContext(employee){
     manualContext=ctx;
     if(ctx.abandon_threshold_minutes)document.getElementById("abandonThresholdCaption").textContent="Départ anticipé (≥ "+ctx.abandon_threshold_minutes+" min)";
     const x=ctx.extra_shift;
-    const rows=[["Employé",[employee.nom,employee.prenom].filter(Boolean).join(" ")+" · "+(employee.matricule||"")],["Site",ctx.site&&ctx.site.name]];
+    const rows=[];
     let note="",explicit=false;
     if(x){
       const prev=x.previous||{};
@@ -1824,8 +1850,8 @@ async function loadManualContext(employee){
     box.innerHTML='<dl class="v5-facts">'+rows.filter(r=>r[1]).map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>'
       +(note?'<p class="v5-reason">'+esc(note)+'</p>':"")
       +(explicit?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
-      +'<p class="v5-audit-note">Cette opération sera auditée.</p>';
-    box.classList.remove("hidden");
+      +(explicit?'<p class="v5-audit-note">Cette opération sera auditée.</p>':"");
+    box.classList.toggle("hidden",!rows.length&&!note&&!explicit);
     button.classList.toggle("hidden",!explicit);
   }catch(e){/* contexte indisponible : la saisie reste possible, Attendance Core décide */}
 }
@@ -1908,7 +1934,7 @@ async function confirmManualPointage(action="present",options={}){
     const employeeRef=manualSelected.id||manualSelected.matricule;
     const observation=reason||document.getElementById("manualObservation").value.trim();
     // Intention EXPLICITE d'ouvrir une deuxième vacation : jamais devinée depuis un scan ambigu.
-    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action,site_id:selectedSiteId||null,...(intent?{intent}:{})})});
+    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action,site_id:selectedSiteId||null,society:selectedSociety||null,...(intent?{intent}:{})})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,data);
@@ -1994,6 +2020,124 @@ document.addEventListener("DOMContentLoaded",()=>{
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("/pointeur-sw.js",{scope:"/"}).catch(()=>{})});
 }
+/* Vue du poste : mêmes API et même polling que le poste existant. */
+let trackingOnlyPresent=false;
+let selectedSociety='',authorizedAttendanceSites=[],trackingTab='today',trackingWindow=null,trackingAnomalies=[];
+const detachedTracking=location.pathname==='/pointeur/suivi';
+function readAttendanceScope(raw=localStorage.getItem('atlas_pointer_scope')){try{return JSON.parse(raw||'{}')||{}}catch(e){return {}}}
+const societyKey=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+siteQuery=function(prefix='?'){
+  const params=new URLSearchParams();if(selectedSiteId)params.set('site_id',selectedSiteId);if(selectedSociety)params.set('society',selectedSociety);
+  const date=document.getElementById('trackingDate')?.value;if(date)params.set('date',date);
+  return params.size?prefix+params.toString():'';
+};
+loadAttendanceSites=async function(){
+  const response=await fetch('/api/portal/attendance-sites',{headers:{Authorization:'Bearer '+pointerSession.token}});
+  if(response.status===401||response.status===403){logout();throw Error('Accès refusé')}
+  if(!response.ok)throw Error('Sites indisponibles');
+  authorizedAttendanceSites=await response.json();
+  const labels=[...new Set(authorizedAttendanceSites.map(s=>s.society).filter(Boolean))];
+  const selector=document.getElementById('societySelector');
+  selector.innerHTML='<option value="">Toutes les sociétés</option>'+labels.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  const scope=readAttendanceScope();
+  selectedSociety=labels.includes(scope.society)?scope.society:'';selector.value=selectedSociety;
+  selectedSiteId=String(scope.site??localStorage.getItem('atlas_pointer_site')??(authorizedAttendanceSites.length===1?authorizedAttendanceSites[0].id:''));
+  rebuildAttendanceSites();
+};
+function rebuildAttendanceSites(){
+  const sites=authorizedAttendanceSites.filter(s=>!selectedSociety||societyKey(s.society)===societyKey(selectedSociety));
+  if(!sites.some(s=>String(s.id)===selectedSiteId))selectedSiteId='';
+  const options='<option value="">Tous les sites autorisés</option>'+sites.map(s=>`<option value="${s.id}">${esc(s.name||s.indicatif)}</option>`).join('');
+  for(const id of ['siteSelector','trackingSite']){const el=document.getElementById(id);el.innerHTML=options;el.value=selectedSiteId;el.disabled=!sites.length;el.dataset.sites=JSON.stringify(sites)}
+  updateSelectedSiteLabel();
+}
+function persistAttendanceScope(){localStorage.setItem('atlas_pointer_scope',JSON.stringify({society:selectedSociety,site:selectedSiteId}))}
+async function changeAttendanceSociety(value){
+  if(scanBusy){document.getElementById('societySelector').value=selectedSociety;return}
+  if(value&&!authorizedAttendanceSites.some(s=>s.society===value))return;
+  selectedSociety=value;selectedSiteId='';rebuildAttendanceSites();persistAttendanceScope();await changeAttendanceSite('');
+}
+const originalChangeSite=changeAttendanceSite;
+changeAttendanceSite=async function(value){
+  if(scanBusy){rebuildAttendanceSites();return}
+  if(value&&!authorizedAttendanceSites.some(s=>String(s.id)===String(value)&&(!selectedSociety||societyKey(s.society)===societyKey(selectedSociety))))return;
+  trackingOnlyPresent=false;trackingEvents=[];trackingDailyServer=null;trackingAnomalies=[];postState=null;serverSummary=null;activeSheet=null;setHTML('presentNowList','');setHTML('postKpis','');renderTracking();
+  selectedSiteId=String(value||'');rebuildAttendanceSites();persistAttendanceScope();
+  await originalChangeSite(value);
+};
+window.addEventListener('storage',event=>{
+  if(event.key===SESSION_KEY&&!event.newValue){logout();return}
+  if(event.key!=='atlas_pointer_scope'||!pointerSession)return;
+  const scope=readAttendanceScope(event.newValue);
+  if(scope.society&&!authorizedAttendanceSites.some(s=>s.society===scope.society))return;
+  selectedSociety=scope.society||'';document.getElementById('societySelector').value=selectedSociety;
+  selectedSiteId=String(scope.site||'');rebuildAttendanceSites();changeAttendanceSite(selectedSiteId);
+});
+// L'identité nominative de fenêtre évite les doublons et permet la réouverture.
+function openTrackingWindow(){
+  persistAttendanceScope();
+  if(trackingWindow&&!trackingWindow.closed){trackingWindow.focus();return}
+  trackingWindow=window.open('/pointeur/suivi','atlas-pointeur-suivi','popup=yes,width=1400,height=900,resizable=yes,scrollbars=yes');
+  if(!trackingWindow)document.getElementById('trackingStatus').textContent='Autorisez l’ouverture de la fenêtre de suivi dans votre navigateur.';
+}
+async function togglePointerFullscreen(){
+  try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}
+  catch(e){document.getElementById('trackingStatus').textContent='Le plein écran n’est pas disponible dans cet environnement.'}
+}
+function activateInlineManualSearch(){if(!isManualPanelOpen())toggleManualPanel()}
+function showAllPresent(){setTrackingTab('today');trackingOnlyPresent=true;renderTracking();document.getElementById('trackingSearch').focus()}
+function setTrackingTab(tab){trackingOnlyPresent=false;trackingTab=tab;document.querySelectorAll('[data-tracking-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.trackingTab===tab)));renderTracking()}
+function trackingDailyRows(events){
+  const grouped=new Map();
+  [...events].sort((a,b)=>String(a.scanned_at).localeCompare(String(b.scanned_at))).forEach(e=>{
+    const day=String(e.scanned_at||'').slice(0,10),key=String(e.employee_id||e.matricule)+'|'+day;
+    let r=grouped.get(key);if(!r){r={...e,arrival:'',departure:'',status:'—'};grouped.set(key,r)}
+    if(e.action==='arrivee'){if(!r.arrival)r.arrival=hms(e.scanned_at);r.departure='';r.status='En poste'}
+    else if(e.action==='depart'){r.departure=hms(e.scanned_at);r.status='Sorti'}
+    else if(e.action==='absent')r.status='Absent';
+    r.observation=e.observation||r.observation;
+  });return [...grouped.values()];
+}
+async function loadAttendanceAnomalies(){
+  if(!pointerSession)return;const scope=siteQuery();
+  try{const response=await fetch('/api/portal/attendance-anomalies'+scope,{headers:{Authorization:'Bearer '+pointerSession.token},cache:'no-store'});
+    if(response.status===401||response.status===403){logout();return}if(!response.ok)return;
+    const rows=await response.json();if(scope!==siteQuery())return;trackingAnomalies=Array.isArray(rows)?rows:[];renderTracking();
+  }catch(e){document.getElementById('trackingStatus').textContent='Anomalies indisponibles, nouvel essai au prochain rafraîchissement.'}
+}
+function renderTracking(){
+  const host=document.getElementById('trackingBody');if(!host)return;
+  const query=String(document.getElementById('trackingSearch').value||'').toLowerCase(),date=document.getElementById('trackingDate').value||localDate();
+  const events=trackingEvents.filter(e=>String(e.scanned_at||'').slice(0,10)===date&&(!query||[e.nom,e.matricule,e.poste].join(' ').toLowerCase().includes(query)));
+  let columns,rows;
+  if(trackingTab==='today'){
+    columns=['Nom et prénom','Code','Fonction',...(detachedTracking?['Société','Site']:[]),'Heure arrivée','Heure départ','Statut',...(detachedTracking?['Observation','Actions']:[])];
+    const presentRows=(postState?.present||[]).map(r=>{const e=r.employee||{};return {nom:[e.nom,e.prenom].filter(Boolean).join(' '),matricule:e.matricule,poste:e.fonction||e.poste,societe:e.societe,site:r.site||postState.site,arrival:r.entry_at?hms(r.entry_at):r.entry,departure:'',status:r.badge_label||'En poste'}}).filter(r=>!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query));
+    rows=(trackingOnlyPresent?presentRows:(trackingDailyServer?trackingDailyServer.filter(r=>r.date===date&&(!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query))):trackingDailyRows(events))).map(r=>[r.nom,r.matricule,r.poste,...(detachedTracking?[r.societe,r.site]:[]),r.arrival,r.departure,r.status,...(detachedTracking?[r.observation,'—']:[])]);
+  }else if(trackingTab==='entries'){
+    columns=['Heure','Nom et prénom','Code','Fonction','Société','Site','Mode','Statut'];rows=events.filter(e=>e.action==='arrivee').map(e=>[hms(e.scanned_at),e.nom,e.matricule,e.poste,e.societe,e.site,e.source||'—','Enregistré']);
+  }else if(trackingTab==='exits'){
+    columns=['Heure','Nom et prénom','Code','Fonction','Société','Site','Durée de présence','Type de sortie','Statut'];rows=events.filter(e=>e.action==='depart').map(e=>[hms(e.scanned_at),e.nom,e.matricule,e.poste,e.societe,e.site,e.duration_minutes==null?'—':minutesLabel(e.duration_minutes),e.exit_type||'Sortie','Enregistré']);
+  }else{
+    columns=['Nom et prénom','Code','Société','Site','Type anomalie','Heure','Observation','Statut','Action'];
+    const anomalies=[...trackingAnomalies];
+    if(date===localDate())(postState?.todo||[]).forEach((r,index)=>{if(r.action==='MANUAL_ENTRY'&&!anomalies.some(a=>a.id===r.anomaly_id))anomalies.push({...r,code:r.code,site:r.site||postState.site,status:'À traiter',manualIndex:index})});
+    rows=anomalies.filter(r=>!query||[r.employee?.nom,r.employee?.prenom,r.employee?.matricule].join(' ').toLowerCase().includes(query)).map(r=>{const e=r.employee||{};return [[e.nom,e.prenom].filter(Boolean).join(' '),e.matricule,e.societe,r.site,r.code,r.at?hms(r.at):r.overdue_since||r.scheduled_end,r.observation||r.message,r.status,
+      Number.isInteger(r.manualIndex)&&!detachedTracking?{html:'<button type="button" onclick="openManualFor('+r.manualIndex+')">Saisie manuelle</button>'}:'—']});
+  }
+  setHTML('trackingHead','<tr>'+columns.map(c=>'<th scope="col">'+esc(c)+'</th>').join('')+'</tr>');
+  setHTML('trackingBody',rows.length?rows.map(r=>'<tr>'+r.map(v=>'<td>'+(v?.html||esc(v||'—'))+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+columns.length+'">Aucun résultat dans le périmètre sélectionné.</td></tr>');
+}
+const originalRenderPost=renderPost;renderPost=function(){originalRenderPost();renderTracking()};
+const originalSetupScanMode=setupScanMode;setupScanMode=function(){if(!detachedTracking)originalSetupScanMode()};
+const originalStartLive=startLivePolling;startLivePolling=function(){originalStartLive();if(detachedTracking){clearInterval(liveTimer);liveTimer=setInterval(pollLive,5000)}};
+const originalEnterApp=enterApp;enterApp=async function(){
+  document.body.classList.toggle('tracking-detached',detachedTracking);
+  const date=document.getElementById('trackingDate');date.value=localDate();date.max=localDate();
+  if(detachedTracking){document.querySelector('.brand-sub').textContent='Suivi détaillé des pointages';document.getElementById('detachTracking').hidden=true}
+  await originalEnterApp();if(detachedTracking){stopScanner();window.PointeurFacial?.stop?.()}
+};
+
 </script>
 </body>
 </html>
