@@ -65,3 +65,11 @@
 #appView .manual-actions{justify-content:flex-start;flex-wrap:wrap}
 #appView .manual-actions button{flex:none!important;min-width:130px!important;width:auto!important}
 @media(max-width:700px){#appView .manual-actions{gap:6px}#appView .manual-actions button{min-width:85px!important;padding:6px 8px!important;font-size:10px!important}}
+
+.tracking-detached #appView .brand-sub{display:block;font-size:12px;margin-top:2px}
+@media(min-width:1101px){#appView #societySelector{max-width:none;width:260px}}
+
+@media(min-width:1101px){#appView .top-row{display:flex!important}}
+@media(min-width:1101px) and (max-width:1700px){#appView .header-clock{flex-direction:column;gap:2px}#appView .seg-date{font-size:10px}}
+
+@media(min-width:1101px){#appView .society-control{width:280px}#appView #societySelector{width:100%;padding-right:18px}}

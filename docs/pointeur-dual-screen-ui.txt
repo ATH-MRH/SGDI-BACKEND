@@ -4,7 +4,8 @@ Branche : feat/pointeur-dual-screen-ui
 Base : 2833099803fcd4149eea9b6aa4e0070d5f72e2f8
 
 PÉRIMÈTRE
-Travail local sur le poste existant. Aucun merge, push ou déploiement.
+Travail local sur le poste existant. Publication autorisée de la branche seule après validation.
+Aucun merge ni déploiement.
 Aucune intervention sur les données, les services ou la configuration production.
 Aucune migration. Attendance Core et la logique ABANDON POSTE restent inchangés.
 
@@ -79,7 +80,11 @@ Backend : pytest tests/test_pointeur_dual_screen.py tests/test_abandon_module_rb
  tests/test_pointeur_control_post.py tests/test_attendance_core.py
  tests/test_attendance_counted_time.py tests/test_portal_attendance.py
  tests/test_pointeur_facial_direct.py tests/test_pointer_users.py
-Résultat : 202 tests passés, base SQLite locale isolée.
+Résultat final : 204 tests passés, base SQLite locale isolée.
+PostgreSQL 16.13 : mêmes suites + tests/test_attendance_core_pg_race.py ;
+209 tests passés, zéro ignoré, sur 127.0.0.1:62021/pointeur_validation.
+Cluster jetable dédié : /private/tmp/pointeur-final-validation-ebbotyz7.
+Base supprimée après les tests ; arrêt confirmé de ce seul cluster local.
 Frontend : npm test (suite complète, comprenant pointeur-dual-screen.test.js).
 Résultat : 988 tests passés. Contrôles ciblés après les derniers ajustements :
 19 tests contexte/ABANDON et 3 tests de scope/fenêtre passés.
@@ -97,6 +102,66 @@ Le visuel de référence annoncé n'était pas joint. La disposition suit la mis
 écrite ; la fidélité à ce visuel reste à confirmer lors de sa mise à disposition.
 Aucune caméra, douchette physique ni paire de moniteurs réels n'a été utilisée.
 Les parcours sont testés via moteurs existants et fixtures, sans faux pointage production.
-Aucune nouvelle validation PostgreSQL de ce lot : contrôles backend exécutés sur SQLite.
+Le déplacement matériel sur une paire de moniteurs reste une action utilisateur ;
+les deux fenêtres, leur réutilisation, les filtres et le polling sont validés dans Chrome.
 Un périmètre multi-sites très étendu nécessite une mesure de charge sur environnement
 de recette ; aucun test de charge n'a été exécuté sur la production.
+
+VALIDATION FINALE AVANT INTÉGRATION — 6 OCTOBRE 2026
+HEAD avant validation : 735c378aca5fd5571094fb2422e5e62c8d7502e0
+Base attendue origin/main : 2833099803fcd4149eea9b6aa4e0070d5f72e2f8
+Correctifs complémentaires :
+- Présent et Absent exigent aussi attendance/manual_entry/create ; absence : 403,
+  sans mouvement créé. Exception admin global préservée.
+- Site injecté hors périmètre : 403 avant le contrôle d'affectation, pour les
+  lectures de contexte et les écritures QR/manuelles/ABANDON.
+- Sous-titre détaché visible ; header compact et société lisible sur desktop.
+- Fixtures authentifiées AGENT POINTEUR 01, IRON GLOBAL SÉCURITÉ / SOLUTION :
+  catalogue, recherche, feed, présents, compteurs, filtre site, union stricte.
+- Chrome : listes remplies, photo de test, scrolls internes, cinq captures,
+  onglets, fenêtre réutilisée/rouverte, synchronisation Société ET Site,
+  changement de fixture visible automatiquement dans les deux fenêtres.
+- ABANDON : seuil >= 60 minutes, motif obligatoire et alertes OPS/DRH inchangés.
+Le catalogue sites ne consomme pas un paramètre site_id ; il retourne uniquement
+les sites autorisés. Les lectures acceptant site_id rejettent un site interdit.
+
+CAPTURES CHROME RÉELLES, EXAMINÉES VISUELLEMENT
+/private/tmp/pointeur-validation-20261006/poste-1920x1080.png
+/private/tmp/pointeur-validation-20261006/poste-1600x900.png
+/private/tmp/pointeur-validation-20261006/poste-1440x900.png
+/private/tmp/pointeur-validation-20261006/poste-1366x768.png
+/private/tmp/pointeur-validation-20261006/poste-390x844.png
+/private/tmp/pointeur-validation-20261006/suivi-detache-1920x1080.png
+Desktop : noms des sociétés lisibles ; header s'adapte sur 1366 pixels.
+Mobile : dégradation par scroll interne de la fiche et horizontal du tableau ;
+présents masqués, sélecteurs abrégés, valeurs intégrales dans les options natives.
+
+REVUE UX FINALE
+Header compact : OUI
+Société visible : OUI
+Vacation supprimé : OUI
+Zone Pointage compacte : OUI
+Fiche employé compacte : OUI
+Boutons réduits : OUI
+Compteurs réduits : OUI
+Présents optimisés : OUI
+Bloc supérieur approximativement 2/3 : OUI
+Bloc inférieur approximativement 1/3 : OUI
+Bloc inférieur fixe/indépendant : OUI
+Tableau Aujourd'hui lisible : OUI
+Fenêtre détachable : OUI
+Bi-écran fonctionnel : OUI (deux fenêtres Chrome ; matériel physique non testé)
+Multi-sociétés fonctionnel : OUI
+
+TRACES LOCALES
+/private/tmp/pointeur-validation-postgresql.log
+/private/tmp/pointeur-validation-backend.log
+/private/tmp/pointeur-validation-frontend.log
+/private/tmp/pointeur-validation-chrome.log
+/private/tmp/pointeur-final-validation-ebbotyz7/cleanup-confirmed.txt
+Le runner PostgreSQL isolé et son plugin sont dans /private/tmp :
+run_pointeur_pg_validation.py et pointeur_pg_plugin.py.
+Les suites SQLite/PostgreSQL sont exécutées successivement : le teardown historique
+conftest supprime test_sgdi.db même lorsqu'un plugin change le moteur.
+Une exécution simultanée a été écartée puis relancée séquentiellement avec succès.
+Aucun script de validation ne référence PostgreSQL production.

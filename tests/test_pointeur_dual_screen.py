@@ -37,7 +37,7 @@ def test_http_injected_society_is_denied_on_every_read_endpoint(client, db):
     from app.core.security import create_access_token
     site=Site(name='DUAL HTTP',active=1,equipment_plan={'societe':'IRON GLOBAL SOLUTION'})
     db.add(site);db.flush()
-    user=User(username='DUAL_HTTP_FIXTURE',password_hash='unused',full_name='Fixture',role='ops',is_active=True,
+    user=User(username='DUAL_HTTP_FIXTURE',password_hash='unused',full_name='AGENT POINTEUR 01',role='ops',is_active=True,
               authorized_modules=['pointeur'],authorized_societies=['IRON GLOBAL SOLUTION'],authorized_sites=[site.id],
               authorized_structures=['pointage'],global_society_access=False)
     db.add(user);db.flush()
@@ -71,7 +71,7 @@ def test_daily_summary_is_computed_before_event_limit(db):
     db.rollback()
 
 
-def test_company_filter_changes_real_feed_present_rows_and_counters(db, monkeypatch):
+def test_company_filter_changes_real_feed_present_rows_and_counters(db, monkeypatch, client):
     from datetime import datetime
     from zoneinfo import ZoneInfo
     from app.modules.attendance import core
@@ -88,7 +88,7 @@ def test_company_filter_changes_real_feed_present_rows_and_counters(db, monkeypa
         db.add(AttendanceEvent(employee_id=emp.id,society=soc,site_id=site.id,presence_date=now.date(),
             occurred_at=core.to_utc_naive(now),event_type=EVENT_ARRIVAL,source='MANUAL',data={}))
     db.flush()
-    user=SimpleNamespace(id=None,username='FIXTURE',authorized_societies=societies,authorized_sites=[s.id for s in sites],global_society_access=False,role='ops',access_level='H1')
+    user=SimpleNamespace(id=None,username='AGENT POINTEUR 01',full_name='AGENT POINTEUR 01',authorized_societies=societies,authorized_sites=[s.id for s in sites],global_society_access=False,role='ops',access_level='H1')
     for i,soc in enumerate(societies):
         feed=attendance_feed(date='2026-10-06',society=soc,include_daily=True,db=db,user=user)
         assert {r['employee_id'] for r in feed['daily']}=={employees[i].id}
@@ -99,4 +99,33 @@ def test_company_filter_changes_real_feed_present_rows_and_counters(db, monkeypa
     assert state['summary']['present_now']==2
     assert state['post']['kpi']['present']==2
     assert {r['employee']['id'] for r in state['post']['present']}=={e.id for e in employees}
+    # Même scénario via les endpoints authentifiés, avec le compte demandé.
+    from app.modules.auth.models import User, UserFeaturePermission
+    from app.core.security import create_access_token
+    account=User(username='AGENT_POINTEUR_01',full_name='AGENT POINTEUR 01',password_hash='unused',
+        role='pointeur',access_level='H2',is_active=True,authorized_modules=['pointage'],
+        authorized_structures=['pointage'],authorized_societies=societies,
+        authorized_sites=[s.id for s in sites],global_society_access=False)
+    db.add(account);db.flush()
+    db.add(UserFeaturePermission(user_id=account.id,module_key='attendance',feature_key='manual_entry',action_key='create'))
+    denied=Site(name='DUAL INTERDIT',active=1,equipment_plan={'societe':'SWORD CORPORATION'})
+    db.add(denied);db.commit()
+    headers={'Authorization':'Bearer '+create_access_token(subject=str(account.id))}
+    catalogue=client.get('/api/portal/attendance-sites',headers=headers)
+    assert catalogue.status_code==200
+    assert {row['id'] for row in catalogue.json()}=={s.id for s in sites}
+    for soc,expected in [(societies[0],{employees[0].id}),(societies[1],{employees[1].id}),(None,{e.id for e in employees})]:
+        params={'society':soc} if soc else {}
+        for selected in [params,dict(params,site_id=sites[0].id)] if soc==societies[0] else [params]:
+            feed=client.get('/api/portal/attendance-feed',headers=headers,params=dict(selected,date='2026-10-06',include_daily='true'))
+            live=client.get('/api/portal/attendance-live',headers=headers,params=selected)
+            search=client.get('/api/portal/attendance-manual/search',headers=headers,params=dict(selected,q='DUAL_LIVE'))
+            assert feed.status_code==live.status_code==search.status_code==200
+            assert {r['employee_id'] for r in feed.json()['daily']}==expected
+            assert {r['id'] for r in search.json()}==expected
+            assert {r['employee']['id'] for r in live.json()['post']['present']}==expected
+            assert live.json()['post']['kpi']['present']==len(expected)
+    for route in ('live','feed','manual/search'):
+        response=client.get('/api/portal/attendance-'+route,headers=headers,params={'site_id':denied.id,'q':'DUAL'})
+        assert response.status_code==403,(route,response.text)
     db.rollback()

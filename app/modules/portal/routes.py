@@ -60,6 +60,14 @@ def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Empl
         raise HTTPException(status_code=403, detail="Employé hors du périmètre société/site du pointeur")
 
 
+def _ensure_selected_site_access(db: Session, scanner: User, site_id: Any) -> None:
+    """Refuse les sites injectés hors périmètre ; conserve les conflits métier admin."""
+    if site_id in (None, ""):
+        return
+    if _attendance_selected_sites(db, scanner) is not None:
+        _attendance_selected_sites(db, scanner, site_id)
+
+
 def _ensure_employee_on_selected_site(db: Session, employee: Employee, site_id: Any) -> None:
     if site_id in (None, ""):
         return
@@ -738,6 +746,7 @@ def scan_employee_attendance_qr(
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+    _ensure_selected_site_access(db, scanner, payload.get("site_id"))
     _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
     return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
 
@@ -1489,6 +1498,7 @@ def manual_attendance_context(employee_id: int, site_id: int | None = None, db: 
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_selected_site_access(db, scanner, site_id)
     _ensure_employee_on_selected_site(db, employee, site_id)
     assignment = attendance_core.active_assignment(db, employee.id)
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
@@ -1515,6 +1525,7 @@ def _abandon_employee(db, scanner, employee_id, site_id):
     if not employee:
         raise HTTPException(404, "Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_selected_site_access(db, scanner, site_id)
     _ensure_employee_on_selected_site(db, employee, site_id)
     assignment = attendance_core.active_assignment(db, employee.id)
     if not assignment or not assignment.site_id:
@@ -1558,10 +1569,13 @@ def manual_employee_attendance_scan(
 ) -> dict[str, Any]:
     """Pointage saisi par le pointeur au nom d'un employé sans smartphone (identifié par
     code ou nom via /attendance-manual/search), au lieu d'un scan QR."""
+    if not _manual_entry_granted(db, scanner):
+        raise HTTPException(status_code=403, detail="Permission de pointage manuel requise")
     employee = employee_by_ref(db, payload.get("employee_id"))
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+    _ensure_selected_site_access(db, scanner, payload.get("site_id"))
     _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
     requested_action = _clean_text(payload.get("action") or "present").lower()
     if requested_action not in {"present", "absent"}:
