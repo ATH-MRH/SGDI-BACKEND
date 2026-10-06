@@ -933,3 +933,45 @@ test('BEO : le titre "Bureau des Effectifs Ouest" garde sa casse après la norma
   T().normalizeCentralPage(other);
   assert.strictEqual(other.querySelector('h1').textContent, 'Gestion des utilisateurs');
 });
+
+test('accueil Portail DRH : mêmes rubriques, routes et actions de session sous le nouvel habillage',()=>{
+  const c=require('./load-app').loadSgdiApp(['renderModuleHostPortal','sgdiModuleHostConfigs']);
+  assert.ifError(c.loadError);
+  try{
+    const w=c.window,app=w.document.getElementById('app');
+    c.T().setDb({users:[],settings:{}});
+    c.T().setSession({username:'DRH01',nom:'Karim <b>Benali</b>',societe:'IRON GLOBAL SÉCURITÉ',role:'admin',niveau:'H5'});
+    const calls=[];
+    w.sgdiSpeakStructure=()=>calls.push('speak');
+    const configs=c.T().sgdiModuleHostConfigs(),cfg=configs.drh;
+    c.T().renderModuleHostPortal(cfg);
+    assert.deepStrictEqual(calls.splice(0),['speak'],'l’annonce vocale du module est conservée');
+    const root=app.firstElementChild;
+    assert.ok(root.matches('.company-portal.module-host-portal.module-host-drh.drh-portal-home'));
+    assert.strictEqual(root.querySelector('h1').textContent,'Portail DRH');
+    assert.ok(root.querySelector('.drh-home-user').textContent.includes('Karim <b>Benali</b>'),'le nom est échappé');
+    assert.ok(root.querySelector('.drh-home-user').textContent.includes('IRON GLOBAL SÉCURITÉ'),'la société active reste affichée');
+    const cards=[...root.querySelectorAll('.module-host-module')];
+    assert.deepStrictEqual(cards.map(b=>b.dataset.route).sort(),Array.from(cfg.sections,s=>s.route).sort(),'aucune rubrique ajoutée ni retirée');
+    assert.deepStrictEqual(cards.map(b=>b.querySelector('strong').textContent),['Tableau de bord','Recrutement','Contrats','Fiche de position','Congés','GRH','Demandes personnel']);
+    assert.ok(cards.every(b=>b.querySelector('small').textContent.trim()&&b.type==='button'));
+    cards.forEach(b=>assert.strictEqual(b.getAttribute('onclick'),`enterModuleHostRoute('${b.dataset.route}')`));
+    assert.strictEqual(root.querySelector('.company-portal-change').getAttribute('onclick'),'changeSociete()');
+    assert.strictEqual(root.querySelector('.company-portal-logout').getAttribute('onclick'),'logout()');
+    assert.ok(root.querySelector('.company-portal-change').textContent.includes('Changer société'));
+    assert.ok(root.querySelector('.company-portal-logout').textContent.includes('Déconnexion'));
+    assert.ok([...root.querySelectorAll('.drh-home-bg,.drh-home-bg *,svg')].every(n=>n.closest('[aria-hidden="true"]')),'le décor est ignoré des lecteurs d’écran');
+
+    cards[0].focus();
+    c.T().renderModuleHostPortal(cfg,{announceStructure:false});
+    assert.strictEqual(app.firstElementChild,root,'une synchronisation sans changement conserve les nœuds');
+    assert.strictEqual(w.document.activeElement,cards[0]);
+    c.T().setSession({username:'DRH01',societe:'AUTRE SOCIÉTÉ',role:'admin',niveau:'H5'});
+    c.T().renderModuleHostPortal(cfg,{announceStructure:false});
+    assert.ok(app.querySelector('.drh-home-user').textContent.includes('AUTRE SOCIÉTÉ'));
+
+    c.T().renderModuleHostPortal(configs.ops,{announceStructure:false});
+    assert.strictEqual(app.querySelector('.drh-portal-home'),null,'les autres portails gardent leur présentation');
+    assert.strictEqual(app.querySelectorAll('.company-portal-main .module-host-module').length,configs.ops.sections.length);
+  }finally{c.window.close();}
+});
