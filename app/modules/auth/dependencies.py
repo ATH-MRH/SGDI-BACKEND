@@ -23,6 +23,7 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/profitability", "/api/fiscalite", "/api/cockpit",
     "/api/site-workforce",
     "/api/attendance",
+    "/api/brq",
     "/api/biometrics",
 )
 
@@ -67,6 +68,7 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     # ATLAS Site Workforce — module dédié, propre clé (jamais "ops"/"drh" : ce rôle n'a pas
     # les droits transversaux de ces modules, seulement son unique site imposé).
     ("/api/site-workforce", frozenset({"site_workforce"})),
+    ("/api/brq", frozenset({"brq"})),
     # Centre de contrôle du pointage + onglet Pointages de l'Employé 360.
     ("/api/attendance", frozenset({"pointage", "ops", "drh"})),
     # Saisie manuelle du pointeur : la permission fine ne réactive pas un module
@@ -161,7 +163,7 @@ def enforce_module_access(db: Session, request: Request, user: User) -> None:
 # Applications dont l'accès est revérifié à CHAQUE requête servie sur leur sous-domaine (pas
 # seulement à la connexion) : un jeton obtenu sur pointage.irongs.com ne vaut pas accès au
 # terminal terrain pointeur.irongs.com sans la clé de module « pointeur ».
-HOST_ENFORCED_APPLICATIONS = frozenset({"pointeur"})
+HOST_ENFORCED_APPLICATIONS = frozenset({"pointeur", "brq"})
 
 
 def enforce_application_host(request: Request, user: User) -> None:

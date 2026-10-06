@@ -37,7 +37,8 @@
     "test:admin-user-wizard-chrome": "node --test tests_frontend/admin-user-wizard-v3-chrome.test.js",
     "test:pointage-pointer-users-e2e": "node --test tests_frontend/pointage-pointer-users-e2e.test.js",
     "test:beo-attendance-v4-e2e": "node --test tests_frontend/beo-attendance-v4-e2e.test.js",
-    "test:pointeur-dual-screen-chrome": "node --test tests_frontend/pointeur-dual-screen-chrome.test.js"
+    "test:pointeur-dual-screen-chrome": "node --test tests_frontend/pointeur-dual-screen-chrome.test.js",
+    "pretest": "node --test tests_frontend/brq.test.js"
   },
   "devDependencies": {
     "jsdom": "29.1.1",

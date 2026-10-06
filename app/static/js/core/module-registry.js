@@ -71,7 +71,8 @@
     "superviseur": "ops",
     "pointage": "pointage",
     "alerts": "alerts",
-    "paie": "paie"
+    "paie": "paie",
+    "brq": "brq"
   };
 
   var registry = Object.create(null);   // key -> { key, init, destroy, routes, dependencies, initialized }
