@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core import rate_limit
 from app.core.audit import append_audit
 from app.core.config import settings
-from app.core.scope_policy import ScopeKind, society_scope, society_key
+from app.core.scope_policy import ScopeKind, SocietyScope, society_scope, society_key
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -45,11 +45,29 @@ ATTENDANCE_QR_TTL_SECONDS = 120
 _authorized_work_minutes = attendance_core.authorized_work_minutes
 
 
+def _attendance_society_scope(db: Session, user: User) -> SocietyScope:
+    """Legacy site-only grants imply only the societies of those explicit sites.
+
+    Explicit society grants still intersect site grants. Empty grants never imply
+    global access, and deriving a society does not grant its other sites.
+    """
+    scope = society_scope(user)
+    if scope.kind is not ScopeKind.NONE:
+        return scope
+    site_ids = _allowed_assignment_site_ids(db, user)
+    if not site_ids:
+        return scope
+    sites = db.execute(select(Site).where(Site.active == 1, Site.id.in_(site_ids))).scalars()
+    societies = frozenset(society_key(_site_society(site)) for site in sites if society_key(_site_society(site)))
+    return SocietyScope(ScopeKind.LIMITED if societies else ScopeKind.NONE, societies)
+
+
 def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Employee, requested_society: str | None = None) -> None:
-    if requested_society and (not society_scope(scanner).allows(requested_society)
+    scope = _attendance_society_scope(db, scanner)
+    if requested_society and (not scope.allows(requested_society)
                               or society_key(requested_society) != society_key(employee.society)):
         raise HTTPException(status_code=403, detail="Employé hors de la société sélectionnée")
-    if not society_scope(scanner).allows(employee.society):
+    if not scope.allows(employee.society):
         raise HTTPException(status_code=403, detail="Société non autorisée")
     allowed_site_ids = _attendance_selected_sites(db, scanner)
     if allowed_site_ids is None:
@@ -754,7 +772,7 @@ def scan_employee_attendance_qr(
 def _attendance_selected_sites(db: Session, user: User, site_id: int | None = None,
                                society: str | None = None) -> set[int] | None:
     """Intersection explicite des sociétés et sites autorisés, jamais union des droits."""
-    scope = society_scope(user)
+    scope = _attendance_society_scope(db, user)
     if society and not scope.allows(society):
         raise HTTPException(status_code=403, detail="Société non autorisée")
     allowed_site_ids = _allowed_assignment_site_ids(db, user)
@@ -833,10 +851,10 @@ def attendance_employee_portrait(employee_id: int, site_id: int | None = None, d
     from app.modules.drh import portrait
     from app.modules.ops.models import Assignment
 
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     if allowed_site_ids is not None:
         allowed = list(allowed_site_ids) or [-1]
         visible = db.execute(select(Assignment.id).where(Assignment.employee_id == employee_id, Assignment.site_id.in_(allowed)).limit(1)).first() \
@@ -1446,8 +1464,9 @@ def search_employee_for_manual_attendance(
     query = _clean_text(q)
     if len(query) < 2:
         return []
+    scope = _attendance_society_scope(db, scanner)
     permitted_societies = {value for (value,) in db.execute(select(Employee.society).distinct())
-                           if society_scope(scanner).allows(value)
+                           if scope.allows(value)
                            and (not society or society_key(value) == society_key(society))}
     like = f"%{query}%"
     stmt = (
@@ -1569,13 +1588,14 @@ def manual_employee_attendance_scan(
 ) -> dict[str, Any]:
     """Pointage saisi par le pointeur au nom d'un employé sans smartphone (identifié par
     code ou nom via /attendance-manual/search), au lieu d'un scan QR."""
-    if not _manual_entry_granted(db, scanner):
-        raise HTTPException(status_code=403, detail="Permission de pointage manuel requise")
     employee = employee_by_ref(db, payload.get("employee_id"))
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
     _ensure_selected_site_access(db, scanner, payload.get("site_id"))
+    if not _manual_entry_granted(db, scanner):
+        raise HTTPException(status_code=403, detail="Permission de pointage manuel requise",
+                            headers={"X-Attendance-Code": "MANUAL_ENTRY_REQUIRED"})
     _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
     requested_action = _clean_text(payload.get("action") or "present").lower()
     if requested_action not in {"present", "absent"}:
