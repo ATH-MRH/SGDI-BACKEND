@@ -369,6 +369,20 @@ def settings_grace() -> int:
     return settings.attendance_unclosed_shift_grace_minutes
 
 
+def overview_post(db: Session, site_ids: set[int], now: datetime, manual_entry: bool) -> dict[str, Any]:
+    """Même modèle canonique pour les sites sélectionnés, sans état métier parallèle."""
+    posts = [control_post(db, site_id, now, manual_entry=manual_entry) for site_id in sorted(site_ids)]
+    present = {r["employee"]["id"]: {**r, "site": p["site"]} for p in posts for r in p["present"]}
+    todo = [{**r, "site": p["site"]} for p in posts for r in p["todo"]]
+    kpi = {key: (sum(p["kpi"][key] for p in posts) if all(p["kpi"].get(key) is not None for p in posts) else None)
+           for key in ("expected", "absent", "excused")}
+    kpi.update(present=len(present), maintien=sum(r["badge"] == "EN_MAINTIEN" for r in present.values()), anomalies=len(todo))
+    return {"site": "Sites sélectionnés", "status": "OVERVIEW", "current": None, "next": None,
+            "maintien": None, "kpi": kpi, "present": list(present.values()), "todo": todo,
+            "movements": [], "activity": {"refused_today": sum(p["activity"]["refused_today"] for p in posts)},
+            "permissions": {"manual_entry": manual_entry}}
+
+
 def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_refusal_id: int | None, now: datetime | None = None,
          manual_entry: bool = False) -> dict[str, Any]:
     """Nouveaux passages ACCEPTÉS (id > after_id ; sans curseur : le dernier seulement), refus
@@ -402,5 +416,5 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
             "refusals": refusals(db, site_ids, after_refusal_id, now) if after_refusal_id is not None else [],
             "alerts": alerts(db, site_ids, now), "alert_labels": dict(ALERT_LABELS),
             # Poste de contrôle : seulement pour UN site (la vacation active est celle d'un site).
-            "post": control_post(db, next(iter(site_ids)), now_local, manual_entry=manual_entry) if site_ids is not None and len(site_ids) == 1 else None,
+            "post": control_post(db, next(iter(site_ids)), now_local, manual_entry=manual_entry) if site_ids is not None and len(site_ids) == 1 else overview_post(db, site_ids, now_local, manual_entry) if site_ids is not None else None,
             "summary": summary(db, site_ids, now), **core.operational_clock(now_local)}

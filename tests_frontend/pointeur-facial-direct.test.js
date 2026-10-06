@@ -66,7 +66,7 @@ test('UN clic sur « Reconnaissance faciale » : mode facial actif dans la zone 
   assert.match(r.text('faceView'), /POINTAGE FACIAL AUTOMATIQUE/);
   // Le poste reste affiché : vacation, KPI, à traiter.
   assert.equal(r.d.querySelector('main.main').classList.contains('hidden'), false);
-  assert.match(r.text('shiftBanner'), /APRÈS-MIDI 14:00 → 22:00 GROUPE B/); assert.ok(r.d.getElementById('postKpis').children.length === 5);
+  assert.equal(r.d.getElementById('shiftBanner'), null); assert.ok(r.d.getElementById('postKpis').children.length === 5);
   assert.match(r.text('lastScanCard'), /EN ATTENTE D’UN VISAGE.*Vacation actuelle : 14:00 → 22:00 · Groupe B/);
   // Moteur existant, site du poste, caméra du site, détection lancée — aucun clic « caméra ».
   assert.equal(r.of('/api/biometrics/cameras')[0].search, '?site_id=12');

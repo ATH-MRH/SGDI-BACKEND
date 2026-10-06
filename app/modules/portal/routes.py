@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core import rate_limit
 from app.core.audit import append_audit
 from app.core.config import settings
-from app.core.scope_policy import ScopeKind, society_scope
+from app.core.scope_policy import ScopeKind, society_scope, society_key
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -45,19 +45,27 @@ ATTENDANCE_QR_TTL_SECONDS = 120
 _authorized_work_minutes = attendance_core.authorized_work_minutes
 
 
-def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Employee) -> None:
-    allowed_site_ids = _allowed_assignment_site_ids(db, scanner)
+def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Employee, requested_society: str | None = None) -> None:
+    if requested_society and (not society_scope(scanner).allows(requested_society)
+                              or society_key(requested_society) != society_key(employee.society)):
+        raise HTTPException(status_code=403, detail="Employé hors de la société sélectionnée")
+    if not society_scope(scanner).allows(employee.society):
+        raise HTTPException(status_code=403, detail="Société non autorisée")
+    allowed_site_ids = _attendance_selected_sites(db, scanner)
     if allowed_site_ids is None:
         return
-    permitted = db.execute(
-        select(Assignment.id).where(
-            Assignment.employee_id == employee.id,
-            Assignment.active == 1,
-            Assignment.site_id.in_(allowed_site_ids),
-        )
-    ).scalar_one_or_none() if allowed_site_ids else None
+    assignment = attendance_core.active_assignment(db, employee.id)
+    permitted = assignment and assignment.site_id in allowed_site_ids
     if not permitted:
         raise HTTPException(status_code=403, detail="Employé hors du périmètre société/site du pointeur")
+
+
+def _ensure_selected_site_access(db: Session, scanner: User, site_id: Any) -> None:
+    """Refuse les sites injectés hors périmètre ; conserve les conflits métier admin."""
+    if site_id in (None, ""):
+        return
+    if _attendance_selected_sites(db, scanner) is not None:
+        _attendance_selected_sites(db, scanner, site_id)
 
 
 def _ensure_employee_on_selected_site(db: Session, employee: Employee, site_id: Any) -> None:
@@ -737,30 +745,43 @@ def scan_employee_attendance_qr(
     employee = employee_by_ref(db, str(qr.get("sub") or ""))
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+    _ensure_selected_site_access(db, scanner, payload.get("site_id"))
     _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
     return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
 
 
-def _attendance_selected_sites(db: Session, user: User, site_id: int | None = None) -> set[int] | None:
+def _attendance_selected_sites(db: Session, user: User, site_id: int | None = None,
+                               society: str | None = None) -> set[int] | None:
+    """Intersection explicite des sociétés et sites autorisés, jamais union des droits."""
+    scope = society_scope(user)
+    if society and not scope.allows(society):
+        raise HTTPException(status_code=403, detail="Société non autorisée")
     allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    if scope.kind is ScopeKind.GLOBAL and allowed_site_ids is None and not society and site_id is None:
+        return None
+    candidates = db.execute(select(Site).where(Site.active == 1)).scalars().all()
+    allowed = {site.id for site in candidates
+               if (allowed_site_ids is None or site.id in allowed_site_ids)
+               and scope.allows(_site_society(site))
+               and (not society or society_key(_site_society(site)) == society_key(society))}
     if site_id is not None:
         site = db.get(Site, site_id)
         if not site or not site.active:
             raise HTTPException(status_code=404, detail="Site de pointage introuvable")
-        if allowed_site_ids is not None and site_id not in set(allowed_site_ids):
+        if site_id not in allowed:
             raise HTTPException(status_code=403, detail="Site non autorisé pour ce compte Pointeur")
         return {site_id}
-    return set(allowed_site_ids) if allowed_site_ids is not None else None
+    return allowed
 
 
 @router.get("/attendance-sites")
-def attendance_sites(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
-    selected = _attendance_selected_sites(db, user)
+def attendance_sites(db: Session = Depends(get_db), user: User = Depends(current_user), society: str | None = None) -> list[dict[str, Any]]:
+    selected = _attendance_selected_sites(db, user, society=society)
     query = select(Site).where(Site.active == 1).order_by(Site.name)
     if selected is not None:
         query = query.where(Site.id.in_(selected))
-    return [{"id": site.id, "name": site.name, "indicatif": site.indicatif or ""} for site in db.execute(query).scalars().all()]
+    return [{"id": site.id, "name": site.name, "indicatif": site.indicatif or "", "society": _site_society(site) or ""} for site in db.execute(query).scalars().all()]
 
 
 @router.get("/attendance-sheet")
@@ -768,13 +789,14 @@ def attendance_sheet(
     site_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    society: str | None = None,
 ) -> dict[str, Any]:
     """Poste de pointage : FEUILLE ACTIVE de la rotation en cours du site (une ligne par
     employé), et non l'historique de la journée. Sans paramètres de rotation pour ce site —
     ou sans site unique — `configured` est faux et le poste garde son affichage historique."""
     from app.modules.attendance import sheets
 
-    selected = _attendance_selected_sites(db, user, site_id)
+    selected = _attendance_selected_sites(db, user, site_id, society)
     if selected is None or len(selected) != 1:
         return {"configured": False, "site_id": site_id, "sheet": None, "next": None, "reason": "site_required"}
     view = sheets.active_view(db, next(iter(selected)))
@@ -789,20 +811,22 @@ def attendance_live(
     after_refusal_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    society: str | None = None,
 ) -> dict[str, Any]:
     """Poste de sécurité : passages ACCEPTÉS par Attendance Core depuis `after_id` (sans curseur :
     le dernier), refus récents des terminaux, compteurs canoniques. Lecture seule, même
     périmètre sites que le flux de pointage. Interrogée toutes les ~2 s par le PC."""
     from app.modules.attendance import live
 
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     return live.live(db, allowed_site_ids, after_id=after_id, after_refusal_id=after_refusal_id,
                      manual_entry=_manual_entry_granted(db, user))
 
 
 @router.get("/attendance-employee/{employee_id}/portrait")
 def attendance_employee_portrait(employee_id: int, site_id: int | None = None, db: Session = Depends(get_db),
-                                 user: User = Depends(current_user)) -> Response:
+                                 user: User = Depends(current_user), society: str | None = None,
+) -> Response:
     """Portrait de présentation (visage agrandi, fond blanc) d'un employé du périmètre du poste :
     affecté à un site autorisé, ou ayant pointé sur un site autorisé. Jamais d'URL publique."""
     from app.modules.attendance.models import AttendanceEvent
@@ -812,7 +836,7 @@ def attendance_employee_portrait(employee_id: int, site_id: int | None = None, d
     employee = db.get(Employee, employee_id)
     if employee is None:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     if allowed_site_ids is not None:
         allowed = list(allowed_site_ids) or [-1]
         visible = db.execute(select(Assignment.id).where(Assignment.employee_id == employee_id, Assignment.site_id.in_(allowed)).limit(1)).first() \
@@ -829,23 +853,53 @@ def attendance_employee_portrait(employee_id: int, site_id: int | None = None, d
                     headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Portrait-Method": result.method})
 
 
+@router.get("/attendance-anomalies")
+def attendance_anomalies(site_id: int | None = None, society: str | None = None, date: str | None = None,
+                         db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    """Journal d'anomalies existantes, filtré en SQL, aucune création ni résolution."""
+    from app.modules.attendance.models import AttendanceAnomaly
+    selected = _attendance_selected_sites(db, user, site_id, society)
+    try:
+        day = datetime.fromisoformat(date).date() if date else datetime.now(ZoneInfo("Africa/Algiers")).date()
+    except ValueError:
+        raise HTTPException(422, "Date de suivi invalide")
+    rows = db.execute(select(AttendanceAnomaly).where(*([AttendanceAnomaly.site_id.in_(selected)] if selected is not None else []),
+        AttendanceAnomaly.presence_date == day).order_by(AttendanceAnomaly.id.desc()).limit(200)).scalars().all()
+    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({r.employee_id for r in rows}))).scalars()} if rows else {}
+    sites = {s.id: s for s in db.execute(select(Site).where(*([Site.id.in_(selected)] if selected is not None else []))).scalars()}
+    return [{"id": r.id, "employee": attendance_core._employee_card(employees[r.employee_id], "") if r.employee_id in employees else {},
+             "site": sites[r.site_id].name if r.site_id in sites else "", "code": r.anomaly_type,
+             "message": r.message, "observation": r.message, "at": attendance_core.to_local(r.created_at).isoformat(),
+             "status": r.status, "action": None} for r in rows]
+
+
 @router.get("/attendance-feed")
 def attendance_feed(
     since: str | None = None,
     limit: int = 50,
+    include_daily: bool = False,
     days: int = 2,
+    date: str | None = None,
     site_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
-) -> list[dict[str, Any]]:
+    society: str | None = None,
+) -> list[dict[str, Any]] | dict[str, Any]:
     """Flux des derniers pointages (arrivée/départ), pour l'écran de supervision temps réel
     (interrogé par polling toutes les quelques secondes). Filtré selon le même périmètre
     sites/société qu'un superviseur OPS (_allowed_assignment_site_ids) : un compte restreint
     à certains sites ne voit que leurs pointages, pas ceux de toute l'entreprise."""
     days = max(2, min(days, 8))
     limit = max(1, min(limit, 2000 if days > 2 else 200))
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    until = None
+    if date:
+        try:
+            cutoff = datetime.fromisoformat(date).replace(tzinfo=ZoneInfo("Africa/Algiers"))
+            until = cutoff + timedelta(days=1)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Date de suivi invalide")
 
     def within_retention(row: dict[str, Any]) -> bool:
         raw = _clean_text(row.get("scannedAt"))
@@ -855,12 +909,12 @@ def attendance_feed(
             scanned_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if scanned_at.tzinfo is None:
                 scanned_at = scanned_at.replace(tzinfo=timezone.utc)
-            return scanned_at.astimezone(timezone.utc) >= cutoff
+            return scanned_at.astimezone(timezone.utc) >= cutoff and (until is None or scanned_at < until)
         except ValueError:
             return False
 
     rows = [
-        row for row in attendance_core.scan_rows(db, site_ids=allowed_site_ids, since=cutoff)
+        row for row in attendance_core.scan_rows(db, site_ids=allowed_site_ids, since=cutoff - timedelta(microseconds=1), until=until - timedelta(microseconds=1) if until else None)
         if within_retention(row)
     ]
     if allowed_site_ids is not None:
@@ -874,6 +928,7 @@ def attendance_feed(
         select(DailyPresence).where(
             DailyPresence.presence_date >= cutoff.astimezone(ZoneInfo("Africa/Algiers")).date(),
             DailyPresence.status == "absent",
+            *([DailyPresence.presence_date < until.date()] if until else []),
         ).order_by(DailyPresence.presence_date.desc(), DailyPresence.id.desc())
     ).scalars().all()
     if allowed_site_ids is not None:
@@ -900,6 +955,10 @@ def attendance_feed(
             "",
         )
 
+    from app.modules.attendance.models import AttendanceEvent, EVENT_ABANDON
+    abandon_rows = db.execute(select(AttendanceEvent).where(AttendanceEvent.event_type == EVENT_ABANDON,
+        *([AttendanceEvent.site_id.in_(allowed_site_ids)] if allowed_site_ids is not None else []), AttendanceEvent.occurred_at >= attendance_core.to_utc_naive(cutoff))).scalars().all()
+    abandon_departures = {r.data.get("departure_event_id") for r in abandon_rows if isinstance(r.data, dict)}
     feed = [
         {
             "id": row.get("id"),
@@ -915,6 +974,9 @@ def attendance_feed(
             "site_id": row.get("siteId"),
             "scanned_at": row.get("scannedAt") or "",
             "scanned_by": row.get("scannedBy") or "",
+            "source": row.get("source") or "",
+            "duration_minutes": row.get("workedMinutes"),
+            "exit_type": "Abandon poste" if row.get("eventId") in abandon_departures else "Sortie",
             "observation": row.get("observation") or "",
         }
         for row in rows
@@ -943,6 +1005,25 @@ def attendance_feed(
             "observation": row.notes or legacy.get("observations") or "",
         })
     feed.sort(key=lambda row: _clean_text(row.get("scanned_at")), reverse=True)
+    if include_daily:
+        daily = {}
+        for event in reversed(feed):
+            day = str(event["scanned_at"])[:10]
+            key = (event["employee_id"], day)
+            row = daily.setdefault(key, {**event, "date": day, "arrival": "", "departure": "", "status": "—"})
+            at = str(event["scanned_at"])[11:19]
+            if event["action"] == "arrivee":
+                row["arrival"] = row["arrival"] or at
+                row["departure"] = ""
+                row["status"] = "En poste"
+            elif event["action"] == "depart":
+                row["departure"] = at
+                row["status"] = "Sorti"
+            elif event["action"] == "absent":
+                row["status"] = "Absent"
+            row["observation"] = event.get("observation") or row.get("observation", "")
+        return {"events": feed[:limit], "daily": list(daily.values())[:200],
+                "events_limited": len(feed) > limit, "daily_limited": len(daily) > 200}
     return feed[:limit]
 
 
@@ -951,6 +1032,7 @@ def attendance_staffing(
     site_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    society: str | None = None,
 ) -> dict[str, Any]:
     """Effectif contractuel requis pour le shift actuellement en service, par fonction.
 
@@ -965,7 +1047,7 @@ def attendance_staffing(
     explicitement "non configuré" (source="unconfigured", requirements={}),
     jamais avec des quotas OPS substitués silencieusement.
     """
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     query = select(Site).where(Site.active == 1).order_by(Site.name)
     if allowed_site_ids is not None:
         query = query.where(Site.id.in_(allowed_site_ids))
@@ -1301,6 +1383,7 @@ def attendance_alerts(
     site_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    society: str | None = None,
 ) -> dict[str, Any]:
     """Alertes de présence prolongée (seuils absolus 8h/12h/16h, pour repérer un agent
     resté trop longtemps sur site quel que soit son régime de rotation) et de
@@ -1310,7 +1393,7 @@ def attendance_alerts(
     filtrage par périmètre sites/société via _allowed_assignment_site_ids."""
     tz = ZoneInfo("Africa/Algiers")
     now = datetime.now(tz)
-    allowed_site_ids = _attendance_selected_sites(db, user, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
 
     # 4 jours de recul : assez large pour couvrir une vacation ouverte depuis avant-hier
     # (rotations longues comprises), sans avoir à charger tout l'historique.
@@ -1320,7 +1403,7 @@ def attendance_alerts(
     return _compute_attendance_alerts(rows, now, tz)
 
 
-def _employee_search_result(db: Session, employee: Employee) -> dict[str, Any]:
+def _employee_search_result(db: Session, employee: Employee, allowed_sites: set[int] | None) -> dict[str, Any]:
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
     photo = next(
@@ -1332,7 +1415,7 @@ def _employee_search_result(db: Session, employee: Employee) -> dict[str, Any]:
         "",
     )
     assignment = db.execute(
-        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
+        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1, *([Assignment.site_id.in_(allowed_sites)] if allowed_sites is not None else [])).order_by(Assignment.id.desc())
     ).scalars().first()
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
     return {
@@ -1354,18 +1437,24 @@ def search_employee_for_manual_attendance(
     site_id: int | None = None,
     db: Session = Depends(get_db),
     scanner: User = Depends(current_user),
+    society: str | None = None,
 ) -> list[dict[str, Any]]:
     """Recherche par code ou nom/prénom pour le pointage manuel (employé sans smartphone,
     ou QR illisible) : le pointeur tape le code ou le nom donné par l'employé, choisit la
     bonne fiche dans la liste, puis confirme le pointage via /attendance-manual/scan."""
+    allowed_site_ids = _attendance_selected_sites(db, scanner, site_id, society)
     query = _clean_text(q)
     if len(query) < 2:
         return []
+    permitted_societies = {value for (value,) in db.execute(select(Employee.society).distinct())
+                           if society_scope(scanner).allows(value)
+                           and (not society or society_key(value) == society_key(society))}
     like = f"%{query}%"
     stmt = (
         select(Employee)
         .where(
             Employee.status == "actif",
+            Employee.society.in_(permitted_societies),
             or_(
                 Employee.code.ilike(like),
                 Employee.first_name.ilike(like),
@@ -1374,11 +1463,12 @@ def search_employee_for_manual_attendance(
                 (Employee.first_name + " " + Employee.last_name).ilike(like),
             ),
         )
+        .where(*([Employee.id.in_(select(Assignment.employee_id).where(Assignment.active == 1, Assignment.site_id.in_(allowed_site_ids)))] if allowed_site_ids is not None else []))
         .order_by(Employee.last_name, Employee.first_name)
         .limit(8)
     )
     rows = db.execute(stmt).scalars().all()
-    allowed_site_ids = _attendance_selected_sites(db, scanner, site_id)
+    allowed_site_ids = _attendance_selected_sites(db, scanner, site_id, society)
     if allowed_site_ids is not None:
         allowed = set(allowed_site_ids)
         employee_ids = {row.id for row in rows}
@@ -1393,7 +1483,7 @@ def search_employee_for_manual_attendance(
             ).scalars().all()
         } if employee_ids and allowed else set()
         rows = [row for row in rows if row.id in permitted_employee_ids]
-    return [_employee_search_result(db, row) for row in rows]
+    return [_employee_search_result(db, row, allowed_site_ids) for row in rows]
 
 
 @router.get("/attendance-manual/context")
@@ -1408,6 +1498,7 @@ def manual_attendance_context(employee_id: int, site_id: int | None = None, db: 
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_selected_site_access(db, scanner, site_id)
     _ensure_employee_on_selected_site(db, employee, site_id)
     assignment = attendance_core.active_assignment(db, employee.id)
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
@@ -1434,6 +1525,7 @@ def _abandon_employee(db, scanner, employee_id, site_id):
     if not employee:
         raise HTTPException(404, "Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_selected_site_access(db, scanner, site_id)
     _ensure_employee_on_selected_site(db, employee, site_id)
     assignment = attendance_core.active_assignment(db, employee.id)
     if not assignment or not assignment.site_id:
@@ -1477,10 +1569,13 @@ def manual_employee_attendance_scan(
 ) -> dict[str, Any]:
     """Pointage saisi par le pointeur au nom d'un employé sans smartphone (identifié par
     code ou nom via /attendance-manual/search), au lieu d'un scan QR."""
+    if not _manual_entry_granted(db, scanner):
+        raise HTTPException(status_code=403, detail="Permission de pointage manuel requise")
     employee = employee_by_ref(db, payload.get("employee_id"))
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    _ensure_attendance_employee_scope(db, scanner, employee)
+    _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+    _ensure_selected_site_access(db, scanner, payload.get("site_id"))
     _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
     requested_action = _clean_text(payload.get("action") or "present").lower()
     if requested_action not in {"present", "absent"}:

@@ -143,3 +143,14 @@ def test_admin_without_global_access_still_needs_fine_permission(client, db):
     response = client.post("/api/portal/attendance-manual/abandon", headers=headers,
                            json={"employee_id": emp.id, "site_id": site.id, "shift_id": shift, "observation": "Motif"})
     assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize("action", ["present", "absent"])
+def test_module_without_fine_permission_denies_regular_manual_writes(client, db, action):
+    emp, site = _setup(db)
+    _, headers = _account(db, emp, site, modules=["pointage"], permission=False)
+    before = db.scalar(select(func.count(AttendanceEvent.id)))
+    response = client.post("/api/portal/attendance-manual/scan", headers=headers,
+                           json={"employee_id": emp.id, "site_id": site.id, "action": action})
+    assert response.status_code == 403, response.text
+    assert db.scalar(select(func.count(AttendanceEvent.id))) == before

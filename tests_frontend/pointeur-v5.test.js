@@ -67,39 +67,18 @@ test('header : logo IRON GLOBAL SÉCURITÉ, POSTE DE POINTAGE, zone « Pointage 
   for (const id of ['qrModeBtn', 'faceModeBtn', 'manualModeBtn']) assert.ok(t.d.getElementById(id), id);
 });
 
-test('bandeau : vacation en cours, groupe, prochaine relève et compte à rebours réel', async () => {
+test('bandeau Vacation supprimé, contexte métier conservé dans le poste', async () => {
   const t = await ready(boot({ live: [LIVE(POST())] }));
-  assert.match(t.text('shiftBanner'), /Vacation en cours APRÈS-MIDI 14:00 → 22:00 GROUPE B/);
-  assert.match(t.text('shiftBanner'), /Prochaine relève 22:00 → 06:00 GROUPE C Dans 07:(20:00|19:5\d)/);
-  t.T().syncOpsClock({ timezone: 'Africa/Algiers', server_now: '2026-10-01T21:59:30+01:00' });
-  t.T().tickPost();
-  assert.match(t.text('reliefCountdown'), /^00:00:(30|29)$/);
-  assert.match(t.text('maintienBanner'), /MAINTIENS — VACATION 06:00 → 14:00 Nouvelle entrée autorisée : 14:30 → 14:45/);
+  assert.equal(t.d.getElementById('shiftBanner'), null);
+  assert.equal(t.T().getPost().current.group, 'B');
   assert.equal(t.d.getElementById('idleShift').textContent, 'Vacation actuelle : 14:00 → 22:00 · Groupe B');
 });
 
-test('relève et minuit : le bandeau suit le serveur, la Nuit ne change pas à minuit', async () => {
-  const night = slot('NUIT', 'Nuit', 'C', '22:00', '06:00', '2026-10-02');
-  const t = await ready(boot({ live: [LIVE(POST())] }));
-  t.T().setPost(POST({ current: night, next: slot('MATIN', 'Matin', 'A', '06:00', '14:00'), maintien: null }));
-  assert.match(t.text('shiftBanner'), /NUIT 22:00 → 06:00 GROUPE C/);
-  const node = t.d.querySelector('#shiftBanner .v5-shift-name');
-  t.T().syncOpsClock({ timezone: 'Africa/Algiers', server_now: '2026-10-02T00:00:05+01:00' });
-  t.T().setPost(POST({ current: night, next: slot('MATIN', 'Matin', 'A', '06:00', '14:00'), maintien: null }));
-  t.T().tickPost();
-  assert.equal(t.d.querySelector('#shiftBanner .v5-shift-name'), node, 'aucune réécriture du bandeau à minuit');
-  assert.match(t.text('shiftBanner'), /NUIT 22:00 → 06:00 GROUPE C/); assert.match(t.text('reliefCountdown'), /^05:59:5[45]$/);
-  assert.ok(t.d.getElementById('maintienBanner').classList.contains('hidden'));
-});
-
-test('rotation non configurée : aucun groupe, aucune vacation, aucune relève inventés', async () => {
+test('rotation non configurée : compteurs inconnus sans invention', async () => {
   const t = await ready(boot({ live: [LIVE(POST({ status: 'ROTATION_NOT_CONFIGURED', current: null, next: null, maintien: null, kpi: { expected: null, present: 1, absent: null, excused: 0, maintien: 0, anomalies: 0 } }))] }));
-  const banner = t.text('shiftBanner');
-  assert.match(banner, /ROTATION NON CONFIGURÉE/); assert.match(banner, /n’a pas encore de date d’ancrage/);
-  assert.doesNotMatch(banner, /GROUPE|→|relève/i);
+  assert.equal(t.d.getElementById('shiftBanner'), null);
   assert.equal(t.d.getElementById('idleShift'), null);
-  const kpis = [...t.d.querySelectorAll('#postKpis .v5-kpi')].map((k) => k.querySelector('b').textContent);
-  assert.deepEqual(kpis, ['—', '1', '—', '0', '0']);
+  assert.deepEqual([...t.d.querySelectorAll('#postKpis .v5-kpi')].map(k => k.querySelector('b').textContent), ['—', '1', '—', '0', '0']);
 });
 
 test('KPI personnes séparés de l\'activité du jour (mouvements)', async () => {
@@ -138,11 +117,11 @@ test('derniers mouvements : chronologie avec refus, filtres locaux sans appel r�
   assert.deepEqual(rows().map((r) => r.slice(0, 13)), ['14:35:00K088B', '14:10:00K088N', '14:04:00K088B', '13:40:00K162A']);
   assert.match(rows()[1], /REFUSÉ$/);
   const before = t.calls.length;
-  t.d.querySelector('[data-move-filter="REFUS"]').click();
+  t.T().setMovementFilter('REFUS');
   assert.deepEqual(rows().length, 1); assert.match(rows()[0], /14:10:00.*REFUSÉ/);
-  t.d.querySelector('[data-move-filter="MAINTIEN"]').click(); assert.match(rows()[0], /MAINTIEN$/);
-  t.d.querySelector('[data-move-filter="ENTREE"]').click(); assert.equal(rows().length, 1);
-  t.d.querySelector('[data-move-filter="all"]').click(); assert.equal(rows().length, 4);
+  t.T().setMovementFilter('MAINTIEN'); assert.match(rows()[0], /MAINTIEN$/);
+  t.T().setMovementFilter('ENTREE'); assert.equal(rows().length, 1);
+  t.T().setMovementFilter('all'); assert.equal(rows().length, 4);
   assert.equal(t.calls.length, before, 'filtrage local');
   assert.equal(t.text('presentNowCount'), '2');                                           // un refus ne change pas les présents
 });
@@ -211,7 +190,7 @@ test('saisie manuelle : contexte affiché, opération auditée, intention EXTRA_
   t.T().toggleManualPanel(); t.T().setManualResults([E2]); t.T().selectManualResult(0);
   await tick();
   const box = t.text('manualContext');
-  assert.match(box, /Employé BENALI SAMIR · K088 Site SITE TEST Vacation précédente 06:00 → 14:00 Sortie précédente 14:04 Fin théorique 14:00 Fenêtre automatique 14:30 → 14:45 Vacation supplémentaire Après-midi 14:00 → 22:00/);
+  assert.match(box, /Vacation précédente 06:00 → 14:00 Sortie précédente 14:04 Fin théorique 14:00 Fenêtre automatique 14:30 → 14:45 Vacation supplémentaire Après-midi 14:00 → 22:00/);
   assert.match(box, /Motif \(obligatoire\)/); assert.match(box, /Cette opération sera auditée\./);
   const button = t.d.getElementById('manualExtraBtn');
   assert.equal(button.classList.contains('hidden'), false);
