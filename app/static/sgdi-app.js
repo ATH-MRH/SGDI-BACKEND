@@ -5195,10 +5195,89 @@ function renderModuleHostSocieteSelector(cfg){
   app.innerHTML=markup;
   app.__societySelectorMarkup=markup;
 }
+// Accueil du Portail DRH : habillage dédié. Les rubriques, routes et actions restent
+// celles de la configuration du module ; seule la présentation change.
+const DRH_PORTAL_HOME_CARDS={
+  "drh/dashboard":{title:"Tableau de bord",hint:"Vue d'ensemble",tone:"blue",icon:'<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>'},
+  "recrutement/candidats":{title:"Recrutement",hint:"Attirer les talents",tone:"mint",icon:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.4c2.1.8 3.5 2.7 3.5 5.6"/>'},
+  "contrats/dashboard":{title:"Contrats",hint:"Gérer les documents",tone:"violet",icon:'<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>'},
+  "fiches":{title:"Fiche de position",hint:"Informations employés",tone:"orange",icon:'<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5z"/>'},
+  "drh/conges":{title:"Congés",hint:"Demandes et suivi",tone:"cyan",icon:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'},
+  "effectif/recap":{title:"GRH",hint:"Administration RH",tone:"rose",icon:'<path d="M6 20v-6M12 20V5M18 20v-9"/>'},
+  "demandes_personnel/dashboard":{title:"Demandes personnel",hint:"Gestion des demandes du personnel",tone:"indigo",icon:'<rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9 4.5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.5M9 11h6M9 15h4"/>'}
+};
+function drhPortalHomeIcon(paths){
+  return `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+function renderDrhPortalHome(cfg,sections){
+  const userName=session?.nom||session?.username||"Utilisateur";
+  const societe=session?.societe||"Société sélectionnée";
+  const order=Object.keys(DRH_PORTAL_HOME_CARDS);
+  const rank=s=>{const i=order.indexOf(s.route);return i<0?order.length:i};
+  const cards=sections.map((s,i)=>({s,i})).sort((a,b)=>rank(a.s)-rank(b.s)||a.i-b.i).map(({s},i)=>{
+    const card=DRH_PORTAL_HOME_CARDS[s.route]||{title:s.label,hint:"",tone:"blue",icon:'<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>'};
+    return `<button type="button" class="company-portal-module module-host-module drh-home-card" data-tone="${card.tone}" data-route="${escapeHTML(s.route)}" style="--i:${i}" onclick="enterModuleHostRoute('${escapeHTML(s.route)}')">
+          <span class="drh-home-card-icon">${drhPortalHomeIcon(card.icon)}</span>
+          <span class="drh-home-card-text"><strong>${escapeHTML(card.title)}</strong>${card.hint?`<small>${escapeHTML(card.hint)}</small>`:""}</span>
+          <span class="drh-home-card-arrow">${drhPortalHomeIcon('<path d="M5 12h14M13 6l6 6-6 6"/>')}</span>
+        </button>`;
+  }).join("");
+  const title=String(cfg.title||"Portail DRH").trim();
+  const cut=title.lastIndexOf(" ");
+  const markup=`<div data-drh-portal-home="1" class="company-portal module-host-portal module-host-drh drh-portal-home">
+    <div class="drh-home-bg" aria-hidden="true">
+      <span class="drh-home-orbit drh-home-orbit-a"></span><span class="drh-home-orbit drh-home-orbit-b"></span>
+      <span class="drh-home-dot drh-home-dot-a"></span><span class="drh-home-dot drh-home-dot-b"></span>
+      <span class="drh-home-watermark">DRH</span>
+    </div>
+    <header class="drh-home-header">
+      <div class="drh-home-logo" role="img" aria-label="IRON GLOBAL SOLUTION — People, Services, Performance">
+        <span class="drh-home-logo-mark" aria-hidden="true">IR<i>O</i>N</span>
+        <span class="drh-home-logo-name" aria-hidden="true">Global Solution</span>
+        <span class="drh-home-logo-tag" aria-hidden="true">People <b>|</b> Services <b>|</b> Performance</span>
+      </div>
+      <div class="drh-home-actions">
+        <div class="drh-home-user" title="${escapeHTML(userName)} — ${escapeHTML(societe)}">
+          <span class="drh-home-avatar" aria-hidden="true">${drhPortalHomeIcon('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>')}</span>
+          <span class="drh-home-user-text"><strong>${escapeHTML(userName)}</strong><small><span class="drh-home-sr">Société active : </span>${escapeHTML(societe)}</small></span>
+        </div>
+        ${sgdiModuleHostRequiresSociete(cfg)?`<button type="button" class="company-portal-change" onclick="changeSociete()" title="Changer société">${drhPortalHomeIcon('<path d="M4 8h15l-3.5-3.5M20 16H5l3.5 3.5"/>')}<span>Changer société</span></button>`:""}
+        <button type="button" class="company-portal-logout" onclick="logout()" title="Déconnexion">${drhPortalHomeIcon('<path d="M12 3v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/>')}<span class="drh-home-sr">Déconnexion</span></button>
+      </div>
+    </header>
+    <div class="drh-home-main" role="main">
+      <section class="drh-home-hero">
+        <p class="drh-home-eyebrow">Bienvenue sur le</p>
+        <h1 class="drh-home-title">${cut>0?`${escapeHTML(title.slice(0,cut))} <span class="drh-home-title-accent">${escapeHTML(title.slice(cut+1))}</span>`:`<span class="drh-home-title-accent">${escapeHTML(title)}</span>`}</h1>
+        <p class="drh-home-tagline"><span>Vos talents, notre force</span></p>
+      </section>
+      <nav class="drh-home-grid" aria-label="Rubriques du ${escapeHTML(title)}">
+        ${cards}
+      </nav>
+      ${sections.length?``:`<div class="company-portal-foot text-red-700">Aucune rubrique configurée pour ce module.</div>`}
+    </div>
+    <footer class="drh-home-footer">
+      <p class="drh-home-footer-motto">Building<br>a safer &amp; stronger<br>tomorrow</p>
+      <p class="drh-home-footer-brand">Iron Global Solution</p>
+    </footer>
+    ${connectedAccountHeadingHTML()}
+  </div>`;
+  // La synchronisation peut rappeler render() sans changement : conserver les nœuds
+  // évite de rejouer l'animation d'entrée et de perdre le focus clavier.
+  const app=document.getElementById("app");
+  if(app.firstElementChild?.matches("[data-drh-portal-home]")&&app.__drhPortalHomeMarkup===markup)return;
+  app.innerHTML=markup;
+  app.__drhPortalHomeMarkup=markup;
+}
 function renderModuleHostPortal(cfg,options={}){
   sgdiApplyModuleHostSession(false);
   const userName=session?.nom||session?.username||"Utilisateur";
   const sections=(cfg.sections||[]).filter(s=>s&&s.route);
+  if(cfg.key==="drh"){
+    renderDrhPortalHome(cfg,sections);
+    if(options.announceStructure!==false)sgdiSpeakStructure();
+    return;
+  }
   document.getElementById("app").innerHTML=`<div class="company-portal module-host-portal module-host-${escapeHTML(cfg.key)}">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     ${sgdiModuleHostRequiresSociete(cfg)?`<button type="button" class="company-portal-change" onclick="changeSociete()">Changer société</button>`:""}

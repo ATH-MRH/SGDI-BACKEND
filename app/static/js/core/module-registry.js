@@ -38,7 +38,7 @@
   R.__ready = true;
 
   // Version de cache-busting des fichiers de modules (alignée sur index.html).
-  R.MODULE_VERSION = R.MODULE_VERSION || "20261005-brq-v1-r2";
+  R.MODULE_VERSION = R.MODULE_VERSION || "20261006-drh-portal-home";
   R.MODULE_BASE = R.MODULE_BASE || "/static/js/modules/";
 
   // Carte statique racine-de-route -> clé de module, connue dès le bootstrap.

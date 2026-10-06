@@ -11184,3 +11184,373 @@ body.atlas-ui #view .ops-sites-cc table.ops-sites-cc-table td{background:transpa
   #view .ops-sites-cc .ops-sites-cc-marker::after{animation:none}
   #view .ops-sites-cc .ops-sites-cc-card{transition:none}
 }
+
+/* ----- PORTAIL DRH — ACCUEIL (clair, premium, minimaliste) ----- */
+body:has(.drh-portal-home),
+html:has(.drh-portal-home),
+body:has(.drh-portal-home) #app{
+  background:#f7faff!important;
+  background-image:none!important;
+}
+.company-portal.drh-portal-home{
+  --drh-ink:#081a3a;
+  --drh-navy:#0b1f44;
+  --drh-blue:#1f7aff;
+  --drh-cyan:#35c7ff;
+  --drh-muted:#56678a;
+  --drh-gutter:clamp(18px,3.6vw,56px);
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:100vh!important;
+  min-height:100svh!important;
+  width:100%!important;
+  color:var(--drh-navy)!important;
+  background:linear-gradient(160deg,#fcfdff 0%,#f7faff 44%,#eef6ff 100%)!important;
+  overflow:hidden auto!important;
+}
+.company-portal.drh-portal-home:before{display:none!important}
+.company-portal.drh-portal-home .drh-home-sr{
+  position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+}
+
+/* Arrière-plan : halos, deux orbites fines, quatre points lumineux, filigrane. */
+.company-portal.drh-portal-home .drh-home-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.company-portal.drh-portal-home .drh-home-bg:before{
+  content:"";
+  position:absolute;
+  inset:-18%;
+  background:
+    radial-gradient(34% 32% at 20% 40%,rgba(53,199,255,.20),transparent 70%),
+    radial-gradient(32% 36% at 82% 24%,rgba(31,122,255,.15),transparent 72%),
+    radial-gradient(40% 28% at 60% 98%,rgba(124,92,252,.06),transparent 70%);
+  animation:drhHomeDrift 48s ease-in-out infinite alternate;
+}
+.company-portal.drh-portal-home .drh-home-orbit{
+  position:absolute;
+  aspect-ratio:1;
+  border:1px solid rgba(31,122,255,.17);
+  border-radius:50%;
+}
+.company-portal.drh-portal-home .drh-home-orbit:before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:-6px;
+  width:11px;
+  height:11px;
+  margin-left:-5.5px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 0 4px rgba(53,199,255,.16),0 0 20px 5px rgba(31,122,255,.34);
+}
+.company-portal.drh-portal-home .drh-home-orbit-a{width:118vmax;left:-66vmax;top:-80vmax;transform:rotate(164deg);animation:drhHomeOrbitA 140s ease-in-out infinite alternate}
+.company-portal.drh-portal-home .drh-home-orbit-b{width:104vmax;right:-88vmax;top:-34vmax;border-color:rgba(53,199,255,.22);transform:rotate(272deg);animation:drhHomeOrbitB 170s ease-in-out infinite alternate}
+.company-portal.drh-portal-home .drh-home-dot{
+  position:absolute;
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 0 3px rgba(53,199,255,.14),0 0 14px 3px rgba(31,122,255,.26);
+  animation:drhHomeFloat 26s ease-in-out infinite alternate;
+}
+.company-portal.drh-portal-home .drh-home-dot-a{left:4.5%;top:74%}
+.company-portal.drh-portal-home .drh-home-dot-b{right:5%;top:66%;animation-duration:34s;animation-delay:-9s}
+.company-portal.drh-portal-home .drh-home-watermark{
+  position:absolute;
+  right:clamp(-20px,3vw,84px);
+  top:47%;
+  transform:translateY(-50%);
+  font-size:clamp(150px,22vw,390px);
+  font-weight:900;
+  line-height:.8;
+  letter-spacing:-.03em;
+  color:transparent;
+  background:linear-gradient(180deg,rgba(31,122,255,.075),rgba(31,122,255,.02));
+  -webkit-background-clip:text;
+  background-clip:text;
+  user-select:none;
+}
+
+/* En-tête : aucune barre, seulement le logotype et les actions de session. */
+.company-portal.drh-portal-home .drh-home-header{
+  position:relative;
+  z-index:2;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  padding:clamp(18px,3.4vh,34px) var(--drh-gutter) 0;
+}
+.company-portal.drh-portal-home .drh-home-logo{display:grid;justify-items:start;color:var(--drh-ink)}
+.company-portal.drh-portal-home .drh-home-logo-mark{font-size:clamp(36px,3.5vw,52px);font-weight:900;line-height:.86;letter-spacing:.03em}
+.company-portal.drh-portal-home .drh-home-logo-mark i{
+  font-style:normal;
+  color:var(--drh-blue);
+  background:linear-gradient(135deg,var(--drh-blue),var(--drh-cyan));
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.company-portal.drh-portal-home .drh-home-logo-name{margin-top:7px;font-size:clamp(10px,.92vw,13px);font-weight:800;letter-spacing:.2em;text-transform:uppercase}
+.company-portal.drh-portal-home .drh-home-logo-tag{margin-top:11px;color:var(--drh-muted);font-size:clamp(8.5px,.72vw,10.5px);font-weight:600;letter-spacing:.2em;text-transform:uppercase}
+.company-portal.drh-portal-home .drh-home-logo-tag b{margin:0 .45em;font-weight:400;opacity:.6}
+.company-portal.drh-portal-home .drh-home-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
+.company-portal.drh-portal-home .drh-home-user{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  max-width:min(340px,38vw);
+  min-height:46px;
+  padding:5px 18px 5px 6px;
+  border:1px solid rgba(31,122,255,.13);
+  border-radius:999px;
+  background:rgba(255,255,255,.72);
+  box-shadow:0 10px 28px rgba(11,31,68,.06);
+  -webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);
+}
+.company-portal.drh-portal-home .drh-home-avatar{flex:0 0 auto;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#e8f2ff,#def5ff);color:var(--drh-blue)}
+.company-portal.drh-portal-home .drh-home-avatar svg{width:19px;height:19px}
+.company-portal.drh-portal-home .drh-home-user-text{display:grid;min-width:0;line-height:1.25}
+.company-portal.drh-portal-home .drh-home-user-text strong{overflow:hidden;color:var(--drh-navy);font-size:13px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.company-portal.drh-portal-home .drh-home-user-text small{overflow:hidden;color:var(--drh-muted);font-size:10.5px;font-weight:600;letter-spacing:.04em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
+.company-portal.drh-portal-home .company-portal-change,
+.company-portal.drh-portal-home .company-portal-logout{
+  position:static!important;
+  inset:auto!important;
+  flex:0 0 auto;
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:auto!important;
+  min-width:0!important;
+  height:46px!important;
+  min-height:46px!important;
+  padding:0 18px!important;
+  border:1px solid rgba(31,122,255,.13)!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.72)!important;
+  color:var(--drh-navy)!important;
+  box-shadow:0 10px 28px rgba(11,31,68,.06)!important;
+  -webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);
+  font-size:12.5px!important;
+  font-weight:650!important;
+  letter-spacing:.01em;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:transform .22s ease,border-color .22s ease,background .22s ease,color .22s ease,box-shadow .22s ease;
+}
+.company-portal.drh-portal-home .company-portal-change svg,
+.company-portal.drh-portal-home .company-portal-logout svg{width:18px;height:18px}
+.company-portal.drh-portal-home .company-portal-logout{width:46px!important;padding:0!important}
+.company-portal.drh-portal-home .company-portal-change:hover,
+.company-portal.drh-portal-home .company-portal-logout:hover{
+  transform:translateY(-1px)!important;
+  border-color:rgba(31,122,255,.42)!important;
+  background:#fff!important;
+  color:var(--drh-blue)!important;
+  box-shadow:0 14px 32px rgba(31,122,255,.13)!important;
+}
+
+/* Zone centrale. */
+.company-portal.drh-portal-home .drh-home-main{
+  position:relative;
+  z-index:1;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(30px,5.4vh,60px);
+  width:min(1180px,calc(100% - 2*var(--drh-gutter)));
+  margin:0 auto;
+  padding:clamp(22px,4vh,46px) 0 clamp(26px,5vh,58px);
+}
+.company-portal.drh-portal-home .drh-home-hero{text-align:center;animation:drhHomeRise .7s cubic-bezier(.2,.7,.2,1) backwards}
+.company-portal.drh-portal-home .drh-home-eyebrow{margin:0;padding-left:.5em;color:#33456a;font-size:clamp(11px,1vw,14px);font-weight:600;letter-spacing:.5em;text-transform:uppercase}
+.company-portal.drh-portal-home .drh-home-title{
+  margin:clamp(10px,1.8vh,20px) 0 0;
+  color:var(--drh-ink);
+  font-size:clamp(44px,min(7.6vw,13vh),108px);
+  font-weight:900;
+  line-height:1;
+  letter-spacing:-.025em;
+  text-transform:uppercase;
+}
+.company-portal.drh-portal-home .drh-home-title-accent{
+  color:var(--drh-blue);
+  background:linear-gradient(100deg,var(--drh-blue) 0%,var(--drh-cyan) 50%,var(--drh-blue) 100%);
+  background-size:220% 100%;
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:drhHomeSheen 9s ease-in-out infinite alternate;
+}
+.company-portal.drh-portal-home .drh-home-tagline{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(14px,3vw,44px);
+  margin:clamp(14px,2.6vh,28px) 0 0;
+  color:var(--drh-muted);
+  font-size:clamp(10px,.95vw,13px);
+  font-weight:500;
+  letter-spacing:.5em;
+  text-transform:uppercase;
+}
+.company-portal.drh-portal-home .drh-home-tagline span{padding-left:.5em}
+.company-portal.drh-portal-home .drh-home-tagline:before,
+.company-portal.drh-portal-home .drh-home-tagline:after{content:"";flex:0 0 auto;width:clamp(20px,3vw,44px);height:1px;background:rgba(11,31,68,.3)}
+
+/* Cartes des rubriques. */
+.company-portal.drh-portal-home .drh-home-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,1.6vw,22px);width:100%}
+.company-portal.drh-portal-home .drh-home-card{
+  --tone:#1f7aff;
+  --tone-soft:rgba(31,122,255,.10);
+  position:relative;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:16px!important;
+  width:100%;
+  height:auto!important;
+  min-height:108px!important;
+  padding:18px 22px!important;
+  border:1px solid rgba(31,122,255,.13)!important;
+  border-radius:20px!important;
+  background:rgba(255,255,255,.76)!important;
+  color:var(--drh-ink)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 14px 38px rgba(11,31,68,.07)!important;
+  -webkit-backdrop-filter:blur(14px) saturate(1.15);
+  backdrop-filter:blur(14px) saturate(1.15);
+  font-size:15px!important;
+  font-weight:400!important;
+  line-height:1.3!important;
+  letter-spacing:0!important;
+  text-align:left!important;
+  text-transform:none!important;
+  cursor:pointer;
+  transition:transform .26s cubic-bezier(.2,.7,.2,1),box-shadow .26s ease,border-color .26s ease,background .26s ease!important;
+  animation:drhHomeRise .62s cubic-bezier(.2,.7,.2,1) backwards!important;
+  animation-delay:calc(.26s + var(--i,0)*70ms)!important;
+}
+.company-portal.drh-portal-home .drh-home-card[data-tone="mint"]{--tone:#0c9f6e;--tone-soft:rgba(16,185,129,.12)}
+.company-portal.drh-portal-home .drh-home-card[data-tone="violet"]{--tone:#6d4df2;--tone-soft:rgba(124,92,252,.12)}
+.company-portal.drh-portal-home .drh-home-card[data-tone="orange"]{--tone:#ea6a12;--tone-soft:rgba(249,115,22,.12)}
+.company-portal.drh-portal-home .drh-home-card[data-tone="cyan"]{--tone:#0a8fcb;--tone-soft:rgba(53,199,255,.16)}
+.company-portal.drh-portal-home .drh-home-card[data-tone="rose"]{--tone:#de3a7b;--tone-soft:rgba(236,72,153,.11)}
+.company-portal.drh-portal-home .drh-home-card[data-tone="indigo"]{--tone:#4755d6;--tone-soft:rgba(79,91,213,.11)}
+.company-portal.drh-portal-home .drh-home-card-icon{
+  flex:0 0 auto;
+  display:grid;
+  place-items:center;
+  width:54px;
+  height:54px;
+  border-radius:16px;
+  background:var(--tone-soft);
+  color:var(--tone);
+  transition:transform .26s cubic-bezier(.2,.7,.2,1);
+}
+.company-portal.drh-portal-home .drh-home-card-text{flex:1 1 auto;display:grid;gap:4px;min-width:0}
+.company-portal.drh-portal-home .drh-home-card-text strong{color:var(--drh-ink);font-size:clamp(15px,1.25vw,17px);font-weight:700;line-height:1.25}
+.company-portal.drh-portal-home .drh-home-card-text small{color:var(--drh-muted);font-size:clamp(12.5px,1.02vw,14px);font-weight:450;line-height:1.3}
+.company-portal.drh-portal-home .drh-home-card-arrow{flex:0 0 auto;display:grid;place-items:center;color:#5b6b85;transition:transform .26s cubic-bezier(.2,.7,.2,1),color .26s ease}
+.company-portal.drh-portal-home .drh-home-card-arrow svg{width:20px;height:20px}
+.company-portal.drh-portal-home .drh-home-card:hover{
+  transform:translateY(-4px)!important;
+  border-color:rgba(31,122,255,.4)!important;
+  background:rgba(255,255,255,.94)!important;
+  color:var(--drh-ink)!important;
+  box-shadow:inset 0 1px 0 #fff,0 22px 50px rgba(11,31,68,.11),0 0 36px var(--tone-soft)!important;
+}
+.company-portal.drh-portal-home .drh-home-card:active{transform:translateY(-1px)!important}
+.company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-icon{transform:scale(1.08) rotate(-4deg)}
+.company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-arrow{transform:translateX(4px);color:var(--drh-blue)}
+.company-portal.drh-portal-home .drh-home-card:focus-visible,
+.company-portal.drh-portal-home .company-portal-change:focus-visible,
+.company-portal.drh-portal-home .company-portal-logout:focus-visible{
+  outline:3px solid var(--drh-blue)!important;
+  outline-offset:3px!important;
+}
+@media(min-width:1025px){
+  .company-portal.drh-portal-home .drh-home-card:last-child:nth-child(3n+1){grid-column:2}
+}
+
+/* Pied de page discret ; la marge droite laisse la place à l'assistant flottant. */
+.company-portal.drh-portal-home .drh-home-footer{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:20px;
+  padding:0 max(var(--drh-gutter),62px) clamp(16px,3vh,30px) var(--drh-gutter);
+  color:#5a6a88;
+  font-size:10.5px;
+  font-weight:500;
+  line-height:1.7;
+  letter-spacing:.28em;
+  text-transform:uppercase;
+}
+.company-portal.drh-portal-home .drh-home-footer p{margin:0}
+.company-portal.drh-portal-home .drh-home-footer-motto:before{content:"";display:block;width:44px;height:1px;margin-bottom:12px;background:rgba(11,31,68,.3)}
+.company-portal.drh-portal-home .drh-home-footer-brand{display:flex;align-items:center;gap:14px;font-weight:650;white-space:nowrap}
+.company-portal.drh-portal-home .drh-home-footer-brand:before{content:"";width:40px;height:1px;background:rgba(11,31,68,.3)}
+
+@keyframes drhHomeRise{from{opacity:0;transform:translateY(14px)}}
+@keyframes drhHomeSheen{to{background-position:100% 0}}
+@keyframes drhHomeDrift{to{transform:translate3d(3%,-2.5%,0) scale(1.05)}}
+@keyframes drhHomeFloat{to{transform:translate3d(14px,-18px,0)}}
+@keyframes drhHomeOrbitA{from{transform:rotate(158deg)}to{transform:rotate(170deg)}}
+@keyframes drhHomeOrbitB{from{transform:rotate(266deg)}to{transform:rotate(278deg)}}
+
+@media(max-width:1024px){
+  .company-portal.drh-portal-home .drh-home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .company-portal.drh-portal-home .drh-home-main{justify-content:flex-start;padding-top:clamp(34px,7vh,72px)}
+  .company-portal.drh-portal-home .drh-home-watermark{top:34%}
+  .company-portal.drh-portal-home .drh-home-orbit:before{display:none}
+}
+@media(max-width:640px){
+  .company-portal.drh-portal-home .drh-home-header{flex-direction:column;align-items:stretch;gap:18px}
+  .company-portal.drh-portal-home .drh-home-actions{justify-content:space-between;gap:8px}
+  .company-portal.drh-portal-home .drh-home-user{flex:1 1 auto;max-width:none;padding-right:14px}
+  .company-portal.drh-portal-home .company-portal-change{padding:0 14px!important;font-size:12px!important}
+  .company-portal.drh-portal-home .drh-home-main{gap:28px;padding-top:34px}
+  .company-portal.drh-portal-home .drh-home-eyebrow,
+  .company-portal.drh-portal-home .drh-home-tagline{letter-spacing:.34em}
+  .company-portal.drh-portal-home .drh-home-eyebrow,
+  .company-portal.drh-portal-home .drh-home-tagline span{padding-left:.34em}
+  .company-portal.drh-portal-home .drh-home-grid{grid-template-columns:1fr;gap:12px}
+  .company-portal.drh-portal-home .drh-home-card{min-height:84px!important;padding:14px 16px!important;gap:14px!important;border-radius:18px!important}
+  .company-portal.drh-portal-home .drh-home-card-icon{width:48px;height:48px;border-radius:14px}
+  .company-portal.drh-portal-home .drh-home-footer{font-size:9px;letter-spacing:.22em}
+  .company-portal.drh-portal-home .drh-home-footer-brand:before{display:none}
+  .company-portal.drh-portal-home .drh-home-watermark{top:64%;right:-6vw;font-size:50vw}
+}
+@media(max-width:480px){
+  .company-portal.drh-portal-home .company-portal-change{width:46px!important;padding:0!important}
+  .company-portal.drh-portal-home .company-portal-change span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+@media(prefers-reduced-motion:reduce){
+  .company-portal.drh-portal-home .drh-home-bg:before,
+  .company-portal.drh-portal-home .drh-home-orbit,
+  .company-portal.drh-portal-home .drh-home-dot,
+  .company-portal.drh-portal-home .drh-home-hero,
+  .company-portal.drh-portal-home .drh-home-title-accent{animation:none}
+  .company-portal.drh-portal-home .drh-home-card{animation:none!important;transition:none!important}
+  .company-portal.drh-portal-home .drh-home-card:hover,
+  .company-portal.drh-portal-home .drh-home-card:active,
+  .company-portal.drh-portal-home .company-portal-change:hover,
+  .company-portal.drh-portal-home .company-portal-logout:hover{transform:none!important}
+  .company-portal.drh-portal-home .drh-home-card-icon,
+  .company-portal.drh-portal-home .drh-home-card-arrow,
+  .company-portal.drh-portal-home .company-portal-change,
+  .company-portal.drh-portal-home .company-portal-logout{transition:none}
+  .company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-icon,
+  .company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-arrow{transform:none}
+}
