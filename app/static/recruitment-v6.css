@@ -269,3 +269,81 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .socie
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-destination button{margin-left:8px;min-height:30px;padding:0 10px;font-size:11.5px;vertical-align:middle}
 /* Compteurs à chiffres de largeur fixe : un total qui change ne déplace pas la mise en page. */
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-tabs .tab-btn .count,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .counter-chip .n,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-count{font-variant-numeric:tabular-nums}
+
+/* ── Assistant d'import Excel (Fichier → Correspondance → Vérification → Résultat) ── */
+#importBackdrop .imp-modal{max-width:1080px}
+#importBackdrop .imp-steps{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;padding:0;list-style:none;font-size:11.5px;font-weight:650;color:var(--muted)}
+#importBackdrop .imp-step{display:flex;align-items:center;gap:6px}
+#importBackdrop .imp-step span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#e8eef7;color:#40537a;font-size:11px;font-weight:800}
+#importBackdrop .imp-step.is-current{color:var(--ink)}
+#importBackdrop .imp-step.is-current span{background:var(--blue);color:#fff}
+#importBackdrop .imp-step.is-done span{background:#dff5e8;color:#13633c}
+#importBackdrop .imp-body{padding:16px 0 2px;min-height:180px}
+#importBackdrop .imp-note{margin:10px 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
+#importBackdrop .imp-warning{margin:10px 0;padding:9px 12px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:12.5px;font-weight:650}
+#importBackdrop .imp-drop{display:grid;gap:5px;place-items:center;text-align:center;padding:34px 16px;border:2px dashed #bcd0e8;border-radius:12px;background:#f7faff;color:var(--muted);font-size:12.5px;cursor:pointer}
+#importBackdrop .imp-drop strong{font-size:14.5px;color:var(--ink)}
+#importBackdrop .imp-drop:hover,#importBackdrop .imp-drop.is-over,#importBackdrop .imp-drop:focus-visible{border-color:var(--blue);background:#eef5ff;outline:0}
+#importBackdrop .imp-drop.is-busy{cursor:progress;opacity:.75}
+#importBackdrop .imp-file-current{font-size:12.5px;margin:8px 0}
+#importBackdrop .imp-template{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
+#importBackdrop .imp-template div{display:grid;gap:2px;font-size:12.5px;min-width:0}
+#importBackdrop .imp-template span{color:var(--muted)}
+#importBackdrop .imp-empty{display:grid;gap:8px;padding:18px;border:1px solid var(--line);border-radius:10px;font-size:12.5px;color:var(--muted)}
+#importBackdrop .imp-empty strong{color:var(--ink);font-size:14px}
+#importBackdrop .imp-empty ul{margin:0;padding-left:18px}
+#importBackdrop .imp-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+#importBackdrop .imp-table{width:100%;border-collapse:collapse;font-size:12.5px}
+#importBackdrop .imp-table th{position:sticky;top:0;padding:9px 10px;font-size:10.5px;white-space:nowrap}
+#importBackdrop .imp-table td{padding:8px 10px;border-bottom:1px solid #eef2f7;vertical-align:top;overflow-wrap:anywhere}
+#importBackdrop .imp-table tr:last-child td{border-bottom:0}
+#importBackdrop .imp-table small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+#importBackdrop .imp-table select{min-width:190px;margin:0}
+#importBackdrop .imp-mapping tr.is-ignored td:first-child{color:var(--muted)}
+#importBackdrop .imp-samples span{display:inline-block;max-width:180px;margin:0 4px 3px 0;padding:2px 7px;border-radius:6px;background:#f1f5fa;color:#40537a;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+#importBackdrop .imp-hint{color:#92400e!important}
+#importBackdrop .imp-summary{margin:10px 0;padding:10px 12px;border-radius:8px;background:#eef5ff;color:#1f3b6b;font-size:12.5px;line-height:1.5}
+#importBackdrop .imp-filters{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+#importBackdrop .imp-filter{min-height:32px;padding:0 11px;border:1px solid var(--line);border-radius:999px;background:#fff;color:#40537a;font-size:12px;font-weight:650;cursor:pointer}
+#importBackdrop .imp-filter b{margin-left:3px;font-variant-numeric:tabular-nums}
+#importBackdrop .imp-filter.is-active{border-color:var(--blue);background:var(--blue);color:#fff}
+#importBackdrop .imp-preview tr.is-error td:first-child{box-shadow:inset 3px 0 0 #d92d20}
+#importBackdrop .imp-preview tr.is-duplicate td:first-child{box-shadow:inset 3px 0 0 #d97706}
+#importBackdrop .imp-preview tr.is-valid td:first-child{box-shadow:inset 3px 0 0 #16a34a}
+#importBackdrop .imp-state{min-width:150px}
+#importBackdrop .imp-decision{display:block;min-width:0;width:100%;margin-top:6px;height:32px;font-size:12px}
+#importBackdrop .imp-issues{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+#importBackdrop .imp-issue{padding-left:10px;border-left:3px solid #cbd5e1;line-height:1.4}
+#importBackdrop .imp-issue.is-error{border-color:#d92d20;color:#7f1d1d}
+#importBackdrop .imp-issue.is-duplicate{border-color:#d97706;color:#7c4a03}
+#importBackdrop .imp-issue.is-warning{border-color:#eab308;color:#6b4e00}
+#importBackdrop .imp-issue.is-change{border-color:var(--blue);color:#1f3b6b}
+#importBackdrop .imp-ok{color:#13633c}
+#importBackdrop .imp-pagination{padding:10px 0 0}
+#importBackdrop .imp-done{display:grid;gap:3px;padding:12px 14px;border-radius:10px;background:#dff5e8;color:#13633c;font-size:12.5px}
+#importBackdrop .imp-done strong{font-size:15px}
+#importBackdrop .imp-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+#importBackdrop .imp-tile{display:grid;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
+#importBackdrop .imp-tile b{font-size:24px;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+#importBackdrop .imp-tile span{font-size:11.5px;color:var(--muted);font-weight:650}
+#importBackdrop .imp-tile.is-good b{color:#13633c}
+#importBackdrop .imp-tile.is-warn b{color:#b45309}
+#importBackdrop .imp-tile.is-bad b{color:#b42318}
+/* Pied d'action enfant direct de la modale : pas de marge négative (elle compense un formulaire). */
+#importBackdrop .modal .modal-actions{flex-wrap:wrap;margin-left:0;margin-right:0}
+#importBackdrop .imp-preview td:nth-child(3){min-width:170px}
+@media(max-width:800px){
+#importBackdrop .imp-table thead{display:none}
+#importBackdrop .imp-table,#importBackdrop .imp-table tbody,#importBackdrop .imp-table tr,#importBackdrop .imp-table td{display:block;width:100%}
+#importBackdrop .imp-table tr{padding:8px 0;border-bottom:1px solid var(--line)}
+#importBackdrop .imp-table tr:last-child{border-bottom:0}
+#importBackdrop .imp-table td{border:0;padding:4px 10px}
+#importBackdrop .imp-table td[data-label]::before{content:attr(data-label);display:block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+#importBackdrop .imp-table select{width:100%;min-width:0}
+#importBackdrop .imp-preview td:nth-child(3){min-width:0}
+#importBackdrop .imp-preview tr.is-error,#importBackdrop .imp-preview tr.is-duplicate,#importBackdrop .imp-preview tr.is-valid{box-shadow:none}
+#importBackdrop .imp-template button{flex:1 1 140px}
+/* Trois actions empilées : le pied suit le contenu au lieu de le recouvrir. */
+#importBackdrop .modal .modal-actions{position:static}
+#importBackdrop .imp-drop{padding:24px 12px}
+}

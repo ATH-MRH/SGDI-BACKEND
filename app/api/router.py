@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.modules.auth.routes import router as auth_router
 from app.modules.drh.routes import router as drh_router
+from app.modules.drh.candidate_import_routes import router as candidate_import_router
 from app.modules.ops.routes import router as ops_router
 from app.modules.materiel.routes import router as materiel_router
 from app.modules.commercial.routes import router as commercial_router
@@ -39,6 +40,7 @@ from app.modules.brq.routes import router as brq_router
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["Auth"])
 api_router.include_router(drh_router, prefix="/drh", tags=["DRH"])
+api_router.include_router(candidate_import_router, prefix="/drh", tags=["Recrutement — import Excel"])
 api_router.include_router(ops_router, prefix="/ops", tags=["OPS"])
 api_router.include_router(materiel_router, prefix="/materiel", tags=["Matériel & équipement"])
 api_router.include_router(commercial_router, prefix="/commercial", tags=["Commercial"])

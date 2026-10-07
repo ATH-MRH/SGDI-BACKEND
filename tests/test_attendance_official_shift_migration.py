@@ -10,6 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
+HEAD = "20261010_0001"            # tête courante de la chaîne (import Excel de candidats)
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
@@ -25,7 +26,7 @@ def _ok(result: subprocess.CompletedProcess[str]) -> str:
 
 
 def test_single_alembic_head():
-    assert _ok(_alembic("sqlite://", "heads")).split() == [REVISION, "(head)"]
+    assert _ok(_alembic("sqlite://", "heads")).split() == [HEAD, "(head)"]
 
 
 def test_upgrade_downgrade_upgrade_preserves_existing_assignments(tmp_path):
@@ -65,7 +66,7 @@ def test_upgrade_downgrade_upgrade_preserves_existing_assignments(tmp_path):
 
     _ok(_alembic(url, "upgrade", "head"))
     assert rows() == before
-    assert _ok(_alembic(url, "current")).split()[:1] == [REVISION]
+    assert _ok(_alembic(url, "current")).split()[:1] == [HEAD]
 
 
 def test_downgrade_refuses_to_destroy_posted_regime(tmp_path):
@@ -109,7 +110,7 @@ def test_postgresql_upgrade_downgrade_upgrade():
         with engine.connect() as con:
             assert con.execute(text("SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'assignments' AND column_name = 'work_regime'")).scalar() == 0
         _ok(_alembic(url, "upgrade", "head"))
-        assert _ok(_alembic(url, "current")).split()[:1] == [REVISION]
+        assert _ok(_alembic(url, "current")).split()[:1] == [HEAD]
     finally:
         engine.dispose()
         with admin.connect() as con:
