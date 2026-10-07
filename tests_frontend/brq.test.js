@@ -60,6 +60,35 @@ test("BRQ renders the read-only report from its scoped API endpoint", async () =
   dom.window.close();
 });
 
+test("repeated BRQ renders issue one API request for each of the five report views", async () => {
+  const views = [
+    ["situation", "situation"],
+    ["presences", "presences"],
+    ["absences", "absences"],
+    ["abandons-poste", "abandons-poste"],
+    ["sortants", "sortants"],
+  ];
+  for (const [view, endpoint] of views) {
+    let resolveRequest;
+    const calls = [];
+    const dom = setupDom((url, options) => {
+      calls.push({ url, options });
+      return new Promise(resolve => { resolveRequest = resolve; });
+    });
+    const target = dom.window.document.getElementById("view");
+    const firstRender = dom.window.renderBrqPage(target, view);
+    const duplicateRender = dom.window.renderBrqPage(target, view);
+
+    assert.equal(calls.length, 1, `${view}: one request despite repeated route renders`);
+    assert.match(calls[0].url, new RegExp(`/api/brq/${endpoint}\\?date=2026-10-01$`));
+    assert.ok(calls[0].options.signal, `${view}: request supports cancellation`);
+    resolveRequest({ items: [], total: 0, date: "2026-10-01" });
+    await Promise.all([firstRender, duplicateRender]);
+    assert.equal(target.querySelectorAll(".brq-page").length, 1, `${view}: one page shell`);
+    dom.window.close();
+  }
+});
+
 test("BRQ dashboard renders site/function, absence, abandon, and exit sections", async () => {
   const dom = setupDom(async () => ({
     date: "2026-10-01",
@@ -85,6 +114,71 @@ test("BRQ dashboard renders site/function, absence, abandon, and exit sections",
   dom.window.close();
 });
 
+test("BRQ keeps one shell and its filters visible while results are loading", async () => {
+  let resolveRequest;
+  const dom = setupDom(() => new Promise(resolve => { resolveRequest = resolve; }));
+  const target = dom.window.document.getElementById("view");
+  const rendering = dom.window.renderBrqPage(target, "presences");
+
+  assert.equal(target.querySelectorAll(".brq-page").length, 1);
+  assert.equal(target.querySelectorAll("h1").length, 1);
+  assert.equal(target.querySelectorAll(".brq-tabs").length, 1);
+  assert.equal(target.querySelectorAll(".brq-filters").length, 1);
+  assert.equal(target.querySelectorAll("[data-brq-results]").length, 1);
+  assert.match(dom.window.document.getElementById("brq-module-styles").textContent, /\.brq-results\{min-height:320px/);
+  assert.equal(target.querySelector('[data-brq-results]').getAttribute("aria-busy"), "true");
+  assert.match(target.querySelector("h1").textContent, /Présences/);
+  assert.match(target.querySelector(".brq-tabs").textContent, /Absences/);
+  assert.match(target.querySelector(".brq-filters").textContent, /Date/);
+  assert.match(target.querySelector("[role=status]").textContent, /Chargement/);
+
+  resolveRequest({ items: [], total: 0, date: "2026-10-01" });
+  await rendering;
+  assert.equal(target.querySelectorAll(".brq-page").length, 1);
+  assert.equal(target.querySelectorAll(".brq-filters").length, 1);
+  assert.equal(target.querySelector('[data-brq-results]').getAttribute("aria-busy"), "false");
+  assert.match(target.querySelector("[data-brq-results]").textContent, /Aucune donnée pour ces filtres/);
+  dom.window.close();
+});
+
+test("BRQ API errors stay inside the stable results area", async () => {
+  const dom = setupDom(async () => { throw new Error("Service indisponible"); });
+  const target = dom.window.document.getElementById("view");
+  await dom.window.renderBrqPage(target, "absences");
+
+  assert.equal(target.querySelectorAll(".brq-page").length, 1);
+  assert.equal(target.querySelectorAll("h1").length, 1);
+  assert.equal(target.querySelectorAll(".brq-filters").length, 1);
+  assert.equal(target.querySelectorAll("[data-brq-results]").length, 1);
+  assert.match(target.querySelector('[role="alert"]').textContent, /Service indisponible/);
+  assert.equal(target.querySelector('[data-brq-results]').getAttribute("aria-busy"), "false");
+  dom.window.close();
+});
+
+test("rapid BRQ navigation ignores an obsolete API response without duplicating the shell", async () => {
+  const pending = new Map();
+  const dom = setupDom((url, options) => new Promise(resolve => pending.set(url, { resolve, signal: options.signal })));
+  const target = dom.window.document.getElementById("view");
+  const oldRender = dom.window.renderBrqPage(target, "presences");
+  const currentRender = dom.window.renderBrqPage(target, "absences");
+  const oldUrl = [...pending.keys()].find(url => url.includes("/presences"));
+  const currentUrl = [...pending.keys()].find(url => url.includes("/absences"));
+  assert.equal(pending.get(oldUrl).signal.aborted, true);
+
+  pending.get(currentUrl).resolve({ items: [{ nom: "Résultat courant", state: "absent" }], total: 1, date: "2026-10-01" });
+  await currentRender;
+  pending.get(oldUrl).resolve({ items: [{ nom: "Résultat obsolète", state: "present" }], total: 1, date: "2026-10-01" });
+  await oldRender;
+
+  assert.match(target.querySelector("h1").textContent, /Absences/);
+  assert.equal(target.querySelectorAll(".brq-page").length, 1);
+  assert.equal(target.querySelectorAll(".brq-filters").length, 1);
+  assert.equal(target.querySelectorAll("[data-brq-results]").length, 1);
+  assert.match(target.querySelector("[data-brq-results]").textContent, /Résultat courant/);
+  assert.doesNotMatch(target.querySelector("[data-brq-results]").textContent, /Résultat obsolète/);
+  dom.window.close();
+});
+
 test("BRQ submits date and scope filters to the API", async () => {
   const calls = [];
   const dom = setupDom(async url => {
@@ -96,6 +190,8 @@ test("BRQ submits date and scope filters to the API", async () => {
   const form = dom.window.document.createElement("form");
   form.innerHTML = '<input name="date" value="2026-10-02"><input name="society" value="Société A"><input name="wilaya" value="Oran"><input name="client" value="Client A"><input name="site" value="Site A"><input name="fonction" value="Agent"><input name="vacation" value="14:00"><input name="site_id" value="">';
   dom.window.brqApplyFilters(form);
+  const duplicateRender = dom.window.renderView();
+  await duplicateRender;
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(calls.length, 1);
   assert.match(calls[0], /^\/api\/brq\/presences\?/);
@@ -141,6 +237,9 @@ test("dedicated BRQ host, navigation, and route are wired into the ERP shell", (
   assert.match(SHELL_CSS, /\.sgdi-login-page-brq \.login-admin-system-shortcut\{display:none!important\}/);
   assert.match(SHELL_CSS, /body:has\(\.brq-page\) button\[aria-label="Ouvrir l'assistant ATLAS"\],[\s\S]*body:has\(\.module-host-brq\) button\[aria-label="Ouvrir l'assistant ATLAS"\]\{display:none!important\}/);
   assert.match(SHELL_SRC, /sgdiPullState\(\{render:false,silent:true,force:true,deferSql:true,deferSecondary:true\}\)/);
+  assert.match(MODULE_SRC, /function brqNavHTML\(active\)[\s\S]*?href="#\/brq[\s\S]*?aria-current="page"/);
+  assert.doesNotMatch(MODULE_SRC.match(/function brqNavHTML\(active\)[\s\S]*?\n\}/)?.[0] || "", /onclick=/);
+  assert.match(SHELL_SRC, /window\.addEventListener\("hashchange",\(\)=>\{[\s\S]*?render\(\);[\s\S]*?\}\);/);
 });
 
 test("BRQ login reuses the shared ERP login endpoint and token", () => {

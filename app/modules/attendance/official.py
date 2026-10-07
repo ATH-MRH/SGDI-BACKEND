@@ -337,13 +337,14 @@ def official_shift(db: Session, *, employee_id: int, site_id: int, at: datetime)
     return result
 
 
-def legacy_rotation(db: Session, assignment: Assignment, work_date: date) -> dict[str, Any] | None:
+def legacy_rotation(db: Session, assignment: Assignment, work_date: date,
+                    anchors: list[SiteRotation] | None = None) -> dict[str, Any] | None:
     """Vacation officielle au format du moteur historique (`rotation_for_date`), pour que les
     écrans existants lisent la même vérité. None si l'affectation n'est pas en travail posté ;
     `known: False` si la rotation n'est pas configurée (ni travaillé ni repos : rien n'est déduit)."""
     if not is_posted(assignment):
         return None
-    plan = shift_on(db, assignment, work_date)
+    plan = shift_on(db, assignment, work_date, anchors=anchors)
     if not plan["official"]:
         return {"known": False, "on": None, "period": "", "faction": "", "recovery": 0, "start_time": "", "end_time": ""}
     working = bool(plan["working"])

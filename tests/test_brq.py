@@ -2,13 +2,14 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from app.modules.attendance import core
 from app.modules.attendance.models import AttendanceEvent, EVENT_ABANDON, SOURCE_SYSTEM
 from app.modules.auth.models import User
 from app.modules.brq import service
 from app.modules.commercial.models import Client
+from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401
 from tests.test_attendance_counted_time import ANCHOR, _scan, _setup, _ts
@@ -59,6 +60,83 @@ def test_situation_uses_planned_attendance_and_existing_abandon_event(db, monkey
     assert result["items"][0]["state"] == "present"
     assert result["items"][0]["available"] is False
     assert service.collection_items(report, "abandons-poste")[0]["abandon"]["threshold_minutes"] == 60
+
+
+def test_sortants_report_skips_attendance_planning(db, monkeypatch):
+    employee, site = _setup(db)
+    employee.status = "sortant"
+    employee.extra = {"dateSortie": ANCHOR.isoformat()}
+    db.commit()
+
+    def unexpected_planning(*_args, **_kwargs):
+        pytest.fail("Le rapport sortants ne doit pas calculer le planning de présence")
+
+    monkeypatch.setattr(core, "planned_day", unexpected_planning)
+    report = service.build_report(
+        db, _admin(db), day=ANCHOR, site_id=site.id, include_attendance=False,
+    )
+
+    assert report["items"] == []
+    assert [item["employee_id"] for item in report["sortants"]] == [employee.id]
+
+
+def test_non_sortant_report_skips_sortants_aggregation(db, monkeypatch):
+    employee, site = _setup(db)
+    monkeypatch.setattr(
+        service, "_sortants",
+        lambda *_args, **_kwargs: pytest.fail("Agrégation des sortants inutile pour cet écran"),
+    )
+
+    report = service.build_report(
+        db, _admin(db), day=ANCHOR, site_id=site.id, include_sortants=False,
+    )
+
+    assert [item["employee_id"] for item in report["items"]] == [employee.id]
+    assert report["sortants"] == []
+
+
+def test_official_rotation_anchor_query_is_constant_for_multiple_assignments(db):
+    employee, site = _setup(db)
+    original_assignment = db.scalar(select(Assignment).where(Assignment.employee_id == employee.id))
+    for index in range(4):
+        additional = Employee(
+            code=f"BRQ-PROFILE-{index}-{employee.code}",
+            first_name="Profil",
+            last_name=f"Employé {index}",
+            society=employee.society,
+            status="actif",
+        )
+        db.add(additional)
+        db.flush()
+        db.add(Assignment(
+            employee_id=additional.id,
+            site_id=site.id,
+            rotation_id=original_assignment.rotation_id,
+            group_code="B",
+            start_date=original_assignment.start_date,
+            active=1,
+            work_regime=original_assignment.work_regime,
+        ))
+    db.commit()
+
+    statements = []
+    engine = db.get_bind()
+    def count_site_rotation_query(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if "site_rotations" in statement.lower():
+            statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", count_site_rotation_query)
+    try:
+        report = service.build_report(
+            db, _admin(db), day=ANCHOR, site_id=site.id, include_sortants=False,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_site_rotation_query)
+
+    assert len(report["items"]) == 5
+    assert len(statements) == 1, (
+        f"Expected one preloaded site rotation query for five posted assignments; got {len(statements)}"
+    )
 
 
 @pytest.mark.parametrize(("offset", "expected", "sortant"), [
