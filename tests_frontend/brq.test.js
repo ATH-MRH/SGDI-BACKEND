@@ -60,6 +60,35 @@ test("BRQ renders the read-only report from its scoped API endpoint", async () =
   dom.window.close();
 });
 
+test("repeated BRQ renders issue one API request for each of the five report views", async () => {
+  const views = [
+    ["situation", "situation"],
+    ["presences", "presences"],
+    ["absences", "absences"],
+    ["abandons-poste", "abandons-poste"],
+    ["sortants", "sortants"],
+  ];
+  for (const [view, endpoint] of views) {
+    let resolveRequest;
+    const calls = [];
+    const dom = setupDom((url, options) => {
+      calls.push({ url, options });
+      return new Promise(resolve => { resolveRequest = resolve; });
+    });
+    const target = dom.window.document.getElementById("view");
+    const firstRender = dom.window.renderBrqPage(target, view);
+    const duplicateRender = dom.window.renderBrqPage(target, view);
+
+    assert.equal(calls.length, 1, `${view}: one request despite repeated route renders`);
+    assert.match(calls[0].url, new RegExp(`/api/brq/${endpoint}\\?date=2026-10-01$`));
+    assert.ok(calls[0].options.signal, `${view}: request supports cancellation`);
+    resolveRequest({ items: [], total: 0, date: "2026-10-01" });
+    await Promise.all([firstRender, duplicateRender]);
+    assert.equal(target.querySelectorAll(".brq-page").length, 1, `${view}: one page shell`);
+    dom.window.close();
+  }
+});
+
 test("BRQ dashboard renders site/function, absence, abandon, and exit sections", async () => {
   const dom = setupDom(async () => ({
     date: "2026-10-01",
@@ -128,16 +157,17 @@ test("BRQ API errors stay inside the stable results area", async () => {
 
 test("rapid BRQ navigation ignores an obsolete API response without duplicating the shell", async () => {
   const pending = new Map();
-  const dom = setupDom(url => new Promise(resolve => pending.set(url, resolve)));
+  const dom = setupDom((url, options) => new Promise(resolve => pending.set(url, { resolve, signal: options.signal })));
   const target = dom.window.document.getElementById("view");
   const oldRender = dom.window.renderBrqPage(target, "presences");
   const currentRender = dom.window.renderBrqPage(target, "absences");
   const oldUrl = [...pending.keys()].find(url => url.includes("/presences"));
   const currentUrl = [...pending.keys()].find(url => url.includes("/absences"));
+  assert.equal(pending.get(oldUrl).signal.aborted, true);
 
-  pending.get(currentUrl)({ items: [{ nom: "Résultat courant", state: "absent" }], total: 1, date: "2026-10-01" });
+  pending.get(currentUrl).resolve({ items: [{ nom: "Résultat courant", state: "absent" }], total: 1, date: "2026-10-01" });
   await currentRender;
-  pending.get(oldUrl)({ items: [{ nom: "Résultat obsolète", state: "present" }], total: 1, date: "2026-10-01" });
+  pending.get(oldUrl).resolve({ items: [{ nom: "Résultat obsolète", state: "present" }], total: 1, date: "2026-10-01" });
   await oldRender;
 
   assert.match(target.querySelector("h1").textContent, /Absences/);
@@ -160,6 +190,8 @@ test("BRQ submits date and scope filters to the API", async () => {
   const form = dom.window.document.createElement("form");
   form.innerHTML = '<input name="date" value="2026-10-02"><input name="society" value="Société A"><input name="wilaya" value="Oran"><input name="client" value="Client A"><input name="site" value="Site A"><input name="fonction" value="Agent"><input name="vacation" value="14:00"><input name="site_id" value="">';
   dom.window.brqApplyFilters(form);
+  const duplicateRender = dom.window.renderView();
+  await duplicateRender;
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(calls.length, 1);
   assert.match(calls[0], /^\/api\/brq\/presences\?/);

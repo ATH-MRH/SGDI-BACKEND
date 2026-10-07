@@ -1,5 +1,7 @@
 /* BRQ V1 — reporting views backed exclusively by the read-only BRQ API. */
 let brqRequestGeneration = 0;
+let brqFilterGeneration = 0;
+let brqActiveRequest = null;
 let brqFilters = {
   date: "", society: typeof session !== "undefined" ? String(session?.societe || "") : "",
   wilaya: "", client: "", site: "",
@@ -271,6 +273,12 @@ function brqApplyFilters(form) {
     fonction: form.elements.fonction.value.trim(),
     vacation: form.elements.vacation.value.trim(),
   };
+  brqFilterGeneration += 1;
+  if (typeof renderView === "function") renderView();
+}
+
+function brqRetry() {
+  brqActiveRequest = null;
   if (typeof renderView === "function") renderView();
 }
 
@@ -289,7 +297,38 @@ async function renderBrqPage(viewElement, requestedView = "situation") {
       throw new Error("Le client API central n'est pas disponible.");
     }
     const query = brqQuery();
-    const data = await window.SGDI_API.request(`/api/brq/${BRQ_VIEWS[view].endpoint}${query ? `?${query}` : ""}`, { method: "GET" });
+    const navigation = typeof sgdiViewRenderGeneration === "number"
+      ? sgdiViewRenderGeneration
+      : String(location.hash || "");
+    const key = `${navigation}|${location.hash}|${view}|${query}|${brqFilterGeneration}`;
+    if (!brqActiveRequest || brqActiveRequest.key !== key) {
+      brqActiveRequest?.controller.abort();
+      const controller = new AbortController();
+      const request = {
+        key,
+        controller,
+        promise: window.SGDI_API.request(
+          `/api/brq/${BRQ_VIEWS[view].endpoint}${query ? `?${query}` : ""}`,
+          { method: "GET", signal: controller.signal },
+        ),
+        data: undefined,
+        error: undefined,
+        settled: false,
+      };
+      brqActiveRequest = request;
+      request.promise.then(
+        data => { request.data = data; request.settled = true; },
+        error => { request.error = error; request.settled = true; },
+      );
+    }
+    const request = brqActiveRequest;
+    let data;
+    if (request.settled) {
+      if (request.error) throw request.error;
+      data = request.data;
+    } else {
+      data = await request.promise;
+    }
     if (generation !== brqRequestGeneration || !viewElement.isConnected) return;
     results.innerHTML = brqResultsHTML(view, data || {});
     results.classList.remove("brq-results--loading");
@@ -299,7 +338,7 @@ async function renderBrqPage(viewElement, requestedView = "situation") {
     const message = error?.message || String(error);
     results.classList.remove("brq-results--loading");
     results.setAttribute("aria-busy", "false");
-    results.innerHTML = `<section class="brq-panel"><div class="brq-error" role="alert">Chargement impossible : ${brqEscape(message)}<br><button type="button" class="brq-button" onclick="renderView()">Réessayer</button></div></section>`;
+    results.innerHTML = `<section class="brq-panel"><div class="brq-error" role="alert">Chargement impossible : ${brqEscape(message)}<br><button type="button" class="brq-button" onclick="brqRetry()">Réessayer</button></div></section>`;
   }
 }
 
@@ -314,5 +353,7 @@ window.SGDIModules.registerModule({
   },
   destroy() {
     brqRequestGeneration += 1;
+    brqActiveRequest?.controller.abort();
+    brqActiveRequest = null;
   },
 });

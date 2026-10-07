@@ -37,7 +37,7 @@ from app.modules.attendance.models import (
     AttendanceEvent,
 )
 from app.modules.drh.models import Employee
-from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
+from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site, SiteRotation
 
 TZ_NAME = "Africa/Algiers"
 TZ = ZoneInfo(TZ_NAME)
@@ -90,7 +90,8 @@ def active_assignment(db: Session, employee_id: int) -> Assignment | None:
     ).scalars().first()
 
 
-def planned_day(db: Session, assignment: Assignment | None, site: Site | None, work_date: date) -> dict[str, Any]:
+def planned_day(db: Session, assignment: Assignment | None, site: Site | None, work_date: date,
+                anchors: list[SiteRotation] | None = None) -> dict[str, Any]:
     """Jour prévu par le planning réel (rotation configurée, sinon régime du site). Aucun
     horaire n'est inventé : `start_time`/`end_time` sont vides si le planning n'en porte pas."""
     from app.modules.ops.service import configured_rotation_for_date, rotation_for_date
@@ -99,7 +100,7 @@ def planned_day(db: Session, assignment: Assignment | None, site: Site | None, w
         return {"known": False, "on": None, "period": "", "start_time": "", "end_time": ""}
     from app.modules.attendance import official
 
-    posted = official.legacy_rotation(db, assignment, work_date)
+    posted = official.legacy_rotation(db, assignment, work_date, anchors=anchors)
     if posted is not None:
         # Travail posté explicite : la vérité attendue est le planning OFFICIEL.
         return {"known": posted["known"], "on": posted["on"], "period": posted["period"],
