@@ -1,3 +1,5 @@
+import re
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -79,6 +81,29 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/biometrics", frozenset({"pointage", "pointeur", "ops", "drh"})),
 )
 
+# Écritures Pointage / Présence / Rotation : le module propriétaire est exigé en plus du
+# préfixe ci-dessus, qui n'ouvre que la LECTURE aux modules consultants (DRH lit le centre de
+# contrôle et l'onglet Pointages de l'Employé 360 sans jamais y écrire). Une écriture sans
+# propriétaire opérationnel listé ici ou dans API_MODULE_PREFIXES n'existe pas : la première
+# règle qui correspond s'applique, puis le préfixe.
+READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+API_WRITE_MODULE_RULES: tuple[tuple[re.Pattern[str], frozenset[str]], ...] = (
+    # Comptes pointeurs : gestion d'identités, déjà portée par la permission explicite
+    # Administration › Utilisateurs (attendance/pointer_users.py) — modules du préfixe inchangés.
+    (re.compile(r"^/api/attendance/pointers(/|$)"), frozenset({"pointage", "ops", "drh"})),
+    # Qualification d'un écart de rotation et décision planifiée : décisions d'exploitation OPS.
+    (re.compile(r"^/api/attendance/rotation-(deviations|planning)(/|$)"), frozenset({"ops"})),
+    # Centre de contrôle (pointage.irongs.com) : correction, clôture, réouverture, anomalies,
+    # réglages et apprentissage de rotation — module du centre de contrôle ou OPS.
+    (re.compile(r"^/api/attendance(/|$)"), frozenset({"ops", "pointage"})),
+    # Scan du QR d'un employé : terminal Pointeur et scanner du Pointage — mêmes modules que
+    # la saisie /api/ops/pointage.
+    (re.compile(r"^/api/portal/attendance-qr(/|$)"), frozenset({"ops", "pointage", "pointeur"})),
+    # Reconnaissance faciale : crée un pointage, contrairement au reste de /api/biometrics
+    # (enrôlement, référence faciale) que DRH utilise légitimement.
+    (re.compile(r"^/api/biometrics/cameras/[^/]+/recognize$"), frozenset({"ops", "pointage", "pointeur"})),
+)
+
 MODULE_KEY_ALIASES = {
     "commercial": "dc",
     "finance": "finances",
@@ -89,6 +114,10 @@ MODULE_KEY_ALIASES = {
 def request_module_keys(request: Request) -> frozenset[str] | None:
     """Retourne les modules existants capables d'utiliser la route demandee."""
     path = request.url.path.lower().rstrip("/")
+    if request.method.upper() not in READ_ONLY_METHODS:
+        for pattern, module_keys in API_WRITE_MODULE_RULES:
+            if pattern.match(path):
+                return module_keys
     for prefix, module_keys in API_MODULE_PREFIXES:
         if path == prefix or path.startswith(f"{prefix}/"):
             return module_keys
