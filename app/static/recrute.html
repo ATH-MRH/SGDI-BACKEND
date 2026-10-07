@@ -165,7 +165,7 @@ tr:last-child td{border-bottom:0}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
-<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261004-group-pool-v7" media="screen">
+<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261007-import-excel" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
@@ -225,7 +225,7 @@ tr:last-child td{border-bottom:0}
         <div class="rec-page-actions">
           <span id="candidateTotal" class="rec-count">0 dossier</span>
           <button type="button" class="rec-icon-btn" id="refreshCandidatesBtn" aria-label="Actualiser la liste" title="Actualiser" onclick="loadTab(activeTab)"><svg class="rec-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
-          <button type="button" class="secondary hidden" id="importCandidatesBtn" onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>
+          <button type="button" class="secondary hidden" id="importCandidatesBtn" onclick="openCandidateImport()">Importer Excel</button>
           <button type="button" class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
         </div>
        </header>
@@ -277,7 +277,6 @@ tr:last-child td{border-bottom:0}
        </div>
       </section>
       <section id="announcementsSection" class="hidden"></section>
-      <input id="candidateExcelInput" class="hidden" type="file" accept=".xlsx,.xls" onchange="importRecruitmentExcel(this)">
     </main>
   </div>
 </section>
@@ -706,7 +705,7 @@ async function renderRecruitDashboard(refresh=false){
   const sources=new Map();for(const item of rows){const value=String(item.data?.source||"").trim();if(value)sources.set(value,(sources.get(value)||0)+1)}
   const sourceTotal=[...sources.values()].reduce((a,b)=>a+b,0),sourceColors=["#2783ff","#20bc97","#ffac50","#9364e7","#8294b9"];
   let offset=0;const gradient=[...sources].map(([label,n],index)=>{const start=offset;offset+=n/sourceTotal*100;return `${sourceColors[index%sourceColors.length]} ${start}% ${offset}%`}).join(",");
-  host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div>${create?`<button onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button>`:""}<button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
+  host.innerHTML=`<div class="section-head dashboard-title"><div><h2>Recrutement</h2><p>Attirer les meilleurs talents pour un environnement plus sûr</p></div><div class="dashboard-actions">${create?`<button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">＋ Nouvelle candidature</button><button type="button" class="secondary" id="dashboardImportBtn" onclick="openCandidateImport()">Importer Excel</button><button class="secondary" onclick="showRecruitSection('announcements');openAnnouncementForm()">Publier une annonce</button>`:""}<details class="dashboard-more"><summary>Actions</summary><div><button onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div></details></div></div>
   <div class="dashboard-kpis">${kpis.map(([label,n,color,icon,action])=>action?`<button class="dashboard-kpi" style="--kpi-color:${color}" onclick="${action}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></button>`:`<div class="dashboard-kpi dashboard-kpi-static" style="--kpi-color:${color}"><i aria-hidden="true">${dashboardIcon(icon)}</i><div><span>${label}</span><strong>${n}</strong></div></div>`).join("")}</div>
   <div class="dashboard-grid"><section class="dashboard-panel pipeline-panel"><div class="dashboard-panel-head"><h3>Pipeline de recrutement</h3><select aria-label="Filtrer le pipeline par poste" onchange="dashboardSetPosition(this.value)"><option value="">Tous les postes</option>${positions.map(value=>`<option value="${esc(value)}"${value===recruitmentDashboardPosition?' selected':''}>${esc(value)}</option>`).join("")}</select></div><div class="dashboard-pipeline">${DASHBOARD_STAGES.map(([key,label,color,mode])=>{const items=rows.filter(item=>dashboardStage(item)===key);return `<section class="pipeline-column" style="--stage:${color}"><div class="pipeline-heading"><span><i></i>${label}</span><b>${items.length}</b></div><div class="pipeline-cards">${items.slice(0,3).map(candidateCard).join("")||'<div class="pipeline-empty">Aucune candidature</div>'}</div><button class="pipeline-all" onclick="dashboardGo('${mode}')">Voir toutes (${items.length}) →</button></section>`}).join("")}</div></section>
   <aside class="dashboard-right"><section class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Voir tout</button></div><div class="dashboard-agenda">${scheduled.slice(0,4).map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${esc(c.heure||"—")}<small>${esc(formatDateFr(c.date))}</small></div><span class="pipeline-avatar">${esc(dashboardInitials(item))}</span><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(item.desired_position||"Poste non renseigné")}${c.lieu?` · ${esc(c.lieu)}`:""}</div></div>${update?`<button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${Number(item.id)},'interview')">Ouvrir</button>`:""}</div>`}).join("")||'<div class="empty">Aucun entretien planifié.</div>'}</div></section>${create?'<section class="dashboard-publish"><div><h3>Publier une annonce</h3><p>Diffusez vos offres sur vos canaux de recrutement</p><button class="secondary" onclick="showRecruitSection(\'announcements\');openAnnouncementForm()">＋ Créer une annonce</button></div></section>':""}</aside></div>
@@ -797,35 +796,6 @@ function candidateEmptyState(){
   if(state.q||state.posteFilter||state.avisFilter)return recruitmentEmptyState({title:"Aucun résultat",text:"Aucun dossier ne correspond à ces filtres.",action:'<button type="button" class="secondary" onclick="resetCandidateFilters()">Réinitialiser les filtres</button>'});
   const [, ,title,text]=CANDIDATE_PAGES[activeTab]||CANDIDATE_PAGES.new;
   return recruitmentEmptyState({title,text,action:activeTab==="new"&&recruitmentCan("create")?'<button type="button" class="primary" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>':""});
-}
-function normalizeExcelHeader(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
-function excelCell(row,names){
-  const wanted=names.map(normalizeExcelHeader);
-  const key=Object.keys(row||{}).find(name=>wanted.includes(normalizeExcelHeader(name)));
-  return key?String(row[key]??"").trim():"";
-}
-async function importRecruitmentExcel(input){
-  if(!recruitmentCan("create"))return;
-  const file=input?.files?.[0];if(!file)return;
-  try{
-    if(!window.XLSX){await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src="/static/xlsx.full.min.js?v=1";script.onload=resolve;script.onerror=()=>reject(new Error("Lecteur Excel indisponible"));document.head.appendChild(script)})}
-    const workbook=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:false});
-    const rows=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{defval:""});
-    if(!rows.length)throw new Error("Le fichier Excel ne contient aucune ligne");
-    let created=0;const errors=[];
-    for(let index=0;index<rows.length;index++){
-      const row=rows[index];
-      let lastName=excelCell(row,["nom","nom candidat","nom de famille"]),firstName=excelCell(row,["prenom","prénom"]);
-      const fullName=excelCell(row,["nom prenom","nom et prenom","candidat"]);
-      if(fullName&&(!lastName||!firstName)){const parts=fullName.split(/\s+/);lastName=lastName||parts.shift()||"NON RENSEIGNE";firstName=firstName||parts.join(" ")||"NON RENSEIGNE"}
-      lastName=lastName||"NON RENSEIGNE";firstName=firstName||"NON RENSEIGNE";
-      const proposedSociety=excelCell(row,["societe","société"])||"";
-      const payload={last_name:lastName,first_name:firstName,phone:excelCell(row,["telephone","téléphone","tel","mobile"])||null,email:excelCell(row,["email","e mail","courriel"])||null,desired_position:excelCell(row,["poste","poste souhaite","fonction"])||null,society:null,status:"nouvelle",data:{importSource:file.name,importRow:index+2,societeProposee:proposedSociety}};
-      try{await apiFetch("/api/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});created++}catch(error){errors.push(`ligne ${index+2}: ${error.message}`)}
-    }
-    showBanner(`${created} candidat(s) importé(s)${errors.length?` · ${errors.length} ligne(s) non importée(s)`:""}.`,errors.length&&created===0?"error":"success");
-    if(recruitSection==="dashboard")await renderRecruitDashboard(true);else refreshRecruitCurrentSection();
-  }catch(error){showBanner(esc(error.message||"Import Excel impossible"),"error")}finally{input.value=""}
 }
 function getRecruitAnnouncements(){
   try{return JSON.parse(localStorage.getItem(RECRUIT_ANNOUNCEMENTS_KEY)||"[]")||[]}catch(error){return []}
@@ -1674,5 +1644,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(recruteSession?.token)enterApp();
 });
 </script>
+<script src="/static/recrute-import.js?v=20261007-import-excel"></script>
 </body>
 </html>
