@@ -141,6 +141,27 @@ test("BRQ keeps one shell and its filters visible while results are loading", as
   dom.window.close();
 });
 
+test("BRQ responsive layout constrains the shell, filters, tabs, and table scrolling", async () => {
+  const dom = setupDom(async () => ({ items: [], total: 0, date: "2026-10-01" }));
+  await dom.window.renderBrqPage(dom.window.document.getElementById("view"), "situation");
+  const styles = dom.window.document.getElementById("brq-module-styles").textContent;
+
+  assert.match(styles, /\.brq-page,[\s\S]*?width:100%;max-width:100%;min-width:0;box-sizing:border-box/);
+  assert.match(styles, /\.sgdi-shell:has\(\.brq-page\) main\{flex:1 1 auto\}/);
+  assert.match(styles, /\.brq-filters\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(180px,1fr\)\)/);
+  assert.match(styles, /@media\(max-width:1399px\)\{\.brq-filters\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\)\}\}/);
+  assert.match(styles, /@media\(max-width:899px\)\{\.brq-filters\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}\}/);
+  assert.match(styles, /@media\(max-width:599px\)\{\.brq-filters\{grid-template-columns:minmax\(0,1fr\)\}\}/);
+  assert.match(styles, /\.brq-filters input,\.brq-filters select,\.brq-filters button\{width:100%;min-width:0;max-width:100%;box-sizing:border-box\}/);
+  assert.match(styles, /\.brq-tabs\{display:flex;flex-wrap:wrap;gap:8px;width:100%;min-width:0\}/);
+  assert.match(styles, /\.brq-table-wrap\{overflow-x:auto;overflow-y:hidden/);
+  assert.match(styles, /\.brq-mini-table-wrap\{overflow-x:auto;overflow-y:hidden/);
+  assert.doesNotMatch(styles, /\.brq-page[^}]*overflow-x:\s*auto/);
+  assert.match(SHELL_SRC, /<main class="flex-1 flex flex-col overflow-hidden min-w-0">/);
+
+  dom.window.close();
+});
+
 test("BRQ API errors stay inside the stable results area", async () => {
   const dom = setupDom(async () => { throw new Error("Service indisponible"); });
   const target = dom.window.document.getElementById("view");
