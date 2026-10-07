@@ -145,9 +145,7 @@ def drh_writer_headers(client, db):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-# Le mouvement de personnel (save-presence-movement) est partagé avec d'autres modules : il reste
-# soumis aux seuls droits d'action du compte et n'entre pas dans ce verrou.
-@pytest.mark.parametrize("action", [a for a in LEGACY_ACTIONS if a != "save-presence-movement"] + ["assign-vacant-agent"])
+@pytest.mark.parametrize("action", LEGACY_ACTIONS + ["assign-vacant-agent"])
 def test_drh_account_with_write_rights_still_cannot_write_pointage(client, drh_writer_headers, action):
     """Écrire le Pointage exige le module OPS : les droits d'écriture RH n'y donnent pas accès."""
     refused = client.post(f"/api/irongs/actions/{action}", headers=drh_writer_headers,

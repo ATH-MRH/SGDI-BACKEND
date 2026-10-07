@@ -70,13 +70,16 @@ _SECRETARIAT = {
 _POINTAGE = {"pointages", "pointageMensuel", "feuillePresence", "feuillePresenceArchive", "feuillePresenceCloture"}
 _READ_ONLY_MODULES = {name: frozenset({"rh"}) for name in _POINTAGE}
 
-# Actions legacy qui écrivent le Pointage (feuille mensuelle et feuille de présence).
+# Actions legacy qui écrivent le Pointage (feuille mensuelle et feuille de présence). Le mouvement
+# de personnel en fait partie : il crée ou modifie la ligne de présence du jour avant d'archiver
+# l'ordre de mouvement, et n'est appelé que depuis les écrans OPS.
 POINTAGE_WRITE_ACTIONS = frozenset({
     "save-pointage-cell", "save-pointage-observation", "clear-pointage-sheet",
     "validate-pointage", "unlock-pointage", "validate-pointage-day", "unlock-pointage-day",
     "validate-pointage-all", "unlock-pointage-all",
     "upsert-presence-line", "delete-presence-line", "add-presence-agent", "assign-vacant-agent",
     "validate-presence-line", "unlock-presence-line", "close-presence-day", "reopen-presence-day",
+    "save-presence-movement",
 })
 
 
