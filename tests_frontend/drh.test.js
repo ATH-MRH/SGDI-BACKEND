@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { JSDOM } = require('jsdom');
 const { loadSgdiApp } = require('./load-app');
 
 const { loadError, T } = loadSgdiApp([
@@ -76,6 +77,71 @@ test('nouveau contrat: un identifiant explicite ne retombe jamais sur un autre e
   assert.strictEqual(t.employeeNewContractTarget('bilel').id, 'bilel');
   assert.strictEqual(t.employeeNewContractTarget('inconnu'), null, 'identifiant inconnu: aucun repli sur ACHOUR');
   assert.strictEqual(t.employeeNewContractTarget().id, 'bilel', 'depuis Contrats, choisir un employé éligible');
+});
+
+test('Ajouter Employé: bloque la création directe non habilitée et convertit un dossier sélectionné', async () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'rh.html'), 'utf8');
+  const calls = [];
+  const candidate = {
+    id: 741, first_name: 'Samira', last_name: 'Trace', society: 'Iron Global Securite',
+    desired_position: 'AGENTE DE SÉCURITÉ', phone: '0550998877', email: 'samira@example.com',
+    expected_salary: 52000, data: { referenceDossier: 'REC-741', nomPere: 'Ahmed', dateNaissance: '1991-02-03' },
+  };
+  const dom = new JSDOM(html, {
+    url: 'http://localhost/',
+    runScripts: 'dangerously',
+    beforeParse(window) {
+      window.localStorage.setItem('atlas_rh_session', JSON.stringify({
+        token: 'test-token',
+        user: { authorized_societies: ['Iron Global Securite'] },
+      }));
+      window.confirm = () => true;
+      window.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), options });
+        let body = {};
+        if (String(url).includes('/creation-options')) {
+          body = { direct_creation_allowed: false, recruitment_creation_allowed: true };
+        } else if (String(url).includes('/recruitment-candidates/page')) {
+          body = { items: [candidate], total: 1, page: 1, pages: 1, page_size: 25 };
+        } else if (String(url).includes('/employees/page')) {
+          body = { items: [], total: 0, page: 1, pages: 1, page_size: 25 };
+        }
+        return { ok: true, status: 200, json: async () => body };
+      };
+    },
+  });
+  try {
+    const { window } = dom;
+    if (window.document.readyState === 'loading') {
+      await new Promise(resolve => window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    }
+    await window.openAddEmployeeModal();
+    const choices = window.document.querySelectorAll('#employeeCreationOptions .creation-choice');
+    assert.strictEqual(choices.length, 2, window.document.getElementById('employeeCreationOptions').textContent);
+    assert.strictEqual(choices[1].disabled, true, 'la création directe doit rester verrouillée sans permission');
+    assert.strictEqual(choices[0].disabled, false, 'le parcours recrutement doit rester accessible');
+
+    choices[0].click();
+    await window.loadRecruitCandidates(1);
+    const candidateButton = [...window.document.querySelectorAll('#recruitCandidatesList button')]
+      .find(button => button.textContent.includes('Sélectionner'));
+    assert.ok(candidateButton, `le candidat éligible doit être sélectionnable (${window.document.getElementById('recruitCandidatesList').textContent})`);
+    candidateButton.click();
+    assert.strictEqual(window.document.getElementById('eFirstName').value, 'Samira');
+    assert.strictEqual(window.document.getElementById('eFatherName').value, 'Ahmed');
+    assert.match(window.document.getElementById('employeeSourceSummary').textContent, /REC-741/);
+
+    await window.submitEmployee();
+    const conversion = calls.find(call => call.url.includes('/employees/from-recruitment'));
+    assert.ok(conversion, 'la conversion doit appeler le nouvel endpoint de recrutement');
+    const payload = JSON.parse(conversion.options.body);
+    assert.strictEqual(payload.candidate_id, candidate.id);
+    assert.strictEqual(payload.first_name, 'Samira');
+    assert.strictEqual(payload.society, 'Iron Global Securite');
+    assert.strictEqual(payload.salary_net, candidate.expected_salary);
+  } finally {
+    dom.window.close();
+  }
 });
 
 // ── Congés acquis : 2,5 jours par mois ───────────────────────────────────────

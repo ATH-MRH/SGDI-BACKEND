@@ -35,6 +35,13 @@ class Employee(Base, TimestampMixin):
     contract_end_date: Mapped[date | None] = mapped_column(Date, index=True)
     locked: Mapped[int] = mapped_column(Integer, default=1)
     extra: Mapped[dict | None] = mapped_column(JSON)
+    recruitment_candidate_id: Mapped[int | None] = mapped_column(
+        ForeignKey("candidates.id", ondelete="RESTRICT"), unique=True, index=True
+    )
+    creation_source: Mapped[str | None] = mapped_column(String(30))
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Candidate(Base, TimestampMixin):

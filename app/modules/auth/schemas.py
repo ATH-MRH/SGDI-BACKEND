@@ -6,6 +6,12 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 UserAction = Literal["read", "create", "update", "validate", "delete", "export", "unlock", "admin"]
 
 
+class FeaturePermissionIn(BaseModel):
+    module_key: str = Field(min_length=1, max_length=80)
+    feature_key: str = Field(min_length=1, max_length=100)
+    action_key: str = Field(min_length=1, max_length=40)
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=80)
     email: EmailStr | None = None
@@ -17,6 +23,7 @@ class UserCreate(BaseModel):
     authorized_sites: list[int] = Field(default_factory=list)
     authorized_actions: list[UserAction] = Field(default_factory=list)
     authorized_modules: list[str] = Field(default_factory=list)
+    feature_permissions: list[FeaturePermissionIn] = Field(default_factory=list)
     supervisor_read_only: bool = True
     global_society_access: bool = False
     password: str = Field(min_length=4)
@@ -88,12 +95,6 @@ class UserModulePermissionsOut(BaseModel):
     legacy_permissions_active: bool = True
     authorized_societies: list[str] | None = None
     authorized_sites: list[int] | None = None
-
-
-class FeaturePermissionIn(BaseModel):
-    module_key: str = Field(min_length=1, max_length=80)
-    feature_key: str = Field(min_length=1, max_length=100)
-    action_key: str = Field(min_length=1, max_length=40)
 
 
 class FeaturePermissionsReplaceIn(BaseModel):

@@ -3,7 +3,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import create_staff_token, hash_password, verify_password
-from app.modules.auth.models import User
+from app.core.granular_permissions import validate_feature_permissions
+from app.modules.auth.models import User, UserFeaturePermission
 from app.modules.auth.schemas import UserCreate, UserUpdate
 
 
@@ -42,7 +43,13 @@ def _validate_beo_scope(db: Session, *, role, modules, societies, sites, global_
                                global_society_access=global_society_access)
 
 
-def create_user(db: Session, payload: UserCreate, *, commit: bool = True) -> User:
+def create_user(
+    db: Session,
+    payload: UserCreate,
+    *,
+    commit: bool = True,
+    created_by_user_id: int | None = None,
+) -> User:
     username = normalize_username(payload.username)
     email = normalize_login(str(payload.email)) if payload.email else None
     if get_user_by_login(db, username) or (email and get_user_by_login(db, email)):
@@ -52,6 +59,10 @@ def create_user(db: Session, payload: UserCreate, *, commit: bool = True) -> Use
     _validate_beo_scope(db, role=payload.role, modules=payload.authorized_modules,
                         societies=payload.authorized_societies, sites=payload.authorized_sites,
                         global_society_access=payload.global_society_access)
+    try:
+        feature_permissions = validate_feature_permissions(payload.feature_permissions)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     user = User(
         username=username,
         email=email,
@@ -70,11 +81,18 @@ def create_user(db: Session, payload: UserCreate, *, commit: bool = True) -> Use
         is_active=True,
     )
     db.add(user)
+    db.flush()
+    for module_key, feature_key, action_key in feature_permissions:
+        db.add(UserFeaturePermission(
+            user_id=user.id,
+            module_key=module_key,
+            feature_key=feature_key,
+            action_key=action_key,
+            created_by_user_id=created_by_user_id,
+        ))
     if commit:
         db.commit()
         db.refresh(user)
-    else:
-        db.flush()
     user.has_validation_password = bool(user.validation_password_hash)
     return user
 

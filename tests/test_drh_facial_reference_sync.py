@@ -16,7 +16,7 @@ from app.core import rate_limit
 from app.core.config import settings
 from app.core.security import hash_password
 from app.modules.attendance.models import AttendanceAnomaly, AttendanceEvent
-from app.modules.auth.models import AuditEvent, User
+from app.modules.auth.models import AuditEvent, User, UserFeaturePermission
 from app.modules.biometrics import engine as engine_module
 from app.modules.biometrics import photo_sync, service
 from app.modules.biometrics.engine import cosine
@@ -63,8 +63,16 @@ def _employee(db, *, society=SOC, status="actif"):
 @pytest.fixture
 def drh(client, db):
     name = f"LBD{uuid.uuid4().int % 10**6:06d}"
-    db.add(User(username=name, full_name=name, role="agent", access_level="H2", password_hash=hash_password("lot-b-pass-1"), is_active=True,
-                authorized_modules=["drh"], authorized_societies=[SOC]))
+    user = User(username=name, full_name=name, role="agent", access_level="H2", password_hash=hash_password("lot-b-pass-1"), is_active=True,
+                authorized_modules=["drh"], authorized_societies=[SOC])
+    db.add(user)
+    db.flush()
+    db.add(UserFeaturePermission(
+        user_id=user.id,
+        module_key="drh",
+        feature_key="direct_employee_creation",
+        action_key="create",
+    ))
     db.commit()
     token = client.post("/api/auth/login", json={"username": name, "password": "lot-b-pass-1"}).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

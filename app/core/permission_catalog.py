@@ -60,6 +60,7 @@ FEATURE_CATALOG: dict[str, dict] = {
     "drh": {"label": "DRH", "domain": "drh.irongs.com", "description": "Gestion des ressources humaines", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs RH", ("read", "export")),
         "employees": ("Employés", "Gestion des fiches employés", ("read", "create", "update", "delete", "export")),
+        "direct_employee_creation": ("Création directe d’un employé", "Autorise la création d’une fiche employé sans passer par le module Recrutement. Le périmètre société/site de l’utilisateur reste appliqué.", ("create",)),
         "positions": ("Postes", "Référentiel des fonctions et postes", ("read", "create", "update", "delete", "admin")),
         "position_files": ("Fiches de position", "Carrière et position des employés", ("read", "export")),
         "contracts": ("Contrats", "Contrats de travail", ("read", "create", "update", "delete", "export", "sign")),

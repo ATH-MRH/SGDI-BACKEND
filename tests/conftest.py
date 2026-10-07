@@ -47,7 +47,7 @@ _db_session.SessionLocal = TestSessionLocal
 from app.main import app
 from app.db.session import get_db
 from app.core.security import hash_password, create_access_token
-from app.modules.auth.models import User
+from app.modules.auth.models import User, UserFeaturePermission
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -102,6 +102,20 @@ def _seed_admin():
                 is_active=True,
             ))
         session.commit()
+        admin = session.query(User).filter(User.username == "testadmin").one()
+        if not session.query(UserFeaturePermission).filter_by(
+            user_id=admin.id,
+            module_key="drh",
+            feature_key="direct_employee_creation",
+            action_key="create",
+        ).first():
+            session.add(UserFeaturePermission(
+                user_id=admin.id,
+                module_key="drh",
+                feature_key="direct_employee_creation",
+                action_key="create",
+            ))
+            session.commit()
     finally:
         session.close()
 
