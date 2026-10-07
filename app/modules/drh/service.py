@@ -8,12 +8,13 @@ import unicodedata
 from types import SimpleNamespace
 from typing import Any, Type
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
+from app.core.audit import append_audit
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, EmployeeBlacklistEntry, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
 from app.modules.ops.models import Assignment, Site
@@ -303,6 +304,9 @@ def _candidate_matches_text(row: Candidate, query: str) -> bool:
             data.get("telephone"),
             data.get("posteSouhaite"),
             data.get("wilaya"),
+            data.get("referenceDossier"),
+            data.get("numeroDossier"),
+            data.get("reference"),
         )
     ).lower()
     return query.lower() in haystack
@@ -346,6 +350,13 @@ def list_candidates_page(
         # Vivier Recrutement Groupe : tout ce qui relève encore du Recrutement (actifs, réserve,
         # archives) — base des indicateurs et de la recherche.
         rows = [row for row in rows if not _candidate_left_recruitment(row)]
+    elif selected_mode in {"employee_creation", "eligible_for_hire"}:
+        rows = [
+            row for row in rows
+            if _candidate_is_transmitted(row)
+            and not _candidate_is_recruited(row)
+            and _candidate_decision_is_favorable(row.data if isinstance(row.data, dict) else {})
+        ]
     elif selected_mode in {"reserve", "reserves"}:
         rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row) and not _candidate_is_transmitted(row)]
     elif selected_mode in {"recruited", "recrutes", "recrutés", "candidats_recrutes"}:
@@ -1227,7 +1238,16 @@ def _candidate_int(value: Any) -> int:
         return 0
 
 
-def recruit_candidate(db: Session, candidate_id: int, username: str | None = None):
+def recruit_candidate(
+    db: Session,
+    candidate_id: int,
+    username: str | None = None,
+    *,
+    employee_values: dict[str, Any] | None = None,
+    user: User | None = None,
+    request: Request | None = None,
+    allow_idempotent: bool = True,
+):
     candidate = db.execute(
         select(Candidate).where(Candidate.id == candidate_id).with_for_update()
     ).scalar_one_or_none()
@@ -1235,10 +1255,19 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         raise HTTPException(status_code=404, detail="Candidate not found")
     data = candidate.data if isinstance(candidate.data, dict) else {}
     converted_id = data.get("convertedEmployeeId")
-    if candidate.status == "embauche" and converted_id:
-        employee = db.get(Employee, int(converted_id))
-        if employee:
-            return employee
+    linked_employee = db.execute(
+        select(Employee).where(Employee.recruitment_candidate_id == candidate.id)
+    ).scalar_one_or_none()
+    if linked_employee or converted_id or candidate.status == "embauche":
+        existing_employee = linked_employee
+        if existing_employee is None and converted_id:
+            try:
+                existing_employee = db.get(Employee, int(converted_id))
+            except (TypeError, ValueError):
+                existing_employee = None
+        if allow_idempotent and existing_employee is not None:
+            return existing_employee
+        raise HTTPException(status_code=409, detail="Ce candidat a déjà été converti en employé")
     if candidate.status != "a_contractualiser":
         raise HTTPException(status_code=422, detail="Le candidat doit être à contractualiser avant son recrutement")
     if not str(candidate.society or "").strip():
@@ -1250,20 +1279,24 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
     # création de l'employé. La décision favorable reste la seule règle métier.
     if not _candidate_decision_is_favorable(data):
         raise HTTPException(status_code=422, detail="Contrat refusé : la décision du recruteur doit être Favorable")
-    next_code = next_employee_code(db, candidate.society)
-    recruit_date = _candidate_date(data.get("contractStartDate")) or date.today()
+    values = employee_values or {}
+    society = str(values.get("society") or candidate.society or data.get("societe") or "").strip()
+    if not society:
+        raise HTTPException(status_code=422, detail="La société de l’employé est obligatoire")
+    code = str(values.get("code") or "").strip().upper() or next_employee_code(db, society)
+    recruit_date = values.get("recruit_date") or _candidate_date(data.get("contractStartDate")) or date.today()
 
     # typeContrat stocké tel quel (CDD/CDI/CIDD…) — ne pas passer par _clean_contract_type
     # qui efface CDI. posteContrat est le poste de travail, pas le type de contrat.
-    raw_type = str(data.get("typeContrat") or "").strip().upper()
+    raw_type = str(values.get("contract_type") or data.get("typeContrat") or "").strip().upper()
     contract_type = raw_type if raw_type in {"CDD", "CDI", "CIDD", "CTA", "APPRENTISSAGE"} else "CDD"
 
     # Période d'essai selon le type (convention sécurité privée algérienne)
     trial_days = {"CDI": 90, "CDD": 30, "CIDD": 45}.get(contract_type, 30)
-    trial_end = date.fromordinal(recruit_date.toordinal() + trial_days)
+    trial_end = values.get("trial_end_date") or date.fromordinal(recruit_date.toordinal() + trial_days)
 
     # Date de fin de contrat (CDD uniquement, depuis les données candidat si dispo)
-    raw_end = str(data.get("dateFinContrat") or "").strip()
+    raw_end = str(values.get("contract_end_date") or data.get("dateFinContrat") or "").strip()
     contract_end: date | None = None
     if contract_type != "CDI":
         try:
@@ -1273,53 +1306,102 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         if contract_end and contract_end < recruit_date:
             raise HTTPException(status_code=422, detail="La date de fin du contrat doit être postérieure à la date de début")
 
+    salary = values.get("salary_net")
+    if salary is None:
+        salary = candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0
+    position = str(values.get("position") or candidate.desired_position or data.get("posteContrat") or data.get("posteSouhaite") or "").strip() or None
+    now = datetime.utcnow().isoformat()
     employee = Employee(
-        code=next_code,
-        first_name=candidate.first_name,
-        last_name=candidate.last_name,
-        father_name=data.get("nomPere"), mother_name=data.get("nomMere"),
-        nin=_candidate_text(data.get("nin")) or None,
-        birth_date=_candidate_date(data.get("dateNaissance")), birth_place=data.get("lieuNaissance"),
-        family_status=data.get("situation"), children_count=_candidate_int(data.get("nombreEnfants")),
-        phone=candidate.phone or data.get("telephone"), email=candidate.email or data.get("email"),
-        address=data.get("adresse"), commune=data.get("commune"), wilaya=data.get("wilaya"),
-        position=candidate.desired_position or data.get("posteContrat") or data.get("posteSouhaite"),
-        society=candidate.society or data.get("societe"),
-        salary_net=candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0,
+        code=code,
+        first_name=values.get("first_name") or candidate.first_name,
+        last_name=values.get("last_name") or candidate.last_name,
+        father_name=values.get("father_name") or data.get("nomPere"),
+        mother_name=values.get("mother_name") or data.get("nomMere"),
+        nin=values.get("nin") or _candidate_text(data.get("nin")) or None,
+        birth_date=values.get("birth_date") or _candidate_date(data.get("dateNaissance")),
+        birth_place=values.get("birth_place") or data.get("lieuNaissance"),
+        family_status=values.get("family_status") or data.get("situation"),
+        children_count=(
+            values["children_count"] if values.get("children_count") is not None
+            else _candidate_int(data.get("nombreEnfants"))
+        ),
+        phone=values.get("phone") or candidate.phone or data.get("telephone"),
+        email=values.get("email") or candidate.email or data.get("email"),
+        address=values.get("address") or data.get("adresse"),
+        commune=values.get("commune") or data.get("commune"),
+        wilaya=values.get("wilaya") or data.get("wilaya"),
+        position=position,
+        society=society,
+        salary_net=_parse_salary(salary),
         contract_type=contract_type,
         status="actif" if recruit_date <= date.today() else "a_venir",
         recruit_date=recruit_date,
         trial_end_date=trial_end,
         contract_end_date=contract_end,
-        extra=_prepare_employee_extra({**data, "sourceCandidateId": candidate.id}, fallback=str(candidate.id)),
+        extra=_prepare_employee_extra({
+            "sourceCandidateId": candidate.id,
+            "recruitmentReference": (
+                data.get("referenceDossier") or data.get("numeroDossier") or data.get("reference") or f"CAND-{candidate.id}"
+            ),
+        }, fallback=str(candidate.id)),
+        recruitment_candidate_id=candidate.id,
+        creation_source="recruitment",
+        created_by_user_id=user.id if user else None,
     )
     candidate.status = "embauche"
     candidate.data = {
         **(candidate.data if isinstance(candidate.data, dict) else {}),
         "statut": "embauche",
         "status": "embauche",
-        "convertedAt": datetime.utcnow().isoformat(),
+        "convertedAt": now,
         "convertedBy": username or "system",
     }
     db.add(employee)
-    db.flush()
-    candidate.data = {**candidate.data, "convertedEmployeeId": employee.id}
-    contract = Contract(
-        employee_id=employee.id,
-        contract_type=contract_type,
-        position=employee.position,
-        start_date=recruit_date,
-        end_date=contract_end,
-        trial_end_date=trial_end,
-        salary_net=employee.salary_net,
-        status="actif" if recruit_date <= date.today() else "a_venir",
-    )
-    db.add(contract)
     try:
+        db.flush()
+        candidate.data = {
+            **candidate.data,
+            "convertedEmployeeId": employee.id,
+            "conversionSociety": society,
+            "conversionSource": "recruitment",
+        }
+        contract = Contract(
+            employee_id=employee.id,
+            contract_type=contract_type,
+            position=employee.position,
+            start_date=recruit_date,
+            end_date=contract_end,
+            trial_end_date=trial_end,
+            salary_net=employee.salary_net,
+            status="actif" if recruit_date <= date.today() else "a_venir",
+        )
+        db.add(contract)
+        if user is not None:
+            append_audit(
+                db,
+                action="employee.created_from_recruitment",
+                resource="employee",
+                resource_id=employee.id,
+                result="success",
+                user=user,
+                request=request,
+                society=society,
+                new_state={
+                    "employee_id": employee.id,
+                    "candidate_id": candidate.id,
+                    "creation_source": "recruitment",
+                    "user_id": user.id,
+                    "society": society,
+                    "site_id": None,
+                },
+            )
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=f"Recrutement refusé : {_postgres_error_detail(exc)}") from exc
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(employee)
     return employee
 

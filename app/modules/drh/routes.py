@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from datetime import datetime
@@ -11,6 +11,7 @@ from typing import Annotated
 import orjson
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel, Field
@@ -20,7 +21,7 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.core.photo_storage import DOCS_DIR, UPLOADS_ROOT
 from app.modules.auth.dependencies import current_token_payload, current_user
-from app.modules.auth.models import User
+from app.modules.auth.models import User, UserFeaturePermission
 from app.core.security import verify_password
 from app.modules.drh import service
 from app.modules.drh.convocation_email import send_candidate_convocation_email
@@ -51,6 +52,7 @@ from app.modules.drh.schemas import (
     EmployeeCreate,
     EmployeeOut,
     EmployeePage,
+    EmployeeRecruitmentCreate,
     EmployeeUpdate,
     GenerateContractRequest,
     GeneratedContractOut,
@@ -95,6 +97,27 @@ def _ensure_recruitment_access(user: User, *, destructive: bool = False) -> None
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès réservé au recrutement / DRH")
     if destructive and role not in {"admin", "adm", "adm1", "adm2", "rh", "drh"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Suppression réservée à la DRH")
+
+
+def _has_direct_employee_creation_permission(db: Session, user: User) -> bool:
+    return db.scalar(
+        select(UserFeaturePermission.id)
+        .where(
+            UserFeaturePermission.user_id == user.id,
+            UserFeaturePermission.module_key == "drh",
+            UserFeaturePermission.feature_key == "direct_employee_creation",
+            UserFeaturePermission.action_key == "create",
+        )
+        .limit(1)
+    ) is not None
+
+
+def _ensure_direct_employee_creation_permission(db: Session, user: User) -> None:
+    if not _has_direct_employee_creation_permission(db, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission insuffisante pour créer directement un employé.",
+        )
 
 
 def _allowed_societies(user: User) -> list[str]:
@@ -361,6 +384,41 @@ def employees(
     return Response(content=raw, media_type="application/json")
 
 
+@router.get("/employees/creation-options")
+def employee_creation_options(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    try:
+        _ensure_recruitment_access(user)
+        can_create_from_recruitment = True
+    except HTTPException:
+        can_create_from_recruitment = False
+    return {
+        "direct_creation_allowed": _has_direct_employee_creation_permission(db, user),
+        "recruitment_creation_allowed": can_create_from_recruitment,
+    }
+
+
+@router.get("/employees/recruitment-candidates/page", response_model=CandidatePage)
+def employee_recruitment_candidates_page(
+    q: str | None = None,
+    society: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_recruitment_access(user)
+    effective_society = _effective_society_filter(user, society)
+    result = service.list_candidates_page(
+        db,
+        society=effective_society,
+        mode="employee_creation",
+        q=q,
+        page=page,
+        page_size=page_size,
+    )
+    return result
+
+
 @router.post("/employees/repair-codes")
 def repair_employee_codes(db: Session = Depends(get_db), user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
     if not _is_admin_system_user(user, token_payload):
@@ -425,25 +483,97 @@ def _sync_facial_reference_after_save(db: Session, employee: Employee, user: Use
 
 
 @router.post("/employees", response_model=EmployeeOut)
-def create_employee(payload: EmployeeCreate, background_tasks: BackgroundTasks, photo_source: str | None = Query(None, max_length=30),
-                    db: Session = Depends(get_db), user: User = Depends(current_user)):
+def create_employee(
+    payload: EmployeeCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    photo_source: str | None = Query(None, max_length=30),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_direct_employee_creation_permission(db, user)
+    if not str(payload.society or "").strip():
+        raise HTTPException(status_code=422, detail="La société de l’employé est obligatoire")
     _ensure_society_allowed(user, payload.society)
+    if payload.nin and db.scalar(select(Employee.id).where(Employee.nin == payload.nin)):
+        raise HTTPException(status_code=409, detail="Ce numéro d’identité est déjà associé à un employé")
     sync, _ = _photo_fingerprint_before(None, photo_source)
     code = (payload.code or "").strip().upper() or service.next_employee_code(db, payload.society)
     for attempt in range(200):
         values = payload.model_dump()
         values["code"] = code
+        employee = Employee(**values)
+        employee.creation_source = "direct"
+        employee.created_by_user_id = user.id
+        if isinstance(values.get("extra"), dict):
+            employee.extra = service._prepare_employee_extra(values["extra"], fallback=code)
+        db.add(employee)
         try:
-            created = service.create_row(db, Employee, EmployeeCreate(**values))
+            db.flush()
+            append_audit(
+                db,
+                action="employee.created_directly",
+                resource="employee",
+                resource_id=employee.id,
+                result="success",
+                user=user,
+                request=request,
+                society=employee.society,
+                new_state={
+                    "employee_id": employee.id,
+                    "candidate_id": None,
+                    "creation_source": "direct",
+                    "user_id": user.id,
+                    "society": employee.society,
+                    "site_id": None,
+                },
+            )
+            db.commit()
+            db.refresh(employee)
             if sync:
-                _sync_facial_reference_after_save(db, created, user, photo_source, None, background_tasks)
-                db.refresh(created)
-            return created
-        except HTTPException as exc:
-            if "ix_employees_code" not in str(exc.detail) or attempt >= 199:
-                raise
+                _sync_facial_reference_after_save(db, employee, user, photo_source, None, background_tasks)
+                db.refresh(employee)
+            return employee
+        except SQLAlchemyError as exc:
+            db.rollback()
+            error_text = str(getattr(exc, "orig", None) or exc)
+            if attempt >= 199 or not any(marker in error_text for marker in (
+                "ix_employees_code", "employees_code_key", "employees.code",
+            )):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Création refusée : code employé ou numéro d’identité déjà utilisé.",
+                ) from exc
             code = service.next_employee_code_after_conflict(db, payload.society, code)
-    raise HTTPException(status_code=409, detail="Code employé indisponible")
+        except Exception:
+            db.rollback()
+            raise
+
+
+@router.post("/employees/from-recruitment", response_model=EmployeeOut)
+def create_employee_from_recruitment(
+    payload: EmployeeRecruitmentCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_recruitment_access(user)
+    candidate = service.get_or_404(db, Candidate, payload.candidate_id)
+    society = str(payload.society or candidate.society or "").strip()
+    if candidate.society and payload.society and _society_key(candidate.society) != _society_key(payload.society):
+        raise HTTPException(status_code=422, detail="La société choisie doit correspondre à celle du dossier candidat")
+    if not society:
+        raise HTTPException(status_code=422, detail="La société de l’employé est obligatoire")
+    _ensure_society_allowed(user, society)
+    return service.recruit_candidate(
+        db,
+        payload.candidate_id,
+        username=user.username,
+        employee_values={**payload.model_dump(exclude={"candidate_id"}), "society": society},
+        user=user,
+        request=request,
+        allow_idempotent=False,
+    )
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeOut)
@@ -926,11 +1056,22 @@ def delete_candidate(
 
 
 @router.post("/candidates/{candidate_id}/recruit")
-def recruit(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def recruit(
+    candidate_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     _ensure_recruitment_access(user)
     candidate = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, candidate.society)
-    return _action_success(service.recruit_candidate(db, candidate_id, username=user.username))
+    return _action_success(service.recruit_candidate(
+        db,
+        candidate_id,
+        username=user.username,
+        user=user,
+        request=request,
+    ))
 
 
 @router.get("/contracts", response_model=list[ContractOut])

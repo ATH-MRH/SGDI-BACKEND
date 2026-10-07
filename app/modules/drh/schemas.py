@@ -31,7 +31,7 @@ class EmployeeBase(_UpperMixin):
     birth_date: date | None = None
     birth_place: str | None = None
     family_status: str | None = None
-    children_count: int = 0
+    children_count: int = Field(default=0, ge=0)
     phone: str | None = None
     email: str | None = None
     address: str | None = None
@@ -53,16 +53,47 @@ class EmployeeCreate(EmployeeBase):
     pass
 
 
+class EmployeeRecruitmentCreate(_UpperMixin):
+    candidate_id: int = Field(gt=0)
+    code: str | None = Field(default=None, max_length=30)
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    father_name: str | None = Field(default=None, max_length=120)
+    mother_name: str | None = Field(default=None, max_length=120)
+    nin: str | None = Field(default=None, max_length=30)
+    birth_date: date | None = None
+    birth_place: str | None = Field(default=None, max_length=120)
+    family_status: str | None = Field(default=None, max_length=80)
+    children_count: int | None = Field(default=None, ge=0)
+    phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=150)
+    address: str | None = None
+    commune: str | None = Field(default=None, max_length=120)
+    wilaya: str | None = Field(default=None, max_length=120)
+    society: str | None = Field(default=None, max_length=150)
+    position: str | None = Field(default=None, max_length=150)
+    recruit_date: date | None = None
+    contract_type: str | None = Field(default=None, max_length=80)
+    contract_end_date: date | None = None
+    trial_end_date: date | None = None
+    salary_net: float | None = Field(default=None, ge=0)
+
+
 class EmployeeUpdate(BaseModel):
     code: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    father_name: str | None = None
+    mother_name: str | None = None
     phone: str | None = None
     email: str | None = None
     address: str | None = None
     commune: str | None = None
     wilaya: str | None = None
     birth_date: date | None = None
+    birth_place: str | None = None
+    family_status: str | None = None
+    children_count: int | None = Field(default=None, ge=0)
     nin: str | None = None
     position: str | None = None
     society: str | None = None
@@ -90,6 +121,9 @@ class EmployeeOut(EmployeeBase):
     current_client_name: str | None = None
     current_group_code: str | None = None
     current_position: str | None = None
+    recruitment_candidate_id: int | None = None
+    creation_source: str | None = None
+    created_by_user_id: int | None = None
 
     model_config = {"from_attributes": True}
 

@@ -133,11 +133,29 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 .contract-timeline-labels{display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px;color:light-dark(#7c8ba0,#8ea2b7);font-weight:600}
 .contract-timeline-labels b{color:inherit;font-weight:800;color:light-dark(#1a2c44,#eef4fa)}
 
-.modal-backdrop{position:fixed;inset:0;background:rgba(9,20,36,.5);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
-.modal{width:100%;max-width:760px;background:light-dark(#fff,#111b29);border-radius:20px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.32)}
-.modal.wide{max-width:920px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(9,20,36,.5);display:flex;align-items:flex-start;justify-content:center;padding:clamp(10px,4vw,30px) 16px;overflow-y:auto;z-index:50}
+.modal{width:100%;max-width:760px;background:light-dark(#fff,#111b29);border-radius:20px;padding:clamp(16px,3vw,24px);box-shadow:0 30px 80px rgba(0,0,0,.32)}
+.modal.wide{max-width:1100px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .modal-head h2{font-size:18px;margin:0;font-weight:900}
+.modal-subtitle{margin:-7px 0 18px;color:light-dark(#718399,#8ea2b7);font-size:13px}
+.creation-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.creation-choice{width:100%;min-width:0;padding:20px;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:16px;background:light-dark(#fff,#0d1725);text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:12px;color:inherit}
+.creation-choice:hover:not(:disabled){border-color:#7c9cbe;box-shadow:0 12px 26px rgba(18,63,111,.12)}
+.creation-choice:disabled{cursor:not-allowed;opacity:.72}
+.creation-choice-icon{width:42px;height:42px;border-radius:13px;background:light-dark(#eaf1fb,#182535);color:#123f6f;display:grid;place-items:center}
+.creation-choice-icon svg{width:22px;height:22px}
+.creation-choice-title{font-weight:900;font-size:15px}
+.creation-choice-description{font-size:12.5px;line-height:1.55;color:light-dark(#718399,#a8b7c8)}
+.creation-choice-footnote{font-size:11.5px;font-weight:800;color:#8a6206}
+.creation-locked{font-size:12px;color:#a1122a;font-weight:750}
+.candidate-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.candidate-toolbar .search-box{min-width:min(100%,240px)}
+.candidate-table-wrap{width:100%;overflow-x:auto;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:12px}
+.candidate-table-wrap table{min-width:920px}
+.candidate-reference{white-space:nowrap;font-weight:800;color:light-dark(#123f6f,#9fc6f4)}
+.employee-source-summary{margin:0 0 14px;padding:11px 13px;border-radius:11px;background:light-dark(#eef5fd,#13263b);font-size:12px;line-height:1.5}
+.employee-source-summary b{display:block}
 .modal-close{border:0;background:none;font-size:19px;color:light-dark(#7a8da2,#8ea2b7);cursor:pointer;line-height:1}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
 .field-grid .full{grid-column:1/-1}
@@ -168,6 +186,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 
 @media(max-width:1200px){.position-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{position:static}.nav{flex-direction:row;overflow-x:auto}.nav-btn{min-width:max-content}.atlas-fiche-hero{align-items:flex-start;flex-wrap:wrap}.atlas-fiche-summary{min-width:0;width:100%}}
+@media(max-width:680px){.creation-choice-grid{grid-template-columns:1fr}.candidate-toolbar .search-box{min-width:100%}.modal-actions{flex-wrap:wrap}.modal-actions .btn{flex:1;justify-content:center}}
 @media(max-width:640px){.field-grid,.fiche-info-grid{grid-template-columns:1fr}.top{padding:14px 16px}.top-title{font-size:14px}.shell{padding:14px}.atlas-fiche-hero{padding:18px}.atlas-fiche-summary{grid-template-columns:1fr 1fr}.atlas-fiche-panel{padding:16px}.atlas-fiche-identity h2{font-size:18px}.position-cards{grid-template-columns:1fr}.position-card{min-height:116px}}
 </style>
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
@@ -213,7 +232,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
       <div id="banner"></div>
 
       <section id="agentsSection">
-        <div class="section-head"><div><h1>Effectifs</h1><p>Fiches du personnel employé.</p></div><button class="btn primary" onclick="openEmployeeModal(null)">+ Nouvel agent</button></div>
+        <div class="section-head"><div><h1>Effectifs</h1><p>Fiches du personnel employé.</p></div><button class="btn primary" onclick="openAddEmployeeModal()">+ Ajouter Employé</button></div>
         <div class="toolbar">
           <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="agentsSearch" placeholder="Rechercher un agent (nom, code, poste)…" oninput="debounceReload('agents')"></div>
           <select id="agentsStatusFilter" class="filter" onchange="loadAgents()"><option value="all">Tous les statuts</option><option value="actifs">Actif</option><option value="absents">Absent</option><option value="suspension">Suspendu</option><option value="sortant">Sortant</option></select>
@@ -265,15 +284,42 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
   </div>
 </section>
 
+<!-- Employee creation mode -->
+<div id="addEmployeeModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeAddEmployeeModal()">
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="addEmployeeTitle">
+    <div class="modal-head"><h2 id="addEmployeeTitle">Ajouter un employé</h2><button class="modal-close" aria-label="Fermer" onclick="closeAddEmployeeModal()">×</button></div>
+    <p class="modal-subtitle">Choisissez le mode de création de la fiche employé.</p>
+    <div id="employeeCreationOptions"><div class="empty">Chargement des habilitations…</div></div>
+  </section>
+</div>
+
+<!-- Recruitment candidate picker -->
+<div id="recruitCandidatesBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeRecruitCandidates()">
+  <section class="modal wide" role="dialog" aria-modal="true" aria-labelledby="recruitCandidatesTitle">
+    <div class="modal-head"><h2 id="recruitCandidatesTitle">Sélectionner un candidat</h2><button class="modal-close" aria-label="Fermer" onclick="closeRecruitCandidates()">×</button></div>
+    <p class="modal-subtitle">Seuls les dossiers favorables à contractualiser et non encore convertis sont proposés.</p>
+    <div class="candidate-toolbar">
+      <div class="search-box"><input id="recruitCandidateSearch" type="search" placeholder="Rechercher nom, téléphone, poste ou référence…" oninput="debounceRecruitCandidates()"></div>
+      <select id="recruitCandidateSociety" class="filter" aria-label="Filtrer par société" onchange="loadRecruitCandidates(1)"></select>
+    </div>
+    <div id="recruitCandidatesList" class="candidate-table-wrap"><div class="empty">Chargement des candidats…</div></div>
+    <div id="recruitCandidatesPagination" class="pagination"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeRecruitCandidates()">Fermer</button></div>
+  </section>
+</div>
+
 <!-- Employee create/edit modal -->
 <div id="employeeModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEmployeeModal()">
   <div class="modal">
     <div class="modal-head"><h2 id="employeeModalTitle">Nouvel agent</h2><button class="modal-close" onclick="closeEmployeeModal()">×</button></div>
+    <div id="employeeSourceSummary" class="employee-source-summary hidden"></div>
     <div class="field-grid">
       <div><label for="eCode">Code</label><input id="eCode" placeholder="AG001"></div>
       <div><label for="eSociety">Société</label><select id="eSociety"></select></div>
       <div><label for="eFirstName">Prénom</label><input id="eFirstName" required></div>
       <div><label for="eLastName">Nom</label><input id="eLastName" required></div>
+      <div><label for="eFatherName">Nom du père</label><input id="eFatherName"></div>
+      <div><label for="eMotherName">Nom de la mère</label><input id="eMotherName"></div>
       <div><label for="ePosition">Poste</label><input id="ePosition"></div>
       <div><label for="eStatus">Statut</label><select id="eStatus"><option value="actif">Actif</option><option value="absent">Absent</option><option value="suspendu">Suspendu</option><option value="sortant">Sortant</option></select></div>
       <div><label for="ePhone">Téléphone</label><input id="ePhone"></div>
@@ -282,9 +328,13 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
       <div><label for="eCommune">Commune</label><input id="eCommune"></div>
       <div><label for="eWilaya">Wilaya</label><input id="eWilaya"></div>
       <div><label for="eBirthDate">Date de naissance</label><input id="eBirthDate" type="date"></div>
+      <div><label for="eBirthPlace">Lieu de naissance</label><input id="eBirthPlace"></div>
       <div><label for="eNin">NIN</label><input id="eNin"></div>
+      <div><label for="eFamilyStatus">Situation familiale</label><input id="eFamilyStatus"></div>
+      <div><label for="eChildrenCount">Nombre d'enfants</label><input id="eChildrenCount" type="number" min="0" step="1"></div>
       <div><label for="eRecruitDate">Date de recrutement</label><input id="eRecruitDate" type="date"></div>
       <div><label for="eContractType">Type de contrat</label><input id="eContractType" placeholder="CDI, CDD…"></div>
+      <div><label for="eContractEnd">Fin de contrat</label><input id="eContractEnd" type="date"></div>
       <div><label for="eSalary">Salaire net</label><input id="eSalary" type="number" min="0" step="1"></div>
       <div><label for="eTrialEnd">Fin de période d'essai</label><input id="eTrialEnd" type="date"></div>
     </div>
@@ -364,6 +414,9 @@ let congesCache=[];
 const PAGE_SIZE=25;
 const state={agents:{page:1,pages:1,total:0}};
 let debounceTimers={};
+let recruitmentCandidateRequest=0;
+let recruitmentCandidates=[];
+let selectedRecruitmentCandidate=null;
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function fmtDate(value){
@@ -385,7 +438,9 @@ function showBanner(message,type){
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 function societyOptionsHtml(selected){
   const list=(session?.user?.authorized_societies?.length?session.user.authorized_societies:SOCIETES_FALLBACK);
-  return list.map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`).join("");
+  const options=list.map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`);
+  if(selected&&!list.includes(selected))options.unshift(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+  return options.join("");
 }
 function employeeSelectOptionsHtml(selectedId){
   return '<option value="">— Choisir un agent —</option>'+allEmployeesCache.map(e=>`<option value="${e.id}" ${String(e.id)===String(selectedId)?"selected":""}>${esc(e.code||"")} — ${esc(e.last_name)} ${esc(e.first_name)}</option>`).join("");
@@ -505,35 +560,155 @@ async function loadAgents(page){
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
 
-function openEmployeeModal(employee){
-  document.getElementById("employeeModalTitle").textContent=employee?"Modifier l'agent":"Nouvel agent";
+async function openAddEmployeeModal(){
+  const backdrop=document.getElementById("addEmployeeModalBackdrop");
+  const host=document.getElementById("employeeCreationOptions");
+  backdrop.classList.remove("hidden");
+  host.innerHTML='<div class="empty">Chargement des habilitations…</div>';
+  try{
+    const options=await apiFetch("/api/drh/employees/creation-options");
+    const directAllowed=options.direct_creation_allowed===true;
+    const recruitmentAllowed=options.recruitment_creation_allowed===true;
+    host.innerHTML=`<div class="creation-choice-grid">
+      <button class="creation-choice" onclick="startRecruitmentEmployeeCreation()" ${recruitmentAllowed?"":"disabled"}>
+        <span class="creation-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6m3-3h-6"/></svg></span>
+        <span class="creation-choice-title">Depuis un dossier de recrutement</span>
+        <span class="creation-choice-description">Sélectionnez un candidat dont le dossier a reçu un avis favorable à contractualiser. Les informations disponibles seront reprises dans la fiche employé et le contrat.</span>
+        ${recruitmentAllowed?'<span class="creation-choice-footnote">Dossier de recrutement conservé et lié à la fiche employé.</span>':'<span class="creation-locked">Votre compte ne dispose pas de l’accès au module Recrutement.</span>'}
+      </button>
+      <button class="creation-choice" onclick="startDirectEmployeeCreation()" ${directAllowed?"":"disabled"}>
+        <span class="creation-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4h-2"/><circle cx="10" cy="7" r="4"/><path d="M19 8v6m3-3h-6"/></svg></span>
+        <span class="creation-choice-title">Création directe</span>
+        <span class="creation-choice-description">Créez une fiche employé sans dossier de recrutement. La société reste obligatoire et les périmètres d’accès du compte sont appliqués.</span>
+        ${directAllowed?'<span class="creation-choice-footnote">Habilitation explicite accordée à ce compte.</span>':'<span class="creation-locked">Accès requis : drh.direct_employee_creation:create. Demandez son attribution à l’administrateur système.</span>'}
+      </button>
+    </div>`;
+  }catch(error){
+    host.innerHTML=`<div class="error show">${esc(error.message||"Impossible de charger les habilitations.")}</div><div class="modal-actions"><button class="btn primary" onclick="openAddEmployeeModal()">Réessayer</button></div>`;
+  }
+}
+function closeAddEmployeeModal(){document.getElementById("addEmployeeModalBackdrop").classList.add("hidden")}
+function startDirectEmployeeCreation(){
+  const button=document.querySelector("#employeeCreationOptions .creation-choice:nth-child(2)");
+  if(!button||button.disabled)return;
+  closeAddEmployeeModal();
+  openEmployeeModal(null);
+}
+function startRecruitmentEmployeeCreation(){
+  const button=document.querySelector("#employeeCreationOptions .creation-choice:first-child");
+  if(!button||button.disabled)return;
+  closeAddEmployeeModal();
+  openRecruitCandidates();
+}
+function openRecruitCandidates(){
+  const societies=session?.user?.authorized_societies?.filter(Boolean)||[];
+  const select=document.getElementById("recruitCandidateSociety");
+  const choices=societies.length?societies:SOCIETES_FALLBACK;
+  select.innerHTML='<option value="">Toutes les sociétés autorisées</option>'+choices.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  if(activeSociety&&choices.includes(activeSociety))select.value=activeSociety;
+  document.getElementById("recruitCandidateSearch").value="";
+  document.getElementById("recruitCandidatesBackdrop").classList.remove("hidden");
+  loadRecruitCandidates(1);
+}
+function closeRecruitCandidates(){document.getElementById("recruitCandidatesBackdrop").classList.add("hidden")}
+function debounceRecruitCandidates(){
+  clearTimeout(debounceTimers.recruitCandidates);
+  debounceTimers.recruitCandidates=setTimeout(()=>loadRecruitCandidates(1),300);
+}
+async function loadRecruitCandidates(page){
+  const requestId=++recruitmentCandidateRequest;
+  const list=document.getElementById("recruitCandidatesList");
+  const pagination=document.getElementById("recruitCandidatesPagination");
+  list.innerHTML='<div class="empty">Chargement des candidats…</div>';pagination.innerHTML="";
+  const params=new URLSearchParams({page:String(page||1),page_size:String(PAGE_SIZE)});
+  const query=document.getElementById("recruitCandidateSearch").value.trim();
+  const society=document.getElementById("recruitCandidateSociety").value;
+  if(query)params.set("q",query);
+  if(society)params.set("society",society);
+  try{
+    const result=await apiFetch("/api/drh/employees/recruitment-candidates/page?"+params.toString());
+    if(requestId!==recruitmentCandidateRequest)return;
+    const rows=result.items||[];
+    recruitmentCandidates=rows;
+    if(!rows.length){
+      list.innerHTML='<div class="empty">Aucun dossier éligible. Vérifiez les filtres ou l’avis de contractualisation dans le module Recrutement.</div>';
+      renderRecruitCandidatePagination(result);return;
+    }
+    list.innerHTML=`<table><thead><tr><th>Dossier</th><th>Candidat</th><th>Poste demandé</th><th>Société</th><th>Téléphone</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(candidate=>{
+      const data=candidate.data&&typeof candidate.data==="object"?candidate.data:{};
+      const reference=data.referenceDossier||data.reference||data.numeroDossier||data.code||`DOS-${candidate.id}`;
+      return `<tr>
+        <td class="candidate-reference">${esc(reference)}</td>
+        <td><div class="cell-strong">${esc(candidate.last_name)} ${esc(candidate.first_name)}</div><div class="cell-meta">${esc(candidate.email||"")}</div></td>
+        <td>${esc(candidate.desired_position||"—")}</td><td>${esc(candidate.society||"—")}</td>
+        <td>${esc(candidate.phone||"—")}</td><td><span class="pill pill-green">À contractualiser</span></td>
+        <td><button class="btn primary" onclick="selectRecruitmentCandidate(${candidate.id})">Sélectionner</button></td>
+      </tr>`;
+    }).join("")}</tbody></table>`;
+    renderRecruitCandidatePagination(result);
+  }catch(error){
+    if(requestId!==recruitmentCandidateRequest)return;
+    list.innerHTML=`<div class="empty">${esc(error.message||"Impossible de charger les dossiers.")}</div><div class="modal-actions"><button class="btn primary" onclick="loadRecruitCandidates(1)">Réessayer</button></div>`;
+  }
+}
+function renderRecruitCandidatePagination(result){
+  const host=document.getElementById("recruitCandidatesPagination");
+  const page=result.page||1,pages=result.pages||1,total=result.total||0;
+  host.innerHTML=`<span>${total} dossier${total>1?"s":""}</span><div class="btns">
+    <button ${page<=1?"disabled":""} onclick="loadRecruitCandidates(${page-1})">‹ Précédent</button>
+    <span style="align-self:center">Page ${page} / ${pages}</span>
+    <button ${page>=pages?"disabled":""} onclick="loadRecruitCandidates(${page+1})">Suivant ›</button>
+  </div>`;
+}
+function selectRecruitmentCandidate(candidateId){
+  const row=recruitmentCandidates.find(candidate=>Number(candidate.id)===Number(candidateId));
+  if(row){selectedRecruitmentCandidate=row;closeRecruitCandidates();openEmployeeModal(null,row)}
+}
+
+function openEmployeeModal(employee,candidate=null){
+  const source=candidate?.data&&typeof candidate.data==="object"?candidate.data:{};
+  selectedRecruitmentCandidate=candidate;
+  const title=employee?"Modifier l'agent":candidate?"Créer un employé depuis le recrutement":"Créer un employé";
+  document.getElementById("employeeModalTitle").textContent=title;
   document.getElementById("employeeModalBackdrop").dataset.id=employee?.id||"";
-  document.getElementById("eSociety").innerHTML=societyOptionsHtml(activeSociety);
+  document.getElementById("employeeModalBackdrop").dataset.candidateId=candidate?.id||"";
+  document.getElementById("employeeModalBackdrop").dataset.creationMode=employee?"edit":candidate?"recruitment":"direct";
+  document.getElementById("employeeSourceSummary").classList.toggle("hidden",!candidate);
+  document.getElementById("employeeSourceSummary").innerHTML=candidate?`<b>Dossier de recrutement ${esc(source.referenceDossier||source.reference||source.numeroDossier||source.code||`DOS-${candidate.id}`)} — ${esc(candidate.last_name)} ${esc(candidate.first_name)}</b>Les données d’identité disponibles seront reprises. Le dossier d’origine et ses pièces restent conservés dans Recrutement.`:"";
+  document.getElementById("eSociety").innerHTML=societyOptionsHtml(candidate?.society||employee?.society||activeSociety);
   document.getElementById("employeeError").classList.remove("show");
   document.getElementById("eCode").value=employee?.code||"";
   document.getElementById("eCode").disabled=!!employee;
-  if(employee?.society)document.getElementById("eSociety").value=employee.society;
-  document.getElementById("eFirstName").value=employee?.first_name||"";
-  document.getElementById("eLastName").value=employee?.last_name||"";
-  document.getElementById("ePosition").value=employee?.position||"";
+  document.getElementById("eFirstName").value=employee?.first_name||candidate?.first_name||"";
+  document.getElementById("eLastName").value=employee?.last_name||candidate?.last_name||"";
+  document.getElementById("eFatherName").value=employee?.father_name||source.nomPere||"";
+  document.getElementById("eMotherName").value=employee?.mother_name||source.nomMere||"";
+  document.getElementById("ePosition").value=employee?.position||candidate?.desired_position||"";
   document.getElementById("eStatus").value=employee?.status||"actif";
-  document.getElementById("ePhone").value=employee?.phone||"";
-  document.getElementById("eEmail").value=employee?.email||"";
-  document.getElementById("eAddress").value=employee?.address||"";
-  document.getElementById("eCommune").value=employee?.commune||"";
-  document.getElementById("eWilaya").value=employee?.wilaya||"";
-  document.getElementById("eBirthDate").value=(employee?.birth_date||"").slice(0,10);
-  document.getElementById("eNin").value=employee?.nin||"";
-  document.getElementById("eRecruitDate").value=(employee?.recruit_date||today()).slice(0,10);
-  document.getElementById("eContractType").value=employee?.contract_type||"";
-  document.getElementById("eSalary").value=employee?.salary_net||"";
-  document.getElementById("eTrialEnd").value=(employee?.trial_end_date||"").slice(0,10);
+  document.getElementById("ePhone").value=employee?.phone||candidate?.phone||"";
+  document.getElementById("eEmail").value=employee?.email||candidate?.email||"";
+  document.getElementById("eAddress").value=employee?.address||source.adresse||"";
+  document.getElementById("eCommune").value=employee?.commune||source.commune||"";
+  document.getElementById("eWilaya").value=employee?.wilaya||source.wilaya||"";
+  document.getElementById("eBirthDate").value=String(employee?.birth_date||source.dateNaissance||"").slice(0,10);
+  document.getElementById("eBirthPlace").value=employee?.birth_place||source.lieuNaissance||"";
+  document.getElementById("eNin").value=employee?.nin||source.nin||source.NIN||"";
+  document.getElementById("eFamilyStatus").value=employee?.family_status||source.situation||"";
+  document.getElementById("eChildrenCount").value=employee?.children_count??source.nombreEnfants??"";
+  document.getElementById("eRecruitDate").value=String(employee?.recruit_date||source.contractStartDate||today()).slice(0,10);
+  document.getElementById("eContractType").value=employee?.contract_type||source.typeContrat||"CDD";
+  document.getElementById("eContractEnd").value=String(employee?.contract_end_date||source.dateFinContrat||"").slice(0,10);
+  document.getElementById("eSalary").value=employee?.salary_net??candidate?.expected_salary??source.salaireNet??source.salairePrevu??"";
+  document.getElementById("eTrialEnd").value=String(employee?.trial_end_date||"").slice(0,10);
   document.getElementById("employeeModalBackdrop").classList.remove("hidden");
 }
-function closeEmployeeModal(){document.getElementById("employeeModalBackdrop").classList.add("hidden")}
+function closeEmployeeModal(){document.getElementById("employeeModalBackdrop").classList.add("hidden");selectedRecruitmentCandidate=null}
 async function submitEmployee(){
   const errorEl=document.getElementById("employeeError");errorEl.classList.remove("show");
-  const employeeId=document.getElementById("employeeModalBackdrop").dataset.id;
+  const backdrop=document.getElementById("employeeModalBackdrop");
+  const employeeId=backdrop.dataset.id;
+  const candidateId=backdrop.dataset.candidateId;
+  const creationMode=backdrop.dataset.creationMode;
   const firstName=document.getElementById("eFirstName").value.trim();
   const lastName=document.getElementById("eLastName").value.trim();
   if(!firstName||!lastName){errorEl.textContent="Nom et prénom sont requis.";errorEl.classList.add("show");return}
@@ -549,23 +724,46 @@ async function submitEmployee(){
     commune:document.getElementById("eCommune").value.trim()||null,
     wilaya:document.getElementById("eWilaya").value.trim()||null,
     birth_date:document.getElementById("eBirthDate").value||null,
+    father_name:document.getElementById("eFatherName").value.trim()||null,
+    mother_name:document.getElementById("eMotherName").value.trim()||null,
+    birth_place:document.getElementById("eBirthPlace").value.trim()||null,
+    family_status:document.getElementById("eFamilyStatus").value.trim()||null,
+    children_count:parseInt(document.getElementById("eChildrenCount").value,10)||0,
     nin:document.getElementById("eNin").value.trim()||null,
     recruit_date:document.getElementById("eRecruitDate").value||null,
     contract_type:document.getElementById("eContractType").value.trim()||null,
-    salary_net:parseFloat(document.getElementById("eSalary").value)||0,
+    salary_net:document.getElementById("eSalary").value===""?(candidateId?null:0):(parseFloat(document.getElementById("eSalary").value)||0),
     trial_end_date:document.getElementById("eTrialEnd").value||null,
+    contract_end_date:document.getElementById("eContractEnd").value||null,
   };
+  if(!employeeId&&!payload.society){errorEl.textContent="La société est obligatoire.";errorEl.classList.add("show");return}
+  if(creationMode==="direct"&&!document.getElementById("eCode").value.trim()){errorEl.textContent="Le code agent est requis.";errorEl.classList.add("show");return}
+  if(creationMode==="recruitment"&&!payload.contract_type){errorEl.textContent="Le type de contrat est requis.";errorEl.classList.add("show");return}
   const btn=document.getElementById("employeeSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
   try{
     if(employeeId){
       await apiFetch(`/api/drh/employees/${employeeId}`,{method:"PUT",body:JSON.stringify(payload)});
+    }else if(candidateId){
+      const label=`${lastName} ${firstName} · ${payload.society} · ${payload.contract_type} · ${payload.recruit_date}`;
+      if(!confirm(`Confirmer la création de cet employé depuis le dossier de recrutement ?\n\n${label}\n\nUn contrat sera créé et le dossier source sera lié à la fiche.`))return;
+      await apiFetch("/api/drh/employees/from-recruitment",{method:"POST",body:JSON.stringify({
+        candidate_id:Number(candidateId),code:document.getElementById("eCode").value.trim()||null,
+        first_name:payload.first_name,last_name:payload.last_name,
+        father_name:payload.father_name,mother_name:payload.mother_name,nin:payload.nin,
+        birth_date:payload.birth_date,birth_place:payload.birth_place,
+        family_status:payload.family_status,children_count:payload.children_count,
+        phone:payload.phone,email:payload.email,address:payload.address,
+        commune:payload.commune,wilaya:payload.wilaya,
+        society:payload.society,position:payload.position,recruit_date:payload.recruit_date,
+        contract_type:payload.contract_type,contract_end_date:payload.contract_end_date,
+        trial_end_date:payload.trial_end_date,salary_net:payload.salary_net,
+      })});
     }else{
       const code=document.getElementById("eCode").value.trim();
-      if(!code){errorEl.textContent="Le code agent est requis.";errorEl.classList.add("show");btn.disabled=false;btn.textContent="Enregistrer";return}
       payload.code=code;
       await apiFetch("/api/drh/employees",{method:"POST",body:JSON.stringify(payload)});
     }
-    closeEmployeeModal();showBanner("Agent enregistré.","success");loadAgents();
+    closeEmployeeModal();showBanner(candidateId?"Employé créé et lié au dossier de recrutement.":"Employé enregistré.","success");loadAgents();
   }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer cet agent.";errorEl.classList.add("show")}
   finally{btn.disabled=false;btn.textContent="Enregistrer"}
 }

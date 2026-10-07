@@ -129,3 +129,174 @@ def test_future_contract_start_is_preserved(client, auth_headers):
     assert employee["status"] == "a_venir"
     contracts = client.get(f"/api/drh/contracts?employee_id={employee['id']}", headers=auth_headers).json()
     assert contracts[0]["start_date"] == "2999-09-01"
+
+
+def test_employee_creation_options_and_direct_creation_permission(client, auth_headers, restricted_headers, db):
+    from app.modules.auth.models import User, UserFeaturePermission, AuditEvent
+    from app.modules.drh.models import Employee
+
+    options = client.get("/api/drh/employees/creation-options", headers=auth_headers)
+    assert options.status_code == 200
+    assert options.json() == {"direct_creation_allowed": True, "recruitment_creation_allowed": True}
+
+    restricted = db.query(User).filter_by(username="testops").one()
+    restricted.authorized_modules = ["ops", "dc", "drh"]
+    db.commit()
+    restricted_options = client.get("/api/drh/employees/creation-options", headers=restricted_headers)
+    assert restricted_options.status_code == 200, restricted_options.text
+    assert restricted_options.json()["direct_creation_allowed"] is False
+    denied = client.post("/api/drh/employees", headers=restricted_headers, json={
+        "code": "DENIED01", "first_name": "Agent", "last_name": "SansDroit",
+        "society": "Iron Global Securite",
+    })
+    assert denied.status_code == 403
+
+    db.add(UserFeaturePermission(
+        user_id=restricted.id, module_key="drh",
+        feature_key="direct_employee_creation", action_key="create",
+    ))
+    db.commit()
+    allowed = client.post("/api/drh/employees", headers=restricted_headers, json={
+        "code": "SCOPE01", "first_name": "Agent", "last_name": "Perimetre",
+        "society": "Iron Global Securite",
+    })
+    assert allowed.status_code == 200, allowed.text
+    employee = allowed.json()
+    assert employee["creation_source"] == "direct"
+    assert employee["created_by_user_id"] == restricted.id
+    assert db.query(Employee).filter_by(id=employee["id"]).one().society == "IRON GLOBAL SECURITE"
+    assert db.query(AuditEvent).filter_by(
+        action="employee.created_directly", resource_id=str(employee["id"]), user_id=restricted.id,
+    ).count() == 1
+
+    out_of_scope = client.post("/api/drh/employees", headers=restricted_headers, json={
+        "code": "SCOPE02", "first_name": "Agent", "last_name": "HorsPerimetre",
+        "society": "Sword Construction",
+    })
+    assert out_of_scope.status_code == 403
+
+
+def test_employee_creation_from_recruitment_is_paginated_linked_and_audited(client, auth_headers, db):
+    from app.modules.auth.models import AuditEvent, User
+    from app.modules.drh.models import Candidate, Contract, Employee
+
+    user = db.query(User).filter_by(username="testadmin").one()
+    candidate = Candidate(
+        first_name="UniqueRecruitmentSamira",
+        last_name="Trace",
+        phone="0550998877",
+        email="samira@example.com",
+        desired_position="AGENTE DE SÉCURITÉ",
+        society="Iron Global Securite",
+        expected_salary=52000,
+        status="a_contractualiser",
+        data={
+            "avisDecision": "Favorable",
+            "nomPere": "Ahmed",
+            "nomMere": "Nadia",
+            "dateNaissance": "1991-02-03",
+            "lieuNaissance": "Alger",
+            "nin": "9900022233",
+            "situation": "mariée",
+            "nombreEnfants": 2,
+            "adresse": "Rue 1",
+            "commune": "Alger Centre",
+            "wilaya": "Alger",
+            "typeContrat": "CDD",
+            "contractStartDate": "2026-10-01",
+            "dateFinContrat": "2027-09-30",
+        },
+    )
+    db.add(candidate)
+    db.commit()
+    db.refresh(candidate)
+
+    page = client.get(
+        "/api/drh/employees/recruitment-candidates/page",
+        headers=auth_headers,
+        params={"page": 1, "page_size": 10, "society": "Iron Global Securite", "q": "UniqueRecruitmentSamira"},
+    )
+    assert page.status_code == 200, page.text
+    assert page.json()["total"] == 1
+    assert page.json()["items"][0]["id"] == candidate.id
+
+    created = client.post("/api/drh/employees/from-recruitment", headers=auth_headers, json={
+        "candidate_id": candidate.id,
+        "society": candidate.society,
+        "first_name": "Samira",
+        "last_name": "Trace",
+        "contract_type": "CDD",
+        "recruit_date": "2026-10-01",
+        "salary_net": None,
+    })
+    assert created.status_code == 200, created.text
+    employee = created.json()
+    assert employee["creation_source"] == "recruitment"
+    assert employee["recruitment_candidate_id"] == candidate.id
+    assert employee["created_by_user_id"] == user.id
+    assert employee["father_name"] == "Ahmed"
+    assert employee["children_count"] == 2
+    assert employee["salary_net"] == 52000
+    assert employee["contract_end_date"] == "2027-09-30"
+    assert db.query(Contract).filter_by(employee_id=employee["id"]).count() == 1
+    db.refresh(candidate)
+    assert candidate.status == "embauche"
+    assert candidate.data["convertedEmployeeId"] == employee["id"]
+    assert db.query(AuditEvent).filter_by(
+        action="employee.created_from_recruitment",
+        resource_id=str(employee["id"]),
+        user_id=user.id,
+    ).count() == 1
+
+    second = client.post("/api/drh/employees/from-recruitment", headers=auth_headers, json={
+        "candidate_id": candidate.id, "society": candidate.society,
+    })
+    assert second.status_code == 409
+
+
+def test_employee_creation_from_recruitment_rejects_invalid_and_ineligible_candidates(client, auth_headers, db):
+    from app.modules.drh.models import Candidate
+
+    missing = client.post("/api/drh/employees/from-recruitment", headers=auth_headers, json={
+        "candidate_id": 999999, "society": "Iron Global Securite",
+    })
+    assert missing.status_code == 404
+
+    candidate = Candidate(
+        first_name="Non", last_name="Eligible", society="Iron Global Securite",
+        status="nouvelle", data={"avisDecision": "Favorable"},
+    )
+    db.add(candidate)
+    db.commit()
+    response = client.post("/api/drh/employees/from-recruitment", headers=auth_headers, json={
+        "candidate_id": candidate.id, "society": candidate.society,
+    })
+    assert response.status_code == 422
+
+
+def test_employee_recruitment_conversion_rolls_back_when_audit_fails(client, auth_headers, db, monkeypatch):
+    import pytest
+    from app.modules.drh.models import Candidate, Contract, Employee
+
+    candidate = Candidate(
+        first_name="Rollback", last_name="Candidat", society="Iron Global Securite",
+        status="a_contractualiser", data={"avisDecision": "Favorable", "typeContrat": "CDD"},
+    )
+    db.add(candidate)
+    db.commit()
+    candidate_id = candidate.id
+    contract_count = db.query(Contract).count()
+
+    def fail_audit(*_args, **_kwargs):
+        raise RuntimeError("audit unavailable")
+
+    monkeypatch.setattr("app.modules.drh.service.append_audit", fail_audit)
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        client.post("/api/drh/employees/from-recruitment", headers=auth_headers, json={
+            "candidate_id": candidate_id, "society": candidate.society,
+        })
+
+    db.expire_all()
+    assert db.query(Employee).filter_by(recruitment_candidate_id=candidate_id).count() == 0
+    assert db.query(Contract).count() == contract_count
+    assert db.get(Candidate, candidate_id).status == "a_contractualiser"
