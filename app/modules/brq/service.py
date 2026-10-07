@@ -15,12 +15,12 @@ from app.core.scope_policy import (
     society_key,
     society_scope,
 )
-from app.modules.attendance import core
+from app.modules.attendance import core, official
 from app.modules.attendance.models import EVENT_ABANDON, AttendanceEvent
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs.sql_bridge import flatten_employee_extra
-from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.modules.ops.models import Assignment, DailyPresence, Site, SiteRotation
 from app.modules.ops.routes import _site_society
 
 ACTIVE_EMPLOYEE_STATUSES = frozenset({"actif", "active"})
@@ -294,7 +294,8 @@ def _filter_abandon_society(event: AttendanceEvent, employee: Employee, site: Si
 def build_report(db: Session, user: Any, *, day: date, society: str | None = None,
                  wilaya: str | None = None, site_id: int | None = None,
                  client: str | None = None, site: str | None = None,
-                 fonction: str | None = None, vacation: str | None = None) -> dict[str, Any]:
+                 fonction: str | None = None, vacation: str | None = None,
+                 include_attendance: bool = True, include_sortants: bool = True) -> dict[str, Any]:
     now = core._now_local()
     sites, societies = _visible_sites(db, user, society=society, wilaya=wilaya, site_id=site_id)
     client_ids = {item.client_id for item in sites.values() if item.client_id is not None}
@@ -302,6 +303,25 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
         item.id: item.name
         for item in db.execute(select(Client).where(Client.id.in_(client_ids or {-1}))).scalars()
     }
+    filters = {
+        "society": society, "wilaya": wilaya, "site_id": site_id,
+        "client": client, "site": site, "fonction": fonction, "vacation": vacation,
+    }
+    if not include_attendance:
+        sortants = _sortants(
+            db, user, day, society, wilaya, site_id, sites, societies, clients,
+        ) if include_sortants else []
+        sortants = [
+            item for item in sortants
+            if _matches_report_filters(
+                item, client=client, site=site, fonction=fonction, vacation=vacation,
+            )
+        ]
+        return {
+            "date": day, "timezone": core.TZ_NAME, "filters": filters,
+            "items": [], "abandon_events": [], "abandon_rows": [],
+            "sortants": sortants, "now": now,
+        }
     assignments = _query_assignments(db, day, sites)
     latest: dict[int, Assignment] = {}
     for assignment in assignments:
@@ -340,6 +360,12 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
     for event in abandon_events:
         abandons_by_employee.setdefault(event.employee_id, event)
     abandoned_employee_ids = {event.employee_id for event in abandon_events}
+    posted_site_ids = {
+        assignment.site_id for assignment in assignments
+        if official.is_posted(assignment)
+    }
+    anchors: list[SiteRotation] | None = None
+    anchors_loaded = False
 
     rows: list[dict[str, Any]] = []
     for employee_id, assignment in latest.items():
@@ -363,7 +389,10 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
             continue
         if exit_date is not None and exit_date < day:
             continue
-        plan = core.planned_day(db, assignment, site_row, day)
+        if official.is_posted(assignment) and not anchors_loaded:
+            anchors = official.anchors_for(db, posted_site_ids)
+            anchors_loaded = True
+        plan = core.planned_day(db, assignment, site_row, day, anchors=anchors)
         rows.append(_card(
             employee, assignment, site_row, day, presences.get(employee_id), plan,
             abandons_by_employee.get(employee_id), now, clients.get(site_row.client_id, ""),
@@ -407,7 +436,7 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
         })
     sortants = _sortants(
         db, user, day, society, wilaya, site_id, sites, societies, clients,
-    )
+    ) if include_sortants else []
     sortants = [
         item for item in sortants
         if _matches_report_filters(
@@ -418,10 +447,7 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
     return {
         "date": day,
         "timezone": core.TZ_NAME,
-        "filters": {
-            "society": society, "wilaya": wilaya, "site_id": site_id,
-            "client": client, "site": site, "fonction": fonction, "vacation": vacation,
-        },
+        "filters": filters,
         "items": rows,
         "abandon_events": abandon_events,
         "abandon_rows": abandon_rows,

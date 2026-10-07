@@ -15,7 +15,8 @@ router = APIRouter()
 
 def _report(db: Session, user: User, day: date | None, society: str | None,
             wilaya: str | None, site_id: int | None, client: str | None,
-            site: str | None, fonction: str | None, vacation: str | None) -> dict[str, Any]:
+            site: str | None, fonction: str | None, vacation: str | None, *,
+            include_attendance: bool = True, include_sortants: bool = True) -> dict[str, Any]:
     from app.modules.attendance import core
 
     return service.build_report(
@@ -29,6 +30,8 @@ def _report(db: Session, user: User, day: date | None, society: str | None,
         site=site,
         fonction=fonction,
         vacation=vacation,
+        include_attendance=include_attendance,
+        include_sortants=include_sortants,
     )
 
 
@@ -63,22 +66,22 @@ def situation(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
 @router.get("/presences", response_model=BRQList)
 def presences(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
               user: User = Depends(current_user)) -> dict[str, Any]:
-    return _list(_report(db, user, *filters), "presences")
+    return _list(_report(db, user, *filters, include_sortants=False), "presences")
 
 
 @router.get("/absences", response_model=BRQList)
 def absences(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
              user: User = Depends(current_user)) -> dict[str, Any]:
-    return _list(_report(db, user, *filters), "absences")
+    return _list(_report(db, user, *filters, include_sortants=False), "absences")
 
 
 @router.get("/abandons-poste", response_model=BRQList)
 def abandons_poste(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
                    user: User = Depends(current_user)) -> dict[str, Any]:
-    return _list(_report(db, user, *filters), "abandons-poste")
+    return _list(_report(db, user, *filters, include_sortants=False), "abandons-poste")
 
 
 @router.get("/sortants", response_model=BRQList)
 def sortants(filters: tuple = Depends(_filters), db: Session = Depends(get_db),
              user: User = Depends(current_user)) -> dict[str, Any]:
-    return _list(_report(db, user, *filters), "sortants")
+    return _list(_report(db, user, *filters, include_attendance=False), "sortants")
