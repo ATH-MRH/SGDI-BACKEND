@@ -1,7 +1,7 @@
 """Autorise le droit explicite de création directe d'employé dans le catalogue RH.
 
 Revision ID: 20261007_0035
-Revises: 20260908_0034
+Revises: 20261010_0001
 """
 
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "20261007_0035"
-down_revision = "20260908_0034"
+down_revision = "20261010_0001"
 branch_labels = None
 depends_on = None
 

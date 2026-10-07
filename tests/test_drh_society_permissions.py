@@ -1,5 +1,5 @@
 from app.core.security import hash_password
-from app.modules.auth.models import User
+from app.modules.auth.models import User, UserFeaturePermission
 
 
 def _limited_headers(client, db, username="rh_limited", societies=None):
@@ -15,6 +15,13 @@ def _limited_headers(client, db, username="rh_limited", societies=None):
         is_active=True,
     )
     db.add(user)
+    db.flush()
+    db.add(UserFeaturePermission(
+        user_id=user.id,
+        module_key="drh",
+        feature_key="direct_employee_creation",
+        action_key="create",
+    ))
     db.commit()
     resp = client.post("/api/auth/login", json={"username": username, "password": "secret123"})
     assert resp.status_code == 200, resp.text

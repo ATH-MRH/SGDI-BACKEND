@@ -132,6 +132,7 @@ def test_future_contract_start_is_preserved(client, auth_headers):
 
 
 def test_employee_creation_options_and_direct_creation_permission(client, auth_headers, restricted_headers, db):
+    from app.core.security import hash_password
     from app.modules.auth.models import User, UserFeaturePermission, AuditEvent
     from app.modules.drh.models import Employee
 
@@ -139,13 +140,31 @@ def test_employee_creation_options_and_direct_creation_permission(client, auth_h
     assert options.status_code == 200
     assert options.json() == {"direct_creation_allowed": True, "recruitment_creation_allowed": True}
 
-    restricted = db.query(User).filter_by(username="testops").one()
-    restricted.authorized_modules = ["ops", "dc", "drh"]
+    restricted = User(
+        username="employee_creator",
+        email="employee_creator@test.com",
+        full_name="Employee Creator",
+        role="ops",
+        access_level="H3",
+        authorized_societies=["Iron Global Securite"],
+        authorized_structures=[],
+        authorized_modules=["ops", "dc", "drh"],
+        password_hash=hash_password("secret123"),
+        is_active=True,
+    )
+    db.add(restricted)
     db.commit()
-    restricted_options = client.get("/api/drh/employees/creation-options", headers=restricted_headers)
+    login = client.post("/api/auth/login", json={
+        "username": "employee_creator",
+        "password": "secret123",
+    })
+    assert login.status_code == 200, login.text
+    employee_creator_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    restricted_options = client.get("/api/drh/employees/creation-options", headers=employee_creator_headers)
     assert restricted_options.status_code == 200, restricted_options.text
     assert restricted_options.json()["direct_creation_allowed"] is False
-    denied = client.post("/api/drh/employees", headers=restricted_headers, json={
+    denied = client.post("/api/drh/employees", headers=employee_creator_headers, json={
         "code": "DENIED01", "first_name": "Agent", "last_name": "SansDroit",
         "society": "Iron Global Securite",
     })
@@ -156,7 +175,7 @@ def test_employee_creation_options_and_direct_creation_permission(client, auth_h
         feature_key="direct_employee_creation", action_key="create",
     ))
     db.commit()
-    allowed = client.post("/api/drh/employees", headers=restricted_headers, json={
+    allowed = client.post("/api/drh/employees", headers=employee_creator_headers, json={
         "code": "SCOPE01", "first_name": "Agent", "last_name": "Perimetre",
         "society": "Iron Global Securite",
     })
@@ -169,7 +188,7 @@ def test_employee_creation_options_and_direct_creation_permission(client, auth_h
         action="employee.created_directly", resource_id=str(employee["id"]), user_id=restricted.id,
     ).count() == 1
 
-    out_of_scope = client.post("/api/drh/employees", headers=restricted_headers, json={
+    out_of_scope = client.post("/api/drh/employees", headers=employee_creator_headers, json={
         "code": "SCOPE02", "first_name": "Agent", "last_name": "HorsPerimetre",
         "society": "Sword Construction",
     })
