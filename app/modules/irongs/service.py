@@ -9,7 +9,7 @@ from typing import Any
 
 import orjson
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text as sql_text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -1291,6 +1291,11 @@ def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) 
 
 
 def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
+    return _upsert_and_success(db, "feuillePresence", _presence_line_prepare(db, data))
+
+
+def _presence_line_prepare(db: Session, data: dict[str, Any]) -> dict[str, Any]:
+    """Ligne de présence du jour, contrôlée et prête à être enregistrée (aucune écriture ici)."""
     date_value = str(data.get("date") or "").strip()
     agent_id = str(data.get("agentId") or "").strip()
     if not date_value or not agent_id:
@@ -1316,7 +1321,7 @@ def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
     line["date"] = date_value
     line["agentId"] = target_agent_id
     line["updatedAt"] = _now_iso()
-    return _upsert_and_success(db, "feuillePresence", line)
+    return line
 
 
 def _movement_history_key(item: dict[str, Any]) -> str:
@@ -1330,8 +1335,25 @@ def _movement_history_key(item: dict[str, Any]) -> str:
 
 
 def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]:
-    result = _presence_line_upsert(db, data)
-    line = dict((result.get("data") or {}).get("item") or {})
+    """Ligne de présence et ordre de mouvement dans UNE transaction : le succès n'est renvoyé
+    qu'après leur validation commune, et rien n'est conservé si l'une des deux écritures échoue."""
+    try:
+        line, movement = _presence_movement_write(db, data)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    _snapshot_cache_invalidate()
+    return {"status": "success", "data": {"item": line, "movement": movement}}
+
+
+def _presence_movement_write(db: Session, data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Deux enregistrements simultanés du même mouvement (même jour, même agent) se suivent au
+    # lieu de s'écraser ou de créer deux ordres : le second relit ce que le premier a validé.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(sql_text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                   {"key": f"presence_movement:{data.get('date')}:{data.get('agentId')}"})
+    line = _upsert_collection_item_no_commit(db, "feuillePresence", _presence_line_prepare(db, data))
     patch = dict(data.get("patch") or {})
     movement = {**line, **patch}
     movement["date"] = line.get("date") or data.get("date")
@@ -1366,8 +1388,9 @@ def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]
     movement["updatedAt"] = _now_iso()
     movement.setdefault("createdAt", movement["updatedAt"])
     if movement.get("mouvementMotif") or movement.get("mouvementType") or movement.get("ordreMouvementNumero") or movement.get("mouvementNumero"):
-        sql_bridge.replace_collection(db, "opsMouvements", [movement])
-    return {"status": "success", "data": {"item": line, "movement": movement}}
+        # L'ordre renvoyé est celui relu depuis la table (identifiant SQL inclus).
+        movement = {**movement, **sql_bridge.upsert_item(db, "opsMouvements", movement)}
+    return line, movement
 
 
 def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]) -> dict[str, Any]:
