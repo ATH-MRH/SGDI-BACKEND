@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_staff_token, hash_password, verify_password
 from app.modules.auth.models import User
 from app.modules.auth.schemas import UserCreate, UserUpdate
 
@@ -88,7 +88,7 @@ def authenticate(db: Session, username: str, password: str) -> tuple[str, User]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
     from app.modules.auth.pointer_policy import validate_pointer_scope
     validate_pointer_scope(db, role=user.role, societies=user.authorized_societies, sites=user.authorized_sites, global_society_access=user.global_society_access, status_code=403)
-    token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
+    token = create_staff_token(user.id, {"role": user.role, "username": user.username})
     return token, user
 
 

@@ -22,7 +22,7 @@ from starlette.datastructures import Headers
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.base import Base
-from app.core.security import decode_token, hash_password
+from app.core.security import decode_staff_token, decode_token, hash_password, is_sse_ticket_payload, is_staff_token_payload
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
@@ -357,7 +357,7 @@ def serve_uploaded_document(filename: str, request: Request):
             if not auth_header.lower().startswith("bearer "):
                 raise HTTPException(status_code=401, detail="Token manquant")
             try:
-                payload = decode_token(auth_header.split(" ", 1)[1].strip())
+                payload = decode_staff_token(auth_header.split(" ", 1)[1].strip())
             except ValueError:
                 raise HTTPException(status_code=401, detail="Token invalide")
             user = get_user(db, int(payload["sub"]))
@@ -1493,7 +1493,7 @@ def irongs_events_ticket(authorization: str | None = Header(default=None)):
         raise HTTPException(status_code=401, detail="Authorization header requis")
     with SessionLocal() as db:
         try:
-            payload = decode_token(token)
+            payload = decode_staff_token(token)
             user = get_user(db, int(payload["sub"]))
         except Exception:
             user = None
@@ -1512,6 +1512,9 @@ def irongs_events_stream(ticket: str | None = None, token: str | None = None):
     with SessionLocal() as db:
         try:
             payload = decode_token(raw_token)
+            # Ticket SSE (flux normal) ou jeton staff (paramètre `token` historique) uniquement.
+            if not (is_sse_ticket_payload(payload) or is_staff_token_payload(payload)):
+                raise ValueError("Ticket invalide")
             user = get_user(db, int(payload["sub"]))
         except Exception:
             user = None

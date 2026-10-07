@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_token
+from app.core.security import decode_staff_token
 from app.db.session import get_db
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
@@ -232,7 +232,7 @@ def current_token_payload(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token manquant")
     try:
-        return decode_token(credentials.credentials)
+        return decode_staff_token(credentials.credentials)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide")
 
