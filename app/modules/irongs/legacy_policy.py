@@ -16,6 +16,8 @@ class LegacyCollectionPolicy:
     read: LegacyAccess
     write: LegacyAccess
     modules: frozenset[str]
+    # Modules autorisés à LIRE sans pouvoir écrire (en plus de `modules`).
+    read_modules: frozenset[str] = frozenset()
 
 
 _SQL = {
@@ -63,6 +65,21 @@ _SECRETARIAT = {
 }
 
 
+# Pointage consulté depuis DRH : mêmes données qu'OPS, en lecture seule. Le module RH lit ces
+# collections ; leur écriture reste réservée à OPS (et à l'administration).
+_POINTAGE = {"pointages", "pointageMensuel", "feuillePresence", "feuillePresenceArchive", "feuillePresenceCloture"}
+_READ_ONLY_MODULES = {name: frozenset({"rh"}) for name in _POINTAGE}
+
+# Actions legacy qui écrivent le Pointage (feuille mensuelle et feuille de présence).
+POINTAGE_WRITE_ACTIONS = frozenset({
+    "save-pointage-cell", "save-pointage-observation", "clear-pointage-sheet",
+    "validate-pointage", "unlock-pointage", "validate-pointage-day", "unlock-pointage-day",
+    "validate-pointage-all", "unlock-pointage-all",
+    "upsert-presence-line", "delete-presence-line", "add-presence-agent", "assign-vacant-agent",
+    "validate-presence-line", "unlock-presence-line", "close-presence-day", "reopen-presence-day",
+})
+
+
 def _collection_modules(name: str) -> frozenset[str]:
     if name in {"alertes", "dialogue", "echanges", "messages", "notificationLog", "notifications"}:
         return frozenset({"rh", "ops", "finance", "commercial", "materiel", "secretariat"})
@@ -79,7 +96,8 @@ def _collection_modules(name: str) -> frozenset[str]:
 
 def collection_policy(name: str) -> LegacyCollectionPolicy:
     if name in _SQL or name in _LEGACY:
-        return LegacyCollectionPolicy(LegacyAccess.READ_ALLOWED, LegacyAccess.WRITE_ALLOWED, _collection_modules(name))
+        return LegacyCollectionPolicy(LegacyAccess.READ_ALLOWED, LegacyAccess.WRITE_ALLOWED, _collection_modules(name),
+                                      _READ_ONLY_MODULES.get(name, frozenset()))
     if name in _ADMIN:
         return LegacyCollectionPolicy(LegacyAccess.ADMIN_ONLY, LegacyAccess.ADMIN_ONLY, frozenset({"admin"}))
     return LegacyCollectionPolicy(LegacyAccess.DISABLED, LegacyAccess.DISABLED, frozenset())
@@ -114,4 +132,10 @@ def user_can_read_collection(user, name: str) -> bool:
         return False
     if policy.read is LegacyAccess.ADMIN_ONLY:
         return admin
-    return admin or bool(policy.modules & user_legacy_modules(user))
+    return admin or bool((policy.modules | policy.read_modules) & user_legacy_modules(user))
+
+
+def user_can_write_pointage(user) -> bool:
+    """Écrire le Pointage suit la règle d'écriture de sa collection : module OPS ou administration."""
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    return role in {"admin", "adm", "adm1", "adm2"} or bool(collection_policy("pointages").modules & user_legacy_modules(user))

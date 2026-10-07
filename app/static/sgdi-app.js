@@ -20450,6 +20450,15 @@ function fpqRelieveDueWithoutPointage(f){
 }
 const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["planning","🧠 Planning 7 jours"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
 
+// DRH consulte le Pointage d'OPS : même interface, mêmes données, aucune écriture.
+// OPS reste la référence ; ptReadOnly() ne retire que les contrôles d'écriture, jamais
+// une information. Toute fonction d'écriture du Pointage commence par ptGuardReadOnly().
+function ptReadOnly(){return session?.transverse==="drh"}
+function ptGuardReadOnly(){
+  if(!ptReadOnly())return false;
+  toast("Pointage en lecture seule dans DRH — les saisies se font depuis OPS","error");
+  return true;
+}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){
   // Dans DRH, la société active du module est la source de vérité. Un ancien
@@ -20671,7 +20680,7 @@ function fpqGuardArchive(date){if(fpqIsArchived(date)){toast("📦 Feuille du "+
 function fpqGuardCloture(date){if(fpqIsCloture(date)){toast("🔒 Feuille du "+formatDate(date)+" clôturée · déclôturez d'abord","error");return true}return false}
 function fpqGuardLine(date,agentId){if(ptGuardEmployeePointage(agentId,date))return true;const f=fpqGet(date,agentId);if(f&&f.valide){toast("🔒 Ligne validée · déverrouillez avant modification","error");return true}return false}
 function ptAutoArchiveOldDays(){
-  if(!db||!session)return;
+  if(!db||!session||ptReadOnly())return;
   const td=today();
   if(!db.feuillePresenceArchive)db.feuillePresenceArchive={};
   if(!db.feuillePresenceCloture)db.feuillePresenceCloture={};

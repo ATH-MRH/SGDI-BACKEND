@@ -7230,6 +7230,13 @@ table.pt-auto.pt-manuel tbody tr.locked td{background:#eafaf5}
 .pt-lock-btn{border:1px solid #dbe5f0;background:#fff;color:#043970;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}
 .pt-lock-btn:hover{border-color:#0d6ecc}
 .pt-lock-btn.locked{background:#dcfce7;color:#166534;border-color:#16a34a}
+/* Pointage consulté en lecture seule (DRH) : mêmes puces et statuts, sans affordance de clic. */
+table.pt-manuel .pt-code-chip.readonly,table.pt-manuel .pt-code-dot.readonly{cursor:default}
+table.pt-manuel .pt-code-chip.readonly:hover,table.pt-manuel .pt-code-dot.readonly:hover{box-shadow:none}
+table.pt-manuel span.pt-code-dot{display:inline-flex;align-items:center;justify-content:center}
+span.pt-lock-btn{display:inline-block;cursor:default}
+span.pt-lock-btn:hover{border-color:#dbe5f0}
+span.pt-lock-btn.locked:hover{border-color:#16a34a}
 
 /* Mouvement — liste agents : hover géré par CSS pour éviter le layout thrashing au scroll */
 .ops-mvt-agent-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;}

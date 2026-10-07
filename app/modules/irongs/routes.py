@@ -15,7 +15,9 @@ from app.modules.irongs.models import Position
 from app.modules.auth.routes import is_admin_role
 from app.core.audit import append_audit
 from app.core.scope_policy import ScopeKind, society_scope
-from app.modules.irongs.legacy_policy import LegacyAccess, collection_policy, user_legacy_modules
+from app.modules.irongs.legacy_policy import (
+    POINTAGE_WRITE_ACTIONS, LegacyAccess, collection_policy, user_can_write_pointage, user_legacy_modules,
+)
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
@@ -31,7 +33,8 @@ def _legacy_gate(db: Session, request: Request, user, name: str, write: bool = F
     allowed = access in {LegacyAccess.WRITE_ALLOWED if write else LegacyAccess.READ_ALLOWED}
     allowed = allowed or (access is LegacyAccess.ADMIN_ONLY and is_admin_role(user.role))
     allowed = allowed and society_scope(user).kind is not ScopeKind.NONE
-    allowed = allowed and (is_admin_role(user.role) or bool(policy.modules & _legacy_capabilities(user)))
+    modules = policy.modules if write else policy.modules | policy.read_modules
+    allowed = allowed and (is_admin_role(user.role) or bool(modules & _legacy_capabilities(user)))
     actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])}
     allowed = allowed and (not actions or request_action(request) in actions or "admin" in actions)
     if not allowed:
@@ -352,7 +355,13 @@ def valider_facture(item_id: str, request: Request, db: Session = Depends(get_db
 def legacy_action(
     action: str,
     payload: LegacyActionPayload,
+    request: Request,
     db: Session = Depends(get_db),
     user=Depends(current_user),
 ) -> dict[str, Any]:
+    if action in POINTAGE_WRITE_ACTIONS and not user_can_write_pointage(user):
+        append_audit(db, action="legacy.write", resource="pointage_action", resource_id=action,
+                     result="refused", user=user, request=request)
+        db.commit()
+        raise HTTPException(status_code=403, detail="Pointage en lecture seule pour ce compte")
     return service.run_legacy_action(db, action, payload, user)
