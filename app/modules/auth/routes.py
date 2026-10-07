@@ -321,7 +321,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
     safe_payload = payload.model_copy(update={
         "role": "user", "access_level": None, "authorized_societies": [],
         "authorized_structures": [], "authorized_sites": [], "authorized_actions": ["read"],
-        "authorized_modules": [], "global_society_access": False,
+        "authorized_modules": [], "feature_permissions": [], "global_society_access": False,
     })
     return create_user(db, safe_payload)
 
@@ -337,7 +337,7 @@ def create_user_as_admin(
         raise HTTPException(status_code=422, detail="Une adresse email personnelle est obligatoire pour chaque utilisateur")
     if not payload.validation_password:
         raise HTTPException(status_code=422, detail="Le mot de passe de validation est obligatoire")
-    created = create_user(db, payload)
+    created = create_user(db, payload, created_by_user_id=user.id)
     created.has_validation_password = bool(created.validation_password_hash)
     created.credentials_email_sent = False
     created.credentials_email_error = None

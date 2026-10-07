@@ -47,7 +47,7 @@ function renderGranularPermissionsEditor(){
   const notApplicable=(module.features||[]).length*(editor.catalog.actions||[]).length-applicable;
   const moduleAll=applicable>0&&selected===applicable,moduleSome=selected>0&&selected<applicable;
   host.innerHTML=`<div class="granular-head"><div><span>Permissions granulaires — utilisateur</span><h2>${escapeHTML(editor.username)}</h2></div><button type="button" aria-label="Fermer" onclick="closeModal()">×</button></div>
-    <div class="granular-warning"><b>Permissions préparées — non actives.</b><span>Les autorisations legacy restent applicables.</span></div>
+    <div class="granular-warning"><b>La création directe d’un employé est contrôlée par cette permission côté API.</b><span>Les autres permissions granulaires restent préparatoires ; les périmètres société et site du compte sont conservés.</span></div>
     <div class="granular-layout"><aside class="granular-modules"><label class="granular-search"><span>⌕</span><input type="search" placeholder="Rechercher un module..." value="${escapeHTML(editor.moduleSearch)}" oninput="granularSetModuleSearch(this.value)"></label><div class="granular-module-list">${modules.map(item=>`<button type="button" data-entry="${escapeHTML(granularEntryKey(item))}" class="${granularEntryKey(item)===granularEntryKey(module)?"active":""}" onclick="granularSelectModule('${escapeHTML(granularEntryKey(item))}')"><i>${escapeHTML(item.label.charAt(0))}</i><span><b>${escapeHTML(item.label)}</b><small>${escapeHTML(item.domain)}</small></span></button>`).join("")||'<p class="granular-empty">Aucun module</p>'}</div></aside>
     <main class="granular-main"><header class="granular-module-head"><i>${escapeHTML(module.label.charAt(0))}</i><div><h3>${escapeHTML(module.label)}</h3><a>${escapeHTML(module.domain)}</a><p>${escapeHTML(module.description)}</p>${granularEntryNoteHtml(module)}</div></header>
     <div class="granular-toolbar"><label class="granular-search"><span>⌕</span><input type="search" placeholder="Rechercher une fonctionnalité..." value="${escapeHTML(editor.featureSearch)}" oninput="granularSetFeatureSearch(this.value)"></label><select onchange="granularSetFeatureFilter(this.value)"><option value="all" ${editor.featureFilter==="all"?"selected":""}>Toutes les fonctionnalités</option><option value="selected" ${editor.featureFilter==="selected"?"selected":""}>Avec sélection</option><option value="empty" ${editor.featureFilter==="empty"?"selected":""}>Non sélectionnées</option></select><label class="granular-select-module"><input id="granular-module-all" type="checkbox" ${moduleAll?"checked":""} onchange="granularToggleModule(this.checked)"> Sélectionner tout le module</label></div>
@@ -76,8 +76,8 @@ function granularResetModule(){granularToggleModule(false)}
 async function saveGranularPermissions(){
   const editor=granularPermissionEditor;if(!editor)return;
   const permissions=[...editor.selected].sort().map(key=>{const[module_key,feature_key,action_key]=key.split(":");return{module_key,feature_key,action_key}});
-  if(!confirm("Remplacer les permissions granulaires préparées par cette sélection ?"))return;
-  try{const result=await SGDI.auth.replaceUserFeaturePermissions(editor.userId,permissions);closeModal();toast("Permissions préparées enregistrées : "+result.permission_count,"success")}
+  if(!confirm("Remplacer les permissions granulaires de cet utilisateur par cette sélection ?"))return;
+  try{const result=await SGDI.auth.replaceUserFeaturePermissions(editor.userId,permissions);closeModal();toast("Permissions enregistrées : "+result.permission_count,"success")}
   catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
 }
 

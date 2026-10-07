@@ -64,6 +64,9 @@ def test_catalog_has_all_23_modules_and_only_applicable_actions(client, db):
             assert feature["applicable_actions"] == list(
                 applicable_actions(module["module_key"], feature["feature_key"])
             )
+    drh = next(module for module in body["modules"] if module["module_key"] == "drh")
+    direct = next(feature for feature in drh["features"] if feature["feature_key"] == "direct_employee_creation")
+    assert direct["applicable_actions"] == ["create"]
 
 
 def test_feature_administration_requires_explicit_global_admin(client, db):
@@ -163,6 +166,61 @@ def test_identical_replacement_is_deterministic_without_false_audit(client, db):
     assert response.status_code == 200
     assert response.json()["permissions"] == payload["permissions"]
     assert db.query(AuditEvent).filter_by(user_id=admin.id, resource_id=str(target.id)).count() == before
+
+
+def test_direct_employee_creation_permission_can_be_granted_and_revoked(client, db):
+    admin = _user(db, "FEATURE_DIRECT_ADMIN", role="admin", global_access=True)
+    target = _user(db, "FEATURE_DIRECT_TARGET")
+    target.authorized_modules = ["drh"]
+    db.commit()
+    headers = _headers(target)
+    options_url = "/api/drh/employees/creation-options"
+    assert client.get(options_url, headers=headers).json()["direct_creation_allowed"] is False
+    permission = {"module_key": "drh", "feature_key": "direct_employee_creation", "action_key": "create"}
+
+    granted = client.put(_url(target), headers=_headers(admin), json={"permissions": [permission]})
+    assert granted.status_code == 200, granted.text
+    assert client.get(options_url, headers=headers).json()["direct_creation_allowed"] is True
+
+    revoked = client.put(_url(target), headers=_headers(admin), json={"permissions": []})
+    assert revoked.status_code == 200, revoked.text
+    assert client.get(options_url, headers=headers).json()["direct_creation_allowed"] is False
+
+
+def test_user_creation_can_grant_direct_permission_but_public_registration_cannot(client, db, monkeypatch):
+    admin = _user(db, "FEATURE_DIRECT_CREATE_ADMIN", role="admin", global_access=True)
+    permission = {"module_key": "drh", "feature_key": "direct_employee_creation", "action_key": "create"}
+    monkeypatch.setattr("app.modules.auth.routes.send_user_credentials_email", lambda *_args, **_kwargs: None)
+    created = client.post("/api/auth/users", headers=_headers(admin), json={
+        "username": "FEATURE_DIRECT_NEW",
+        "email": "feature.direct.new@example.com",
+        "full_name": "Direct creation user",
+        "role": "drh",
+        "authorized_modules": ["drh"],
+        "authorized_societies": ["Iron Global Securite"],
+        "feature_permissions": [permission],
+        "password": "testpass123",
+        "validation_password": "test-validation-password",
+    })
+    assert created.status_code == 200, created.text
+    created_user_id = created.json()["id"]
+    assert db.query(UserFeaturePermission).filter_by(
+        user_id=created_user_id, module_key="drh",
+        feature_key="direct_employee_creation", action_key="create",
+    ).count() == 1
+
+    monkeypatch.setattr("app.modules.auth.routes.settings.allow_public_registration", True)
+    public = client.post("/api/auth/register", json={
+        "username": "FEATURE_PUBLIC_DIRECT",
+        "email": "feature.public.direct@example.com",
+        "role": "admin",
+        "authorized_modules": ["drh"],
+        "feature_permissions": [permission],
+        "password": "testpass123",
+    })
+    assert public.status_code == 200, public.text
+    public_user_id = public.json()["id"]
+    assert db.query(UserFeaturePermission).filter_by(user_id=public_user_id).count() == 0
 
 
 def test_audit_failure_rolls_back_the_complete_replacement(client, db, monkeypatch):

@@ -169,6 +169,7 @@ async function openAdminUserModal(username){
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
       </div>
+      ${isNew?`<div class="mt-3 rounded-lg p-3" style="border:1px solid #c7d2fe;background:#eef2ff"><label class="flex items-start gap-2 text-sm font-bold"><input type="checkbox" name="directEmployeeCreation"/><span>Création directe d’un employé<small class="block text-xs font-normal text-slate-600 mt-1">Autorise la création d’une fiche employé hors Recrutement. Les périmètres société et site du compte restent appliqués.</small></span></label></div>`:""}
       <div class="admin-access-separator"></div>
       <label class="label">Modules accessibles avec cet identifiant et ce mot de passe *</label>
       <p class="text-xs text-slate-500 mb-2">Cochez chaque application autorisée. L'utilisateur conservera la même identité de connexion sur tous ces sous-domaines.</p>
@@ -243,7 +244,7 @@ async function confirmAdminUser(originalUsername){
   const username=originalUsername?rawUsername:rawUsername.toUpperCase();
   const password=String(fd.get("password")||"");
   const validationPassword=String(fd.get("validationPassword")||"");
-  const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),modulesAutorises:ADMIN_LOGIN_MODULES.filter(m=>fd.get("module_"+m.key)===m.key).map(m=>m.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
+  const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",directEmployeeCreation:!originalUsername&&fd.get("directEmployeeCreation")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),modulesAutorises:ADMIN_LOGIN_MODULES.filter(m=>fd.get("module_"+m.key)===m.key).map(m=>m.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
   if(f.__adminWizard)adminWizardPreserveAccess(f,data);
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
@@ -261,7 +262,7 @@ async function confirmAdminUser(originalUsername){
     if(!validationPassword){toast("Mot de passe de validation requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,password,validation_password:validationPassword});
+      savedUser=await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,feature_permissions:data.directEmployeeCreation?[{module_key:"drh",feature_key:"direct_employee_creation",action_key:"create"}]:[],password,validation_password:validationPassword});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
