@@ -44,7 +44,7 @@ from app.modules.auth.schemas import (
     UserModulePermissionsOut,
     UserFeaturePermissionsOut,
 )
-from app.core.security import create_access_token, hash_password
+from app.core.security import create_staff_token, hash_password
 from app.modules.auth.service import authenticate, create_user, update_user
 
 
@@ -696,7 +696,7 @@ def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Sessio
         rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
     rate_limit.clear(f"login:{ip}")
-    token = create_access_token(str(user.id), {"role": user.role, "username": user.username, "admin_system": True})
+    token = create_staff_token(user.id, {"role": user.role, "username": user.username, "admin_system": True})
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 

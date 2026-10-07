@@ -74,3 +74,49 @@ def decode_token(token: str) -> dict[str, Any]:
         return payload
     except Exception as exc:
         raise ValueError("Token invalide") from exc
+
+
+# --- Isolation des familles de jetons -------------------------------------------------
+# Tous les jetons (staff, portail client, portail employé, QR de pointage, ticket SSE)
+# sont signés par le même secret. La signature seule ne dit donc pas à QUI le jeton a été
+# délivré : sans contrôle de famille, le `sub` d'un compte portail client serait lu comme
+# un identifiant staff. Les routes staff n'acceptent que ce que valident ces fonctions.
+
+TOKEN_USE_CLAIM = "token_use"
+STAFF_TOKEN_USE = "staff"
+
+# Jetons staff émis avant l'ajout de `token_use` (durée de vie : jwt_expires_minutes) :
+# ils ne portaient que ces claims. Tout autre claim désigne une autre famille (ou une
+# famille future) et fait refuser le jeton : refus par défaut.
+_LEGACY_STAFF_CLAIMS = frozenset({"sub", "exp", "iat", "role", "username", "admin_system"})
+_SSE_TICKET_CLAIMS = frozenset({"sub", "exp", "sse_ticket"})
+
+
+def _has_staff_subject(payload: dict[str, Any]) -> bool:
+    subject = payload.get("sub")
+    return isinstance(subject, str) and subject.isascii() and subject.isdigit() and isinstance(payload.get("exp"), int)
+
+
+def is_staff_token_payload(payload: dict[str, Any]) -> bool:
+    if not _has_staff_subject(payload):
+        return False
+    if TOKEN_USE_CLAIM in payload:
+        return payload[TOKEN_USE_CLAIM] == STAFF_TOKEN_USE
+    return set(payload) <= _LEGACY_STAFF_CLAIMS
+
+
+def is_sse_ticket_payload(payload: dict[str, Any]) -> bool:
+    return _has_staff_subject(payload) and payload.get("sse_ticket") is True and set(payload) <= _SSE_TICKET_CLAIMS
+
+
+def create_staff_token(user_id: int, claims: dict[str, Any] | None = None) -> str:
+    return create_access_token(str(user_id), {**(claims or {}), TOKEN_USE_CLAIM: STAFF_TOKEN_USE})
+
+
+def decode_staff_token(token: str) -> dict[str, Any]:
+    """Décode un jeton et exige qu'il soit un jeton staff ; ValueError sinon."""
+    payload = decode_token(token)
+    if not is_staff_token_payload(payload):
+        raise ValueError("Token invalide")
+    return payload
+
