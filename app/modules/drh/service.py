@@ -1057,9 +1057,14 @@ def _ensure_candidate_not_duplicate(db: Session, values: dict[str, Any], existin
             raise HTTPException(status_code=409, detail=f"Cette personne est déjà salariée sous le code {employee.code}")
 
 
-def create_candidate(db: Session, payload: Any, username: str | None = None):
+def create_candidate(db: Session, payload: Any, username: str | None = None, *,
+                     commit: bool = True, check_duplicates: bool = True):
+    """`commit=False` laisse l'appelant maître de la transaction (import en lot).
+    `check_duplicates=False` est réservé à un appelant qui vient lui-même de contrôler les
+    doublons sur un index complet, dans la même transaction (import Excel)."""
     values = _candidate_values(payload)
-    _ensure_candidate_not_duplicate(db, values)
+    if check_duplicates:
+        _ensure_candidate_not_duplicate(db, values)
     initial_data = values.get("data") if isinstance(values.get("data"), dict) else {}
     values["data"] = {
         **initial_data,
@@ -1073,12 +1078,15 @@ def create_candidate(db: Session, payload: Any, username: str | None = None):
     db.add(row)
     db.flush()
     _record_candidate_recruitment_creation(db, row, username)
+    if not commit:
+        db.flush()
+        return row
     db.commit()
     db.refresh(row)
     return row
 
 def update_candidate(db: Session, candidate_id: int, payload: Any, username: str | None = None, *,
-                     actor: Any | None = None, ventilation_context: str = "fiche"):
+                     actor: Any | None = None, ventilation_context: str = "fiche", commit: bool = True):
     row = get_or_404(db, Candidate, candidate_id)
     values = _candidate_values(payload, existing=row, partial=True)
     _ensure_candidate_not_duplicate(db, values, existing=row)
@@ -1098,6 +1106,9 @@ def update_candidate(db: Session, candidate_id: int, payload: Any, username: str
         db.flush()
         ventilate_candidate(db, row.id, new_society, actor=actor or SimpleNamespace(id=None, username=username or "system"),
                             context=ventilation_context, commit=False)
+    if not commit:
+        db.flush()
+        return row
     db.commit()
     db.refresh(row)
     return row

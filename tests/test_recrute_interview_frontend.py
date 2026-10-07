@@ -60,5 +60,8 @@ def test_candidate_pool_is_shared_until_favorable_interview():
     # V7 : le vivier est celui du Groupe ; « Non ventilés » est un filtre de portefeuille.
     assert "PORTFOLIO_UNASSIGNED+'\">Non ventilés</option>'" in HTML
     assert 'society:existing?.society||null' in HTML
-    assert 'society:null,status:"nouvelle"' in HTML
+    # L'import Excel est désormais traité par le serveur : fiche non ventilée, statut initial.
+    importer = (Path(__file__).resolve().parents[1] / "app" / "modules" / "drh" / "candidate_import.py").read_text(encoding="utf-8")
+    assert 'payload: dict[str, Any] = {"status": "nouvelle", "society": None}' in importer
+    assert "importRecruitmentExcel" not in HTML
     assert 'if(valide&&entretien.recommandation==="Favorable"&&recruitmentCanVentilate())payload.society=' in HTML
