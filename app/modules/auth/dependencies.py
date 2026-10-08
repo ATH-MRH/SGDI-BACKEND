@@ -74,10 +74,40 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     # Saisie manuelle du pointeur : la permission fine ne réactive pas un module
     # révoqué. Couvre recherche/contexte, PRÉSENT, ABSENT et ABANDON POSTE.
     ("/api/portal/attendance-manual", frozenset({"pointage", "pointeur"})),
+    # Validation d'un QR salarié : un pointage est écrit. Réservée aux applications de pointage
+    # (le QR lui-même est émis par le salarié, avec un jeton portail, hors de cette table).
+    ("/api/portal/attendance-qr/scan", frozenset({"pointage", "pointeur", "ops"})),
+    # Lectures du poste de pointage (sites, feuille, relève en direct, portrait, anomalies, flux,
+    # effectifs, alertes, statistiques, référentiel léger) : mêmes applications, plus la DRH
+    # qui consulte le référentiel et l'onglet Pointages. Sans ces lignes, tout compte interne
+    # d'un autre module lisait noms, matricules et photos de sa société.
+    ("/api/portal/attendance-sites", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-sheet", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-live", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-employee", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-employees", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-anomalies", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-feed", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-staffing", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-statistics", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-alerts", frozenset({"pointage", "pointeur", "ops", "drh"})),
     # Biométrie : terminal (reconnaissance) + administration ; actions sensibles soumises en
     # plus à une permission biométrique explicite (app/modules/biometrics/routes.py).
     ("/api/biometrics", frozenset({"pointage", "pointeur", "ops", "drh"})),
 )
+
+# Écritures : sous-ensemble plus strict que la lecture du même préfixe. Le terminal terrain
+# (clé « pointeur ») LIT les présences OPS mais n'en écrit aucune par ces routes : ses pointages
+# passent par /api/portal/attendance-* (heure serveur, périmètre site, permission fine).
+API_MODULE_WRITE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
+    ("/api/ops/pointage", frozenset({"ops", "pointage"})),
+)
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_LEGACY_ATTENDANCE_ROLE_KEYS: dict[str, frozenset[str]] = {
+    "ops": frozenset({"ops"}), "superviseur": frozenset({"ops"}), "supervisor": frozenset({"ops"}),
+    "dispatch": frozenset({"ops"}), "pointeur": frozenset({"pointeur"}), "pointage": frozenset({"pointage"}),
+    "drh": frozenset({"drh"}), "rh": frozenset({"drh"}),
+}
 
 MODULE_KEY_ALIASES = {
     "commercial": "dc",
@@ -89,6 +119,10 @@ MODULE_KEY_ALIASES = {
 def request_module_keys(request: Request) -> frozenset[str] | None:
     """Retourne les modules existants capables d'utiliser la route demandee."""
     path = request.url.path.lower().rstrip("/")
+    if request.method.upper() not in _READ_METHODS:
+        for prefix, module_keys in API_MODULE_WRITE_PREFIXES:
+            if path == prefix or path.startswith(f"{prefix}/"):
+                return module_keys
     for prefix, module_keys in API_MODULE_PREFIXES:
         if path == prefix or path.startswith(f"{prefix}/"):
             return module_keys
@@ -143,6 +177,14 @@ def enforce_module_access(db: Session, request: Request, user: User) -> None:
     if is_admin_role(user.role):
         return
     allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
+    legacy_path = request.url.path.lower()
+    if (configured is None and legacy_path.startswith("/api/portal/attendance-")
+            and not legacy_path.startswith("/api/portal/attendance-manual")):
+        # Comptes historiques (modules NULL) : ces routes n'avaient aucune porte de module ; un
+        # superviseur ou un pointeur historique y accédait par son rôle. Son rôle continue de
+        # valoir application de pointage ici — et ici seulement (la saisie manuelle garde sa
+        # porte stricte existante). Une liste de modules explicite fait toujours foi.
+        allowed = allowed | _LEGACY_ATTENDANCE_ROLE_KEYS.get(str(user.role or "").strip().lower(), frozenset())
     if allowed.isdisjoint(required):
         append_audit(
             db,

@@ -115,15 +115,19 @@ def attendance_employees(
         return " ".join("".join(ch for ch in text if unicodedata.category(ch) != "Mn").split())
 
     requested_key = society_key(society)
-    authorized_societies = user.authorized_societies if isinstance(user.authorized_societies, list) else []
-    allowed_keys = {society_key(value) for value in authorized_societies if society_key(value)}
-    if requested_key and allowed_keys and requested_key not in allowed_keys:
+    # Périmètre réel du compte (sociétés explicites, ou sociétés de ses sites) : un compte sans
+    # aucun périmètre ne voit rien — auparavant un périmètre vide valait « toutes les sociétés ».
+    scope = _attendance_society_scope(db, user)
+    if scope.kind is ScopeKind.NONE:
+        raise HTTPException(status_code=403, detail="Aucun périmètre société explicite")
+    if requested_key and not scope.allows(society):
         raise HTTPException(status_code=403, detail="Société non autorisée")
-    effective_keys = {requested_key} if requested_key else allowed_keys
     employees = db.execute(select(Employee).order_by(Employee.last_name, Employee.first_name)).scalars().all()
     employees = [row for row in employees if not _employee_portal_block_reason(row)]
-    if effective_keys:
-        employees = [row for row in employees if society_key(row.society) in effective_keys]
+    if requested_key:
+        employees = [row for row in employees if society_key(row.society) == requested_key]
+    elif scope.kind is not ScopeKind.GLOBAL:
+        employees = [row for row in employees if scope.allows(row.society)]
 
     employee_ids = [row.id for row in employees]
     assignments = db.execute(
@@ -1200,7 +1204,9 @@ def attendance_statistics(
     selected_month = int(month) if month else None
     if selected_month is not None and not 1 <= selected_month <= 12:
         raise HTTPException(status_code=422, detail="Mois invalide")
-    allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    # Même périmètre que les routes voisines : intersection sociétés × sites, et jamais « tout »
+    # pour un compte sans périmètre (seul un périmètre global explicite renvoie None).
+    allowed_site_ids = _attendance_selected_sites(db, user)
     site_catalog_query = select(Site.name).where(Site.active == 1)
     if allowed_site_ids is not None:
         site_catalog_query = site_catalog_query.where(Site.id.in_(allowed_site_ids))
