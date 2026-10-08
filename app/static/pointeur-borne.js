@@ -664,7 +664,11 @@
     if (facialOn()) SCREENS.READY();
     else { SCREENS.FACIAL_OFF(B.session.facial.message); poll(TIMING.STATUS_POLL_MS); }
     start();
-    try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) { /* facultatif */ }
+    const keepAwake = async () => { try { if (navigator.wakeLock && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch (e) { /* facultatif */ } };
+    await keepAwake();
+    // Le navigateur relâche le verrou d'écran quand la page passe en arrière-plan : il est
+    // redemandé au retour, sinon la borne se met en veille après une première interruption.
+    document.addEventListener("visibilitychange", keepAwake);
   }
 
   B.boot = boot;

@@ -89,6 +89,10 @@ def _ensure_selected_site_access(db: Session, scanner: User, site_id: Any) -> No
     """Refuse les sites injectés hors périmètre ; conserve les conflits métier admin."""
     if site_id in (None, ""):
         return
+    if isinstance(site_id, bool) or not isinstance(site_id, (int, str)) or not str(site_id).strip().lstrip("-").isdigit():
+        # Valeur mal typée (objet, liste…) : refus propre, plus une erreur 500.
+        raise HTTPException(status_code=422, detail="Site de pointage invalide")
+    site_id = int(site_id)
     if _attendance_selected_sites(db, scanner) is not None:
         _attendance_selected_sites(db, scanner, site_id)
 
@@ -1017,7 +1021,7 @@ def attendance_feed(
             "scanned_by": row.get("scannedBy") or "",
             "source": row.get("source") or "",
             "duration_minutes": row.get("workedMinutes"),
-            "exit_type": "Abandon poste" if row.get("eventId") in abandon_departures else "Sortie",
+            "exit_type": ("Abandon poste" if row.get("eventId") in abandon_departures else "Sortie") if row.get("action") == "depart" else "",
             "observation": row.get("observation") or "",
         }
         for row in rows
@@ -1649,7 +1653,7 @@ def manual_employee_attendance_scan(
             select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
         ).scalars().first()
         site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
-        observation = _clean_text(payload.get("observation"))
+        observation = _clean_text(payload.get("observation"))[:500]      # même borne que les scans
         # Via Attendance Core : statut de journée (refusé si la journée est clôturée).
         row = attendance_core.record_day_status(
             db, employee=employee, site_id=assignment.site_id if assignment else None, day=now.date(),

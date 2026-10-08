@@ -257,10 +257,69 @@ relève d'une régularisation explicite, au cas par cas.
 - Deux tests existants adaptés : la caméra de test en `127.0.0.1` (désormais refusée par l'API)
   et l'assertion sur les scores renvoyés à la borne (désormais vérifiés dans l'audit).
 
-## Risques résiduels (mis à jour à chaque priorité)
+## P3 — constats de faible gravité
 
-- Documents de `photos/docs/` sans ligne `Document` : servis sans authentification, sous un nom
-  prévisible. Les fermer casserait les pièces jointes du portail client ; à traiter avec ce module.
-- La permission fine `qr_scanning` n'est toujours lue par aucune route (voir P2).
-- Le comportement du proxy de production (normalisation des chemins, en-tête
-  `X-Forwarded-For`) n'a pas pu être vérifié depuis le dépôt.
+- `site_id` mal typé sur la saisie manuelle : refus 422, plus d'erreur 500.
+- Flux : `exit_type` n'est renseigné que pour les départs (il valait « Sortie » aussi pour les
+  arrivées).
+- Observation d'une absence : bornée à 500 caractères, comme celle des scans.
+- Poste : résultat de pointage et erreur de connexion annoncés aux lecteurs d'écran ; champ de
+  recherche libellé ; résultats de recherche activables au clavier ; coller dans un champ ne
+  déclenche plus une lecture de badge ; une erreur de connexion non textuelle ne s'affiche plus
+  « [object Object] » ; vibration de succès rétablie.
+- Borne : le verrou d'écran est redemandé au retour au premier plan.
+- Tests : `tests/test_pointeur_audit_p3.py` (8), `tests_frontend/pointeur-audit-p3.test.js` (5).
+
+## Constats de l'audit non corrigés, et pourquoi
+
+Chacun demande une décision métier, une migration de données existantes ou une information
+absente du dépôt. Ils sont laissés en l'état, volontairement.
+
+| Constat | Raison | Ce qu'il faudrait |
+|---|---|---|
+| Présentation d'une photo à la borne (contrôle de présence réelle passif) | Choix de conception documenté (`docs/biometrics.md`) ; aucun correctif logiciel simple | Ne pas activer le pointage facial des bornes avant les essais physiques prévus, ou ajouter un défi actif |
+| Permission fine `qr_scanning` lue par aucune route | L'exiger couperait le scan des comptes existants qui ne la détiennent pas | Migration qui l'accorde aux comptes actifs concernés, puis contrôle par route |
+| Jeton du portail salarié délivré sans mot de passe (nom, prénom, matricule, date de naissance), qui permet de pointer à distance | Modifie le parcours du portail salarié | Décision produit : exiger le compte portail pour tout pointage, retirer `/pointage-qr` |
+| Gabarits faciaux conservés après désactivation | Suppression irréversible, colonne non nullable, durée de conservation non définie | Politique de conservation, migration, purge planifiée |
+| Aucune unicité (employé, jour) sur `daily_presence` | Une contrainte exige d'abord de dédoublonner des données existantes, dont des journées clôturées | Inventaire des doublons, régularisation, puis contrainte |
+| Affectation résolue sans ses dates (future ou échue) | Dépend de la qualité des dates déjà saisies ; un filtre strict refuserait des agents réellement en poste | Contrôle des affectations `active=1` à date de fin passée, puis filtre |
+| `attendance-staffing` : libellé de groupe calculé autrement que le planning officiel | Les quantités sont justes, seul le libellé diverge | Appeler `official.site_shift` |
+| `attendance-statistics` : faux « sortie manquante » pour un agent en poste | Faible impact, vue non utilisée par le poste | Reprendre l'appariement des paires |
+| Refus filtrés par site après une limite globale (multi-sites) | Demande une colonne ou une table dédiée | Colonne `site_id` sur les refus, filtrage en SQL |
+| Seuils biométriques modifiables par un administrateur limité à une société | Les bornes limitent désormais l'effet ; restreindre davantage change les habilitations | Réserver `/config` aux administrateurs globaux |
+| Jeton de session de 12 h, sans révocation ; déconnexion locale seulement | Demande un identifiant de jeton ou une version par utilisateur, donc une migration | Version de jeton par compte, révocation à la déconnexion |
+| Accès bloquants en base dans des fonctions asynchrones des bornes | Refonte des dépendances, à mesurer en charge | Dépendances synchrones, file bornée sur le moteur |
+| Documents de `photos/docs/` sans ligne `Document` servis sans authentification | Les fermer casserait les pièces jointes du portail client | À traiter avec le portail client |
+| Mot de passe des comptes pointeur : 8 caractères, sans changement forcé | Règle de gestion des comptes | Changement à la première connexion |
+| Une clé de chiffrement unique, sans rotation | Documenté ; la rotation impose un ré-enrôlement | Procédure de rotation |
+
+## Points à connaître sur les tests
+
+- `tests/test_biometrics_facial_pilot.py::test_entry_exit_double_scan_and_audit` échoue s'il est
+  lancé juste après `tests/test_biometrics_terminals.py` : ce dernier laisse une fenêtre de
+  non-répétition à zéro dans la configuration partagée. Défaut d'isolation antérieur à cette
+  branche ; la suite complète, dans son ordre normal, passe.
+- Les tests de concurrence (`*_pg_race.py`, `test_pointeur_audit_pg.py`) sont ignorés sans
+  `ATTENDANCE_PG_URL`. Ils ont été exécutés ici sur une base PostgreSQL locale jetable.
+- Aucun essai n'a été fait sur la production, ni avec de vraies caméras ou de vraies bornes.
+
+## Avant tout déploiement
+
+Rien n'est déployé ni fusionné. Avant de le faire :
+
+1. **Sauvegarde** : sauvegarde complète de la base (aucune migration de schéma dans cette
+   branche, mais les nouveaux pointages suivront les nouvelles règles dès la mise en service).
+2. **Compatibilité des comptes** : exécuter la requête de la section P0 et vérifier qu'aucun
+   compte légitime ne perd l'accès aux routes de pointage.
+3. **Caméras** : exécuter la requête de la section P2.
+4. **Proxy** : vérifier que le proxy de production écrase bien l'en-tête `X-Forwarded-For`
+   fourni par le client et normalise les barres obliques doublées.
+5. **Information** : prévenir OPS, la paie et les pointeurs (rattachement des nuits, reprise de
+   poste, message « connexion perdue », blocage d'un compte après des échecs répétés).
+6. **Essai** : valider sur un site pilote une nuit complète (arrivée avant et après minuit,
+   sortie le matin, clôture) avant la généralisation.
+7. **Retour arrière** : la branche ne contient aucune migration ; revenir au commit précédent
+   suffit côté code. Les pointages enregistrés entre-temps restent valides mais portent les
+   nouvelles valeurs (journée de travail, numéro de vacation dans la journée, nouvelles
+   anomalies). Aucun format de donnée n'a changé, donc l'ancien code devrait les lire sans
+   erreur ; ce retour arrière n'a toutefois pas été testé.

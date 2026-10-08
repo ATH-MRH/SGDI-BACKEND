@@ -677,7 +677,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
     <label for="password">Mot de passe</label>
     <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
     <button id="loginBtn" class="primary">SE CONNECTER</button>
-    <div id="loginError" class="error"></div>
+    <div id="loginError" class="error" role="alert" aria-live="assertive"></div>
   </form>
   </div>
 </section>
@@ -751,7 +751,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code employé</small></button>
         </div>
         <div class="pointer-search">
-            <input id="manualQuery" autocomplete="off" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
+            <input id="manualQuery" autocomplete="off" aria-label="Rechercher un employé par code, nom ou prénom" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
             <button type="button" class="manual-search-button" onclick="activateInlineManualSearch();runManualSearch(document.getElementById('manualQuery').value.trim())">Rechercher</button></div>
         <div class="action-row">
           <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
@@ -759,7 +759,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="generateQrBtn" class="secondary generate-qr-btn ptr-legacy" tabindex="-1" aria-hidden="true">▦ GÉNÉRER UN QR SITE</button>
         </div>
         <div class="station-foot"><i class="dot" aria-hidden="true"></i><p class="scanner-hint" id="scannerHint">La validation est automatique.</p></div>
-        <div id="result" class="result"></div>
+        <div id="result" class="result" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
           <div id="manualSearchStep">
@@ -1046,7 +1046,7 @@ async function login(){
   try{
     const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("username").value.trim(),password:document.getElementById("password").value})});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.detail||"Connexion refusée");
+    if(!response.ok)throw new Error(typeof data.detail==="string"&&data.detail?data.detail:"Connexion refusée : vérifiez l’identifiant et le mot de passe.");
     pointerSession={token:data.access_token,user:data.user};
     localStorage.setItem(SESSION_KEY,JSON.stringify(pointerSession));
     await enterApp();
@@ -1841,7 +1841,7 @@ async function runManualSearch(query){
 function renderManualResults(){
   const el=document.getElementById("manualResults");
   if(!manualResults.length){el.innerHTML='<div class="manual-empty">Aucun employé trouvé.</div>';return}
-  el.innerHTML=manualResults.map((row,index)=>`<div class="manual-result-row" onclick="selectManualResult(${index})"><div><div class="manual-result-name">${esc(row.nom)} ${esc(row.prenom)}</div><div class="manual-result-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")}</div></div><div>›</div></div>`).join("");
+  el.innerHTML=manualResults.map((row,index)=>`<div class="manual-result-row" role="button" tabindex="0" onclick="selectManualResult(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectManualResult(${index})}"><div><div class="manual-result-name">${esc(row.nom)} ${esc(row.prenom)}</div><div class="manual-result-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")}</div></div><div>›</div></div>`).join("");
 }
 function selectManualResult(index){
   if(scanBusy)return;
@@ -2045,6 +2045,10 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("paste",event=>{
   if(!pointerSession||cameraMode||isManualPanelOpen())return;
+  // Coller dans un champ (recherche, motif…) reste un collage : seul un collage hors champ est
+  // traité comme une lecture de badge.
+  const field=event.target&&event.target.closest?event.target.closest("input,textarea,select,[contenteditable]"):null;
+  if(field&&field.id!=="wedgeInput")return;
   const value=event.clipboardData?.getData("text")||"";
   if(value){event.preventDefault();acceptUsbQr(value)}
 });
