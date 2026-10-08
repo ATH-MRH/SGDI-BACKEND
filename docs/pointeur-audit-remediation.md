@@ -90,6 +90,93 @@ La confusion des familles de jetons (un jeton du portail client accepté comme s
 
 - `tests/test_pointeur_audit_p0.py` (35 tests) et `tests_frontend/pointeur-audit-p0.test.js` (4).
 
+## P1 — calcul des vacations, paie, suivi en direct
+
+Principe : aucun pointage existant, aucune journée clôturée et aucune paie ne sont réécrits.
+Les règles ci-dessous s'appliquent aux passages enregistrés après le déploiement. Les journées
+déjà mal rattachées (nuits commencées après minuit) restent telles quelles ; les corriger
+relève d'une régularisation explicite, au cas par cas.
+
+### Suivi en direct
+
+- `live._last_scan_by_employee` reçoit une borne `since` : il ne relit plus tout l'historique
+  des employés à chaque relève (toutes les 2 s par poste). Le résultat est identique, chaque
+  appelant ne demandant que des employés qui ont un passage dans cette fenêtre.
+
+### Journée de travail des postes de nuit (effet sur la paie)
+
+- **Avant** : une arrivée après minuit était rattachée au jour civil. Deux nuits consécutives
+  dont la première commencée en retard tombaient sur une seule journée de présence : la paie,
+  qui compte les journées « present » clôturées, en perdait une. Le retard n'était pas signalé
+  et le lendemain recevait une anomalie « hors planning » à tort.
+- **Après** : l'arrivée est rattachée à la journée de travail de la vacation officielle
+  (`work_date`). Le retard est mesuré sur le début réel de la vacation, date comprise.
+- **Si cette journée de travail est déjà clôturée** : elle n'est pas modifiée. Le passage reste
+  sur le jour civil et une anomalie `ARRIVAL_AFTER_CLOSURE` demande la régularisation.
+
+### Numéro de vacation (`cycle`)
+
+- **Avant** : nombre d'arrivées parmi les 40 derniers événements de l'employé ; il augmentait
+  d'un jour à l'autre puis se déréglait (arrivée 21, départ 20) après 20 vacations.
+- **Après** : rang de l'arrivée dans sa journée de présence (1, 2…) ; le départ reprend celui de
+  son arrivée. Les événements déjà enregistrés gardent leur ancien numéro.
+
+### Clôture et postes de nuit
+
+- **Avant** : clôturer la journée d'arrivée bloquait la sortie du lendemain matin (409). La
+  vacation restait ouverte, sans temps compté.
+- **Après** : la sortie d'une vacation ouverte est enregistrée au journal avec son temps compté.
+  La journée clôturée n'est pas modifiée (ni heure de départ, ni statut) ; une anomalie
+  `DEPARTURE_AFTER_CLOSURE` le signale. Une arrivée sur une journée clôturée reste refusée.
+
+### Reprise de poste (sortie ou abandon saisi par erreur)
+
+- Nouvelle intention `REENTRY` sur `POST /api/portal/attendance-manual/scan` : réservée à la
+  saisie manuelle habilitée (`manual_entry:create`), motif obligatoire, possible seulement tant
+  que la vacation de la sortie précédente est en cours. Rien n'est effacé : la sortie reste au
+  journal, la reprise ouvre une vacation de rang 2, et une anomalie `REENTRY` (information) la
+  signale. Le poste propose le bouton « REPRISE DE POSTE » dans la saisie manuelle.
+- Temps compté : la première vacation garde son temps (souvent 0 min) ; la seconde compte à
+  partir de l'heure de reprise.
+
+### Régularisation d'un oubli de sortie
+
+- Nouvelle route `POST /api/attendance/events/{id}/regularize-exit` (`exit_at`, `reason`) :
+  ajoute la sortie manquante d'une arrivée restée ouverte. Action `update` requise, et
+  `validate` si la journée est clôturée. La sortie doit suivre l'arrivée, précéder le passage
+  suivant, ne pas être dans le futur et rester dans la fenêtre d'une vacation.
+- La vacation reçoit un temps compté borné par le planning officiel. Une journée ouverte reçoit
+  l'heure de départ ; une journée clôturée n'est pas touchée. Anomalie `EXIT_REGULARIZED`
+  (information) et audit `attendance.regularize_exit`.
+- Aucun écran ne l'appelle encore : à brancher dans Gestion du pointage.
+
+### Flux de suivi
+
+- Résumé journalier : regroupé par journée de présence (une nuit = une ligne, et non une ligne
+  « En poste » jamais refermée), trié du plus récent au plus ancien avant la coupe, plafond
+  porté de 200 à 1000 lignes. Chaque événement expose `presence_date`.
+- Vue sur plusieurs jours (planning) : plus de coupe à 2000 lignes (plafond serveur 20000),
+  sans photos.
+
+### Page du poste
+
+- Le planning n'envoie plus la date du suivi : il reçoit bien 8 jours.
+- La date du suivi et sa borne maximale suivent le jour opérationnel après minuit, sauf si
+  l'opérateur a choisi un autre jour.
+
+### Tests P1
+
+- `tests/test_pointeur_audit_p1.py` (14), `tests/test_pointeur_audit_pg.py` (3, PostgreSQL
+  réel, dont la concurrence sur la régularisation), `tests_frontend/pointeur-audit-p1.test.js` (4).
+
+### À vérifier avant déploiement (P1)
+
+- Informer OPS et la paie du changement de rattachement des nuits : à partir du déploiement, une
+  arrivée après minuit compte pour la veille.
+- Les libellés des nouvelles anomalies (`ARRIVAL_AFTER_CLOSURE`, `DEPARTURE_AFTER_CLOSURE`,
+  `REENTRY`, `EXIT_REGULARIZED`) ne sont pas encore traduits dans Gestion du pointage : le code
+  brut s'affiche.
+
 ## Risques résiduels (mis à jour à chaque priorité)
 
 - Documents de `photos/docs/` sans ligne `Document` : servis sans authentification, sous un nom

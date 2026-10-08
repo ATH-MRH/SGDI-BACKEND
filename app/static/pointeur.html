@@ -770,7 +770,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <div id="manualCardStep" class="hidden">
             <div id="manualCard"></div>
             <div id="manualContext" class="v5-context hidden"></div>
-            <button id="manualExtraBtn" type="button" class="v5-extra-btn hidden" onclick="confirmManualPointage('present',{intent:'EXTRA_SHIFT_ENTRY'})">NOUVELLE ENTRÉE DE MAINTIEN</button>
+            <button id="manualExtraBtn" type="button" class="v5-extra-btn hidden" data-intent="EXTRA_SHIFT_ENTRY" onclick="confirmManualPointage('present',{intent:this.dataset.intent||'EXTRA_SHIFT_ENTRY'})">NOUVELLE ENTRÉE DE MAINTIEN</button>
             <div class="manual-actions">
               <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
               <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
@@ -1009,6 +1009,7 @@ function updateHeaderClock(){
   const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",timeZone:opsTimeZone});
   const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone});
   el.innerHTML='<span class="seg-date">'+esc(date)+'</span><span class="seg-clock">'+segClockHTML(time)+'</span>';
+  syncTrackingDate();
   el.dataset.time=time;el.dataset.date=opsDate(now);
   tickPost();
 }
@@ -1489,7 +1490,7 @@ function showPointerSection(section){
 }
 async function loadPlanning(){
   if(!pointerSession?.token)return;const target=document.getElementById("planningDate")?.value||localDate();
-  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
+  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000"+siteQuery("&",false),{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
 }
 function groupPlanningEvents(date){
   const grouped=new Map();planningEvents.filter(e=>String(e.scanned_at||"").slice(0,10)===date).forEach(e=>{const key=String(e.employee_id||e.matricule||"")+"|"+String(e.cycle||1);let row=grouped.get(key);if(!row){row={key,name:e.nom||"Employé",code:e.matricule||"",site:e.site||"—",siteId:e.site_id,arrival:"",departure:"",absent:false,observation:"",scannedBy:""};grouped.set(key,row)}if(e.action==="absent"){row.absent=true;row.observation=e.observation||"";row.scannedBy=e.scanned_by||""}else if(e.action==="depart")row.departure=eventTime(e.scanned_at);else row.arrival=eventTime(e.scanned_at)});return [...grouped.values()]
@@ -1853,6 +1854,16 @@ async function loadManualContext(employee){
       if(x.entry_status==="MANUAL_ENTRY_REQUIRED")note="Ce compte n’a pas la permission « Saisie manuelle » : la deuxième vacation ne peut pas être ouverte ici.";
       if(x.entry_status==="EXTRA_BEFORE_WINDOW")note="Nouvelle entrée possible entre "+hm(x.window_opens_at)+" et "+hm(x.window_closes_at)+".";
     }
+    // Reprise de poste : la dernière sortie appartient à une vacation encore en cours (double
+    // scan, sortie ou abandon saisi par erreur). Le serveur exige l'habilitation et un motif.
+    const reentry=!x&&ctx.reentry&&ctx.reentry.available?ctx.reentry:null;
+    if(reentry){
+      rows.push(["Dernière sortie",reentry.previous_exit||""],["Situation","Vacation encore en cours"]);
+      note="Si cette sortie est une erreur (double scan, mauvaise saisie), enregistrez une reprise de poste. La sortie reste au journal et l’opération est signalée.";
+      explicit=true;
+    }
+    button.dataset.intent=reentry?"REENTRY":"EXTRA_SHIFT_ENTRY";
+    button.textContent=reentry?"REPRISE DE POSTE":"NOUVELLE ENTRÉE DE MAINTIEN";
     box.innerHTML='<dl class="v5-facts">'+rows.filter(r=>r[1]).map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>'
       +(note?'<p class="v5-reason">'+esc(note)+'</p>':"")
       +(explicit?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
@@ -2030,11 +2041,23 @@ if("serviceWorker" in navigator){
 let trackingOnlyPresent=false;
 let selectedSociety='',authorizedAttendanceSites=[],trackingTab='today',trackingWindow=null,trackingAnomalies=[];
 const detachedTracking=location.pathname==='/pointeur/suivi';
+// Poste ouvert en continu : au changement de jour opérationnel, la date du suivi et sa borne
+// maximale avancent d'elles-mêmes — sauf si l'opérateur consulte volontairement un autre jour.
+var trackingDateToday='';
+function syncTrackingDate(){
+  const el=document.getElementById('trackingDate');if(!el||!trackingDateToday)return;
+  const today=localDate();if(today===trackingDateToday)return;
+  const followed=!el.value||el.value===trackingDateToday;
+  trackingDateToday=today;el.max=today;
+  if(followed){el.value=today;if(pointerSession?.token){Promise.resolve(loadHistory()).catch(()=>{});Promise.resolve(loadAttendanceAnomalies()).catch(()=>{})}}
+}
 function readAttendanceScope(raw=localStorage.getItem('atlas_pointer_scope')){try{return JSON.parse(raw||'{}')||{}}catch(e){return {}}}
 const societyKey=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
-siteQuery=function(prefix='?'){
+siteQuery=function(prefix='?',withDate=true){
   const params=new URLSearchParams();if(selectedSiteId)params.set('site_id',selectedSiteId);if(selectedSociety)params.set('society',selectedSociety);
-  const date=document.getElementById('trackingDate')?.value;if(date)params.set('date',date);
+  // withDate=false : vues qui portent leur propre fenêtre (planning sur 8 jours). Leur imposer la
+  // date du suivi réduisait la réponse à un seul jour : la référence J-7 était toujours vide.
+  const date=withDate?document.getElementById('trackingDate')?.value:'';if(date)params.set('date',date);
   return params.size?prefix+params.toString():'';
 };
 loadAttendanceSites=async function(){
@@ -2139,7 +2162,7 @@ const originalSetupScanMode=setupScanMode;setupScanMode=function(){if(!detachedT
 const originalStartLive=startLivePolling;startLivePolling=function(){originalStartLive();if(detachedTracking){clearInterval(liveTimer);liveTimer=setInterval(pollLive,5000)}};
 const originalEnterApp=enterApp;enterApp=async function(){
   document.body.classList.toggle('tracking-detached',detachedTracking);
-  const date=document.getElementById('trackingDate');date.value=localDate();date.max=localDate();
+  const date=document.getElementById('trackingDate');date.value=localDate();date.max=localDate();trackingDateToday=localDate();
   if(detachedTracking){document.querySelector('.brand-sub').textContent='Suivi détaillé des pointages';document.getElementById('detachTracking').hidden=true}
   await originalEnterApp();if(detachedTracking){stopScanner();window.PointeurFacial?.stop?.()}
 };

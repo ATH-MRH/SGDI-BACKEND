@@ -40,9 +40,16 @@ ATTENDANCE_QR_REFRESH_SECONDS = 10
 # application is backgrounded. Keep a short server-side grace period while the
 # displayed QR is still replaced every ten seconds and remains single-use.
 ATTENDANCE_QR_TTL_SECONDS = 120
+FEED_MULTI_DAY_LIMIT = 20000
+FEED_DAILY_LIMIT = 1000
 # Règles de bascule arrivée/départ et durée autorisée : implémentation unique dans
 # Attendance Core (app/modules/attendance/core.py). Alias conservé pour les appelants.
 _authorized_work_minutes = attendance_core.authorized_work_minutes
+
+
+def attendance_core_intent_reentry() -> str:
+    from app.modules.attendance import counted as counted_time
+    return counted_time.INTENT_REENTRY
 
 
 def _attendance_society_scope(db: Session, user: User) -> SocietyScope:
@@ -912,7 +919,9 @@ def attendance_feed(
     sites/société qu'un superviseur OPS (_allowed_assignment_site_ids) : un compte restreint
     à certains sites ne voit que leurs pointages, pas ceux de toute l'entreprise."""
     days = max(2, min(days, 8))
-    limit = max(1, min(limit, 2000 if days > 2 else 200))
+    # Vue multi-jours (planning) : le plafond client de 2000 lignes faisait disparaître sans
+    # signal les jours les plus anciens dès ~125 agents. Le serveur garantit la fenêtre demandée.
+    limit = FEED_MULTI_DAY_LIMIT if days > 2 else max(1, min(limit, 200))
     allowed_site_ids = _attendance_selected_sites(db, user, site_id, society)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     until = None
@@ -989,12 +998,15 @@ def attendance_feed(
             "nom": row.get("agentName") or (" ".join(filter(None, [employees_by_id.get(int(row.get("employeeId"))).last_name, employees_by_id.get(int(row.get("employeeId"))).first_name])).strip() if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else "Employé inconnu"),
             "poste": (employees_by_id.get(int(row.get("employeeId"))).position if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else _clean_text(row.get("poste"))),
             "societe": row.get("societe") or (employees_by_id.get(int(row.get("employeeId"))).society if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else ""),
-            "photo": employee_photo(employees_by_id.get(int(row.get("employeeId")))) if str(row.get("employeeId") or "").isdigit() else "",
+            # Vue multi-jours (planning) : pas de photo — elle n'y est pas affichée et alourdirait
+            # la réponse de plusieurs milliers de lignes.
+            "photo": employee_photo(employees_by_id.get(int(row.get("employeeId")))) if days <= 2 and str(row.get("employeeId") or "").isdigit() else "",
             "action": row.get("action") or "arrivee",
             "cycle": row.get("cycle") or 1,
             "site": row.get("site") or "",
             "site_id": row.get("siteId"),
             "scanned_at": row.get("scannedAt") or "",
+            "presence_date": row.get("presenceDate") or str(row.get("scannedAt") or "")[:10],
             "scanned_by": row.get("scannedBy") or "",
             "source": row.get("source") or "",
             "duration_minutes": row.get("workedMinutes"),
@@ -1030,7 +1042,9 @@ def attendance_feed(
     if include_daily:
         daily = {}
         for event in reversed(feed):
-            day = str(event["scanned_at"])[:10]
+            # Journée de PRÉSENCE (celle de l'arrivée) : une nuit 22:00 → 06:00 tient sur une seule
+            # ligne. Par jour civil, elle donnait une ligne « En poste » jamais refermée.
+            day = str(event.get("presence_date") or event["scanned_at"])[:10]
             key = (event["employee_id"], day)
             row = daily.setdefault(key, {**event, "date": day, "arrival": "", "departure": "", "status": "—"})
             at = str(event["scanned_at"])[11:19]
@@ -1044,8 +1058,10 @@ def attendance_feed(
             elif event["action"] == "absent":
                 row["status"] = "Absent"
             row["observation"] = event.get("observation") or row.get("observation", "")
-        return {"events": feed[:limit], "daily": list(daily.values())[:200],
-                "events_limited": len(feed) > limit, "daily_limited": len(daily) > 200}
+        # Les journées les plus récentes d'abord : la coupe à 200 lignes retirait celles du jour.
+        ordered = sorted(daily.values(), key=lambda row: row["date"], reverse=True)
+        return {"events": feed[:limit], "daily": ordered[:FEED_DAILY_LIMIT],
+                "events_limited": len(feed) > limit, "daily_limited": len(ordered) > FEED_DAILY_LIMIT}
     return feed[:limit]
 
 
@@ -1531,14 +1547,19 @@ def manual_attendance_context(employee_id: int, site_id: int | None = None, db: 
     events = attendance_core._last_scan_events(db, employee.id)
     allowed = _manual_entry_granted(db, scanner)
     extra = counted_time.extra_context(events, site.id if site else None, now, manual_allowed=allowed)
+    reentry = bool(allowed and not extra and attendance_core._reentry_possible(events[-1] if events else None, site, now))
     return {
         "employee": {"id": employee.id, "matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name,
                      "poste": employee.position or ""},
         "site": {"id": site.id, "name": site.name} if site else None, "group": assignment.group_code if assignment else None,
         "extra_shift": counted_time.view({"counted": extra}) if extra else None,
         "abandon_threshold_minutes": attendance_core.settings.attendance_abandon_threshold_minutes,
-        "manual_entry_allowed": allowed, "intent": counted_time.INTENT_EXTRA_ENTRY if extra else None,
-        "reason_required": bool(extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL),
+        "manual_entry_allowed": allowed,
+        "intent": counted_time.INTENT_EXTRA_ENTRY if extra else (counted_time.INTENT_REENTRY if reentry else None),
+        # Reprise de poste : la dernière sortie appartient à une vacation encore en cours (double
+        # scan, sortie ou abandon saisi par erreur). Motif obligatoire, opération signalée.
+        "reentry": {"available": True, "previous_exit": attendance_core.to_local(events[-1].occurred_at).strftime("%H:%M")} if reentry else None,
+        "reason_required": bool(reentry or (extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL)),
         "audited": True, **attendance_core.operational_clock(now),
     }
 
@@ -1685,7 +1706,8 @@ def manual_employee_attendance_scan(
         _clean_text(payload.get("observation")),
         # Vacation supplémentaire après la fenêtre : permission « Saisie manuelle » explicite.
         manual_entry_allowed=_manual_entry_granted(db, scanner),
-        intent=EXTRA_SHIFT_ENTRY if _clean_text(payload.get("intent")).upper() == EXTRA_SHIFT_ENTRY else None,
+        intent=next((code for code in (EXTRA_SHIFT_ENTRY, attendance_core_intent_reentry())
+                     if _clean_text(payload.get("intent")).upper() == code), None),
     )
 
 
