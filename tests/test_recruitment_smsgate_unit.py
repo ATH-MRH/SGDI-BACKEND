@@ -109,6 +109,19 @@ def test_client_reads_message_state_and_device_error(monkeypatch):
     assert client.state('m') == smsgate.GatewayReply('accepted', 'failed', 'RESULT_ERROR_NO_SERVICE')
 
 
+def test_webhook_registration_targets_the_configured_device(monkeypatch):
+    seen = []
+
+    def handler(req):
+        seen.append((req.url.path, json.loads(req.content)))
+        return httpx.Response(201, json={})
+
+    client = smsgate.SMSGateClient(configure(monkeypatch, RECRUITMENT_SMSGATE_DEVICE_ID='device-1'), httpx.MockTransport(handler))
+    assert client.register_webhook('atlas-sent', 'https://atlas.example.test/hook', 'sms:sent') == 201
+    # Nom de champ de l'API SMSGate : `deviceId` (un autre nom serait ignoré et viserait tous les téléphones).
+    assert seen == [('/api/3rdparty/v1/webhooks', {'id': 'atlas-sent', 'url': 'https://atlas.example.test/hook', 'event': 'sms:sent', 'deviceId': 'device-1'})]
+
+
 def test_accepted_is_not_reported_as_sent_or_delivered(db):
     challenge = request(db)
     gateway = FakeGateway()

@@ -164,5 +164,5 @@ class SMSGateClient:
     def register_webhook(self, webhook_id: str, url: str, event: str) -> int:
         body = {'id': webhook_id, 'url': url, 'event': event}
         if self.config.device_id:
-            body['device_id'] = self.config.device_id
+            body['deviceId'] = self.config.device_id
         return self._request('POST', '/webhooks', json=body).status_code

@@ -110,10 +110,12 @@ volumes:
    Ne pas exposer le port de la base.
 3. Vérifier : `https://sms.votre-domaine.com/health` doit répondre avec un état correct.
 
-Cet exemple configure le serveur uniquement par variables d'environnement et n'a pas encore été
-déployé réellement. Si le conteneur réclame un fichier, suivre la méthode officielle
+Les noms de variables ci-dessus sont ceux du fichier de configuration officiel du serveur
+(`configs/config.example.yml` du dépôt `android-sms-gateway/server`). Cet exemple n'a pas encore
+été déployé réellement. Si le conteneur réclame un fichier, suivre la méthode officielle
 (<https://docs.sms-gate.app/getting-started/private-server/>) : monter un `config.yml` sur
-`/app/config.yml` avec les mêmes réglages.
+`/app/config.yml` avec les mêmes réglages. Ne pas modifier `GATEWAY__UPSTREAM_URL` : c'est
+l'adresse par laquelle le serveur privé fait réveiller le téléphone.
 
 Le service `smsgate-worker` nettoie les anciens messages. Le serveur SMSGate conserve le texte
 des SMS dans sa base le temps de les traiter, puis le remplace par une empreinte : protéger
@@ -214,3 +216,19 @@ Les journaux d'ATLAS ne contiennent ni code, ni texte de SMS, ni identifiant de 
 Les routes `mobile/gateway/poll` et `mobile/gateway/ack` restent disponibles pour une passerelle
 dédiée, uniquement avec `RECRUITMENT_SMS_PROVIDER=poll` et `RECRUITMENT_SMS_GATEWAY_KEY`.
 L'application SMS Gateway for Android ne les utilise pas ; elles sont fermées en mode `smsgate`.
+
+## 8. Ce qui reste à faire avant la mise en service
+
+Le code est terminé et couvert par des tests automatiques, mais **aucun envoi réel n'a encore
+été effectué** : ni serveur SMSGate privé, ni Samsung S21 n'étaient disponibles pendant le
+développement. Restent à faire, dans l'ordre :
+
+1. Déployer le serveur SMSGate privé (section 2) et vérifier `/health`.
+2. Connecter le Samsung S21 au serveur (section 3) et relever ses identifiants.
+3. Saisir les variables dans ATLAS (section 4), appliquer `alembic upgrade head`, redémarrer.
+4. Lancer `status`, `register-webhooks` puis `send-test` (section 5).
+5. Faire les essais du portail candidat (section 5), dont le mode avion.
+
+Points que seuls ces essais réels confirmeront : l'exemple Docker Compose, le refus d'un
+identifiant de message déjà connu (409) par votre version du serveur, la réception des accusés
+signés, le choix de la SIM, et la tenue de l'application face à l'économie de batterie Samsung.
