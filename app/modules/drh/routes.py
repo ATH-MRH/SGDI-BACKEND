@@ -1,3 +1,4 @@
+import base64
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -807,6 +808,21 @@ def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), us
     _ensure_recruitment_access(user)
     _ensure_society_allowed(user, payload.society)
     return _action_success(service.create_candidate(db, payload, username=user.username))
+
+
+@router.get("/candidates/{candidate_id}/cv")
+def download_candidate_cv(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
+    row = service.get_or_404(db, Candidate, candidate_id)
+    data = row.data if isinstance(row.data, dict) else {}
+    cv = data.get('cv') or {}
+    content = data.get('_cv_content')
+    if not content or cv.get('mime_type') not in {'application/pdf', 'image/jpeg', 'image/png'}:
+        raise HTTPException(status_code=404, detail='Aucun CV joint à ce dossier')
+    extension = {'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png'}[cv['mime_type']]
+    return Response(content=base64.b64decode(content), media_type=cv['mime_type'], headers={
+        'Content-Disposition': f'attachment; filename="CV-{candidate_id}.{extension}"',
+        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
 
 
 @router.put("/candidates/{candidate_id}")

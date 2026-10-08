@@ -17,6 +17,7 @@ from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, EmployeeBlacklistEntry, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
 from app.modules.ops.models import Assignment, Site
+from app.core.candidate_cv import apply_cv
 from app.core.photo_storage import externalize_employee_documents, normalize_photo_fields
 
 
@@ -666,6 +667,10 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
     values = payload.model_dump(exclude_unset=True)
     data = values.get("data")
     if isinstance(data, dict):
+        try:
+            data = apply_cv(data, existing.data if existing and isinstance(existing.data, dict) else None)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         # Ces marqueurs sont exclusivement produits par les endpoints de validation.
         # Un client web ne peut donc plus fabriquer une fiche entièrement validée.
         if existing:
