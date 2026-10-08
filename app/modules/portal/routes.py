@@ -252,6 +252,13 @@ def _employee_portal_block_reason(employee: Any, on_date: str | None = None) -> 
         "licenc",
         "mise a pied",
         "mis a pied",
+        # Situations définitivement non actives : un employé « retraite » affecté à un site
+        # restait pointable par son identifiant.
+        "retrait",
+        "deces",
+        "decede",
+        "fin de contrat",
+        "radie",
     )
     if any(marker in status_key for marker in blocked_statuses):
         return "Compte portail suspendu : situation administrative non active"

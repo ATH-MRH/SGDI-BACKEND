@@ -658,11 +658,11 @@ body.ptr-v5.has-post .shift-staffing{order:3}
   body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:14px}
 }
 </style>
-<script defer src="/static/html5-qrcode.min.js?v=1"></script>
-<script defer src="/static/pointeur-facial.js?v=1"></script>
+<script defer src="/static/html5-qrcode.min.js?v=20261008-audit"></script>
+<script defer src="/static/pointeur-facial.js?v=20261008-audit"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
-<link rel="stylesheet" href="/static/pointeur-workstation.css">
+<link rel="stylesheet" href="/static/pointeur-workstation.css?v=20261008-audit">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -968,6 +968,17 @@ function stopIdleWatch(){
   hideIdleWarning();
 }
 
+// Aucune requête ne reste en attente indéfiniment : sans délai, un appel sans réponse laissait
+// le poste bloqué (scan, saisie manuelle, relève) alors que l'écran indiquait « opérationnel ».
+const REQUEST_TIMEOUT_MS=30000;
+if(typeof window.fetch==="function"&&typeof AbortSignal!=="undefined"&&typeof AbortSignal.timeout==="function"){
+  const nativeFetch=window.fetch.bind(window);
+  window.fetch=(input,init={})=>nativeFetch(input,init&&init.signal?init:{...init,signal:AbortSignal.timeout(REQUEST_TIMEOUT_MS)});
+}
+// Panne de transport (réseau coupé, délai dépassé) : la requête a pu atteindre le serveur. Ce
+// n'est pas un refus ; l'opérateur doit vérifier le dernier pointage avant de recommencer.
+function transportFailure(error){return !!error&&!error.refusal&&(error instanceof TypeError||error.name==="TypeError"||error.name==="AbortError"||error.name==="TimeoutError")}
+const TRANSPORT_MESSAGE="Connexion perdue : le pointage a peut-être été enregistré. Vérifiez le dernier pointage avant de recommencer.";
 // Échappement valable en contenu ET en valeur d'attribut : les guillemets sont neutralisés
 // (l'ancien passage par textContent/innerHTML les laissait intacts dans src, alt, title, value…).
 function esc(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c])}
@@ -1527,6 +1538,12 @@ async function logout(){
     Object.values(portraitUrls).forEach(u=>{if(String(u).startsWith("blob:"))try{URL.revokeObjectURL(u)}catch(e){}});
     Object.keys(portraitUrls).forEach(k=>delete portraitUrls[k]);
     localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
+    // Données du périmètre du compte : vidées avec la session. Sinon le compte suivant les voyait
+    // jusqu'au premier rafraîchissement réussi — et les gardait si ce rafraîchissement échouait.
+    trackingEvents=[];trackingDailyServer=null;planningEvents=[];serverSummary=null;postState=null;presenceAlertsData=[];
+    manualResults=[];trackingAnomalies=[];authorizedAttendanceSites=[];liveCursor=null;liveRefusalCursor=null;lastScanShownId="";
+    for(const id of ["liveFeedList","trackingBody","planningContent","manualResults","result"]){const node=document.getElementById(id);if(node)node.innerHTML=""}
+    for(const redraw of [()=>{document.getElementById("lastScanCard").innerHTML=lastScanIdleHTML()},renderPost,renderHistory]){try{redraw()}catch(e){/* zone absente de cette vue */}}
     closeManualPanel();resetManualPanel();
     document.getElementById("appView").classList.add("hidden");
     document.getElementById("appView").classList.remove("idle-locking");
@@ -1690,7 +1707,11 @@ async function onQr(token){
   // — contrairement à la caméra qui tourne simplement sans jamais rien décoder, ou à la
   // douchette USB simplement branchée : ceci ne s'exécute QUE sur une lecture réelle.
   noteUserActivity();
-  if(scanBusy)return;
+  if(scanBusy){
+    // Second badge présenté pendant le traitement du premier : il n'est PAS pointé. Le signaler
+    // (son + message) évite qu'un agent reparte en croyant avoir pointé.
+    showResult({kicker:"PATIENTEZ",message:"Pointage précédent en cours — présentez à nouveau votre badge."},"error");playTone(false);return;
+  }
   scanBusy=true;
   try{
     const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null,society:selectedSociety||null})});
@@ -1699,10 +1720,13 @@ async function onQr(token){
     if(!response.ok)throw operationalError(response,data);
     const entry=recordScanEntry(data);
     showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);
-    pollLive();                                                   // la fiche « Dernier pointage » suit sans attendrenavigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
+    pollLive();                                                   // la fiche « Dernier pointage » suit sans attendre
+    navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){
     if(error.refusal)showLastRefusal({id:"x"+Date.now(),heure:opsStamp().slice(11,19),...error.refusal});
-    showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
+    if(transportFailure(error))showResult({kicker:"CONNEXION PERDUE",message:TRANSPORT_MESSAGE},"error");
+    else showResult({message:error.message||"QR invalide"},"error");
+    playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
 function playTone(success){
@@ -1719,11 +1743,11 @@ function playTone(success){
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"||type==="warning"){
-    const action=data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE";
+    const action=data.duplicate?"DÉJÀ ENREGISTRÉ — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE");
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
     const photo=safePhotoSrc(data.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(data.photo))}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
     el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
-  }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
+  }else el.innerHTML=`<div class="result-kicker">${esc(data.kicker||"SCAN REFUSÉ")}</div><div class="result-name">${esc(data.message)}</div>`;
   clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
 function renderHistory(){
@@ -1970,11 +1994,12 @@ async function confirmManualPointage(action="present",options={}){
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
     setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},intent?6000:1800);
   }catch(error){
-    const message=error.message||"Pointage impossible";
+    const lost=transportFailure(error);
+    const message=lost?TRANSPORT_MESSAGE:(error.message||"Pointage impossible");
     const block=error.refusal?refusalBlockHTML(error.refusal):null;
     if(block)feedback.innerHTML='<b>'+esc(block.title)+'</b>'+block.body+'<p class="v5-reason">Aucun mouvement enregistré.</p>';else feedback.textContent=message;
     feedback.className="manual-feedback show error";
-    showResult({message},"error");playTone(false);navigator.vibrate?.(180);
+    showResult({message,...(lost?{kicker:"CONNEXION PERDUE"}:{})},"error");playTone(false);navigator.vibrate?.(180);
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
   }finally{
     scanBusy=false;

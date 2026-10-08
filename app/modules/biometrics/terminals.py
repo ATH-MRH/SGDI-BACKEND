@@ -231,23 +231,30 @@ async def authenticated_terminal(request: Request, db: Session = Depends(get_db)
     timestamp = request.headers.get("x-atlas-timestamp", "")
     signature = request.headers.get("x-atlas-signature", "")
     ip_limiter = f"terminal-auth:{ip}"
-    if rate_limit.failure_count(ip_limiter, 300) >= 30:
-        raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
-    body = await _read_body(request, MAX_BODY_BYTES)
+    # Le terminal est identifié AVANT toute lecture du corps (jusqu'à 20 Mo) : une requête anonyme
+    # ne fait plus tamponner son corps par le serveur.
     terminal = db.execute(select(BiometricTerminal).where(BiometricTerminal.public_id == public_id)).scalar_one_or_none() \
-        if public_id else None
+        if public_id and len(public_id) <= 80 else None
     if terminal is None or terminal.deleted_at or not terminal.public_key:
-        rate_limit.record_failure(ip_limiter, 300)
+        # Le compteur par IP ne bloque que les identifiants INCONNUS : les bornes associées qui
+        # partagent cette adresse (même NAT, même sortie 4G) ne sont plus coupées par un tiers.
+        if rate_limit.record_failure(ip_limiter, 300) > 30:
+            raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
         raise _error(401, "TERMINAL_UNKNOWN", "Terminal non associé")
     if terminal.revoked_at:
         raise _error(401, "TERMINAL_REVOKED", "Terminal révoqué")
+    body = await _read_body(request, MAX_BODY_BYTES)
     try:
-        skew = abs(time.time() - int(timestamp) / 1000)
-    except ValueError:
+        skew = abs(time.time() - int(timestamp) / 1000) if len(timestamp) <= 16 else float("inf")
+    except (ValueError, OverflowError):
         skew = float("inf")
     if skew > SIGNATURE_SKEW_SECONDS or not _verify_signature(
             terminal.public_key, signed_message(public_id, request.method, _signed_path(request), timestamp, body), signature):
-        rate_limit.record_failure(ip_limiter, 300)
+        # Signatures invalides : comptées par terminal ET par adresse ; au-delà du seuil, la
+        # réponse reste un refus mais n'est plus journalisée (pas d'inondation de l'audit). Une
+        # requête correctement signée n'est jamais bloquée par ce compteur.
+        if rate_limit.record_failure(f"terminal-sig:{terminal.id}:{ip}", 300) > 30:
+            raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
         append_audit(db, action="biometrics.terminal.auth", resource="biometric_terminal", resource_id=terminal.id,
                      result="refused", society=terminal.society,
                      new_state={"ip": ip, "reason": "horodatage hors fenêtre" if skew > SIGNATURE_SKEW_SECONDS else "signature invalide"})
@@ -446,7 +453,9 @@ def terminal_recognize(req: TerminalRequest = Depends(authenticated_terminal), d
     result.pop("terminal_id", None)
     result["duration_ms"] = round((time.perf_counter() - req.received) * 1000, 1)
     _audit(db, terminal, "biometrics.terminal.recognize", result, {**audit, "duration_ms": result["duration_ms"]})
-    return result
+    # Les scores (présence réelle, similarité) restent dans l'audit : renvoyés à un appareil non
+    # fiable, ils permettaient d'ajuster une présentation essai après essai.
+    return {key: value for key, value in result.items() if key not in ("liveness", "confidence")}
 
 
 @router.post("/terminal/qr")

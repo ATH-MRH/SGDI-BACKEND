@@ -177,6 +177,86 @@ relève d'une régularisation explicite, au cas par cas.
   `REENTRY`, `EXIT_REGULARIZED`) ne sont pas encore traduits dans Gestion du pointage : le code
   brut s'affiche.
 
+## P2 — caméras, bornes, connexion, robustesse du poste
+
+### Caméras (`/api/biometrics/cameras*`)
+
+- **Inventaire** : un compte sans permission biométrique (pointeur, OPS, DRH) ne reçoit plus
+  l'adresse, les ports, le numéro de série, le dernier test ni les profils de flux ; il garde ce
+  dont l'écran du poste a besoin (nom, rôle, usage, état).
+- **Destination** : l'adresse doit être un nom d'hôte ou une IPv4 simples. Refus de la boucle
+  locale, des adresses de lien local, non routables ou réservées, et de tout séparateur d'URL.
+  Les chemins de flux doivent rester relatifs à la caméra. Les redirections HTTP ne sont plus
+  suivies.
+- **Identifiants** : changer l'adresse ou un port sans ressaisir le mot de passe efface les
+  identifiants enregistrés (`credentials_cleared` dans la réponse). Ils ne sont plus jamais
+  présentés à une autre destination.
+- **Débit** : 240 aperçus et 120 reconnaissances par minute, par compte et par caméra.
+- **À vérifier avant déploiement** : une caméra déjà enregistrée avec une adresse désormais
+  refusée (par exemple `127.0.0.1` pour un relais local) continue de fonctionner, mais ne pourra
+  plus être modifiée avec cette adresse.
+
+  ```sql
+  SELECT id, name, host FROM cameras
+  WHERE host ~ '[^A-Za-z0-9.-]' OR host IN ('localhost') OR host LIKE '127.%' OR host LIKE '169.254.%';
+  ```
+
+### Reconnaissance
+
+- **Indice d'employé** : il ne réduit plus la comparaison à un seul gabarit. Le meilleur candidat
+  du site doit être l'employé désigné, sinon aucun pointage ; l'ambiguïté entre deux employés
+  reste détectée.
+- **Seuils** : planchers et plafonds côté serveur (`CONFIG_BOUNDS`). Une valeur qui neutraliserait
+  la reconnaissance ou le contrôle de présence réelle est refusée.
+
+### Bornes (`/api/biometrics/terminal/*`)
+
+- Le terminal est identifié avant toute lecture du corps : une requête anonyme ne fait plus
+  tamponner jusqu'à 20 Mo.
+- Le compteur par adresse ne bloque que les identifiants inconnus. Les signatures invalides sont
+  comptées par terminal et par adresse. Une requête correctement signée n'est jamais bloquée :
+  un tiers sur le même réseau ne peut plus couper les bornes d'un site.
+- Un horodatage démesuré donne un refus propre (401) et non une erreur 500.
+- Les scores de présence réelle et de similarité ne sont plus renvoyés à la borne ; ils restent
+  dans l'audit.
+
+### Connexion
+
+- Compteur d'échecs par compte visé, en plus du compteur par adresse. Il ne s'efface que par la
+  réussite de ce compte. Au-delà de `LOGIN_MAX_ATTEMPTS` échecs dans la fenêtre, le compte reçoit
+  429, même avec le bon mot de passe.
+- Les échecs sont journalisés (premier échec, puis blocage), sans le mot de passe.
+- **Effet de bord assumé** : quelqu'un qui connaît un identifiant peut le bloquer pendant la
+  fenêtre (5 minutes par défaut) en échouant volontairement.
+
+### Employés non actifs
+
+- Les statuts « retraité », « décédé », « fin de contrat », « radié » rejoignent la liste des
+  situations non pointables (`_employee_portal_block_reason`). Cette règle sert aussi au portail
+  salarié : ces personnes n'y ont plus accès.
+
+### Page du poste et borne
+
+- Délai d'expiration de 30 s sur toutes les requêtes (poste et borne) : plus d'écran figé.
+- Coupure réseau pendant un scan ou une saisie : message « connexion perdue, vérifiez le dernier
+  pointage », distinct d'un refus.
+- Second badge pendant le traitement du premier : signalé (son et message), plus ignoré.
+- Doublon renvoyé par le serveur : affiché « déjà enregistré ».
+- Déconnexion : les données du compte précédent sont retirées de la mémoire et de l'écran.
+- Fichiers versionnés (`pointeur-facial.js`, lecteur QR, feuille de style, `pointeur-borne.js`) :
+  ils sont renouvelés à la livraison malgré le cache d'un an. **À refaire à chaque livraison qui
+  modifie l'un de ces fichiers.**
+- Service worker : les fichiers `/uploads/` ne sont plus mis en cache ; l'ancien cache est purgé.
+- Borne : un QR dont le traitement a échoué (réseau, erreur serveur) peut être présenté de nouveau.
+
+### Tests P2
+
+- `tests/test_pointeur_audit_p2.py` (9), 28 tests ajoutés dans `tests/test_biometrics.py`,
+  3 dans `tests/test_biometrics_terminals.py`, 2 dans `tests/test_biometrics_facial_pilot.py`,
+  `tests_frontend/pointeur-audit-p2.test.js` (9).
+- Deux tests existants adaptés : la caméra de test en `127.0.0.1` (désormais refusée par l'API)
+  et l'assertion sur les scores renvoyés à la borne (désormais vérifiés dans l'audit).
+
 ## Risques résiduels (mis à jour à chaque priorité)
 
 - Documents de `photos/docs/` sans ligne `Document` : servis sans authentification, sous un nom
