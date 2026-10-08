@@ -1,6 +1,7 @@
 from datetime import date, datetime
 import os
 import hmac
+import json
 import time
 import re
 from typing import Annotated
@@ -18,6 +19,8 @@ from app.modules.drh import service
 from app.modules.drh.schemas import CandidateCreate
 from app.modules.drh.models import Candidate
 from app.modules import recruitment_sms_service as sms
+from app.modules import recruitment_smsgate as smsgate
+from app.modules.recruitment_sms_worker import provider as _sms_provider, smsgate_enabled
 from app.modules.recruitment_sms_models import RecruitmentSMSGateway
 
 
@@ -266,15 +269,24 @@ class MobileCodeIn(BaseModel):
     code: Annotated[str, Field(min_length=6, max_length=6)]
 
 
+class MobileChallengeIn(BaseModel):
+    challenge_id: Annotated[str, Field(min_length=20, max_length=64)]
+
+
 class GatewayAckIn(BaseModel):
     job_id: Annotated[str, Field(min_length=20, max_length=64)]
     lease_token: Annotated[str, Field(min_length=20, max_length=64)]
     sent: bool
 
 
-def _sms_enabled():
+def _poll_enabled():
+    # Ancien protocole maison (poll/ack), conservé pour une passerelle dédiée : RECRUITMENT_SMS_PROVIDER=poll.
     key = os.getenv('RECRUITMENT_SMS_GATEWAY_KEY', '')
-    return os.getenv('RECRUITMENT_SMS_ENABLED', 'false').lower() == 'true' and len(key) >= 32
+    return os.getenv('RECRUITMENT_SMS_ENABLED', 'false').lower() == 'true' and _sms_provider() == 'poll' and len(key) >= 32
+
+
+def _sms_enabled():
+    return _poll_enabled() or smsgate_enabled()
 
 
 def _gateway_connected(db):
@@ -299,7 +311,7 @@ def _mobile_token(authorization: str | None):
 
 def _gateway_auth(key: str | None):
     expected = os.getenv('RECRUITMENT_SMS_GATEWAY_KEY', '')
-    if not _sms_enabled() or not key or not hmac.compare_digest(key, expected):
+    if not _poll_enabled() or not key or not hmac.compare_digest(key, expected):
         raise HTTPException(status_code=403, detail='Passerelle SMS non autorisée.')
 
 
@@ -320,6 +332,11 @@ def mobile_request_code(payload: MobileIdentityIn, request: Request, db: Session
 @router.post('/mobile/verify-code')
 def mobile_verify_code(payload: MobileCodeIn, db: Session = Depends(get_db)):
     return _sms_call(sms.verify_code, db, settings.jwt_secret, payload.challenge_id, payload.code)
+
+
+@router.post('/mobile/code-status')
+def mobile_code_status(payload: MobileChallengeIn, db: Session = Depends(get_db)):
+    return _sms_call(sms.delivery_state, db, payload.challenge_id)
 
 
 @router.get('/mobile/identity')
@@ -357,3 +374,31 @@ def mobile_gateway_poll(x_sms_gateway_key: str | None = Header(default=None), db
 def mobile_gateway_ack(payload: GatewayAckIn, x_sms_gateway_key: str | None = Header(default=None), db: Session = Depends(get_db)):
     _gateway_auth(x_sms_gateway_key)
     return _sms_call(sms.gateway_ack, db, settings.jwt_secret, payload.job_id, payload.lease_token, payload.sent)
+
+
+async def _raw_body(request: Request) -> bytes:
+    body = await request.body()
+    if len(body) > 16_384:
+        raise HTTPException(status_code=413, detail='Requête trop volumineuse.')
+    return body
+
+
+@router.post('/mobile/gateway/smsgate/webhook')
+def mobile_smsgate_webhook(body: bytes = Depends(_raw_body), x_signature: str | None = Header(default=None),
+                           x_timestamp: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Accusés envoyé/livré/échec émis par le téléphone SMSGate, authentifiés par signature HMAC."""
+    config = smsgate.load_config() if smsgate_enabled() else None
+    if config is None or not config.webhook_key or not smsgate.verify_webhook(config.webhook_key, body, x_timestamp, x_signature, int(time.time())):
+        raise HTTPException(status_code=403, detail='Passerelle SMS non autorisée.')
+    try:
+        event = json.loads(body)
+        payload = event['payload']
+        state, message_id = smsgate.WEBHOOK_EVENTS[event['event']], payload['messageId']
+    except (ValueError, KeyError, TypeError):
+        # 200 : un événement hors sujet ne doit pas être rejoué pendant deux jours par le téléphone.
+        return {'status': 'ignored'}
+    if not isinstance(message_id, str) or len(message_id) > 36 or (config.device_id and event.get('deviceId') != config.device_id):
+        return {'status': 'ignored'}
+    reason = payload.get('reason') if state == 'failed' else None
+    applied = sms.apply_gateway_state(db, message_id, state, str(reason)[:100] if reason else None)
+    return {'status': 'recorded' if applied else 'ignored'}
