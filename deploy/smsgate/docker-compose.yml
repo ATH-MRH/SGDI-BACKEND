@@ -1,0 +1,58 @@
+# Serveur SMSGate privé (SMS Gateway for Android) pour les codes SMS candidats d'ATLAS.
+# Guide : docs/recruitment-smsgate.md
+#
+# Les trois secrets se saisissent dans les variables d'environnement de Coolify, jamais ici.
+# Aucun port n'est publié : seul le proxy de Coolify atteint le service `smsgate` (port 3000).
+services:
+  smsgate:
+    image: ghcr.io/android-sms-gateway/server:v1.49.0
+    restart: unless-stopped
+    environment:
+      - GATEWAY__MODE=private
+      - GATEWAY__PRIVATE_TOKEN=${SMSGATE_PRIVATE_TOKEN:?}
+      - HTTP__LISTEN=0.0.0.0:3000
+      - DATABASE__HOST=db
+      - DATABASE__PORT=3306
+      - DATABASE__USER=sms
+      - DATABASE__PASSWORD=${SMSGATE_DB_PASSWORD:?}
+      - DATABASE__DATABASE=sms
+      - DATABASE__TIMEZONE=UTC
+    depends_on:
+      db:
+        condition: service_healthy
+
+  smsgate-worker:
+    image: ghcr.io/android-sms-gateway/server:v1.49.0
+    restart: unless-stopped
+    command: ["/app/app", "worker"]
+    environment:
+      - DATABASE__HOST=db
+      - DATABASE__PORT=3306
+      - DATABASE__USER=sms
+      - DATABASE__PASSWORD=${SMSGATE_DB_PASSWORD:?}
+      - DATABASE__DATABASE=sms
+      - DATABASE__TIMEZONE=UTC
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mariadb:12.3
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${SMSGATE_DB_ROOT_PASSWORD:?}
+      - MARIADB_DATABASE=sms
+      - MARIADB_USER=sms
+      - MARIADB_PASSWORD=${SMSGATE_DB_PASSWORD:?}
+      - MARIADB_AUTO_UPGRADE=1
+    volumes:
+      - smsgate-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  smsgate-db:

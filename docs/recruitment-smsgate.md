@@ -44,90 +44,145 @@ réponse, ATLAS relance avec **le même identifiant** : SMSGate refuse un identi
 Le SMS porte aussi une durée de vie égale au temps restant du code : un téléphone resté hors
 ligne n'enverra pas un code périmé.
 
-## 2. Installer le serveur SMSGate privé
+## 2. Installer le serveur SMSGate privé dans Coolify
 
-Prérequis : un serveur Linux avec Docker, une base MariaDB ou MySQL vide, et un nom de domaine
-en HTTPS avec un certificat valide (par exemple `sms.votre-domaine.com`). L'application Android
-refuse les adresses sans HTTPS.
+Adresse proposée : **`sms.irongs.com`**. Suivre les étapes dans l'ordre, une à la fois.
 
-Sur Coolify, créer un service Docker Compose à partir de cet exemple. Les mots de passe se
-saisissent dans les variables d'environnement de Coolify, jamais dans un fichier du dépôt.
+Ce qui est installé : trois conteneurs, décrits dans
+[`deploy/smsgate/docker-compose.yml`](../deploy/smsgate/docker-compose.yml).
 
-```yaml
-services:
-  smsgate:
-    image: ghcr.io/android-sms-gateway/server:latest
-    restart: unless-stopped
-    environment:
-      - GATEWAY__MODE=private
-      - GATEWAY__PRIVATE_TOKEN=${SMSGATE_PRIVATE_TOKEN}
-      - HTTP__LISTEN=0.0.0.0:3000
-      - DATABASE__HOST=db
-      - DATABASE__PORT=3306
-      - DATABASE__USER=sms
-      - DATABASE__PASSWORD=${SMSGATE_DB_PASSWORD}
-      - DATABASE__DATABASE=sms
-      - DATABASE__TIMEZONE=UTC
-    depends_on:
-      db:
-        condition: service_healthy
-  smsgate-worker:
-    image: ghcr.io/android-sms-gateway/server:latest
-    restart: unless-stopped
-    command: ["/app/app", "worker"]
-    environment:
-      - DATABASE__HOST=db
-      - DATABASE__PORT=3306
-      - DATABASE__USER=sms
-      - DATABASE__PASSWORD=${SMSGATE_DB_PASSWORD}
-      - DATABASE__DATABASE=sms
-      - DATABASE__TIMEZONE=UTC
-    depends_on:
-      db:
-        condition: service_healthy
-  db:
-    image: mariadb:lts
-    restart: unless-stopped
-    environment:
-      - MARIADB_RANDOM_ROOT_PASSWORD=1
-      - MARIADB_DATABASE=sms
-      - MARIADB_USER=sms
-      - MARIADB_PASSWORD=${SMSGATE_DB_PASSWORD}
-    volumes:
-      - smsgate-db:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-volumes:
-  smsgate-db:
+| Service | Rôle | Image |
+|---|---|---|
+| `smsgate` | Le serveur, port interne 3000. Seul service relié au domaine. | `ghcr.io/android-sms-gateway/server:v1.49.0` |
+| `smsgate-worker` | Ménage périodique (anciens messages, anciens jetons). | la même |
+| `db` | Base MariaDB du serveur, données dans le volume `smsgate-db`. | `mariadb:12.3` |
+
+### Étape 1 — Le nom de domaine
+
+`sms.irongs.com` doit pointer vers l'adresse IP du VPS (la même que `drh.irongs.com`).
+**Ce DNS reste à configurer** : chez le gestionnaire du domaine `irongs.com`, créer un
+enregistrement `A` pour `sms` vers l'IP du VPS, puis vérifier depuis un ordinateur :
+
+```bash
+dig +short sms.irongs.com drh.irongs.com
 ```
 
-1. Générer deux valeurs longues et aléatoires (`openssl rand -hex 32`) pour
-   `SMSGATE_PRIVATE_TOKEN` et `SMSGATE_DB_PASSWORD`, et les saisir dans Coolify.
-2. Associer le domaine `sms.votre-domaine.com` au service `smsgate`, port 3000, avec HTTPS.
-   Ne pas exposer le port de la base.
-3. Vérifier : `https://sms.votre-domaine.com/health` doit répondre avec un état correct.
+Les deux lignes affichées doivent être identiques. Le 9 octobre 2026, c'était déjà le cas,
+apparemment grâce à une règle générale (`*.irongs.com`) : créer quand même l'enregistrement
+dédié, pour ne pas dépendre de cette règle. Ne pas passer à la suite tant que les deux lignes
+diffèrent : Coolify ne peut obtenir le certificat HTTPS que si le nom pointe vers le serveur.
 
-Les noms de variables ci-dessus sont ceux du fichier de configuration officiel du serveur
-(`configs/config.example.yml` du dépôt `android-sms-gateway/server`). Cet exemple n'a pas encore
-été déployé réellement. Si le conteneur réclame un fichier, suivre la méthode officielle
-(<https://docs.sms-gate.app/getting-started/private-server/>) : monter un `config.yml` sur
-`/app/config.yml` avec les mêmes réglages. Ne pas modifier `GATEWAY__UPSTREAM_URL` : c'est
-l'adresse par laquelle le serveur privé fait réveiller le téléphone.
+### Étape 2 — Générer les trois secrets
 
-Le service `smsgate-worker` nettoie les anciens messages. Le serveur SMSGate conserve le texte
-des SMS dans sa base le temps de les traiter, puis le remplace par une empreinte : protéger
-cette base comme celle d'ATLAS.
+Sur le Mac, dans le Terminal :
 
-## 3. Régler le Samsung S21
+```bash
+openssl rand -hex 16   # SMSGATE_PRIVATE_TOKEN (32 caractères, à retaper sur le téléphone)
+openssl rand -hex 32   # SMSGATE_DB_PASSWORD
+openssl rand -hex 32   # SMSGATE_DB_ROOT_PASSWORD
+```
+
+Garder ces trois valeurs dans le gestionnaire de mots de passe de l'entreprise. Elles ne vont
+ni dans Git, ni dans un e-mail, ni dans une capture d'écran. N'utiliser que des valeurs de ce
+type (chiffres et lettres) : pas d'espace ni de caractère spécial.
+
+### Étape 3 — Créer le service dans Coolify
+
+1. Dans Coolify, ouvrir le projet, puis **+ New** (nouvelle ressource).
+2. Choisir **Docker Compose Empty**.
+3. Coller le contenu complet de `deploy/smsgate/docker-compose.yml`, puis **Save**.
+4. Nommer la ressource `smsgate`. **Ne pas déployer tout de suite.**
+
+Ne pas ajouter de section `ports:` : aucun port ne doit être ouvert sur le serveur, ni pour
+SMSGate ni pour la base.
+
+### Étape 4 — Saisir les secrets
+
+Dans l'onglet **Environment Variables** de la ressource, Coolify affiche les trois variables
+attendues. Coller les valeurs de l'étape 2 :
+
+| Variable | Valeur |
+|---|---|
+| `SMSGATE_PRIVATE_TOKEN` | le jeton de 32 caractères |
+| `SMSGATE_DB_PASSWORD` | le deuxième secret |
+| `SMSGATE_DB_ROOT_PASSWORD` | le troisième secret |
+
+Les trois sont obligatoires : le déploiement est refusé s'il en manque une.
+
+### Étape 5 — Associer le domaine
+
+Dans les réglages du service **`smsgate`** (pas `smsgate-worker`, pas `db`), champ **Domains** :
+
+```
+https://sms.irongs.com:3000
+```
+
+Le `:3000` indique seulement à Coolify le port interne du conteneur. L'adresse publique reste
+`https://sms.irongs.com`, et Coolify se charge du certificat HTTPS. Ne donner aucun domaine aux
+deux autres services.
+
+### Étape 6 — Déployer et vérifier
+
+1. Cliquer sur **Deploy**.
+2. Attendre que les trois services soient à l'état **healthy** (une à deux minutes la première fois).
+3. Ouvrir dans un navigateur : `https://sms.irongs.com/health`
+
+La réponse attendue commence par `{"status":"pass","version":"1.49.0"` et le cadenas du
+navigateur doit être valide. Si ce n'est pas le cas, voir la section 6 avant de continuer.
+
+### Étape 7 — Sauvegarde et mises à jour
+
+- Les données (téléphone enregistré, identifiants, messages) sont dans le volume `smsgate-db`.
+  Il survit aux redéploiements. Le supprimer oblige à reconnecter le téléphone et à ressaisir
+  de nouveaux identifiants dans ATLAS.
+- Ajouter ce volume, ou un export de la base, aux sauvegardes du VPS.
+- Les versions sont volontairement figées. Pour mettre à jour : lire les notes de version du
+  dépôt `android-sms-gateway/server`, changer le numéro dans le fichier, redéployer, puis
+  revérifier `/health`. Ne pas utiliser l'étiquette `latest`.
+- La base, les journaux du service et l'accès à cette ressource Coolify sont à traiter comme
+  des données confidentielles, au même titre que ceux d'ATLAS : accès réservé aux administrateurs.
+
+### Ce qui a été vérifié, et ce qui ne l'a pas été
+
+Vérifié le 9 octobre 2026, contre le code source du serveur v1.49.0 et par un démarrage réel
+de ce fichier sur un poste de développement (Docker, hors production, sans téléphone ni SMS) :
+
+- Le serveur se configure entièrement par variables d'environnement. Le fichier `config.yml`
+  de la documentation officielle est facultatif : il n'est pas utilisé ici, ce qui évite de
+  monter un fichier dans Coolify.
+- Les trois conteneurs démarrent et passent à l'état `healthy` ; le schéma de la base est créé
+  automatiquement au premier démarrage, sur MariaDB 12.3 (série LTS actuelle) comme sur 11.8.
+- `/health` répond `pass`. Aucun port n'est publié par le fichier.
+- L'enregistrement d'un téléphone est refusé sans le bon jeton privé et accepté avec lui ;
+  il fournit alors le nom d'utilisateur et le mot de passe.
+- L'API utilisée par ATLAS répond : liste des téléphones (commande `status` d'ATLAS), dépôt
+  d'un message, refus `409` du même identifiant rejoué, enregistrement d'un webhook.
+- Le téléphone enregistré et les messages sont toujours là après suppression puis recréation
+  des conteneurs (volume conservé).
+- Aucun des trois secrets n'apparaît dans les journaux des conteneurs.
+
+Non vérifié, faute d'accès ou de matériel — à confirmer lors de l'installation :
+
+- le déploiement dans Coolify lui-même (écrans, proxy, certificat HTTPS) : les étapes 3 à 6
+  suivent la documentation de Coolify mais n'ont pas été exécutées ;
+- le fonctionnement sur le processeur du VPS : l'essai a eu lieu sur un Mac (arm64) ; l'image
+  est aussi publiée pour amd64 ;
+- la sortie du VPS vers `api.sms-gate.app`, nécessaire pour réveiller le téléphone ;
+- tout ce qui demande le Samsung S21 : connexion, envoi réel, accusés, choix de la SIM.
+
+Ne pas modifier `GATEWAY__UPSTREAM_URL` : c'est l'adresse par laquelle le serveur privé fait
+réveiller le téléphone.
+
+## 3. Connecter le Samsung S21
+
+À faire seulement quand `https://sms.irongs.com/health` répond (section 2, étape 6).
+Une étape à la fois.
 
 1. Installer la version officielle de l'application depuis les « Releases » du dépôt
-   `capcom6/android-sms-gateway` (version normale, pas la variante « insecure »).
+   `capcom6/android-sms-gateway` : fichier `app-release.apk` (pas la variante « insecure »).
 2. Accepter l'autorisation **SMS**, ainsi que **Téléphone** (nécessaire pour choisir la SIM).
 3. Onglet **Settings → Cloud Server** :
-   - **API URL** : `https://sms.votre-domaine.com/api/mobile/v1` (le chemin est obligatoire) ;
+   - **API URL** : `https://sms.irongs.com/api/mobile/v1` (le chemin est obligatoire) ;
    - **Private Token** : la valeur de `SMSGATE_PRIVATE_TOKEN`, saisie à la main sur le téléphone.
 4. Onglet **Home** : activer **Cloud Server**, laisser **Local Server** désactivé, puis appuyer
    sur le bouton **Offline** jusqu'à ce qu'il affiche **Online**.
@@ -160,7 +215,7 @@ cette base comme celle d'ATLAS.
 |---|---|
 | `RECRUITMENT_SMS_ENABLED` | `true` pour activer. Défaut : `false`. |
 | `RECRUITMENT_SMS_PROVIDER` | `smsgate` (défaut). |
-| `RECRUITMENT_SMSGATE_API_URL` | `https://sms.votre-domaine.com/api/3rdparty/v1` |
+| `RECRUITMENT_SMSGATE_API_URL` | `https://sms.irongs.com/api/3rdparty/v1` |
 | `RECRUITMENT_SMSGATE_USERNAME` | Nom d'utilisateur affiché par l'application. |
 | `RECRUITMENT_SMSGATE_PASSWORD` | Mot de passe affiché par l'application. |
 | `RECRUITMENT_SMSGATE_DEVICE_ID` | Optionnel. Identifiant du téléphone (commande `status`). Recommandé : seul ce téléphone enverra les codes. |
@@ -204,6 +259,10 @@ Puis, depuis le portail candidat :
 | Constat | Piste |
 |---|---|
 | `sms_available` reste `false` | Variable manquante, URL sans `https://`, identifiants refusés, ou téléphone non enregistré. Lancer `status`. |
+| `https://sms.irongs.com/health` ne répond pas | DNS pas encore actif (étape 1), domaine associé au mauvais service ou sans `:3000` (étape 5), ou service `smsgate` pas encore `healthy`. |
+| Avertissement de certificat | Le certificat n'a pas encore été obtenu : vérifier le DNS, puis redéployer. Le téléphone refuse une adresse sans HTTPS valide. |
+| Le service `smsgate` redémarre en boucle | Lire ses journaux dans Coolify. Cause habituelle : `SMSGATE_DB_PASSWORD` modifié après le premier démarrage, alors que la base garde l'ancien. |
+| Le téléphone reste **Offline** | Adresse sans `/api/mobile/v1`, ou jeton privé différent de `SMSGATE_PRIVATE_TOKEN` (majuscules, caractère oublié). |
 | État bloqué sur `accepted` | Le téléphone n'a pas récupéré le message : application fermée par Samsung, pas de réseau, ou serveur privé sans accès sortant à `api.sms-gate.app`. |
 | État `failed` | Lire le motif dans la colonne `delivery_error` : `gateway_auth` (identifiants), `gateway_http_503` (file du téléphone saturée ou téléphone absent), `RESULT_ERROR_…` (refus du réseau mobile : crédit, couverture, numéro). |
 | SMS envoyé par la mauvaise SIM | Fixer `RECRUITMENT_SMSGATE_SIM_NUMBER`. |
@@ -219,16 +278,23 @@ L'application SMS Gateway for Android ne les utilise pas ; elles sont fermées e
 
 ## 8. Ce qui reste à faire avant la mise en service
 
-Le code est terminé et couvert par des tests automatiques, mais **aucun envoi réel n'a encore
-été effectué** : ni serveur SMSGate privé, ni Samsung S21 n'étaient disponibles pendant le
-développement. Restent à faire, dans l'ordre :
+Le code est terminé et couvert par des tests automatiques, et la configuration du serveur a été
+démarrée et contrôlée hors production (section 2). Mais **aucun envoi réel n'a encore été
+effectué** : le serveur n'est pas installé sur le VPS et le Samsung S21 n'a pas été connecté.
+`RECRUITMENT_SMS_ENABLED` reste à `false` en production tant que les étapes 1 à 4 ci-dessous
+ne sont pas réussies. Dans l'ordre :
 
-1. Déployer le serveur SMSGate privé (section 2) et vérifier `/health`.
-2. Connecter le Samsung S21 au serveur (section 3) et relever ses identifiants.
-3. Saisir les variables dans ATLAS (section 4), appliquer `alembic upgrade head`, redémarrer.
+1. Installer le serveur SMSGate dans Coolify (section 2) et vérifier `/health`.
+2. Connecter le Samsung S21 (section 3) et relever ses identifiants.
+3. Saisir les variables `RECRUITMENT_SMSGATE_*` dans ATLAS (section 4), en laissant
+   `RECRUITMENT_SMS_ENABLED=false`, appliquer `alembic upgrade head`, redémarrer.
 4. Lancer `status`, `register-webhooks` puis `send-test` (section 5).
-5. Faire les essais du portail candidat (section 5), dont le mode avion.
+5. Passer `RECRUITMENT_SMS_ENABLED` à `true`, redémarrer, puis faire les essais du portail
+   candidat (section 5), dont le mode avion.
 
-Points que seuls ces essais réels confirmeront : l'exemple Docker Compose, le refus d'un
-identifiant de message déjà connu (409) par votre version du serveur, la réception des accusés
-signés, le choix de la SIM, et la tenue de l'application face à l'économie de batterie Samsung.
+Points que seuls ces essais réels confirmeront : le déploiement dans Coolify et son certificat,
+le réveil du téléphone par `api.sms-gate.app`, la réception des accusés signés, le choix de la
+SIM, et la tenue de l'application face à l'économie de batterie Samsung.
+
+Des constats de sécurité ont été identifiés lors de cette vérification et sont suivis
+séparément dans un rapport de sécurité privé.
