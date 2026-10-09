@@ -212,6 +212,9 @@ def test_pointer_sees_only_its_authorized_paired_and_active_devices(client, auth
     # Aucun secret ni paramètre de connexion ne sort vers le navigateur du Pointeur.
     text = json.dumps(listing)
     assert not any(f'"{field}"' in text for field in FORBIDDEN_FIELDS) and "10.0.0.20" not in text and "secret-cam" not in text
+    cams = client.get(f"{API}/cameras", headers=many_h).json()
+    assert cams and not any(field in cam for cam in cams for field in ("host", "http_port", "rtsp_port", "serial_number", "last_check"))
+    assert client.get(f"{API}/cameras", headers=nobody_h).json() == []
     # Le Pointeur ne lit pas la liste d'administration des terminaux.
     assert client.get(f"{API}/terminals", headers=many_h).status_code == 403
 

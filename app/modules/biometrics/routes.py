@@ -528,7 +528,17 @@ def cameras(site_id: int | None = None, db: Session = Depends(get_db), user: Use
         stmt = stmt.where(Camera.site_id.in_(allowed or [-1]))
     rows = db.execute(stmt.order_by(Camera.site_id, Camera.name)).scalars().all()
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows}))).scalars()} if rows else {}
-    return [_camera_out(r, sites.get(r.site_id)) for r in rows]
+    if _biometric_manager(db, user):
+        return [_camera_out(r, sites.get(r.site_id)) for r in rows]
+    # Compte sans fonction de gestion biométrique (poste Pointeur) : ses seules caméras
+    # autorisées, sans aucun paramètre de connexion.
+    _terminal_ids, camera_ids = pointer_devices.authorized_ids(db, user.id)
+    return [{k: v for k, v in _camera_out(r, sites.get(r.site_id)).items() if k not in CAMERA_TECHNICAL_FIELDS}
+            for r in rows if r.id in camera_ids]
+
+
+CAMERA_TECHNICAL_FIELDS = ("serial_number", "host", "http_port", "rtsp_port", "connection_type", "channel", "profiles",
+                           "capabilities", "credentials_set", "last_check")
 
 
 def _biometric_manager(db: Session, user: User) -> bool:
