@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261011_0001"            # tête courante de la chaîne (suivi SMSGate des codes candidats)
+HEAD = "20261012_0001"            # tête courante de la chaîne (autorisations des équipements faciaux)
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
