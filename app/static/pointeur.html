@@ -218,11 +218,15 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .face-check{font-size:24px;letter-spacing:.03em}.face-name{font-size:30px;margin-top:8px}.face-meta{font-size:16px;font-weight:700;margin-top:6px}
 .face-fallback{margin-top:12px}
 .face-origin{opacity:.85}
-.face-terminals{margin:12px 0}
+.face-terminals{margin:10px 0}
 .ft-toolbar{display:flex;flex-wrap:wrap;gap:8px}
-.ft-toolbar button{min-height:40px;padding:0 14px;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer}
-.ft-toolbar .ft-primary{border:0;background:var(--navy);color:#fff}
-.ft-toolbar button:disabled{opacity:.45;cursor:not-allowed}
+.ft-btn{width:auto;min-height:36px;margin:0;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--navy);font-weight:800;font-size:12.5px;cursor:pointer}
+.ft-btn.ft-primary{border-color:var(--navy);background:var(--navy);color:#fff}
+.ft-btn:disabled{opacity:.45;cursor:not-allowed}
+.ft-btn:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+/* Poste sans défilement de page : en mode facial la carte défile, ses blocs ne s'écrasent pas. */
+#appView #scannerCard.facial-mode>*{flex-shrink:0}
+#appView #scannerCard.facial-mode .last-scan{flex:0 0 auto}
 .ft-counters{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0 8px;font-size:13px}
 .ft-counters div{display:flex;gap:6px;align-items:baseline;min-width:0}
 .ft-counters dt{color:var(--muted);font-weight:700}
@@ -753,13 +757,14 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         <section id="faceView" class="face-view hidden" aria-live="polite">
           <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Cochez les terminaux à utiliser, puis activez-les.</p></div>
             <div class="face-camera"><span id="faceCameraLabel">—</span></div></div>
+          <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
           <!-- Terminaux déjà enregistrés par l'Administration Système et autorisés pour ce compte : sélection multiple, aucun appairage ici. -->
           <div id="faceTerminals" class="face-terminals hidden">
             <div class="ft-toolbar" role="group" aria-label="Sélection des terminaux">
-              <button type="button" class="secondary" data-ft="all">Sélectionner tout</button>
-              <button type="button" class="secondary" data-ft="none">Désélectionner tout</button>
-              <button type="button" id="ftActivate" class="ft-primary" data-ft="activate" disabled>Activer les terminaux sélectionnés</button>
-              <button type="button" id="ftStop" class="secondary" data-ft="stop" disabled>Arrêter la surveillance</button>
+              <button type="button" class="ft-btn" data-ft="all">Sélectionner tout</button>
+              <button type="button" class="ft-btn" data-ft="none">Désélectionner tout</button>
+              <button type="button" id="ftActivate" class="ft-btn ft-primary" data-ft="activate" disabled>Activer les terminaux sélectionnés</button>
+              <button type="button" id="ftStop" class="ft-btn" data-ft="stop" disabled>Arrêter la surveillance</button>
             </div>
             <dl class="ft-counters" aria-live="polite">
               <div><dt>Sélectionnés</dt><dd id="ftCountSelected">0</dd></div>
@@ -773,7 +778,6 @@ body.ptr-v5.has-post .shift-staffing{order:3}
             </table></div>
           </div>
           <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
-          <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
         </section>
         <div id="usbReader" class="usb-reader hidden">
           <div id="usbReaderSociety" class="idle-society hidden"></div>
