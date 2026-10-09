@@ -16,8 +16,13 @@ Candidat identifié par SMS ── profil, documents, candidatures ──> dossi
 - Le public ne voit que les annonces **publiées et non expirées** (date limite incluse, heure d'Alger).
 - Un **espace candidat** est rattaché à un numéro de téléphone vérifié par SMS.
 - Une **candidature** relie le dossier du candidat à une annonce, ou à aucune (candidature spontanée).
-- Un candidat a **un seul dossier** dans le vivier : postuler à une deuxième annonce complète ce
-  dossier au lieu d'en créer un autre.
+- Un candidat a **un seul dossier** et un seul profil dans le vivier : postuler à une deuxième
+  annonce complète ce dossier au lieu d'en créer un autre.
+- Chaque **candidature à une annonce a son propre état**, décidé par le recruteur de l'annonce :
+  reçue, présélectionnée, entretien, retenue, non retenue. Le refus d'une candidature ne change ni
+  les autres candidatures du candidat, ni son dossier.
+- Une candidature **spontanée ou historique** n'est rattachée à aucune annonce : son suivi reste
+  celui du dossier, comme avant.
 
 ## 2. Données (migration `20261012_0001`)
 
@@ -29,7 +34,7 @@ Cinq tables nouvelles, aucune table existante modifiée :
 | `recruitment_job_offers` | Annonce : poste, métier, wilaya, lieu, contrat, missions, profil, date limite, état. |
 | `recruitment_candidate_accounts` | Espace candidat : téléphone vérifié, profil, CV, photo, dossier rattaché. |
 | `recruitment_candidate_sessions` | Sessions de l'espace candidat (empreinte du jeton, 30 jours). |
-| `recruitment_applications` | Candidature : dossier, annonce éventuelle, identifiant d'envoi. |
+| `recruitment_applications` | Candidature : dossier, annonce éventuelle, identifiant d'envoi, état propre (`status`, date et auteur du dernier changement). |
 
 Les candidatures historiques et spontanées restent dans `candidates`, inchangées.
 
@@ -57,7 +62,7 @@ Avec la session de l'espace candidat (`Authorization: Bearer …`) :
 | `PUT / GET / DELETE /me/cv` | CV PDF, JPG ou PNG, 5 Mo au plus. |
 | `PUT / GET / DELETE /me/photo` | Photo d'identité (JPEG). |
 | `POST /applications` | Candidature à une annonce (`offer_id`) ou spontanée. |
-| `GET /applications`, `GET /applications/{id}` | Candidatures du candidat et état du dossier. |
+| `GET /applications`, `GET /applications/{id}` | Candidatures du candidat, chacune avec son état. La liste donne aussi l'état du dossier (`dossier`), qui porte une éventuelle convocation. |
 
 Règles appliquées par le serveur :
 
@@ -69,7 +74,8 @@ Règles appliquées par le serveur :
 - Un candidat ne lit et ne modifie que son espace ; la candidature d'un autre répond `404`.
 - Un jeton de recruteur n'ouvre pas l'espace candidat, et inversement.
 - Un numéro déjà rattaché à un espace n'en ouvre pas un autre sous un nom différent (`409`).
-- L'état renvoyé est celui du dossier, calculé par les mêmes règles que le suivi existant.
+- L'état d'une candidature à une annonce est le sien (`state`). Pour une candidature spontanée ou
+  historique, c'est celui du dossier, calculé par les mêmes règles que le suivi existant.
 
 ## 4. API recruteur — `/api/drh/job-offers`
 
@@ -84,10 +90,12 @@ et ne modifie que les annonces des sociétés de son périmètre ; hors périmè
 | `POST /{id}/publish` | Publication (champs obligatoires renseignés, date limite non dépassée). |
 | `POST /{id}/close` | Clôture. |
 | `DELETE /{id}` | Suppression d'un brouillon sans candidature (DRH). |
-| `GET /{id}/applications` | Candidatures reçues pour l'annonce. |
+| `GET /{id}/applications` | Candidatures reçues pour l'annonce, avec l'état de chacune et, à part, l'état du dossier. |
+| `PUT /{id}/applications/{candidature}/status` | Change l'état d'une candidature de cette annonce. |
 | `GET /companies` · `PUT /companies/{id}` | Fiches des sociétés du périmètre. |
 
-Création, modification, publication, clôture et suppression sont inscrites au journal d'audit.
+Création, modification, publication, clôture, suppression et changement d'état d'une candidature
+sont inscrits au journal d'audit.
 
 Dans recrute.irongs.com, la section « Annonces » utilise ces routes. Les annonces que l'ancienne
 version gardait dans le navigateur ne sont plus affichées comme publiées : un bouton propose de
@@ -118,7 +126,8 @@ candidats et liens de candidature) ; les dossiers du vivier ne sont pas touchés
 
 ## 7. Limites de cette version
 
-- L'état suivi par le candidat est celui de son dossier, commun à toutes ses candidatures.
+- L'état d'une candidature et l'état du dossier sont deux informations distinctes : changer l'un ne
+  change pas l'autre. Convocation, entretien et avis restent gérés sur le dossier.
 - Les sociétés sont celles du groupe ; l'inscription d'entreprises tierces n'est pas développée.
 - Pas de messagerie, d'alertes automatiques ni de prise de rendez-vous : phase suivante.
 - Les conseils emploi sont un contenu éditorial embarqué dans l'application, pas des annonces.

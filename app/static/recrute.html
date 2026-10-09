@@ -800,7 +800,7 @@ function candidateEmptyState(){
 // ── Annonces : enregistrées sur le serveur et diffusées dans l'application IRON Emploi ─────
 const ANNOUNCEMENT_API="/api/drh/job-offers";
 const ANNOUNCEMENT_STATUS={draft:["Brouillon","pill-amber"],published:["Publiée","pill-green"],closed:["Clôturée","pill-gray"],expired:["Expirée","pill-gray"]};
-let recruitAnnouncements=[],recruitAnnouncementMeta={societies:[],contract_types:[],logos:[]},recruitAnnouncementError="",recruitAnnouncementLoaded=false,recruitAnnouncementRequest=0,recruitAnnouncementBusy=false;
+let recruitAnnouncements=[],recruitAnnouncementMeta={societies:[],contract_types:[],application_states:[],logos:[]},recruitAnnouncementError="",recruitAnnouncementLoaded=false,recruitAnnouncementRequest=0,recruitAnnouncementBusy=false;
 function getRecruitAnnouncements(){return recruitAnnouncements}
 function announcementStatus(item){return ANNOUNCEMENT_STATUS[item.effective_status]||ANNOUNCEMENT_STATUS.draft}
 function announcementById(id){return recruitAnnouncements.find(row=>Number(row.id)===Number(id))}
@@ -902,17 +902,36 @@ async function importLegacyRecruitAnnouncements(){
   }catch(error){showBanner(`${done} annonce(s) importée(s), puis : ${announcementErrorText(error)}`,"error")}
   finally{recruitAnnouncementBusy=false;renderRecruitAnnouncements()}
 }
+const APPLICATION_STATE_PILLS={received:"pill-blue",shortlisted:"pill-indigo",interview:"pill-amber",accepted:"pill-green",declined:"pill-red"};
+function applicationStateCell(offer,row){
+  const states=recruitAnnouncementMeta.application_states||[],pill=`<span class="pill ${APPLICATION_STATE_PILLS[row.state.code]||"pill-gray"}">${esc(row.state.label)}</span>`;
+  if(!recruitmentCan("update")||!states.length)return pill;
+  // L'état vaut pour cette candidature seulement : les autres candidatures du même dossier ne changent pas.
+  return `<select class="rec-state-select" aria-label="État de la candidature de ${esc(candidateFullName(row.candidate))}" onchange="setApplicationStatus(${Number(offer.id)},${Number(row.application_id)},this)">${states.map(state=>`<option value="${esc(state.code)}"${state.code===row.state.code?" selected":""}>${esc(state.label)}</option>`).join("")}</select>`;
+}
 function announcementApplicationsHTML(result){
   const offer=result.offer;
   return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Candidatures — ${esc(offer.title)}</h2><p>${esc(offer.society)} · ${esc(announcementStatus(offer)[0])}</p></div><div class="rec-page-actions"><span class="rec-count">${result.items.length} candidature${result.items.length>1?"s":""}</span><button type="button" class="secondary" onclick="renderRecruitAnnouncements()">← Retour aux annonces</button></div></header>
-    <div class="table-card rec-table-card">${result.items.length?`<div class="candidate-table-wrap"><table class="rec-table"><thead><tr><th>Candidat</th><th>Téléphone</th><th>Reçue le</th><th>CV</th><th>État du dossier</th></tr></thead><tbody>${result.items.map(row=>`<tr><td><b>${esc(candidateFullName(row.candidate))}</b></td><td>${esc(row.candidate.phone||"—")}</td><td>${esc(formatDateFr(row.applied_at))}</td><td>${row.candidate.has_cv?"Joint":"—"}</td><td><span class="pill pill-blue">${esc(row.state.label)}</span></td></tr>`).join("")}</tbody></table></div><p class="rec-note" style="padding:0 14px 12px">Les dossiers s’ouvrent depuis « Candidatures », avec la recherche par nom.</p>`
+    <div class="table-card rec-table-card">${result.items.length?`<div class="candidate-table-wrap"><table class="rec-table"><thead><tr><th>Candidat</th><th>Téléphone</th><th>Reçue le</th><th>CV</th><th>État de la candidature</th><th class="rec-col-secondary">État du dossier</th></tr></thead><tbody>${result.items.map(row=>`<tr data-application="${Number(row.application_id)}"><td><b>${esc(candidateFullName(row.candidate))}</b></td><td>${esc(row.candidate.phone||"—")}</td><td>${esc(formatDateFr(row.applied_at))}</td><td>${row.candidate.has_cv?"Joint":"—"}</td><td>${applicationStateCell(offer,row)}</td><td class="rec-col-secondary"><span class="pill pill-gray">${esc(row.dossier_state?.label||"—")}</span></td></tr>`).join("")}</tbody></table></div><p class="rec-note" style="padding:0 14px 12px">L’état de la candidature ne vaut que pour cette annonce ; le candidat le voit dans l’application. L’état du dossier est commun à la personne et se gère depuis « Candidatures ».</p>`
       :recruitmentEmptyState({title:"Aucune candidature",text:"Aucun candidat n’a encore postulé à cette annonce."})}</div>`;
 }
+let recruitApplications=null;
 async function openAnnouncementApplications(id){
   const host=document.getElementById("announcementsSection");
   host.innerHTML=`<div class="table-card rec-table-card">${recruitmentListSkeleton()}</div>`;
-  try{const result=await apiFetch(`${ANNOUNCEMENT_API}/${Number(id)}/applications`);if(recruitSection==="announcements")host.innerHTML=announcementApplicationsHTML(result)}
+  try{const result=await apiFetch(`${ANNOUNCEMENT_API}/${Number(id)}/applications`);recruitApplications=result;if(recruitSection==="announcements")host.innerHTML=announcementApplicationsHTML(result)}
   catch(error){host.innerHTML=`<div class="table-card rec-table-card">${recruitmentErrorState(esc(announcementErrorText(error)),"renderRecruitAnnouncements()")}</div>`}
+}
+async function setApplicationStatus(offerId,applicationId,select){
+  const row=recruitApplications?.items.find(item=>Number(item.application_id)===Number(applicationId));
+  if(!row||!recruitmentCan("update"))return;
+  const wanted=select.value;select.disabled=true;
+  try{
+    const saved=await apiFetch(`${ANNOUNCEMENT_API}/${Number(offerId)}/applications/${Number(applicationId)}/status`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:wanted})});
+    row.state=saved.state;showBanner(`Candidature de ${candidateFullName(row.candidate)} : ${saved.state.label}.`,"success");
+  }catch(error){showBanner(announcementErrorText(error),"error")}
+  // En cas d'échec, la liste réaffiche l'état réellement enregistré.
+  finally{if(recruitSection==="announcements"&&recruitApplications)document.getElementById("announcementsSection").innerHTML=announcementApplicationsHTML(recruitApplications)}
 }
 function recruitAnnouncementShareText(item){
   const lines=[`📢 OFFRE D'EMPLOI — ${item.title}`,item.company?.name||item.society,[item.wilaya,item.location].filter(Boolean).join(" · ")?`📍 ${[item.wilaya,item.location].filter(Boolean).join(" · ")}`:"",item.contract_type?`📄 ${item.contract_type}`:"",`👥 ${item.positions||1} poste(s) à pourvoir`,item.deadline?`📅 Candidatures avant le ${formatDateFr(item.deadline)}`:"",item.missions||"","Postulez depuis l’application IRON Emploi.","#Recrutement #Emploi #IRONGROUP"];

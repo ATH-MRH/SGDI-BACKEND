@@ -84,6 +84,11 @@ class RecruitmentApplication(Base):
     request_id: Mapped[str] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(20), default='mobile', server_default='mobile')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # État propre à cette candidature, décidé par le recruteur de l'annonce. Il ne vaut que pour
+    # une candidature à une annonce : une candidature spontanée ou historique suit l'état du dossier.
+    status: Mapped[str] = mapped_column(String(20), default='received', server_default='received', index=True)
+    status_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status_updated_by: Mapped[str | None] = mapped_column(String(100))
     __table_args__ = (
         UniqueConstraint('account_id', 'request_id', name='uq_recruitment_applications_request'),
         UniqueConstraint('candidate_id', 'offer_id', name='uq_recruitment_applications_candidate_offer'),

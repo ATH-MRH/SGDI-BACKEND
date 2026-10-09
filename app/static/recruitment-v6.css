@@ -163,6 +163,7 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-c
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-card-meta dd{margin:2px 0 0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-card-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px;margin-top:auto;padding-top:12px;border-top:1px solid #edf2f8}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-form-card{max-width:980px;padding:20px;overflow:visible}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-state-select{min-height:36px;min-width:150px;max-width:100%;padding:6px 10px;font-size:12.5px;font-weight:600}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-form-card .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 
 /* ── Modales : en-tête et pied toujours accessibles ── */

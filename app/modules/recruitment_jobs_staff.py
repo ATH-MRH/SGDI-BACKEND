@@ -52,6 +52,10 @@ class OfferIn(BaseModel):
         return None if value == '' else value
 
 
+class ApplicationStatusIn(BaseModel):
+    status: Annotated[str, Field(max_length=20)]
+
+
 class CompanyIn(BaseModel):
     name: Annotated[str, Field(min_length=2, max_length=150)]
     sector: Annotated[str | None, Field(default=None, max_length=120)]
@@ -107,6 +111,7 @@ def _apply(offer: Offer, payload: OfferIn, user: User) -> None:
 @router.get('/meta')
 def job_offers_meta(db: Session = Depends(get_db), user: User = Depends(_recruiter)):
     return {'societies': _ventilation_targets(db, user), 'contract_types': list(jobs.CONTRACT_TYPES),
+            'application_states': [{'code': code, 'label': label} for code, (label, _) in jobs.APPLICATION_STATES.items()],
             'logos': [{'path': path, 'label': label} for path, label in jobs.COMPANY_LOGOS.items()]}
 
 
@@ -213,12 +218,35 @@ def job_offer_applications(offer_id: int, db: Session = Depends(get_db), user: U
     offer, company = _offer(db, user, offer_id)
     rows = db.execute(select(Application, Candidate).join(Candidate, Candidate.id == Application.candidate_id)
                       .where(Application.offer_id == offer.id).order_by(Application.created_at.desc(), Application.id.desc())).all()
-    items = []
-    for application, candidate in rows:
-        state = _public_candidate_state(candidate)
-        items.append({'application_id': application.id, 'applied_at': application.created_at.isoformat() if application.created_at else None,
-                      'candidate': {'id': candidate.id, 'first_name': candidate.first_name, 'last_name': candidate.last_name,
-                                    'phone': candidate.phone, 'society': candidate.society, 'status': candidate.status,
-                                    'has_cv': bool((candidate.data or {}).get('cv'))},
-                      'state': {'code': state['status'], 'label': state['label']}})
+    items = [_application_staff(application, candidate) for application, candidate in rows]
     return {'offer': jobs.offer_staff(offer, company, len(items)), 'items': items}
+
+
+def _application_staff(application: Application, candidate: Candidate) -> dict:
+    state, dossier = jobs.application_state(application), _public_candidate_state(candidate)
+    return {'application_id': application.id, 'applied_at': application.created_at.isoformat() if application.created_at else None,
+            'candidate': {'id': candidate.id, 'first_name': candidate.first_name, 'last_name': candidate.last_name,
+                          'phone': candidate.phone, 'society': candidate.society, 'status': candidate.status,
+                          'has_cv': bool((candidate.data or {}).get('cv'))},
+            # État de cette candidature ; l'état du dossier (commun à la personne) est donné à part.
+            'state': {'code': state['status'], 'label': state['label'], 'updated_at': state['updated_at'], 'updated_by': application.status_updated_by},
+            'dossier_state': {'code': dossier['status'], 'label': dossier['label']}}
+
+
+@router.put('/{offer_id}/applications/{application_id}/status')
+def set_job_application_status(offer_id: int, application_id: int, payload: ApplicationStatusIn, request: Request,
+                               db: Session = Depends(get_db), user: User = Depends(_recruiter)):
+    offer, company = _offer(db, user, offer_id)
+    if payload.status not in jobs.APPLICATION_STATES:
+        raise HTTPException(status_code=422, detail='État de candidature inconnu.')
+    # La candidature doit appartenir à cette annonce : pas d'accès par un identifiant d'une autre société.
+    application = db.scalar(select(Application).where(Application.id == application_id, Application.offer_id == offer.id).with_for_update())
+    if application is None:
+        raise HTTPException(status_code=404, detail='Introuvable.')
+    if application.status != payload.status:
+        previous = application.status
+        application.status, application.status_updated_at, application.status_updated_by = payload.status, datetime.utcnow(), user.username
+        append_audit(db, action='recruitment.job_application.status', resource='job_application', resource_id=application.id, result='success',
+                     user=user, request=request, society=company.society, old_state={'status': previous}, new_state={'status': payload.status})
+    db.commit()
+    return _application_staff(application, db.get(Candidate, application.candidate_id))

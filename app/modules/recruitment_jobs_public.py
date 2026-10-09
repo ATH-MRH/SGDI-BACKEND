@@ -63,12 +63,18 @@ def _account_out(account: Account, *, has_photo: bool) -> dict:
             'created_at': account.created_at.isoformat() if account.created_at else None}
 
 
+def _dossier_state(candidate) -> tuple[str, dict]:
+    state = _public_candidate_state(candidate)
+    state.pop('position', None)
+    return state.pop('reference'), state
+
+
 def _application_out(application: Application, candidate, offer: Offer | None, company: Company | None) -> dict:
+    reference, dossier_state = _dossier_state(candidate)
+    # Candidature à une annonce : son propre état. Spontanée ou historique : l'état du dossier.
     result = {'id': application.id, 'kind': 'offer' if application.offer_id else 'spontaneous', 'position': application.position or '',
-              'submitted_at': application.created_at.isoformat() if application.created_at else None,
-              'state': _public_candidate_state(candidate), 'offer': None}
-    result['reference'] = result['state'].pop('reference')
-    result['state'].pop('position', None)
+              'submitted_at': application.created_at.isoformat() if application.created_at else None, 'reference': reference,
+              'state': jobs.application_state(application) if application.offer_id else dossier_state, 'offer': None}
     if offer is not None and company is not None:
         # Une annonce clôturée reste nommée dans le suivi du candidat, sans redevenir consultable.
         result['offer'] = {'id': offer.id, 'title': offer.title, 'company': jobs.company_public(company),
@@ -205,7 +211,13 @@ def _applications(db: Session, account: Account, application_id: int | None = No
 
 @router.get('/applications')
 def emploi_applications(account: Account = Depends(_account), db: Session = Depends(get_db)):
-    return {'items': _applications(db, account)}
+    candidate = jobs.dossier(db, account)
+    dossier = None
+    if candidate is not None:
+        reference, state = _dossier_state(candidate)
+        # Le dossier porte ce qui vaut pour la personne, quelle que soit l'annonce : une convocation, par exemple.
+        dossier = {'reference': reference, 'state': state}
+    return {'items': _applications(db, account), 'dossier': dossier}
 
 
 @router.get('/applications/{application_id}')

@@ -57,6 +57,8 @@ def test_upgrade_is_additive_replayable_and_reversible(tmp_path):
         con.execute("INSERT INTO recruitment_job_offers (company_id, title, created_at) VALUES (1, 'Agent', '2026-01-01')")
         assert con.execute("SELECT kind, is_active FROM recruitment_companies").fetchone() == ('group', 1)
         assert con.execute("SELECT status, positions FROM recruitment_job_offers").fetchone() == ('draft', 1)
+        con.execute("INSERT INTO recruitment_applications (candidate_id, offer_id, request_id, created_at) VALUES (1, 1, 'r1', '2026-01-01')")
+        assert con.execute("SELECT status, source, status_updated_at FROM recruitment_applications").fetchone() == ('received', 'mobile', None)
 
     _alembic(url, "downgrade", PREVIOUS)
     assert _tables(database) == schema_before and _candidates(database) == before

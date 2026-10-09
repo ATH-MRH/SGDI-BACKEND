@@ -22,6 +22,14 @@ MAX_SESSIONS = 5
 CONTRACT_TYPES = ('CDI', 'CDD', 'CTA', 'Stage', 'Apprentissage', 'Autre')
 # Logos de marque réellement présents dans app/static ; aucun autre chemin n'est accepté.
 COMPANY_LOGOS = {'/static/iron-securite-logo.png': 'IRON Sécurité', '/static/iron-solution-logo.png': 'IRON Solution'}
+# États d'une candidature à une annonce : (libellé, message affiché au candidat).
+APPLICATION_STATES = {
+    'received': ('Reçue', 'Votre candidature a bien été reçue par le service recrutement.'),
+    'shortlisted': ('Présélectionnée', 'Votre candidature a été présélectionnée pour ce poste.'),
+    'interview': ('Entretien', 'Votre candidature passe à l’étape de l’entretien. Le service recrutement vous contactera.'),
+    'accepted': ('Retenue', 'Votre candidature a été retenue pour ce poste. Le service recrutement vous contactera pour la suite.'),
+    'declined': ('Non retenue', 'Votre candidature n’a pas été retenue pour ce poste. Vos autres candidatures ne sont pas concernées.'),
+}
 PUBLISH_REQUIRED = (('title', 'Intitulé du poste'), ('wilaya', 'Wilaya'), ('contract_type', 'Type de contrat'),
                     ('missions', 'Missions'), ('profile', 'Profil recherché'))
 
@@ -160,6 +168,14 @@ def company_staff(company: Company) -> dict:
     return {'id': company.id, 'name': company.name, 'society': company.society, 'kind': company.kind, 'sector': company.sector,
             'city': company.city, 'description': company.description or '', 'website': company.website,
             'logo_path': company.logo_path, 'is_active': company.is_active}
+
+
+def application_state(application: Application) -> dict:
+    """État d'une candidature à une annonce, indépendant des autres candidatures du même dossier."""
+    code = application.status if application.status in APPLICATION_STATES else 'received'
+    label, message = APPLICATION_STATES[code]
+    changed = application.status_updated_at or application.created_at
+    return {'status': code, 'label': label, 'message': message, 'updated_at': changed.isoformat() if changed else None}
 
 
 def application_counts(db: Session, offer_ids: list[int]) -> dict[int, int]:

@@ -415,7 +415,7 @@ test('V6 annonces: every write goes to the server and a failed load never shows 
   app.ctx.confirm=()=>true;app.ctx.showBanner=()=>{};
   app.ctx.apiFetch=async(url,options={})=>{calls.push([options.method||'GET',url,options.body?JSON.parse(options.body):null]);
     if(url.endsWith('/publish'))return v6Offer(1);if(url.endsWith('/close'))return v6Offer(1,{status:'closed',effective_status:'closed'});
-    if(url.endsWith('/applications'))return {offer:v6Offer(1,{applications:1}),items:[{application_id:9,applied_at:'2026-10-02T09:00:00',candidate:{id:4,first_name:'Nadia',last_name:'TEST',phone:'+213551122334',has_cv:true},state:{code:'review',label:'En cours d’étude'}}]};
+    if(url.endsWith('/applications'))return {offer:v6Offer(1,{applications:1}),items:[{application_id:9,applied_at:'2026-10-02T09:00:00',candidate:{id:4,first_name:'Nadia',last_name:'TEST',phone:'+213551122334',has_cv:true},state:{code:'received',label:'Reçue'},dossier_state:{code:'review',label:'En cours d’étude'}}]};
     if(options.method==='POST')return v6Offer(2,{title:'Cariste',status:'draft',effective_status:'draft',published_at:null});
     throw new Error('Panne réseau')};
   const host=app.doc.getElementById('announcementsSection');
@@ -430,11 +430,40 @@ test('V6 annonces: every write goes to the server and a failed load never shows 
   assert.deepEqual({title:calls.at(-1)[2].title,society:calls.at(-1)[2].society,wilaya:calls.at(-1)[2].wilaya,deadline:calls.at(-1)[2].deadline},{title:'Cariste',society:'IRON GLOBAL SÉCURITÉ',wilaya:'Oran',deadline:null});
   assert.deepEqual(texts(host.querySelectorAll('article h3')),['Cariste','Annonce 1']);
   await app.run('openAnnouncementApplications(1)');
-  assert.match(host.textContent,/Candidatures — Annonce 1/);assert.match(host.textContent,/TEST Nadia/);assert.match(host.textContent,/En cours d’étude/);
+  assert.match(host.textContent,/Candidatures — Annonce 1/);assert.match(host.textContent,/TEST Nadia/);assert.match(host.textContent,/Reçue/);assert.match(host.textContent,/En cours d’étude/);
   // Chargement en échec : état d'erreur avec « Réessayer », jamais la liste précédente.
   await app.run('refreshRecruitAnnouncements()');
   assert.equal(host.querySelector('.rec-error-state strong').textContent,'Données indisponibles');assert.match(host.textContent,/Panne réseau/);
   assert.equal(host.querySelector('article'),null);assert.deepEqual(texts(host.querySelectorAll('button')),['Réessayer']);
+});
+
+test('V6 annonces: each application to an offer has its own state, set by the recruiter and saved on the server',async()=>{
+  const states=[['received','Reçue'],['shortlisted','Présélectionnée'],['interview','Entretien'],['accepted','Retenue'],['declined','Non retenue']].map(([code,label])=>({code,label}));
+  const item=(id,name,code,label)=>({application_id:id,applied_at:'2026-10-02T09:00:00',candidate:{id,first_name:name,last_name:'TEST',phone:'+21355112233'+id,has_cv:id===9},state:{code,label},dossier_state:{code:'review',label:'En cours d’étude'}});
+  const build=actions=>{const app=v6Announcements([v6Offer(1,{applications:2})],{actions});app.ctx.states=states;app.run('recruitAnnouncementMeta.application_states=states');app.ctx.showBanner=()=>{};return app};
+  const app=build(['read','update']);const calls=[];let fail=false;
+  app.ctx.apiFetch=async(url,options={})=>{calls.push([options.method||'GET',url,options.body?JSON.parse(options.body):null]);
+    if(url.endsWith('/applications'))return {offer:v6Offer(1,{applications:2}),items:[item(9,'Nadia','received','Reçue'),item(8,'Karim','interview','Entretien')]};
+    if(fail)throw new Error('Refusé par le serveur');
+    return {...item(9,'Nadia','declined','Non retenue'),state:{code:'declined',label:'Non retenue'}}};
+  const host=app.doc.getElementById('announcementsSection');
+  await app.run('openAnnouncementApplications(1)');
+  assert.deepEqual(texts(host.querySelectorAll('thead th')),['Candidat','Téléphone','Reçue le','CV','État de la candidature','État du dossier']);
+  const selects=()=>[...host.querySelectorAll('select.rec-state-select')];
+  assert.deepEqual(selects().map(select=>select.value),['received','interview'],'one independent state per application');
+  assert.deepEqual(texts(selects()[0].options),states.map(state=>state.label));
+  assert.ok(selects().every(select=>/État de la candidature de TEST/.test(select.getAttribute('aria-label'))));
+  assert.deepEqual(texts(host.querySelectorAll('tbody td:last-child .pill')),['En cours d’étude','En cours d’étude'],'the dossier state is shown apart');
+  selects()[0].value='declined';app.ctx.select=selects()[0];await app.run('setApplicationStatus(1,9,select)');
+  assert.deepEqual(calls.at(-1),['PUT','/api/drh/job-offers/1/applications/9/status',{status:'declined'}]);
+  assert.deepEqual(selects().map(select=>select.value),['declined','interview'],'the other application is untouched');
+  // Refus du serveur : la liste revient à l'état réellement enregistré.
+  fail=true;selects()[1].value='accepted';app.ctx.select=selects()[1];await app.run('setApplicationStatus(1,8,select)');
+  assert.deepEqual(selects().map(select=>select.value),['declined','interview']);
+  const readOnly=build(['read']);readOnly.ctx.apiFetch=app.ctx.apiFetch;fail=false;await readOnly.run('openAnnouncementApplications(1)');
+  const view=readOnly.doc.getElementById('announcementsSection');
+  assert.equal(view.querySelector('select'),null,'read-only accounts see the state, they cannot change it');
+  assert.deepEqual(texts(view.querySelectorAll('tbody td:nth-child(5) .pill')),['Reçue','Entretien']);
 });
 
 test('V6 annonces: announcements kept in the browser by the previous version are only offered for import as drafts',async()=>{
