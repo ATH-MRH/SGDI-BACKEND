@@ -217,6 +217,27 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .face-error,.face-disabled{background:#f1f5f9;color:#334155}
 .face-check{font-size:24px;letter-spacing:.03em}.face-name{font-size:30px;margin-top:8px}.face-meta{font-size:16px;font-weight:700;margin-top:6px}
 .face-fallback{margin-top:12px}
+.face-origin{opacity:.85}
+.face-terminals{margin:12px 0}
+.ft-toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.ft-toolbar button{min-height:40px;padding:0 14px;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer}
+.ft-toolbar .ft-primary{border:0;background:var(--navy);color:#fff}
+.ft-toolbar button:disabled{opacity:.45;cursor:not-allowed}
+.ft-counters{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0 8px;font-size:13px}
+.ft-counters div{display:flex;gap:6px;align-items:baseline;min-width:0}
+.ft-counters dt{color:var(--muted);font-weight:700}
+.ft-counters dd{margin:0;font-weight:900;color:var(--navy);font-variant-numeric:tabular-nums}
+.ft-counters .ft-last{flex:1 1 220px}.ft-counters .ft-last dd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.ft-table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
+.ft-table th{padding:8px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#f8fafc;white-space:nowrap}
+.ft-table td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:middle}
+.ft-table td small{display:block;font-weight:600;color:var(--muted);font-size:12px;margin-top:2px}
+.ft-table tr.is-focus td{background:#eff6ff}
+.ft-table .ft-check{width:36px;text-align:center}.ft-table .ft-check input{width:18px;height:18px;cursor:pointer}
+.ft-table .ft-time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ft-state{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:800;font-size:12px;white-space:nowrap;background:#f1f5f9;color:#334155}
+.ft-state[data-tone=ok]{background:#dcfce7;color:#166534}.ft-state[data-tone=bad]{background:#fee2e2;color:#991b1b}
 @media (max-width:640px){.face-view{padding:10px}.face-check{font-size:20px}.face-name{font-size:24px}}
 
 .manual-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:20px 0 8px}
@@ -659,7 +680,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
 }
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
-<script defer src="/static/pointeur-facial.js?v=1"></script>
+<script defer src="/static/pointeur-facial.js?v=20261009-multi-terminals-v1"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/pointeur-workstation.css">
@@ -730,8 +751,27 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         </div>
         <!-- Pointage facial automatique : même zone centrale, moteur facial existant (pointeur-facial.js). -->
         <section id="faceView" class="face-view hidden" aria-live="polite">
-          <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Aucune action : présentez-vous face à la caméra.</p></div>
-            <div class="face-camera"><span id="faceCameraLabel">—</span><select id="faceCameraSelect" class="site-selector hidden" aria-label="Caméra" onchange="PointeurFacial.selectCamera(this.value)"></select></div></div>
+          <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Cochez les terminaux à utiliser, puis activez-les.</p></div>
+            <div class="face-camera"><span id="faceCameraLabel">—</span></div></div>
+          <!-- Terminaux déjà enregistrés par l'Administration Système et autorisés pour ce compte : sélection multiple, aucun appairage ici. -->
+          <div id="faceTerminals" class="face-terminals hidden">
+            <div class="ft-toolbar" role="group" aria-label="Sélection des terminaux">
+              <button type="button" class="secondary" data-ft="all">Sélectionner tout</button>
+              <button type="button" class="secondary" data-ft="none">Désélectionner tout</button>
+              <button type="button" id="ftActivate" class="ft-primary" data-ft="activate" disabled>Activer les terminaux sélectionnés</button>
+              <button type="button" id="ftStop" class="secondary" data-ft="stop" disabled>Arrêter la surveillance</button>
+            </div>
+            <dl class="ft-counters" aria-live="polite">
+              <div><dt>Sélectionnés</dt><dd id="ftCountSelected">0</dd></div>
+              <div><dt>Actifs</dt><dd id="ftCountActive">0</dd></div>
+              <div><dt>Hors ligne</dt><dd id="ftCountOffline">0</dd></div>
+              <div class="ft-last"><dt>Dernier événement</dt><dd id="ftLastEvent">Aucun</dd></div>
+            </dl>
+            <div class="ft-scroll"><table class="ft-table">
+              <thead><tr><th class="ft-check"><input type="checkbox" id="ftAll" aria-label="Sélectionner tous les terminaux"></th><th>Terminal</th><th>Site</th><th>État</th><th>Dernière activité</th></tr></thead>
+              <tbody id="ftRows"></tbody>
+            </table></div>
+          </div>
           <div class="face-stage"><img id="facePreview" class="hidden" alt="Aperçu caméra (relayé par le serveur)"></div>
           <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
         </section>

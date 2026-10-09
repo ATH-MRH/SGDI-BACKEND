@@ -3,9 +3,10 @@
 // Vraie page servie telle quelle dans un cadre de la largeur testée ; réseau simulé par des fixtures
 // isolées ici. AUCUNE caméra physique : l'aperçu est une image de test relayée par le faux serveur,
 // comme le ferait le backend (le navigateur n'accède jamais à une caméra).
-// Vérifie, de 1600 à 390 px : un clic sur « Reconnaissance faciale » active le mode facial dans la
-// zone centrale, le poste reste affiché, aucun débordement, cadre vidéo stable, état compact sans
-// caméra, haut de page inchangé.
+// Vérifie, de 1600 à 390 px : un clic sur « Reconnaissance faciale » ouvre la liste des terminaux
+// autorisés dans la zone centrale ; « tout sélectionner » puis « activer » lance PLUSIEURS équipements
+// à la fois (deux caméras + une borne autonome surveillée) ; le poste reste affiché, aucun
+// débordement, cadre vidéo stable, état compact sans terminal, haut de page inchangé.
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -25,28 +26,34 @@ const POST = { site_id: 12, site: 'SITE DE RECETTE', status: 'OFFICIAL', reason:
   current: { shift: 'APRES_MIDI', shift_label: 'Après-midi', group: 'B', work_date: '2026-10-01', start: '14:00', end: '22:00', scheduled_start: iso('14:00'), scheduled_end: iso('22:00') },
   next: null, maintien: null, kpi: { expected: 18, present: 9, absent: 9, excused: 0, maintien: 0, anomalies: 0 }, activity: { refused_today: 0 }, present: [], todo: [], movements: [], permissions: { manual_entry: false } };
 
-// Sonde dans la page : état avant le clic (6 s), clic sur la carte, état après (10 s et 14 s).
+// Sonde dans la page : état avant le clic (6 s), clic sur la carte, liste (7 s), tout sélectionner +
+// activer, état après (10 s et 14 s).
 const PROBE = `
 (function(){
-  let recognize=0;const nativeFetch=window.fetch.bind(window);
-  window.fetch=(url,options)=>{if(String(url).includes('/recognize'))recognize++;return nativeFetch(url,options)};
+  let recognize=0;const perCamera={};const nativeFetch=window.fetch.bind(window);
+  window.fetch=(url,options)=>{const m=/cameras\\/(\\d+)\\/recognize/.exec(String(url));if(m){recognize++;perCamera[m[1]]=(perCamera[m[1]]||0)+1}return nativeFetch(url,options)};
   const box=id=>{const el=document.getElementById(id);if(!el)return null;const r=el.getBoundingClientRect();return {top:Math.round(r.top+scrollY),left:Math.round(r.left),width:Math.round(r.width),height:Math.round(r.height)}};
   const shown=el=>{if(!el)return false;const r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'};
   const sample=()=>({scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,bodyScrollWidth:document.body.scrollWidth,recognize,
     facial:document.getElementById('scannerCard').classList.contains('facial-mode'),faceView:shown(document.getElementById('faceView')),
     stage:(()=>{const el=document.querySelector('#faceView .face-stage');if(!shown(el))return null;const r=el.getBoundingClientRect();return {width:Math.round(r.width),height:Math.round(r.height)}})(),
-    preview:shown(document.getElementById('facePreview')),status:document.getElementById('faceStatus').innerText.replace(/\\s+/g,' ').trim(),
+    preview:shown(document.getElementById('facePreview')),
+    rows:[...document.querySelectorAll('#ftRows tr')].map(tr=>[tr.dataset.key,tr.cells[3].innerText.replace(/\\s+/g,' ').trim(),tr.querySelector('input').checked]),
+    counters:['ftCountSelected','ftCountActive','ftCountOffline'].map(id=>document.getElementById(id).textContent).join('/'),
+    buttons:[...document.querySelectorAll('#faceView button')].filter(shown).map(b=>b.textContent.trim()),
+    perCamera:Object.fromEntries(Object.entries(perCamera)),status:document.getElementById('faceStatus').innerText.replace(/\\s+/g,' ').trim(),
     banner:shown(document.getElementById('shiftBanner')),kpis:document.querySelectorAll('#postKpis .v5-kpi').length,
     qrBits:['usbReader','reader','cameraModeBtn'].filter(id=>shown(document.getElementById(id))),pressed:document.getElementById('faceModeBtn').getAttribute('aria-pressed'),
     host:location.pathname,boxes:Object.fromEntries(['shiftBanner','postKpis','scannerCard','faceView'].map(id=>[id,box(id)])),
-    outside:[...document.querySelectorAll('#appView *')].filter(el=>{const r=el.getBoundingClientRect();return shown(el)&&!el.closest('.hidden')&&!el.closest('.v5-list,.v5-moves,.live-feed-list,.wedge-input,.tracking-scroll')&&(r.right>document.documentElement.clientWidth+1||r.left<-1)}).map(el=>el.tagName+'.'+String(el.className).split(' ')[0]).slice(0,5)});
+    outside:[...document.querySelectorAll('#appView *')].filter(el=>{const r=el.getBoundingClientRect();return shown(el)&&!el.closest('.hidden')&&!el.closest('.v5-list,.v5-moves,.live-feed-list,.wedge-input,.tracking-scroll,.ft-scroll')&&(r.right>document.documentElement.clientWidth+1||r.left<-1)}).map(el=>el.tagName+'.'+String(el.className).split(' ')[0]).slice(0,5)});
   const out={};
   setTimeout(()=>{out.before=sample();document.getElementById('faceModeBtn').click()},6000);
+  setTimeout(()=>{out.listed=sample();const all=document.querySelector('#faceTerminals [data-ft="all"]');if(shown(all)){all.click();document.querySelector('#faceTerminals [data-ft="activate"]').click()}},7000);
   setTimeout(()=>{out.after=sample()},10000);
   setTimeout(()=>{out.later=sample();parent.postMessage({probe:out},'*')},14000);
 })();`;
 
-function startServer(cameras) {
+function startServer(devices) {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
     const json = (body, status = 200) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(body)); };
@@ -61,8 +68,10 @@ function startServer(cameras) {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return response.end(fs.readFileSync(path.join(STATIC, 'pointeur.html'), 'utf8').replace('<head>', '<head>' + boot).replace('</body>', `<script>${PROBE}</script></body>`));
     }
-    if (url.pathname === '/api/biometrics/status') return json({ enabled: true, engine_available: true });
-    if (url.pathname === '/api/biometrics/cameras') return json(url.searchParams.get('site_id') === '12' ? cameras : []);
+    if (url.pathname === '/api/biometrics/pointer/terminals') return json({ server_time: iso('14:40'), engine: { ready: true, message: null },
+      terminals: url.searchParams.get('site_id') === '12' ? devices : [], authorized_total: devices.length, last_event: null });
+    if (url.pathname === '/api/biometrics/pointer/terminals/activate') return json({ results: devices.map((d) => (d.kind === 'CAMERA'
+      ? { key: d.key, status: 'ACTIVATED', code: 'SERVER_CAMERA' } : { key: d.key, status: 'MONITORED', code: 'AUTONOMOUS', online: true, last_communication: d.last_communication })) });
     if (url.pathname.endsWith('/preview.jpg')) { response.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }); return response.end(PIXEL); }
     if (url.pathname.endsWith('/recognize')) return json({ state: 'NO_FACE', recorded: false, reasons: [] });
     if (url.pathname === '/api/portal/attendance-live') return json({ latest_event_id: 50, events: [], latest_refusal_id: 9, refusals: [], alerts: [], summary: { entries_today: 21, exits_today: 9, present_now: 9, absent_today: 0 },
@@ -98,11 +107,14 @@ function probe(port, width) {
   });
 }
 
-const CAMERA = [{ id: 7, site_id: 12, name: 'CAM-ENTREE-01', location: 'Entrée principale', adapter: 'DAHUA', usage: 'ATTENDANCE', role: 'ENTRY', is_default: true, active: true, facial_attendance_enabled: true }];
+const DEVICE = (key, kind, name, extra = {}) => ({ key, kind, name, category: kind === 'CAMERA' ? 'IP_CAMERA' : 'MOBILE_KIOSK', hardware: kind === 'CAMERA' ? 'DAHUA IPC-HFW' : 'Tablette Android',
+  location: 'Entrée principale', site_id: 12, site: 'SITE DE RECETTE', society: 'Iron Global Securite', activation: kind === 'CAMERA' ? 'SERVER_CAMERA' : 'AUTONOMOUS',
+  remote_activation: kind === 'CAMERA', online: kind === 'CAMERA' ? null : true, state: kind === 'CAMERA' ? 'READY' : 'ONLINE', last_communication: kind === 'CAMERA' ? null : '2026-10-01T13:39:50Z', last_event: null, ...extra });
+const DEVICES = [DEVICE('cam:7', 'CAMERA', 'CAM-ENTREE-01'), DEVICE('cam:8', 'CAMERA', 'CAM-SORTIE-02', { location: 'Sortie quai' }), DEVICE('trm:3', 'TERMINAL', 'TABLETTE POSTE DE GARDE')];
 
 for (const width of WIDTHS) {
-  for (const [label, cameras] of [['caméra de pointage déclarée', CAMERA], ['aucune caméra', []]]) {
-    test(`Chrome réel ${width}px — ${label} : un clic active le facial dans la zone centrale`, { skip: SKIP, timeout: 150000 }, async () => {
+  for (const [label, cameras] of [['trois terminaux autorisés', DEVICES], ['aucun terminal autorisé', []]]) {
+    test(`Chrome réel ${width}px — ${label} : le facial s'ouvre dans la zone centrale, plusieurs terminaux actifs ensemble`, { skip: SKIP, timeout: 150000 }, async () => {
       const server = await startServer(cameras);
       let out;
       try { out = await probe(server.address().port, width); } finally { server.close(); }
@@ -120,16 +132,24 @@ for (const width of WIDTHS) {
         assert.equal(s.boxes.scannerCard.top, out.before.boxes.scannerCard.top); assert.equal(s.boxes.scannerCard.width, out.before.boxes.scannerCard.width);
       }
       assert.deepEqual(out.later.boxes, out.after.boxes, 'mise en page stable une fois le mode actif');
+      assert.equal(out.listed.recognize, 0, 'aucune reconnaissance avant l\'activation');
+      assert.ok(!out.later.buttons.some((b) => /appair|associer/i.test(b)), 'aucun bouton d\'appairage dans Pointeur');
       if (cameras.length) {
-        assert.ok(out.after.recognize >= 1, 'détection automatique démarrée sans second clic');
-        assert.ok(out.later.recognize > out.after.recognize, 'la détection continue seule');
+        assert.deepEqual(out.listed.rows.map((r) => [r[0], r[2]]), [['cam:7', false], ['cam:8', false], ['trm:3', false]], 'liste à cocher, rien de présélectionné');
+        assert.deepEqual(out.later.buttons, ['Sélectionner tout', 'Désélectionner tout', 'Activer les terminaux sélectionnés', 'Arrêter la surveillance']);
+        assert.deepEqual(out.later.rows.map((r) => r[2]), [true, true, true]);
+        assert.match(out.later.rows[0][1], /^Actif/); assert.match(out.later.rows[1][1], /^Actif/); assert.match(out.later.rows[2][1], /^Actif · autonome/);
+        assert.equal(out.later.counters, '3/3/0', 'sélectionnés / actifs / hors ligne');
+        assert.ok(out.after.perCamera['7'] >= 1 && out.after.perCamera['8'] >= 1, 'les deux caméras tournent en même temps');
+        assert.ok(out.later.perCamera['7'] > out.after.perCamera['7'] && out.later.perCamera['8'] > out.after.perCamera['8'], 'chacune continue seule');
         assert.equal(out.after.preview, true, 'aperçu relayé affiché');
         const { width: w, height: h } = out.after.stage;
         assert.ok(w <= Math.min(560, out.after.boxes.scannerCard.width) && Math.abs(w / h - 16 / 9) < 0.03, `cadre vidéo 16/9 stable (${w}×${h})`);
         assert.match(out.after.status, /PRÊT — placez-vous face à la caméra/);
       } else {
         assert.equal(out.after.recognize, 0); assert.equal(out.after.stage, null, 'aucun cadre noir sans source vidéo');
-        assert.match(out.after.status, /AUCUNE CAMÉRA DE POINTAGE Aucune caméra active n'est déclarée pour ce site\./);
+        assert.match(out.after.status, /AUCUN TERMINAL AUTORISÉ Aucun terminal de reconnaissance faciale n'est autorisé pour ce compte/);
+        assert.deepEqual(out.after.buttons, [], 'aucune action proposée');
         assert.ok(out.after.boxes.faceView.height < 220, `état compact (${out.after.boxes.faceView.height}px)`);
       }
     });
