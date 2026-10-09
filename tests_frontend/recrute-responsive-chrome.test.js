@@ -49,9 +49,11 @@ function fixtures(kind) {
   add('new', SOLUTION, 8); add('new', null, 6);
   const announcements = Array.from({ length: 9 }, (_, i) => ({
     id: `ANN-${i}`, title: i % 4 === 0 ? 'Agent de prévention et de sécurité — site industriel de nuit' : `Poste de test ${i}`,
-    society: i % 3 === 2 ? SOLUTION : SECURITE, location: i % 2 ? 'Alger' : '', positions: 1 + i, publishedAt: '2026-10-01', deadline: i % 2 ? '2026-11-15' : '',
-    status: ['Publiée', 'Brouillon', 'Clôturée'][i % 3], reference: i % 2 ? `REC-2026-00${i}` : '', description: 'Annonce de test.',
-  }));
+    society: i % 3 === 2 ? SOLUTION : SECURITE, wilaya: i % 2 ? 'Alger' : null, location: i % 2 ? 'Hydra' : null, contract_type: i % 2 ? 'CDI' : null, positions: 1 + i,
+    published_at: i % 3 === 1 ? null : '2026-10-01T08:00:00', deadline: i % 2 ? '2026-11-15' : null, applications: i % 3 === 0 ? i : 0,
+    status: ['published', 'draft', 'closed'][i % 3], effective_status: ['published', 'draft', 'closed'][i % 3], reference: i % 2 ? `REC-2026-00${i}` : null,
+    missions: 'Mission de test.', profile: 'Profil de test.', description: '',
+  })).map((item, i) => ({ ...item, id: i + 1 }));
   return { candidates, announcements };
 }
 
@@ -81,6 +83,9 @@ function startServer(state) {
       });
     }
     if (url.pathname === '/api/irongs/positions') return json([]);
+    // Annonces serveur (règles couvertes par tests/test_recruitment_jobs_api.py).
+    if (url.pathname === '/api/drh/job-offers/meta') return json({ societies: [SECURITE, SOLUTION], contract_types: ['CDI', 'CDD', 'CTA', 'Stage', 'Apprentissage', 'Autre'], logos: [] });
+    if (url.pathname === '/api/drh/job-offers') return state.fail ? json({ detail: 'Service indisponible (test)' }, 503) : json({ items: state.data.announcements });
     if (url.pathname === '/api/drh/candidates/page') {
       if (state.fail) return json({ detail: 'Service indisponible (test)' }, 503);
       const q = url.searchParams, society = q.get('society'), mode = q.get('mode'), needle = (q.get('q') || '').toLowerCase();
@@ -136,7 +141,6 @@ async function openApp(browser, base, announcements, width) {
   await page.setViewport({ width, height: 900, deviceScaleFactor: 1, isMobile: width <= 430, hasTouch: width <= 430 });
   await page.evaluateOnNewDocument(items => {
     localStorage.setItem('atlas_recrute_session', JSON.stringify({ token: 'recette', user: {} }));
-    localStorage.setItem('atlas_recruitment_announcements_v1', JSON.stringify(items));
     sessionStorage.removeItem('atlas_recrute_section');
   }, announcements);
   const errors = [];

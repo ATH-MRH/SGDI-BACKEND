@@ -25,8 +25,12 @@ test("annonces recrutement: cycle opérationnel disponible", () => {
     "shareRecruitAnnouncement",
     "recruitAnnouncementPoster",
   ]) assert.match(source, new RegExp(`function ${fn}\\(`));
-  assert.match(source, />Publier \/ Partager</);
+  assert.match(source, />Partager</);
   assert.match(source, />Clôturer</);
+  // Les annonces vivent sur le serveur : plus aucune écriture locale.
+  assert.match(source, /const ANNOUNCEMENT_API="\/api\/drh\/job-offers"/);
+  assert.doesNotMatch(source, /localStorage\.setItem\(RECRUIT_ANNOUNCEMENTS_KEY/);
+  assert.doesNotMatch(source, /Annonces enregistrées sur ce navigateur/);
 });
 
 test("tableau de bord recrutement: indicateurs et accès rapides", () => {
@@ -114,15 +118,15 @@ test('dashboard V7: complete pagination, exclusive active stages, transferred fi
   assert.match(c.document.querySelector('.dashboard-recent tbody tr').textContent,/Test 8/);
   assert.equal(c.document.querySelectorAll('.dashboard-agenda-item').length,1);
 });
-test('dashboard V5: strict company isolation for candidates and local announcements',async()=>{
+test('dashboard V5: strict company isolation for candidates and announcements',async()=>{
   const c=dashboardContext([candidate(1),candidate(2,'nouvelle',{},'B')]);
-  c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',status:'Publiée'},{title:'Annonce B',society:'B',status:'Publiée'}];
-  await c.renderRecruitDashboard(true);assert.match(c.document.body.textContent,/Test 1/);assert.doesNotMatch(c.document.body.textContent,/Test 2|Annonce B/);
+  c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',effective_status:'published'},{title:'Annonce B',society:'B',effective_status:'published'},{title:'Brouillon A',society:'A',effective_status:'draft'},{title:'Expirée B',society:'B',effective_status:'expired'}];
+  await c.renderRecruitDashboard(true);assert.match(c.document.body.textContent,/Test 1/);assert.doesNotMatch(c.document.body.textContent,/Test 2|Annonce B|Brouillon A|Expirée B/);
   c.activeSociety='B';await c.renderRecruitDashboard(true);assert.match(c.document.body.textContent,/Test 2|Annonce B/);assert.doesNotMatch(c.document.body.textContent,/Test 1|Annonce A/);
 });
 test('dashboard V7: portfolio filter — all files, unventilated files, one company',async()=>{
   const items=[candidate(1),candidate(2,'nouvelle',{},'B'),candidate(3,'nouvelle',{},null)];
-  const c=dashboardContext(items);c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',status:'Publiée'},{title:'Annonce B',society:'B',status:'Publiée'}];
+  const c=dashboardContext(items);c.getRecruitAnnouncements=()=>[{title:'Annonce A',society:'A',effective_status:'published'},{title:'Annonce B',society:'B',effective_status:'published'},{title:'Brouillon A',society:'A',effective_status:'draft'},{title:'Expirée B',society:'B',effective_status:'expired'}];
   const urls=[];const fetch=c.apiFetch;c.apiFetch=async url=>{urls.push(url);return fetch(url)};
   c.activeSociety='';await c.renderRecruitDashboard(true);
   assert.match(c.document.body.textContent,/Test 1/);assert.match(c.document.body.textContent,/Test 2/);assert.match(c.document.body.textContent,/Test 3/);
@@ -362,33 +366,89 @@ test('V6 entretiens: API failure renders the shared error component with a retry
   assert.equal(host.innerHTML,before,'a response for the previous company never repaints the screen');
 });
 
-test('V6 annonces: card grid with real fields only, actions follow permissions, compact empty state',()=>{
-  const announcements=[{id:'A1',title:'Chef de poste',society:'IRON GLOBAL SÉCURITÉ',location:'Alger',positions:2,publishedAt:'2026-10-01',deadline:'2026-11-01',status:'Publiée',reference:'REC-1'},
-    {id:'A2',title:'Agent',society:'IRON GLOBAL SÉCURITÉ',positions:1,status:'Clôturée'},{id:'A3',title:'Autre société',society:'IRON GLOBAL SOLUTION',positions:1,status:'Brouillon'}];
-  const app=v6Context({announcements});app.run('recruitSection="announcements";renderRecruitAnnouncements()');
+const v6Offer=(id,extra={})=>({id,title:`Annonce ${id}`,society:'IRON GLOBAL SÉCURITÉ',company:{name:'IRON GLOBAL SÉCURITÉ'},profession:'Sécurité',wilaya:'Alger',location:'Hydra',contract_type:'CDI',positions:2,
+  missions:'Surveiller',profile:'Rigueur',description:'',reference:'',deadline:'2026-11-01',published_at:'2026-10-01T08:00:00',status:'published',effective_status:'published',applications:0,...extra});
+function v6Announcements(items,options={}){
+  const app=v6Context(options);app.ctx.fixture=items;
+  app.run('recruitAnnouncements=fixture;recruitAnnouncementLoaded=true;recruitAnnouncementMeta={societies:["IRON GLOBAL SÉCURITÉ","IRON GLOBAL SOLUTION"],contract_types:["CDI","CDD"],logos:[]};recruitSection="announcements"');
+  return app;
+}
+test('V6 annonces: server-backed cards, real counters, actions follow status and permissions',()=>{
+  const offers=[v6Offer(1,{title:'Chef de poste',reference:'REC-1',applications:3}),v6Offer(2,{title:'Agent',status:'closed',effective_status:'closed'}),
+    v6Offer(3,{title:'Brouillon',status:'draft',effective_status:'draft',published_at:null}),v6Offer(4,{title:'Autre société',society:'IRON GLOBAL SOLUTION'}),
+    v6Offer(5,{title:'Dépassée',effective_status:'expired'})];
+  const app=v6Announcements(offers);app.run('renderRecruitAnnouncements()');
   const host=app.doc.getElementById('announcementsSection');
   assert.equal(host.querySelector('.rec-page-header h2').textContent,'Annonces recrutement');
   assert.deepEqual(texts(host.querySelectorAll('.rec-page-actions .primary')),['+ Nouvelle annonce']);
-  assert.equal(host.querySelector('.rec-count').textContent,'2 annonces');
+  assert.equal(host.querySelector('.rec-count').textContent,'4 annonces','the active company only');
   const cards=host.querySelectorAll('#announcementList.rec-card-grid article.rec-card');
-  assert.equal(cards.length,2);
-  assert.deepEqual(texts(cards[0].querySelectorAll('dt')),['Lieu','Postes','Publication','Date limite','Référence']);
-  assert.deepEqual(texts(cards[1].querySelectorAll('dt')),['Lieu','Postes','Publication','Date limite']);
-  assert.doesNotMatch(host.textContent,/candidature\(s\)|candidatures reçues/i,'no candidate counter is invented');
-  assert.deepEqual(texts(cards[0].querySelectorAll('footer button')),['Publier / Partager','Modifier','Clôturer','Supprimer']);
-  assert.deepEqual(texts(cards[1].querySelectorAll('footer button')),['Publier / Partager','Modifier','Supprimer']);
+  assert.equal(cards.length,4);
+  assert.deepEqual(texts(cards[0].querySelectorAll('dt')),['Lieu','Contrat','Postes','Candidatures','Publication','Date limite','Référence']);
+  assert.deepEqual(texts(cards[1].querySelectorAll('dt')),['Lieu','Contrat','Postes','Candidatures','Publication','Date limite']);
+  assert.deepEqual(texts(host.querySelectorAll('article .pill')),['Publiée','Clôturée','Brouillon','Expirée']);
+  assert.deepEqual(texts(cards[0].querySelectorAll('footer button')),['Candidatures (3)','Partager','Modifier','Clôturer']);
+  assert.deepEqual(texts(cards[1].querySelectorAll('footer button')),['Candidatures (0)','Republier','Modifier'],'a closed offer is never deleted');
+  assert.deepEqual(texts(cards[2].querySelectorAll('footer button')),['Candidatures (0)','Publier','Modifier','Supprimer'],'only an empty draft can be deleted');
+  assert.deepEqual(texts(cards[3].querySelectorAll('footer button')),['Candidatures (0)','Republier','Modifier','Clôturer']);
   assert.equal(host.querySelectorAll('article .primary').length,0,'one primary action per page');
+  assert.match(host.querySelector('.rec-note').textContent,/IRON Emploi/);assert.doesNotMatch(host.textContent,/sur ce navigateur/);
   app.doc.getElementById('announcementSearch').value='introuvable';app.run('filterRecruitAnnouncements()');
   assert.equal(host.querySelector('#announcementList .rec-empty-state strong').textContent,'Aucun résultat');
-  app.run('openAnnouncementForm("A1")');
+  app.doc.getElementById('announcementSearch').value='';app.doc.getElementById('announcementStatus').value='draft';app.run('filterRecruitAnnouncements()');
+  assert.deepEqual(texts(host.querySelectorAll('article h3')),['Brouillon']);
+  app.run('openAnnouncementForm(1)');
   assert.equal(host.querySelector('#announcementForm [name="title"]').value,'Chef de poste');
+  assert.ok(host.querySelector('#annSociety').disabled,'the company is locked once applications exist');
+  assert.equal(host.querySelector('#announcementForm input[type="hidden"][name="society"]').value,'IRON GLOBAL SÉCURITÉ');
   for(const field of host.querySelectorAll('#announcementForm input:not([type="hidden"]),#announcementForm select,#announcementForm textarea'))assert.ok(host.querySelector(`label[for="${field.id}"]`),field.name);
   assert.deepEqual(texts(host.querySelectorAll('#announcementForm .modal-actions button')),['Annuler','Enregistrer l’annonce']);
-  const readOnly=v6Context({announcements,actions:['read']});readOnly.run('renderRecruitAnnouncements()');
-  assert.equal(readOnly.doc.querySelector('#announcementsSection button'),null);
-  const empty=v6Context({actions:['read','create']});empty.run('renderRecruitAnnouncements()');
+  const readOnly=v6Announcements(offers,{actions:['read']});readOnly.run('renderRecruitAnnouncements()');
+  assert.deepEqual([...new Set(texts(readOnly.doc.querySelectorAll('#announcementsSection button')).map(text=>text.replace(/\d+/,'n')))],['Candidatures (n)']);
+  const empty=v6Announcements([],{actions:['read','create']});empty.run('renderRecruitAnnouncements()');
   assert.equal(empty.doc.querySelector('#announcementList .rec-empty-state strong').textContent,'Aucune annonce');
   assert.deepEqual(texts(empty.doc.querySelectorAll('#announcementList .rec-empty-state button')),['+ Nouvelle annonce']);
+});
+
+test('V6 annonces: every write goes to the server and a failed load never shows stale or local data',async()=>{
+  const app=v6Announcements([v6Offer(1,{status:'draft',effective_status:'draft',published_at:null})]);const calls=[];
+  app.ctx.confirm=()=>true;app.ctx.showBanner=()=>{};
+  app.ctx.apiFetch=async(url,options={})=>{calls.push([options.method||'GET',url,options.body?JSON.parse(options.body):null]);
+    if(url.endsWith('/publish'))return v6Offer(1);if(url.endsWith('/close'))return v6Offer(1,{status:'closed',effective_status:'closed'});
+    if(url.endsWith('/applications'))return {offer:v6Offer(1,{applications:1}),items:[{application_id:9,applied_at:'2026-10-02T09:00:00',candidate:{id:4,first_name:'Nadia',last_name:'TEST',phone:'+213551122334',has_cv:true},state:{code:'review',label:'En cours d’étude'}}]};
+    if(options.method==='POST')return v6Offer(2,{title:'Cariste',status:'draft',effective_status:'draft',published_at:null});
+    throw new Error('Panne réseau')};
+  const host=app.doc.getElementById('announcementsSection');
+  await app.run('setAnnouncementStatus(1,"publish")');
+  assert.deepEqual(calls.at(-1).slice(0,2),['POST','/api/drh/job-offers/1/publish']);assert.deepEqual(texts(host.querySelectorAll('article .pill')),['Publiée']);
+  await app.run('setAnnouncementStatus(1,"close")');
+  assert.deepEqual(calls.at(-1).slice(0,2),['POST','/api/drh/job-offers/1/close']);assert.deepEqual(texts(host.querySelectorAll('article .pill')),['Clôturée']);
+  app.run('openAnnouncementForm()');
+  const form=host.querySelector('#announcementForm');form.querySelector('[name="title"]').value='Cariste';form.querySelector('[name="society"]').value='IRON GLOBAL SÉCURITÉ';form.querySelector('[name="wilaya"]').value='Oran';
+  app.ctx.form=form;await app.run('saveRecruitAnnouncement(form)');
+  assert.deepEqual(calls.at(-1).slice(0,2),['POST','/api/drh/job-offers']);
+  assert.deepEqual({title:calls.at(-1)[2].title,society:calls.at(-1)[2].society,wilaya:calls.at(-1)[2].wilaya,deadline:calls.at(-1)[2].deadline},{title:'Cariste',society:'IRON GLOBAL SÉCURITÉ',wilaya:'Oran',deadline:null});
+  assert.deepEqual(texts(host.querySelectorAll('article h3')),['Cariste','Annonce 1']);
+  await app.run('openAnnouncementApplications(1)');
+  assert.match(host.textContent,/Candidatures — Annonce 1/);assert.match(host.textContent,/TEST Nadia/);assert.match(host.textContent,/En cours d’étude/);
+  // Chargement en échec : état d'erreur avec « Réessayer », jamais la liste précédente.
+  await app.run('refreshRecruitAnnouncements()');
+  assert.equal(host.querySelector('.rec-error-state strong').textContent,'Données indisponibles');assert.match(host.textContent,/Panne réseau/);
+  assert.equal(host.querySelector('article'),null);assert.deepEqual(texts(host.querySelectorAll('button')),['Réessayer']);
+});
+
+test('V6 annonces: announcements kept in the browser by the previous version are only offered for import as drafts',async()=>{
+  const legacy=[{id:'ANN-1',title:'Ancienne annonce',society:'IRON GLOBAL SÉCURITÉ',location:'Alger',positions:2,status:'Publiée',deadline:'2026-12-01'},{id:'ANN-2',title:'Hors périmètre',society:'AUTRE',status:'Publiée'}];
+  const app=v6Announcements([],{announcements:legacy});const posted=[];app.ctx.confirm=()=>true;app.ctx.showBanner=()=>{};
+  app.ctx.apiFetch=async(url,options)=>{posted.push(JSON.parse(options.body));return v6Offer(7,{title:posted.at(-1).title,status:'draft',effective_status:'draft',published_at:null})};
+  app.run('renderRecruitAnnouncements()');
+  const host=app.doc.getElementById('announcementsSection');
+  assert.equal(host.querySelector('article'),null,'never listed as if it were published');
+  assert.match(host.querySelector('.rec-note button').textContent,/Importer 1 annonce/);
+  await app.run('importLegacyRecruitAnnouncements()');
+  assert.deepEqual(posted.map(row=>[row.title,row.society,row.location,row.positions,row.deadline]),[['Ancienne annonce','IRON GLOBAL SÉCURITÉ','Alger',2,'2026-12-01']]);
+  assert.deepEqual(texts(host.querySelectorAll('article .pill')),['Brouillon']);
+  assert.equal(app.ctx.localStorage.getItem('atlas_recruitment_announcements_v1'),null);assert.equal(host.querySelector('.rec-note button'),null);
 });
 
 test('V6 formulaires et modales: labelled experience fields, sticky header/footer, no decorative emoji in the interface',()=>{
