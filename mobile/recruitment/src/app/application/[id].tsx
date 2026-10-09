@@ -4,7 +4,7 @@ import { StateBadge } from '../../components/application-state';
 import { Icon } from '../../components/icon';
 import { Button, Card, colors, EmptyState, ErrorState, Loading, styles } from '../../components/ui';
 import { useCandidateSession } from '../../lib/candidate-session';
-import { Application, formatDate } from '../../lib/emploi';
+import { Application, formatDate, stateScope } from '../../lib/emploi';
 import { useLoad } from '../../lib/use-load';
 
 export default function ApplicationScreen() {
@@ -18,7 +18,7 @@ export default function ApplicationScreen() {
       ? <View style={{ padding: 18 }}><Card><EmptyState icon="file" title="Candidature introuvable" text="Elle n’est plus enregistrée auprès du service recrutement." /></Card></View>
       : <ErrorState message={application.error} onRetry={application.reload} />;
   }
-  const data = application.data, convocation = data.state.convocation;
+  const data = application.data, convocation = data.state.convocation, scope = stateScope(data);
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Card>
@@ -30,7 +30,7 @@ export default function ApplicationScreen() {
         <Fact label="Envoyée le" value={formatDate(data.submitted_at)} />
       </Card>
       <Card>
-        <Text accessibilityRole="header" style={styles.heading}>État de votre dossier</Text>
+        <Text accessibilityRole="header" style={styles.heading}>{scope.heading}</Text>
         <StateBadge state={data.state} />
         <Text style={page.message}>{data.state.message}</Text>
         {!!convocation && (
@@ -43,7 +43,7 @@ export default function ApplicationScreen() {
           </View>
         )}
         {!!data.state.updated_at && <Text style={page.note}>Dernière mise à jour le {formatDate(data.state.updated_at)}.</Text>}
-        <Text style={page.note}>L’état est celui enregistré par le service recrutement pour l’ensemble de votre dossier.</Text>
+        <Text style={page.note}>{scope.note}</Text>
       </Card>
       {!!data.offer && (data.offer.open
         ? <Button title="Revoir l’annonce" secondary onPress={() => router.push({ pathname: '/offer/[id]', params: { id: String(data.offer!.id) } })} />

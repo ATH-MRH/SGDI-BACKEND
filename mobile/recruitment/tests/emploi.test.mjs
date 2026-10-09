@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {API, ApiError, ORIGIN, request} from '../src/lib/api.ts';
-import {activeFilterCount, fetchOffer, fetchOffers, formatDate, formToProfile, initials, lines, logoUri, newRequestId, offersPath, profileCompleteness, profileToForm, validateForm} from '../src/lib/emploi.ts';
+import {activeFilterCount, fetchOffer, fetchOffers, formatDate, formToProfile, initials, lines, logoUri, newRequestId, offersPath, profileCompleteness, profileToForm, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
 
 const response = (data, status = 200) => new Response(status === 204 ? null : JSON.stringify(data), {status});
 const identity = {first_name: 'Nadia', last_name: 'Test', phone: '+213551122334'};
@@ -100,6 +100,28 @@ test('affichage : texte du recruteur en lignes, dates, initiales, logos du serve
   assert.equal(initials('IRON Global Sécurité'), 'IS'); assert.equal(initials('Nadia'), 'NA');
   assert.equal(logoUri({logo_url: '/static/iron-securite-logo.png'}), 'https://recrute.irongs.com/static/iron-securite-logo.png');
   assert.equal(logoUri({logo_url: 'https://ailleurs.example/logo.png'}), null); assert.equal(logoUri({logo_url: null}), null);
+});
+
+test('suivi : chaque candidature à une annonce a son état, une candidature spontanée suit le dossier', () => {
+  // États propres à une candidature à une annonce.
+  assert.deepEqual(['received', 'shortlisted', 'interview', 'accepted', 'declined'].map(stateTone), ['neutral', 'gold', 'gold', 'green', 'red']);
+  // États du dossier (candidatures spontanées et historiques).
+  assert.deepEqual(['review', 'invited', 'interviewed', 'reserve', 'transmitted_drh', 'recruited'].map(stateTone), ['neutral', 'gold', 'gold', 'neutral', 'green', 'green']);
+  assert.equal(stateTone('etat-ajoute-plus-tard'), 'neutral', 'un état inconnu reste affichable');
+  assert.equal(stateScope({kind: 'offer'}).heading, 'État de votre candidature');
+  assert.match(stateScope({kind: 'offer'}).note, /que cette annonce/);
+  assert.equal(stateScope({kind: 'spontaneous'}).heading, 'État de votre dossier');
+});
+
+test('suivi : la liste donne une candidature par annonce et, à part, le dossier', async () => {
+  const body = {dossier: {reference: 'CAND-2026-000007', state: {status: 'invited', label: 'Convocation programmée', message: 'm', convocation: {date: '2026-11-02', heure: '10:00', lieu: 'Siège'}}},
+    items: [{id: 2, kind: 'offer', position: 'Cariste', reference: 'CAND-2026-000007', state: {status: 'declined', label: 'Non retenue', message: 'm'}, offer: {id: 3}},
+            {id: 1, kind: 'offer', position: 'Agent', reference: 'CAND-2026-000007', state: {status: 'interview', label: 'Entretien', message: 'm'}, offer: {id: 1}}]};
+  global.fetch = async (url, init) => { assert.equal(url, API + '/public/emploi/applications'); assert.equal(init.headers.Authorization, 'Bearer session-test'); return response(body); };
+  const list = await request('/public/emploi/applications', {token: 'session-test'});
+  assert.deepEqual(list.items.map(item => [item.id, item.state.status, stateTone(item.state.status)]), [[2, 'declined', 'red'], [1, 'interview', 'gold']]);
+  assert.equal(new Set(list.items.map(item => item.reference)).size, 1, 'un seul dossier');
+  assert.equal(list.dossier.state.convocation.heure, '10:00');
 });
 
 test('identifiant d’envoi : accepté par le serveur et différent à chaque candidature', () => {

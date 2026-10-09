@@ -17,7 +17,7 @@ Elle remplace « IRON Recrutement » en conservant son identifiant (`com.irongs.
 | Identification | Nom, prénom, téléphone, puis code reçu par SMS (parcours SMSGate existant). |
 | Candidature | Formulaire existant, prérempli depuis le profil ; à une offre ou spontanée ; CV PDF, JPG ou PNG. |
 | Confirmation | Référence du dossier. |
-| Suivi | Candidatures du candidat et leur état, tel qu'enregistré par le recrutement. |
+| Suivi | Candidatures du candidat. Chaque candidature à une annonce a son propre état ; une candidature spontanée suit l'état du dossier. |
 | Profil | Informations et documents, réutilisés aux candidatures suivantes. |
 | Conseils | Contenu éditorial embarqué, distinct des annonces. |
 | Paramètres | Session, favoris, suppression de l'espace candidat. |
@@ -95,7 +95,7 @@ Aucun binaire n'a été produit ni publié par ce dépôt.
 
 ## Limites connues
 
-- L'état affiché dans « Suivi » est celui du dossier du candidat, commun à toutes ses candidatures.
+- Un candidat a un seul dossier et un seul profil. L'état d'une candidature à une annonce est indépendant des autres ; convocation et entretien restent portés par le dossier et s'affichent en tête du suivi.
 - Un même numéro de téléphone ne peut ouvrir qu'un espace, sous le nom utilisé à la première inscription.
 - Les dates se saisissent au format AAAA-MM-JJ.
 - L'aperçu web (`npx expo start --web`) sert à la revue d'interface ; il n'est pas un produit distribué.

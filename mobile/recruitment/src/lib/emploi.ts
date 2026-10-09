@@ -23,6 +23,9 @@ export type Application = {
   id: number; kind: 'offer' | 'spontaneous'; position: string; submitted_at: string | null; reference: string; state: ApplicationState;
   offer: { id: number; title: string; company: Company; wilaya: string | null; contract_type: string | null; open: boolean } | null;
 };
+/** Dossier du candidat : ce qui vaut pour la personne, quelle que soit l'annonce (une convocation, par exemple). */
+export type Dossier = { reference: string; state: ApplicationState };
+export type ApplicationList = { items: Application[]; dossier: Dossier | null };
 export type ApplicationReceipt = { status: string; application_id: number; reference: string; already_applied: boolean };
 
 export function offersPath(filters: OfferFilters = {}, page = 1, pageSize = 20): string {
@@ -61,6 +64,20 @@ export function formatDate(value: string | null | undefined): string {
   const months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   return `${Number(match[3])} ${months[Number(match[2]) - 1]} ${match[1]}`;
 }
+
+export type StateTone = 'neutral' | 'gold' | 'green' | 'red';
+// Les libellés viennent du serveur ; seule la couleur est choisie ici, à partir du code d'état.
+// Candidature à une annonce : received, shortlisted, interview, accepted, declined. Les autres codes sont ceux du dossier.
+const STATE_TONES: Record<string, StateTone> = {
+  received: 'neutral', shortlisted: 'gold', interview: 'gold', accepted: 'green', declined: 'red',
+  review: 'neutral', reserve: 'neutral', invited: 'gold', interviewed: 'gold', transmitted_drh: 'green', recruited: 'green',
+};
+export const stateTone = (status: string): StateTone => STATE_TONES[status] || 'neutral';
+
+/** Une candidature à une annonce a son propre état ; une candidature spontanée suit l'état du dossier. */
+export const stateScope = (application: Pick<Application, 'kind'>) => application.kind === 'offer'
+  ? { heading: 'État de votre candidature', note: 'Cet état ne concerne que cette annonce. Vos autres candidatures sont suivies séparément.' }
+  : { heading: 'État de votre dossier', note: 'L’état est celui enregistré par le service recrutement pour votre dossier.' };
 
 export const newRequestId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 8)}`;
 
