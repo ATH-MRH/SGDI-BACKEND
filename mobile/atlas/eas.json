@@ -1,0 +1,49 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote",
+    "requireCommit": true
+  },
+  "build": {
+    "base": {
+      "node": "22.22.2"
+    },
+    "development": {
+      "extends": "base",
+      "environment": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "development" }
+    },
+    "development-simulator": {
+      "extends": "development",
+      "ios": { "simulator": true }
+    },
+    "staging": {
+      "extends": "base",
+      "environment": "preview",
+      "distribution": "store",
+      "autoIncrement": true,
+      "channel": "staging",
+      "env": { "APP_VARIANT": "staging" },
+      "android": { "buildType": "app-bundle" }
+    },
+    "production": {
+      "extends": "base",
+      "environment": "production",
+      "distribution": "store",
+      "autoIncrement": true,
+      "channel": "production",
+      "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_API_URL": "https://atlas.irongs.com" },
+      "android": { "buildType": "app-bundle" }
+    }
+  },
+  "submit": {
+    "staging": {
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    },
+    "production": {
+      "android": { "track": "internal", "releaseStatus": "draft" }
+    }
+  }
+}
