@@ -1,0 +1,82 @@
+name: Mobile Build (EAS)
+
+# Build cloud signe, declenche A LA MAIN uniquement.
+# - Aucun declenchement automatique sur push ou tag.
+# - La soumission ne vise que TestFlight / Google Play Internal Testing (brouillon).
+# - La mise en production store reste une action humaine dans App Store Connect
+#   et Google Play Console (LOT MOBILE 11, sur instruction explicite).
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Profil EAS
+        type: choice
+        required: true
+        default: staging
+        options: [development, staging, production]
+      platform:
+        description: Plateforme
+        type: choice
+        required: true
+        default: all
+        options: [all, ios, android]
+      submit:
+        description: Soumettre a TestFlight / Play Internal Testing apres le build
+        type: boolean
+        default: false
+
+concurrency:
+  group: mobile-build-${{ inputs.profile }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile/atlas
+
+jobs:
+  build:
+    name: EAS ${{ inputs.profile }} (${{ inputs.platform }})
+    runs-on: ubuntu-latest
+    # Les builds production exigent l'approbation des relecteurs de l'environnement GitHub.
+    environment: mobile-${{ inputs.profile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/atlas/package-lock.json
+
+      - run: npm ci
+
+      - name: Controles avant build
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          node scripts/check-native.mjs ${{ inputs.profile }}
+
+      # EXPO_TOKEN est le SEUL secret cote GitHub. Certificats Apple, cle App Store
+      # Connect, keystore Android et compte de service Google Play restent dans
+      # EAS (credentials chiffres) et ne transitent jamais par ce depot.
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build
+        run: eas build --profile "${{ inputs.profile }}" --platform "${{ inputs.platform }}" --non-interactive --wait
+        env:
+          EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+          EXPO_OWNER: ${{ vars.EXPO_OWNER }}
+
+      - name: Soumission aux canaux de test
+        if: ${{ inputs.submit && inputs.profile != 'development' }}
+        run: eas submit --profile "${{ inputs.profile }}" --platform "${{ inputs.platform }}" --latest --non-interactive
+        env:
+          EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+          EXPO_OWNER: ${{ vars.EXPO_OWNER }}
