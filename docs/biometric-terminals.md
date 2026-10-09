@@ -3,17 +3,20 @@
 Référence technique : `docs/biometrics.md` § 14. Ce guide décrit les gestes d'exploitation.
 
 Terminologie : la tablette (ou le smartphone) de production appartient à l'application
-**Pointage** (pointeur.irongs.com, clé de module `pointeur`, page `/borne`). Elle est créée,
-associée, activée et révoquée depuis **Gestion du pointage** (pointage.irongs.com, clé
-`pointage`). La borne ne dépend d'aucune session utilisateur : elle s'authentifie par sa clé
-d'appareil.
+**Pointage** (pointeur.irongs.com, clé de module `pointeur`, page `/borne`). Elle est
+enregistrée, associée (une seule fois), remplacée et révoquée depuis **Administration Système →
+Terminaux faciaux** ; l'activation du facial, le renommage et l'audit restent aussi disponibles
+dans **Gestion du pointage** (pointage.irongs.com, clé `pointage`). La borne ne dépend d'aucune
+session utilisateur : elle s'authentifie par sa clé d'appareil. Usage de plusieurs équipements
+depuis le poste Pointeur : `docs/pointeur-multi-facial-terminals.md`.
 
 ## 1. Pré-requis
 
 - `BIOMETRIC_ENABLED` **absent** tant que le GO du pilote n'est pas signé (la borne s'installe et
   s'associe sans lui ; elle affiche alors « POINTAGE FACIAL INDISPONIBLE » et accepte le QR).
-- Permission `biometric_admin × admin` pour créer, associer, activer, révoquer (Administration →
-  Utilisateurs → Permissions). Un pointeur terrain ordinaire ne peut rien faire de tout cela.
+- Créer, associer, remplacer, révoquer, supprimer : compte **Administration Système**
+  (administrateur global, ou `administration × security × admin`). Activer le facial, renommer :
+  `biometric_admin × admin`. Un pointeur terrain ordinaire ne peut rien faire de tout cela.
 - Employés du pilote : consentement admissible + enrôlement supervisé (`docs/biometrics.md` § 13.2).
 
 ## 2. Matériel recommandé
@@ -33,7 +36,7 @@ caméra sur Safari (`BarcodeDetector` absent) → QR par HENEX ou pointeur.
 
 ## 3. Association (≈ 5 minutes, administrateur sur place)
 
-1. ATLAS → Gestion du pointage (pointage.irongs.com) → **Terminaux (tablettes)** → « + Ajouter un terminal » :
+1. ATLAS → Administration Système → **Terminaux faciaux** → « Enregistrer un terminal » :
    nom (ex. `TAB-HAMOUL-01`), type « Tablette Android (Samsung) », site, emplacement.
 2. Le code d'association s'affiche (10 caractères + QR), **valable 10 minutes, une seule fois**.
    Ne pas le photographier ni le transmettre par messagerie.

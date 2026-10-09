@@ -55,7 +55,7 @@ FEATURE_CATALOG: dict[str, dict] = {
     "administration": {"label": "Administration", "domain": "atlas.irongs.com", "description": "Identités, accès et configuration système", "features": {
         "users": ("Utilisateurs", "Comptes et profils utilisateurs", ("read", "create", "update", "delete", "unlock", "admin")),
         "access_rules": ("Droits d’accès", "Règles d’accès legacy", ("read", "update", "admin")),
-        "security": ("Sécurité des accès", "Contrôles et maintenance de sécurité", ("read", "update", "unlock", "admin")),
+        "security": ("Sécurité des accès", "Contrôles et maintenance de sécurité ; Administrer : enregistrement, appairage, révocation et comptes autorisés des terminaux faciaux", ("read", "update", "unlock", "admin")),
     }},
     "drh": {"label": "DRH", "domain": "drh.irongs.com", "description": "Gestion des ressources humaines", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs RH", ("read", "export")),
@@ -103,7 +103,9 @@ FEATURE_CATALOG: dict[str, dict] = {
          "description": "Opérations de pointage : QR, scanner, saisie terrain, tablette, smartphone, pointage facial et borne",
          "features": ("qr_scanning", "manual_entry"),
          "note": "Mode Test facial : accordé par Gestion du pointage → Biométrie — administration → Valider. "
-                 "Pointage facial de la borne (/borne) : identité de terminal, aucune permission utilisateur."},
+                 "Pointage facial de la borne (/borne) : identité de terminal, aucune permission utilisateur. "
+                 "Terminaux faciaux utilisables depuis le poste : autorisés compte par compte dans "
+                 "Administration Système → Terminaux faciaux."},
     ), "features": {
         "daily_sheets": ("Feuilles quotidiennes", "Pointages et états journaliers", ("read", "create", "update", "validate")),
         "generation": ("Génération et clôture", "Génération par rotation et clôture", ("validate", "execute")),
@@ -118,7 +120,7 @@ FEATURE_CATALOG: dict[str, dict] = {
         # biometric_admin × validate ouvre aussi le Mode Test, y compris dans Pointage.
         "biometric_status": ("Biométrie — état", "Consentement et état d'enrôlement d'un employé, liste des terminaux", ("read",)),
         "biometric_enrollment": ("Biométrie — enrôlement", "Consentement, enrôlement supervisé, ré-enrôlement, désactivation", ("create", "update")),
-        "biometric_admin": ("Biométrie — administration", "Valider : doublons et Mode Test facial (aussi depuis Pointage, pointeur.irongs.com) ; Administrer : seuils, caméras, terminaux, coupures", ("validate", "admin")),
+        "biometric_admin": ("Biométrie — administration", "Valider : doublons et Mode Test facial (aussi depuis Pointage, pointeur.irongs.com) ; Administrer : seuils, réglages des caméras et terminaux, coupures (enregistrement et appairage : Administration Système)", ("validate", "admin")),
     }},
     "material": {"label": "Matériel", "domain": "materiel.irongs.com", "description": "Équipements, stocks et dotations", "features": {
         "dashboard": ("Tableau de bord", "Indicateurs et alertes matériel", ("read",)),
