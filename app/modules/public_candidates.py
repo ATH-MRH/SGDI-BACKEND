@@ -54,6 +54,19 @@ class PublicCVIn(BaseModel):
         return self
 
 
+def check_birth_date(value: str | None) -> None:
+    if not value:
+        return
+    try:
+        born = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("La date de naissance est invalide") from exc
+    today = date.today()
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    if age < 19:
+        raise ValueError("Le candidat doit avoir au minimum 19 ans")
+
+
 class PublicCandidateIn(BaseModel):
     cv: PublicCVIn | None = None
     first_name: Annotated[str, Field(min_length=2, max_length=100)]
@@ -99,15 +112,7 @@ class PublicCandidateIn(BaseModel):
             raise ValueError("Un téléphone ou un email est obligatoire")
         if not self.consent:
             raise ValueError("Le consentement est obligatoire")
-        if self.birth_date:
-            try:
-                born = date.fromisoformat(self.birth_date)
-            except ValueError as exc:
-                raise ValueError("La date de naissance est invalide") from exc
-            today = date.today()
-            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-            if age < 19:
-                raise ValueError("Le candidat doit avoir au minimum 19 ans")
+        check_birth_date(self.birth_date)
         if self.photo_data and not self.photo_data.startswith("data:image/jpeg;base64,"):
             raise ValueError("Le format de la photo est invalide")
         return self
@@ -146,7 +151,7 @@ def _public_candidate_state(row: Candidate) -> dict:
     else:
         code, label, message = "review", "En cours d’étude", "Votre dossier a bien été reçu et est en cours d’étude par le service recrutement."
     result = {
-        "reference": f"CAND-{row.created_at.year if row.created_at else datetime.utcnow().year}-{row.id:06d}",
+        "reference": candidate_reference(row),
         "status": code,
         "label": label,
         "message": message,
@@ -183,6 +188,16 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
 
 
 def _create_public_candidate(payload: PublicCandidateIn, request: Request, db: Session, *, commit: bool = True, verified: bool = False):
+    row = _public_candidate_row(payload, request, db, commit=commit, verified=verified)
+    return {"status": "received", "reference": candidate_reference(row)}
+
+
+def candidate_reference(row: Candidate) -> str:
+    return f"CAND-{row.created_at.year if row.created_at else datetime.utcnow().year}-{row.id:06d}"
+
+
+def _public_candidate_row(payload: PublicCandidateIn, request: Request, db: Session, *, commit: bool = True, verified: bool = False,
+                          extra_data: dict | None = None) -> Candidate:
     # Champ invisible anti-robot : une vraie personne ne le remplit jamais.
     if payload.company:
         raise HTTPException(status_code=400, detail="Candidature invalide")
@@ -252,10 +267,10 @@ def _create_public_candidate(payload: PublicCandidateIn, request: Request, db: S
             ],
             "consentementCandidatAt": now,
             "remoteAddress": request.client.host if request.client else "",
+            **(extra_data or {}),
         },
     )
-    row = service.create_candidate(db, candidate, username="portail-candidat", commit=commit)
-    return {"status": "received", "reference": f"CAND-{datetime.utcnow().year}-{row.id:06d}"}
+    return service.create_candidate(db, candidate, username="portail-candidat", commit=commit)
 
 
 class MobileIdentityIn(BaseModel):
