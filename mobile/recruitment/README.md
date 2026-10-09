@@ -1,93 +1,101 @@
-# IRON Recrutement — application mobile native V4
+# IRON Emploi — application mobile
 
-Application React Native / Expo pour Android et iOS, avec écrans natifs et appels directs à l’API existante. Aucun WebView. Base vérifiée : commit `6b2aac3da145bf4d8c7ba1dd04a3cd2c83922023`.
+Portail emploi iOS et Android du groupe IRON GLOBAL, relié au backend ATLAS et à recrute.irongs.com.
+Application React Native / Expo (SDK 57, Expo Router), écrans natifs, aucun WebView.
 
-## Fonctionnalités livrées
+Elle remplace « IRON Recrutement » en conservant son identifiant (`com.irongs.recruitment`) : c'est une mise à jour, pas une nouvelle application.
 
-- Accueil avec espaces candidat et RH.
-- Dépôt public : identité, téléphone/email, poste, wilaya, adresse, disponibilité, photo JPEG facultative via caméra/photothèque, consentement et référence de réception.
-- Suivi public avec référence et nom, selon l’API existante ; affiche aussi les informations de convocation retournées par le serveur.
-- Connexion RH avec compte existant, vérification serveur `/auth/me`, jeton conservé dans SecureStore sur Android/iOS, suppression locale à la déconnexion ou après un refus 401.
-- Consultation RH : recherche, nouveaux dossiers, réserve, transmis/recrutés, pagination, actualisation et fiche candidat.
-- Délais réseau, annulation des recherches obsolètes, messages d’erreur et absence de répétition automatique des dépôts.
+## Ce que fait l'application
 
-## Démarrer sur votre Mac
+| Écran | Contenu |
+|---|---|
+| Accueil | Recherche, offres récentes, candidature spontanée, conseils. « Accès adm. » discret en bas. |
+| Offres | Liste, recherche, filtres par wilaya, métier, société et type de contrat. |
+| Détail d'une offre | Société, poste, lieu, contrat, missions, profil recherché, date limite, bouton Postuler. |
+| Société | Présentation et offres publiées. |
+| Favoris | Offres enregistrées sur le téléphone, sans compte. |
+| Identification | Nom, prénom, téléphone, puis code reçu par SMS (parcours SMSGate existant). |
+| Candidature | Formulaire existant, prérempli depuis le profil ; à une offre ou spontanée ; CV PDF, JPG ou PNG. |
+| Confirmation | Référence du dossier. |
+| Suivi | Candidatures du candidat et leur état, tel qu'enregistré par le recrutement. |
+| Profil | Informations et documents, réutilisés aux candidatures suivantes. |
+| Conseils | Contenu éditorial embarqué, distinct des annonces. |
+| Paramètres | Session, favoris, suppression de l'espace candidat. |
 
-À partir de la racine du dépôt contenant cette branche :
+Les offres se consultent sans connexion. L'identification par SMS n'est demandée que pour postuler et pour les données personnelles.
+
+Ne font **pas** partie de cette version : messagerie, alertes automatiques, gestion des entretiens, notifications push. Aucun écran ne les simule.
+
+## Serveur
+
+L'application appelle `https://recrute.irongs.com/api`.
+
+- Les annonces et l'espace candidat demandent l'API IRON Emploi (`/api/public/emploi/…`), livrée dans le même dépôt (`app/modules/recruitment_jobs_*.py`).
+- Tant que cette API n'est pas en production, l'application le détecte et reste utilisable : elle affiche « Offres bientôt disponibles » et la candidature spontanée passe par le parcours déjà en service (`/api/public/mobile/…`). Rien n'est simulé.
+
+Pour pointer un serveur de recette **en développement uniquement** :
+
+```sh
+EXPO_PUBLIC_API_URL=http://<adresse-du-Mac>:8000/api npx expo start
+```
+
+Une adresse sans HTTPS est ignorée par une application compilée pour la distribution.
+
+## Démarrer
 
 ```sh
 cd mobile/recruitment
 npm ci
-npm start
+npx expo start
 ```
 
-Scanner le QR depuis Expo Go compatible SDK 57. Pour un simulateur iOS ou Android configuré, utiliser les raccourcis proposés par Expo. Les permissions caméra et le stockage sécurisé doivent être vérifiés sur un vrai téléphone. L’export web sert uniquement à la revue d’interface ; SecureStore ne fournit pas une session RH persistante dans le navigateur.
-
-## Produire les applications installables
-
-Les identifiants proposés sont `com.irongs.recruitment`. Vérifier qu’ils sont disponibles dans vos comptes développeur avant la première signature.
-
-```sh
-npx eas-cli@latest login
-npx eas-cli@latest build:configure
-npx eas-cli@latest build --platform android --profile preview
-npx eas-cli@latest build --platform ios --profile preview
-```
-
-Le profil Android preview génère un APK signé. Le profil iOS interne nécessite le compte Apple Developer, les certificats et l’enregistrement des appareils. La publication en magasin nécessite vos comptes développeur et des fiches validées. Aucun binaire APK/IPA ni aucune publication n’a été produit dans cette intervention.
-
-## API réutilisées
-
-Base fixe HTTPS : `https://recrute.irongs.com/api`.
-
-| Usage | Route |
-|---|---|
-| Connexion RH | POST `/auth/login` |
-| Autorisation réelle du compte | GET `/auth/me` |
-| Recherche / consultation RH | GET `/drh/candidates/page` |
-| Dépôt candidat | POST `/public/candidates` |
-| Suivi candidat | POST `/public/candidates/status` |
-
-Aucun changement backend, migration ou déploiement. Aucune candidature de test envoyée à la production. Les contrôles serveur existants restent l’autorité pour le vivier groupe et les droits RH.
-
-## Limites avant diffusion générale
-
-- La fiche RH reprend les champs du formulaire recrute.html et permet leur édition, y compris l’avis du recruteur. Les entretiens, convocations, ventilations et transferts DRH restent réalisés sur le site existant.
-- Les comptes candidats, offres d’emploi publiées, téléchargement de CV/PDF, notifications push et fonctionnement hors connexion ne sont pas implémentés.
-- Des constats de sécurité backend ont été identifiés et sont suivis séparément dans un rapport de sécurité privé.
-- Un dépôt dont la réponse se perd peut avoir été reçu : l’application ne le répète pas automatiquement et invite à vérifier auprès du recrutement.
-- Les tests d’API utilisent des réponses simulées. Aucun compte RH connecté ni téléphone physique utilisé pendant cette intervention ; vérifier les deux parcours avec des comptes de test et une API de recette avant distribution.
+Scanner le QR code avec Expo Go (SDK 57) sur iPhone ou Android. Voir « Tester sur un téléphone » plus bas.
 
 ## Vérifications
 
 ```sh
-npm test
+npm test            # contrat d'API, profil, filtres (Node, sans appareil)
 npm run typecheck
 npm run lint
 npx expo-doctor
-npx expo export --platform ios --platform android --platform web
+npx expo export --platform ios --platform android
 ```
 
-Résultats : six tests du client HTTP réussis, TypeScript et lint réussis, Expo Doctor 21/21 contrôles réussis, génération des bundles Hermes Android/iOS et de l’aperçu web réussie. Un bundle Hermes n’est pas un APK/IPA signé.
+## Données et sécurité
 
-Documentation officielle utilisée : https://docs.expo.dev/router/installation/, https://docs.expo.dev/versions/v57.0.0/sdk/imagepicker/, https://docs.expo.dev/versions/latest/sdk/securestore/.
+- La session candidat (30 jours) est conservée dans le stockage sécurisé du téléphone (Keychain / Keystore) et supprimée à la déconnexion, à l'expiration ou si le serveur la refuse.
+- Le code SMS et l'accès court qu'il délivre ne sont jamais écrits sur le téléphone.
+- Les favoris restent sur l'appareil ; ils ne sont pas envoyés au serveur.
+- Aucun secret n'est embarqué : l'adresse de l'API est publique, les identifiants SMSGate ne quittent pas le serveur.
+- Un double appui ou une relance réseau n'envoie qu'une candidature : chaque envoi porte un identifiant que le serveur reconnaît.
 
-La vérification visuelle automatisée n’a pas pu être menée : Chromium absent et téléchargement du navigateur interrompu par le réseau. Ne pas considérer l’affichage ou les parcours sur appareil comme validés.
+## Tester sur un téléphone
 
-## Correction du formulaire — 8 octobre 2026
+### Sans installation (Expo Go)
 
-Les rubriques et listes sont reprises du formulaire `app/static/recrute.html` : identification, coordonnées, candidature/profil, expérience et avis du recruteur. Les notes et l’avis ne sont accessibles que dans l’espace RH. Les dates sont saisies au format AAAA-MM-JJ sur mobile. La photo se choisit dans la galerie ou avec la caméra.
+1. Installer **Expo Go** depuis l'App Store (iPhone) ou le Play Store (Samsung).
+2. Sur le Mac, dans `mobile/recruitment` : `npm ci` puis `npx expo start`.
+3. Le téléphone et le Mac sur le même Wi-Fi : scanner le QR code (appareil photo sur iPhone, Expo Go sur Samsung).
 
-Le serveur doit recevoir la correction `app/modules/public_candidates.py` avant les nouveaux dépôts publics : ajout des champs CNAS, contact d’urgence, source, taille, pointure et chemise. Aucun changement de base de données n’est requis (données JSON existantes). L’application vérifie `/api/public/candidates/form-config` avant l’envoi pour éviter de perdre les nouveaux champs avec un serveur ancien. Cette correction n’est pas déployée en production.
+Si Expo Go refuse le projet (version de SDK différente), utiliser une version installable.
 
-Vérifications : typecheck et lint passent ; tests HTTP mobiles (7) passent ; export iOS/Android/Web. Le test serveur ajouté vérifie la conservation des champs et l’impossibilité de fournir un avis public. Ce test a depuis été exécuté avec succès dans la suite ciblée de 29 tests backend. La validation visuelle sur iPhone/Android reste à faire.
+### Version installable (EAS)
 
-## CV facultatif
+```sh
+npx eas-cli@latest login
+npx eas-cli@latest build --platform android --profile preview   # APK à installer sur le Samsung
+npx eas-cli@latest build --platform ios --profile preview       # iPhone enregistré, compte Apple Developer requis
+```
 
-Un CV PDF, JPG/JPEG ou PNG de 5 Mo maximum peut être joint au dépôt candidat, remplacé ou retiré lors de l’édition RH. Le fichier reste privé dans les données JSON du candidat ; les listes ne renvoient que son nom, type et taille. Le téléchargement `/api/drh/candidates/{id}/cv` exige la connexion et l’accès recrutement. La mise à jour serveur est indispensable (form-config version 3). Aucun CV n’est publié dans le répertoire statique uploads. Aucun changement de schéma SQL n’est nécessaire.
+Aucun binaire n'a été produit ni publié par ce dépôt.
 
-Sur mobile, « Ouvrir / enregistrer le CV joint » affiche la feuille système permettant de l’ouvrir dans une application compatible ou de l’enregistrer. Sur web, ce bouton télécharge le fichier. Les nouveaux modules Expo DocumentPicker, FileSystem et Sharing sont installés dans les versions SDK 57. Tester le sélecteur et l’ouverture sur les appareils réels avant diffusion. Sept tests unitaires CV valident les formats, les contenus, la limite, la conservation, le remplacement et le retrait. Le test API complet a depuis été exécuté avec succès.
+## Espace administration
 
-## Identification candidat et code SMS
+« Accès adm. » ouvre l'espace RH existant (connexion, liste et fiche des candidats). Il n'a pas été modifié. La gestion des annonces se fait dans recrute.irongs.com.
 
-L’accueil, l’identification et la saisie du code SMS précèdent maintenant le formulaire. La connexion du téléphone passerelle et les paramètres serveur restent à configurer ; l’envoi SMS est désactivé par défaut. Consulter `SMS_SETUP.md` pour la migration, les paramètres, le contrat d’intégration Android et les tests réalisés. Cette archive fournit l’application recrutement et la connexion serveur ; elle ne contient pas encore l’application Android passerelle à installer sur le téléphone de la société.
+## Limites connues
+
+- L'état affiché dans « Suivi » est celui du dossier du candidat, commun à toutes ses candidatures.
+- Un même numéro de téléphone ne peut ouvrir qu'un espace, sous le nom utilisé à la première inscription.
+- Les dates se saisissent au format AAAA-MM-JJ.
+- L'aperçu web (`npx expo start --web`) sert à la revue d'interface ; il n'est pas un produit distribué.
