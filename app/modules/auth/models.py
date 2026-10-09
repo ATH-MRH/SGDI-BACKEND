@@ -37,6 +37,35 @@ class User(Base, TimestampMixin):
 
 
 
+class AuthSession(Base):
+    """Session renouvelable d'ATLAS MOBILE (voir app/modules/auth/sessions.py).
+
+    Le refresh token n'est jamais stocké : seulement son condensat SHA-256."""
+
+    __tablename__ = "auth_sessions"
+    # Mêmes noms que la migration 20261013_0001 : une base neuve (create_all) et une base
+    # migrée ont exactement le même schéma.
+    __table_args__ = (
+        UniqueConstraint("public_id", name="uq_auth_sessions_public_id"),
+        UniqueConstraint("refresh_hash", name="uq_auth_sessions_refresh_hash"),
+        Index("ix_auth_sessions_user_active", "user_id", "revoked_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    refresh_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Condensat du refresh token précédent : le revoir signale une réutilisation.
+    previous_refresh_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    platform: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
 class AccessRule(Base, TimestampMixin):
     __tablename__ = "access_rules"
     __table_args__ = (UniqueConstraint("module_key", "role", name="uq_access_rules_module_role"),)

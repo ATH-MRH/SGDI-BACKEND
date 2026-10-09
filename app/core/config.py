@@ -120,6 +120,27 @@ class Settings(BaseSettings):
     # valeur fabriquée si absent — exposé tel quel (None) par /api/version, jamais une chaîne
     # inventée qui ferait croire à une valeur réelle.
     source_commit: str | None = None
+    # ATLAS MOBILE — configuration publique servie par GET /api/mobile/config. Sans valeur,
+    # rien n'est imposé à l'application (aucune version minimale, aucune maintenance).
+    mobile_min_version_ios: str | None = None
+    mobile_min_version_android: str | None = None
+    mobile_recommended_version_ios: str | None = None
+    mobile_recommended_version_android: str | None = None
+    mobile_maintenance_enabled: bool = False
+    mobile_maintenance_message: str | None = None
+    mobile_store_url_ios: str | None = None
+    mobile_store_url_android: str | None = None
+    # Sessions renouvelables ATLAS MOBILE (POST /api/auth/mobile/login, /refresh, /logout).
+    mobile_access_token_minutes: int = Field(default=30, ge=5, le=720)
+    mobile_refresh_token_days: int = Field(default=30, ge=1, le=90)
+    mobile_session_max_days: int = Field(default=90, ge=1, le=365)
+    # Notifications push : "disabled" (rien n'est envoyé) ou "expo". Le jeton d'accès Expo
+    # est un secret d'environnement, jamais versionné.
+    push_provider: str = Field(default="disabled", pattern=r"^(disabled|expo)$")
+    push_environment: str = Field(default="production", pattern=r"^(development|staging|production)$")
+    expo_access_token: str | None = None
+    # Accès mobile employé (libre-service) : durée du jeton, sans renouvellement.
+    employee_mobile_token_minutes: int = Field(default=480, ge=15, le=1440)
 
     database_url: str
 
