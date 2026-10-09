@@ -151,6 +151,8 @@ for name, allowed_sites, societies, admin in (("${OPERATOR}", [x.id for x in sit
     if admin:
         for action in ("validate", "admin"):
             s.add(UserFeaturePermission(user_id=u.id, module_key="attendance", feature_key="biometric_admin", action_key=action))
+        # Enregistrer, associer, révoquer, supprimer un terminal : habilitation Administration Système.
+        s.add(UserFeaturePermission(user_id=u.id, module_key="administration", feature_key="security", action_key="admin"))
 now = datetime.utcnow()
 rows = []
 for i in range(16):
