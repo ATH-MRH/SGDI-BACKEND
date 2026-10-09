@@ -28,7 +28,7 @@ from app.core.granular_permissions import is_global_administrator, load_feature_
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
-from app.modules.biometrics import crypto, remote_capture, service, terminals, test_mode
+from app.modules.biometrics import crypto, pointer_devices, remote_capture, service, terminals, test_mode
 from app.modules.biometrics.cameras import PROFILES, CameraError, adapter_for
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
@@ -53,6 +53,8 @@ router = APIRouter()
 router.include_router(terminals.router)
 # Prise de photo distante supervisée (LOT C1) : commandes lues par le terminal, requêtes signées.
 router.include_router(remote_capture.router)
+# Équipements faciaux : autorisations (Administration Système) et usage multi-équipements (Pointeur).
+router.include_router(pointer_devices.router)
 MAX_FRAMES = 6
 MAX_FRAME_BYTES = 3_000_000
 
@@ -529,6 +531,12 @@ def cameras(site_id: int | None = None, db: Session = Depends(get_db), user: Use
     return [_camera_out(r, sites.get(r.site_id)) for r in rows]
 
 
+def _biometric_manager(db: Session, user: User) -> bool:
+    return is_global_administrator(user) or any(
+        g.module_key == "attendance" and g.feature_key in ("biometric_status", "biometric_enrollment", "biometric_admin")
+        for g in load_feature_permissions(db, user.id))
+
+
 class CameraIn(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     camera_model_id: int
@@ -597,7 +605,7 @@ def _single_default(db: Session, camera: Camera) -> None:
 
 @router.post("/cameras")
 def add_camera(payload: CameraIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    require_feature(db, user, "biometric_admin", "admin")
+    pointer_devices.require_system_admin(db, user)      # enregistrement d'un équipement : Administration Système
     site = _ensure_site_allowed(db, user, payload.site_id)
     model = db.get(CameraModel, payload.camera_model_id)
     if not model or not model.active:
@@ -665,6 +673,8 @@ def test_camera(camera_id: int, db: Session = Depends(get_db), user: User = Depe
 def preview(camera_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
     """Aperçu basse résolution relayé par le backend : le navigateur ne voit jamais la caméra."""
     camera = _camera_in_scope(db, user, camera_id)
+    if not _biometric_manager(db, user):
+        pointer_devices.require_device(db, user, camera=camera)
     if camera.adapter == "TERMINAL":
         raise HTTPException(409, detail="Caméra du terminal : aperçu local")
     if not camera.active:
@@ -701,6 +711,8 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
     """Pointage facial automatique (terminal) : aucune sélection d'employé, aucune validation
     manuelle dans le parcours normal. Toute condition non remplie ⇒ aucun pointage."""
     camera = _camera_in_scope(db, user, camera_id)
+    # Société, site et autorisation explicite du compte sur CETTE caméra — à chaque essai.
+    pointer_devices.require_device(db, user, camera=camera)
     service.ensure_enabled()
     if camera.adapter == "TERMINAL":
         raise HTTPException(409, detail="Pointage facial : caméra lue par le serveur obligatoire")
@@ -827,7 +839,7 @@ class RevokeIn(BaseModel):
 
 @router.post("/terminals")
 def add_terminal(payload: TerminalIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    require_feature(db, user, "biometric_admin", "admin")
+    pointer_devices.require_system_admin(db, user)      # enregistrement : Administration Système
     if payload.terminal_type not in TERMINAL_TYPES:
         raise HTTPException(422, detail="Type de terminal inconnu")
     if payload.terminal_type not in MOBILE_TERMINAL_TYPES:
@@ -879,7 +891,7 @@ def update_terminal(terminal_id: int, payload: TerminalPatch, db: Session = Depe
 def terminal_pairing_code(terminal_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Code d'association à usage unique (10 min). Sur un terminal déjà associé : rotation de
     la clé (l'ancienne reste valable jusqu'à la nouvelle association)."""
-    require_feature(db, user, "biometric_admin", "admin")
+    pointer_devices.require_system_admin(db, user)      # appairage et remplacement : Administration Système
     term = _terminal_in_scope(db, user, terminal_id, lock=True)
     out = terminals.new_pairing_code(db, term, user)
     db.commit()
@@ -889,7 +901,7 @@ def terminal_pairing_code(terminal_id: int, db: Session = Depends(get_db), user:
 @router.post("/terminals/{terminal_id}/revoke")
 def revoke_terminal(terminal_id: int, payload: RevokeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Révocation définitive, effet immédiat : clé publique effacée, code annulé."""
-    require_feature(db, user, "biometric_admin", "admin")
+    pointer_devices.require_system_admin(db, user)
     term = _terminal_in_scope(db, user, terminal_id, lock=True)
     if term.revoked_at:
         raise HTTPException(409, detail="Terminal déjà révoqué")
@@ -918,7 +930,7 @@ class TerminalDeleteIn(BaseModel):
 def delete_terminal(terminal_id: int, payload: TerminalDeleteIn | None = None,
                     db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Retrait opérationnel définitif, sans supprimer la ligne ni ses preuves historiques."""
-    require_feature(db, user, "biometric_admin", "admin")
+    pointer_devices.require_system_admin(db, user)
     term = _terminal_in_scope(db, user, terminal_id, include_deleted=True, lock=True)
     if not term.deleted_at:
         changed = db.execute(update(BiometricTerminal).where(
