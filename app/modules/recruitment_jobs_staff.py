@@ -75,7 +75,7 @@ def _allowed_society(db: Session, user: User, society: str) -> str:
     raise HTTPException(status_code=403, detail='Société non autorisée')
 
 
-def _company_or_403(user: User, company: Company | None) -> Company:
+def _company_in_scope(user: User, company: Company | None) -> Company:
     # Hors périmètre ou inexistant : même refus, pour ne rien révéler des autres sociétés.
     if company is None or not society_scope(user).allows(company.society):
         raise HTTPException(status_code=404, detail='Introuvable.')
@@ -87,7 +87,7 @@ def _offer(db: Session, user: User, offer_id: int, *, lock: bool = False) -> tup
     offer = db.scalar(stmt.with_for_update() if lock else stmt)
     if offer is None:
         raise HTTPException(status_code=404, detail='Introuvable.')
-    return offer, _company_or_403(user, db.get(Company, offer.company_id))
+    return offer, _company_in_scope(user, db.get(Company, offer.company_id))
 
 
 def _audit(db: Session, request: Request, user: User, action: str, offer: Offer, company: Company) -> None:
@@ -139,7 +139,7 @@ def job_companies(db: Session = Depends(get_db), user: User = Depends(_recruiter
 
 @router.put('/companies/{company_id}')
 def update_job_company(company_id: int, payload: CompanyIn, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
-    company = _company_or_403(user, db.get(Company, company_id))
+    company = _company_in_scope(user, db.get(Company, company_id))
     if payload.logo_path and payload.logo_path not in jobs.COMPANY_LOGOS:
         raise HTTPException(status_code=422, detail='Logo inconnu.')
     for field, value in payload.model_dump().items():
