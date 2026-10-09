@@ -7627,6 +7627,7 @@ function renderSidebar(){
         {label:"MATRICE DES DROITS",route:"admin/droits",group:"IDENTITÉS & ACCÈS",count:Object.keys(db.droitsAcces||{}).length},
         {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"IDENTITÉS & ACCÈS",count:(adminClientPortalUsersCache||[]).length},
         {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"IDENTITÉS & ACCÈS",count:(db.supervisorScopes||[]).length},
+        {label:"TERMINAUX FACIAUX",route:"admin/terminaux-faciaux",group:"IDENTITÉS & ACCÈS"},
         {label:"MODULES",route:"admin/modules",group:"PARAMÈTRES"},
         {label:"ACCÈS SOCIÉTÉS",route:"admin/access_societes",group:"PARAMÈTRES"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"PARAMÈTRES",count:adminSitesActifs},
