@@ -11,7 +11,7 @@ Voir docs/biometrics.md.
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -286,3 +286,23 @@ class BiometricFrameDigest(Base):
     digest: Mapped[str] = mapped_column(String(64), unique=True)
     terminal_id: Mapped[int] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class FacialDeviceAuthorization(Base):
+    """Autorisation EXPLICITE d'un utilisateur sur un équipement facial déjà enregistré par
+    l'Administration Système : un terminal associé (circuit B) OU une caméra lue par le serveur
+    (circuit C). Refus par défaut : sans ligne, aucun accès. Une ligne n'élargit jamais le
+    périmètre Société/Site du compte — il est revérifié à chaque opération."""
+    __tablename__ = "facial_device_authorizations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "terminal_id", name="uq_facial_device_auth_user_terminal"),
+        UniqueConstraint("user_id", "camera_id", name="uq_facial_device_auth_user_camera"),
+        CheckConstraint("(terminal_id IS NULL) <> (camera_id IS NULL)", name="ck_facial_device_auth_one_device"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    terminal_id: Mapped[int | None] = mapped_column(ForeignKey("biometric_terminals.id", ondelete="CASCADE"), index=True)
+    camera_id: Mapped[int | None] = mapped_column(ForeignKey("cameras.id", ondelete="CASCADE"), index=True)
+    granted_by: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
