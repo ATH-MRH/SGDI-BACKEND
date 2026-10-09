@@ -63,6 +63,7 @@ from app.modules.fiscalite import models as _fiscalite_models  # noqa: F401
 # ailleurs (banking/finance_core/accounting/achats/ventes) — aucune table propre, donc
 # aucun modèle à enregistrer ici.
 from app.modules.alerts.scheduler import start_scheduler as start_alerts_scheduler, stop_scheduler as stop_alerts_scheduler
+from app.modules.recruitment_sms_worker import start_worker as start_recruitment_sms_worker, stop_worker as stop_recruitment_sms_worker
 
 
 logging.basicConfig(
@@ -737,6 +738,7 @@ def on_startup() -> None:
         start_contract_email_alert_scheduler()
         start_assistant_scheduler()
         start_alerts_scheduler()
+        start_recruitment_sms_worker()
 
 
 @app.on_event("shutdown")
@@ -744,6 +746,7 @@ def on_shutdown() -> None:
     stop_contract_email_alert_scheduler()
     stop_assistant_scheduler()
     stop_alerts_scheduler()
+    stop_recruitment_sms_worker()
 
 
 @app.get("/health")

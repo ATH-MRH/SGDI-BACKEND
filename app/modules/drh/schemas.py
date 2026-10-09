@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_serializer
 
 _UPPERCASE_FIELDS = {
     "first_name", "last_name", "father_name", "mother_name",
@@ -145,6 +145,10 @@ class CandidateUpdate(BaseModel):
 
 
 class CandidateOut(CandidateBase):
+    @field_serializer('data')
+    def hide_cv_content(self, value):
+        return {key: item for key, item in value.items() if key not in {'_cv_content', 'cvUpload'}} if isinstance(value, dict) else value
+
     id: int
     created_at: datetime
     updated_at: datetime | None = None

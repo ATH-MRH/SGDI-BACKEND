@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261010_0001"            # tête courante de la chaîne (import Excel de candidats)
+HEAD = "20261011_0001"            # tête courante de la chaîne (suivi SMSGate des codes candidats)
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
