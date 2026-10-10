@@ -110,24 +110,92 @@ les importer en brouillon.
 - La nouvelle application détecte l'absence de `/api/public/emploi/config` et se limite alors à
   la candidature spontanée par le parcours existant.
 
-## 6. Mise en service
+## 6. Traitement des candidatures (migration `20261013_0001`)
+
+La révision `20261013_0001` complète la précédente sans la modifier : colonnes ajoutées aux
+sociétés, aux espaces candidats et aux candidatures, et onze tables (messages, entretiens, pièces
+de candidature, demandes de pièces, notes internes, historique, contrat, conseils, alertes,
+notifications, appareils).
+
+### Trois informations distinctes par candidature
+
+| Information | Valeurs | Vue par le candidat |
+|---|---|---|
+| Étape de traitement (`stage`) | réception, examen, présélection, convocation, entretien, décision, dossier d'embauche, préparation du contrat, signature, recrutement effectif | seulement sous la forme simplifiée « reçue / en cours d'examen / présélectionnée / entretien » |
+| Résultat (`outcome`) | en attente, favorable, non retenue, retirée | uniquement après « Communiquer au candidat » |
+| Contrat | préparé, remis, signé | uniquement si le recruteur choisit de le partager |
+
+Une décision est d'abord interne. Tant qu'elle n'est pas communiquée, l'application continue
+d'afficher l'étape en cours. Les notes internes, comptes rendus d'entretien et appréciations ne
+sont renvoyés par aucune route publique.
+
+### Pièces
+
+- À l'envoi d'une candidature, le CV et la photo du profil sont **copiés** dans la candidature.
+  Remplacer le CV du profil ensuite ne change pas la pièce déjà transmise.
+- Les pièces ne sont jamais servies par une adresse publique : `GET
+  /api/drh/job-offers/applications/{id}/documents/{doc}` exige la session du recruteur et le
+  périmètre de la société, et répond sans mise en cache. La visionneuse de recrute.irongs.com lit
+  le fichier avec cette session (PDF intégré, image avec zoom) ; `?download=1` le télécharge.
+- Formats acceptés : PDF, JPG, PNG, contrôlés côté serveur (type réel et taille).
+- Le recruteur peut demander une pièce complémentaire ; le candidat la dépose depuis l'application
+  et elle apparaît avec la provenance « Pièce complémentaire ».
+
+### Entretiens, échanges, notifications
+
+- Un entretien est rattaché à une candidature, proposé par le recruteur (heure d'Alger), confirmé
+  par le candidat, puis reporté, annulé ou clos (présent / absent, compte rendu interne). La
+  présence ne s'enregistre qu'après l'heure de l'entretien.
+- La convocation historique saisie sur le dossier reste affichée ; elle n'est pas dupliquée quand
+  un entretien porte la même date.
+- Messages : stockés par candidature, avec accusé de lecture et identifiant client qui rend un
+  renvoi sans effet (pas de doublon).
+- Alertes d'offres (dix au plus par candidat) : une notification est créée à la publication d'une
+  annonce correspondante.
+- Conseils emploi : rédigés et publiés depuis recrute.irongs.com → Traitement IRON Emploi →
+  Conseils emploi ; l'application garde un contenu embarqué si aucun n'est publié.
+
+### Contrat et passage à la DRH
+
+- L'aperçu Word est produit par le service de contrats de la DRH à partir d'un modèle validé. Il
+  ne crée ni contrat signé ni fiche employé.
+- La signature est une **constatation saisie par le recruteur** (date de signature du document
+  papier). Aucune signature électronique n'est proposée, et un contrat généré n'est jamais
+  considéré comme signé.
+- « Transmettre à la DRH » exige une décision favorable communiquée et une signature enregistrée,
+  puis appelle le transfert existant du dossier. Un second appel ne crée rien. La fiche employé
+  et le contrat définitif restent créés par la DRH, avec ses contrôles de doublons.
+
+### Notifications push
+
+Le serveur enregistre les appareils et les préférences, et sait relayer vers le service Expo,
+mais l'envoi est **désactivé** tant que `RECRUITMENT_PUSH_ENABLED=true` n'est pas posé. Rien
+n'a été essayé sur un téléphone : l'application n'embarque pas encore le module de notifications,
+et l'activation demande un identifiant de projet EAS et les accès FCM (Android) et APNs (iOS).
+Les notifications dans l'application, elles, fonctionnent sans réglage.
+
+## 7. Mise en service
 
 1. Fusionner la branche serveur ; le déploiement applique `alembic upgrade head`
-   (révision `20261012_0001`, cinq créations de table).
+   (révisions `20261012_0001` puis `20261013_0001`).
 2. Vérifier `GET https://recrute.irongs.com/api/public/emploi/config`.
 3. Dans recrute.irongs.com → Annonces : créer une annonce, la publier, la vérifier dans
    `GET /api/public/emploi/offers`.
-4. Distribuer la nouvelle application.
+4. Dans recrute.irongs.com → Traitement IRON Emploi : vérifier le tableau de bord.
+5. Distribuer la nouvelle application.
 
-Aucune nouvelle variable d'environnement. Les réglages SMSGate ne changent pas.
+Aucune variable d'environnement obligatoire. `RECRUITMENT_PUSH_ENABLED` est facultative et reste
+à `false`. Les réglages SMSGate ne changent pas.
 
-Retour arrière : `alembic downgrade 20261011_0001` supprime les cinq tables (annonces, espaces
-candidats et liens de candidature) ; les dossiers du vivier ne sont pas touchés.
+Retour arrière : `alembic downgrade 20261012_0001` retire le traitement des candidatures ;
+`alembic downgrade 20261011_0001` retire aussi annonces, espaces candidats et candidatures. Les
+dossiers du vivier ne sont pas touchés.
 
-## 7. Limites de cette version
+## 8. Limites de cette version
 
-- L'état d'une candidature et l'état du dossier sont deux informations distinctes : changer l'un ne
-  change pas l'autre. Convocation, entretien et avis restent gérés sur le dossier.
+- Les candidatures spontanées et historiques suivent l'état du dossier, pas un état par annonce.
 - Les sociétés sont celles du groupe ; l'inscription d'entreprises tierces n'est pas développée.
-- Pas de messagerie, d'alertes automatiques ni de prise de rendez-vous : phase suivante.
-- Les conseils emploi sont un contenu éditorial embarqué dans l'application, pas des annonces.
+- Notifications push non activées (voir ci-dessus).
+- L'envoi de la convocation par e-mail dépend du canal e-mail existant ; sans configuration, seule
+  la notification dans l'application est émise.
+- L'indication « en ligne » n'est pas affichée dans les échanges : la présence n'est pas mesurée.

@@ -29,6 +29,8 @@ _NOT_IN_PROFILE = {'cv', 'first_name', 'last_name', 'phone', 'photo_data', 'cons
 EmploiProfileIn = create_model(
     'EmploiProfileIn',
     desired_position=(Annotated[str | None, Field(default=None, max_length=150)], None),
+    # Compétences : propres à l'espace candidat (le formulaire public ne les demande pas).
+    skills=(Annotated[list[Annotated[str, Field(max_length=60)]], Field(default_factory=list, max_length=20)], Field(default_factory=list, max_length=20)),
     **{name: (field.annotation, field) for name, field in PublicCandidateIn.model_fields.items() if name not in _NOT_IN_PROFILE},
 )
 
@@ -280,6 +282,7 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
     try:
         if candidate is None:
             profile.pop('desired_position', None)
+            skills = profile.pop('skills', None) or []
             try:
                 form = PublicCandidateIn(**profile, first_name=account.first_name, last_name=account.last_name, phone=account.phone,
                                          desired_position=position, consent=True, photo_data=full.photo,
@@ -288,7 +291,7 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
                 raise HTTPException(status_code=422, detail='Votre profil est incomplet ou invalide : ' + exc.errors()[0]['msg']) from exc
             try:
                 candidate = _public_candidate_row(form, request, db, commit=False, verified=True,
-                                                  extra_data={'sourceExterne': 'iron_emploi', 'candidaturesEmploi': [entry]})
+                                                  extra_data={'sourceExterne': 'iron_emploi', 'candidaturesEmploi': [entry], 'competences': skills})
             except HTTPException as exc:
                 if exc.status_code == 409:
                     # Le message interne cite un numéro de dossier : il ne sort pas vers le public.

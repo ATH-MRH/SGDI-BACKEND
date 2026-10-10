@@ -32,6 +32,12 @@ def when(days=2, hour=10):
     return (engage.now_local() + timedelta(days=days)).replace(hour=hour, minute=0, second=0, microsecond=0)
 
 
+def held(db, interview_id):
+    """L'entretien a eu lieu : sa date est ramenée dans le passé."""
+    db.get(RecruitmentInterview, interview_id).starts_at = engage.now_local() - timedelta(hours=1)
+    db.commit()
+
+
 def candidate_with_documents(client):
     headers, _ = session(client)
     assert client.put(f'{API}/me/cv', headers=headers, json={'name': 'cv.pdf', 'mime_type': 'application/pdf', 'data_base64': PDF}).status_code == 200
@@ -112,6 +118,9 @@ def test_full_recruitment_journey_from_mobile_application_to_drh(client, db, sec
     assert [n['title'] for n in notifications(client, headers)['items'] if n['kind'] == 'interview'] == ['Entretien reporté', 'Entretien proposé']
 
     # ── Entretien : présence et compte rendu (internes)
+    early = client.post(f"{STAFF}/interviews/{interview['id']}/outcome", headers=securite, json={'attendance': 'present'})
+    assert early.status_code == 409                                                                       # pas de compte rendu avant l'entretien
+    held(db, interview['id'])
     done = client.post(f"{STAFF}/interviews/{interview['id']}/outcome", headers=securite,
                        json={'attendance': 'present', 'report': 'COMPTE-RENDU-CONFIDENTIEL très bon', 'appreciation': 'Favorable'})
     assert done.status_code == 200 and done.json()['interviews'][0]['status'] == 'done' and done.json()['stage'] == 'interview'
@@ -218,6 +227,7 @@ def test_refusal_withdrawal_postponement_and_absence(client, db, securite):
     # Absence à l'entretien, puis entretien supplémentaire.
     client.post(f'{STAFF}/applications/{two}/interviews', headers=securite, json={'starts_at': when().isoformat(), 'location': 'Siège'})
     interview = client.get(f'{API}/interviews', headers=headers).json()['items'][0]
+    held(db, interview['id'])
     absent = client.post(f"{STAFF}/interviews/{interview['id']}/outcome", headers=securite, json={'attendance': 'absent'})
     assert absent.json()['interviews'][0]['status'] == 'no_show' and absent.json()['stage'] == 'convocation'
     assert client.put(f"{STAFF}/interviews/{interview['id']}", headers=securite, json={'starts_at': when(4).isoformat(), 'location': 'Siège'}).status_code == 409

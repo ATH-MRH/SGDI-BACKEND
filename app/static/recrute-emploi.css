@@ -23,7 +23,7 @@
 .emploi-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .emploi-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;align-items:end;margin-top:10px}
 .emploi-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}.emploi-form .emploi-wide{grid-column:1/-1}
-.emploi-form .emploi-check{flex-direction:row;align-items:center;gap:8px;font-weight:400;grid-column:1/-1}.emploi-form textarea{min-height:84px}
+.emploi-form .emploi-check{flex-direction:row;align-items:center;gap:8px;font-weight:400;grid-column:1/-1}.emploi-form .emploi-check input{width:auto;min-height:0;height:auto;flex:none;margin:0}.emploi-form .emploi-check{justify-content:flex-start;text-transform:none;letter-spacing:0;font-size:13px}.emploi-form textarea{min-height:84px}
 .emploi-interview{border:1px solid var(--line,#dfe5ee);border-radius:10px;padding:12px;margin-bottom:10px}.emploi-interview p{margin:6px 0 0;font-size:13px}
 .emploi-thread{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;padding:4px}
 .emploi-bubble{max-width:78%;background:#eef1f6;border-radius:14px 14px 14px 4px;padding:9px 12px;align-self:flex-start}

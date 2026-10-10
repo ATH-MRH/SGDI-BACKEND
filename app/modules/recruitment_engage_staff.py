@@ -557,6 +557,8 @@ def record_interview_outcome(interview_id: int, payload: InterviewOutcomeIn, req
     row, scope = _interview_scope(db, user, interview_id)
     if row.status == INTERVIEW_CANCELLED:
         raise HTTPException(status_code=409, detail='Cet entretien a été annulé.')
+    if row.starts_at > engage.now_local():
+        raise HTTPException(status_code=409, detail='Cet entretien n’a pas encore eu lieu : la présence s’enregistre après sa tenue.')
     row.status = INTERVIEW_DONE if payload.attendance == 'present' else INTERVIEW_NO_SHOW
     row.report, row.appreciation, row.updated_by = (payload.report or '').strip() or None, (payload.appreciation or '').strip() or None, user.username
     if payload.attendance == 'present' and engage.STAGE_ORDER.index(scope.application.stage) < engage.STAGE_ORDER.index('interview'):
