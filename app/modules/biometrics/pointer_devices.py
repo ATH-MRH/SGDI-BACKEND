@@ -38,14 +38,18 @@ from app.modules.ops.routes import _allowed_assignment_site_ids
 router = APIRouter()
 
 ATTENDANCE_USAGES = ("ATTENDANCE", "ATTENDANCE_AND_ENROLLMENT")
-# Une borne armée et au repos ne contacte le serveur que par à-coups (dernière communication
-# écrite au plus une fois par minute) : fenêtre large pour ne pas l'afficher hors ligne à tort.
-TERMINAL_ONLINE_SECONDS = 120
+# Une borne en service bat toutes les 30 s (terminals.HEARTBEAT_SECONDS), même sans passage :
+# trois battements manqués = connexion perdue. Une borne qui n'a jamais déclaré de battement
+# (page chargée avant cette version) ne permet pas de conclure : état « sans signal », jamais
+# « hors ligne » par supposition.
+TERMINAL_ONLINE_SECONDS = 90
+ACTIVITY_WINDOW = timedelta(minutes=10)
+CONNECTION_LABELS = {"ONLINE": "En ligne", "LOST": "Connexion perdue", "SILENT": "Sans signal", "NEVER": "Jamais connecté"}
 EVENT_WINDOW = timedelta(hours=24)
 MAX_SELECTION = 50
 TERMINAL_HARDWARE = {"TABLET_ANDROID": "Tablette Android", "SMARTPHONE_ANDROID": "Smartphone Android",
                      "IPHONE": "iPhone", "IPAD": "iPad"}
-STATUS_LABELS = {"ACTIVE": "Actif", "INACTIVE": "Inactif", "OFFLINE": "Hors ligne", "REVOKED": "Révoqué"}
+STATUS_LABELS = {"ACTIVE": "Actif", "INACTIVE": "Inactif", "OFFLINE": "Hors ligne", "UNKNOWN": "Sans signal", "REVOKED": "Révoqué"}
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -100,9 +104,20 @@ def require_device(db: Session, user: User, *, camera: Camera | None = None,
 
 
 # ── État des équipements ─────────────────────────────────────────────────────────────────
-def terminal_online(term: BiometricTerminal, now: datetime | None = None) -> bool:
+def terminal_connection(term: BiometricTerminal, now: datetime | None = None) -> str:
+    """ONLINE : communication récente. LOST : la borne battait et s'est tue (perte de connexion
+    réelle). SILENT : aucune communication récente d'une borne sans battement — état inconnu.
+    NEVER : jamais vue. L'absence de PASSAGE n'intervient jamais ici (voir `activity`)."""
     now = now or datetime.utcnow()
-    return bool(term.last_seen_at and (now - term.last_seen_at).total_seconds() <= TERMINAL_ONLINE_SECONDS)
+    if not term.last_seen_at:
+        return "NEVER"
+    if (now - term.last_seen_at).total_seconds() <= TERMINAL_ONLINE_SECONDS:
+        return "ONLINE"
+    return "LOST" if (term.meta or {}).get("heartbeat_s") else "SILENT"
+
+
+def _online(connection: str) -> bool | None:
+    return True if connection == "ONLINE" else None if connection == "SILENT" else False
 
 
 def terminal_block(term: BiometricTerminal) -> tuple[str, str] | None:
@@ -185,19 +200,24 @@ def _site_names(db: Session, devices: list[Any]) -> dict[int, str]:
 
 
 def _pointer_row(device: Any, key: str, sites: dict[int, str], last: AttendanceEvent | None, now: datetime) -> dict[str, Any]:
+    recent = bool(last and attendance_core.to_utc_naive(attendance_core._now_local()) - last.occurred_at <= ACTIVITY_WINDOW)
     base = {"key": key, "name": device.name, "location": device.location, "site_id": device.site_id,
-            "site": sites.get(device.site_id), "society": device.society, "last_event": _event_out(last) if last else None}
+            "site": sites.get(device.site_id), "society": device.society, "last_event": _event_out(last) if last else None,
+            # Activité = passages récents ; indépendante de l'état de la connexion.
+            "activity": "ACTIVE" if recent else "IDLE"}
     if isinstance(device, Camera):
         # Aucune liaison permanente : la disponibilité réelle n'est connue qu'à l'essai (online=None).
         return {**base, "kind": "CAMERA", "category": "IP_CAMERA",
                 "hardware": " ".join(v for v in (device.manufacturer, device.model) if v) or "Caméra IP",
                 "activation": "SERVER_CAMERA", "remote_activation": True, "online": None, "state": "READY",
                 "last_communication": None}
-    online = terminal_online(device, now)
+    connection = terminal_connection(device, now)
     return {**base, "kind": "TERMINAL", "category": "MOBILE_KIOSK",
             "hardware": TERMINAL_HARDWARE.get(device.terminal_type, device.terminal_type),
-            "activation": "AUTONOMOUS", "remote_activation": False, "online": online,
-            "state": "ONLINE" if online else "OFFLINE", "last_communication": _iso(device.last_seen_at)}
+            "activation": "AUTONOMOUS", "remote_activation": False, "online": _online(connection),
+            "connection": connection, "connection_label": CONNECTION_LABELS[connection],
+            "state": {"ONLINE": "ONLINE", "SILENT": "SILENT"}.get(connection, "OFFLINE"),
+            "last_communication": _iso(device.last_seen_at)}
 
 
 # ── Poste Pointeur ───────────────────────────────────────────────────────────────────────
@@ -261,11 +281,14 @@ def activate_terminals(payload: SelectionIn, db: Session = Depends(get_db), user
         elif isinstance(device, Camera):
             results.append({"key": key, "status": "ACTIVATED", "code": "SERVER_CAMERA", "message": "Caméra activée"})
         else:
-            online = terminal_online(device, now)
-            results.append({"key": key, "status": "MONITORED", "code": "AUTONOMOUS" if online else "AUTONOMOUS_OFFLINE",
-                            "online": online, "last_communication": _iso(device.last_seen_at),
-                            "message": "Terminal autonome : il pointe seul, sans activation distante. Surveillance démarrée."
-                            if online else "Terminal hors ligne : aucune communication récente. Surveillance démarrée."})
+            connection = terminal_connection(device, now)
+            results.append({"key": key, "status": "MONITORED", "online": _online(connection), "connection": connection,
+                            "connection_label": CONNECTION_LABELS[connection], "last_communication": _iso(device.last_seen_at),
+                            "code": {"ONLINE": "AUTONOMOUS", "SILENT": "AUTONOMOUS_SILENT"}.get(connection, "AUTONOMOUS_OFFLINE"),
+                            "message": {"ONLINE": "Terminal autonome : il pointe seul, sans activation distante. Surveillance démarrée.",
+                                        "SILENT": "Terminal sans signal récent : son état de connexion est inconnu. Surveillance démarrée.",
+                                        "LOST": "Connexion perdue avec le terminal. Surveillance démarrée.",
+                                        "NEVER": "Terminal jamais connecté. Surveillance démarrée."}[connection]})
     append_audit(db, action="biometrics.pointer.activate", resource="facial_device", result="success", user=user,
                  new_state={"site_id": payload.site_id, "results": [{k: r[k] for k in ("key", "status", "code")} for r in results]})
     db.commit()
@@ -333,13 +356,15 @@ def _admin_row(device: Any, sites: dict[int, str], users: list[dict[str, Any]], 
                  "last_communication": check.get("checked_at"), "remote_activation": True, "pairing": "REGISTRATION"}
     else:
         paired = bool(device.public_key)
+        connection = terminal_connection(device, now)
         status = "REVOKED" if device.revoked_at else "INACTIVE" if not (device.enabled and paired) \
-            else "ACTIVE" if terminal_online(device, now) else "OFFLINE"
+            else {"ONLINE": "ACTIVE", "SILENT": "UNKNOWN"}.get(connection, "OFFLINE")
         extra = {"key": f"trm:{device.id}", "kind": "TERMINAL", "category": "MOBILE_KIOSK",
                  "hardware": TERMINAL_HARDWARE.get(device.terminal_type, device.terminal_type),
                  "equipment": (device.meta or {}).get("device_label") or device.location, "paired": paired,
                  "paired_at": _iso(device.paired_at), "last_communication": _iso(device.last_seen_at),
-                 "remote_activation": False, "pairing": "DEVICE_KEY",
+                 "remote_activation": False, "pairing": "DEVICE_KEY", "connection": connection,
+                 "connection_label": CONNECTION_LABELS[connection], "heartbeat": bool((device.meta or {}).get("heartbeat_s")),
                  "pairing_pending": bool(device.pairing_code_hash and device.pairing_expires_at and device.pairing_expires_at > now),
                  "revoked_reason": device.revoked_reason}
     return {**extra, "id": device.id, "name": device.name, "society": device.society, "site_id": device.site_id,

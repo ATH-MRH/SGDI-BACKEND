@@ -10,7 +10,7 @@
 
 let adminFacialState={items:[],kpi:{},categories:[],error:"",loaded:false};
 const ADMIN_FACIAL_TYPES=[["TABLET_ANDROID","Tablette Android"],["SMARTPHONE_ANDROID","Smartphone Android"],["IPAD","iPad"],["IPHONE","iPhone"]];
-const ADMIN_FACIAL_PILLS={ACTIVE:"pill-green",INACTIVE:"pill-gray",OFFLINE:"pill-amber",REVOKED:"pill-red"};
+const ADMIN_FACIAL_PILLS={ACTIVE:"pill-green",INACTIVE:"pill-gray",OFFLINE:"pill-amber",UNKNOWN:"pill-gray",REVOKED:"pill-red"};
 
 function adminFacialWhen(value){
   if(!value)return "—";
@@ -56,7 +56,7 @@ function adminFacialHTML(){
       <td class="p-3">${escapeHTML(item.society||"")}</td>
       <td class="p-3">${escapeHTML(item.site||"")}</td>
       <td class="p-3 text-xs">${escapeHTML(item.equipment||"—")}<div class="text-slate-500">${item.remote_activation?"Activée depuis le poste Pointeur":"Autonome — surveillance seulement"}</div></td>
-      <td class="p-3"><span class="pill ${ADMIN_FACIAL_PILLS[item.status]||"pill-gray"}">${escapeHTML(item.status_label||item.status||"")}</span>${revoked&&item.revoked_reason?`<div class="text-xs text-slate-500">${escapeHTML(item.revoked_reason)}</div>`:""}${!revoked&&!item.facial_attendance_enabled?`<div class="text-xs text-slate-500">Pointage facial coupé</div>`:""}</td>
+      <td class="p-3"><span class="pill ${ADMIN_FACIAL_PILLS[item.status]||"pill-gray"}">${escapeHTML(item.status_label||item.status||"")}</span>${revoked&&item.revoked_reason?`<div class="text-xs text-slate-500">${escapeHTML(item.revoked_reason)}</div>`:""}${!revoked&&!item.facial_attendance_enabled?`<div class="text-xs text-slate-500">Pointage facial coupé</div>`:""}${terminal&&!revoked&&item.paired&&item.connection&&item.connection!=="ONLINE"?`<div class="text-xs text-slate-500">${escapeHTML(item.connection_label||"")}${item.connection==="SILENT"?" — borne à recharger pour le suivi de connexion":""}</div>`:""}</td>
       <td class="p-3 text-xs">${pairing}</td>
       <td class="p-3 text-xs">${escapeHTML(adminFacialWhen(item.last_communication))}</td>
       <td class="p-3 text-xs"><span class="pill pill-blue">${users.length} compte${users.length>1?"s":""}</span><div class="text-slate-500">${users.map(u=>escapeHTML(u.username)).join(", ")}</div></td>
@@ -71,7 +71,7 @@ function adminFacialHTML(){
     </div>
     <div class="flex flex-wrap gap-2 mb-3" id="admin-facial-kpi">
       <span class="pill pill-green">${Number(kpi.active||0)} actif(s)</span><span class="pill pill-gray">${Number(kpi.inactive||0)} inactif(s)</span>
-      <span class="pill pill-amber">${Number(kpi.offline||0)} hors ligne</span><span class="pill pill-red">${Number(kpi.revoked||0)} révoqué(s)</span>
+      <span class="pill pill-amber">${Number(kpi.offline||0)} hors ligne</span><span class="pill pill-gray">${Number(kpi.unknown||0)} sans signal</span><span class="pill pill-red">${Number(kpi.revoked||0)} révoqué(s)</span>
     </div>
     ${s.error?`<div class="p-3 mb-3 text-red-700" role="alert">${escapeHTML(s.error)}</div>`:""}
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-500">

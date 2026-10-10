@@ -71,7 +71,7 @@ function startServer(devices) {
     if (url.pathname === '/api/biometrics/pointer/terminals') return json({ server_time: iso('14:40'), engine: { ready: true, message: null },
       terminals: url.searchParams.get('site_id') === '12' ? devices : [], authorized_total: devices.length, last_event: null });
     if (url.pathname === '/api/biometrics/pointer/terminals/activate') return json({ results: devices.map((d) => (d.kind === 'CAMERA'
-      ? { key: d.key, status: 'ACTIVATED', code: 'SERVER_CAMERA' } : { key: d.key, status: 'MONITORED', code: 'AUTONOMOUS', online: true, last_communication: d.last_communication })) });
+      ? { key: d.key, status: 'ACTIVATED', code: 'SERVER_CAMERA' } : { key: d.key, status: 'MONITORED', code: 'AUTONOMOUS', online: true, connection: 'ONLINE', last_communication: d.last_communication })) });
     if (url.pathname.endsWith('/preview.jpg')) { response.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }); return response.end(PIXEL); }
     if (url.pathname.endsWith('/recognize')) return json({ state: 'NO_FACE', recorded: false, reasons: [] });
     if (url.pathname === '/api/portal/attendance-live') return json({ latest_event_id: 50, events: [], latest_refusal_id: 9, refusals: [], alerts: [], summary: { entries_today: 21, exits_today: 9, present_now: 9, absent_today: 0 },
@@ -109,7 +109,7 @@ function probe(port, width) {
 
 const DEVICE = (key, kind, name, extra = {}) => ({ key, kind, name, category: kind === 'CAMERA' ? 'IP_CAMERA' : 'MOBILE_KIOSK', hardware: kind === 'CAMERA' ? 'DAHUA IPC-HFW' : 'Tablette Android',
   location: 'Entrée principale', site_id: 12, site: 'SITE DE RECETTE', society: 'Iron Global Securite', activation: kind === 'CAMERA' ? 'SERVER_CAMERA' : 'AUTONOMOUS',
-  remote_activation: kind === 'CAMERA', online: kind === 'CAMERA' ? null : true, state: kind === 'CAMERA' ? 'READY' : 'ONLINE', last_communication: kind === 'CAMERA' ? null : '2026-10-01T13:39:50Z', last_event: null, ...extra });
+  remote_activation: kind === 'CAMERA', online: kind === 'CAMERA' ? null : true, connection: kind === 'CAMERA' ? undefined : 'ONLINE', activity: 'IDLE', state: kind === 'CAMERA' ? 'READY' : 'ONLINE', last_communication: kind === 'CAMERA' ? null : '2026-10-01T13:39:50Z', last_event: null, ...extra });
 const DEVICES = [DEVICE('cam:7', 'CAMERA', 'CAM-ENTREE-01'), DEVICE('cam:8', 'CAMERA', 'CAM-SORTIE-02', { location: 'Sortie quai' }), DEVICE('trm:3', 'TERMINAL', 'TABLETTE POSTE DE GARDE')];
 
 for (const width of WIDTHS) {
@@ -138,7 +138,7 @@ for (const width of WIDTHS) {
         assert.deepEqual(out.listed.rows.map((r) => [r[0], r[2]]), [['cam:7', false], ['cam:8', false], ['trm:3', false]], 'liste à cocher, rien de présélectionné');
         assert.deepEqual(out.later.buttons, ['Sélectionner tout', 'Désélectionner tout', 'Activer les terminaux sélectionnés', 'Arrêter la surveillance']);
         assert.deepEqual(out.later.rows.map((r) => r[2]), [true, true, true]);
-        assert.match(out.later.rows[0][1], /^Actif/); assert.match(out.later.rows[1][1], /^Actif/); assert.match(out.later.rows[2][1], /^Actif · autonome/);
+        assert.match(out.later.rows[0][1], /^Actif/); assert.match(out.later.rows[1][1], /^Actif/); assert.match(out.later.rows[2][1], /^Actif · au repos/);
         assert.equal(out.later.counters, '3/3/0', 'sélectionnés / actifs / hors ligne');
         assert.ok(out.after.perCamera['7'] >= 1 && out.after.perCamera['8'] >= 1, 'les deux caméras tournent en même temps');
         assert.ok(out.later.perCamera['7'] > out.after.perCamera['7'] && out.later.perCamera['8'] > out.after.perCamera['8'], 'chacune continue seule');

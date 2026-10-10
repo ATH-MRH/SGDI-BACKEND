@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadPointeur } = require('./load-pointeur');
-const { CAM, KIOSK, facialServer } = require('./helpers/pointeur-facial-mock');
+const { CAM, KIOSK, LOST, facialServer } = require('./helpers/pointeur-facial-mock');
 
 const FACIAL_SRC = fs.readFileSync(path.join(__dirname, '../app/static/pointeur-facial.js'), 'utf8');
 const HTML = fs.readFileSync(path.join(__dirname, '../app/static/pointeur.html'), 'utf8');
@@ -48,13 +48,13 @@ async function boot(state = {}, { site = '12', stored } = {}) {
 }
 
 test('liste des terminaux autorisés : Nom | Site | État | Sélection — rien ne démarre sans activation, aucun appairage', async () => {
-  const r = await boot({ devices: [CAM(7, 12), CAM(8, 13), KIOSK(3, 12), KIOSK(4, 13, { online: false, state: 'OFFLINE', last_communication: null })] }, { site: '' });
+  const r = await boot({ devices: [CAM(7, 12), CAM(8, 13), KIOSK(3, 12), KIOSK(4, 13, { online: false, connection: 'NEVER', state: 'OFFLINE', last_communication: null })] }, { site: '' });
   await r.F.start();
   assert.equal(r.of('/pointer/terminals')[0].search, '', 'tous les sites autorisés du compte');
   assert.deepEqual([...r.d.querySelectorAll('.ft-table thead th')].map((th) => th.textContent.trim()), ['', 'Terminal', 'Site', 'État', 'Dernière activité']);
   assert.deepEqual(r.rows().map((x) => [x.key, x.cells[2], x.checked]), [['cam:7', 'SITE 12', false], ['cam:8', 'SITE 13', false], ['trm:3', 'SITE 12', false], ['trm:4', 'SITE 13', false]]);
   assert.match(r.row('cam:7').cells[1], /CAM-7.*DAHUA IPC/); assert.match(r.row('cam:7').cells[3], /Disponible/);
-  assert.match(r.row('trm:3').cells[3], /En ligne.*Terminal autonome/); assert.match(r.row('trm:4').cells[3], /Hors ligne/);
+  assert.match(r.row('trm:3').cells[3], /En ligne · au repos.*Terminal autonome/); assert.match(r.row('trm:4').cells[3], /Jamais connecté/);
   assert.equal(r.row('trm:4').cells[4], 'Jamais');
   assert.match(r.text('faceStatus'), /SÉLECTIONNEZ LES TERMINAUX/);
   assert.equal(r.d.getElementById('ftActivate').disabled, true, 'rien à activer sans sélection');
@@ -138,21 +138,27 @@ test('caméra qui tourne sans passage : ce n\'est jamais une activité utilisate
   r.close();
 });
 
-test('terminal autonome : surveillé, jamais « activé » à distance — son état réel est affiché', async () => {
-  const r = await boot({ devices: [KIOSK(3), KIOSK(4, 12, { online: false, state: 'OFFLINE', last_communication: '2026-10-09T09:12:00Z' })] });
+test('terminal autonome : surveillé, jamais « activé » à distance — connexion et activité affichées séparément', async () => {
+  const r = await boot({ devices: [KIOSK(3), KIOSK(4, 12, { ...LOST, last_communication: '2026-10-09T09:12:00Z' }),
+    KIOSK(5, 12, { online: null, connection: 'SILENT', state: 'SILENT' }), KIOSK(6, 12, { activity: 'ACTIVE' })] });
   await r.run();
   await wait(1200);
   assert.equal(r.of('/recognize').length, 0, 'le poste ne pilote pas la caméra d\'une borne');
   assert.equal(r.of('/preview.jpg').length, 0);
-  assert.match(r.row('trm:3').cells[3], /Actif · autonome.*aucune activation distante/); assert.match(r.row('trm:4').cells[3], /Hors ligne/);
-  assert.equal(r.count('ftCountActive'), '1'); assert.equal(r.count('ftCountOffline'), '1');
-  assert.match(r.text('faceStatus'), /SURVEILLANCE ACTIVE TAB-4 : hors ligne\./);
+  // Borne au repos (aucun passage) : toujours en ligne — l'inactivité n'est jamais une panne.
+  assert.match(r.row('trm:3').cells[3], /^Actif · au repos.*aucune activation distante/); assert.match(r.row('trm:6').cells[3], /^Actif · en service/);
+  // Borne qui battait et s'est tue : perte de connexion réelle.
+  assert.match(r.row('trm:4').cells[3], /^Connexion perdue/);
+  // Borne sans battement de cœur : état inconnu, ni « en ligne » ni « hors ligne ».
+  assert.match(r.row('trm:5').cells[3], /^Sans signal.*État de connexion inconnu/);
+  assert.equal(r.count('ftCountActive'), '2'); assert.equal(r.count('ftCountOffline'), '1', 'seule la connexion perdue compte hors ligne');
+  assert.match(r.text('faceStatus'), /SURVEILLANCE ACTIVE TAB-4 : connexion perdue\./);
   assert.ok(r.d.getElementById('faceView').classList.contains('no-video'), 'aucun cadre vidéo vide');
   // Relevé d'état : la borne revient, un pointage y a eu lieu.
-  r.state.devices[1] = KIOSK(4, 12, { last_event: { id: 91, heure: '14:02:11', type: 'ENTREE', name: 'SAIDI Lina', matricule: 'M044' } });
+  r.state.devices[1] = KIOSK(4, 12, { activity: 'ACTIVE', last_event: { id: 91, heure: '14:02:11', type: 'ENTREE', name: 'SAIDI Lina', matricule: 'M044' } });
   r.state.lastEvent = r.state.devices[1].last_event;
   await r.F.refresh();
-  assert.match(r.row('trm:4').cells[3], /Actif · autonome/); assert.equal(r.count('ftCountOffline'), '0'); assert.equal(r.count('ftCountActive'), '2');
+  assert.match(r.row('trm:4').cells[3], /^Actif · en service/); assert.equal(r.count('ftCountOffline'), '0'); assert.equal(r.count('ftCountActive'), '3');
   assert.match(r.count('ftLastEvent'), /14:02:11 · ENTRÉE · SAIDI Lina · TAB-4/);
   r.close();
 });

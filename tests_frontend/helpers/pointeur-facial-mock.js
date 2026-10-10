@@ -5,7 +5,8 @@ const CAM = (id, site = 12, extra = {}) => ({ key: `cam:${id}`, kind: 'CAMERA', 
   online: null, state: 'READY', last_communication: null, last_event: null, ...extra });
 const KIOSK = (id, site = 12, extra = {}) => ({ key: `trm:${id}`, kind: 'TERMINAL', category: 'MOBILE_KIOSK', hardware: 'Tablette Android', name: `TAB-${id}`,
   location: 'Poste de garde', site_id: site, site: `SITE ${site}`, society: 'Iron Global Securite', activation: 'AUTONOMOUS', remote_activation: false,
-  online: true, state: 'ONLINE', last_communication: '2026-10-09T13:00:00Z', last_event: null, ...extra });
+  online: true, connection: 'ONLINE', activity: 'IDLE', state: 'ONLINE', last_communication: '2026-10-09T13:00:00Z', last_event: null, ...extra });
+const LOST = { online: false, connection: 'LOST', state: 'OFFLINE' };
 
 /** `state` est modifiable en cours de test (révocation, panne réseau, moteur coupé…). */
 function facialServer(state) {
@@ -28,7 +29,7 @@ function facialServer(state) {
       return json({ results: call.body.keys.map((key) => {
         const dev = state.devices.find((d) => d.key === key);
         if (!dev) return { key, status: 'REFUSED', code: 'NOT_AUTHORIZED', message: 'Terminal non autorisé pour ce compte ou hors du périmètre sélectionné' };
-        if (dev.kind === 'TERMINAL') return { key, status: 'MONITORED', code: dev.online ? 'AUTONOMOUS' : 'AUTONOMOUS_OFFLINE', online: dev.online, last_communication: dev.last_communication, message: 'Terminal autonome' };
+        if (dev.kind === 'TERMINAL') return { key, status: 'MONITORED', code: dev.online ? 'AUTONOMOUS' : 'AUTONOMOUS_OFFLINE', online: dev.online, connection: dev.connection, last_communication: dev.last_communication, message: 'Terminal autonome' };
         return { key, status: 'ACTIVATED', code: 'SERVER_CAMERA', message: 'Caméra activée' };
       }) });
     }
@@ -46,4 +47,4 @@ function facialServer(state) {
   };
 }
 
-module.exports = { CAM, KIOSK, facialServer };
+module.exports = { CAM, KIOSK, LOST, facialServer };

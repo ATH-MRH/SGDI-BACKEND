@@ -252,3 +252,38 @@ test('personne arrivée pendant une pause puis immobile : analysée dès la fin 
   assert.equal(ctx.count('/terminal/challenge'), 2);
   ctx.dom.window.close();
 });
+
+test('battement de cœur : au repos (aucun passage) la borne relit son état toutes les 30 s, requête signée ; jamais de reconnaissance', async () => {
+  const ctx = await started({ routes: facialRoutes([200, RECORDED('ENTRÉE', '08:00')]) });
+  const beats = () => ctx.calls.filter((c) => c.path === '/api/biometrics/terminal/session' && c.headers['X-Atlas-Signature']).length;
+  const base = beats();
+  for (let i = 0; i < 5; i++) { ctx.advance(9000); await ctx.B.tick(); }            // 45 s sans aucun mouvement
+  assert.equal(beats() - base, 1, 'un battement par tranche de 30 s');
+  for (let i = 0; i < 7; i++) { ctx.advance(9000); await ctx.B.tick(); }            // +63 s
+  assert.equal(beats() - base, 3);
+  assert.equal(ctx.count('/terminal/recognize'), 0, 'un battement ne déclenche aucune reconnaissance');
+  assert.equal(ctx.count('/terminal/challenge'), 0);
+  assert.match(JS, /call\("GET", "\/terminal\/session\?hb=1"\)/, 'le battement se déclare au serveur');
+  assert.match(fs.readFileSync(path.join(ROOT, 'pointeur-borne.html'), 'utf8'), /pointeur-borne\.js\?v=20261010-heartbeat-v1/);
+});
+
+test('battement de cœur : coupure réseau silencieuse puis reprise ; facial coupé par l\'administration appris sans passage ; révocation apprise au repos', async () => {
+  let session = [200, SESSION];
+  const ctx = await started({ routes: { ...facialRoutes([200, RECORDED('ENTRÉE', '08:00')]), 'GET /api/biometrics/terminal/session': () => session } });
+  const before = ctx.text();
+  session = ['NETWORK'];
+  ctx.advance(31000); await ctx.B.tick();
+  assert.equal(ctx.text(), before, 'réseau coupé au repos : écran inchangé, nouvel essai au battement suivant');
+  session = [200, { ...SESSION, facial: { available: false, code: 'FACIAL_DISABLED', message: 'Pointage facial désactivé' } }];
+  ctx.advance(31000); await ctx.B.tick();
+  assert.match(ctx.text(), /Pointage facial désactivé|FACIAL/i);
+  await ctx.motion();
+  assert.equal(ctx.count('/terminal/recognize'), 0, 'facial coupé : aucune rafale');
+  session = [200, SESSION];
+  ctx.advance(31000); await ctx.B.tick();
+  await ctx.motion(); await tick();
+  assert.equal(ctx.count('/terminal/recognize'), 1, 'facial rétabli : la borne reprend seule');
+  session = [401, { detail: { code: 'TERMINAL_REVOKED', message: 'Terminal révoqué' } }];
+  ctx.advance(40000); await ctx.B.tick(); await tick();
+  assert.equal(await ctx.store.get('identity'), undefined, 'révocation apprise au repos : identité effacée');
+});

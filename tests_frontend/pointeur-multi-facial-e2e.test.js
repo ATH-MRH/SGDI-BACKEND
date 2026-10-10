@@ -293,7 +293,7 @@ test('Multi-terminaux faciaux — Administration Système puis Pointeur, Chrome 
     await pointer.click('#ftActivate');
     const camA = `cam:${cameras['CAM ENTREE HAMOUL']}`, camB = `cam:${cameras['CAM QUAI DEPOT']}`;
     await pointer.waitForFunction((a, b) => [a, b].every((k) => /^Actif/.test(document.querySelector(`#ftRows tr[data-key="${k}"]`)?.cells[3].innerText || '')), { timeout: 15000 }, camA, camB);
-    assert.match(await rowState(pointer, `trm:${terminalId}`), /^Actif · autonome/);
+    assert.match(await rowState(pointer, `trm:${terminalId}`), /^Actif · au repos/);
     assert.equal(await pointer.$eval('#ftCountActive', (el) => el.textContent), '3');
     assert.equal(await pointer.$eval('#ftCountOffline', (el) => el.textContent), '0');
     await shot(pointer, '04-pointeur-trois-terminaux-actifs');

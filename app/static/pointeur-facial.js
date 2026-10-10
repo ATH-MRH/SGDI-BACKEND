@@ -329,10 +329,16 @@
     }
     if (note) return { label: note.state === "REFUSED" ? "Refusé" : "Arrêté", tone: "bad", detail: note.message, offline: false, active: false };
     if (dev.kind === "TERMINAL") {
+      // Connexion (la borne bat-elle ?) et activité (y a-t-il des passages ?) sont deux choses :
+      // une borne au repos reste « en ligne » ; seule une borne qui s'est tue est « perdue ».
       const watched = F.monitored.has(dev.key);
-      return { label: dev.online ? (watched ? "Actif · autonome" : "En ligne") : "Hors ligne", tone: dev.online ? "ok" : "bad",
-        detail: watched ? "Terminal autonome : il pointe seul (aucune activation distante)" : "Terminal autonome",
-        offline: !dev.online, active: watched && dev.online };
+      const connection = dev.connection || (dev.online ? "ONLINE" : "LOST");
+      const pace = dev.activity === "ACTIVE" ? "en service" : "au repos";
+      const [label, tone] = { ONLINE: [(watched ? "Actif · " : "En ligne · ") + pace, "ok"], LOST: ["Connexion perdue", "bad"],
+        SILENT: ["Sans signal", "pending"], NEVER: ["Jamais connecté", "bad"] }[connection] || ["—", "pending"];
+      const detail = connection === "SILENT" ? "État de connexion inconnu : borne à recharger pour le suivi"
+        : watched ? "Terminal autonome : il pointe seul (aucune activation distante)" : "Terminal autonome";
+      return { label, tone, detail, offline: connection === "LOST" || connection === "NEVER", active: watched && connection === "ONLINE" };
     }
     return { label: "Disponible", tone: "pending", detail: "", offline: false, active: false };
   }
@@ -408,15 +414,19 @@
       const dev = device(r.key);
       if (!dev) return;
       if (r.status === "ACTIVATED") startRunner(dev);
-      else if (r.status === "MONITORED") { F.monitored.add(dev.key); F.notes.delete(dev.key); dev.online = !!r.online; if (r.last_communication) dev.last_communication = r.last_communication; }
+      else if (r.status === "MONITORED") {
+        F.monitored.add(dev.key); F.notes.delete(dev.key);
+        dev.online = r.online; dev.connection = r.connection || (r.online ? "ONLINE" : "LOST");
+        if (r.last_communication) dev.last_communication = r.last_communication;
+      }
       else { stopRunner(dev.key, { state: "REFUSED", message: r.message || "Refusé" }); refused.push(dev.name + " : " + (r.message || "refusé")); }
     });
     focus(F.focusKey);
-    const offline = F.devices.filter((d) => F.monitored.has(d.key) && !d.online).map((d) => d.name);
+    const offline = F.devices.filter((d) => F.monitored.has(d.key) && rowState(d).offline).map((d) => d.name);
     if (!F.runners.size && !F.monitored.size) setStatus("DISABLED", `<div class="face-check">AUCUN TERMINAL ACTIVÉ</div><small>${esc(refused.join(" — ") || "Aucun équipement utilisable.")}</small>`);
     else if (Date.now() < F.displayUntil) { /* un résultat est affiché : une ré-activation ne l'efface pas */ }
     else if (F.runners.size) setStatus("READY", MESSAGES.NO_FACE + (refused.length ? `<br><small>${esc(refused.join(" — "))}</small>` : ""));
-    else setStatus("READY", `SURVEILLANCE ACTIVE<br><small>${offline.length ? esc(offline.join(", ")) + " : hors ligne. " : ""}Les terminaux autonomes pointent seuls ; les passages apparaissent sur la fiche du poste.</small>`);
+    else setStatus("READY", `SURVEILLANCE ACTIVE<br><small>${offline.length ? esc(offline.join(", ")) + " : connexion perdue. " : ""}Les terminaux autonomes pointent seuls ; les passages apparaissent sur la fiche du poste.</small>`);
     renderTable(); syncSystem();
   };
 

@@ -67,13 +67,17 @@ test('module enregistré comme dépendance d\'Administration, route réservée a
 
 test('liste : identifiant, nom, matériel, société, site, équipement, état, appairage, dernière communication, utilisateurs', async () => {
   const c = boot({ items: [KIOSK(), CAMERA(), KIOSK({ key: 'trm:5', id: 5, name: 'TAB NEUVE', paired: false, paired_at: null, status: 'INACTIVE', status_label: 'Inactif', users: [], last_communication: null }),
-    KIOSK({ key: 'trm:6', id: 6, name: 'TAB PERDUE', status: 'REVOKED', status_label: 'Révoqué', revoked_reason: 'Vol', users: [] })] });
+    KIOSK({ key: 'trm:6', id: 6, name: 'TAB PERDUE', status: 'REVOKED', status_label: 'Révoqué', revoked_reason: 'Vol', users: [] }),
+    KIOSK({ key: 'trm:7', id: 7, name: 'TAB COUPEE', status: 'OFFLINE', status_label: 'Hors ligne', connection: 'LOST', connection_label: 'Connexion perdue' }),
+    KIOSK({ key: 'trm:8', id: 8, name: 'TAB ANCIENNE', status: 'UNKNOWN', status_label: 'Sans signal', connection: 'SILENT', connection_label: 'Sans signal' })] });
   await c.open();
   assert.deepEqual([...c.view.querySelectorAll('thead th')].map((th) => th.textContent), ['Terminal', 'Société', 'Site', 'Équipement', 'État', 'Appairage', 'Dernière communication', 'Utilisateurs autorisés', 'Actions']);
   const row = (key) => c.text(c.view.querySelector(`[data-facial-row="${key}"]`));
   assert.match(row('trm:4'), /TAB HAMOUL 01 trm:4 · Tablette Android Iron Global Securite HAMOUL 01 Galaxy Tab Autonome — surveillance seulement Actif Appairé le 03\/10\/2026 \d\d:00 09\/10\/2026 \d\d:00 1 compte PTG01/);
   assert.match(row('cam:9'), /CAM ENTREE cam:9 · DAHUA IPC.*Activée depuis le poste Pointeur Actif Enregistrée le.*0 compte/);
   assert.match(row('trm:5'), /Inactif Non appairé/); assert.match(row('trm:6'), /Révoqué Vol/);
+  // Connexion réellement perdue ≠ borne sans battement de cœur (état inconnu).
+  assert.match(row('trm:7'), /Hors ligne Connexion perdue Appairé/); assert.match(row('trm:8'), /Sans signal Sans signal — borne à recharger pour le suivi de connexion/);
   const actions = (key) => [...c.view.querySelectorAll(`[data-facial-row="${key}"] button`)].map((b) => b.textContent.replace(/^[^\wÀ-ÿ]+/, ''));
   assert.deepEqual(actions('trm:4'), ['Utilisateurs autorisés', 'Remplacer le matériel', 'Couper le pointage facial', 'Révoquer']);
   assert.deepEqual(actions('trm:5'), ['Utilisateurs autorisés', 'Appairer', 'Révoquer']);

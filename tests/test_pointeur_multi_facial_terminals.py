@@ -284,12 +284,13 @@ def test_activation_gives_one_honest_result_per_selected_device(client, auth_hea
     assert len(out.json()["results"]) == 8                                 # sélection dédoublonnée, un résultat par équipement
     assert [(results[k]["status"], results[k]["code"]) for k in keys] == [
         ("ACTIVATED", "SERVER_CAMERA"), ("ACTIVATED", "SERVER_CAMERA"), ("REFUSED", "FACIAL_OFF"),
-        ("MONITORED", "AUTONOMOUS"), ("MONITORED", "AUTONOMOUS_OFFLINE"), ("REFUSED", "NOT_PAIRED")]
-    # Une borne autonome n'est jamais annoncée « activée » : surveillée, avec son état réel.
-    assert results[f"trm:{kiosk}"]["online"] is True and results[f"trm:{silent}"]["online"] is False
+        ("MONITORED", "AUTONOMOUS"), ("MONITORED", "AUTONOMOUS_SILENT"), ("REFUSED", "NOT_PAIRED")]
+    # Une borne autonome n'est jamais annoncée « activée » : surveillée, avec son état réel. Sans
+    # battement de cœur déclaré, un long silence ne prouve rien : « sans signal », pas « hors ligne ».
+    assert results[f"trm:{kiosk}"]["online"] is True and results[f"trm:{silent}"]["online"] is None
     assert results["cam:999999"]["code"] == results["nimporte-quoi"]["code"] == "NOT_AUTHORIZED"
     states = {r["key"]: r["state"] for r in _list(client, pointer).json()["terminals"]}
-    assert states == {f"cam:{cam_a}": "READY", f"cam:{cam_b}": "READY", f"trm:{kiosk}": "ONLINE", f"trm:{silent}": "OFFLINE"}
+    assert states == {f"cam:{cam_a}": "READY", f"cam:{cam_b}": "READY", f"trm:{kiosk}": "ONLINE", f"trm:{silent}": "SILENT"}
     # Moteur facial coupé : aucune activation simulée.
     settings.biometric_enabled = False
     off = _activate(client, pointer, [f"cam:{cam_a}", f"trm:{kiosk}"]).json()["results"]
@@ -352,6 +353,55 @@ def test_a_kiosk_and_a_camera_seeing_the_same_person_record_one_movement(client,
     assert [e.event_type for e in _events(db, emp)] == ["ARRIVAL"]
     listing = _list(client, pointer).json()
     assert {r["key"]: bool(r["last_event"]) for r in listing["terminals"]} == {f"trm:{kiosk}": True, f"cam:{cam}": False}
+
+
+def test_idle_kiosk_stays_online_and_only_a_silenced_heartbeat_is_a_lost_connection(client, auth_headers, db):
+    """Absence de passage ≠ perte de connexion : la borne bat au repos ; seul l'arrêt du battement
+    d'une borne qui battait est une connexion perdue."""
+    site = _site(db)
+    user, pointer = _pointer(client, db, sites=[site])
+    kiosk, device = _kiosk(client, auth_headers, site)
+    key = f"trm:{kiosk}"
+    assert _grant(client, auth_headers, key, user).status_code == 200
+    row = lambda: _list(client, pointer).json()["terminals"][0]                                # noqa: E731
+    admin = lambda: {r["key"]: r for r in client.get(f"{API}/facial-devices", headers=auth_headers).json()["items"]}[key]   # noqa: E731
+    age = lambda **kw: (setattr(db.get(BiometricTerminal, kiosk), "last_seen_at", datetime.utcnow() - timedelta(**kw)), db.commit())   # noqa: E731
+    # Battement périodique, aucun passage : en ligne ET au repos.
+    beat = device.call(client, "GET", "/terminal/session?hb=1")
+    assert beat.status_code == 200 and beat.json()["heartbeat_ms"] == 30000
+    db.expire_all()
+    assert db.get(BiometricTerminal, kiosk).meta["heartbeat_s"] == 30
+    assert (row()["connection"], row()["online"], row()["state"], row()["activity"]) == ("ONLINE", True, "ONLINE", "IDLE")
+    assert (admin()["status"], admin()["heartbeat"]) == ("ACTIVE", True)
+    # Des heures sans passage mais un battement récent : toujours en ligne.
+    age(seconds=60)
+    assert (row()["connection"], row()["activity"]) == ("ONLINE", "IDLE")
+    # Le battement s'arrête (trois manqués) : connexion réellement perdue.
+    age(seconds=120)
+    assert (row()["connection"], row()["online"], row()["state"]) == ("LOST", False, "OFFLINE")
+    out = _activate(client, pointer, [key]).json()["results"][0]
+    assert (out["status"], out["code"], out["connection_label"]) == ("MONITORED", "AUTONOMOUS_OFFLINE", "Connexion perdue")
+    assert (admin()["status"], admin()["connection"]) == ("OFFLINE", "LOST")
+    # La borne revient et quelqu'un pointe : en ligne ET en service.
+    emp, who = _enrolled(db, site)
+    assert device.recognize(client, burst(face(who))).json()["state"] == "ATTENDANCE_RECORDED"
+    assert (row()["connection"], row()["activity"], row()["last_event"]["matricule"]) == ("ONLINE", "ACTIVE", emp.code)
+    # Le battement d'une borne est écrit au plus toutes les 20 s : assez fin pour une fenêtre de 90 s.
+    from app.modules.biometrics import terminals as terminals_module
+    assert terminals_module.LAST_SEEN_THROTTLE <= timedelta(seconds=terminals_module.HEARTBEAT_SECONDS)
+    # Remplacement du matériel : le nouvel appareil doit déclarer lui-même son battement.
+    code = client.post(f"{API}/terminals/{kiosk}/pairing-code", headers=auth_headers).json()["code"]
+    assert client.post(f"{API}/terminal/pair", json={"code": code, "public_key": Device().jwk}).status_code == 200
+    db.expire_all()
+    assert "heartbeat_s" not in db.get(BiometricTerminal, kiosk).meta
+    age(minutes=10)
+    assert (row()["connection"], row()["online"]) == ("SILENT", None) and admin()["status"] == "UNKNOWN"
+    # Jamais vue : ni en ligne ni « perdue ».
+    fresh, _ = _kiosk(client, auth_headers, site)
+    assert _grant(client, auth_headers, f"trm:{fresh}", user).status_code == 200
+    term = db.get(BiometricTerminal, fresh); term.last_seen_at = None; db.commit()
+    states = {r["key"]: r["connection"] for r in _list(client, pointer).json()["terminals"]}
+    assert states[f"trm:{fresh}"] == "NEVER"
 
 
 # ── Révocation, désactivation, retrait d'autorisation ────────────────────────────────────
