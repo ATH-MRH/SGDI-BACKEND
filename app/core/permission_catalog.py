@@ -71,7 +71,7 @@ FEATURE_CATALOG: dict[str, dict] = {
         "candidates": ("Candidats", "Dossiers de candidature", ("read", "create", "update", "validate", "delete", "recruit")),
         "contact_duplicates": ("Doublons de contact", "Contrôle des coordonnées candidates", ("read",)),
         "convocations": ("Convocations", "Envoi des convocations", ("create", "execute")),
-        "contractualization": ("Contractualisation", "Transmission vers le dossier contractuel", ("update", "validate", "recruit")),
+        "contractualization": ("Contractualisation", "Ventilation vers une société et transmission vers le dossier contractuel", ("update", "validate", "recruit")),
     }},
     "leaves": {"label": "Congés", "domain": "drh.irongs.com", "description": "Demandes et décisions de congé", "features": {
         "requests": ("Demandes de congé", "Création, consultation et décision", ("read", "create", "validate")),
