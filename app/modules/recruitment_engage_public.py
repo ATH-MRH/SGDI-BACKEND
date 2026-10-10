@@ -259,8 +259,10 @@ def emploi_register_device(payload: PushDeviceIn, account: Account = Depends(_ac
 
 
 @router.delete('/me/push-device', status_code=204)
-def emploi_unregister_devices(account: Account = Depends(_account), db: Session = Depends(get_db)):
-    for row in db.scalars(select(PushDevice).where(PushDevice.account_id == account.id)).all():
+def emploi_unregister_devices(token: str | None = None, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    """Avec `token` : ce téléphone seulement (déconnexion). Sans : tous les appareils de l'espace."""
+    query = select(PushDevice).where(PushDevice.account_id == account.id)
+    for row in db.scalars(query.where(PushDevice.token == token) if token else query).all():
         db.delete(row)
     db.commit()
     return Response(status_code=204)

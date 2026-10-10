@@ -380,7 +380,12 @@ def test_push_is_off_by_default_and_devices_follow_the_signed_in_space(client, d
     # Le téléphone passe à un autre espace : il ne reçoit plus pour le précédent.
     client.put(f'{API}/me/push-device', headers=other, json={'token': 'ExponentPushToken[test-device-1]', 'platform': 'android'})
     assert client.get(f'{API}/me/settings', headers=headers).json()['devices'] == 0 and client.get(f'{API}/me/settings', headers=other).json()['devices'] == 1
+    # Déconnexion d'un téléphone : lui seul est retiré, les autres appareils de l'espace restent.
+    client.put(f'{API}/me/push-device', headers=other, json={'token': 'ExponentPushToken[test-device-2]', 'platform': 'ios'})
+    assert client.delete(f'{API}/me/push-device', headers=other, params={'token': 'ExponentPushToken[test-device-1]'}).status_code == 204
+    assert client.get(f'{API}/me/settings', headers=other).json()['devices'] == 1
     assert client.delete(f'{API}/me/push-device', headers=other).status_code == 204
+    assert client.get(f'{API}/me/settings', headers=other).json()['devices'] == 0
     # Suppression de l'espace : alertes, notifications et appareils disparaissent avec lui.
     client.post(f'{API}/alerts', headers=headers, json={'wilaya': 'Oran'})
     assert client.delete(f'{API}/me', headers=headers).status_code == 204
