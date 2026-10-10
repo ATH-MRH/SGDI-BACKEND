@@ -27,7 +27,7 @@ const otp = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
   box: { flex: 1, maxWidth: 52, aspectRatio: 0.9, borderRadius: 9, borderWidth: 1.2, borderColor: colors.border, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   active: { borderColor: colors.navy, borderWidth: 1.8 }, filled: { borderColor: colors.navy },
-  digit: { fontSize: 22.5, fontFamily: fonts.semi, color: colors.ink },
+  digit: { fontSize: 20, fontFamily: fonts.semi, color: colors.ink },
   // Champ réel, transparent, sur toute la largeur : il reçoit le clavier, le collage et la saisie automatique.
   input: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0.01, color: 'transparent', fontSize: 1 },
 });

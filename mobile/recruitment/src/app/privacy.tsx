@@ -30,6 +30,6 @@ export default function Privacy() {
 
 const page = StyleSheet.create({
   point: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.navy, marginTop: 10 },
-  pending: { gap: 4, padding: 12, borderRadius: 10, backgroundColor: colors.goldSoft }, pendingTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.goldDeep },
-  pendingText: { fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, color: colors.ink },
+  pending: { gap: 4, padding: 12, borderRadius: 12, backgroundColor: colors.goldSoft }, pendingTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.goldDeep },
+  pendingText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.sans, color: colors.ink },
 });

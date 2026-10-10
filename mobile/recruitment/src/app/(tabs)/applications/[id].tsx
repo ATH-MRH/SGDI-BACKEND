@@ -118,10 +118,10 @@ function Fact({ label, value, selectable = false }: { label: string; value: stri
 }
 
 const page = StyleSheet.create({
-  fact: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 }, factLabel: { fontSize: 15.5, fontFamily: fonts.sans, color: colors.muted },
-  factValue: { fontSize: 15.5, fontFamily: fonts.bold, color: colors.ink, flexShrink: 1, textAlign: 'right' }, note: { fontSize: 13.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.muted },
-  convocation: { flexDirection: 'row', gap: 10, backgroundColor: colors.goldSoft, borderRadius: 12, padding: 12, alignItems: 'flex-start' },
-  convocationText: { flex: 1, fontSize: 15.5, lineHeight: 23.5, fontFamily: fonts.medium, color: colors.ink },
-  document: { flexDirection: 'row', gap: 10, alignItems: 'center' }, documentName: { fontSize: 16, fontFamily: fonts.semi, color: colors.ink },
-  quote: { fontSize: 15.5, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.ink, backgroundColor: colors.surface, borderRadius: 10, padding: 12 },
+  fact: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 }, factLabel: { fontSize: 15, fontFamily: fonts.sans, color: colors.muted },
+  factValue: { fontSize: 15, fontFamily: fonts.bold, color: colors.ink, flexShrink: 1, textAlign: 'right' }, note: { fontSize: 13, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
+  convocation: { flexDirection: 'row', gap: 10, backgroundColor: colors.goldSoft, borderRadius: 16, padding: 12, alignItems: 'flex-start' },
+  convocationText: { flex: 1, fontSize: 15, lineHeight: 23, fontFamily: fonts.medium, color: colors.ink },
+  document: { flexDirection: 'row', gap: 10, alignItems: 'center' }, documentName: { fontSize: 15, fontFamily: fonts.semi, color: colors.ink },
+  quote: { fontSize: 15, lineHeight: 23, fontFamily: fonts.sans, color: colors.ink, backgroundColor: colors.surface, borderRadius: 12, padding: 12 },
 });

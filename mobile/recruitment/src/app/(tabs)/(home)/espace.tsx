@@ -126,14 +126,14 @@ const PREVIEW = 3;
 
 const page = StyleSheet.create({
   dot: { position: 'absolute', top: 4, right: 4, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.gold },
-  notification: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, minHeight: 64 },
-  kind: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  notificationTitle: { fontSize: 16, fontFamily: fonts.semi, color: colors.ink }, notificationBody: { fontSize: 14, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
+  notification: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, minHeight: 64 },
+  kind: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  notificationTitle: { fontSize: 15, fontFamily: fonts.semi, color: colors.ink }, notificationBody: { fontSize: 14, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
   backdrop: { flex: 1, backgroundColor: 'rgba(12,28,54,0.45)' }, sheet: { backgroundColor: colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, gap: 14 },
   sheetTop: { flexDirection: 'row', alignItems: 'center', gap: 12 }, close: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  when: { fontSize: 13.5, fontFamily: fonts.sans, color: colors.muted },
+  when: { fontSize: 13, fontFamily: fonts.sans, color: colors.muted },
   unread: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.gold },
-  tip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...shadow },
-  tipArt: { width: 72, height: 64, borderRadius: 10, backgroundColor: colors.blueSoft, alignItems: 'center', justifyContent: 'center' },
-  tipTitle: { fontSize: 17, fontFamily: fonts.bold, color: colors.ink }, tipText: { fontSize: 14.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.muted },
+  tip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...shadow },
+  tipArt: { width: 72, height: 64, borderRadius: 12, backgroundColor: colors.blueSoft, alignItems: 'center', justifyContent: 'center' },
+  tipTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink }, tipText: { fontSize: 14, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
 });

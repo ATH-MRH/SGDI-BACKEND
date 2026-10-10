@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SessionGate } from '../../../components/session-gate';
 import { Card, colors, EmptyState, ErrorState, fonts, Loading, Monogram, Screen, shadow, styles } from '../../../components/ui';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { Conversation, messageTime } from '../../../lib/emploi';
+import { Conversation, logoUri, messageTime } from '../../../lib/emploi';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
 
@@ -35,7 +35,7 @@ function List() {
             <Pressable key={item.application_id} accessibilityRole="button"
               accessibilityLabel={`${item.title}${item.unread ? `, ${item.unread} message${item.unread > 1 ? 's' : ''} non lu${item.unread > 1 ? 's' : ''}` : ''}`}
               onPress={() => router.push({ pathname: '/messages/[id]', params: { id: String(item.application_id) } })} style={({ pressed }) => [row.box, pressed && { opacity: 0.85 }]}>
-              <Monogram name={item.company?.name || 'IRON Emploi'} size={46} round />
+              <Monogram name={item.company?.name || 'IRON Emploi'} uri={logoUri(item.company)} size={46} round />
               <View style={{ flex: 1, gap: 2 }}>
                 <View style={row.head}>
                   <Text style={[row.title, item.unread > 0 && { fontFamily: fonts.bold }]} numberOfLines={1}>{item.title}</Text>
@@ -55,9 +55,9 @@ function List() {
 }
 
 const row = StyleSheet.create({
-  box: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...shadow },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 8 }, title: { flex: 1, fontSize: 17, fontFamily: fonts.semi, color: colors.ink },
+  box: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13, borderRadius: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, ...shadow },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 }, title: { flex: 1, fontSize: 16, fontFamily: fonts.semi, color: colors.ink },
   time: { fontSize: 13, fontFamily: fonts.sans, color: colors.muted }, meta: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
-  preview: { fontSize: 15, fontFamily: fonts.sans, color: colors.muted },
-  unread: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }, unreadText: { fontSize: 13, fontFamily: fonts.bold, color: colors.white },
+  preview: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
+  unread: { minWidth: 22, height: 22, borderRadius: 12, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }, unreadText: { fontSize: 13, fontFamily: fonts.bold, color: colors.white },
 });

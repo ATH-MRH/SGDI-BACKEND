@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { CandidateForm } from '../../../components/candidate-form';
 import { PhotoField } from '../../../components/photo-field';
 import { consentMissing, consentPayload, PrivacyConsent } from '../../../components/privacy-consent';
@@ -28,6 +28,8 @@ function Editor({ account }: { account: Account }) {
   const [photo, setPhoto] = useState<string>(), [savedPhoto, setSavedPhoto] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [consent, setConsent] = useState(false), [saved, setSaved] = useState(false);
   const saving = useRef(false);
+  // Rubrique ouverte depuis « Mon espace » : identité et coordonnées, ou disponibilité et poste. Les autres valeurs sont renvoyées inchangées.
+  const param = useLocalSearchParams<{ part?: string }>().part, part = param === 'identity' || param === 'job' ? param : undefined;
 
   useEffect(() => {
     if (!account.has_photo) return;
@@ -63,9 +65,10 @@ function Editor({ account }: { account: Account }) {
     );
   }
   return (
-    <Page title="Mes informations" subtitle="Ces informations préremplissent vos candidatures. Les enregistrer n’envoie aucune candidature. Votre nom, prénom et téléphone sont ceux vérifiés par SMS.">
-      <CandidateForm lockedIdentity values={values} onChange={setValues} experience={experience} onExperience={setExperience}
-        photo={<PhotoField value={photo ?? savedPhoto} onChange={setPhoto} onError={setError} />} />
+    <Page title={part === 'job' ? 'Disponibilité et poste' : part === 'identity' ? 'Identité et coordonnées' : 'Mes informations'}
+      subtitle={part === 'job' ? 'Ces informations préremplissent vos candidatures. Les enregistrer n’envoie aucune candidature.' : 'Les enregistrer n’envoie aucune candidature. Votre nom, prénom et téléphone sont ceux vérifiés par SMS.'}>
+      <CandidateForm lockedIdentity only={part} values={values} onChange={setValues} experience={experience} onExperience={setExperience}
+        photo={part === 'job' ? undefined : <PhotoField value={photo ?? savedPhoto} onChange={setPhoto} onError={setError} />} />
       <Card>
         <PrivacyConsent privacy={account.privacy} value={consent} onChange={setConsent} />
         <ErrorText message={error} />

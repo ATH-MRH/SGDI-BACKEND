@@ -43,7 +43,7 @@ export function TabStack({ plain = [] }: { plain?: string[] }) {
 }
 
 const header = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: HEADER_HEIGHT, paddingBottom: 4, backgroundColor: colors.white },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: HEADER_HEIGHT, paddingBottom: 4, backgroundColor: colors.background },
   back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, title: { flex: 1, minWidth: 0 },
-  text: { fontSize: 26, lineHeight: 32, fontFamily: fonts.serif, color: colors.ink },
+  text: { fontSize: 22, lineHeight: 28, fontFamily: fonts.bold, color: colors.ink },
 });

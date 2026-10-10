@@ -74,7 +74,7 @@ export default function Settings() {
         </Card>
       )}
 
-      <Text style={[styles.subtitle, { textAlign: 'center', fontSize: 13.5 }]}>IRON Emploi · version {Constants.expoConfig?.version || '—'}</Text>
+      <Text style={[styles.subtitle, { textAlign: 'center', fontSize: 13 }]}>IRON Emploi · version {Constants.expoConfig?.version || '—'}</Text>
     </ScrollView>
   );
 }

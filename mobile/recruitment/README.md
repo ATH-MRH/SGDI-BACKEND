@@ -7,7 +7,7 @@ Elle remplace « IRON Recrutement » en conservant son identifiant (`com.irongs.
 
 ## Ce que fait l'application
 
-Les douze écrans de la planche de référence, avec des données réelles :
+Les écrans de l'application, au style de la maquette « IRON EMPLOI », avec des données réelles :
 
 | Écran | Contenu |
 |---|---|
@@ -30,12 +30,15 @@ Les offres et les entreprises se consultent sans connexion. L'identification par
 
 ## Apparence
 
+Le style suit la maquette « IRON EMPLOI — Un espace emploi pensé pour vous » et s'applique à tous les écrans.
+
+- **Thème commun** (`src/components/ui.tsx`) : bleu nuit `#14243B`, doré `#B48C42` réservé aux accents, fond `#F5F6F8`, cartes blanches, texte secondaire `#667085`, bordures `#E4E7EC` ; titres 28, sections 19, texte 15–16, secondaire 12–14 ; cartes arrondies de 16, boutons de 50 points, zones tactiles d'au moins 44 points.
+- **Composants partagés** : carte d'offre (`offer-card.tsx`), recherche avec localisation (`search-panel.tsx`), champs à liste, calendrier, montant et chiffres (`fields.tsx`, `date-field.tsx`), progression d'une candidature (`application-state.tsx`), en-tête des écrans secondaires (`tab-stack.tsx`).
 - **Police** : Arial pour tous les textes. Sur iOS c'est l'Arial du système. Sur Android, où Arial n'existe pas et ne peut pas être embarquée sans licence, l'application affiche Arimo (licence libre, mêmes largeurs de caractères) — ce n'est pas Arial ; voir `assets/fonts/LISEZ-MOI.md`. Les dialogues et calendriers du système gardent la police du téléphone.
-- **Styles partagés** : couleurs, typographies, cartes, boutons, pastilles et filtres sont définis dans `src/components/ui.tsx`.
-- **Icônes** vectorielles dessinées pour l'application (`src/components/icon.tsx`), aucune police d'icônes, aucun emoji.
-- **Illustrations** : trois images générées par IA (agent de sécurité de dos, équipe devant un immeuble, poste de surveillance), sans logo ni personne réelle ; origine et droits dans `assets/photos/SOURCES.md`. Elles ne représentent aucun site du groupe.
-- **Identité** : les pages société et les conversations portent le monogramme IRON EMPLOI (bleu marine et doré). Aucun logo officiel n'est reproduit ni inventé.
-- **Retour** : sur les écrans secondaires, la flèche est sur la ligne du titre, comme sur la planche (`src/components/tab-stack.tsx`).
+- **Icônes** vectorielles d'une même famille, dessinées pour l'application (`src/components/icon.tsx`) ; aucun emoji.
+- **Illustrations** : images générées par IA, sans logo ni personne réelle ; origine et droits dans `assets/photos/SOURCES.md`.
+- **Sociétés** : le logo servi par le serveur quand il existe, sinon un monogramme aux initiales. Aucun logo n'est inventé.
+- **Données** : rien de fictif dans l'application. Les compteurs, salaires, états et étapes affichés viennent du serveur ; un salaire n'apparaît que s'il est renseigné, avec sa période seulement si elle est connue.
 
 ## Notifications
 
@@ -143,6 +146,19 @@ Aucun binaire n'a été produit ni publié par ce dépôt.
 ## Espace administration
 
 « Accès adm. » ouvre l'espace RH existant (connexion, liste et fiche des candidats). Il n'a pas été modifié. La gestion des annonces se fait dans recrute.irongs.com.
+
+## Formulaires et protection des données
+
+- **Dates** : choisies dans le calendrier du téléphone, affichées JJ/MM/AAAA, transmises AAAA-MM-JJ. La date de naissance ne peut être ni future ni celle d'un mineur de moins de 19 ans (règle du serveur).
+- **Listes** : nombre d'enfants de 0 à 15 (« non renseigné » distinct de 0), taille en cm, pointure, taille de chemise, langues parlées et écrites (sélection multiple, Kabyle inclus). Une valeur déjà enregistrée hors liste reste proposée.
+- **NIN** : clavier numérique, chiffres uniquement, conservé comme texte (zéros initiaux), 10 ou 18 chiffres comme dans le dossier de recrutement.
+- **Adresse** : Wilaya → Commune → Adresse ; la commune est vidée si elle n'appartient pas à la nouvelle wilaya.
+- **Poste souhaité** : liste avec recherche, et saisie libre d'un poste absent.
+- **Salaire demandé** : « 50 000,00 DA » hors saisie ; transmis comme un nombre à deux décimales.
+- **Profil et candidature** : « Enregistrer mon profil » n'envoie rien au recruteur. Une candidature part seulement par « Envoyer ma candidature », après vérification de l'offre, des informations et des pièces.
+- **Consentement** : case non cochée par défaut près de l'enregistrement du profil, notice « Protection des données personnelles » (`src/lib/privacy.ts`, écran `/privacy`). Le serveur contrôle et enregistre la version de la notice et la date ; il ne le redemande pas tant que la notice ne change pas. Ce consentement est distinct des réglages de notifications.
+
+La notice contient des rubriques marquées « À préciser par IRON GLOBAL avant la mise en service » : responsable du traitement et contact, délégué à la protection des données, référence de la formalité ANPDP, hébergeur et transferts, durées de conservation, adresse d'exercice des droits. Elles ne sont pas inventées ; l'application n'est présentée ni comme agréée ni comme validée par l'ANPDP.
 
 ## Limites connues
 

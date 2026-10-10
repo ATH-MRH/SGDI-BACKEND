@@ -7,11 +7,17 @@ import { initials } from '../lib/emploi';
 
 // Système de styles IRON Emploi (planche de référence) : bleu marine, doré, blanc et gris clair ;
 // tous les textes en Arial (voir `fonts` ci-dessous).
+// Palette de la maquette : bleu nuit et doré (accents seulement) sur fond gris très clair, cartes blanches.
+// Les états utilisent des teintes discrètes, toujours accompagnées d'un libellé.
 export const colors = {
-  ink: '#13284B', navy: '#13284B', navyDeep: '#0C1C36', muted: '#66758C', soft: '#8E9AAD', background: '#FFFFFF', surface: '#F4F6F9',
-  gold: '#B88A3B', goldDeep: '#96702A', goldSoft: '#F6EEDD', white: '#FFFFFF', border: '#E2E7EE', red: '#B3293A', redSoft: '#FBECEE',
-  green: '#1E8E4E', greenSoft: '#E4F4EA', blue: '#2E6BD9', blueSoft: '#E8F0FC', field: '#F4F6F9',
+  ink: '#14243B', navy: '#14243B', navyDeep: '#0D1929', muted: '#667085', soft: '#98A2B3', background: '#F5F6F8', surface: '#F2F4F7',
+  gold: '#B48C42', goldDeep: '#8C6A2C', goldSoft: '#F7F1E3', white: '#FFFFFF', border: '#E4E7EC', red: '#B42318', redSoft: '#FEF3F2',
+  green: '#1B7F4B', greenSoft: '#EAF6EF', blue: '#2F5FB3', blueSoft: '#EAF1FB', field: '#FFFFFF',
 };
+/** Rayons, espacements (grille de 4/8) et tailles de texte communs à tous les écrans. */
+export const radius = { card: 16, control: 12, pill: 999 };
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
+export const type = { title: 28, heading: 19, body: 15.5, small: 13.5, tiny: 12 };
 // Police de toute l'application : Arial.
 // - iOS : Arial est fournie par le système (ArialMT, Arial-BoldMT).
 // - Android : Arial n'est pas installée et sa licence n'autorise pas de l'embarquer sans accord. L'application y utilise
@@ -23,9 +29,9 @@ const strong = Platform.select({ ios: 'Arial-BoldMT', android: 'Arimo_700Bold', 
 // Arial n'a que deux graisses : les anciens niveaux intermédiaires se rangent sur l'une ou l'autre.
 export const fonts = { serif: strong, serifSemi: strong, sans: regular, medium: regular, semi: strong, bold: strong };
 export const shadow: ViewStyle = Platform.select({
-  ios: { shadowColor: '#13284B', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } },
-  android: { elevation: 2 },
-  default: { boxShadow: '0 3px 10px rgba(19,40,75,0.07)' } as ViewStyle,
+  ios: { shadowColor: '#14243B', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
+  default: { boxShadow: '0 2px 8px rgba(20,36,59,0.05)' } as ViewStyle,
 }) as ViewStyle;
 
 export function Page({ title, subtitle, children }: {title: string; subtitle?: string; children: React.ReactNode}) {
@@ -96,7 +102,7 @@ export function Heading({ children, action, onAction }: { children: string; acti
 export function Chip({ label, selected = false, onPress, icon }: { label: string; selected?: boolean; onPress?: () => void; icon?: IconName }) {
   const body = (
     <View style={[styles.chip, selected && styles.chipSelected]}>
-      {icon && <Icon name={icon} size={15} color={selected ? colors.white : colors.gold} />}
+      {icon && <Icon name={icon} size={15} color={selected ? colors.white : colors.navy} />}
       <Text style={[styles.chipText, selected && { color: colors.white }]}>{label}</Text>
     </View>
   );
@@ -104,9 +110,14 @@ export function Chip({ label, selected = false, onPress, icon }: { label: string
 }
 
 export type Tone = 'neutral' | 'gold' | 'green' | 'red' | 'blue';
+const TONES: Record<Tone, [string, string, string]> = {
+  neutral: [colors.surface, colors.ink, colors.soft], gold: [colors.goldSoft, colors.goldDeep, colors.gold], green: [colors.greenSoft, colors.green, colors.green],
+  red: [colors.redSoft, colors.red, colors.red], blue: [colors.blueSoft, colors.blue, colors.blue],
+};
+/** État : fond discret, point de couleur et libellé explicite (la couleur seule ne porte jamais l'information). */
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
-  const palette = { neutral: [colors.surface, colors.navy], gold: [colors.goldSoft, colors.goldDeep], green: [colors.green, colors.white], red: [colors.redSoft, colors.red], blue: [colors.blue, colors.white] }[tone];
-  return <Text style={[styles.badgePill, { backgroundColor: palette[0], color: palette[1] }]}>{label}</Text>;
+  const [background, text, dot] = TONES[tone];
+  return <View style={[styles.badgePill, { backgroundColor: background }]}><View style={[styles.badgeDot, { backgroundColor: dot }]} /><Text style={[styles.badgeText, { color: text }]}>{label}</Text></View>;
 }
 
 /** Sélecteur à segments (filtres de liste), comme sur la planche. */
@@ -135,7 +146,7 @@ export function Loading({ label = 'Chargement…' }: { label?: string }) {
 export function StateBox({ icon, title, text, action, onAction, tone = 'neutral' }: { icon: IconName; title: string; text?: string; action?: string; onAction?: () => void; tone?: 'neutral' | 'error' }) {
   return (
     <View accessibilityRole={tone === 'error' ? 'alert' : undefined} style={styles.state}>
-      <View style={[styles.stateIcon, tone === 'error' && { backgroundColor: colors.redSoft }]}><Icon name={icon} size={26} color={tone === 'error' ? colors.red : colors.gold} /></View>
+      <View style={[styles.stateIcon, tone === 'error' && { backgroundColor: colors.redSoft }]}><Icon name={icon} size={24} color={tone === 'error' ? colors.red : colors.navy} /></View>
       <Text style={styles.stateTitle}>{title}</Text>
       {!!text && <Text style={styles.stateText}>{text}</Text>}
       {action && onAction && <View style={{ alignSelf: 'stretch', marginTop: 6 }}><Button title={action} secondary onPress={onAction} /></View>}
@@ -163,9 +174,9 @@ export function JobIcon({ name, size = 46 }: { name: IconName; size?: number }) 
 export function Row({ icon, title, subtitle, onPress, right }: { icon: IconName; title: string; subtitle?: string; onPress?: () => void; right?: React.ReactNode }) {
   const body = (
     <View style={styles.listRow}>
-      <View style={styles.listIcon}><Icon name={icon} size={27} color={colors.navy} /></View>
+      <View style={styles.listIcon}><Icon name={icon} size={24} color={colors.navy} /></View>
       <View style={{ flex: 1, gap: 1 }}><Text style={styles.listTitle}>{title}</Text>{!!subtitle && <Text style={styles.listSubtitle}>{subtitle}</Text>}</View>
-      {right || (onPress && <Icon name="chevronRight" size={20} color={colors.navy} />)}
+      {right || (onPress && <Icon name="chevronRight" size={18} color={colors.muted} />)}
     </View>
   );
   return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title} onPress={onPress} style={({ pressed }) => pressed && { opacity: 0.7 }}>{body}</Pressable> : body;
@@ -182,31 +193,32 @@ export function FloatingButton({ icon, label, onPress, filled = false }: { icon:
 
 export const styles = StyleSheet.create({
   page: {flex: 1, backgroundColor: colors.background}, content: {padding: 18, gap: 16, paddingBottom: 40},
-  eyebrow: {fontSize: 12.5, letterSpacing: 1.6, fontFamily: fonts.bold, color: colors.gold},
-  title: {fontSize: 31.5, lineHeight: 38, fontFamily: fonts.serif, color: colors.ink},
-  subtitle: {fontSize: 16, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.muted},
-  text: {fontSize: 17, lineHeight: 24.5, fontFamily: fonts.sans, color: colors.ink},
-  card: {padding: 16, borderRadius: 14, backgroundColor: colors.white, gap: 12, borderWidth: 1, borderColor: colors.border, ...shadow},
-  label: {fontSize: 15, color: colors.ink, fontFamily: fonts.semi}, field: {gap: 7},
-  input: {minHeight: 50, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 13, color: colors.ink, backgroundColor: colors.white, fontSize: 18, fontFamily: fonts.sans},
+  eyebrow: {fontSize: 12, letterSpacing: 1.2, fontFamily: fonts.bold, color: colors.gold},
+  title: {fontSize: 28, lineHeight: 34, fontFamily: fonts.bold, color: colors.ink},
+  subtitle: {fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, color: colors.muted},
+  text: {fontSize: 15.5, lineHeight: 22.5, fontFamily: fonts.sans, color: colors.ink},
+  card: {padding: 16, borderRadius: 16, backgroundColor: colors.white, gap: 12, borderWidth: 1, borderColor: colors.border, ...shadow},
+  label: {fontSize: 14, color: colors.ink, fontFamily: fonts.semi}, field: {gap: 6},
+  input: {minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, paddingHorizontal: 14, color: colors.ink, backgroundColor: colors.white, fontSize: 16, fontFamily: fonts.sans},
   inputLocked: {backgroundColor: colors.surface, color: colors.muted},
-  button: {minHeight: 52, borderRadius: 10, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, paddingHorizontal: 16},
-  buttonRow: {flexDirection: 'row', alignItems: 'center', gap: 8}, secondary: {backgroundColor: colors.white, borderWidth: 1.2, borderColor: colors.border},
-  danger: {backgroundColor: colors.white, borderWidth: 1.2, borderColor: '#E7C2C7'}, buttonText: {color: colors.white, fontSize: 17.5, fontFamily: fonts.semi, textAlign: 'center'},
-  error: {color: colors.red, lineHeight: 23.5, fontSize: 15.5, fontFamily: fonts.medium}, heading: {fontSize: 19, color: colors.ink, fontFamily: fonts.bold, flexShrink: 1},
+  button: {minHeight: 50, borderRadius: 12, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, paddingHorizontal: 16},
+  buttonRow: {flexDirection: 'row', alignItems: 'center', gap: 8}, secondary: {backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border},
+  danger: {backgroundColor: colors.white, borderWidth: 1, borderColor: '#F4C7C3'}, buttonText: {color: colors.white, fontSize: 16, fontFamily: fonts.semi, textAlign: 'center'},
+  error: {color: colors.red, lineHeight: 20, fontSize: 14, fontFamily: fonts.medium}, heading: {fontSize: 19, lineHeight: 24, color: colors.ink, fontFamily: fonts.bold, flexShrink: 1},
   headingRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12},
-  badge: {color: colors.ink, backgroundColor: colors.goldSoft, padding: 8, borderRadius: 7, alignSelf: 'flex-start', overflow: 'hidden', fontFamily: fonts.medium},
-  badgePill: {fontSize: 13, fontFamily: fonts.semi, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 7, alignSelf: 'flex-start', overflow: 'hidden'},
-  row: {flexDirection: 'row', alignItems: 'center', gap: 12}, link: {color: colors.gold, fontFamily: fonts.semi, fontSize: 15.5}, photo: {width: 90, height: 90, borderRadius: 16},
-  chip: {flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 13, borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, minHeight: 38},
-  chipSelected: {backgroundColor: colors.navy, borderColor: colors.navy}, chipText: {fontSize: 15, color: colors.ink, fontFamily: fonts.medium},
-  segmented: {flexDirection: 'row', gap: 6}, segment: {flex: 1, minHeight: 40, borderRadius: 9, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3},
-  segmentActive: {backgroundColor: colors.navy}, segmentText: {fontSize: 14.5, fontFamily: fonts.semi, color: colors.muted},
-  state: {alignItems: 'center', gap: 8, paddingVertical: 28, paddingHorizontal: 18}, stateIcon: {width: 54, height: 54, borderRadius: 27, backgroundColor: colors.goldSoft, alignItems: 'center', justifyContent: 'center'},
-  stateTitle: {fontSize: 18, fontFamily: fonts.bold, color: colors.ink, textAlign: 'center'}, stateText: {fontSize: 15.5, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.muted, textAlign: 'center'},
-  monogram: {backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center'}, monogramText: {color: colors.gold, fontFamily: fonts.serif, letterSpacing: 0.5},
-  listRow: {flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 66}, listIcon: {width: 38, height: 38, alignItems: 'center', justifyContent: 'center'},
-  listTitle: {fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink}, listSubtitle: {fontSize: 14.5, fontFamily: fonts.sans, color: colors.muted, lineHeight: 20},
+  badge: {color: colors.ink, backgroundColor: colors.goldSoft, padding: 8, borderRadius: 8, alignSelf: 'flex-start', overflow: 'hidden', fontFamily: fonts.medium},
+  badgePill: {flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start'},
+  badgeDot: {width: 7, height: 7, borderRadius: 4}, badgeText: {fontSize: 13, fontFamily: fonts.semi},
+  row: {flexDirection: 'row', alignItems: 'center', gap: 12}, link: {color: colors.navy, fontFamily: fonts.semi, fontSize: 14.5}, photo: {width: 90, height: 90, borderRadius: 16},
+  chip: {flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, minHeight: 40},
+  chipSelected: {backgroundColor: colors.navy, borderColor: colors.navy}, chipText: {fontSize: 14, color: colors.ink, fontFamily: fonts.medium},
+  segmented: {flexDirection: 'row', backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 3, gap: 3}, segment: {flex: 1, minHeight: 42, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4},
+  segmentActive: {backgroundColor: colors.navy}, segmentText: {fontSize: 14.5, fontFamily: fonts.semi, color: colors.ink},
+  state: {alignItems: 'center', gap: 8, paddingVertical: 24, paddingHorizontal: 16}, stateIcon: {width: 52, height: 52, borderRadius: 26, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center'},
+  stateTitle: {fontSize: 17, fontFamily: fonts.bold, color: colors.ink, textAlign: 'center'}, stateText: {fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, color: colors.muted, textAlign: 'center'},
+  monogram: {backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center'}, monogramText: {color: colors.white, fontFamily: fonts.bold, letterSpacing: 0.3},
+  listRow: {flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 60}, listIcon: {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
+  listTitle: {fontSize: 15.5, fontFamily: fonts.semi, color: colors.ink}, listSubtitle: {fontSize: 13.5, fontFamily: fonts.sans, color: colors.muted, lineHeight: 19},
   divider: {height: 1, backgroundColor: colors.border},
-  floating: {width: 42, height: 42, borderRadius: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow},
+  floating: {width: 44, height: 44, borderRadius: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow},
 });

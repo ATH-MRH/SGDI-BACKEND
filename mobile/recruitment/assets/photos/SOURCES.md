@@ -7,6 +7,7 @@ Elles sont exportées à 1 920 pixels de large, puis réduites à 1 600 pixels e
 | Fichier | Usage | Contenu | Origine |
 |---|---|---|---|
 | `accueil.jpg` (4:3) | Bannière de l’accueil | Trois professionnels de dos (sécurité, logistique, entretien) devant un immeuble blanc et des palmiers | Image générée, Canva |
+| `agent.jpg` (16:9) | Carte « À découvrir » de l’accueil | Agent en chemise bleue à manches courtes et casquette bleue, écusson uni sans texte ni logo, devant une ville côtière | Image générée, Canva |
 | `offre.jpg` (16:9) | Bannière des offres et vignette de candidature | Agent de sécurité de dos devant un immeuble vitré | Image générée, Canva |
 | `societe.jpg` (16:9) | Bannière des pages société | Deux opérateurs de dos devant un mur d’écrans | Image générée, Canva |
 

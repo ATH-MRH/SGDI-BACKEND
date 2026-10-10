@@ -48,8 +48,10 @@ const communesOf = (wilaya: string | undefined): string[] => {
 };
 const EXPERIENCE: [keyof Experience, string, 'text' | 'date'][] = [['position', 'Poste', 'text'], ['society', 'Employeur', 'text'], ['start_date', 'Du', 'date'], ['end_date', 'Au', 'date'], ['departure_reason', 'Motif du départ', 'text']];
 
-export function CandidateForm({ values, onChange, experience, onExperience, staff = false, token, photo, lockedIdentity = false, hidden = [] }:
-  { values: FormValues; onChange: (v: FormValues) => void; experience: Experience[]; onExperience: (v: Experience[]) => void; staff?: boolean; token?: string; photo?: React.ReactNode; lockedIdentity?: boolean; hidden?: string[] }) {
+export function CandidateForm({ values, onChange, experience, onExperience, staff = false, token, photo, lockedIdentity = false, hidden = [], only }:
+  { values: FormValues; onChange: (v: FormValues) => void; experience: Experience[]; onExperience: (v: Experience[]) => void; staff?: boolean; token?: string; photo?: React.ReactNode; lockedIdentity?: boolean; hidden?: string[];
+    /** Rubriques affichées : « identity » (identité et coordonnées) ou « job » (poste et profil). Par défaut, tout le formulaire. */
+    only?: 'identity' | 'job' }) {
   const [positions, setPositions] = useState(locations.positions);
   const [today] = useState(() => new Date());
   // Le référentiel des postes est réservé aux comptes RH : un candidat utilise la liste embarquée.
@@ -96,14 +98,14 @@ export function CandidateForm({ values, onChange, experience, onExperience, staf
   const setRow = (index: number, key: keyof Experience, value: string) => onExperience(experience.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
   return (
     <>
-      {SECTIONS.map((section, index) => (
+      {SECTIONS.map((section, index) => (only === 'identity' && index === 2) || (only === 'job' && index < 2) ? null : (
         <Card key={section.title}>
           <Text accessibilityRole="header" style={styles.heading}>{section.title}</Text>
           {index === 0 && photo}
           {section.items.filter(item => (staff || !item.staffOnly) && !hidden.includes(item.key)).map(render)}
         </Card>
       ))}
-      <Card>
+      {!only && <Card>
         <Text accessibilityRole="header" style={styles.heading}>Expérience professionnelle</Text>
         {experience.map((row, i) => (
           <View key={i} style={{ gap: 12 }}>
@@ -118,7 +120,7 @@ export function CandidateForm({ values, onChange, experience, onExperience, staf
         {experience.length === 0 && <Text style={styles.subtitle}>Aucune expérience ajoutée.</Text>}
         <Button title="Ajouter une expérience" icon="plus" secondary disabled={experience.length >= 20}
           onPress={() => onExperience([...experience, { society: '', position: '', start_date: '', end_date: '', departure_reason: '' }])} />
-      </Card>
+      </Card>}
       {staff && schema.slice(3).map(section => (
         <Card key={section.title}>
           <Text accessibilityRole="header" style={styles.heading}>{section.title}</Text>

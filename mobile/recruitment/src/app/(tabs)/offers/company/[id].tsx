@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../../../components/icon';
 import { OfferMeta } from '../../../../components/offer-card';
 import { Card, colors, EmptyState, ErrorState, FloatingButton, fonts, JobIcon, Loading, Monogram, shadow, styles } from '../../../../components/ui';
-import { fetchCompany, jobIcon } from '../../../../lib/emploi';
+import { fetchCompany, jobIcon, logoUri } from '../../../../lib/emploi';
 import { useLoad } from '../../../../lib/use-load';
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/offers'));
@@ -39,8 +39,8 @@ export default function CompanyScreen() {
       </View>
       <View style={page.body}>
         <View style={page.identity}>
-          <View style={page.logo}><Monogram name={data.name} size={64} /></View>
-          <View style={{ flex: 1, paddingTop: 26 }}>
+          <View style={page.logo}><Monogram name={data.name} uri={logoUri(data)} size={64} /></View>
+          <View style={{ flex: 1, paddingTop: 36 }}>
             <Text accessibilityRole="header" style={page.name}>{data.name}</Text>
             {!!data.sector && <Text style={page.sector}>{data.sector}</Text>}
           </View>
@@ -86,10 +86,10 @@ export default function CompanyScreen() {
 
 const page = StyleSheet.create({
   banner: { height: 190, backgroundColor: colors.surface, overflow: 'hidden' }, photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }, body: { paddingHorizontal: 18, gap: 16 },
-  identity: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginTop: -30 }, logo: { padding: 4, borderRadius: 14, backgroundColor: colors.white, ...shadow },
-  name: { fontSize: 19, fontFamily: fonts.bold, color: colors.ink }, sector: { fontSize: 14.5, fontFamily: fonts.sans, color: colors.muted },
+  identity: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginTop: -30 }, logo: { padding: 4, borderRadius: 16, backgroundColor: colors.white, ...shadow },
+  name: { fontSize: 19, fontFamily: fonts.bold, color: colors.ink }, sector: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
   bullet: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.navy, marginTop: 9 },
   figures: { flexDirection: 'row', gap: 16, flexWrap: 'wrap' }, figure: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 120 },
-  figureText: { fontSize: 14.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.ink, flexShrink: 1 },
-  offer: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60, paddingVertical: 8 }, offerTitle: { fontSize: 17, fontFamily: fonts.bold, color: colors.ink },
+  figureText: { fontSize: 14, lineHeight: 19, fontFamily: fonts.sans, color: colors.ink, flexShrink: 1 },
+  offer: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60, paddingVertical: 8 }, offerTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
 });

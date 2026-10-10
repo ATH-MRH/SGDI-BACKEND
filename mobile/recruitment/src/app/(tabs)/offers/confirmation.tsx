@@ -28,5 +28,5 @@ export default function Confirmation() {
 
 const page = StyleSheet.create({
   icon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.greenSoft, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 21.5, fontFamily: fonts.bold, color: colors.ink }, reference: { fontSize: 23.5, fontFamily: fonts.bold, color: colors.navy, letterSpacing: 0.8 },
+  title: { fontSize: 20, fontFamily: fonts.bold, color: colors.ink }, reference: { fontSize: 20, fontFamily: fonts.bold, color: colors.navy, letterSpacing: 0.8 },
 });

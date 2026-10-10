@@ -31,7 +31,7 @@ export function PrivacyConsent({ privacy, value, onChange }: { privacy: PrivacyS
       <Text style={styles.subtitle}>Vos informations servent uniquement au recrutement : étude de vos candidatures, échanges, entretiens et, si vous êtes retenu, préparation de l’embauche.</Text>
       <Pressable accessibilityRole="checkbox" aria-checked={value} accessibilityState={{ checked: value }} accessibilityLabel={CONSENT_TEXT} onPress={() => onChange(!value)} style={consent.row}>
         <View style={[consent.box, value && consent.boxOn]}>{value && <Icon name="check" size={18} color={colors.white} />}</View>
-        <Text style={[styles.text, { flex: 1, fontSize: 15.5, lineHeight: 22 }]}>{CONSENT_TEXT}</Text>
+        <Text style={[styles.text, { flex: 1, fontSize: 15, lineHeight: 21 }]}>{CONSENT_TEXT}</Text>
       </Pressable>
       {notice}
     </View>
@@ -41,6 +41,6 @@ export function PrivacyConsent({ privacy, value, onChange }: { privacy: PrivacyS
 const consent = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 44 },
   box: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: colors.navy, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white, marginTop: 2 }, boxOn: { backgroundColor: colors.navy },
-  notice: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  noticeText: { flex: 1, fontSize: 15.5, fontFamily: fonts.semi, color: colors.navy },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 46, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  noticeText: { flex: 1, fontSize: 15, fontFamily: fonts.semi, color: colors.navy },
 });

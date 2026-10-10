@@ -6,7 +6,7 @@ import { HEADER_HEIGHT } from '../../../components/tab-stack';
 import { Icon } from '../../../components/icon';
 import { colors, EmptyState, ErrorState, fonts, Loading, Monogram, styles } from '../../../components/ui';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { ChatMessage, messageTime, newRequestId, Thread } from '../../../lib/emploi';
+import { ChatMessage, logoUri, messageTime, newRequestId, Thread } from '../../../lib/emploi';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
 
@@ -57,7 +57,7 @@ export default function ThreadScreen() {
     <SafeAreaView style={styles.page} edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerTitle: () => (
         <View style={chat.header}>
-          <Monogram name={data.company?.name || 'IRON Emploi'} size={34} round />
+          <Monogram name={data.company?.name || 'IRON Emploi'} uri={logoUri(data.company)} size={34} round />
           <View style={{ flexShrink: 1 }}><Text style={chat.headerTitle} numberOfLines={1}>Équipe recrutement</Text><Text style={chat.headerSub} numberOfLines={1}>{data.title}</Text></View>
         </View>
       ) }} />
@@ -90,12 +90,12 @@ export default function ThreadScreen() {
 }
 
 const chat = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: 250 }, headerTitle: { fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink }, headerSub: { fontSize: 13.5, fontFamily: fonts.sans, color: colors.muted },
-  list: { padding: 16, gap: 10, flexGrow: 1 }, bubble: { maxWidth: '82%', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 13, gap: 4 },
-  theirs: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderTopLeftRadius: 4 }, mine: { alignSelf: 'flex-end', backgroundColor: colors.navy, borderTopRightRadius: 4 },
-  text: { fontSize: 16, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.ink }, time: { fontSize: 12, fontFamily: fonts.sans, color: colors.muted, alignSelf: 'flex-end' },
-  retry: { fontSize: 13.5, fontFamily: fonts.semi, color: '#FFD9A0', alignSelf: 'flex-end', textDecorationLine: 'underline' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: 250 }, headerTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink }, headerSub: { fontSize: 13, fontFamily: fonts.sans, color: colors.muted },
+  list: { padding: 16, gap: 10, flexGrow: 1 }, bubble: { maxWidth: '82%', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 13, gap: 4 },
+  theirs: { alignSelf: 'flex-start', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderTopLeftRadius: 4 }, mine: { alignSelf: 'flex-end', backgroundColor: colors.navy, borderTopRightRadius: 4 },
+  text: { fontSize: 15, lineHeight: 22, fontFamily: fonts.sans, color: colors.ink }, time: { fontSize: 12, fontFamily: fonts.sans, color: colors.muted, alignSelf: 'flex-end' },
+  retry: { fontSize: 13, fontFamily: fonts.semi, color: '#FFD9A0', alignSelf: 'flex-end', textDecorationLine: 'underline' },
   compose: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, backgroundColor: colors.surface, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 17, fontFamily: fonts.sans, color: colors.ink },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, backgroundColor: colors.surface, paddingHorizontal: 16, paddingTop: 11, paddingBottom: 11, fontSize: 16, fontFamily: fonts.sans, color: colors.ink },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center' },
 });

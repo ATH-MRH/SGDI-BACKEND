@@ -36,37 +36,46 @@ function Sheet({ title, visible, onClose, children }: { title: string; visible: 
   );
 }
 
+/** Feuille de sélection à choix unique, avec recherche et saisie libre facultatives. */
+export function PickerSheet({ title, visible, value, options, onPick, onClose, searchable = false, allowCustom = false }:
+  { title: string; visible: boolean; value: string; options: Option[]; onPick: (value: string) => void; onClose: () => void; searchable?: boolean; allowCustom?: boolean }) {
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => (search.trim() ? options.filter(option => fold(option.label).includes(fold(search))) : options), [options, search]);
+  const typed = search.trim(), custom = allowCustom && typed.length >= 2 && !options.some(option => fold(option.label) === fold(typed));
+  const pick = (next: string) => { setSearch(''); onPick(next); };
+  return (
+    <Sheet title={title} visible={visible} onClose={() => { setSearch(''); onClose(); }}>
+      {(searchable || allowCustom) && (
+        <TextInput accessibilityLabel={`Rechercher : ${title}`} value={search} onChangeText={setSearch} placeholder={allowCustom ? 'Rechercher ou saisir…' : 'Rechercher…'} placeholderTextColor={colors.soft}
+          autoCorrect={false} returnKeyType="search" maxLength={150} style={[styles.input, { marginHorizontal: 18 }]} />
+      )}
+      <FlatList data={shown} keyExtractor={option => option.value || '—'} keyboardShouldPersistTaps="handled" initialNumToRender={24}
+        ListHeaderComponent={custom ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Utiliser ${typed}`} onPress={() => pick(typed)} style={({ pressed }) => [field.option, pressed && { backgroundColor: colors.surface }]}>
+            <Icon name="plus" size={18} color={colors.gold} /><Text style={[field.optionText, { color: colors.goldDeep, fontFamily: fonts.semi }]}>{`Utiliser « ${typed} »`}</Text>
+          </Pressable>
+        ) : null}
+        ListEmptyComponent={custom ? null : <Text style={[styles.subtitle, { padding: 18 }]}>Aucun résultat.</Text>}
+        renderItem={({ item }) => (
+          <Pressable accessibilityRole="button" accessibilityState={{ selected: item.value === value }} accessibilityLabel={item.label} onPress={() => pick(item.value)}
+            style={({ pressed }) => [field.option, pressed && { backgroundColor: colors.surface }]}>
+            <Text style={[field.optionText, item.value === value && { fontFamily: fonts.bold }, !item.value && { color: colors.muted }]}>{item.label}</Text>
+            {item.value === value && <Icon name="check" size={20} color={colors.navy} />}
+          </Pressable>
+        )} />
+    </Sheet>
+  );
+}
+
 /** Liste à choix unique. `searchable` ajoute une recherche ; `allowCustom` permet d'enregistrer une valeur absente de la liste. */
 export function SelectField({ label, value, options, onChange, placeholder = 'Choisir', searchable = false, allowCustom = false, disabled = false }:
   { label: string; value: string; options: Option[]; onChange: (value: string) => void; placeholder?: string; searchable?: boolean; allowCustom?: boolean; disabled?: boolean }) {
-  const [open, setOpen] = useState(false), [search, setSearch] = useState('');
-  const shown = useMemo(() => (search.trim() ? options.filter(option => fold(option.label).includes(fold(search))) : options), [options, search]);
-  const typed = search.trim(), custom = allowCustom && typed.length >= 2 && !options.some(option => fold(option.label) === fold(typed));
-  const pick = (next: string) => { onChange(next); setOpen(false); };
+  const [open, setOpen] = useState(false);
   const current = options.find(option => option.value === value);
   return (
     <>
-      <FieldButton label={label} text={value ? (current?.label || value) : ''} placeholder={placeholder} icon={searchable ? 'search' : 'chevronDown'} disabled={disabled} onPress={() => { setSearch(''); setOpen(true); }} />
-      <Sheet title={label} visible={open} onClose={() => setOpen(false)}>
-        {(searchable || allowCustom) && (
-          <TextInput accessibilityLabel={`Rechercher : ${label}`} value={search} onChangeText={setSearch} placeholder={allowCustom ? 'Rechercher ou saisir…' : 'Rechercher…'} placeholderTextColor={colors.soft}
-            autoCorrect={false} returnKeyType="search" maxLength={150} style={[styles.input, { marginHorizontal: 18 }]} />
-        )}
-        <FlatList data={shown} keyExtractor={option => option.value || '—'} keyboardShouldPersistTaps="handled" initialNumToRender={24}
-          ListHeaderComponent={custom ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Utiliser ${typed}`} onPress={() => pick(typed)} style={({ pressed }) => [field.option, pressed && { backgroundColor: colors.surface }]}>
-              <Icon name="plus" size={18} color={colors.gold} /><Text style={[field.optionText, { color: colors.goldDeep, fontFamily: fonts.semi }]}>{`Utiliser « ${typed} »`}</Text>
-            </Pressable>
-          ) : null}
-          ListEmptyComponent={custom ? null : <Text style={[styles.subtitle, { padding: 18 }]}>Aucun résultat.</Text>}
-          renderItem={({ item }) => (
-            <Pressable accessibilityRole="button" accessibilityState={{ selected: item.value === value }} accessibilityLabel={item.label} onPress={() => pick(item.value)}
-              style={({ pressed }) => [field.option, pressed && { backgroundColor: colors.surface }]}>
-              <Text style={[field.optionText, item.value === value && { fontFamily: fonts.bold }, !item.value && { color: colors.muted }]}>{item.label}</Text>
-              {item.value === value && <Icon name="check" size={20} color={colors.navy} />}
-            </Pressable>
-          )} />
-      </Sheet>
+      <FieldButton label={label} text={value ? (current?.label || value) : ''} placeholder={placeholder} icon={searchable ? 'search' : 'chevronDown'} disabled={disabled} onPress={() => setOpen(true)} />
+      <PickerSheet title={label} visible={open} value={value} options={options} searchable={searchable} allowCustom={allowCustom} onClose={() => setOpen(false)} onPick={next => { onChange(next); setOpen(false); }} />
     </>
   );
 }
@@ -128,11 +137,11 @@ export function DigitsField({ label, value, onChange, max = 18, hint }: { label:
 }
 
 export const field = StyleSheet.create({
-  button: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'space-between' }, value: { flex: 1, fontSize: 18, fontFamily: fonts.sans, color: colors.ink },
+  button: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'space-between' }, value: { flex: 1, fontSize: 16, fontFamily: fonts.sans, color: colors.ink },
   sheet: { flex: 1, backgroundColor: colors.white, gap: 12 }, sheetTop: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18 },
   close: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 18, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  optionText: { flex: 1, fontSize: 17, fontFamily: fonts.sans, color: colors.ink },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 50, paddingHorizontal: 18, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  optionText: { flex: 1, fontSize: 16, fontFamily: fonts.sans, color: colors.ink },
   box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.navy, alignItems: 'center', justifyContent: 'center' }, boxOn: { backgroundColor: colors.navy },
-  hint: { fontSize: 13.5, fontFamily: fonts.sans, color: colors.muted },
+  hint: { fontSize: 13, fontFamily: fonts.sans, color: colors.muted },
 });

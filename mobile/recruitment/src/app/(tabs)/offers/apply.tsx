@@ -234,9 +234,9 @@ function DirectApply({ access }: { access: CandidateAccess }) {
 
 const form = StyleSheet.create({
   check: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: colors.navy, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
-  checked: { backgroundColor: colors.navy }, offerTitle: { fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink }, offerMeta: { fontSize: 14.5, fontFamily: fonts.sans, color: colors.muted },
+  checked: { backgroundColor: colors.navy }, offerTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink }, offerMeta: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 12 }, thumb: { width: 76, height: 60, borderRadius: 8, backgroundColor: colors.surface },
-  message: { minHeight: 92, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 17, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.ink, backgroundColor: colors.white },
-  spontaneous: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 12, borderRadius: 12, backgroundColor: colors.goldSoft },
-  info: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, backgroundColor: colors.white, ...shadow }, infoTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
+  message: { minHeight: 92, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 16, lineHeight: 22, fontFamily: fonts.sans, color: colors.ink, backgroundColor: colors.white },
+  spontaneous: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 12, borderRadius: 16, backgroundColor: colors.goldSoft },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 12, backgroundColor: colors.white, ...shadow }, infoTitle: { fontSize: 15, fontFamily: fonts.bold, color: colors.ink },
 });

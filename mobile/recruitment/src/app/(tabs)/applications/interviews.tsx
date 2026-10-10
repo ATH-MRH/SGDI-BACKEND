@@ -101,12 +101,12 @@ function Line({ icon, text }: { icon: 'clock' | 'pin' | 'user' | 'building'; tex
 }
 
 const row = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', gap: 10 }, title: { flex: 1, fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink },
-  line: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 }, lineText: { flex: 1, fontSize: 15.5, lineHeight: 22.5, fontFamily: fonts.sans, color: colors.ink },
-  note: { fontSize: 13.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.muted },
-  month: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, monthTitle: { fontSize: 17, fontFamily: fonts.bold, color: colors.ink },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 10 }, title: { flex: 1, fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
+  line: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 }, lineText: { flex: 1, fontSize: 15, lineHeight: 22, fontFamily: fonts.sans, color: colors.ink },
+  note: { fontSize: 13, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
+  month: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, monthTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
   arrow: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: colors.white, ...shadow },
   week: { flexDirection: 'row' }, weekday: { flex: 1, textAlign: 'center', fontSize: 13, fontFamily: fonts.sans, color: colors.muted },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 2 }, day: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  today: { borderWidth: 1.4, borderColor: colors.navy }, dayText: { fontSize: 15, fontFamily: fonts.sans, color: colors.ink },
+  today: { borderWidth: 1.4, borderColor: colors.navy }, dayText: { fontSize: 14, fontFamily: fonts.sans, color: colors.ink },
 });

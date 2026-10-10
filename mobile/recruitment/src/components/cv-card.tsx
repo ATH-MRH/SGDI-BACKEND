@@ -72,9 +72,9 @@ export function CvCard({ value, existing, onChange, onError, disabled = false }:
 }
 
 const card = StyleSheet.create({
-  drop: { alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 104, borderRadius: 12, borderWidth: 1.4, borderStyle: 'dashed', borderColor: '#B9C4D6', backgroundColor: '#FAFBFD', padding: 12 },
-  dropTitle: { fontSize: 17, fontFamily: fonts.semi, color: colors.ink }, dropHint: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
-  file: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8 },
+  drop: { alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 104, borderRadius: 16, borderWidth: 1.4, borderStyle: 'dashed', borderColor: '#B9C4D6', backgroundColor: '#FAFBFD', padding: 12 },
+  dropTitle: { fontSize: 16, fontFamily: fonts.semi, color: colors.ink }, dropHint: { fontSize: 14, fontFamily: fonts.sans, color: colors.muted },
+  file: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8 },
   type: { minWidth: 34, height: 34, borderRadius: 7, backgroundColor: colors.redSoft, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }, typeText: { fontSize: 12, fontFamily: fonts.bold, color: colors.red },
-  name: { fontSize: 15.5, fontFamily: fonts.semi, color: colors.ink }, size: { fontSize: 13.5, fontFamily: fonts.sans, color: colors.muted }, remove: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  name: { fontSize: 15, fontFamily: fonts.semi, color: colors.ink }, size: { fontSize: 13, fontFamily: fonts.sans, color: colors.muted }, remove: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
 });

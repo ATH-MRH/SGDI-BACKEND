@@ -20,7 +20,7 @@ const LISTS = {
     fields: [['degree', 'Diplôme ou formation'], ['institution', 'Établissement'], ['specialty', 'Spécialité'], ['start_date', 'Du'], ['end_date', 'Au']] },
 } as const;
 const TAGS = {
-  skills: { title: 'Compétences', intro: 'Ce que vous savez faire : habilitations, permis, logiciels, savoir-faire.', placeholder: 'Ex. Permis B, SSIAP 1…', max: 20, length: 60 },
+  skills: { title: 'Compétences et langues', intro: 'Ce que vous savez faire, et les langues que vous parlez ou écrivez.', placeholder: 'Ex. Permis B, SSIAP 1…', max: 20, length: 60 },
 } as const;
 
 export default function ProfileSection() {
@@ -94,6 +94,8 @@ function TagEditor({ name, profile, privacy }: { name: keyof typeof TAGS; profil
   const { save, busy, error, blocked, consentBlock } = useSave(profile, privacy);
   const [tags, setTags] = useState<string[]>(() => (Array.isArray(profile[name]) ? profile[name] as unknown[] : []).filter((tag): tag is string => typeof tag === 'string'));
   const [draft, setDraft] = useState('');
+  const list = (key: string) => (Array.isArray(profile[key]) ? profile[key] as unknown[] : []).filter((item): item is string => typeof item === 'string').join(', ');
+  const [spoken, setSpoken] = useState(() => list('languages')), [written, setWritten] = useState(() => list('written_languages'));
   function add() {
     const value = draft.trim();
     if (value && !tags.some(tag => tag.toLowerCase() === value.toLowerCase()) && tags.length < config.max) setTags([...tags, value]);
@@ -102,7 +104,8 @@ function TagEditor({ name, profile, privacy }: { name: keyof typeof TAGS; profil
   return (
     <Page title={config.title} subtitle={config.intro}>
       <Card>
-        <Field label="Ajouter" value={draft} onChangeText={setDraft} placeholder={config.placeholder} maxLength={config.length} returnKeyType="done" onSubmitEditing={add} />
+        <Text accessibilityRole="header" style={styles.heading}>Compétences</Text>
+        <Field label="Ajouter une compétence" value={draft} onChangeText={setDraft} placeholder={config.placeholder} maxLength={config.length} returnKeyType="done" onSubmitEditing={add} />
         <Button title="Ajouter à la liste" icon="plus" secondary disabled={!draft.trim() || tags.length >= config.max} onPress={add} />
         {tags.length > 0 && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -113,11 +116,16 @@ function TagEditor({ name, profile, privacy }: { name: keyof typeof TAGS; profil
             ))}
           </View>
         )}
-        {tags.length === 0 && <Text style={styles.subtitle}>Aucun élément pour le moment.</Text>}
+        {tags.length === 0 && <Text style={styles.subtitle}>Aucune compétence ajoutée.</Text>}
+      </Card>
+      <Card>
+        <Text accessibilityRole="header" style={styles.heading}>Langues</Text>
+        <MultiSelectField label="Langues parlées" value={spoken} options={LANGUAGE_OPTIONS} onChange={setSpoken} placeholder="Choisir une ou plusieurs langues" />
+        <MultiSelectField label="Langues écrites" value={written} options={LANGUAGE_OPTIONS} onChange={setWritten} placeholder="Choisir une ou plusieurs langues" />
       </Card>
       {consentBlock}
       <ErrorText message={error} />
-      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={() => save({ [name]: tags })} />
+      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={() => save({ [name]: tags, languages: splitList(spoken), written_languages: splitList(written) })} />
     </Page>
   );
 }

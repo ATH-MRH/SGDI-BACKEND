@@ -1,10 +1,11 @@
+import { useCallback, useRef } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../../components/icon';
 import { Button, Card, colors, EmptyState, ErrorState, FloatingButton, fonts, Loading, styles } from '../../../components/ui';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { fetchOffer, formatDate, lines } from '../../../lib/emploi';
+import { ApplicationList, fetchOffer, formatDate, lines, salaryLabel } from '../../../lib/emploi';
 import { useFavorites } from '../../../lib/favorites';
 import { useLoad } from '../../../lib/use-load';
 
@@ -12,7 +13,11 @@ const back = () => (router.canGoBack() ? router.back() : router.replace('/offers
 
 export default function OfferScreen() {
   const id = Number(useLocalSearchParams<{ id: string }>().id);
-  const { session } = useCandidateSession();
+  const { session, call } = useCandidateSession();
+  // Candidat identifié : ses candidatures sont lues pour ne pas proposer de postuler deux fois à la même offre.
+  const mine = useLoad(signal => call<ApplicationList>('/public/emploi/applications', { signal }), `offer-applications:${id}`, !!session && Number.isFinite(id));
+  const { reload: reloadMine } = mine, firstFocus = useRef(true);
+  useFocusEffect(useCallback(() => { if (firstFocus.current) firstFocus.current = false; else reloadMine(); }, [reloadMine]));
   const { isFavorite, toggle, remove } = useFavorites();
   const offer = useLoad(signal => fetchOffer(id, signal), `offer:${id}`, Number.isFinite(id));
   const saved = isFavorite(id);
@@ -33,7 +38,8 @@ export default function OfferScreen() {
     );
   }
 
-  const data = offer.data;
+  const data = offer.data, salary = salaryLabel(data.salary);
+  const applied = session ? (mine.data?.items || []).find(item => item.offer?.id === id) : undefined;
   const apply = () => router.push(session ? { pathname: '/offers/apply', params: { offerId: String(id) } } : { pathname: '/identify', params: { next: 'apply', offerId: String(id) } });
   const facts = [
     data.location ? `Lieu : ${data.location}` : '', data.positions > 1 ? `${data.positions} postes à pourvoir` : '',
@@ -67,6 +73,7 @@ export default function OfferScreen() {
             {!!data.wilaya && <View style={detail.metaItem}><Icon name="pin" size={18} color={colors.gold} filled /><Text style={detail.metaText}>{data.wilaya}</Text></View>}
             {!!data.contract_type && <View style={detail.metaItem}><Icon name="briefcase" size={18} color={colors.gold} filled /><Text style={detail.metaText}>{data.contract_type}</Text></View>}
           </View>
+          {!!salary && <View style={detail.salary}><Text style={detail.salaryLabel}>Salaire proposé</Text><Text style={detail.salaryText}>{salary}</Text></View>}
           <Section title="Vos missions" text={data.missions} />
           <Section title="Profil recherché" text={data.profile} />
           <Section title="Informations complémentaires" text={data.description} />
@@ -78,7 +85,15 @@ export default function OfferScreen() {
           )}
         </View>
       </ScrollView>
-      <View style={detail.bar}><Button title="Postuler" onPress={apply} /></View>
+      <View style={detail.bar}>
+        {applied ? (
+          // Déjà postulé : l'état est rappelé et le bouton mène au suivi, jamais à un second envoi.
+          <>
+            <View style={detail.applied}><Icon name="tick" size={18} color={colors.green} /><Text style={detail.appliedText}>{`Vous avez déjà postulé · ${applied.state.label}`}</Text></View>
+            <Button title="Voir le suivi" secondary onPress={() => router.push({ pathname: '/applications/[id]', params: { id: String(applied.id) } })} />
+          </>
+        ) : <Button title="Postuler" onPress={apply} />}
+      </View>
     </View>
   );
 }
@@ -99,12 +114,15 @@ function Section({ title, text }: { title: string; text: string }) {
 }
 
 const detail = StyleSheet.create({
-  banner: { height: 190, borderRadius: 14, overflow: 'hidden', justifyContent: 'space-between', backgroundColor: colors.navy }, photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }, tint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,28,54,0.38)' },
+  banner: { height: 190, borderRadius: 16, overflow: 'hidden', justifyContent: 'space-between', backgroundColor: colors.navy }, photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }, tint: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,28,54,0.38)' },
   bannerRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 10 },
-  sector: { color: colors.white, fontSize: 13.5, letterSpacing: 2, fontFamily: fonts.semi, paddingHorizontal: 18, paddingBottom: 14 },
-  body: { padding: 18, gap: 14 }, metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 }, metaItem: { flexDirection: 'row', alignItems: 'center', gap: 7 }, metaText: { fontSize: 15.5, fontFamily: fonts.sans, color: colors.ink }, company: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', minHeight: 32, marginTop: -8 },
-  companyName: { fontSize: 17.5, fontFamily: fonts.medium, color: colors.ink },
+  sector: { color: colors.white, fontSize: 13, letterSpacing: 2, fontFamily: fonts.semi, paddingHorizontal: 18, paddingBottom: 14 },
+  body: { padding: 18, gap: 14 }, metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 }, metaItem: { flexDirection: 'row', alignItems: 'center', gap: 7 }, metaText: { fontSize: 15, fontFamily: fonts.sans, color: colors.ink }, company: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', minHeight: 32, marginTop: -8 },
+  companyName: { fontSize: 16, fontFamily: fonts.medium, color: colors.ink },
   bullet: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.navy, marginTop: 9 },
-  bulletText: { flex: 1, fontSize: 16, lineHeight: 24.5, fontFamily: fonts.sans, color: colors.ink },
-  bar: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border },
+  bulletText: { flex: 1, fontSize: 15, lineHeight: 23, fontFamily: fonts.sans, color: colors.ink },
+  bar: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 10, gap: 8, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border },
+  salary: { gap: 2, padding: 12, borderRadius: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border }, salaryLabel: { fontSize: 12.5, fontFamily: fonts.sans, color: colors.muted },
+  salaryText: { fontSize: 17, fontFamily: fonts.bold, color: colors.goldDeep },
+  applied: { flexDirection: 'row', alignItems: 'center', gap: 8 }, appliedText: { flex: 1, fontSize: 14, fontFamily: fonts.semi, color: colors.green },
 });

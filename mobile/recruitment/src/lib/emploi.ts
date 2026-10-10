@@ -1,12 +1,14 @@
 // Contrat de l'API IRON Emploi (/api/public/emploi) et conversions profil <-> formulaire.
 // Aucun import React Native ici : ce module est testé tel quel par `npm test`.
-import { request } from './api.ts';
+import { ORIGIN, request } from './api.ts';
 
 export type Company = { id: number; name: string; sector: string | null; city: string | null; logo_url: string | null };
 export type CompanySummary = Company & { open_offers: number };
 export type Offer = {
   id: number; title: string; profession: string | null; wilaya: string | null; location: string | null; contract_type: string | null;
   positions: number; deadline: string | null; published_at: string | null; company: Company;
+  /** Salaire proposé, s'il est renseigné. `period` reste nul quand le recruteur ne l'a pas précisée. */
+  salary?: { amount: number; period: string | null } | null;
 };
 export type OfferDetail = Offer & { missions: string; profile: string; description: string; reference: string | null };
 export type CompanyDetail = Company & { description: string; website: string | null; activities: string[]; locations: string; headcount: string; offers: Offer[] };
@@ -66,6 +68,29 @@ export const fetchOffer = (id: number, signal?: AbortSignal) => request<OfferDet
 export const fetchCompany = (id: number, signal?: AbortSignal) => request<CompanyDetail>(`/public/emploi/companies/${id}`, { signal });
 
 /** Les logos sont des fichiers de marque servis par le serveur ; rien d'autre n'est chargé. */
+export const logoUri = (company: Pick<Company, 'logo_url'> | null | undefined) => company?.logo_url && company.logo_url.startsWith('/static/') ? ORIGIN + company.logo_url : null;
+
+const PERIODS: Record<string, string> = { heure: 'heure', jour: 'jour', mois: 'mois', an: 'an' };
+/** « 50 000,00 DA / mois » ; sans période connue, le montant seul. Rien n'est supposé (ni mensuel, ni net). */
+export function salaryLabel(salary: Offer['salary']): string {
+  if (!salary || !Number.isFinite(salary.amount)) return '';
+  const period = salary.period ? PERIODS[salary.period] : '';
+  return period ? `${formatMoney(salary.amount)} / ${period}` : formatMoney(salary.amount);
+}
+
+/** Ancienneté d'une publication ou d'une mise à jour : « Aujourd'hui », « Il y a 3 jours », puis la date. */
+export function sinceLabel(value: string | null | undefined, now: Date): string {
+  const then = value ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : value + 'Z') : null;
+  if (!then || Number.isNaN(then.getTime())) return '';
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60000);
+  if (minutes < 0) return formatDate(value);
+  if (minutes < 60) return minutes < 2 ? 'À l’instant' : `Il y a ${minutes} minutes`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? 'Il y a 1 heure' : `Il y a ${hours} heures`;
+  const days = Math.floor(hours / 24);
+  if (days < 8) return days === 1 ? 'Hier' : `Il y a ${days} jours`;
+  return formatDate(value);
+}
 
 export function initials(name: string): string {
   const words = name.replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean);
@@ -245,6 +270,18 @@ export function validateForm(values: FormValues, experience: Experience[], optio
 }
 
 const COMPLETENESS_KEYS = ['birth_date', 'sex', 'address', 'wilaya', 'commune', 'email', 'availability', 'emergency_phone'] as const;
+/** Première rubrique qui reste à compléter, pour guider le candidat ; '' quand tout l'essentiel est renseigné. */
+export function profileHint(account: Pick<Account, 'profile' | 'cv'>): string {
+  const profile = account.profile, has = (key: string) => typeof profile[key] === 'string' && !!profile[key], list = (key: string) => Array.isArray(profile[key]) && (profile[key] as unknown[]).length > 0;
+  if (!has('birth_date') || !has('wilaya') || !has('commune') || !has('address')) return 'Complétez votre identité et vos coordonnées.';
+  if (!list('experience')) return 'Ajoutez vos expériences professionnelles.';
+  if (!list('skills')) return 'Ajoutez vos compétences.';
+  if (!has('availability')) return 'Indiquez votre disponibilité.';
+  if (!account.cv) return 'Ajoutez votre CV.';
+  if (!has('email') || !has('emergency_phone') || !has('sex')) return 'Quelques informations restent à compléter.';
+  return '';
+}
+
 /** Part réellement renseignée du profil (champs utiles au recrutement + CV), de 0 à 100. */
 export function profileCompleteness(account: Pick<Account, 'profile' | 'cv'>): number {
   const list = (key: string) => Array.isArray(account.profile[key]) && (account.profile[key] as unknown[]).length ? 1 : 0;
@@ -273,7 +310,7 @@ export type Step = { label: string; state: StepState };
  * dessinée comme une progression réussie : ses étapes passées sont neutres et la dernière est en échec.
  */
 export function applicationSteps(status: string): Step[] {
-  const labels = ['Reçue', 'En examen', 'Entretien', 'Décision'];
+  const labels = ['Reçue', 'Étude', 'Entretien', 'Décision'];
   if (status === 'declined' || status === 'withdrawn') {
     return labels.map((label, index) => ({ label: index === 3 ? (status === 'declined' ? 'Non retenue' : 'Retirée') : label, state: index === 3 ? 'failed' : 'past' }));
   }
@@ -311,6 +348,16 @@ export function formatDateTime(value: string): string {
   const [, year, month, day, hour, minute] = match;
   const weekday = WEEKDAYS[new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).getUTCDay()];
   return `${weekday} ${Number(day)} ${MONTHS[Number(month) - 1].toLowerCase()} ${year} · ${Number(hour)} h ${minute}`;
+}
+/** « 14 octobre à 10:00 » : date et heure telles qu'enregistrées (heure d'Alger), sans conversion. */
+export function shortDateTime(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+  return match ? `${Number(match[3])} ${MONTHS[Number(match[2]) - 1].toLowerCase()} à ${match[4]}:${match[5]}` : formatDate(value);
+}
+/** Prochain entretien encore ouvert d'une candidature (proposé ou confirmé, non passé), s'il existe. */
+export function nextInterview(interviews: Interview[] | undefined, applicationId: number): Interview | null {
+  const open = (interviews || []).filter(item => item.application_id === applicationId && !item.past && (item.status === 'proposed' || item.status === 'confirmed'));
+  return open.sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0] || null;
 }
 export const formatTime = (value: string | null) => /T(\d{2}):(\d{2})/.exec(value || '')?.slice(1).join(':') || '';
 

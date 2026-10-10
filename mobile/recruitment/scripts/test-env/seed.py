@@ -19,15 +19,16 @@ OFFERS = [
  (SER, 'Agent de nettoyage', 'Nettoyage', 'Alger', None, 'CDI', 'Entretenir les locaux et les espaces communs', 'Ponctualité\nSens du travail soigné'),
  (SEC, 'Chef d’équipe sécurité', 'Sécurité', 'Oran', None, 'CDI', 'Encadrer une équipe d’agents\nOrganiser les plannings', 'Trois ans d’expérience en encadrement'),
 ]
+SALARIES = {'Agent de sécurité': {'salary_amount': 50000, 'salary_period': 'mois'}, 'Cariste': {'salary_amount': 45000}}   # fictifs
 ids = {}
 for soc, title, prof, wilaya, loc, contract, missions, profile in reversed(OFFERS):
-    o = call('/drh/job-offers', {'society': soc, 'title': title, 'profession': prof, 'wilaya': wilaya, 'location': loc, 'contract_type': contract, 'positions': 1, 'missions': missions, 'profile': profile}, staff)
+    o = call('/drh/job-offers', {'society': soc, 'title': title, 'profession': prof, 'wilaya': wilaya, 'location': loc, 'contract_type': contract, 'positions': 1, 'missions': missions, 'profile': profile, **SALARIES.get(title, {})}, staff)
     ids[title] = (o['id'], o['company_id'])
     call(f"/drh/job-offers/{o['id']}/publish", {}, staff)
-call(f"/drh/job-offers/companies/{ids['Agent de sécurité'][1]}", {'name': SEC, 'sector': 'Sécurité des personnes et des biens', 'city': 'Alger',
+call(f"/drh/job-offers/companies/{ids['Agent de sécurité'][1]}", {'name': SEC, 'sector': 'Sécurité des personnes et des biens', 'city': 'Alger', 'logo_path': '/static/iron-securite-logo.png',
      'description': 'Texte de test : la présentation de la société est saisie par le recrutement dans recrute.irongs.com et affichée telle quelle.',
      'activities': 'Gardiennage et surveillance\nSécurité incendie', 'locations': 'Alger, Oran', 'headcount': ''}, staff, 'PUT')
-call(f"/drh/job-offers/companies/{ids['Cariste'][1]}", {'name': SOL, 'sector': 'Logistique', 'city': 'Oran'}, staff, 'PUT')
+call(f"/drh/job-offers/companies/{ids['Cariste'][1]}", {'name': SOL, 'sector': 'Logistique', 'city': 'Oran', 'logo_path': '/static/iron-solution-logo.png'}, staff, 'PUT')
 
 # Candidat fictif de la planche, identifié par le vrai parcours SMS (passerelle locale).
 gw = {'X-SMS-Gateway-Key': os.environ['RECRUITMENT_SMS_GATEWAY_KEY']}

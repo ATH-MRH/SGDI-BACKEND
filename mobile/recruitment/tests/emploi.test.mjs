@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {API, ApiError, ORIGIN, request} from '../src/lib/api.ts';
-import {activeFilterCount, CHILDREN_OPTIONS, digitsOnly, displayDate, formatMoney, HEIGHT_OPTIONS, isoDate, LANGUAGE_OPTIONS, latestBirthDate, moneyInput, parseIsoDate, parseMoney, SHIRT_OPTIONS, SHOE_OPTIONS, withCurrent, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
+import {activeFilterCount, logoUri, nextInterview, profileHint, salaryLabel, shortDateTime, sinceLabel, CHILDREN_OPTIONS, digitsOnly, displayDate, formatMoney, HEIGHT_OPTIONS, isoDate, LANGUAGE_OPTIONS, latestBirthDate, moneyInput, parseIsoDate, parseMoney, SHIRT_OPTIONS, SHOE_OPTIONS, withCurrent, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
 
 const response = (data, status = 200) => new Response(status === 204 ? null : JSON.stringify(data), {status});
 const identity = {first_name: 'Nadia', last_name: 'Test', phone: '+213551122334'};
@@ -136,7 +136,7 @@ test('profil : les rubriques gérées hors du formulaire (études, compétences)
 
 test('progression d’une candidature : un refus ou un retrait n’est jamais une progression réussie', () => {
   const states = status => applicationSteps(status).map(step => step.state);
-  assert.deepEqual(applicationSteps('received').map(step => step.label), ['Reçue', 'En examen', 'Entretien', 'Décision']);
+  assert.deepEqual(applicationSteps('received').map(step => step.label), ['Reçue', 'Étude', 'Entretien', 'Décision']);
   assert.deepEqual(states('received'), ['done', 'todo', 'todo', 'todo']);
   assert.deepEqual(states('review'), ['done', 'current', 'todo', 'todo']);
   assert.deepEqual(states('shortlisted'), ['done', 'done', 'todo', 'todo']); assert.equal(applicationSteps('shortlisted')[1].label, 'Présélection');
@@ -252,4 +252,30 @@ test('profil : NIN en chiffres avec zéros initiaux, enfants non renseignés ≠
   // Une valeur historique hors liste reste proposée.
   assert.equal(withCurrent(HEIGHT_OPTIONS, '215').at(-1).value, '215'); assert.equal(withCurrent(HEIGHT_OPTIONS, '180').length, HEIGHT_OPTIONS.length);
   assert.equal(HEIGHT_OPTIONS[1].label, '140 cm'); assert.equal(SHOE_OPTIONS[1].value, '35'); assert.equal(SHIRT_OPTIONS.at(-1).value, 'XXXL');
+});
+
+test('offre : salaire affiché tel que saisi, période seulement si elle est connue ; ancienneté lisible', () => {
+  const plain = text => text.replace(/[  ]/g, ' ');
+  assert.equal(plain(salaryLabel({ amount: 50000, period: 'mois' })), '50 000,00 DA / mois');
+  assert.equal(plain(salaryLabel({ amount: 45000, period: null })), '45 000,00 DA', 'aucune période supposée');
+  assert.equal(plain(salaryLabel({ amount: 1500, period: 'inconnue' })), '1 500,00 DA'); assert.equal(salaryLabel(null), ''); assert.equal(salaryLabel(undefined), '');
+  const now = new Date('2026-10-10T12:00:00Z');
+  assert.equal(sinceLabel('2026-10-10T11:59:30', now), 'À l’instant'); assert.equal(sinceLabel('2026-10-10T11:20:00', now), 'Il y a 40 minutes');
+  assert.equal(sinceLabel('2026-10-10T10:00:00', now), 'Il y a 2 heures'); assert.equal(sinceLabel('2026-10-09T10:00:00', now), 'Hier');
+  assert.equal(sinceLabel('2026-10-06T10:00:00', now), 'Il y a 4 jours'); assert.equal(sinceLabel('2026-09-01T10:00:00', now), '1 sept. 2026'); assert.equal(sinceLabel(null, now), '');
+  assert.equal(logoUri({ logo_url: '/static/iron-securite-logo.png' }), 'https://recrute.irongs.com/static/iron-securite-logo.png');
+  assert.equal(logoUri({ logo_url: 'https://ailleurs.example/logo.png' }), null); assert.equal(logoUri(null), null);
+});
+
+test('candidatures : prochaine étape réelle, et rubrique du profil à compléter', () => {
+  const interview = (id, application_id, starts_at, status, past = false) => ({ id, application_id, starts_at, status, past, source: 'interview', position: '', company: null, timezone: '', location: 'Agence', contact: null, note: null });
+  const items = [interview(1, 7, '2026-10-20T10:00:00', 'confirmed'), interview(2, 7, '2026-10-14T10:00:00', 'proposed'), interview(3, 7, '2026-10-01T10:00:00', 'done', true), interview(4, 9, '2026-10-12T09:00:00', 'cancelled')];
+  assert.equal(nextInterview(items, 7).id, 2, 'le plus proche encore ouvert'); assert.equal(nextInterview(items, 9), null, 'un entretien annulé n’est pas une prochaine étape'); assert.equal(nextInterview(undefined, 7), null);
+  assert.equal(shortDateTime('2026-10-14T10:00:00'), '14 octobre à 10:00');
+  assert.deepEqual(applicationSteps('interview').map(step => step.label), ['Reçue', 'Étude', 'Entretien', 'Décision']);
+  assert.match(profileHint({ profile: {}, cv: null }), /identité/);
+  const base = { birth_date: '1990-01-01', wilaya: 'Alger', commune: 'Hydra', address: '1 rue' };
+  assert.match(profileHint({ profile: base, cv: null }), /expériences/);
+  assert.match(profileHint({ profile: { ...base, experience: [{}], skills: ['x'], availability: 'Immédiatement' }, cv: null }), /CV/);
+  assert.equal(profileHint({ profile: { ...base, experience: [{}], skills: ['x'], availability: 'Immédiatement', email: 'a@b.c', emergency_phone: '0550', sex: 'M' }, cv: { name: 'cv.pdf' } }), '');
 });

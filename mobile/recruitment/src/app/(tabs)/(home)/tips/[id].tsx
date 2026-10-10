@@ -26,5 +26,5 @@ export default function TipScreen() {
 
 const page = StyleSheet.create({
   bullet: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.gold, marginTop: 8 },
-  text: { flex: 1, fontSize: 17, lineHeight: 24.5, fontFamily: fonts.sans, color: colors.ink },
+  text: { flex: 1, fontSize: 16, lineHeight: 23, fontFamily: fonts.sans, color: colors.ink },
 });

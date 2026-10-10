@@ -111,8 +111,8 @@ function Alerts() {
 }
 
 const row = StyleSheet.create({
-  box: { flexDirection: 'row', borderRadius: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, alignItems: 'flex-start', ...shadow },
+  box: { flexDirection: 'row', borderRadius: 16, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, alignItems: 'flex-start', ...shadow },
   main: { flex: 1, flexDirection: 'row', gap: 12, padding: 13, alignItems: 'center' }, bookmark: { minWidth: 46, minHeight: 46, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  title: { fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink, lineHeight: 22.5 }, meta: { fontSize: 14.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.muted },
-  note: { fontSize: 13.5, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted, textAlign: 'center' },
+  title: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink, lineHeight: 21 }, meta: { fontSize: 14, lineHeight: 19, fontFamily: fonts.sans, color: colors.muted },
+  note: { fontSize: 13, lineHeight: 18, fontFamily: fonts.sans, color: colors.muted, textAlign: 'center' },
 });
