@@ -5,7 +5,8 @@ Candidat de validation de compatibilité, **pas une branche de livraison** : auc
 2026-10-10, à partir de `origin/main` = `71fa92b`.
 
 **Mise à jour du 2026-10-11 : la branche est synchronisée avec `origin/main` = `1958d15`
-(PR #14 ATLAS MOBILE) — voir § 8, qui prévaut sur les § 2, 4 et 6 pour l'état des migrations et
+(PR #14 ATLAS MOBILE) — § 8 — et contient la version finale du lot DRH/OPS (`9bb6331`) — § 9.
+Ces deux sections prévalent sur les § 1, 2, 4 et 6 pour l'état des branches, des migrations et
 les résultats des tests.**
 
 ## 1. Contenu
@@ -225,5 +226,65 @@ ne sont pas installées sur ce poste ; ils relèvent de la CI mobile ajoutée pa
   travail non commité du chantier ne le sont pas.
 - Identifiants de migration en double dans des branches non fusionnées : `20261013_0001`
   (`feat/iron-emploi`) et `20261011_0001` (`feat/admin-regularisation-employes`).
+
+**Reconnaissance faciale réelle : NO-GO.**
+
+## 9. Intégration de la version finale DRH/OPS (`9bb6331`), 2026-10-11
+
+Merge normal d'`origin/fix/drh-pointage-ops-readonly` dans la branche d'intégration (qui n'en
+contenait que la version `f01b28a`). `origin/main` était inchangé (`1958d15`).
+
+Apports : enregistrement de l'ordre de mouvement dans la transaction de la ligne de présence ;
+route `GET /api/attendance/capabilities` ; centre de contrôle et onglet Pointage DRH qui n'affichent
+que les actions accordées par le serveur.
+
+### Conflit et résolution
+
+Un seul fichier en conflit, `app/modules/auth/dependencies.py`, résolu à la main :
+
+| Fonction | Résolution |
+|---|---|
+| `route_module_keys` (nouvelle, DRH/OPS) | Porte les règles d'écriture **composées** de l'intégration : module propriétaire par route et préfixes d'écriture du terminal terrain (audit P0) ; si les deux visent une route, seuls les modules admis par les deux restent. `request_module_keys` l'appelle. |
+| `user_holds_module` (nouvelle, DRH/OPS) | Reprend la tolérance de l'audit pour les comptes historiques (modules non renseignés) sur le pointage du portail, hors saisie manuelle. Elle reçoit le chemin de la route. L'exception administrateur existante est conservée. |
+| `enforce_module_access` et calcul des capacités | Appellent tous deux `user_holds_module` avec le chemin : **une seule règle** pour le contrôle d'accès et pour l'affichage des actions. |
+
+Fusionnés automatiquement et vérifiés par les tests : `attendance/routes.py`, `irongs/service.py`,
+`pointage/index.html` (les commandes de cycle de vie des terminaux restent retirées), `package.json`.
+
+La route de régularisation de sortie ajoutée par l'audit (`POST /api/attendance/events/{id}/regularize-exit`)
+n'était pas dans l'inventaire du contrat DRH : un test du candidat (`tests/test_integration_drh_readonly_audit_routes.py`)
+vérifie qu'elle est refusée à DRH seul et ouverte aux modules propriétaires. Aucun écran ne la propose.
+
+### Résultats
+
+| Suite | Résultat |
+|---|---|
+| `python3 -m pytest -q` + PostgreSQL jetable | **2308 réussis, 0 échec**, 30 ignorés (OpenCV absent, `TEST_POSTGRES_ADMIN_URL` non défini) |
+| `npm test` | **1049 / 1049** (+ 12 / 12) ; `test:drh-next` 115 / 115 ; `test:core-v3` 45 / 45 |
+| Chrome réel (11 suites, dont la lecture seule du centre de contrôle) | 65 / 65, dont la borne avec le moteur OpenCV réel (5 / 5) |
+| Alembic, PostgreSQL 16 jetable | tête unique `20261014_0001`, `down_revision` `20261013_0002` ; `upgrade head` crée la table et ses 7 contraintes ; aucune migration modifiée par cette fusion |
+
+| Groupe ciblé (backend) | Résultat |
+|---|---|
+| DRH lecture seule, capacités, contrat intégré (SQLite et PostgreSQL) | 279 |
+| Mouvements du personnel (PostgreSQL, enregistrements simultanés) | 5 |
+| RBAC : module absent, société et site non autorisés, permission absente | 94 |
+| OPS : présent, absent, mouvements | 85 |
+| Pointeur : audit P0 à P3, poste, comptes | 105 |
+| Présence, abandon de poste, vacations de nuit, temps compté | 84 |
+| BRQ | 25 |
+| Multi-terminaux, révocation d'équipement, biométrie | 125 |
+| Authentification, types de jetons, ATLAS Mobile | 160 |
+| PostgreSQL et concurrence | 51 |
+
+### Toujours ouvert
+
+- `attendance-e2e` (1 / 6) et `biometric-test-mode-real-e2e` (1 / 5) : caméra simulée en `127.0.0.1`,
+  refusée par la protection de l'audit, qui n'a pas été assouplie.
+- Aucun parcours « caméra IP → moteur réel → pointage » validé de bout en bout.
+- Identifiants de migration en double dans des branches non fusionnées : `20261013_0001`
+  (`feat/iron-emploi`), `20261011_0001` (`feat/admin-regularisation-employes`).
+- `feat/pointeur-multi-facial-terminals` porte encore l'ancienne dépendance de `20261014_0001` :
+  c'est la version de cette branche d'intégration qui fait foi.
 
 **Reconnaissance faciale réelle : NO-GO.**
