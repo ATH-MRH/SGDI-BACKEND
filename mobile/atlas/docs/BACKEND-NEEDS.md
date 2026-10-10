@@ -38,6 +38,23 @@ Réglages serveur associés : `MOBILE_*` dans `.env.production.example`. `POST /
 | Périmètre | `GET /api/auth/scope` : sociétés et sites autorisés, avec leurs noms | Les noms de sites viennent de routes dépendant des modules du compte | Moyenne |
 | Origine dans le journal d'audit | Colonne d'origine alimentée par l'en-tête `X-Atlas-Client` | Une action mobile ne se distingue que par son `User-Agent` et son identifiant de corrélation | Basse |
 
+## Données attendues par la refonte de l'interface
+
+L'interface n'affiche que ce que le backend fournit. Ces blocs sont masqués ou marqués « Non disponible » tant que la donnée n'existe pas.
+
+| Écran | Donnée manquante | Affichage actuel |
+|---|---|---|
+| Cockpit | Variation d'un indicateur par rapport à la période précédente | Pas de tendance sur les cartes |
+| Cockpit, OPS | Présents, absents et taux **par site** en une requête | Effectif prévu seulement dans les listes de sites ; le taux n'apparaît que dans la fiche d'un site |
+| Cockpit | Documents arrivant à expiration | Bloc absent |
+| Cockpit | Présence sur 7 jours en une requête | Sept appels au tableau de présence, un par jour |
+| Fiche employé | Département ou service, supérieur hiérarchique, mission, habilitations, visite médicale | « Non disponible » |
+| Liste des employés | Statut de présence du jour, filtres par site et par fonction | Statut RH seulement ; recherche par texte |
+| Fiche site | Responsable du site, photo, consignes | « Non disponible » ou absent |
+| Incidents | Détail, déclarant, chronologie, photos | Liste avec description |
+| Recrutement | Fiche candidat, étape et source | Liste avec statut |
+| Modules | Documents, rondes, matériel, finance, reporting | Tuiles grisées « Pas encore sur mobile » |
+
 ## Règle d'affichage des actions sur mobile
 
 Le mobile applique un refus par défaut : sans action explicitement attribuée, un compte est en **consultation seule**. Les comptes qui doivent saisir, corriger ou valider depuis le téléphone doivent donc avoir des actions explicites dans l'administration ATLAS.

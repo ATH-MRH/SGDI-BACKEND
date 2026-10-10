@@ -65,8 +65,7 @@ export default function LeaveRequestScreen() {
 
   return (
     <Gate allowed={allowed}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID="leave-request-screen">
-        <ScreenHeader title={t('leaves.new')} subtitle={t('leaves.employee', { id: employeeId })} />
+      <Screen edges={['top', 'bottom', 'left', 'right']} testID="leave-request-screen" header={<ScreenHeader title={t('leaves.new')} subtitle={t('leaves.employee', { id: employeeId })} />}>
         <Card>
           <AppText variant="label" color={colors.textSecondary}>
             {t('leaves.field.type')}

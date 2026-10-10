@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppText, Badge, Card, EmptyState, ErrorState, ListItem, Loader } from '@/components/ui';
+import { AtlasHeader, Badge, Card, EmptyState, ErrorState, ListItem, Loader } from '@/components/ui';
 import type { Task, TaskPriority } from '@/features/tasks/model';
 import { useTasks } from '@/features/tasks/useTasks';
 import { t, type TranslationKey } from '@/i18n';
@@ -25,6 +25,7 @@ export default function TasksScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="tasks-screen">
+      <AtlasHeader back title={t('tabs.tasks')} subtitle={hasSource && tasks.length > 0 ? t('tasks.count', { count: tasks.length }) : undefined} />
       {!hasSource ? (
         <EmptyState icon="checkbox-outline" title={t('tasks.empty.title')} body={t('tasks.none.body')} testID="tasks-no-source" />
       ) : isLoading ? (
@@ -38,17 +39,13 @@ export default function TasksScreen() {
           contentContainerStyle={styles.content}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={colors.primary} />}
-          ListHeaderComponent={
-            <AppText variant="title" accessibilityRole="header" style={styles.title}>
-              {t('tabs.tasks')}
-            </AppText>
-          }
           ListEmptyComponent={<EmptyState icon="checkbox-outline" title={t('tasks.empty.title')} body={t('tasks.empty.body')} testID="tasks-empty" />}
           renderItem={({ item }) => (
             <Card>
               <ListItem
                 testID={`task-${item.id}`}
                 icon={item.type === 'leave' ? 'calendar-outline' : 'notifications-outline'}
+                iconTone={PRIORITY[item.priority].tone === 'neutral' ? 'brand' : PRIORITY[item.priority].tone}
                 title={taskTitle(item)}
                 subtitle={[t(`tasks.type.${item.type}`), formatDate(item.date), item.society].filter(Boolean).join(' · ')}
                 onPress={() => router.push(item.route as never)}
@@ -66,5 +63,4 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, flexGrow: 1 },
   separator: { height: spacing.sm },
-  title: { marginBottom: spacing.md },
 });

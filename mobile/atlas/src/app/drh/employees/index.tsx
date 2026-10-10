@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -10,11 +9,13 @@ import { queryKeys } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { Segmented } from '@/components/Segmented';
-import { Avatar, Card, ListItem, PagedList, ScreenHeader, SearchBar } from '@/components/ui';
+import { AtlasHeader, Badge, EmployeeRow, PagedList, SearchBar } from '@/components/ui';
 import { access } from '@/features/access';
+import { employeeStatusTone } from '@/features/status';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePagedList } from '@/hooks/usePagedList';
 import { t } from '@/i18n';
+import { societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
 import { colors, spacing } from '@/theme/tokens';
 import { fullName } from '@/utils/format';
@@ -38,7 +39,7 @@ export default function EmployeesScreen() {
   return (
     <Gate allowed={allowed}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="employees-screen">
-        <ScreenHeader title={t('entry.employees')} />
+        <AtlasHeader back title={t('entry.employees')} subtitle={list.total > 0 ? t('employees.count', { count: list.total, society: societyLabel(scope) }) : societyLabel(scope)} />
         <View style={styles.filters}>
           <SearchBar testID="employees-search" value={search} onChangeText={setSearch} placeholder={t('employees.search')} />
           <Segmented
@@ -59,25 +60,18 @@ export default function EmployeesScreen() {
           keyOf={(employee) => String(employee.id)}
           emptyTitle={t('employees.empty.title')}
           emptyBody={q ? t('search.noResult', { q }) : undefined}
-          renderItem={(employee) => {
-            const name = fullName(employee.lastName, employee.firstName);
-            return (
-              <Card>
-                <View style={styles.row}>
-                  <Avatar name={name} size={40} />
-                  <View style={styles.fill}>
-                    <ListItem
-                      testID={`employee-${employee.id}`}
-                      title={name}
-                      subtitle={[employee.code, employee.position, employee.siteName].filter(Boolean).join(' · ')}
-                      onPress={() => router.push(`/drh/employees/${employee.id}` as never)}
-                      trailing={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
-                    />
-                  </View>
-                </View>
-              </Card>
-            );
-          }}
+          renderItem={(employee) => (
+            <EmployeeRow
+              testID={`employee-${employee.id}`}
+              employeeId={employee.id}
+              name={fullName(employee.lastName, employee.firstName)}
+              code={employee.code}
+              position={employee.position}
+              detail={employee.siteName}
+              badge={<Badge tone={employeeStatusTone(employee.status)} label={employee.status} />}
+              onPress={() => router.push(`/drh/employees/${employee.id}` as never)}
+            />
+          )}
         />
       </SafeAreaView>
     </Gate>
@@ -86,7 +80,5 @@ export default function EmployeesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  fill: { flex: 1 },
+  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm, backgroundColor: colors.background },
 });

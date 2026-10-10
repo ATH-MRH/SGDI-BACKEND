@@ -22,6 +22,9 @@ jest.mock('@/api/scope', () => ({ fetchScopeSites: (...args: unknown[]) => mockF
 jest.mock('@/features/cockpit/useCockpit', () => ({
   useCockpit: () => ({ cards: [], date: null, isRefreshing: false, refresh: jest.fn() }),
 }));
+jest.mock('@/features/cockpit/useCockpitInsights', () => ({
+  useCockpitInsights: () => ({ week: null, today: null, sitesTotal: null, drh: null, alerts: null, incidents: null, incidentsOpen: null, isRefreshing: false, refresh: jest.fn() }),
+}));
 jest.mock('@/features/tasks/useTasks', () => ({
   useTasks: () => ({ tasks: [], hasSource: false, isLoading: false, isRefreshing: false, error: null, refresh: jest.fn() }),
 }));
@@ -46,6 +49,8 @@ function renderApp() {
     login: require('@/app/login').default,
     '(tabs)/_layout': require('@/app/(tabs)/_layout').default,
     '(tabs)/index': require('@/app/(tabs)/index').default,
+    '(tabs)/ops': require('@/app/(tabs)/ops').default,
+    '(tabs)/drh': require('@/app/(tabs)/drh').default,
     '(tabs)/tasks': require('@/app/(tabs)/tasks').default,
     '(tabs)/alerts': require('@/app/(tabs)/alerts').default,
     '(tabs)/modules': require('@/app/(tabs)/modules').default,
@@ -97,16 +102,18 @@ describe('navigation protégée', () => {
     expect(mockFetchProfile).not.toHaveBeenCalled();
   });
 
-  it("ouvre l'accueil et les cinq onglets avec une session valide", async () => {
+  it("ouvre l'accueil et les onglets du profil avec une session valide", async () => {
     store.set('atlas.session.v1', storedSession());
     mockFetchProfile.mockResolvedValue(makeUser());
     await renderApp();
     await settle();
     expect(screen.getByTestId('home-screen')).toBeTruthy();
     expect(screen.queryByTestId('login-screen')).toBeNull();
-    for (const label of ['Accueil', 'Tâches', 'Alertes', 'Modules', 'Profil']) {
+    // Compte OPS : Accueil, OPS, Modules, Plus. L'onglet DRH n'existe que pour un compte qui a le module.
+    for (const label of ['Accueil', 'OPS', 'Modules', 'Plus']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
+    expect(screen.queryByText('DRH')).toBeNull();
   });
 
   it('renvoie à la connexion dès que le backend refuse le jeton', async () => {

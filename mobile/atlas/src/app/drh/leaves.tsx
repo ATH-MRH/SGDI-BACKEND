@@ -11,7 +11,7 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loader, ScreenHeader } from '@/components/ui';
+import { AppText, AtlasHeader, Banner, Button, Card, Chip, ConfirmDialog, EmployeePhoto, EmptyState, ErrorState, Loader } from '@/components/ui';
 import { access } from '@/features/access';
 import { leaveStatus } from '@/features/status';
 import { t } from '@/i18n';
@@ -20,6 +20,12 @@ import { formatDate } from '@/utils/format';
 
 type Filter = 'instance' | 'all';
 type Decision = { leave: Leave; decision: 'approve' | 'refuse' };
+
+/** Nombre de jours calendaires d'une demande, bornes comprises. */
+function leaveDays(start: string, end: string): number {
+  const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
+  return Number.isFinite(days) && days > 0 ? days : 1;
+}
 
 export default function LeavesScreen() {
   const user = useCurrentUser();
@@ -51,7 +57,7 @@ export default function LeavesScreen() {
   return (
     <Gate allowed={allowed}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="leaves-screen">
-        <ScreenHeader title={t('entry.leaves')} />
+        <AtlasHeader back title={t('entry.leaves')} subtitle={query.data ? t('leaves.count', { count: query.data.length }) : undefined} />
         <View style={styles.filters}>
           <Segmented
             testID="leaves-filter"
@@ -62,11 +68,7 @@ export default function LeavesScreen() {
               { value: 'all', label: t('alerts.filter.all') },
             ]}
           />
-          {failure ? (
-            <AppText variant="label" color={colors.danger} accessibilityRole="alert" testID="leaves-error">
-              {failure}
-            </AppText>
-          ) : null}
+          {failure ? <Banner tone="danger" message={failure} testID="leaves-error" /> : null}
         </View>
         {query.isPending ? (
           <Loader />
@@ -82,14 +84,22 @@ export default function LeavesScreen() {
             ListEmptyComponent={<EmptyState icon="calendar-outline" title={t('leaves.empty.title')} testID="leaves-empty" />}
             renderItem={({ item }) => (
               <Card testID={`leave-${item.id}`}>
-                <AppText variant="bodyStrong">
-                  {formatDate(item.startDate)} – {formatDate(item.endDate)}
-                </AppText>
-                <AppText variant="caption" color={colors.textSecondary}>
-                  {[t('leaves.employee', { id: item.employeeId }), item.type].join(' · ')}
-                </AppText>
+                <View style={styles.head}>
+                  <EmployeePhoto employeeId={item.employeeId} name={t('leaves.employee', { id: item.employeeId })} size={46} />
+                  <View style={styles.headTexts}>
+                    <AppText variant="bodyStrong" color={colors.navy}>
+                      {formatDate(item.startDate)} – {formatDate(item.endDate)}
+                    </AppText>
+                    <AppText variant="caption" color={colors.textSecondary}>
+                      {[t('leaves.employee', { id: item.employeeId }), item.type].join(' · ')}
+                    </AppText>
+                  </View>
+                  <StatusBadge status={leaveStatus(item.status)} fallback={item.status} />
+                </View>
+                <View style={styles.chips}>
+                  <Chip icon="time-outline" label={t('leaves.duration', { days: leaveDays(item.startDate, item.endDate) })} />
+                </View>
                 {item.reason ? <AppText color={colors.textSecondary}>{item.reason}</AppText> : null}
-                <StatusBadge status={leaveStatus(item.status)} fallback={item.status} />
                 {canDecide && item.status === 'instance' ? (
                   <View style={styles.actions}>
                     <Button
@@ -129,9 +139,12 @@ export default function LeavesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
+  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
   content: { padding: spacing.lg, flexGrow: 1 },
   separator: { height: spacing.sm },
   actions: { flexDirection: 'row', gap: spacing.md },
+  head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headTexts: { flex: 1, gap: 2 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   action: { flex: 1 },
 });

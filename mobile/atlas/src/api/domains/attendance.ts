@@ -64,7 +64,16 @@ function toBoardItem(raw: unknown): BoardItem {
   };
 }
 
-export type BoardQuery = { society?: string; site_id?: number; status?: string; q?: string; page?: number; page_size?: number };
+export type BoardQuery = {
+  society?: string;
+  site_id?: number;
+  status?: string;
+  q?: string;
+  /** Jour consulté ("2026-10-07") ; aujourd'hui par défaut, côté serveur. */
+  presence_date?: string;
+  page?: number;
+  page_size?: number;
+};
 
 export async function fetchBoard(client: ApiClient, query: BoardQuery = {}): Promise<Board> {
   const raw = asRecord(await client.get<unknown>('/api/attendance/board', { query }));
@@ -257,4 +266,10 @@ export function validateCorrectionReason(reason: string): 'required' | 'tooShort
 export async function correctPresence(client: ApiClient, presenceId: number, correction: { status: CorrectionStatus; reason: string }): Promise<{ status: string }> {
   const raw = asRecord(await client.patch<unknown>(`/api/attendance/presences/${presenceId}`, { status: correction.status, reason: correction.reason.trim() }));
   return { status: asString(raw.status) };
+}
+
+/** Part des présents parmi les attendus (0–1) ; null quand personne n'est attendu. */
+export function presenceRate(kpi: Pick<BoardKpi, 'expected' | 'present'> | null | undefined): number | null {
+  if (!kpi || kpi.expected <= 0) return null;
+  return Math.min(1, Math.max(0, kpi.present / kpi.expected));
 }
