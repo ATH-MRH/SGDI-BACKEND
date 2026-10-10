@@ -44,6 +44,10 @@ def push_settings(account: Account) -> dict:
     return {kind: bool((saved or {}).get(kind, True)) for kind in PUSH_KINDS}
 
 
+def alerts_enabled(account: Account) -> bool:
+    return bool((account.settings or {}).get('alerts_enabled', True)) if isinstance(account.settings, dict) else True
+
+
 def notify(db: Session, account_id: int | None, kind: str, title: str, body: str, *, application_id=None, interview_id=None, offer_id=None,
            dedup: str | None = None) -> Notification | None:
     """Enregistre une notification dans l'espace du candidat. Sans espace (candidature historique), rien."""
@@ -114,6 +118,9 @@ def notify_matching_alerts(db: Session, offer: Offer, company: Company) -> list[
     created = []
     for alert in db.scalars(select(Alert).where(Alert.active.is_(True))).all():
         if alert_matches(alert, offer):
+            account = db.get(Account, alert.account_id)
+            if account is None or not alerts_enabled(account):
+                continue                                              # alertes suspendues par le candidat
             row = notify(db, alert.account_id, 'offer', 'Nouvelle offre pour vous',
                          f'« {offer.title} » chez {company.name} correspond à votre alerte.', offer_id=offer.id, dedup=f'offer:{offer.id}')
             if row is not None:

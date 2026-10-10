@@ -25,12 +25,19 @@ from app.modules.recruitment_jobs_models import (
 router = APIRouter()
 
 # Le profil reprend les champs du formulaire de candidature, tous facultatifs tant qu'on ne postule pas.
-_NOT_IN_PROFILE = {'cv', 'first_name', 'last_name', 'phone', 'photo_data', 'consent', 'company', 'society', 'desired_position'}
+_NOT_IN_PROFILE = {'cv', 'first_name', 'last_name', 'phone', 'photo_data', 'consent', 'company', 'society', 'desired_position', 'children_count'}
 EmploiProfileIn = create_model(
     'EmploiProfileIn',
     desired_position=(Annotated[str | None, Field(default=None, max_length=150)], None),
     # Compétences : propres à l'espace candidat (le formulaire public ne les demande pas).
     skills=(Annotated[list[Annotated[str, Field(max_length=60)]], Field(default_factory=list, max_length=20)], Field(default_factory=list, max_length=20)),
+    # Langues écrites, distinctes des langues parlées (`languages`).
+    written_languages=(list[Annotated[str, Field(max_length=60)]], Field(default_factory=list, max_length=12)),
+    # Non renseigné (None) et zéro sont deux réponses différentes.
+    children_count=(Annotated[int | None, Field(default=None, ge=0, le=20)], None),
+    # Consentement à la notice de protection des données : contrôlé puis conservé à part, jamais dans le profil.
+    privacy_consent=(bool, False),
+    privacy_version=(Annotated[str | None, Field(default=None, max_length=20)], None),
     **{name: (field.annotation, field) for name, field in PublicCandidateIn.model_fields.items() if name not in _NOT_IN_PROFILE},
 )
 
@@ -45,6 +52,7 @@ class EmploiApplicationIn(BaseModel):
     desired_position: Annotated[str | None, Field(default=None, max_length=150)]
     message: Annotated[str | None, Field(default=None, max_length=1500)]
     consent: bool
+    privacy_version: Annotated[str | None, Field(default=None, max_length=20)] = None
     profile: EmploiProfileIn | None = None
 
 
@@ -57,12 +65,18 @@ def _save_profile(account: Account, payload) -> None:
         check_birth_date(payload.birth_date)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    account.profile = payload.model_dump(mode='json')
+    # Le NIN reste une chaîne (zéros initiaux conservés), en chiffres seulement. Même règle que le dossier
+    # de recrutement (10 ou 18 chiffres) : le profil ne peut pas contenir un NIN qu'une candidature refuserait.
+    if payload.nin and not (payload.nin.isascii() and payload.nin.isdigit()):
+        raise HTTPException(status_code=422, detail='Le NIN ne contient que des chiffres.')
+    if payload.nin and len(payload.nin) not in (10, 18):
+        raise HTTPException(status_code=422, detail='Le NIN doit contenir 10 ou 18 chiffres')
+    account.profile = payload.model_dump(mode='json', exclude={'privacy_consent', 'privacy_version'})
 
 
 def _account_out(account: Account, *, has_photo: bool) -> dict:
     return {'first_name': account.first_name, 'last_name': account.last_name, 'phone': account.phone,
-            'profile': account.profile or {}, 'cv': account.cv_meta, 'has_photo': has_photo,
+            'profile': account.profile or {}, 'cv': account.cv_meta, 'has_photo': has_photo, 'privacy': jobs.privacy_state(account),
             'created_at': account.created_at.isoformat() if account.created_at else None}
 
 
@@ -91,7 +105,7 @@ def _application_out(db: Session, application: Application, candidate, offer: Of
 def emploi_config(db: Session = Depends(get_db)):
     return {'version': jobs.API_VERSION, 'sms_available': _gateway_connected(db), 'cv_max_bytes': MAX_CV_BYTES,
             'cv_types': ['application/pdf', 'image/jpeg', 'image/png'], 'contract_types': list(jobs.CONTRACT_TYPES),
-            'session_ttl': jobs.SESSION_TTL}
+            'session_ttl': jobs.SESSION_TTL, 'privacy_version': jobs.PRIVACY_NOTICE_VERSION}
 
 
 @router.get('/offers')
@@ -151,9 +165,11 @@ def emploi_delete_account(account: Account = Depends(_account), db: Session = De
 
 @router.put('/me/profile')
 def emploi_save_profile(payload: EmploiProfileIn, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    """Enregistre le profil, et rien d'autre : aucune candidature n'est créée ici."""
+    jobs.record_privacy_consent(account, payload.privacy_consent, payload.privacy_version)
     _save_profile(account, payload)
     db.commit()
-    return {'profile': account.profile}
+    return {'profile': account.profile, 'privacy': jobs.privacy_state(account)}
 
 
 @router.put('/me/cv')
@@ -259,6 +275,8 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
         offer, company = row
         if not jobs.is_open(offer):
             raise HTTPException(status_code=409, detail='Cette annonce est clôturée et n’accepte plus de candidature.')
+    # Le consentement donné à l'envoi vaut pour la notice en vigueur (ou celle que l'application déclare avoir affichée).
+    jobs.record_privacy_consent(account, True, payload.privacy_version or jobs.PRIVACY_NOTICE_VERSION)
     if payload.profile is not None:
         _save_profile(account, payload.profile)
     profile = dict(account.profile or {})
@@ -283,15 +301,19 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
         if candidate is None:
             profile.pop('desired_position', None)
             skills = profile.pop('skills', None) or []
+            written = profile.pop('written_languages', None) or []
+            children = profile.pop('children_count', None)
             try:
-                form = PublicCandidateIn(**profile, first_name=account.first_name, last_name=account.last_name, phone=account.phone,
+                form = PublicCandidateIn(**profile, children_count=children or 0, first_name=account.first_name, last_name=account.last_name, phone=account.phone,
                                          desired_position=position, consent=True, photo_data=full.photo,
                                          cv=({**full.cv_meta, 'data_base64': full.cv_content} if full.cv_meta and full.cv_content else None))
             except ValidationError as exc:
                 raise HTTPException(status_code=422, detail='Votre profil est incomplet ou invalide : ' + exc.errors()[0]['msg']) from exc
             try:
                 candidate = _public_candidate_row(form, request, db, commit=False, verified=True,
-                                                  extra_data={'sourceExterne': 'iron_emploi', 'candidaturesEmploi': [entry], 'competences': skills})
+                                                  extra_data={'sourceExterne': 'iron_emploi', 'candidaturesEmploi': [entry], 'competences': skills, 'languesEcrites': written,
+                                                              # Non renseigné reste vide dans le dossier, sans devenir zéro.
+                                                              **({} if children is not None else {'nombreEnfants': ''})})
             except HTTPException as exc:
                 if exc.status_code == 409:
                     # Le message interne cite un numéro de dossier : il ne sort pas vers le public.

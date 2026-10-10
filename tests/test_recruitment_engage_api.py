@@ -368,7 +368,7 @@ def test_push_is_off_by_default_and_devices_follow_the_signed_in_space(client, d
     headers, _ = session(client)
     other, _ = session(client, phone='0661122334', first_name='Karim', last_name='Emploi-Deux')
     settings = client.get(f'{API}/me/settings', headers=headers).json()
-    assert settings == {'push': {'applications': True, 'messages': True, 'interviews': True, 'offers': True}, 'push_available': False, 'devices': 0}
+    assert settings == {'push': {'applications': True, 'messages': True, 'interviews': True, 'offers': True}, 'push_available': False, 'devices': 0, 'alerts_enabled': True}
     assert client.put(f'{API}/me/push-device', headers=headers, json={'token': 'ExponentPushToken[test-device-1]', 'platform': 'web'}).status_code == 422
     assert client.put(f'{API}/me/push-device', headers=headers, json={'token': 'ExponentPushToken[test-device-1]', 'platform': 'ios'}).status_code == 200
     assert client.put(f'{API}/me/settings', headers=headers, json={'push': {'messages': False}}).json()['push']['messages'] is False
@@ -429,3 +429,25 @@ def test_workspace_counters_and_filters(client, db, securite, solution):
     client.put(f'{STAFF}/applications/{a3}/contract', headers=securite, json={'position': 'Agent', 'contract_type': 'CDI'})
     assert board()[0]['contracts_prepare'] == 0 and board()[0]['contracts_sign'] == 1
     assert client.get(f'{STAFF}/workspace').status_code == 401 and client.get(f'{STAFF}/workspace', headers=nadia).status_code == 401
+
+
+def test_offer_alerts_can_be_suspended_and_a_closed_offer_is_handled(client, db, securite):
+    """Le candidat suspend toutes ses alertes d'un geste, sans les perdre. Une notification d'offre mène au détail
+    de l'offre (jamais à une candidature) ; si l'offre a été clôturée depuis, le détail répond clairement."""
+    headers, _ = session(client)
+    client.post(f'{API}/alerts', headers=headers, json={'wilaya': 'Alger'})
+    off = client.put(f'{API}/me/settings', headers=headers, json={'alerts_enabled': False})
+    assert off.status_code == 200 and off.json()['alerts_enabled'] is False and off.json()['push']['offers'] is True    # préférences push intactes
+    publish(client, securite, title='Agent de nuit')
+    assert client.get(f'{API}/notifications', headers=headers).json()['items'] == []                       # suspendues : aucune notification
+    assert len(client.get(f'{API}/alerts', headers=headers).json()['items']) == 1                          # l'alerte est conservée
+    assert client.put(f'{API}/me/settings', headers=headers, json={'alerts_enabled': True}).json()['alerts_enabled'] is True
+    offer = publish(client, securite, title='Agent de jour')
+    items = client.get(f'{API}/notifications', headers=headers).json()['items']
+    assert [(n['kind'], n['offer_id'], n['application_id']) for n in items] == [('offer', offer['id'], None)]
+    assert client.get(f"/api/public/emploi/offers/{offer['id']}").status_code == 200
+    assert client.get(f'{API}/applications', headers=headers).json()['items'] == []                        # ouvrir l'offre ne postule pas
+    client.post(f"{STAFF}/{offer['id']}/close", headers=securite)
+    closed = client.get(f"/api/public/emploi/offers/{offer['id']}")
+    assert closed.status_code == 404 and 'plus disponible' in closed.json()['detail']
+    assert len(client.get(f'{API}/notifications', headers=headers).json()['items']) == 1                   # la notification reste lisible

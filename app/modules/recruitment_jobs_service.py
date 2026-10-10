@@ -16,7 +16,29 @@ from app.modules.recruitment_jobs_models import (
 )
 from app.modules.recruitment_sms_service import digest
 
-API_VERSION = 1
+API_VERSION = 2
+# Version de la notice « Protection des données personnelles » affichée par l'application. Tout changement
+# de fond de la notice change cette valeur : le consentement est alors redemandé.
+PRIVACY_NOTICE_VERSION = '2026-10'
+
+
+def privacy_state(account) -> dict:
+    saved = (account.settings or {}).get('privacy') if isinstance(account.settings, dict) else None
+    saved = saved if isinstance(saved, dict) else {}
+    return {'version': PRIVACY_NOTICE_VERSION, 'accepted_version': saved.get('version'), 'accepted_at': saved.get('accepted_at'),
+            'current': saved.get('version') == PRIVACY_NOTICE_VERSION}
+
+
+def record_privacy_consent(account, consent: bool, version: str | None) -> None:
+    """Le profil ne s'enregistre qu'avec un consentement à la notice en vigueur. Déjà donné pour cette
+    version, il n'est pas redemandé ; sinon il est daté et conservé avec la version acceptée."""
+    if privacy_state(account)['current']:
+        return
+    if not consent:
+        raise HTTPException(status_code=422, detail='Votre consentement au traitement de vos données est nécessaire pour enregistrer votre profil.')
+    if version != PRIVACY_NOTICE_VERSION:
+        raise HTTPException(status_code=409, detail='La notice de protection des données a été mise à jour. Mettez à jour l’application pour la consulter.')
+    account.settings = {**(account.settings or {}), 'privacy': {'version': PRIVACY_NOTICE_VERSION, 'accepted_at': datetime.utcnow().isoformat()}}
 SESSION_TTL = 30 * 86400
 MAX_SESSIONS = 5
 CONTRACT_TYPES = ('CDI', 'CDD', 'CTA', 'Stage', 'Apprentissage', 'Autre')

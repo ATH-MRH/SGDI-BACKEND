@@ -23,6 +23,9 @@ PNG = base64.b64encode(b'\x89PNG\r\n\x1a\n image de test').decode()
 JPG = base64.b64encode(b'\xff\xd8\xff image de test').decode()
 SECURITE, SOLUTION = 'Iron Global Securite', 'Iron Global Solution'
 
+# Consentement à la notice de protection des données en vigueur, exigé au premier enregistrement du profil.
+CONSENT = {'privacy_consent': True, 'privacy_version': jobs.PRIVACY_NOTICE_VERSION}
+
 
 @pytest.fixture(autouse=True)
 def clean(db, monkeypatch):
@@ -403,7 +406,7 @@ def test_spontaneous_and_historical_applications_follow_the_dossier(client, db, 
 def test_candidates_are_isolated_from_each_other(client, db, securite):
     offer = publish(client, securite)
     nadia, _ = session(client)
-    client.put('/api/public/emploi/me/profile', headers=nadia, json={'address': '1 rue de Nadia', 'nin': '109876543210987654'})
+    client.put('/api/public/emploi/me/profile', headers=nadia, json={'address': '1 rue de Nadia', 'nin': '109876543210987654', **CONSENT})
     client.put('/api/public/emploi/me/cv', headers=nadia, json={'name': 'nadia.pdf', 'mime_type': 'application/pdf', 'data_base64': PDF})
     sent = apply(client, nadia, offer['id'], profile={'address': '1 rue de Nadia'}).json()
     karim, _ = session(client, phone='0661122334', first_name='Karim', last_name='Emploi-Deux')
@@ -412,7 +415,7 @@ def test_candidates_are_isolated_from_each_other(client, db, securite):
     assert client.get('/api/public/emploi/applications', headers=karim).json()['items'] == []
     assert client.get(f"/api/public/emploi/applications/{sent['application_id']}", headers=karim).status_code == 404
     assert client.get('/api/public/emploi/me/cv', headers=karim).status_code == 404
-    assert client.put('/api/public/emploi/me/profile', headers=karim, json={'address': 'chez Karim'}).status_code == 200
+    assert client.put('/api/public/emploi/me/profile', headers=karim, json={'address': 'chez Karim', **CONSENT}).status_code == 200
     assert client.get('/api/public/emploi/me', headers=nadia).json()['profile']['address'] == '1 rue de Nadia'
     # Les API publiques n'exposent aucune donnée candidat.
     public = ' '.join(client.get(path).text for path in ('/api/public/emploi/offers', f"/api/public/emploi/offers/{offer['id']}",
@@ -446,7 +449,7 @@ def test_profile_and_documents_are_reused_and_cv_formats_are_kept(client, db, se
     profile = {'email': 'nadia.reuse@example.com', 'wilaya': 'Alger', 'commune': 'Hydra', 'languages': ['Arabe', 'Français'],
                'experience': [{'society': 'ACME', 'position': 'Agent', 'start_date': '2020-01-01', 'end_date': '2022-01-01'}],
                'birth_date': '1990-05-04', 'children_count': 2}
-    assert client.put('/api/public/emploi/me/profile', headers=headers, json=profile).status_code == 200
+    assert client.put('/api/public/emploi/me/profile', headers=headers, json={**profile, **CONSENT}).status_code == 200
     assert client.put('/api/public/emploi/me/profile', headers=headers, json={'birth_date': '2015-01-01'}).status_code == 422       # moins de 19 ans
     for name, mime, content in (('cv.pdf', 'application/pdf', PDF), ('cv.jpg', 'image/jpeg', JPG), ('cv.png', 'image/png', PNG)):
         saved = client.put('/api/public/emploi/me/cv', headers=headers, json={'name': name, 'mime_type': mime, 'data_base64': content})
@@ -542,3 +545,47 @@ def test_previous_app_flow_still_works_and_its_dossier_is_adopted(client, db, au
     # Dossier historique : son suivi reste celui du dossier.
     assert mine[0]['state']['status'] == 'review' and mine[0]['state']['label'] == 'En cours d’étude'
     assert db.query(Candidate).filter(Candidate.last_name.ilike('emploi')).count() == 1
+
+
+def test_profile_requires_a_versioned_privacy_consent_recorded_once(client, db):
+    """Le profil ne s'enregistre qu'avec un consentement à la notice en vigueur ; il est daté, conservé à part
+    et n'est pas redemandé tant que la notice ne change pas."""
+    headers, _ = session(client)
+    me = client.get('/api/public/emploi/me', headers=headers).json()
+    assert me['privacy'] == {'version': jobs.PRIVACY_NOTICE_VERSION, 'accepted_version': None, 'accepted_at': None, 'current': False}
+    assert client.get('/api/public/emploi/config').json()['privacy_version'] == jobs.PRIVACY_NOTICE_VERSION
+    refused = client.put('/api/public/emploi/me/profile', headers=headers, json={'wilaya': 'Alger'})
+    assert refused.status_code == 422 and 'consentement' in refused.json()['detail']
+    assert client.put('/api/public/emploi/me/profile', headers=headers, json={'wilaya': 'Alger', 'privacy_consent': False, 'privacy_version': jobs.PRIVACY_NOTICE_VERSION}).status_code == 422
+    assert client.put('/api/public/emploi/me/profile', headers=headers, json={'wilaya': 'Alger', 'privacy_consent': True, 'privacy_version': 'ancienne'}).status_code == 409
+    assert client.get('/api/public/emploi/me', headers=headers).json()['profile'] == {}                    # rien n'a été enregistré
+    saved = client.put('/api/public/emploi/me/profile', headers=headers, json={'wilaya': 'Alger', **CONSENT})
+    assert saved.status_code == 200 and saved.json()['privacy']['current'] is True and saved.json()['privacy']['accepted_at']
+    assert 'privacy_consent' not in saved.json()['profile'] and 'privacy_version' not in saved.json()['profile']
+    accepted_at = saved.json()['privacy']['accepted_at']
+    # Déjà donné pour cette notice : pas redemandé, et sa date ne bouge pas.
+    again = client.put('/api/public/emploi/me/profile', headers=headers, json={'wilaya': 'Oran'})
+    assert again.status_code == 200 and again.json()['privacy']['accepted_at'] == accepted_at
+    # Enregistrer le profil ne crée aucune candidature.
+    assert client.get('/api/public/emploi/applications', headers=headers).json()['items'] == []
+    assert db.query(Candidate).count() == 0
+
+
+def test_profile_keeps_nin_as_digits_string_unknown_children_and_written_languages(client, db):
+    headers, _ = session(client)
+    put = lambda body: client.put('/api/public/emploi/me/profile', headers=headers, json={**body, **CONSENT})
+    assert put({'nin': '0012 34'}).status_code == 422 and put({'nin': '12A4'}).status_code == 422
+    assert put({'nin': '001234567'}).status_code == 422 and put({'nin': '0012345678'}).status_code == 200       # 10 ou 18 chiffres, comme le dossier
+    saved = put({'nin': '001234567890123456', 'languages': ['Arabe', 'Kabyle'], 'written_languages': ['Arabe', 'Français'], 'expected_salary': 50000.5})
+    assert saved.status_code == 200
+    profile = saved.json()['profile']
+    assert profile['nin'] == '001234567890123456' and profile['children_count'] is None                    # zéros initiaux conservés ; non renseigné ≠ 0
+    assert profile['languages'] == ['Arabe', 'Kabyle'] and profile['written_languages'] == ['Arabe', 'Français'] and profile['expected_salary'] == 50000.5
+    assert put({'children_count': 0}).json()['profile']['children_count'] == 0
+    assert put({'children_count': 16}).status_code == 200 and put({'children_count': 21}).status_code == 422
+    # À la première candidature, le dossier reprend les langues écrites ; « non renseigné » n'y devient pas zéro.
+    put({'nin': '001234567890123456', 'languages': ['Kabyle'], 'written_languages': ['Français'], 'birth_date': '1990-01-01'})
+    sent = client.post('/api/public/emploi/applications', headers=headers, json={'offer_id': None, 'desired_position': 'Agent de sécurité', 'request_id': 'profil-0001', 'consent': True})
+    assert sent.status_code == 201
+    data = db.query(Candidate).one().data
+    assert data['nin'] == '001234567890123456' and data['langues'] == ['Kabyle'] and data['languesEcrites'] == ['Français'] and data['nombreEnfants'] == ''

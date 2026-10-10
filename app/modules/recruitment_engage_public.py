@@ -44,7 +44,9 @@ class PushDeviceIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    push: dict[str, bool]
+    push: dict[str, bool] | None = None
+    # Interrupteur général des alertes de nouvelles offres (notifications dans l'application et push).
+    alerts_enabled: bool | None = None
 
 
 def _own_applications(db: Session, account: Account) -> list[tuple[Application, Offer | None, Company | None]]:
@@ -236,14 +238,20 @@ def emploi_summary(account: Account = Depends(_account), db: Session = Depends(g
 def emploi_settings(account: Account = Depends(_account), db: Session = Depends(get_db)):
     devices = db.scalar(select(func.count()).select_from(PushDevice).where(PushDevice.account_id == account.id))
     # `push_available` : le serveur relaie réellement vers le service push ; sinon seules les notifications dans l'application existent.
-    return {'push': engage.push_settings(account), 'push_available': engage.push_enabled(), 'devices': devices}
+    return {'push': engage.push_settings(account), 'push_available': engage.push_enabled(), 'devices': devices,
+            'alerts_enabled': engage.alerts_enabled(account)}
 
 
 @router.put('/me/settings')
 def emploi_save_settings(payload: SettingsIn, account: Account = Depends(_account), db: Session = Depends(get_db)):
-    account.settings = {**(account.settings or {}), 'push': {kind: bool(payload.push.get(kind, True)) for kind in engage.PUSH_KINDS}}
+    saved = dict(account.settings or {})
+    if payload.push is not None:
+        saved['push'] = {kind: bool(payload.push.get(kind, True)) for kind in engage.PUSH_KINDS}
+    if payload.alerts_enabled is not None:
+        saved['alerts_enabled'] = payload.alerts_enabled
+    account.settings = saved
     db.commit()
-    return {'push': engage.push_settings(account)}
+    return {'push': engage.push_settings(account), 'alerts_enabled': engage.alerts_enabled(account)}
 
 
 @router.put('/me/push-device')
