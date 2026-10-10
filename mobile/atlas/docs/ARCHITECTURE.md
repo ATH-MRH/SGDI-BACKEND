@@ -84,6 +84,7 @@ Démarrage ─► écran de restauration ─► session stockée et non expirée
 
 - **Rotation** : chaque renouvellement (`POST /api/auth/refresh`) remplace le refresh token. Le nouveau est écrit aussitôt dans le stockage sécurisé.
 - **Réutilisation** : présenter un refresh token déjà consommé révoque toute la session. C'est le signe d'une copie du jeton.
+- **Réponse perdue** : si le backend a renouvelé la session mais que la réponse n'est jamais arrivée, le nouvel essai présente un jeton déjà consommé. La session est fermée et l'utilisateur se reconnecte.
 - **Un seul renouvellement à la fois** : les requêtes concurrentes partagent le même échange (`renewSession`), sinon elles révoqueraient la session entre elles.
 - **Quand** : avant une requête si le jeton d'accès a expiré, ou après un 401. La requête est alors rejouée une seule fois.
 - **Panne réseau pendant le renouvellement** : la session est conservée. Seul un refus du backend la ferme.

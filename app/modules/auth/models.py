@@ -55,7 +55,7 @@ class AuthSession(Base):
     public_id: Mapped[str] = mapped_column(String(40), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     refresh_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    # Condensat du refresh token précédent : le revoir signale une réutilisation.
+    # Condensat du refresh token précédent, conservé pour l'analyse d'un incident.
     previous_refresh_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     platform: Mapped[str | None] = mapped_column(String(20), nullable=True)
     app_version: Mapped[str | None] = mapped_column(String(20), nullable=True)

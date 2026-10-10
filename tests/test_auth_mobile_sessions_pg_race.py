@@ -86,6 +86,98 @@ def test_concurrent_refresh_consumes_the_token_exactly_once(Session, user_id):
             assert follow_up["refresh_token"] != results[0]
 
 
+def test_concurrent_presentations_of_one_token_never_leave_two_usable_tokens(Session, user_id):
+    """Comme la route : chaque appel valide sa transaction, qu'il réussisse ou soit refusé."""
+    from app.modules.auth import sessions
+    from app.modules.auth.models import AuthSession, User
+
+    with Session() as db:
+        tokens = sessions.open_session(db, db.get(User, user_id), platform="ios", app_version="1.0.0")
+        db.commit()
+
+    def worker(_index):
+        with Session() as db:
+            try:
+                new_tokens, _user, _session = sessions.rotate_session(db, tokens["refresh_token"])
+            except sessions.SessionError:
+                db.commit()
+                raise
+            db.commit()
+            return new_tokens["refresh_token"]
+
+    results, errors = _parallel(worker)
+    assert len(results) == 1 and len(errors) == PARALLEL - 1
+    assert all(isinstance(error, sessions.SessionError) for error in errors)
+    with Session() as db:
+        row = db.execute(select(AuthSession).where(AuthSession.user_id == user_id)).scalar_one()
+        # Le même jeton présenté plusieurs fois : la session est fermée, y compris pour le gagnant.
+        assert row.revoked_at is not None and row.revoked_reason == "refresh_reuse"
+        with pytest.raises(sessions.SessionError):
+            sessions.rotate_session(db, results[0])
+
+
+def test_owner_and_copy_racing_on_different_generations_end_with_a_closed_session(Session, user_id):
+    from app.modules.auth import sessions
+    from app.modules.auth.models import AuthSession, User
+
+    with Session() as db:
+        old = sessions.open_session(db, db.get(User, user_id), platform="ios", app_version="1.0.0")
+        db.commit()
+        current, _user, _session = sessions.rotate_session(db, old["refresh_token"])
+        db.commit()
+
+    def worker(index):
+        with Session() as db:
+            token = old["refresh_token"] if index % 2 else current["refresh_token"]
+            try:
+                new_tokens, _user, _session = sessions.rotate_session(db, token)
+            except sessions.SessionError:
+                db.commit()
+                raise
+            db.commit()
+            return new_tokens["refresh_token"]
+
+    results, _errors = _parallel(worker)
+    assert len(results) <= 1
+    with Session() as db:
+        row = db.execute(select(AuthSession).where(AuthSession.user_id == user_id)).scalar_one()
+        assert row.revoked_at is not None
+        for refreshed in results:
+            with pytest.raises(sessions.SessionError):
+                sessions.rotate_session(db, refreshed)
+
+
+def test_reuse_under_load_leaves_other_sessions_alone(Session, user_id):
+    from app.modules.auth import sessions
+    from app.modules.auth.models import AuthSession, User
+
+    with Session() as db:
+        user = db.get(User, user_id)
+        target = sessions.open_session(db, user, platform="ios", app_version="1.0.0")
+        bystander = sessions.open_session(db, user, platform="android", app_version="1.0.0")
+        db.commit()
+        sessions.rotate_session(db, target["refresh_token"])
+        db.commit()
+
+    def worker(_index):
+        with Session() as db:
+            try:
+                sessions.rotate_session(db, target["refresh_token"])
+            except sessions.SessionError:
+                db.commit()
+                raise
+            db.commit()
+            return True
+
+    results, errors = _parallel(worker)
+    assert results == [] and len(errors) == PARALLEL
+    with Session() as db:
+        rows = db.execute(select(AuthSession).where(AuthSession.user_id == user_id)).scalars().all()
+        assert sorted(row.revoked_at is None for row in rows) == [False, True]
+        renewed, _user, _session = sessions.rotate_session(db, bystander["refresh_token"])
+        assert renewed["refresh_token"] != bystander["refresh_token"]
+
+
 def test_concurrent_device_registration_keeps_one_row_per_token(Session, user_id):
     from app.modules.auth.models import User
     from app.modules.mobile import devices

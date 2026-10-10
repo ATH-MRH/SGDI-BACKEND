@@ -6,10 +6,16 @@ Le web garde son jeton staff autonome, inchangé. Une session mobile ajoute :
 
 Révoquer la session invalide immédiatement tous ses jetons d'accès. Présenter un refresh
 token déjà consommé révoque la session entière : c'est le signe d'une copie du jeton.
+
+Le refresh token porte l'identifiant de sa session et un sceau du serveur. Tout jeton
+authentique qui n'est plus le jeton courant de sa session est donc reconnu comme tel,
+quelle que soit son ancienneté, sans conserver l'historique des jetons émis.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
@@ -36,6 +42,27 @@ class SessionError(ValueError):
 
 def _digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _seal(public_id: str, secret: str) -> str:
+    """Sceau du serveur : prouve qu'un refresh token a bien été émis pour cette session."""
+    message = f"atlas-mobile-refresh-v1|{public_id}|{secret}".encode("utf-8")
+    mac = hmac.new(settings.jwt_secret.encode("utf-8"), message, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(mac).rstrip(b"=").decode("ascii")
+
+
+def _new_refresh_token(public_id: str) -> str:
+    secret = secrets.token_urlsafe(32)
+    return f"{public_id}.{secret}.{_seal(public_id, secret)}"
+
+
+def _session_id_of(refresh_token: str) -> str | None:
+    """Identifiant de session d'un refresh token émis par ce serveur, sinon None."""
+    parts = (refresh_token or "").split(".")
+    if len(parts) != 3 or not all(parts):
+        return None
+    public_id, secret, seal = parts
+    return public_id if hmac.compare_digest(seal, _seal(public_id, secret)) else None
 
 
 def _clean(value: str | None, limit: int) -> str | None:
@@ -87,10 +114,11 @@ def purge_dead_sessions(db: Session, user_id: int | None = None, *, now: datetim
 def open_session(db: Session, user: User, *, platform: str | None, app_version: str | None) -> dict[str, Any]:
     now = datetime.utcnow()
     purge_dead_sessions(db, user.id, now=now)
-    refresh_token = secrets.token_urlsafe(48)
+    public_id = secrets.token_urlsafe(18)
+    refresh_token = _new_refresh_token(public_id)
     platform = (platform or "").strip().lower()
     session = AuthSession(
-        public_id=secrets.token_urlsafe(18),
+        public_id=public_id,
         user_id=user.id,
         refresh_hash=_digest(refresh_token),
         platform=platform if platform in PLATFORMS else None,
@@ -104,23 +132,35 @@ def open_session(db: Session, user: User, *, platform: str | None, app_version: 
     return _tokens(user, session, refresh_token, now)
 
 
+def _revoke_for_reuse(db: Session, session: AuthSession, now: datetime) -> None:
+    db.execute(
+        update(AuthSession)
+        .where(AuthSession.id == session.id, AuthSession.revoked_at.is_(None))
+        .values(revoked_at=now, revoked_reason="refresh_reuse")
+    )
+    db.flush()
+
+
 def rotate_session(db: Session, refresh_token: str, *, app_version: str | None = None) -> tuple[dict[str, Any], User, AuthSession]:
-    """Consomme un refresh token et en délivre un nouveau. Lève SessionError sinon."""
-    digest = _digest(refresh_token or "")
+    """Consomme un refresh token et en délivre un nouveau. Lève SessionError sinon.
+
+    Un refresh token ne sert qu'une fois. En présenter un qui n'est plus le jeton courant
+    de sa session révoque cette session, et elle seule."""
     now = datetime.utcnow()
-    session = db.execute(select(AuthSession).where(AuthSession.refresh_hash == digest)).scalar_one_or_none()
+    public_id = _session_id_of(refresh_token)
+    if public_id is None:
+        raise SessionError("unknown_refresh_token")
+    session = db.execute(select(AuthSession).where(AuthSession.public_id == public_id)).scalar_one_or_none()
     if session is None:
-        reused = db.execute(select(AuthSession).where(AuthSession.previous_refresh_hash == digest)).scalar_one_or_none()
-        if reused is not None and reused.revoked_at is None:
-            reused.revoked_at = now
-            reused.revoked_reason = "refresh_reuse"
-            db.flush()
-            raise SessionError("refresh_reuse", reused)
         raise SessionError("unknown_refresh_token")
     if session.revoked_at is not None:
         raise SessionError("session_revoked", session)
     if session.expires_at <= now:
         raise SessionError("session_expired", session)
+    digest = _digest(refresh_token)
+    if not hmac.compare_digest(session.refresh_hash, digest):
+        _revoke_for_reuse(db, session, now)
+        raise SessionError("refresh_reuse", session)
     user = db.get(User, session.user_id)
     if user is None or not user.is_active:
         session.revoked_at = now
@@ -128,9 +168,9 @@ def rotate_session(db: Session, refresh_token: str, *, app_version: str | None =
         db.flush()
         raise SessionError("user_inactive", session)
 
-    new_refresh = secrets.token_urlsafe(48)
-    # Mise à jour conditionnelle : deux requêtes concurrentes ne peuvent pas consommer
-    # le même refresh token.
+    new_refresh = _new_refresh_token(session.public_id)
+    # Mise à jour conditionnelle : de deux requêtes concurrentes portant le même refresh
+    # token, une seule le consomme. L'autre présente alors un jeton déjà consommé.
     consumed = db.execute(
         update(AuthSession)
         .where(AuthSession.id == session.id, AuthSession.refresh_hash == digest, AuthSession.revoked_at.is_(None))
@@ -141,7 +181,8 @@ def rotate_session(db: Session, refresh_token: str, *, app_version: str | None =
         )
     ).rowcount
     if consumed != 1:
-        raise SessionError("refresh_race", session)
+        _revoke_for_reuse(db, session, now)
+        raise SessionError("refresh_reuse", session)
     db.flush()
     db.refresh(session)
     return _tokens(user, session, new_refresh, now), user, session

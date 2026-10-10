@@ -88,6 +88,108 @@ def test_reusing_a_consumed_refresh_token_revokes_the_whole_session(client, db):
     assert first["refresh_token"] not in f"{event.new_state}{event.resource_id}"
 
 
+def _refresh(client, token):
+    return client.post("/api/auth/refresh", json={"refresh_token": token})
+
+
+def _session_of(db, tokens):
+    db.expire_all()
+    return db.query(AuthSession).filter(AuthSession.public_id == decode_token(tokens["access_token"])[SESSION_CLAIM]).one()
+
+
+def test_any_older_refresh_token_revokes_the_session_however_old(client, db):
+    first = _login(client)
+    latest = first
+    for _ in range(4):
+        latest = _refresh(client, latest["refresh_token"]).json()
+    # Le tout premier jeton, consommé depuis quatre rotations, est encore reconnu.
+    assert _refresh(client, first["refresh_token"]).status_code == 401
+    session = _session_of(db, first)
+    assert session.revoked_at is not None and session.revoked_reason == "refresh_reuse"
+    assert _refresh(client, latest["refresh_token"]).status_code == 401
+    assert client.get("/api/auth/me", headers=_bearer(latest)).status_code == 401
+
+
+def test_copied_refresh_token_is_cut_off_when_the_owner_comes_back(client, db):
+    owner = _login(client)
+    # Une copie du jeton est renouvelée plusieurs fois avant que son propriétaire ne revienne.
+    copy = _refresh(client, owner["refresh_token"]).json()
+    copy = _refresh(client, copy["refresh_token"]).json()
+    assert client.get("/api/auth/me", headers=_bearer(copy)).status_code == 200
+    assert _refresh(client, owner["refresh_token"]).status_code == 401
+    assert _session_of(db, owner).revoked_reason == "refresh_reuse"
+    assert _refresh(client, copy["refresh_token"]).status_code == 401
+    assert client.get("/api/auth/me", headers=_bearer(copy)).status_code == 401
+    session_id = _session_of(db, owner).id
+    events = db.query(AuditEvent).filter(AuditEvent.action == "auth.refresh", AuditEvent.resource_id == str(session_id)).order_by(AuditEvent.id).all()
+    # La réutilisation est journalisée, puis le refus opposé à la copie ; jamais un jeton.
+    assert [event.result for event in events] == ["refused", "refused"]
+    assert "refresh_reuse" in str(events[0].new_state) and "session_revoked" in str(events[1].new_state)
+    for event in events:
+        for secret in (owner["refresh_token"], copy["refresh_token"]):
+            assert secret not in f"{event.new_state}{event.old_state}{event.resource_id}"
+    # Le propriétaire se reconnecte normalement.
+    assert client.get("/api/auth/me", headers=_bearer(_login(client))).status_code == 200
+
+
+def test_reuse_only_revokes_the_session_concerned(client, db, session_user):
+    compromised = _login(client)
+    other_device = _login(client)
+    other_user = client.post("/api/auth/mobile/login", json={"username": session_user.username, "password": "testpass123"}).json()
+    renewed = _refresh(client, compromised["refresh_token"]).json()
+    assert _refresh(client, compromised["refresh_token"]).status_code == 401
+    assert client.get("/api/auth/me", headers=_bearer(renewed)).status_code == 401
+    # Ni l'autre appareil du même compte, ni un autre utilisateur ne sont déconnectés.
+    assert _refresh(client, other_device["refresh_token"]).status_code == 200
+    assert client.get("/api/auth/me", headers=_bearer(other_user)).status_code == 200
+    assert _refresh(client, other_user["refresh_token"]).status_code == 200
+
+
+def test_a_forged_refresh_token_cannot_revoke_someone_else_s_session(client, db):
+    tokens = _login(client)
+    public_id, secret, seal = tokens["refresh_token"].split(".")
+    forged = [
+        f"{public_id}.{'A' * len(secret)}.{seal}",          # secret inventé, sceau d'un autre jeton
+        f"{public_id}.{secret}.{'A' * len(seal)}",          # sceau inventé
+        f"{public_id}.{secret}",                            # sceau absent
+        f"{'B' * len(public_id)}.{secret}.{seal}",          # autre session
+        "x" * 64,
+    ]
+    for token in forged:
+        assert _refresh(client, token).status_code == 401
+    # Connaître l'identifiant d'une session ne suffit pas à la fermer.
+    assert _session_of(db, tokens).revoked_at is None
+    assert _refresh(client, tokens["refresh_token"]).status_code == 200
+
+
+def test_retry_after_a_lost_refresh_answer_closes_the_session_and_login_still_works(client, db):
+    tokens = _login(client)
+    # Le serveur a renouvelé la session, mais la réponse n'est jamais arrivée au téléphone.
+    assert _refresh(client, tokens["refresh_token"]).status_code == 200
+    retry = _refresh(client, tokens["refresh_token"])
+    assert retry.status_code == 401 and retry.json() == {"detail": "Session expirée. Reconnectez-vous."}
+    assert _session_of(db, tokens).revoked_at is not None
+    again = _login(client)
+    assert _refresh(client, again["refresh_token"]).status_code == 200
+
+
+def test_refresh_token_is_stored_as_a_digest_only_and_refusals_say_nothing(client, db):
+    tokens = _login(client)
+    renewed = _refresh(client, tokens["refresh_token"]).json()
+    session = _session_of(db, tokens)
+    stored = f"{session.refresh_hash}{session.previous_refresh_hash}"
+    assert len(session.refresh_hash) == 64 and len(session.previous_refresh_hash) == 64
+    for token in (tokens["refresh_token"], renewed["refresh_token"]):
+        assert token not in stored and token.split(".")[1] not in stored
+    # Jeton inconnu, rejoué ou d'une session fermée : même réponse, sans indice.
+    answers = {
+        _refresh(client, "x" * 64).text,
+        _refresh(client, tokens["refresh_token"]).text,
+        _refresh(client, renewed["refresh_token"]).text,
+    }
+    assert len(answers) == 1
+
+
 def test_refresh_rejects_unknown_malformed_and_access_tokens(client):
     tokens = _login(client)
     assert client.post("/api/auth/refresh", json={"refresh_token": "x" * 64}).status_code == 401
