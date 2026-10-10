@@ -10,7 +10,7 @@ from sqlalchemy import event, func, select
 
 from app.core.config import settings
 from app.modules.alerts.models import Alert
-from app.modules.attendance import core, deviations, projection, sheets
+from app.modules.attendance import core, deviations, learning, projection, sheets
 from app.modules.attendance.models import (
     AttendanceEvent,
     AttendanceSheet,
@@ -49,6 +49,21 @@ def _plan(db, site, first, last=None, **kwargs):
 
 def _utc(day, hour):
     return core.to_utc_naive(datetime(2026, 10, day, hour, 0, tzinfo=core.TZ))
+
+
+@pytest.fixture(autouse=True)
+def fixed_learning_clock(monkeypatch):
+    """Les modèles de ce scénario sont connus dès le 09/10 à 06:00.
+
+    L'apprentissage utilise utcnow indépendamment du now de projection. Sans cette
+    horloge, la couverture historique varie avec la date d'exécution des tests.
+    """
+    class LearningClock(datetime):
+        @classmethod
+        def utcnow(cls):
+            return _utc(9, 6)
+
+    monkeypatch.setattr(learning, "datetime", LearningClock)
 
 
 def _groups(plan):

@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.db.base import Base
 
+from app.modules import recruitment_sms_models as _recruitment_sms_models  # noqa: F401
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.drh import email_alerts as _drh_email_alerts  # noqa: F401  (table contract_email_alert_logs)
@@ -24,6 +25,7 @@ from app.modules.commercial import models as _commercial_models  # noqa: F401
 from app.modules.client_portal import models as _client_portal_models  # noqa: F401
 from app.modules.ronde import models as _ronde_models  # noqa: F401
 from app.modules.site_workforce import models as _site_workforce_models  # noqa: F401
+from app.modules.mobile import models as _mobile_models  # noqa: F401
 
 
 config = context.config

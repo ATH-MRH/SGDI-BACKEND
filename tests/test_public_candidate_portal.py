@@ -215,3 +215,47 @@ def test_recruitment_candidate_list_has_professional_layout():
     assert "convocation-contact" in html
     assert "Adresse email" in html
     assert "Numéro de téléphone" in html
+
+
+def test_full_mobile_form_preserves_web_profile_fields(client, auth_headers):
+    assert client.get('/api/public/candidates/form-config').json()['version'] == 4
+    response = client.post('/api/public/candidates', json=_payload(
+        email='mobile.full@example.com', cnas_number='1234567890',
+        emergency_name='Samir', emergency_relation='Frère', source='ANEM',
+        height=175, shoe_size=42, shirt_size='L', notes='not public', decision='Favorable'))
+    assert response.status_code == 201, response.text
+    rows = client.get('/api/drh/candidates', headers=auth_headers).json()
+    data = next(row['data'] for row in rows if row['email'] == 'mobile.full@example.com')
+    assert data['numeroCnas'] == '1234567890'
+    assert data['contactUrgenceNom'] == 'Samir'
+    assert data['contactUrgenceLien'] == 'Frère'
+    assert data['source'] == 'ANEM'
+    assert data['taille'] == 175
+    assert data['pointure'] == 42
+    assert data['tailleChemise'] == 'L'
+    assert not data.get('notes')
+    assert not data.get('avisDecision')
+
+
+def test_public_cv_is_private_downloadable_and_preserved(client, auth_headers):
+    import base64
+    content = b'%PDF-1.7\nCV de test'
+    cv = {'name': 'CV.pdf', 'mime_type': 'application/pdf', 'data_base64': base64.b64encode(content).decode()}
+    response = client.post('/api/public/candidates', json=_payload(email='cv.mobile@example.com', cv=cv))
+    assert response.status_code == 201, response.text
+    rows = client.get('/api/drh/candidates', headers=auth_headers).json()
+    row = next(item for item in rows if item['email'] == 'cv.mobile@example.com')
+    assert row['data']['cv']['name'] == 'CV.pdf'
+    assert '_cv_content' not in row['data']
+    endpoint = f"/api/drh/candidates/{row['id']}/cv"
+    assert client.get(endpoint).status_code in {401, 403}
+    downloaded = client.get(endpoint, headers=auth_headers)
+    assert downloaded.status_code == 200
+    assert downloaded.content == content
+    assert downloaded.headers['cache-control'] == 'no-store'
+    updated = client.put(f"/api/drh/candidates/{row['id']}", headers=auth_headers, json={'data': {**row['data'], 'notes': 'Mis à jour'}})
+    assert updated.status_code == 200, updated.text
+    assert client.get(endpoint, headers=auth_headers).content == content
+    removed = client.put(f"/api/drh/candidates/{row['id']}", headers=auth_headers, json={'data': {**row['data'], 'cvUpload': None}})
+    assert removed.status_code == 200, removed.text
+    assert client.get(endpoint, headers=auth_headers).status_code == 404

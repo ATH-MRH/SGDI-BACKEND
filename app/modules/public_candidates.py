@@ -1,18 +1,27 @@
 from datetime import date, datetime
+import os
+import hmac
+import json
+import time
 import re
 from typing import Annotated
 import unicodedata
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+from app.core.candidate_cv import validate_cv, MAX_CV_BYTES
 from app.db.session import get_db
 from app.core.config import settings
 from app.modules.drh import service
 from app.modules.drh.schemas import CandidateCreate
 from app.modules.drh.models import Candidate
+from app.modules import recruitment_sms_service as sms
+from app.modules import recruitment_smsgate as smsgate
+from app.modules.recruitment_sms_worker import provider as _sms_provider, smsgate_enabled
+from app.modules.recruitment_sms_models import RecruitmentSMSGateway
 
 
 router = APIRouter()
@@ -34,7 +43,19 @@ class PublicEducationIn(BaseModel):
     end_date: Annotated[str | None, Field(default=None, max_length=10)]
 
 
+class PublicCVIn(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=180)]
+    mime_type: Annotated[str, Field(max_length=40)]
+    data_base64: Annotated[str, Field(max_length=((MAX_CV_BYTES + 2) // 3) * 4)]
+
+    @model_validator(mode="after")
+    def validate_file(self):
+        validate_cv(self.model_dump())
+        return self
+
+
 class PublicCandidateIn(BaseModel):
+    cv: PublicCVIn | None = None
     first_name: Annotated[str, Field(min_length=2, max_length=100)]
     last_name: Annotated[str, Field(min_length=2, max_length=100)]
     phone: Annotated[str | None, Field(default=None, max_length=40)]
@@ -51,6 +72,13 @@ class PublicCandidateIn(BaseModel):
     father_name: Annotated[str | None, Field(default=None, max_length=120)]
     mother_name: Annotated[str | None, Field(default=None, max_length=120)]
     nin: Annotated[str | None, Field(default=None, max_length=30)]
+    cnas_number: Annotated[str | None, Field(default=None, max_length=20)]
+    emergency_name: Annotated[str | None, Field(default=None, max_length=120)]
+    emergency_relation: Annotated[str | None, Field(default=None, max_length=120)]
+    source: Annotated[str | None, Field(default=None, max_length=150)]
+    height: Annotated[float | None, Field(default=None, ge=0, le=300)]
+    shoe_size: Annotated[float | None, Field(default=None, ge=0, le=100)]
+    shirt_size: Annotated[str | None, Field(default=None, max_length=10)]
     address: Annotated[str | None, Field(default=None, max_length=500)]
     commune: Annotated[str | None, Field(default=None, max_length=120)]
     wilaya: Annotated[str | None, Field(default=None, max_length=120)]
@@ -130,6 +158,11 @@ def _public_candidate_state(row: Candidate) -> dict:
     return result
 
 
+@router.get("/candidates/form-config")
+def public_candidate_form_config():
+    return {"version": 4, "cv_max_bytes": MAX_CV_BYTES, "cv_types": ["application/pdf", "image/jpeg", "image/png"]}
+
+
 @router.post("/candidates/status")
 def public_candidate_status(payload: PublicCandidateStatusIn, db: Session = Depends(get_db)):
     match = re.fullmatch(r"CAND-(\d{4})-(\d{6})", payload.reference.strip().upper())
@@ -146,6 +179,10 @@ def public_candidate_status(payload: PublicCandidateStatusIn, db: Session = Depe
 
 @router.post("/candidates", status_code=status.HTTP_201_CREATED)
 def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Session = Depends(get_db)):
+    return _create_public_candidate(payload, request, db)
+
+
+def _create_public_candidate(payload: PublicCandidateIn, request: Request, db: Session, *, commit: bool = True, verified: bool = False):
     # Champ invisible anti-robot : une vraie personne ne le remplit jamais.
     if payload.company:
         raise HTTPException(status_code=400, detail="Candidature invalide")
@@ -161,11 +198,13 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
         status="nouvelle",
         data={
             "moduleOrigine": "fr.irongs.com",
+            "telephoneVerifie": verified,
             "sourceExterne": "portail_candidat",
             "societeAffectationAutomatique": "",
             "ficheCandidatTransmise": True,
             "submittedAt": now,
             "photo": payload.photo_data or "",
+            **({"cvUpload": payload.cv.model_dump()} if payload.cv else {}),
             "telephonesSecondaires": payload.additional_phones,
             "contactUrgenceTel": payload.emergency_phone or "",
             "dateNaissance": payload.birth_date or "",
@@ -177,6 +216,13 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
             "nomPere": payload.father_name or "",
             "nomMere": payload.mother_name or "",
             "nin": payload.nin or "",
+            "tailleChemise": payload.shirt_size,
+            "pointure": payload.shoe_size,
+            "taille": payload.height,
+            "source": payload.source,
+            "contactUrgenceLien": payload.emergency_relation,
+            "contactUrgenceNom": payload.emergency_name,
+            "numeroCnas": payload.cnas_number,
             "adresse": payload.address or "",
             "commune": payload.commune or "",
             "wilaya": payload.wilaya or "",
@@ -208,5 +254,151 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
             "remoteAddress": request.client.host if request.client else "",
         },
     )
-    row = service.create_candidate(db, candidate, username="portail-candidat")
+    row = service.create_candidate(db, candidate, username="portail-candidat", commit=commit)
     return {"status": "received", "reference": f"CAND-{datetime.utcnow().year}-{row.id:06d}"}
+
+
+class MobileIdentityIn(BaseModel):
+    first_name: Annotated[str, Field(min_length=2, max_length=100)]
+    last_name: Annotated[str, Field(min_length=2, max_length=100)]
+    phone: Annotated[str, Field(min_length=9, max_length=30)]
+
+
+class MobileCodeIn(BaseModel):
+    challenge_id: Annotated[str, Field(min_length=20, max_length=64)]
+    code: Annotated[str, Field(min_length=6, max_length=6)]
+
+
+class MobileChallengeIn(BaseModel):
+    challenge_id: Annotated[str, Field(min_length=20, max_length=64)]
+
+
+class GatewayAckIn(BaseModel):
+    job_id: Annotated[str, Field(min_length=20, max_length=64)]
+    lease_token: Annotated[str, Field(min_length=20, max_length=64)]
+    sent: bool
+
+
+def _poll_enabled():
+    # Ancien protocole maison (poll/ack), conservé pour une passerelle dédiée : RECRUITMENT_SMS_PROVIDER=poll.
+    key = os.getenv('RECRUITMENT_SMS_GATEWAY_KEY', '')
+    return os.getenv('RECRUITMENT_SMS_ENABLED', 'false').lower() == 'true' and _sms_provider() == 'poll' and len(key) >= 32
+
+
+def _sms_enabled():
+    return _poll_enabled() or smsgate_enabled()
+
+
+def _gateway_connected(db):
+    if not _sms_enabled():
+        return False
+    row = db.get(RecruitmentSMSGateway, 1)
+    return bool(row and row.last_seen > int(time.time()) - 90)
+
+
+def _sms_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except sms.SMSProblem as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.message) from exc
+
+
+def _mobile_token(authorization: str | None):
+    if not authorization or not authorization.startswith('Bearer ') or len(authorization) > 200:
+        raise HTTPException(status_code=401, detail='Vérifiez votre téléphone avant de déposer votre candidature.')
+    return authorization[7:]
+
+
+def _gateway_auth(key: str | None):
+    expected = os.getenv('RECRUITMENT_SMS_GATEWAY_KEY', '')
+    if not _poll_enabled() or not key or not hmac.compare_digest(key, expected):
+        raise HTTPException(status_code=403, detail='Passerelle SMS non autorisée.')
+
+
+@router.get('/mobile/config')
+def mobile_config(db: Session = Depends(get_db)):
+    return {'version': 4, 'sms_available': _gateway_connected(db), 'otp_length': 6, 'expires_in': sms.CODE_TTL, 'resend_after': sms.RESEND_DELAY}
+
+
+@router.post('/mobile/request-code', status_code=202)
+def mobile_request_code(payload: MobileIdentityIn, request: Request, db: Session = Depends(get_db)):
+    if not _gateway_connected(db):
+        raise HTTPException(status_code=503, detail='Le service SMS est temporairement indisponible. Réessayez plus tard.')
+    # Ne pas faire confiance à un X-Forwarded-For fourni par le candidat.
+    ip = request.client.host if request.client else 'unknown'
+    return _sms_call(sms.request_code, db, settings.jwt_secret, payload.first_name, payload.last_name, payload.phone, ip)
+
+
+@router.post('/mobile/verify-code')
+def mobile_verify_code(payload: MobileCodeIn, db: Session = Depends(get_db)):
+    return _sms_call(sms.verify_code, db, settings.jwt_secret, payload.challenge_id, payload.code)
+
+
+@router.post('/mobile/code-status')
+def mobile_code_status(payload: MobileChallengeIn, db: Session = Depends(get_db)):
+    return _sms_call(sms.delivery_state, db, payload.challenge_id)
+
+
+@router.get('/mobile/identity')
+def mobile_identity(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    row = _sms_call(sms.identity, db, settings.jwt_secret, _mobile_token(authorization))
+    return {'first_name': row.first_name, 'last_name': row.last_name, 'phone': row.phone}
+
+
+@router.post('/mobile/candidates', status_code=201)
+def mobile_submit_candidate(payload: PublicCandidateIn, request: Request, authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
+    row = _sms_call(sms.identity, db, settings.jwt_secret, _mobile_token(authorization), lock=True)
+    if row.submitted_reference:
+        return {'status': 'received', 'reference': row.submitted_reference}
+    if (payload.first_name.strip().casefold() != row.first_name.casefold() or payload.last_name.strip().casefold() != row.last_name.casefold()
+            or _sms_call(sms.normalize_phone, payload.phone or '') != row.phone):
+        raise HTTPException(status_code=422, detail='Le nom, prénom et téléphone doivent correspondre à l’identité vérifiée.')
+    payload.phone = row.phone
+    try:
+        result = _create_public_candidate(payload, request, db, commit=False, verified=True)
+        row.status, row.submitted_reference = 'submitted', result['reference']
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.post('/mobile/gateway/poll')
+def mobile_gateway_poll(x_sms_gateway_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    _gateway_auth(x_sms_gateway_key)
+    return _sms_call(sms.gateway_poll, db, settings.jwt_secret)
+
+
+@router.post('/mobile/gateway/ack')
+def mobile_gateway_ack(payload: GatewayAckIn, x_sms_gateway_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+    _gateway_auth(x_sms_gateway_key)
+    return _sms_call(sms.gateway_ack, db, settings.jwt_secret, payload.job_id, payload.lease_token, payload.sent)
+
+
+async def _raw_body(request: Request) -> bytes:
+    body = await request.body()
+    if len(body) > 16_384:
+        raise HTTPException(status_code=413, detail='Requête trop volumineuse.')
+    return body
+
+
+@router.post('/mobile/gateway/smsgate/webhook')
+def mobile_smsgate_webhook(body: bytes = Depends(_raw_body), x_signature: str | None = Header(default=None),
+                           x_timestamp: str | None = Header(default=None), db: Session = Depends(get_db)):
+    """Accusés envoyé/livré/échec émis par le téléphone SMSGate, authentifiés par signature HMAC."""
+    config = smsgate.load_config() if smsgate_enabled() else None
+    if config is None or not config.webhook_key or not smsgate.verify_webhook(config.webhook_key, body, x_timestamp, x_signature, int(time.time())):
+        raise HTTPException(status_code=403, detail='Passerelle SMS non autorisée.')
+    try:
+        event = json.loads(body)
+        payload = event['payload']
+        state, message_id = smsgate.WEBHOOK_EVENTS[event['event']], payload['messageId']
+    except (ValueError, KeyError, TypeError):
+        # 200 : un événement hors sujet ne doit pas être rejoué pendant deux jours par le téléphone.
+        return {'status': 'ignored'}
+    if not isinstance(message_id, str) or len(message_id) > 36 or (config.device_id and event.get('deviceId') != config.device_id):
+        return {'status': 'ignored'}
+    reason = payload.get('reason') if state == 'failed' else None
+    applied = sms.apply_gateway_state(db, message_id, state, str(reason)[:100] if reason else None)
+    return {'status': 'recorded' if applied else 'ignored'}

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.security import create_staff_token, hash_password, verify_password
 from app.modules.auth.models import User
 from app.modules.auth.schemas import UserCreate, UserUpdate
+from app.modules.auth.sessions import revoke_user_sessions
 
 
 def normalize_username(value: str) -> str:
@@ -122,10 +123,13 @@ def update_user(db: Session, user: User, payload: UserUpdate, *, commit: bool = 
         user.global_society_access = payload.global_society_access
     if payload.password:
         user.password_hash = hash_password(payload.password)
+        revoke_user_sessions(db, user.id, "password_changed")
     if payload.validation_password:
         user.validation_password_hash = hash_password(payload.validation_password)
     if payload.is_active is not None:
         user.is_active = payload.is_active
+        if not user.is_active:
+            revoke_user_sessions(db, user.id, "user_deactivated")
     # Valide l'état FINAL fusionné (existant + PATCH partiel) : un PATCH ne peut jamais
     # laisser un compte BEO ACTIF dans un état que le portail refuserait. Un compte
     # désactivé ne se connecte pas : le suspendre ne doit jamais être bloqué par un
