@@ -94,7 +94,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .search-box{flex:1;min-width:220px;position:relative}
 .search-box input{height:44px}
-.candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px 190px 170px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke,.row-recruit{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.row-recruit{background:#15803d;border-color:#15803d;color:#fff}.row-recruit:hover{background:#166534;border-color:#166534}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
+.candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px 190px 170px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke,.row-recruit,.row-ventilate{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.row-recruit{background:#15803d;border-color:#15803d;color:#fff}.row-recruit:hover{background:#166534;border-color:#166534}.row-ventilate{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}.row-ventilate:hover{background:#e0e7ff;border-color:#a5b4fc}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
 .candidate-clickable-row{cursor:pointer;transition:background .15s ease}.candidate-clickable-row:hover{background:#f3f8fd}.candidate-clickable-row:hover .cand-name{color:var(--blue)}.candidate-clickable-row:focus-visible{outline:3px solid #93c5fd;outline-offset:-3px;background:#eff6ff}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -166,7 +166,7 @@ tr:last-child td{border-bottom:0}
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/recrute-emploi.css?v=20261010-emploi" media="screen">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
-<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261007-import-excel" media="screen">
+<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261010-ventilation-flow" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
@@ -1186,7 +1186,7 @@ function rowActions(item){
   if(!recruitmentCan("update"))return "—";
   const editable=activeTab!=="archive";
   const favorable=recruitmentCan("create")&&item.data?.avisDecision==="Favorable";
-  return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" aria-label="Autres actions" aria-haspopup="menu" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
+  return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>${candidateConvocation(item)?`<button type="button" class="row-convoke" onclick="openCandidateInterview(${item.id})">Entretien</button>`:""}${!item.society&&recruitmentCanVentilate()?`<button type="button" class="row-ventilate" onclick="openCandidateVentilation(${item.id})">Ventiler</button>`:""}${favorable?`<button type="button" class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>`:""}`:""}<button type="button" class="kebab-btn" title="Autres actions" aria-label="Autres actions" aria-haspopup="menu" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
 function handleCandidateRowClick(event,id){if(event.target.closest("button,select,input,a,textarea"))return;openCandidateForm(id)}
 function handleCandidateRowKeydown(event,id){if((event.key==="Enter"||event.key===" ")&&!event.target.closest("button,select,input,a,textarea")){event.preventDefault();openCandidateForm(id)}}
@@ -1339,6 +1339,15 @@ async function changeAvis(id,value){
   }catch(error){showBanner(esc(error.message),"error");loadTab(activeTab)}
 }
 let ventilationCandidate=null;
+const VENTILATION_DENIED_HINT="Votre compte n’a pas la permission de ventiler les candidats. Demandez à un administrateur de ventiler ce dossier ou de vous accorder la permission de ventilation (Recrutement › Contractualisation).";
+function applyCandidateVentilation(item,result,fallback){
+  // Reflète la réponse du serveur dans la ligne déjà chargée : le statut « Non ventilé » change sans rechargement.
+  const saved=result?.data||{};
+  item.society=Object.prototype.hasOwnProperty.call(saved,"society")?saved.society:fallback;
+  if(Array.isArray(saved.data?.ventilations))item.data={...(item.data||{}),ventilations:saved.data.ventilations};
+}
+function refreshCandidateRows(){if(recruitSection==="candidates"&&document.getElementById("listWrap"))renderList()}
+function candidateRecruitable(item){return activeTab!=="archive"&&recruitmentCan("update")&&recruitmentCan("create")&&item?.data?.avisDecision==="Favorable"}
 function candidateVentilationHistory(item){
   const history=(Array.isArray(item?.data?.ventilations)?item.data.ventilations:[]).slice().reverse();
   return history.length?`<div class="rec-history"><div class="rec-chip-label">Historique des ventilations</div><ol>${history.map(entry=>`<li><b>${esc(entry.to||"Vivier Groupe")}</b><span>${esc(formatDateFr(entry.at))}${entry.by?` · ${esc(entry.by)}`:""}${entry.reason?` · ${esc(entry.reason)}`:""}</span></li>`).join("")}</ol></div>`:"";
@@ -1371,38 +1380,91 @@ async function saveCandidateVentilation(form){
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
   const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="VENTILATION…";
   try{
-    await apiFetch(`/api/drh/candidates/${item.id}/ventilation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({society:value==="__pool__"?null:value,reason:form.reason.value.trim()||null})});
+    const result=await apiFetch(`/api/drh/candidates/${item.id}/ventilation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({society:value==="__pool__"?null:value,reason:form.reason.value.trim()||null})});
+    applyCandidateVentilation(item,result,value==="__pool__"?null:value);
     closeCandidateVentilation();
-    showBanner(value==="__pool__"?`Dossier de ${esc(fullName)} remis au vivier Groupe.`:`Dossier de ${esc(fullName)} ventilé vers ${esc(value)}.`,"success");
+    const next=item.society&&recruitSection==="candidates"&&candidateRecruitable(item)&&tabState[activeTab]?.items?.includes(item)?` <button type="button" class="banner-action" onclick="openCandidateRecruitment(${Number(item.id)})">Recruter</button>`:"";
+    showBanner(value==="__pool__"?`Dossier de ${esc(fullName)} remis au vivier Groupe.`:`Dossier de ${esc(fullName)} ventilé vers ${esc(item.society||value)}.${next}`,"success");
+    refreshCandidateRows();
     refreshRecruitCurrentSection();
   }catch(error){const output=document.getElementById("ventilationError");if(output){output.textContent=error.message||"Ventilation impossible";output.classList.add("show")}button.disabled=false;button.textContent="Ventiler";}
 }
-let recruitmentCandidate=null;
+let recruitmentCandidate=null,recruitmentListStale=false;
 function openCandidateRecruitment(id){
   const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));
   if(!item)return;
   recruitmentCandidate=item;
+  renderCandidateRecruitment(item);
+}
+function candidateRecruitmentVentilationStep(){
+  // Dossier non ventilé : la société destinataire se choisit ici, parmi les cibles autorisées par le serveur.
+  if(!recruitmentCanVentilate())return `<div class="error show" role="alert">Société destinataire requise : ce dossier n’est pas encore ventilé.</div><p class="rec-ventilation-hint">${VENTILATION_DENIED_HINT}</p><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button></div>`;
+  return `<p class="rec-destination">Société destinataire : <b>Non ventilé (vivier Groupe)</b></p><label for="recruitmentSociety">Société destinataire *</label><select id="recruitmentSociety" name="society" required disabled><option value="">Chargement…</option></select><label for="recruitmentReason">Motif de ventilation (facultatif)</label><input id="recruitmentReason" name="reason" maxlength="500"><p class="rec-ventilation-hint"><b>Ventiler</b> affecte le dossier à la société choisie. <b>Ventiler et recruter</b> le transfère ensuite à la DRH de cette société (rubrique <b>Contrats à établir</b>).</p><div id="recruitmentError" class="error"></div><div class="modal-actions rec-ventilation-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="button" class="primary" disabled onclick="ventilateCandidateFromRecruitment(this.form,false)">Ventiler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px" disabled>Ventiler et recruter</button></div>`;
+}
+function renderCandidateRecruitment(item,notice=""){
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
   const destination=String(item.society||"").trim();
   document.getElementById("recruitmentModal")?.remove();
   const modal=document.createElement("div");modal.id="recruitmentModal";modal.className="modal-backdrop";
   // Recruter = finaliser le recrutement ET transférer le dossier à la DRH de la société destinataire.
   const body=destination
-    ?`<p class="rec-destination">Société destinataire : <b>${esc(destination)}</b></p><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Le dossier sera transféré à la DRH de cette société (rubrique <b>Contrats à établir</b>) et quittera Recrutement. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p><div id="recruitmentError" class="error"${item.data?.drhTransfer?.status==="failed"?' style="display:block"':""}>${item.data?.drhTransfer?.status==="failed"?"Transfert DRH à reprendre : la tentative précédente n’a pas abouti.":""}</div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px">${item.data?.drhTransfer?.status==="failed"?"Réessayer le transfert":"Recruter et transférer à la DRH"}</button></div>`
-    :`<div class="error show" role="alert">Société destinataire requise : ce dossier n’est pas encore ventilé.</div><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Ventilez le candidat vers une société avant de le recruter.</p><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button>${recruitmentCanVentilate()?`<button type="button" class="primary" onclick="closeCandidateRecruitment();openCandidateVentilation(${Number(item.id)})">Ventiler</button>`:""}</div>`;
+    ?`${notice?`<div class="rec-ventilation-ok" role="status">${esc(notice)}</div>`:""}<p class="rec-destination">Société destinataire : <b>${esc(destination)}</b></p><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Le dossier sera transféré à la DRH de cette société (rubrique <b>Contrats à établir</b>) et quittera Recrutement. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p><div id="recruitmentError" class="error"${item.data?.drhTransfer?.status==="failed"?' style="display:block"':""}>${item.data?.drhTransfer?.status==="failed"?"Transfert DRH à reprendre : la tentative précédente n’a pas abouti.":""}</div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px">${item.data?.drhTransfer?.status==="failed"?"Réessayer le transfert":"Recruter et transférer à la DRH"}</button></div>`
+    :candidateRecruitmentVentilationStep();
   modal.innerHTML=`<div class="modal" style="max-width:560px"><div class="modal-head"><div><h2>Recruter le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(fullName)} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateRecruitment()">×</button></div><form onsubmit="event.preventDefault();transmitCandidateToDrh(this)">${body}</form></div>`;
   modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateRecruitment()});document.body.appendChild(modal);
+  if(!destination&&recruitmentCanVentilate())loadCandidateRecruitmentTargets(item);
 }
-function closeCandidateRecruitment(){document.getElementById("recruitmentModal")?.remove();recruitmentCandidate=null;}
+async function loadCandidateRecruitmentTargets(item){
+  const fail=message=>{const output=document.getElementById("recruitmentError");if(output&&recruitmentCandidate===item){output.textContent=message;output.classList.add("show")}};
+  try{
+    // Uniquement les sociétés vers lesquelles ce compte peut légitimement ventiler (serveur).
+    const result=await apiFetch("/api/drh/candidates/ventilation-targets");
+    if(recruitmentCandidate!==item)return;
+    const select=document.getElementById("recruitmentSociety");if(!select)return;
+    const targets=(result?.societies||[]).filter(Boolean);
+    if(!targets.length){select.innerHTML='<option value="">Aucune société autorisée</option>';fail("Aucune société n’est autorisée pour la ventilation avec ce compte.");return}
+    select.innerHTML='<option value="">— Choisir —</option>'+targets.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");
+    if(targets.length===1)select.value=targets[0];
+    select.disabled=false;select.form.querySelectorAll("button[disabled]").forEach(button=>{button.disabled=false});
+  }catch(error){fail(error.message||"Sociétés indisponibles")}
+}
+async function ventilateCandidateFromRecruitment(form,thenRecruit){
+  const item=recruitmentCandidate;if(!item||!recruitmentCanVentilate()||String(item.society||"").trim())return;
+  const output=document.getElementById("recruitmentError");
+  const fail=message=>{if(output){output.textContent=message;output.classList.add("show")}};
+  const value=String(form.elements.society?.value||"").trim();
+  if(!value){fail("Choisissez la société destinataire.");return}
+  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
+  const buttons=[...form.querySelectorAll("button")];buttons.forEach(button=>{button.disabled=true});
+  try{
+    // Même endpoint que l'action « Ventiler » : permission, périmètre et audit restent contrôlés par le serveur.
+    const result=await apiFetch(`/api/drh/candidates/${item.id}/ventilation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({society:value,reason:String(form.elements.reason?.value||"").trim()||null})});
+    applyCandidateVentilation(item,result,value);
+  }catch(error){fail(error.message||"Ventilation impossible");buttons.forEach(button=>{button.disabled=false});return}
+  recruitmentListStale=true;
+  showBanner(`Dossier de ${esc(fullName)} ventilé vers ${esc(item.society)}.`,"success");
+  refreshCandidateRows();
+  if(recruitmentCandidate!==item)return;
+  // Même fenêtre : le dossier est ventilé, le recrutement se poursuit sans la fermer ni la rouvrir.
+  renderCandidateRecruitment(item,`Dossier ventilé vers ${item.society}.`);
+  if(thenRecruit)await transmitCandidateToDrh(document.getElementById("recruitmentModal").querySelector("form"));
+}
+function closeCandidateRecruitment(){
+  document.getElementById("recruitmentModal")?.remove();recruitmentCandidate=null;
+  // Une ventilation faite ici sans recrutement : la liste et les compteurs repartent du serveur.
+  if(recruitmentListStale){recruitmentListStale=false;refreshRecruitCurrentSection()}
+}
 async function transmitCandidateToDrh(form){
   const item=recruitmentCandidate;if(!item)return;
-  const society=String(item.society||"").trim();if(!society)return;
+  const society=String(item.society||"").trim();
+  // Sans société destinataire, aucun transfert : « Ventiler et recruter » ventile d'abord, puis revient ici.
+  if(!society)return form.elements?.society?ventilateCandidateFromRecruitment(form,true):undefined;
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
   const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="TRANSFERT…";
   try{
     // Transfert atomique et idempotent : un double clic ou un nouvel essai ne crée jamais deux dossiers.
     await apiFetch(`/api/drh/candidates/${item.id}/transfer-drh`,{method:"POST"});
-    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transféré à la DRH de ${esc(society)} (« Contrats à établir »). Il n’apparaît plus dans Recrutement.`,"success");
+    recruitmentListStale=false;closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transféré à la DRH de ${esc(society)} (« Contrats à établir »). Il n’apparaît plus dans Recrutement.`,"success");
     await loadTab(activeTab);
   }catch(error){const output=document.getElementById("recruitmentError");if(output){output.textContent=error.message||"Transfert DRH impossible";output.classList.add("show")}button.disabled=false;button.textContent="Réessayer le transfert";}
 }
