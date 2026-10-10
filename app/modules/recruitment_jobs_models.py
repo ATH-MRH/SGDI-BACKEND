@@ -23,6 +23,10 @@ class RecruitmentCompany(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     website: Mapped[str | None] = mapped_column(String(200))
     logo_path: Mapped[str | None] = mapped_column(String(200))
+    # Présentation publique, saisie par le recrutement : rien n'est affiché tant que ce n'est pas renseigné.
+    activities: Mapped[str | None] = mapped_column(Text)
+    locations: Mapped[str | None] = mapped_column(String(300))
+    headcount: Mapped[str | None] = mapped_column(String(60))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default='1')
 
 
@@ -62,6 +66,8 @@ class RecruitmentCandidateAccount(Base, TimestampMixin):
     photo: Mapped[str | None] = deferred(mapped_column(Text))
     # Dossier du vivier recrutement rattaché à cet espace (un seul dossier par personne).
     candidate_id: Mapped[int | None] = mapped_column(ForeignKey('candidates.id', ondelete='SET NULL'), index=True)
+    # Préférences de l'espace (notifications push par famille d'événements).
+    settings: Mapped[dict | None] = mapped_column(JSON)
 
 
 class RecruitmentCandidateSession(Base):
@@ -80,6 +86,7 @@ class RecruitmentApplication(Base):
     candidate_id: Mapped[int] = mapped_column(ForeignKey('candidates.id', ondelete='CASCADE'), index=True)
     offer_id: Mapped[int | None] = mapped_column(ForeignKey('recruitment_job_offers.id'), index=True)
     position: Mapped[str | None] = mapped_column(String(150))
+    message: Mapped[str | None] = mapped_column(Text)
     # Identifiant fourni par l'application : un double clic ou une relance réseau ne crée qu'une candidature.
     request_id: Mapped[str] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(20), default='mobile', server_default='mobile')
@@ -89,6 +96,15 @@ class RecruitmentApplication(Base):
     status: Mapped[str] = mapped_column(String(20), default='received', server_default='received', index=True)
     status_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     status_updated_by: Mapped[str | None] = mapped_column(String(100))
+    # Traitement interne. `status` ci-dessus est ce que voit le candidat ; il n'avance que par les
+    # étapes qui le concernent et par une décision explicitement communiquée.
+    stage: Mapped[str] = mapped_column(String(20), default='received', server_default='received', index=True)
+    outcome: Mapped[str] = mapped_column(String(20), default='pending', server_default='pending', index=True)
+    outcome_communicated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    assigned_to: Mapped[str | None] = mapped_column(String(100), index=True)
+    next_action: Mapped[str | None] = mapped_column(String(200))
+    next_action_due: Mapped[date | None] = mapped_column(Date)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime)
     __table_args__ = (
         UniqueConstraint('account_id', 'request_id', name='uq_recruitment_applications_request'),
         UniqueConstraint('candidate_id', 'offer_id', name='uq_recruitment_applications_candidate_offer'),

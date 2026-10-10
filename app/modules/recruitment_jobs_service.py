@@ -25,10 +25,12 @@ COMPANY_LOGOS = {'/static/iron-securite-logo.png': 'IRON Sécurité', '/static/i
 # États d'une candidature à une annonce : (libellé, message affiché au candidat).
 APPLICATION_STATES = {
     'received': ('Reçue', 'Votre candidature a bien été reçue par le service recrutement.'),
+    'review': ('En examen', 'Votre candidature est en cours d’examen par le service recrutement.'),
     'shortlisted': ('Présélectionnée', 'Votre candidature a été présélectionnée pour ce poste.'),
     'interview': ('Entretien', 'Votre candidature passe à l’étape de l’entretien. Le service recrutement vous contactera.'),
     'accepted': ('Retenue', 'Votre candidature a été retenue pour ce poste. Le service recrutement vous contactera pour la suite.'),
     'declined': ('Non retenue', 'Votre candidature n’a pas été retenue pour ce poste. Vos autres candidatures ne sont pas concernées.'),
+    'withdrawn': ('Retirée', 'Vous avez retiré cette candidature.'),
 }
 PUBLISH_REQUIRED = (('title', 'Intitulé du poste'), ('wilaya', 'Wilaya'), ('contract_type', 'Type de contrat'),
                     ('missions', 'Missions'), ('profile', 'Profil recherché'))
@@ -56,6 +58,13 @@ def is_open(offer: Offer) -> bool:
 def company_public(company: Company) -> dict:
     return {'id': company.id, 'name': company.name, 'sector': company.sector, 'city': company.city,
             'logo_url': company.logo_path if company.logo_path in COMPANY_LOGOS else None}
+
+
+def company_presentation(company: Company) -> dict:
+    """Présentation publique : uniquement ce que le recrutement a renseigné."""
+    return {'description': company.description or '', 'website': company.website,
+            'activities': [line.strip() for line in (company.activities or '').splitlines() if line.strip()],
+            'locations': company.locations or '', 'headcount': company.headcount or ''}
 
 
 def offer_public(offer: Offer, company: Company, *, detail: bool = False) -> dict:
@@ -127,7 +136,7 @@ def public_company(db: Session, company_id: int) -> dict:
             select(func.count()).select_from(Offer).where(Offer.company_id == company_id, Offer.published_at.is_not(None))):
         raise HTTPException(status_code=404, detail='Société introuvable.')
     offers = [offer_public(o, c) for o, c in _open_offers(db) if c.id == company_id]
-    return {**company_public(company), 'description': company.description or '', 'website': company.website, 'offers': offers}
+    return {**company_public(company), **company_presentation(company), 'offers': offers}
 
 
 def company_for_society(db: Session, society: str) -> Company:
@@ -167,6 +176,7 @@ def offer_staff(offer: Offer, company: Company, applications: int = 0) -> dict:
 def company_staff(company: Company) -> dict:
     return {'id': company.id, 'name': company.name, 'society': company.society, 'kind': company.kind, 'sector': company.sector,
             'city': company.city, 'description': company.description or '', 'website': company.website,
+            'activities': company.activities or '', 'locations': company.locations or '', 'headcount': company.headcount or '',
             'logo_path': company.logo_path, 'is_active': company.is_active}
 
 

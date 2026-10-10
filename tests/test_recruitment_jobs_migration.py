@@ -29,8 +29,9 @@ def _candidates(database) -> list[tuple]:
         return con.execute("SELECT id, first_name, last_name, status, society FROM candidates ORDER BY id").fetchall()
 
 
-def test_single_alembic_head_is_the_job_offers_revision():
-    assert _alembic("sqlite://", "heads").split() == [REVISION, "(head)"]
+def test_single_alembic_head():
+    # La tête a avancé depuis (messages et entretiens) : seule l'unicité de la chaîne est contrôlée ici.
+    assert _alembic("sqlite://", "heads").split()[1:] == ["(head)"]
 
 
 def test_upgrade_is_additive_replayable_and_reversible(tmp_path):
@@ -49,7 +50,7 @@ def test_upgrade_is_additive_replayable_and_reversible(tmp_path):
                     "('Nadia', 'Historique', 'nouvelle', NULL, '2026-01-01 00:00:00'), ('Karim', 'Affecte', 'reserve', 'Iron Global Securite', '2026-02-01 00:00:00')")
     before, schema_before = _candidates(database), _tables(database)
 
-    _alembic(url, "upgrade", "head")
+    _alembic(url, "upgrade", REVISION)
     assert _tables(database) == schema_before | TABLES
     assert _candidates(database) == before                               # candidatures historiques et spontanées intactes
     with sqlite3.connect(database) as con:
@@ -58,10 +59,11 @@ def test_upgrade_is_additive_replayable_and_reversible(tmp_path):
         assert con.execute("SELECT kind, is_active FROM recruitment_companies").fetchone() == ('group', 1)
         assert con.execute("SELECT status, positions FROM recruitment_job_offers").fetchone() == ('draft', 1)
         con.execute("INSERT INTO recruitment_applications (candidate_id, offer_id, request_id, created_at) VALUES (1, 1, 'r1', '2026-01-01')")
-        assert con.execute("SELECT status, source, status_updated_at FROM recruitment_applications").fetchone() == ('received', 'mobile', None)
+        assert con.execute("SELECT status, source, status_updated_at, stage, outcome FROM recruitment_applications").fetchone() == (
+            'received', 'mobile', None, 'received', 'pending')
 
     _alembic(url, "downgrade", PREVIOUS)
     assert _tables(database) == schema_before and _candidates(database) == before
-    _alembic(url, "upgrade", "head")
-    _alembic(url, "upgrade", "head")                                     # rejouable
+    _alembic(url, "upgrade", REVISION)
+    _alembic(url, "upgrade", REVISION)                                   # rejouable
     assert TABLES <= _tables(database)

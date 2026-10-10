@@ -313,8 +313,8 @@ def test_spontaneous_application_and_one_dossier_per_candidate(client, db, secur
     assert apply(client, headers, consent=False).status_code == 422
 
 
-def _set_status(client, headers, offer_id, application_id, status):
-    return client.put(f'/api/drh/job-offers/{offer_id}/applications/{application_id}/status', headers=headers, json={'status': status})
+def _process(client, headers, application_id, **fields):
+    return client.put(f'/api/drh/job-offers/applications/{application_id}/processing', headers=headers, json=fields)
 
 
 def test_each_offer_application_has_its_own_state(client, db, securite):
@@ -331,12 +331,15 @@ def test_each_offer_application_has_its_own_state(client, db, securite):
         return {item['id']: item['state']['status'] for item in items}
 
     assert states() == {one['application_id']: 'received', two['application_id']: 'received', spontaneous['application_id']: 'review'}
-    declined = _set_status(client, securite, first['id'], one['application_id'], 'declined')
-    assert declined.status_code == 200, declined.text
-    assert declined.json()['state'] == {'code': 'declined', 'label': 'Non retenue', 'updated_at': declined.json()['state']['updated_at'], 'updated_by': 'rec_securite'}
-    assert _set_status(client, securite, second['id'], two['application_id'], 'interview').status_code == 200
+    # Décision interne défavorable : tant qu'elle n'est pas communiquée, le candidat ne la voit pas.
+    decided = _process(client, securite, one['application_id'], outcome='unfavorable')
+    assert decided.status_code == 200, decided.text
+    assert decided.json()['stage'] == 'decision' and decided.json()['outcome_communicated'] is False
+    assert states()[one['application_id']] == 'received'
+    assert _process(client, securite, one['application_id'], communicate=True).json()['visible_state']['code'] == 'declined'
+    assert _process(client, securite, two['application_id'], stage='shortlisted').json()['visible_state']['code'] == 'shortlisted'
     # Le refus d'une candidature ne touche ni l'autre annonce, ni la candidature spontanée, ni le dossier.
-    assert states() == {one['application_id']: 'declined', two['application_id']: 'interview', spontaneous['application_id']: 'review'}
+    assert states() == {one['application_id']: 'declined', two['application_id']: 'shortlisted', spontaneous['application_id']: 'review'}
     candidate = db.get(Candidate, db.get(RecruitmentApplication, one['application_id']).candidate_id)
     assert candidate.status == 'nouvelle' and 'avisDecision' not in candidate.data
 
@@ -344,34 +347,36 @@ def test_each_offer_application_has_its_own_state(client, db, securite):
     assert detail['state']['label'] == 'Non retenue' and 'autres candidatures' in detail['state']['message'] and detail['state']['updated_at']
     by_offer = {offer['id']: client.get(f"/api/drh/job-offers/{offer['id']}/applications", headers=securite).json()['items'] for offer in (first, second)}
     assert [(row['state']['code'], row['dossier_state']['code']) for row in by_offer[first['id']]] == [('declined', 'review')]
-    assert [(row['state']['code'], row['dossier_state']['code']) for row in by_offer[second['id']]] == [('interview', 'review')]
-    # L'état reste modifiable après la clôture de l'annonce, et visible du candidat.
+    assert [(row['state']['code'], row['dossier_state']['code']) for row in by_offer[second['id']]] == [('shortlisted', 'review')]
+    # Le traitement continue après la clôture de l'annonce, et reste visible du candidat.
     client.post(f"/api/drh/job-offers/{second['id']}/close", headers=securite)
-    assert _set_status(client, securite, second['id'], two['application_id'], 'accepted').status_code == 200
+    assert _process(client, securite, two['application_id'], outcome='favorable', communicate=True).status_code == 200
     closed = client.get(f"/api/public/emploi/applications/{two['application_id']}", headers=headers).json()
     assert closed['state']['status'] == 'accepted' and closed['offer']['open'] is False
 
 
-def test_application_state_is_set_only_by_recruiters_of_the_offer(client, db, securite, solution, restricted_headers):
+def test_application_processing_is_limited_to_recruiters_in_scope(client, db, securite, solution, restricted_headers):
     mine, theirs = publish(client, securite), publish(client, solution, society=SOLUTION, title='Cariste')
     headers, _ = session(client)
     one, two = apply(client, headers, mine['id']).json(), apply(client, headers, theirs['id']).json()
     spontaneous = apply(client, headers).json()
-    path = f"/api/drh/job-offers/{mine['id']}/applications/{one['application_id']}/status"
-    assert client.put(path, json={'status': 'accepted'}).status_code == 401
-    assert client.put(path, headers=headers, json={'status': 'accepted'}).status_code == 401              # le candidat ne décide pas de son état
-    assert client.put(path, headers=restricted_headers, json={'status': 'accepted'}).status_code == 403   # compte sans accès recrutement
-    assert client.put(path, headers=solution, json={'status': 'accepted'}).status_code == 404             # autre société
-    assert _set_status(client, securite, mine['id'], one['application_id'], 'gagné').status_code == 422
-    # Une candidature n'est atteignable que par son annonce : ni celle d'une autre société, ni une spontanée.
-    assert _set_status(client, securite, mine['id'], two['application_id'], 'accepted').status_code == 404
-    assert _set_status(client, securite, mine['id'], spontaneous['application_id'], 'accepted').status_code == 404
-    assert _set_status(client, securite, mine['id'], 987654, 'accepted').status_code == 404
-    assert {row.id: row.status for row in db.query(RecruitmentApplication).all()} == {
+    path = f"/api/drh/job-offers/applications/{one['application_id']}/processing"
+    assert client.put(path, json={'stage': 'review'}).status_code == 401
+    assert client.put(path, headers=headers, json={'stage': 'review'}).status_code == 401                 # le candidat ne décide pas de son état
+    assert client.put(path, headers=restricted_headers, json={'stage': 'review'}).status_code == 403      # compte sans accès recrutement
+    assert client.put(path, headers=solution, json={'stage': 'review'}).status_code == 404                # autre société
+    assert client.get(f"/api/drh/job-offers/applications/{one['application_id']}", headers=solution).status_code == 404
+    assert _process(client, securite, one['application_id'], stage='gagné').status_code == 422
+    assert _process(client, securite, one['application_id'], outcome='withdrawn').status_code == 422      # le retrait appartient au candidat
+    assert _process(client, securite, two['application_id'], stage='review').status_code == 404
+    assert _process(client, securite, 987654, stage='review').status_code == 404
+    assert {row.id: row.stage for row in db.query(RecruitmentApplication).all()} == {
         one['application_id']: 'received', two['application_id']: 'received', spontaneous['application_id']: 'received'}
-    assert _set_status(client, solution, theirs['id'], two['application_id'], 'shortlisted').json()['state']['code'] == 'shortlisted'
+    # Le vivier des candidatures spontanées est commun au recrutement.
+    assert _process(client, solution, spontaneous['application_id'], stage='review').json()['stage'] == 'review'
+    assert _process(client, solution, two['application_id'], stage='shortlisted').json()['stage_label'] == 'Présélection'
     assert [state['code'] for state in client.get('/api/drh/job-offers/meta', headers=securite).json()['application_states']] == [
-        'received', 'shortlisted', 'interview', 'accepted', 'declined']
+        'received', 'review', 'shortlisted', 'interview', 'accepted', 'declined', 'withdrawn']
 
 
 def test_spontaneous_and_historical_applications_follow_the_dossier(client, db, securite):
@@ -465,11 +470,14 @@ def test_profile_and_documents_are_reused_and_cv_formats_are_kept(client, db, se
     assert candidate.email == 'nadia.reuse@example.com' and candidate.data['commune'] == 'Hydra' and candidate.data['langues'] == ['Arabe', 'Français']
     assert candidate.data['experience'][0]['societe'] == 'ACME' and candidate.data['cv']['mime_type'] == 'image/png'
     assert candidate.data['photo'] and candidate.data['photo'] != photo                                   # photo stockée par le circuit existant
-    # Un CV mis à jour suit la candidature suivante.
+    # Remplacer le CV du profil ne modifie ni le dossier, ni la pièce déjà transmise : la candidature suivante porte la nouvelle.
     client.put('/api/public/emploi/me/cv', headers=headers, json={'name': 'nouveau.pdf', 'mime_type': 'application/pdf', 'data_base64': PDF})
-    assert apply(client, headers).status_code == 201
+    later = apply(client, headers)
+    assert later.status_code == 201
     db.refresh(candidate)
-    assert candidate.data['cv']['name'] == 'nouveau.pdf'
+    assert candidate.data['cv']['name'] == 'cv.png'
+    sent_documents = {row['id']: [doc['name'] for doc in row['documents']] for row in client.get('/api/public/emploi/applications', headers=headers).json()['items']}
+    assert sent_documents == {sent.json()['application_id']: ['cv.png', 'photo.jpg'], later.json()['application_id']: ['nouveau.pdf', 'photo.jpg']}
     assert client.delete('/api/public/emploi/me/cv', headers=headers).status_code == 204
     assert client.get('/api/public/emploi/me', headers=headers).json()['cv'] is None
 

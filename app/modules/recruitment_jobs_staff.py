@@ -52,10 +52,6 @@ class OfferIn(BaseModel):
         return None if value == '' else value
 
 
-class ApplicationStatusIn(BaseModel):
-    status: Annotated[str, Field(max_length=20)]
-
-
 class CompanyIn(BaseModel):
     name: Annotated[str, Field(min_length=2, max_length=150)]
     sector: Annotated[str | None, Field(default=None, max_length=120)]
@@ -63,6 +59,9 @@ class CompanyIn(BaseModel):
     description: Annotated[str | None, Field(default=None, max_length=4000)]
     website: Annotated[str | None, Field(default=None, max_length=200, pattern=r'^(https://[^\s]+)?$')]
     logo_path: Annotated[str | None, Field(default=None, max_length=200)]
+    activities: Annotated[str | None, Field(default=None, max_length=2000)]
+    locations: Annotated[str | None, Field(default=None, max_length=300)]
+    headcount: Annotated[str | None, Field(default=None, max_length=60)]
     is_active: bool = True
 
 
@@ -186,6 +185,11 @@ def publish_job_offer(offer_id: int, request: Request, db: Session = Depends(get
     if offer.status != OFFER_PUBLISHED:
         offer.status, offer.published_at, offer.closed_at, offer.updated_by = OFFER_PUBLISHED, datetime.utcnow(), None, user.username
         _audit(db, request, user, 'publish', offer, company)
+        # Alertes des candidats : une notification par espace dont les critères correspondent.
+        from app.modules import recruitment_engage_service as engage
+        alerts = engage.notify_matching_alerts(db, offer, company)
+        db.commit()
+        engage.send_push(db, alerts)
     db.commit()
     return jobs.offer_staff(offer, company, jobs.application_counts(db, [offer.id]).get(offer.id, 0))
 
@@ -231,22 +235,3 @@ def _application_staff(application: Application, candidate: Candidate) -> dict:
             # État de cette candidature ; l'état du dossier (commun à la personne) est donné à part.
             'state': {'code': state['status'], 'label': state['label'], 'updated_at': state['updated_at'], 'updated_by': application.status_updated_by},
             'dossier_state': {'code': dossier['status'], 'label': dossier['label']}}
-
-
-@router.put('/{offer_id}/applications/{application_id}/status')
-def set_job_application_status(offer_id: int, application_id: int, payload: ApplicationStatusIn, request: Request,
-                               db: Session = Depends(get_db), user: User = Depends(_recruiter)):
-    offer, company = _offer(db, user, offer_id)
-    if payload.status not in jobs.APPLICATION_STATES:
-        raise HTTPException(status_code=422, detail='État de candidature inconnu.')
-    # La candidature doit appartenir à cette annonce : pas d'accès par un identifiant d'une autre société.
-    application = db.scalar(select(Application).where(Application.id == application_id, Application.offer_id == offer.id).with_for_update())
-    if application is None:
-        raise HTTPException(status_code=404, detail='Introuvable.')
-    if application.status != payload.status:
-        previous = application.status
-        application.status, application.status_updated_at, application.status_updated_by = payload.status, datetime.utcnow(), user.username
-        append_audit(db, action='recruitment.job_application.status', resource='job_application', resource_id=application.id, result='success',
-                     user=user, request=request, society=company.society, old_state={'status': previous}, new_state={'status': payload.status})
-    db.commit()
-    return _application_staff(application, db.get(Candidate, application.candidate_id))

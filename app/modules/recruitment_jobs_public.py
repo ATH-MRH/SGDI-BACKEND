@@ -41,6 +41,7 @@ class EmploiApplicationIn(BaseModel):
     offer_id: int | None = None
     request_id: Annotated[str, Field(min_length=8, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')]
     desired_position: Annotated[str | None, Field(default=None, max_length=150)]
+    message: Annotated[str | None, Field(default=None, max_length=1500)]
     consent: bool
     profile: EmploiProfileIn | None = None
 
@@ -69,12 +70,14 @@ def _dossier_state(candidate) -> tuple[str, dict]:
     return state.pop('reference'), state
 
 
-def _application_out(application: Application, candidate, offer: Offer | None, company: Company | None) -> dict:
+def _application_out(db: Session, application: Application, candidate, offer: Offer | None, company: Company | None) -> dict:
     reference, dossier_state = _dossier_state(candidate)
     # Candidature à une annonce : son propre état. Spontanée ou historique : l'état du dossier.
     result = {'id': application.id, 'kind': 'offer' if application.offer_id else 'spontaneous', 'position': application.position or '',
               'submitted_at': application.created_at.isoformat() if application.created_at else None, 'reference': reference,
               'state': jobs.application_state(application) if application.offer_id else dossier_state, 'offer': None}
+    from app.modules import recruitment_engage_service as engage
+    result.update(engage.candidate_extras(db, application))
     if offer is not None and company is not None:
         # Une annonce clôturée reste nommée dans le suivi du candidat, sans redevenir consultable.
         result['offer'] = {'id': offer.id, 'title': offer.title, 'company': jobs.company_public(company),
@@ -205,7 +208,7 @@ def _applications(db: Session, account: Account, application_id: int | None = No
         stmt = stmt.where(Application.id == application_id)
     candidate = jobs.dossier(db, account)
     # Dossier supprimé par le recrutement : ses candidatures disparaissent avec lui.
-    return [_application_out(application, candidate, offer, company) for application, offer, company in db.execute(stmt).all()
+    return [_application_out(db, application, candidate, offer, company) for application, offer, company in db.execute(stmt).all()
             if candidate is not None and application.candidate_id == candidate.id]
 
 
@@ -298,13 +301,19 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
             data['candidaturesEmploi'] = [*(data.get('candidaturesEmploi') or [])[-49:], entry]
             data['auditTrail'] = [*(data.get('auditTrail') or [])[-99:],
                                   {'action': 'candidature_emploi', 'by': 'iron-emploi', 'at': entry['at'], 'offre': entry['offreId']}]
-            if full.cv_meta and full.cv_content and full.cv_content != data.get('_cv_content'):
-                # Le CV est le document du candidat : sa dernière version suit la nouvelle candidature.
-                data['cv'], data['_cv_content'] = dict(full.cv_meta), full.cv_content
+            # Le CV du dossier n'est pas remplacé : chaque candidature garde ses propres pièces (ci-dessous).
             candidate.data = data
         application = Application(account_id=account.id, candidate_id=candidate.id, offer_id=offer.id if offer else None,
-                                  position=position, request_id=payload.request_id, source='mobile')
+                                  position=position, request_id=payload.request_id, source='mobile',
+                                  message=(payload.message or '').strip() or None)
         db.add(application)
+        db.flush()
+        # Pièces figées à la réception, événement d'historique et accusé de réception dans l'espace du candidat.
+        from app.modules import recruitment_engage_service as engage
+        pieces = engage.snapshot_documents(db, application, full)
+        engage.log_event(db, application, 'reception', f'Candidature reçue depuis IRON Emploi ({pieces} pièce(s) jointe(s))', 'candidat')
+        engage.notify(db, account.id, 'application', 'Candidature reçue', f'{position} — votre candidature a bien été transmise au service recrutement.',
+                      application_id=application.id)
         db.commit()
     except IntegrityError:
         db.rollback()
