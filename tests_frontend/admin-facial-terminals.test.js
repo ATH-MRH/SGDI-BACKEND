@@ -79,10 +79,10 @@ test('liste : identifiant, nom, matériel, société, site, équipement, état, 
   // Connexion réellement perdue ≠ borne sans battement de cœur (état inconnu).
   assert.match(row('trm:7'), /Hors ligne Connexion perdue Appairé/); assert.match(row('trm:8'), /Sans signal Sans signal — borne à recharger pour le suivi de connexion/);
   const actions = (key) => [...c.view.querySelectorAll(`[data-facial-row="${key}"] button`)].map((b) => b.textContent.replace(/^[^\wÀ-ÿ]+/, ''));
-  assert.deepEqual(actions('trm:4'), ['Utilisateurs autorisés', 'Remplacer le matériel', 'Couper le pointage facial', 'Révoquer']);
-  assert.deepEqual(actions('trm:5'), ['Utilisateurs autorisés', 'Appairer', 'Révoquer']);
+  assert.deepEqual(actions('trm:4'), ['Utilisateurs autorisés', 'Remplacer le matériel', 'Couper le pointage facial', 'Révoquer', 'Supprimer']);
+  assert.deepEqual(actions('trm:5'), ['Utilisateurs autorisés', 'Appairer', 'Révoquer', 'Supprimer']);
   assert.deepEqual(actions('cam:9'), ['Utilisateurs autorisés']);
-  assert.deepEqual(actions('trm:6'), [], 'révoqué : plus aucune action');
+  assert.deepEqual(actions('trm:6'), ['Supprimer'], 'révoqué : seule la suppression reste');
   assert.match(c.text(c.view.querySelector('#admin-facial-kpi')), /2 actif\(s\).*1 révoqué\(s\)/);
   assert.match(c.text(c.view), /Non pris en charge Terminal réseau autonome.*Non pris en charge Caméra USB ou intégrée du poste Pointeur/);
   // Jamais de secret ni d'adresse d'équipement à l'écran.
@@ -156,7 +156,14 @@ test('révoquer : motif obligatoire, effet relu depuis le serveur ; couper le fa
   c.view.querySelector('[data-facial-revoke="trm:4"]').click(); await wait(40);
   assert.deepEqual(c.writes().at(-1), { method: 'POST', url: '/biometrics/terminals/4/revoke', body: { reason: 'Tablette perdue' } });
   assert.match(c.text(c.view.querySelector('[data-facial-row="trm:4"]')), /Révoqué Tablette perdue/);
-  assert.equal(c.view.querySelectorAll('[data-facial-row="trm:4"] button').length, 0);
+  assert.deepEqual([...c.view.querySelectorAll('[data-facial-row="trm:4"] button')].map((b) => b.dataset.facialDelete), ['trm:4']);
+  // Supprimer : annulation sans écriture, puis DELETE avec motif (historique conservé côté serveur).
+  c.w.prompt = () => null;
+  c.view.querySelector('[data-facial-delete="trm:4"]').click(); await wait();
+  assert.notEqual(c.writes().at(-1).method, 'DELETE');
+  c.w.prompt = () => ' Remplacée ';
+  c.view.querySelector('[data-facial-delete="trm:4"]').click(); await wait(40);
+  assert.deepEqual(c.writes().at(-1), { method: 'DELETE', url: '/biometrics/terminals/4', body: { reason: 'Remplacée' } });
 });
 
 test('contenu hostile échappé ; liste indisponible : erreur affichée, aucune donnée inventée', async () => {

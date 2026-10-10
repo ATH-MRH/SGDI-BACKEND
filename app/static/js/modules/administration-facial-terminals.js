@@ -50,6 +50,7 @@ function adminFacialHTML(){
       terminal&&!revoked?`<button class="btn btn-ghost text-xs" data-facial-pair="${escapeHTML(item.key)}" onclick="adminFacialPair('${escapeHTML(item.key)}')">${item.paired?"🔁 Remplacer le matériel":"🔗 Appairer"}</button>`:"",
       terminal&&!revoked&&item.paired?`<button class="btn btn-ghost text-xs" data-facial-toggle="${escapeHTML(item.key)}" onclick="adminFacialToggle('${escapeHTML(item.key)}')">${item.facial_attendance_enabled?"Couper le pointage facial":"Autoriser le pointage facial"}</button>`:"",
       terminal&&!revoked?`<button class="btn btn-ghost text-xs text-red-600" data-facial-revoke="${escapeHTML(item.key)}" onclick="adminFacialRevoke('${escapeHTML(item.key)}')">⛔ Révoquer</button>`:"",
+      terminal?`<button class="btn btn-ghost text-xs text-red-600" data-facial-delete="${escapeHTML(item.key)}" onclick="adminFacialDelete('${escapeHTML(item.key)}')">🗑 Supprimer</button>`:"",
     ].join("");
     return `<tr class="border-t" data-facial-row="${escapeHTML(item.key)}">
       <td class="p-3"><div class="font-black">${escapeHTML(item.name||"")}</div><div class="text-xs text-slate-500">${escapeHTML(item.key)} · ${escapeHTML(item.hardware||"")}</div></td>
@@ -118,8 +119,15 @@ async function adminFacialPair(key,fresh){
     openModal(`<h3 class="text-lg font-black mb-2">Code d'association</h3>
       <p class="text-sm text-slate-600 mb-3">À saisir une seule fois sur l'appareil, page <b>/borne</b> de pointeur.irongs.com. Valable ${Math.round((out.expires_in||600)/60)} minutes, utilisable une fois.</p>
       <div class="text-3xl font-black tracking-widest text-center my-4" id="admin-facial-code">${escapeHTML(out.code||"")}</div>
+      <div id="admin-facial-qr" class="flex justify-center mb-3"></div>
       <p class="text-xs text-slate-500 mb-4">Une fois l'appareil associé, aucun nouvel appairage n'est demandé — ni à la connexion du Pointeur, ni à l'activation.</p>
       <div class="flex justify-end"><button class="btn btn-primary" onclick="closeModal();renderView()">Fermer</button></div>`);
+    // QR facultatif (même lien que le code) si la bibliothèque est chargée ; jamais conservé.
+    const qr=document.getElementById("admin-facial-qr");
+    if(qr&&window.QRCode&&out.pair_path){
+      const origin=/\.irongs\.com$/.test(location.hostname)?"https://pointeur.irongs.com":location.origin;
+      new window.QRCode(qr,{text:origin+out.pair_path,width:180,height:180,correctLevel:window.QRCode.CorrectLevel.M});
+    }
   }catch(e){toast(e.message,"error")}
 }
 async function adminFacialToggle(key){
@@ -134,6 +142,16 @@ async function adminFacialRevoke(key){
   const reason=String(prompt("Révocation DÉFINITIVE de « "+item.name+" » (effet immédiat).\nMotif (3 caractères minimum) :")||"").trim();
   if(reason.length<3){if(reason)toast("Motif trop court","error");return}
   try{await adminFacialCall("POST","/terminals/"+encodeURIComponent(key.split(":")[1])+"/revoke",{reason});toast("Terminal révoqué","success");renderView()}
+  catch(e){toast(e.message,"error")}
+}
+
+// Suppression : retrait opérationnel définitif ; l'historique et les preuves de pointage sont
+// conservés côté serveur. Le nom redevient disponible sur le site.
+async function adminFacialDelete(key){
+  const item=adminFacialDevice(key);if(!item)return;
+  const reason=prompt("Supprimer « "+item.name+" » ? Il disparaîtra de la liste et ne pourra plus pointer ; son historique est conservé.\nMotif (facultatif) :");
+  if(reason===null)return;
+  try{await adminFacialCall("DELETE","/terminals/"+encodeURIComponent(key.split(":")[1]),{reason:String(reason).trim()||null});toast("Terminal supprimé — historique conservé","success");renderView()}
   catch(e){toast(e.message,"error")}
 }
 

@@ -214,7 +214,7 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
     const kpis = await page.$$eval('#terminal-kpis strong[data-terminal-kpi]', els => Object.fromEntries(els.map(el => [el.dataset.terminalKpi, Number(el.textContent)])));
     assert.deepEqual(kpis, { total: 2, active: 2, inactive: 0, pairing: 0, sites: 1 });
     const labels = await page.$$eval(`tr[data-terminal-id="${ids.phone}"] .terminal-action`, els => els.map(el => ({ label: el.getAttribute('aria-label'), title: el.getAttribute('title'), tag: el.tagName, disabled: el.disabled })));
-    assert.equal(labels.length, 7);
+    assert.equal(labels.length, 4, 'facial, activation, renommage, audit — aucune commande de cycle de vie');
     assert.ok(labels.every(item => item.label && item.title && item.tag === 'BUTTON' && !item.disabled));
     const before = (await api('/biometrics/terminals', { token })).data;
     await page.focus(`[data-term-audit="${ids.phone}"]`);
@@ -298,18 +298,19 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
     assert.deepEqual(errors, []);
   });
 
-  await t.test('actions conservées sur SQLite jetable : confirmations, ré-association, facial, activation, renommage, création et révocation', async () => {
+  await t.test('réglages conservés (confirmations, facial, activation, renommage) ; cycle de vie par l\'Administration Système, reflété ici sans commande', async () => {
     const before = (await api('/biometrics/terminals', { token })).data.find(row => row.id === ids.phone);
     let dialogs = [];
     const dismiss = async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); };
     page.on('dialog', dismiss);
     const requestCount = requests.length;
     await page.click(`[data-term-enable="${ids.phone}"]`);
-    await page.click(`[data-term-pair="${ids.phone}"]`);
-    await page.click(`[data-term-revoke="${ids.phone}"]`);
     await delay(100);
     page.off('dialog', dismiss);
-    assert.equal(dialogs.length, 3, 'confirmations sensibles conservées');
+    assert.equal(dialogs.length, 1, 'confirmation sensible conservée');
+    // Enregistrement, association, révocation, suppression : plus aucune commande sur cette page.
+    assert.equal(await page.$$eval('#terminal-add, #term-form, [data-term-pair], [data-term-revoke], [data-term-delete]', els => els.length), 0);
+    assert.doesNotMatch(await page.$eval('#terminal-rows', el => el.innerText), /Associer|Révoquer|Supprimer/);
     assert.equal(requests.length, requestCount, 'annulation ne déclenche aucune écriture');
     assert.deepEqual((await api('/biometrics/terminals', { token })).data.find(row => row.id === ids.phone), before);
     const accept = async dialog => { await dialog.accept(); };
@@ -322,54 +323,40 @@ s=SessionLocal(); s.get(BiometricTerminal, ${ids.phone}).last_seen_at=datetime.u
       await changeAndWait(page, () => page.click(`[data-term-facial="${ids.phone}"]`), 2);
       assert.equal((await api('/biometrics/terminals', { token })).data.find(row => row.id === ids.phone).facial_attendance_enabled, enabled);
     }
-    await page.click(`[data-term-pair="${ids.phone}"]`);
-    await page.waitForSelector('#pair-code');
-    assert.match(await page.$eval('#pair-code', el => el.textContent.replace(/-/g, '')), /^[A-Z0-9]{10}$/);
-    await changeAndWait(page, () => page.click('#pair-close'), 2);
     page.off('dialog', accept);
     page.once('dialog', dialog => dialog.accept('SMARTPHONE HAMOUL 01 RENOMME'));
     await changeAndWait(page, () => page.click(`[data-term-rename="${ids.phone}"]`), 2);
     assert.equal((await api('/biometrics/terminals', { token })).data.find(row => row.id === ids.phone).name, 'SMARTPHONE HAMOUL 01 RENOMME');
-    await page.click('#terminal-add');
-    await page.waitForSelector('#term-form');
-    await page.type('#t-name', 'SMARTPHONE HAMOUL 01');
-    await page.select('#t-type', 'SMARTPHONE_ANDROID');
-    await page.select('#t-site', String(ids.sites[0]));
-    await page.type('#t-loc', 'POSTE TEST');
-    await page.click('#term-form button[type="submit"]');
-    await page.waitForSelector('#pair-close');
-    await changeAndWait(page, () => page.click('#pair-close'), 3);
+    // Cycle de vie : routes d'Administration Système (API), la page le reflète après actualisation.
+    assert.equal((await api('/biometrics/terminals', { token, method: 'POST', body: { name: 'SMARTPHONE HAMOUL 01', terminal_type: 'SMARTPHONE_ANDROID', site_id: ids.sites[0], location: 'POSTE TEST' } })).status, 200);
+    await changeAndWait(page, () => page.click('#terminal-refresh'), 3);
     const created = (await api('/biometrics/terminals', { token })).data.find(row => row.name === 'SMARTPHONE HAMOUL 01');
     assert.ok(created);
     assert.equal(created.facial_attendance_enabled, false);
     assert.equal(created.terminal_type, 'SMARTPHONE_ANDROID');
     const oldKey = await pairInChrome(page, created, token, 'old');
     assert.equal(await signedSession(page, created, 'old'), 200);
-    page.once('dialog', dialog => dialog.accept('Révocation terminal E2E jetable'));
-    await changeAndWait(page, () => page.click(`[data-term-revoke="${created.id}"]`), 3);
+    assert.equal((await api(`/biometrics/terminals/${created.id}/revoke`, { token, method: 'POST', body: { reason: 'Révocation terminal E2E jetable' } })).status, 200);
+    await changeAndWait(page, () => page.click('#terminal-refresh'), 3);
     const revoked = (await api('/biometrics/terminals', { token })).data.find(row => row.id === created.id);
     assert.ok(revoked.revoked_at);
     assert.equal(revoked.enabled, false);
-    assert.equal(await page.$$eval(`tr[data-terminal-id="${created.id}"] .terminal-action`, els => els.length), 2, 'terminal révoqué : audit et suppression');
+    assert.equal(await page.$$eval(`tr[data-terminal-id="${created.id}"] .terminal-action`, els => els.length), 1, 'terminal révoqué : audit seul');
     await page.click(`[data-term-audit="${created.id}"]`);
     await page.waitForSelector('#audit-close');
     assert.match(await page.$eval('.modal', el => el.innerText), /create/);
     assert.match(await page.$eval('.modal', el => el.innerText), /revoke/);
     await page.click('#audit-close');
-    await page.click(`[data-term-delete="${created.id}"]`);
-    await page.waitForSelector('#terminal-delete-confirm');
-    await page.type('#terminal-delete-reason', 'Remplacement E2E');
-    await page.click('#terminal-delete-confirm');
+    assert.equal((await api(`/biometrics/terminals/${created.id}`, { token, method: 'DELETE', body: { reason: 'Remplacement E2E' } })).status, 200);
+    await changeAndWait(page, () => page.click('#terminal-refresh'), 2);
     await page.waitForFunction(id => !document.querySelector(`[data-terminal-id="${id}"]`), {}, created.id);
     assert.ok(!(await api('/biometrics/terminals', { token })).data.some(row => row.id === created.id));
     const archived = (await api('/biometrics/terminals?include_deleted=true', { token })).data.find(row => row.id === created.id);
     assert.ok(archived.deleted_at);
     assert.equal(await signedSession(page, created, 'old'), 401);
     assert.match(JSON.stringify((await api(`/biometrics/terminals/${created.id}/audit`, { token })).data), /terminal.delete/);
-    await page.click('#terminal-add'); await page.waitForSelector('#term-form');
-    await page.type('#t-name', created.name); await page.select('#t-type', created.terminal_type);
-    await page.select('#t-site', String(created.site_id)); await page.click('#term-form button[type="submit"]');
-    await page.waitForSelector('#pair-close'); await page.click('#pair-close');
+    assert.equal((await api('/biometrics/terminals', { token, method: 'POST', body: { name: created.name, terminal_type: created.terminal_type, site_id: created.site_id } })).status, 200);
+    await changeAndWait(page, () => page.click('#terminal-refresh'), 3);
     const recreated = (await api('/biometrics/terminals', { token })).data.find(row => row.name === created.name);
     assert.ok(recreated); assert.notEqual(recreated.id, created.id); assert.notEqual(recreated.terminal_id, created.terminal_id);
     const newKey = await pairInChrome(page, recreated, token, 'new');
