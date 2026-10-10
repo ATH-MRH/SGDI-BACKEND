@@ -124,7 +124,7 @@ sh scripts/test-env/stop.sh            # arrêt ; « --effacer » supprime aussi
 2. Scanner le QR code : appareil photo sur iPhone, Expo Go sur Samsung.
 3. Pour s'identifier, saisir n'importe quel numéro algérien fictif, par exemple `0770 12 34 56` (candidat déjà pourvu de candidatures, messages et entretien), puis lancer `sms-code.sh` sur le Mac et recopier le code.
 
-**Pourquoi aucun SMS n'arrive** : dans cet environnement le serveur est réglé sur le fournisseur `poll`. Il ne contacte ni SMSGate ni un opérateur ; il met le message en file pour une passerelle, et `sms-code.sh` joue cette passerelle avec une clé tirée au hasard, valable pour cette base seulement. Le code reste vérifié par le serveur, avec ses limites d'essais et de durée. En production le fournisseur est SMSGate : cette file n'y est pas servie et la clé locale n'y existe pas.
+**Pourquoi aucun SMS n'arrive** : dans cet environnement le serveur est réglé sur le fournisseur `poll`. Il ne contacte ni SMSGate ni un opérateur ; il met le message en file pour une passerelle. Une passerelle locale, lancée avec le serveur d'essai et munie d'une clé tirée au hasard pour cette base, reste à l'écoute (sans elle le serveur refuse d'émettre un code) et note chaque code dans `.test-env/codes.log` ; `sms-code.sh` affiche les derniers. Le code reste vérifié par le serveur, avec ses limites d'essais et de durée. En production le fournisseur est SMSGate : cette file n'y est pas servie et la clé locale n'y existe pas.
 
 Les secrets locaux, les journaux et les pièces déposées vont dans `.test-env/`, ignoré par Git. L'espace recruteur de cet environnement est à `http://<adresse-du-Mac>:8765/static/recrute.html` (identifiants dans `.test-env/env`).
 

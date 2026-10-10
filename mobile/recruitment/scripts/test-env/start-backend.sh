@@ -45,5 +45,7 @@ if [ "$NEW" = 1 ]; then
   psql -h "$PGHOST_DIR" "$DB" -qc "update users set global_society_access = true, authorized_societies = '[\"IRON Global Sécurité\", \"IRON Global Solution\", \"IRON Global Services\"]' , authorized_actions = '[\"read\", \"create\", \"update\", \"validate\", \"delete\", \"export\", \"admin\"]' where username ilike 'recruteur'"
   "$PYTHON" "$HERE/cv_fictif.py" "$STATE" >/dev/null; "$PYTHON" "$HERE/seed.py" "$STATE"
 fi
+# Passerelle SMS locale : sans elle, le serveur refuse d'émettre un code.
+pgrep -f "sms-gateway.py $PORT" >/dev/null || nohup "$PYTHON" "$HERE/sms-gateway.py" "$PORT" "$STATE/codes.log" > /dev/null 2>&1 &
 echo "Serveur d'essai prêt : http://$(lan_ip):$PORT  (recruteur : http://$(lan_ip):$PORT/static/recrute.html)"
 echo "Compte recruteur local : identifiant et mot de passe dans $STATE/env (ADMIN_INITIAL_*)."
