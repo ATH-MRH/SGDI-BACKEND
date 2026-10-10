@@ -1,4 +1,4 @@
-"""Migration 20261013_0001 : messages, entretiens, traitement par candidature — additive, rejouable, réversible."""
+"""Migration 20261014_0002 : messages, entretiens, traitement par candidature — additive, rejouable, réversible."""
 import os
 import sqlite3
 import subprocess
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-REVISION, PREVIOUS = "20261013_0001", "20261012_0001"
+REVISION, PREVIOUS = "20261014_0002", "20261014_0001"
 TABLES = {"recruitment_messages", "recruitment_interviews", "recruitment_job_alerts", "recruitment_notifications", "recruitment_push_devices",
           "recruitment_application_documents", "recruitment_document_requests", "recruitment_application_notes",
           "recruitment_application_events", "recruitment_application_contracts", "recruitment_tips"}
@@ -38,7 +38,7 @@ def test_upgrade_extends_an_existing_iron_emploi_database_without_losing_data(tm
     database = tmp_path / "engage.sqlite"
     url = f"sqlite:///{database}"
     _alembic(url, "upgrade", PREVIOUS)
-    # Base telle qu'après 20261012_0001 seule : sans les nouvelles tables ni les nouvelles colonnes.
+    # Base telle qu'après 20261014_0001 seule : sans les nouvelles tables ni les nouvelles colonnes.
     with sqlite3.connect(database) as con:
         for table in TABLES:
             con.execute(f"DROP TABLE IF EXISTS {table}")

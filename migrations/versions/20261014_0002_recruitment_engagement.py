@@ -1,10 +1,10 @@
 """IRON Emploi : messages, entretiens, alertes, notifications, appareils et présentation des sociétés.
 
-Révision additive, distincte de 20261012_0001 : onze nouvelles tables et des colonnes ajoutées à
+Révision additive, distincte de 20261014_0001 : onze nouvelles tables et des colonnes ajoutées à
 trois tables IRON Emploi (traitement par candidature, présentation des sociétés, préférences). Rejouable (créations et ajouts conditionnels).
 
-Revision ID: 20261013_0001
-Revises: 20261012_0001
+Revision ID: 20261014_0002
+Revises: 20261014_0001
 """
 import sqlalchemy as sa
 from alembic import op
@@ -15,8 +15,8 @@ from app.modules.recruitment_engage_models import (
     RecruitmentPushDevice, RecruitmentTip,
 )
 
-revision = '20261013_0001'
-down_revision = '20261012_0001'
+revision = '20261014_0002'
+down_revision = '20261014_0001'
 branch_labels = None
 depends_on = None
 
@@ -49,7 +49,7 @@ def _indexes(table: str) -> set[str]:
 
 
 def upgrade():
-    # 20261012_0001 crée ses tables depuis les modèles courants : sur une base neuve les colonnes
+    # 20261014_0001 crée ses tables depuis les modèles courants : sur une base neuve les colonnes
     # et leurs index existent déjà, d'où les ajouts conditionnels.
     for table, columns in COLUMNS.items():
         present = _existing(table)

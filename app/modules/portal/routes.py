@@ -1900,8 +1900,11 @@ def delete_portal_account(
 # Connexion portail (public)
 # ─────────────────────────────────────────────────────────────────
 
-@router.post("/login")
-def portal_login(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+def authenticate_portal_account(db: Session, request: Request, payload: dict[str, Any]) -> tuple[dict[str, Any], str, Any, Any]:
+    """Vérifie un identifiant de compte employé et son mot de passe.
+
+    Retourne (compte, matricule, fiche SQL ou None, agent historique ou None). Source unique
+    de la règle : le portail web et l'accès mobile employé ne peuvent pas diverger."""
     _limit_public(request, "login", 30)
     username = _norm_text(payload.get("username"))
     password = _clean_text(payload.get("password"))
@@ -1937,6 +1940,12 @@ def portal_login(payload: dict[str, Any], request: Request, db: Session = Depend
     blocked_reason = _employee_portal_block_reason(employee_row or agent)
     if blocked_reason:
         raise HTTPException(status_code=403, detail=blocked_reason)
+    return account, matricule, employee_row, agent
+
+
+@router.post("/login")
+def portal_login(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    account, matricule, _employee_row, agent = authenticate_portal_account(db, request, payload)
 
     portal_token = create_access_token(subject=matricule, claims={"portal": True}, ttl_minutes=PORTAL_TOKEN_TTL)
     employee: dict[str, Any] = {

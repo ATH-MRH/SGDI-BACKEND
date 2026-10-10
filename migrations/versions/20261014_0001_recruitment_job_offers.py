@@ -3,8 +3,8 @@
 Migration purement additive : cinq nouvelles tables, aucune table existante modifiée.
 Les candidatures historiques et spontanées restent dans `candidates`, inchangées.
 
-Revision ID: 20261012_0001
-Revises: 20261011_0001
+Revision ID: 20261014_0001
+Revises: 20261013_0002
 """
 from alembic import op
 
@@ -12,8 +12,8 @@ from app.modules.recruitment_jobs_models import (
     RecruitmentApplication, RecruitmentCandidateAccount, RecruitmentCandidateSession, RecruitmentCompany, RecruitmentJobOffer,
 )
 
-revision = '20261012_0001'
-down_revision = '20261011_0001'
+revision = '20261014_0001'
+down_revision = '20261013_0002'
 branch_labels = None
 depends_on = None
 

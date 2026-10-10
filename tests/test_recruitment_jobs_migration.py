@@ -1,4 +1,4 @@
-"""Migration 20261012_0001 : tables IRON Emploi — additive, rejouable, réversible, sans toucher aux candidatures."""
+"""Migration 20261014_0001 : tables IRON Emploi — additive, rejouable, réversible, sans toucher aux candidatures."""
 import os
 import sqlite3
 import subprocess
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-REVISION, PREVIOUS = "20261012_0001", "20261011_0001"
+REVISION, PREVIOUS = "20261014_0001", "20261013_0002"
 TABLES = {"recruitment_companies", "recruitment_job_offers", "recruitment_candidate_accounts", "recruitment_candidate_sessions",
           "recruitment_applications"}
 

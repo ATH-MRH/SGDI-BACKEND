@@ -39,10 +39,14 @@ from app.modules.site_workforce.routes import router as site_workforce_router
 from app.modules.attendance.routes import router as attendance_router
 from app.modules.biometrics.routes import router as biometrics_router
 from app.modules.brq.routes import router as brq_router
+from app.modules.mobile.routes import router as mobile_router
+from app.modules.employee_mobile.routes import router as employee_mobile_router
 
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["Auth"])
+api_router.include_router(mobile_router, prefix="/mobile", tags=["ATLAS MOBILE"])
+api_router.include_router(employee_mobile_router, prefix="/employee-mobile", tags=["ATLAS MOBILE — employé"])
 api_router.include_router(drh_router, prefix="/drh", tags=["DRH"])
 api_router.include_router(candidate_import_router, prefix="/drh", tags=["Recrutement — import Excel"])
 api_router.include_router(ops_router, prefix="/ops", tags=["OPS"])

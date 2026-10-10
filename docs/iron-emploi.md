@@ -24,7 +24,7 @@ Candidat identifié par SMS ── profil, documents, candidatures ──> dossi
 - Une candidature **spontanée ou historique** n'est rattachée à aucune annonce : son suivi reste
   celui du dossier, comme avant.
 
-## 2. Données (migration `20261012_0001`)
+## 2. Données (migration `20261014_0001`)
 
 Cinq tables nouvelles, aucune table existante modifiée :
 
@@ -110,9 +110,9 @@ les importer en brouillon.
 - La nouvelle application détecte l'absence de `/api/public/emploi/config` et se limite alors à
   la candidature spontanée par le parcours existant.
 
-## 6. Traitement des candidatures (migration `20261013_0001`)
+## 6. Traitement des candidatures (migration `20261014_0002`)
 
-La révision `20261013_0001` complète la précédente sans la modifier : colonnes ajoutées aux
+La révision `20261014_0002` complète la précédente sans la modifier : colonnes ajoutées aux
 sociétés, aux espaces candidats et aux candidatures, et onze tables (messages, entretiens, pièces
 de candidature, demandes de pièces, notes internes, historique, contrat, conseils, alertes,
 notifications, appareils).
@@ -179,7 +179,7 @@ Les notifications dans l'application, elles, fonctionnent sans réglage.
 ## 7. Mise en service
 
 1. Fusionner la branche serveur ; le déploiement applique `alembic upgrade head`
-   (révisions `20261012_0001` puis `20261013_0001`).
+   (révisions `20261014_0001` puis `20261014_0002`, à la suite de `20261013_0002` déjà en production).
 2. Vérifier `GET https://recrute.irongs.com/api/public/emploi/config`.
 3. Dans recrute.irongs.com → Annonces : créer une annonce, la publier, la vérifier dans
    `GET /api/public/emploi/offers`.
@@ -189,8 +189,8 @@ Les notifications dans l'application, elles, fonctionnent sans réglage.
 Aucune variable d'environnement obligatoire. `RECRUITMENT_PUSH_ENABLED` est facultative et reste
 à `false`. Les réglages SMSGate ne changent pas.
 
-Retour arrière : `alembic downgrade 20261012_0001` retire le traitement des candidatures ;
-`alembic downgrade 20261011_0001` retire aussi annonces, espaces candidats et candidatures. Les
+Retour arrière : `alembic downgrade 20261014_0001` retire le traitement des candidatures ;
+`alembic downgrade 20261013_0002` retire aussi annonces, espaces candidats et candidatures. Les
 dossiers du vivier ne sont pas touchés.
 
 ## 8. Limites de cette version

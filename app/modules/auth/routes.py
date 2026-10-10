@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from app.core import rate_limit
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.auth.dependencies import current_user
+from app.modules.auth import sessions
+from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import AccessRule, User
 from app.core.audit import append_audit
 from app.core.granular_permissions import (
@@ -34,6 +35,9 @@ from app.modules.auth.schemas import (
     FeaturePermissionOut,
     FeaturePermissionsReplaceIn,
     LoginIn,
+    MobileLoginIn,
+    RefreshIn,
+    SessionTokenOut,
     ModulePermissionCatalogOut,
     ModulePermissionOut,
     ModulePermissionsReplaceIn,
@@ -714,6 +718,7 @@ def admin_system_recovery(payload: AdminRecoveryIn, request: Request, db: Sessio
         db.commit()
         raise HTTPException(status_code=403, detail="Récupération administrateur indisponible ou refusée")
     user.password_hash = hash_password(payload.new_password)
+    sessions.revoke_user_sessions(db, user.id, "password_changed")
     user.role = "admin"
     user.access_level = "H5"
     user.authorized_structures = ["admin"]
@@ -741,6 +746,65 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
         append_audit(db, action="auth.login", resource="user", resource_id=user.id, result="success", user=user, request=request)
         db.commit()
     return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+# --- Sessions renouvelables ATLAS MOBILE ------------------------------------------------
+# /login reste strictement inchangé pour le web. Le mobile ouvre une session serveur :
+# jeton d'accès court + refresh token à rotation, révocables (app/modules/auth/sessions.py).
+
+_SESSION_REFUSED = "Session expirée. Reconnectez-vous."
+
+
+@router.post("/mobile/login", response_model=SessionTokenOut)
+def mobile_login(payload: MobileLoginIn, request: Request, db: Session = Depends(get_db)):
+    ip = _client_ip(request)
+    _enforce_login_rate(ip)
+    try:
+        _token, user = authenticate(db, payload.username, payload.password)
+        enforce_subdomain_login_scope(request, user)
+    except HTTPException:
+        rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
+        raise
+    rate_limit.clear(f"login:{ip}")
+    tokens = sessions.open_session(db, user, platform=payload.platform, app_version=payload.app_version)
+    append_audit(db, action="auth.mobile_login", resource="user", resource_id=user.id, result="success",
+                 user=user, request=request)
+    db.commit()
+    return {**tokens, "user": user}
+
+
+@router.post("/refresh", response_model=SessionTokenOut)
+def refresh_session(payload: RefreshIn, request: Request, db: Session = Depends(get_db)):
+    ip = _client_ip(request)
+    key = f"refresh:{ip}"
+    if rate_limit.failure_count(key, settings.login_window_seconds) >= settings.login_max_attempts:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Trop de tentatives. Réessayez dans quelques minutes.",
+                            headers={"Retry-After": str(settings.login_window_seconds)})
+    try:
+        tokens, user, _session = sessions.rotate_session(db, payload.refresh_token, app_version=payload.app_version)
+    except sessions.SessionError as exc:
+        rate_limit.record_failure(key, settings.login_window_seconds)
+        if exc.session is not None:
+            # Le refresh token lui-même n'est jamais journalisé.
+            append_audit(db, action="auth.refresh", resource="auth_session", resource_id=exc.session.id,
+                         result="refused", request=request, new_state={"reason": exc.reason})
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=_SESSION_REFUSED)
+    db.commit()
+    return {**tokens, "user": user}
+
+
+@router.post("/logout")
+def logout(request: Request, token_payload: dict = Depends(current_token_payload), db: Session = Depends(get_db)):
+    """Révoque la session du jeton présenté. Un jeton web, sans session serveur, n'a rien à
+    révoquer : la réponse le dit (`revoked: false`) au lieu de prétendre le contraire."""
+    session_id = token_payload.get(sessions.SESSION_CLAIM)
+    revoked = bool(session_id) and sessions.revoke_session(db, str(session_id), "logout")
+    if revoked:
+        append_audit(db, action="auth.logout", resource="user", resource_id=token_payload.get("sub"),
+                     result="success", user=db.get(User, int(token_payload["sub"])), request=request)
+    db.commit()
+    return {"ok": True, "revoked": revoked}
 
 
 @router.get("/me", response_model=UserOut)
