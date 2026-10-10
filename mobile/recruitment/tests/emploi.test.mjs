@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {API, ApiError, ORIGIN, request} from '../src/lib/api.ts';
-import {activeFilterCount, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
+import {activeFilterCount, CHILDREN_OPTIONS, digitsOnly, displayDate, formatMoney, HEIGHT_OPTIONS, isoDate, LANGUAGE_OPTIONS, latestBirthDate, moneyInput, parseIsoDate, parseMoney, SHIRT_OPTIONS, SHOE_OPTIONS, withCurrent, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
 
 const response = (data, status = 200) => new Response(status === 204 ? null : JSON.stringify(data), {status});
 const identity = {first_name: 'Nadia', last_name: 'Test', phone: '+213551122334'};
@@ -64,7 +64,7 @@ test('formulaire vide : profil vide, sans valeur fabriquée', () => {
   const {values, experience} = profileToForm({}, identity);
   assert.deepEqual(values, identity); assert.deepEqual(experience, []);
   const profile = formToProfile(values, [{society: '  ', position: '', start_date: '', end_date: '', departure_reason: ''}]);
-  assert.equal(profile.children_count, 0); assert.equal(profile.expected_salary, null); assert.deepEqual(profile.languages, []); assert.deepEqual(profile.experience, []);
+  assert.equal(profile.children_count, null, 'non renseigné, et non zéro'); assert.equal(profile.expected_salary, null); assert.deepEqual(profile.languages, []); assert.deepEqual(profile.experience, []);
   assert.equal(profile.email, null);
 });
 
@@ -78,9 +78,9 @@ test('contrôles avant envoi', () => {
   assert.equal(validateForm(ok, [], {needPosition: true}), '');
   assert.match(validateForm(identity, [], {needPosition: true}), /poste souhaité/);
   assert.equal(validateForm(identity, [], {needPosition: false}), '', 'le poste vient de l’annonce');
-  assert.match(validateForm({...ok, birth_date: '04/05/1990'}, [], {needPosition: true}), /AAAA-MM-JJ/);
-  assert.match(validateForm({...ok, birth_date: '2023-02-30'}, [], {needPosition: true}), /AAAA-MM-JJ/);
-  assert.match(validateForm(ok, [{society: 'A', position: 'B', start_date: '2020', end_date: '', departure_reason: ''}], {needPosition: true}), /AAAA-MM-JJ/);
+  assert.match(validateForm({...ok, birth_date: '04/05/1990'}, [], {needPosition: true}), /invalide/);
+  assert.match(validateForm({...ok, birth_date: '2023-02-30'}, [], {needPosition: true}), /invalide/);
+  assert.match(validateForm(ok, [{society: 'A', position: 'B', start_date: '2020', end_date: '', departure_reason: ''}], {needPosition: true}), /date invalide/);
   assert.match(validateForm({...ok, expected_salary: '-5'}, [], {needPosition: true}), /Salaire/);
   assert.match(validateForm({...ok, height: 'grand'}, [], {needPosition: true}), /Taille/);
   assert.match(validateForm({...ok, email: 'pas-un-email'}, [], {needPosition: true}), /e-mail/);
@@ -199,4 +199,57 @@ test('notification : le bouton du détail annonce l’écran ouvert', () => {
   assert.equal(notificationLabel({ kind: 'offer', application_id: null, offer_id: 9 }), 'Voir l’offre');
   assert.equal(notificationLabel({ kind: 'application', application_id: 4, offer_id: null }), 'Voir la candidature');
   assert.equal(notificationLabel({ kind: 'application', application_id: null, offer_id: null }), 'Voir mes candidatures');
+});
+
+test('montant : affichage « 50 000,00 DA », lecture d’une saisie ou d’un collage, deux décimales sans perte', () => {
+  const plain = text => text.replace(/[  ]/g, ' ');
+  assert.equal(plain(formatMoney(50000)), '50 000,00 DA'); assert.equal(plain(formatMoney(1234567.5)), '1 234 567,50 DA');
+  assert.equal(plain(formatMoney(0.1 + 0.2)), '0,30 DA'); assert.equal(formatMoney(null), '');
+  for (const [text, amount] of [['50 000,00 DA', 50000], ['50.000,50', 50000.5], ['50,000.50', 50000.5], ['50000.5', 50000.5], ['50000', 50000], ['1.234.567', 1234567], ['0,07', 0.07], ['85 000 DZD', 85000]])
+    assert.equal(parseMoney(text), amount, text);
+  assert.equal(parseMoney(''), null); assert.ok(Number.isNaN(parseMoney('abc'))); assert.ok(Number.isNaN(parseMoney('-5')));
+  // Saisie caractère par caractère : rien n'est regroupé, une seule virgule, deux décimales au plus.
+  let typed = ''; for (const key of '50000,507') typed = moneyInput(typed + key, typed);
+  assert.equal(typed, '50000,50');
+  assert.equal(moneyInput('1234.', '1234'), '1234,'); assert.equal(moneyInput('12a', '12'), '12');
+  // Collage : le montant entier est compris, séparateurs de milliers inclus.
+  assert.equal(moneyInput('50 000,00 DA', ''), '50000'); assert.equal(moneyInput('1.234.567,8', ''), '1234567,80');
+  assert.equal(formToProfile({ expected_salary: '50000,50' }, []).expected_salary, 50000.5);
+  assert.equal(formToProfile({ expected_salary: '' }, []).expected_salary, null);
+});
+
+test('dates : JJ/MM/AAAA à l’écran, AAAA-MM-JJ pour l’API, naissance ni future ni mineure', () => {
+  assert.equal(displayDate('1994-03-12'), '12/03/1994'); assert.equal(displayDate(''), ''); assert.equal(displayDate('1994-02-30'), '');
+  assert.equal(isoDate(new Date(2026, 9, 5)), '2026-10-05'); assert.equal(isoDate(parseIsoDate('2000-01-31')), '2000-01-31'); assert.equal(parseIsoDate('31/01/2000'), null);
+  const today = new Date(2026, 9, 10);
+  assert.equal(isoDate(latestBirthDate(today)), '2007-10-10');
+  const check = (values, experience = []) => validateForm(values, experience, { needPosition: false, today });
+  assert.equal(check({ birth_date: '2007-10-10' }), ''); assert.match(check({ birth_date: '2007-10-11' }), /au moins 19 ans/);
+  assert.match(check({ birth_date: '2027-01-01' }), /futur/); assert.match(check({ birth_date: '12/03/1994' }), /invalide/);
+  const row = { society: '', position: '', departure_reason: '' };
+  assert.match(check({}, [{ ...row, start_date: '2022-01-01', end_date: '2021-01-01' }]), /précède/);
+  assert.match(check({}, [{ ...row, start_date: '2027-01-01', end_date: '' }]), /futur/);
+  assert.equal(check({}, [{ ...row, start_date: '2020-01-01', end_date: '2022-06-30' }]), '');
+});
+
+test('profil : NIN en chiffres avec zéros initiaux, enfants non renseignés ≠ 0, langues parlées et écrites, données historiques conservées', () => {
+  assert.equal(digitsOnly('00 12-34a'), '001234'); assert.equal(digitsOnly('1'.repeat(30)).length, 18);
+  assert.match(validateForm({ nin: '12A' }, [], { needPosition: false }), /que des chiffres/);
+  assert.match(validateForm({ nin: '001234567' }, [], { needPosition: false }), /10 ou 18 chiffres/);
+  assert.equal(validateForm({ nin: '0012345678' }, [], { needPosition: false }), ''); assert.equal(validateForm({ nin: '001234567890123456' }, [], { needPosition: false }), '');
+  const base = { source: 'Salon de l’emploi', emergency_name: 'Ancien contact', skills: ['Permis B'], education: [{ degree: 'BAC' }] };
+  const saved = formToProfile({ nin: '001234567890123456', children_count: '', languages: 'Arabe, Kabyle', written_languages: 'Français', emergency_relation: 'Frère' }, [], base);
+  assert.equal(saved.nin, '001234567890123456'); assert.equal(saved.children_count, null);
+  assert.deepEqual(saved.languages, ['Arabe', 'Kabyle']); assert.deepEqual(saved.written_languages, ['Français']);
+  // Ce que le formulaire ne saisit plus n'est pas effacé.
+  assert.equal(saved.source, 'Salon de l’emploi'); assert.equal(saved.emergency_name, 'Ancien contact'); assert.deepEqual(saved.skills, ['Permis B']);
+  assert.equal(formToProfile({ children_count: '0' }, []).children_count, 0);
+  const form = profileToForm({ children_count: 0, languages: ['Kabyle'], written_languages: ['Arabe', 'Français'], height: 178, source: 'x' }, { first_name: 'A', last_name: 'B', phone: '+213' }).values;
+  assert.equal(form.children_count, '0'); assert.equal(form.written_languages, 'Arabe, Français'); assert.equal(form.height, '178'); assert.equal(form.source, undefined);
+  assert.equal(profileToForm({ children_count: null }, { first_name: 'A', last_name: 'B', phone: '+213' }).values.children_count, undefined);
+  assert.ok(LANGUAGE_OPTIONS.includes('Kabyle'));
+  assert.equal(CHILDREN_OPTIONS.length, 17); assert.equal(CHILDREN_OPTIONS[0].value, ''); assert.equal(CHILDREN_OPTIONS.at(-1).value, '15');
+  // Une valeur historique hors liste reste proposée.
+  assert.equal(withCurrent(HEIGHT_OPTIONS, '215').at(-1).value, '215'); assert.equal(withCurrent(HEIGHT_OPTIONS, '180').length, HEIGHT_OPTIONS.length);
+  assert.equal(HEIGHT_OPTIONS[1].label, '140 cm'); assert.equal(SHOE_OPTIONS[1].value, '35'); assert.equal(SHIRT_OPTIONS.at(-1).value, 'XXXL');
 });

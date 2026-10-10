@@ -71,7 +71,7 @@ function Space() {
         <View style={styles.divider} />
         <Row icon="graduation" title="Études et formations" subtitle={count(profile.education, 'formation ajoutée', 'formations ajoutées', 'Aucune formation ajoutée')} onPress={() => section('education')} />
         <View style={styles.divider} />
-        <Row icon="globe" title="Langues" subtitle={Array.isArray(profile.languages) && profile.languages.length ? (profile.languages as string[]).join(', ') : 'Aucune langue renseignée'} onPress={() => section('languages')} />
+        <Row icon="globe" title="Langues" subtitle={languagesSummary(profile)} onPress={() => section('languages')} />
         <View style={styles.divider} />
         <Row icon="calendar" title="Disponibilité" subtitle={typeof profile.availability === 'string' && profile.availability ? profile.availability : 'Non renseignée'} onPress={() => section('availability')} />
         <View style={styles.divider} />
@@ -103,3 +103,10 @@ const page = StyleSheet.create({
   bar: { height: 7, borderRadius: 4, backgroundColor: colors.green }, percent: { fontSize: 14.5, fontFamily: fonts.medium, color: colors.ink, minWidth: 40, textAlign: 'right' },
   note: { fontSize: 13.5, lineHeight: 20, fontFamily: fonts.sans, color: colors.muted },
 });
+
+/** « Parlées : … · Écrites : … », sans rien afficher pour une liste vide. */
+function languagesSummary(profile: Record<string, unknown>): string {
+  const list = (key: string) => (Array.isArray(profile[key]) ? (profile[key] as unknown[]).filter(item => typeof item === 'string') : []).join(', ');
+  const parts = [list('languages') && `Parlées : ${list('languages')}`, list('written_languages') && `Écrites : ${list('written_languages')}`].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Aucune langue renseignée';
+}

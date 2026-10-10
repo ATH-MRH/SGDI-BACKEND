@@ -41,7 +41,8 @@
         {
           "color": "#0E2747"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "iron-recruitment"
   }

@@ -1,26 +1,27 @@
 import { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { DateField } from '../../../components/date-field';
+import { MultiSelectField } from '../../../components/fields';
 import { Icon } from '../../../components/icon';
+import { consentMissing, consentPayload, PrivacyConsent } from '../../../components/privacy-consent';
 import { Button, Card, Chip, colors, ErrorState, ErrorText, Field, Loading, Page, styles } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { Account, Profile } from '../../../lib/emploi';
+import { Account, LANGUAGE_OPTIONS, parseIsoDate, PrivacyState, Profile, splitList } from '../../../lib/emploi';
 import schema from '../../../lib/form-schema.json';
 import { useLoad } from '../../../lib/use-load';
 
 type Rows = Record<string, string>[];
 const LISTS = {
   experience: { title: 'Expériences', intro: 'Vos postes précédents, du plus récent au plus ancien.', add: 'Ajouter une expérience', max: 20,
-    fields: [['position', 'Poste'], ['society', 'Employeur'], ['start_date', 'Du (AAAA-MM-JJ)'], ['end_date', 'Au (AAAA-MM-JJ)'], ['departure_reason', 'Motif du départ']] },
+    fields: [['position', 'Poste'], ['society', 'Employeur'], ['start_date', 'Du'], ['end_date', 'Au'], ['departure_reason', 'Motif du départ']] },
   education: { title: 'Études et formations', intro: 'Diplômes, formations et certificats.', add: 'Ajouter une formation', max: 20,
-    fields: [['degree', 'Diplôme ou formation'], ['institution', 'Établissement'], ['specialty', 'Spécialité'], ['start_date', 'Du (AAAA-MM-JJ)'], ['end_date', 'Au (AAAA-MM-JJ)']] },
+    fields: [['degree', 'Diplôme ou formation'], ['institution', 'Établissement'], ['specialty', 'Spécialité'], ['start_date', 'Du'], ['end_date', 'Au']] },
 } as const;
 const TAGS = {
   skills: { title: 'Compétences', intro: 'Ce que vous savez faire : habilitations, permis, logiciels, savoir-faire.', placeholder: 'Ex. Permis B, SSIAP 1…', max: 20, length: 60 },
-  languages: { title: 'Langues', intro: 'Les langues que vous parlez.', placeholder: 'Ex. Arabe, Français…', max: 12, length: 60 },
 } as const;
-const isDate = (value: string) => !value || (/^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(value).toISOString().slice(0, 10) === value);
 
 export default function ProfileSection() {
   const section = useLocalSearchParams<{ section?: string }>().section || '';
@@ -29,57 +30,68 @@ export default function ProfileSection() {
   if (!ready) return <Loading />;
   if (ready && !session) return <Redirect href={{ pathname: '/identify', params: { next: 'profile' } }} />;
   if (!account.data) return account.loading ? <Loading /> : <ErrorState message={account.error} onRetry={account.reload} />;
-  const profile = account.data.profile;
-  if (section in LISTS) return <ListEditor name={section as keyof typeof LISTS} profile={profile} />;
-  if (section in TAGS) return <TagEditor name={section as keyof typeof TAGS} profile={profile} />;
-  return <AvailabilityEditor profile={profile} />;
+  const profile = account.data.profile, privacy = account.data.privacy;
+  if (section in LISTS) return <ListEditor name={section as keyof typeof LISTS} profile={profile} privacy={privacy} />;
+  if (section in TAGS) return <TagEditor name={section as keyof typeof TAGS} profile={profile} privacy={privacy} />;
+  if (section === 'languages') return <LanguagesEditor profile={profile} privacy={privacy} />;
+  return <AvailabilityEditor profile={profile} privacy={privacy} />;
 }
 
 /** Enregistre le profil complet avec la rubrique modifiée : les autres rubriques sont renvoyées telles quelles. */
-function useSave(profile: Profile) {
+function useSave(profile: Profile, privacy: PrivacyState | undefined) {
   const { call } = useCandidateSession();
-  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [consent, setConsent] = useState(false);
   const guard = useRef(false);
+  const blocked = consentMissing(privacy, consent);
   async function save(change: Profile) {
     if (guard.current) return;
+    if (blocked) { setError('Cochez la case de consentement pour enregistrer votre profil.'); return; }
     guard.current = true; setBusy(true); setError('');
-    try { await call('/public/emploi/me/profile', { method: 'PUT', body: { ...profile, ...change } }); router.back(); }
+    try { await call('/public/emploi/me/profile', { method: 'PUT', body: { ...profile, ...change, ...consentPayload(privacy, consent) } }); router.back(); }
     catch (e) { setError(errorMessage(e)); } finally { guard.current = false; setBusy(false); }
   }
-  return { save, busy, error, setError };
+  // Consentement demandé seulement s'il n'a pas encore été donné pour la notice en vigueur.
+  const consentBlock = privacy?.current ? null : <Card><PrivacyConsent privacy={privacy} value={consent} onChange={setConsent} /></Card>;
+  return { save, busy, error, setError, blocked, consentBlock };
 }
 
-function ListEditor({ name, profile }: { name: keyof typeof LISTS; profile: Profile }) {
+function ListEditor({ name, profile, privacy }: { name: keyof typeof LISTS; profile: Profile; privacy: PrivacyState | undefined }) {
   const config = LISTS[name];
-  const { save, busy, error, setError } = useSave(profile);
+  const { save, busy, error, setError, blocked, consentBlock } = useSave(profile, privacy);
+  const [today] = useState(() => new Date());
   const [rows, setRows] = useState<Rows>(() => (Array.isArray(profile[name]) ? profile[name] as Record<string, unknown>[] : []).map(row =>
     Object.fromEntries(config.fields.map(([key]) => [key, typeof row?.[key] === 'string' ? row[key] as string : '']))));
   const blank = () => Object.fromEntries(config.fields.map(([key]) => [key, '']));
   function submit() {
     const kept = rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value.trim() || null]))).filter(row => Object.values(row).some(Boolean));
-    if (rows.some(row => !isDate(row.start_date.trim()) || !isDate(row.end_date.trim()))) { setError('Renseignez les dates au format AAAA-MM-JJ.'); return; }
+    if (rows.some(row => row.start_date && row.end_date && row.end_date < row.start_date)) { setError('La date de fin précède la date de début.'); return; }
     save({ [name]: kept });
   }
   return (
     <Page title={config.title} subtitle={config.intro}>
       {rows.map((row, index) => (
         <Card key={index}>
-          {config.fields.map(([key, label]) => <Field key={key} label={label} value={row[key]} maxLength={key.endsWith('_date') ? 10 : 150}
-            onChangeText={value => setRows(rows.map((item, i) => i === index ? { ...item, [key]: value } : item))} />)}
+          {config.fields.map(([key, label]) => {
+            const change = (value: string) => setRows(rows.map((item, i) => i === index ? { ...item, [key]: value } : item));
+            return key.endsWith('_date')
+              ? <DateField key={key} label={label} value={row[key]} onChange={change} maximumDate={today} minimumDate={key === 'end_date' ? parseIsoDate(row.start_date) || undefined : undefined} />
+              : <Field key={key} label={label} value={row[key]} maxLength={150} onChangeText={change} />;
+          })}
           <Button title="Retirer" icon="trash" secondary onPress={() => setRows(rows.filter((_, i) => i !== index))} />
         </Card>
       ))}
       {rows.length === 0 && <Text style={styles.subtitle}>Aucun élément pour le moment.</Text>}
       <Button title={config.add} icon="plus" secondary disabled={rows.length >= config.max} onPress={() => setRows([...rows, blank()])} />
+      {consentBlock}
       <ErrorText message={error} />
-      <Button title="Enregistrer" busy={busy} onPress={submit} />
+      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={submit} />
     </Page>
   );
 }
 
-function TagEditor({ name, profile }: { name: keyof typeof TAGS; profile: Profile }) {
+function TagEditor({ name, profile, privacy }: { name: keyof typeof TAGS; profile: Profile; privacy: PrivacyState | undefined }) {
   const config = TAGS[name];
-  const { save, busy, error } = useSave(profile);
+  const { save, busy, error, blocked, consentBlock } = useSave(profile, privacy);
   const [tags, setTags] = useState<string[]>(() => (Array.isArray(profile[name]) ? profile[name] as unknown[] : []).filter((tag): tag is string => typeof tag === 'string'));
   const [draft, setDraft] = useState('');
   function add() {
@@ -103,14 +115,32 @@ function TagEditor({ name, profile }: { name: keyof typeof TAGS; profile: Profil
         )}
         {tags.length === 0 && <Text style={styles.subtitle}>Aucun élément pour le moment.</Text>}
       </Card>
+      {consentBlock}
       <ErrorText message={error} />
-      <Button title="Enregistrer" busy={busy} onPress={() => save({ [name]: tags })} />
+      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={() => save({ [name]: tags })} />
     </Page>
   );
 }
 
-function AvailabilityEditor({ profile }: { profile: Profile }) {
-  const { save, busy, error } = useSave(profile);
+function LanguagesEditor({ profile, privacy }: { profile: Profile; privacy: PrivacyState | undefined }) {
+  const { save, busy, error, blocked, consentBlock } = useSave(profile, privacy);
+  const list = (key: string) => (Array.isArray(profile[key]) ? profile[key] as unknown[] : []).filter((item): item is string => typeof item === 'string').join(', ');
+  const [spoken, setSpoken] = useState(() => list('languages')), [written, setWritten] = useState(() => list('written_languages'));
+  return (
+    <Page title="Langues" subtitle="Indiquez séparément les langues que vous parlez et celles que vous écrivez.">
+      <Card>
+        <MultiSelectField label="Langues parlées" value={spoken} options={LANGUAGE_OPTIONS} onChange={setSpoken} placeholder="Choisir une ou plusieurs langues" />
+        <MultiSelectField label="Langues écrites" value={written} options={LANGUAGE_OPTIONS} onChange={setWritten} placeholder="Choisir une ou plusieurs langues" />
+      </Card>
+      {consentBlock}
+      <ErrorText message={error} />
+      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={() => save({ languages: splitList(spoken), written_languages: splitList(written) })} />
+    </Page>
+  );
+}
+
+function AvailabilityEditor({ profile, privacy }: { profile: Profile; privacy: PrivacyState | undefined }) {
+  const { save, busy, error, blocked, consentBlock } = useSave(profile, privacy);
   // Mêmes choix que le formulaire de recrute.irongs.com.
   const options = (schema.flatMap(group => group.fields).find(field => field.key === 'availability')?.options || []).filter(option => option.value);
   const [value, setValue] = useState(typeof profile.availability === 'string' ? profile.availability : '');
@@ -119,8 +149,9 @@ function AvailabilityEditor({ profile }: { profile: Profile }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {options.map(option => <Chip key={option.value} label={option.label} selected={value === option.value} onPress={() => setValue(value === option.value ? '' : option.value)} />)}
       </View>
+      {consentBlock}
       <ErrorText message={error} />
-      <Button title="Enregistrer" busy={busy} onPress={() => save({ availability: value || null })} />
+      <Button title="Enregistrer mon profil" busy={busy} disabled={blocked} onPress={() => save({ availability: value || null })} />
     </Page>
   );
 }

@@ -17,7 +17,9 @@ export type EmploiConfig = { version: number; sms_available: boolean; cv_max_byt
 
 export type CVMeta = { name: string; mime_type: string; size: number };
 export type Profile = Record<string, unknown>;
-export type Account = { first_name: string; last_name: string; phone: string; profile: Profile; cv: CVMeta | null; has_photo: boolean; created_at: string | null };
+/** Consentement à la notice de protection des données : `current` vaut vrai s'il a été donné pour la notice en vigueur. */
+export type PrivacyState = { version: string; accepted_version: string | null; accepted_at: string | null; current: boolean };
+export type Account = { first_name: string; last_name: string; phone: string; profile: Profile; cv: CVMeta | null; has_photo: boolean; created_at: string | null; privacy?: PrivacyState };
 export type ApplicationState = { status: string; label: string; message: string; updated_at?: string | null; convocation?: { date?: string; heure?: string; lieu?: string } };
 export type SentDocument = { label: string; name: string; mime_type: string; size: number; received_at: string | null };
 export type DocumentRequest = { id: number; label: string; note: string | null; due: string | null; status: 'requested' | 'received'; received_at: string | null };
@@ -38,7 +40,7 @@ export type InterviewList = { items: Interview[]; timezone: string; now: string 
 export type JobAlert = { id: number; wilaya: string | null; profession: string | null; contract_type: string | null; company_id: number | null; company: string | null; active: boolean };
 export type AppNotification = { id: number; kind: 'application' | 'message' | 'interview' | 'offer'; title: string; body: string; application_id: number | null; interview_id: number | null; offer_id: number | null; created_at: string | null; read: boolean };
 export type Summary = { unread_messages: number; unread_notifications: number; upcoming_interviews: number };
-export type PushSettings = { push: Record<'applications' | 'messages' | 'interviews' | 'offers', boolean>; push_available: boolean; devices: number };
+export type PushSettings = { push: Record<'applications' | 'messages' | 'interviews' | 'offers', boolean>; push_available: boolean; devices: number; alerts_enabled?: boolean };
 /** Dossier du candidat : ce qui vaut pour la personne, quelle que soit l'annonce (une convocation, par exemple). */
 export type Dossier = { reference: string; state: ApplicationState };
 export type ApplicationList = { items: Application[]; dossier: Dossier | null };
@@ -100,10 +102,13 @@ export const newRequestId = () => `${Date.now().toString(36)}-${Math.random().to
 export type FormValues = Record<string, string>;
 export type Experience = Record<'society' | 'position' | 'start_date' | 'end_date' | 'departure_reason', string>;
 
+// « source » et « emergency_name » ne sont plus saisis par le candidat : absents de cette liste, ils sont
+// renvoyés tels qu'enregistrés (profil de base) et ne sont jamais effacés par un enregistrement.
 const TEXT_KEYS = ['email', 'birth_date', 'birth_place', 'sex', 'family_status', 'blood_group', 'father_name', 'mother_name', 'nin', 'cnas_number',
-  'address', 'commune', 'wilaya', 'emergency_name', 'emergency_relation', 'emergency_phone', 'desired_position', 'availability', 'source',
+  'address', 'commune', 'wilaya', 'emergency_relation', 'emergency_phone', 'desired_position', 'availability',
   'military_service', 'shirt_size'] as const;
 const NUMBER_KEYS = ['children_count', 'expected_salary', 'height', 'shoe_size'] as const;
+const LIST_KEYS = ['languages', 'written_languages'] as const;
 const EXPERIENCE_KEYS = ['society', 'position', 'start_date', 'end_date', 'departure_reason'] as const;
 
 const parseNumber = (value: string | undefined) => {
@@ -111,11 +116,81 @@ const parseNumber = (value: string | undefined) => {
   return text ? Number(text) : null;
 };
 
+// ── Listes proposées par le formulaire ───────────────────────────────────────
+export type Option = { value: string; label: string };
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+/** Nombre d'enfants : « non renseigné » (valeur vide) est distinct de 0. */
+export const CHILDREN_OPTIONS: Option[] = [{ value: '', label: 'Non renseigné' }, ...range(0, 15).map(value => ({ value, label: value }))];
+/** Taille corporelle, en centimètres. */
+export const HEIGHT_OPTIONS: Option[] = [{ value: '', label: 'Non renseignée' }, ...range(140, 210).map(value => ({ value, label: `${value} cm` }))];
+/** Pointure (chaussures), en pointures européennes. */
+export const SHOE_OPTIONS: Option[] = [{ value: '', label: 'Non renseignée' }, ...range(35, 50).map(value => ({ value, label: value }))];
+/** Taille de chemise (haut du corps). */
+export const SHIRT_OPTIONS: Option[] = [{ value: '', label: 'Non renseignée' }, ...['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'].map(value => ({ value, label: value }))];
+export const LANGUAGE_OPTIONS = ['Arabe', 'Kabyle', 'Français', 'Anglais', 'Espagnol', 'Italien', 'Allemand', 'Turc'];
+
+/** Une valeur déjà enregistrée hors de la liste (donnée historique) reste proposée et sélectionnée. */
+export function withCurrent(options: Option[], value: string | undefined): Option[] {
+  const current = (value || '').trim();
+  return !current || options.some(option => option.value === current) ? options : [...options, { value: current, label: current }];
+}
+export const splitList = (value: string | undefined) => (value || '').split(',').map(item => item.trim()).filter(Boolean);
+/** Le NIN reste une chaîne : seuls les chiffres sont gardés, zéros initiaux compris. */
+export const digitsOnly = (value: string, max = 18) => value.replace(/\D/g, '').slice(0, max);
+
+// ── Dates : affichage JJ/MM/AAAA, échange AAAA-MM-JJ avec l'API ──────────────
+const pad = (value: number) => String(value).padStart(2, '0');
+export const isoDate = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+export function parseIsoDate(value: string | null | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return isoDate(date) === value ? date : null;
+}
+export function displayDate(value: string | null | undefined): string {
+  const date = parseIsoDate(value);
+  return date ? `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}` : '';
+}
+/** Âge minimal pour postuler (contrôlé par le serveur) : dernière date de naissance acceptée. */
+export const MINIMUM_AGE = 19;
+export const latestBirthDate = (today: Date) => new Date(today.getFullYear() - MINIMUM_AGE, today.getMonth(), today.getDate());
+
+// ── Montants : « 50 000,00 DA » à l'écran, nombre à deux décimales pour l'API ─
+/** Lit un montant saisi ou collé (« 50 000,50 DA », « 50.000,50 », « 50000.5 »). Retourne null s'il est vide, NaN s'il est illisible. */
+export function parseMoney(text: string | null | undefined): number | null {
+  let value = (text || '').replace(/[\s  ]/g, '').replace(/(da|dzd|دج)$/i, '');
+  if (!value) return null;
+  if (!/^\d[\d.,]*$/.test(value)) return NaN;
+  const last = Math.max(value.lastIndexOf(','), value.lastIndexOf('.'));
+  // Le dernier séparateur est décimal s'il est suivi d'une ou deux décimales ; les autres séparent les milliers.
+  if (last >= 0 && value.length - last - 1 <= 2) value = value.slice(0, last).replace(/[.,]/g, '') + '.' + value.slice(last + 1);
+  else value = value.replace(/[.,]/g, '');
+  const cents = Math.round(Number(value) * 100);
+  return Number.isFinite(cents) ? cents / 100 : NaN;
+}
+export function formatMoney(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) return '';
+  const cents = Math.round(amount * 100), whole = Math.floor(cents / 100);
+  return `${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')},${pad(cents % 100)} DA`;
+}
+/** Texte éditable d'un montant : chiffres et une virgule décimale, sans regroupement (le curseur ne saute pas).
+ *  Un collage (plusieurs caractères d'un coup) est lu comme un montant complet, séparateurs de milliers compris. */
+export function moneyInput(text: string, previous = ''): string {
+  const cleaned = text.replace(/[\s  ]/g, '').replace(/(da|dzd)$/i, '');
+  if (Math.abs(cleaned.length - previous.length) > 1) {
+    const amount = parseMoney(cleaned);
+    if (amount !== null && Number.isFinite(amount)) return (Number.isInteger(amount) ? String(amount) : amount.toFixed(2)).replace('.', ',');
+  }
+  const [whole, ...rest] = cleaned.replace(/\./g, ',').replace(/[^\d,]/g, '').split(',');
+  return rest.length ? `${whole},${rest.join('').slice(0, 2)}` : whole;
+}
+
 export function profileToForm(profile: Profile, identity: { first_name: string; last_name: string; phone: string }): { values: FormValues; experience: Experience[] } {
   const values: FormValues = { ...identity };
   for (const key of TEXT_KEYS) if (typeof profile[key] === 'string' && profile[key]) values[key] = profile[key] as string;
-  for (const key of NUMBER_KEYS) if (typeof profile[key] === 'number' && (key !== 'children_count' || profile[key] !== 0)) values[key] = String(profile[key]);
-  if (Array.isArray(profile.languages) && profile.languages.length) values.languages = profile.languages.join(', ');
+  // 0 enfant est une réponse : elle est affichée. Seule l'absence de réponse laisse le champ vide.
+  for (const key of NUMBER_KEYS) if (typeof profile[key] === 'number') values[key] = String(profile[key]);
+  for (const key of LIST_KEYS) if (Array.isArray(profile[key]) && (profile[key] as unknown[]).length) values[key] = (profile[key] as unknown[]).filter(item => typeof item === 'string').join(', ');
   const experience = (Array.isArray(profile.experience) ? profile.experience : []).map(row => {
     const source = (row || {}) as Record<string, unknown>;
     return Object.fromEntries(EXPERIENCE_KEYS.map(key => [key, typeof source[key] === 'string' ? source[key] : ''])) as Experience;
@@ -123,30 +198,47 @@ export function profileToForm(profile: Profile, identity: { first_name: string; 
   return { values, experience };
 }
 
-/** `base` : profil enregistré ; ses rubriques gérées ailleurs que dans le formulaire (études, compétences) sont conservées. */
+/** `base` : profil enregistré ; ce que le formulaire ne saisit pas (études, compétences, source, ancien nom du contact d'urgence) est conservé. */
 export function formToProfile(values: FormValues, experience: Experience[], base: Profile = {}): Profile {
   const profile: Profile = { ...base };
   for (const key of TEXT_KEYS) profile[key] = (values[key] || '').trim() || null;
-  profile.children_count = parseNumber(values.children_count) ?? 0;
-  for (const key of ['expected_salary', 'height', 'shoe_size'] as const) profile[key] = parseNumber(values[key]);
-  profile.languages = (values.languages || '').split(',').map(value => value.trim()).filter(Boolean);
+  profile.children_count = (values.children_count || '').trim() === '' ? null : parseNumber(values.children_count);
+  profile.expected_salary = parseMoney(values.expected_salary);
+  for (const key of ['height', 'shoe_size'] as const) profile[key] = parseNumber(values[key]);
+  for (const key of LIST_KEYS) profile[key] = splitList(values[key]);
   profile.experience = experience
     .map(row => Object.fromEntries(EXPERIENCE_KEYS.map(key => [key, row[key].trim() || null])))
     .filter(row => Object.values(row).some(Boolean));
   return profile;
 }
 
-const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
-
 /** Contrôles faits avant l'envoi ; le serveur reste l'autorité. Retourne '' si tout est correct. */
-export function validateForm(values: FormValues, experience: Experience[], options: { needPosition: boolean }): string {
+export function validateForm(values: FormValues, experience: Experience[], options: { needPosition: boolean; today?: Date }): string {
+  const today = options.today || new Date();
   if (options.needPosition && (values.desired_position || '').trim().length < 2) return 'Choisissez le poste souhaité.';
-  for (const [key, label] of [['expected_salary', 'Salaire souhaité'], ['children_count', 'Nombre d’enfants'], ['height', 'Taille'], ['shoe_size', 'Pointure']] as const) {
+  const salary = parseMoney(values.expected_salary);
+  if (salary !== null && (!Number.isFinite(salary) || salary < 0 || salary > 100_000_000)) return 'Salaire demandé : montant invalide.';
+  const children = (values.children_count || '').trim();
+  if (children && !/^\d{1,2}$/.test(children)) return 'Nombre d’enfants : valeur invalide.';
+  for (const [key, label] of [['height', 'Taille'], ['shoe_size', 'Pointure']] as const) {
     const number = parseNumber(values[key]);
     if (number !== null && (!Number.isFinite(number) || number < 0)) return `${label} : valeur invalide.`;
   }
-  const dates = [values.birth_date, ...experience.flatMap(row => [row.start_date, row.end_date])].filter(Boolean) as string[];
-  if (dates.some(value => !isDate(value))) return 'Renseignez les dates au format AAAA-MM-JJ.';
+  if (values.nin && !/^\d+$/.test(values.nin)) return 'Le NIN ne contient que des chiffres.';
+  // Règle du dossier de recrutement, appliquée dès le profil.
+  if (values.nin && ![10, 18].includes(values.nin.length)) return 'Le NIN doit contenir 10 ou 18 chiffres.';
+  if (values.birth_date) {
+    const birth = parseIsoDate(values.birth_date);
+    if (!birth) return 'Date de naissance invalide.';
+    if (birth > today) return 'La date de naissance ne peut pas être dans le futur.';
+    if (birth > latestBirthDate(today)) return `Vous devez avoir au moins ${MINIMUM_AGE} ans pour postuler.`;
+  }
+  for (const row of experience) {
+    const start = row.start_date ? parseIsoDate(row.start_date) : null, end = row.end_date ? parseIsoDate(row.end_date) : null;
+    if ((row.start_date && !start) || (row.end_date && !end)) return 'Expérience : date invalide.';
+    if ((start && start > today) || (end && end > today)) return 'Expérience : une date ne peut pas être dans le futur.';
+    if (start && end && end < start) return 'Expérience : la date de fin précède la date de début.';
+  }
   const email = (values.email || '').trim();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Adresse e-mail invalide.';
   return '';

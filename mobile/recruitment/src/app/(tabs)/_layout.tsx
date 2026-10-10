@@ -28,7 +28,7 @@ export default function TabsLayout() {
       {TABS.map(tab => (
         <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.title, tabBarAccessibilityLabel: tab.name === 'messages' && summary.unread_messages ? `Messages, ${summary.unread_messages} non lus` : tab.title,
           tabBarBadge: tab.name === 'messages' && summary.unread_messages ? summary.unread_messages : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.gold, color: colors.white, fontSize: 11 },
+          tabBarBadgeStyle: { backgroundColor: colors.gold, color: colors.white, fontSize: 11, fontFamily: fonts.bold },
           tabBarIcon: ({ color, focused }) => <Icon name={tab.icon} size={24} color={color} filled={focused} /> }} />
       ))}
     </Tabs>

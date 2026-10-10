@@ -37,8 +37,9 @@ job = call('/public/mobile/gateway/poll', {}, headers=gw)['job']
 access = call('/public/mobile/verify-code', {'challenge_id': issued['challenge_id'], 'code': re.search(r'\b\d{6}\b', job['message'])[0]})['access_token']
 opened = call('/public/emploi/session', {}, access)
 cand = opened['session_token']
-call('/public/emploi/me/profile', {'desired_position': 'Agent de sécurité', 'wilaya': 'Alger', 'commune': 'Hydra', 'address': 'Adresse de test', 'birth_date': '1994-03-12', 'sex': 'Masculin',
-     'availability': 'Immédiate', 'languages': ['Arabe', 'Français'], 'skills': ['Surveillance de site', 'Contrôle d’accès', 'Premiers secours'],
+call('/public/emploi/me/profile', {'desired_position': 'Agent de sécurité', 'wilaya': 'Alger', 'commune': 'Hydra', 'address': 'Adresse de test', 'birth_date': '1994-03-12', 'sex': 'M',
+     'availability': 'Immédiatement', 'languages': ['Arabe', 'Kabyle', 'Français'], 'written_languages': ['Arabe', 'Français'], 'children_count': 0,
+     'privacy_consent': True, 'privacy_version': call('/public/emploi/config')['privacy_version'], 'skills': ['Surveillance de site', 'Contrôle d’accès', 'Premiers secours'],
      'experience': [{'position': 'Agent de sécurité', 'society': 'Société de test A', 'start_date': '2020-01-01', 'end_date': '2023-06-30'},
                     {'position': 'Agent d’accueil', 'society': 'Société de test B', 'start_date': '2018-02-01', 'end_date': '2019-12-31'}]}, cand, 'PUT')
 pdf = open(os.path.join(STATE, 'cv-fictif.b64')).read()

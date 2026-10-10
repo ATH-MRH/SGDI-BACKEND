@@ -1,9 +1,8 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { NotoSans_400Regular, NotoSans_500Medium, NotoSans_600SemiBold, NotoSans_700Bold } from '@expo-google-fonts/noto-sans';
-import { SourceSerif4_600SemiBold, SourceSerif4_700Bold } from '@expo-google-fonts/source-serif-4';
-import { View } from 'react-native';
+import { Arimo_400Regular, Arimo_700Bold } from '@expo-google-fonts/arimo';
+import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CandidateSessionProvider } from '../lib/candidate-session';
 import { FavoritesProvider } from '../lib/favorites';
@@ -14,9 +13,17 @@ import { SummaryProvider } from '../lib/summary';
 import { stackOptions } from '../components/tab-stack';
 import { colors } from '../components/ui';
 
+// Aperçu web : les deux graisses d'Arial du poste, sous les noms utilisés par les styles.
+if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('app-arial')) {
+  const style = document.createElement('style');
+  style.id = 'app-arial';
+  style.textContent = '@font-face{font-family:"AppArial";src:local("Arial"),local("ArialMT")}@font-face{font-family:"AppArialBold";src:local("Arial Bold"),local("Arial-BoldMT")}';
+  document.head.appendChild(style);
+}
+
 export default function Layout() {
-  // Polices embarquées dans l'application (licence SIL OFL) : identiques sur iOS et Android.
-  const [ready, failed] = useFonts({ NotoSans_400Regular, NotoSans_500Medium, NotoSans_600SemiBold, NotoSans_700Bold, SourceSerif4_600SemiBold, SourceSerif4_700Bold });
+  // Arial vient du système sur iOS. Sur Android, où elle n'existe pas, Arimo (licence libre, mêmes largeurs) est chargée.
+  const [ready, failed] = useFonts(Platform.OS === 'android' ? { Arimo_400Regular, Arimo_700Bold } : {});
   if (!ready && !failed) return <View style={{ flex: 1, backgroundColor: colors.white }} />;
   return (
     <SafeAreaProvider>

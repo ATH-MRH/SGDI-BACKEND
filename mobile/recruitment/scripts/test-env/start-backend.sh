@@ -50,6 +50,8 @@ if [ "$NEW" = 1 ]; then
   "$PYTHON" "$HERE/cv_fictif.py" "$STATE" >/dev/null; "$PYTHON" "$HERE/seed.py" "$STATE"
 fi
 # Passerelle SMS locale : sans elle, le serveur refuse d'émettre un code.
-pgrep -f "sms-gateway.py $PORT" >/dev/null || nohup "$PYTHON" "$HERE/sms-gateway.py" "$PORT" "$STATE/codes.log" > /dev/null 2>&1 &
+if ! pgrep -f "sms-gateway.py $PORT" >/dev/null; then
+  nohup "$PYTHON" "$HERE/sms-gateway.py" "$PORT" "$STATE/codes.log" > /dev/null 2>&1 < /dev/null &
+fi
 echo "Serveur d'essai prêt : http://$(lan_ip):$PORT  (recruteur : http://$(lan_ip):$PORT/static/recrute.html)"
 echo "Compte recruteur local : identifiant et mot de passe dans $STATE/env (ADMIN_INITIAL_*)."

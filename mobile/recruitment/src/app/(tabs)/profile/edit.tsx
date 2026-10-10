@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Redirect, router } from 'expo-router';
 import { CandidateForm } from '../../../components/candidate-form';
 import { PhotoField } from '../../../components/photo-field';
-import { Button, Card, ErrorState, ErrorText, Loading, Page } from '../../../components/ui';
+import { consentMissing, consentPayload, PrivacyConsent } from '../../../components/privacy-consent';
+import { Button, Card, EmptyState, ErrorState, ErrorText, Loading, Page } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
 import { useDocuments } from '../../../lib/documents';
@@ -25,6 +26,7 @@ function Editor({ account }: { account: Account }) {
   const [initial] = useState(() => profileToForm(account.profile, account));
   const [values, setValues] = useState<FormValues>(initial.values), [experience, setExperience] = useState<Experience[]>(initial.experience);
   const [photo, setPhoto] = useState<string>(), [savedPhoto, setSavedPhoto] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [consent, setConsent] = useState(false), [saved, setSaved] = useState(false);
   const saving = useRef(false);
 
   useEffect(() => {
@@ -38,22 +40,36 @@ function Editor({ account }: { account: Account }) {
     if (saving.current) return;
     const problem = validateForm(values, experience, { needPosition: false });
     if (problem) { setError(problem); return; }
+    if (consentMissing(account.privacy, consent)) { setError('Cochez la case de consentement pour enregistrer votre profil.'); return; }
     saving.current = true; setBusy(true); setError('');
     try {
-      await call('/public/emploi/me/profile', { method: 'PUT', body: formToProfile(values, experience, account.profile) });
+      // Le profil seulement : aucune candidature n'est créée par cet enregistrement.
+      await call('/public/emploi/me/profile', { method: 'PUT', body: { ...formToProfile(values, experience, account.profile), ...consentPayload(account.privacy, consent) } });
       if (photo !== undefined) await savePhoto(photo);
-      router.back();
+      setSaved(true);
     } catch (e) { setError(errorMessage(e)); }
     finally { saving.current = false; setBusy(false); }
   }
 
+  if (saved) {
+    return (
+      <Page title="Profil enregistré">
+        <Card>
+          <EmptyState icon="check" title="Votre profil est à jour" text="Aucune candidature n’a été envoyée. Pour postuler, ouvrez une offre puis touchez « Postuler » : vous vérifierez vos informations avant l’envoi." />
+        </Card>
+        <Button title="Voir les offres" onPress={() => { if (router.canDismiss()) router.dismissAll(); router.navigate('/offers'); }} />
+        <Button title="Retour à mon profil" secondary onPress={() => router.back()} />
+      </Page>
+    );
+  }
   return (
-    <Page title="Mes informations" subtitle="Ces informations préremplissent vos candidatures. Votre nom, prénom et téléphone sont ceux vérifiés par SMS.">
+    <Page title="Mes informations" subtitle="Ces informations préremplissent vos candidatures. Les enregistrer n’envoie aucune candidature. Votre nom, prénom et téléphone sont ceux vérifiés par SMS.">
       <CandidateForm lockedIdentity values={values} onChange={setValues} experience={experience} onExperience={setExperience}
         photo={<PhotoField value={photo ?? savedPhoto} onChange={setPhoto} onError={setError} />} />
       <Card>
+        <PrivacyConsent privacy={account.privacy} value={consent} onChange={setConsent} />
         <ErrorText message={error} />
-        <Button title="Enregistrer mon profil" busy={busy} onPress={save} />
+        <Button title="Enregistrer mon profil" busy={busy} disabled={consentMissing(account.privacy, consent)} onPress={save} />
       </Card>
     </Page>
   );

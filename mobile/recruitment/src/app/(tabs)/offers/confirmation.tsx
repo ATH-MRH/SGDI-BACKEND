@@ -12,7 +12,7 @@ export default function Confirmation() {
       <Card>
         <View style={page.icon}><Icon name="check" size={34} color={colors.green} /></View>
         {!!params.title && <Text style={page.title}>{params.title}</Text>}
-        <Text style={styles.subtitle}>{params.company || 'Candidature spontanée'}</Text>
+        <Text style={styles.subtitle}>{params.company || 'Candidature spontanée — aucune annonce sélectionnée'}</Text>
         <View style={styles.divider} />
         <Text style={styles.label}>Référence de votre dossier</Text>
         <Text selectable accessibilityLabel={`Référence ${params.reference}`} style={page.reference}>{params.reference}</Text>
@@ -20,7 +20,7 @@ export default function Confirmation() {
       </Card>
       {params.direct
         ? <Button title="Suivre ma candidature" onPress={() => router.replace({ pathname: '/tracking', params: { reference: params.reference || '' } })} />
-        : <Button title="Voir mes candidatures" onPress={() => leave('/applications')} />}
+        : <Button title="Suivre mes candidatures" onPress={() => leave('/applications')} />}
       <Button title="Retour à l’accueil" secondary onPress={() => leave('/')} />
     </Page>
   );

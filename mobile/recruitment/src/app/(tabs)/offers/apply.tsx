@@ -8,12 +8,14 @@ import locations from '../../../lib/locations.json';
 import { CVField } from '../../../components/cv-field';
 import { Icon } from '../../../components/icon';
 import { PhotoField } from '../../../components/photo-field';
+import { consentMissing, consentPayload, PrivacyConsent } from '../../../components/privacy-consent';
 import { Button, Card, colors, EmptyState, ErrorState, ErrorText, fonts, Loading, Page, shadow, styles } from '../../../components/ui';
 import { ApiError, errorMessage, request } from '../../../lib/api';
 import { CandidateAccess, useCandidateSession } from '../../../lib/candidate-session';
 import { confirm } from '../../../lib/confirm';
 import { CVUpload, useDocuments } from '../../../lib/documents';
-import { Account, ApplicationReceipt, Experience, fetchOffer, formToProfile, FormValues, newRequestId, OfferDetail, profileToForm, validateForm } from '../../../lib/emploi';
+import { Account, ApplicationReceipt, Experience, fetchOffer, formToProfile, FormValues, newRequestId, OfferDetail, PrivacyState, profileToForm, validateForm } from '../../../lib/emploi';
+import { PRIVACY_VERSION } from '../../../lib/privacy';
 import { useServer } from '../../../lib/server';
 import { useLoad } from '../../../lib/use-load';
 
@@ -76,6 +78,7 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
   // undefined : document inchangé ; valeur : nouveau document ; null ou '' : document retiré.
   const [cv, setCv] = useState<(CVUpload & { size?: number }) | null>(), [savedCv, setSavedCv] = useState(account.cv), [photo, setPhoto] = useState<string>(), [savedPhoto, setSavedPhoto] = useState('');
   const [message, setMessage] = useState(''), [consent, setConsent] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [privacy, setPrivacy] = useState<PrivacyState | undefined>(account.privacy);
   const submitting = useRef(false), requestId = useRef(newRequestId());
 
   useEffect(() => {
@@ -89,9 +92,12 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
     if (submitting.current) return;
     const problem = validateForm(values, experience, { needPosition: false });
     if (problem) { setError(problem); return; }
+    if (consentMissing(privacy, consent)) { setError('Cochez la case de consentement pour enregistrer votre profil.'); return; }
     submitting.current = true; setBusy(true); setError('');
     try {
-      await call('/public/emploi/me/profile', { method: 'PUT', body: formToProfile(values, experience, account.profile) });
+      // Étape 1 : le profil seulement. La candidature ne part qu'à l'étape suivante, sur action explicite.
+      const result = await call<{ privacy?: PrivacyState }>('/public/emploi/me/profile', { method: 'PUT', body: { ...formToProfile(values, experience, account.profile), ...consentPayload(privacy, consent) } });
+      if (result.privacy) setPrivacy(result.privacy);
       if (photo !== undefined) { await savePhoto(photo); setSavedPhoto(photo); setPhoto(undefined); }
       setStep('send');
     } catch (e) { setError(errorMessage(e)); } finally { submitting.current = false; setBusy(false); }
@@ -103,7 +109,7 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
     try {
       if (cv !== undefined) { setSavedCv(await saveCv(cv ? { name: cv.name, mime_type: cv.mime_type, data_base64: cv.data_base64 } : null)); setCv(undefined); }
       const receipt = await call<ApplicationReceipt>('/public/emploi/applications', { body: {
-        offer_id: offer ? offer.id : null, request_id: requestId.current, consent: true, message: message.trim() || null,
+        offer_id: offer ? offer.id : null, request_id: requestId.current, consent: true, privacy_version: PRIVACY_VERSION, message: message.trim() || null,
         profile: formToProfile(values, experience, account.profile), desired_position: offer ? null : (values.desired_position || '').trim() } });
       router.replace({ pathname: '/offers/confirmation', params: { reference: receipt.reference, id: String(receipt.application_id), already: receipt.already_applied ? '1' : '',
         title: offer?.title || (values.desired_position || '').trim(), company: offer?.company.name || '' } });
@@ -118,23 +124,27 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
   function review() {
     const problem = validateForm(values, experience, { needPosition: !offer });
     if (problem) { setError(problem); return; }
-    if (!consent) { setError('Votre consentement est nécessaire pour transmettre le dossier.'); return; }
+    if (consentMissing(privacy, consent)) { setError('Votre consentement est nécessaire pour transmettre le dossier.'); return; }
     confirm('Envoyer la candidature ?', offer ? `Votre candidature au poste « ${offer.title} » sera envoyée à ${offer.company.name}.` : 'Votre candidature spontanée sera envoyée au service recrutement.', 'Envoyer', submit);
   }
 
   if (step === 'info') {
     return (
-      <Page title="Mes renseignements" subtitle="Étape 1 sur 2. Ces informations sont demandées une seule fois : elles sont enregistrées dans votre profil pour vos prochaines candidatures.">
+      <Page title="Mes renseignements" subtitle="Étape 1 sur 2. Vous enregistrez votre profil : rien n’est encore envoyé au recruteur. Ces informations serviront aussi à vos prochaines candidatures.">
         <CandidateForm lockedIdentity hidden={offer ? ['desired_position'] : []} values={values} onChange={setValues} experience={experience} onExperience={setExperience}
           photo={<PhotoField value={photo ?? savedPhoto} onChange={setPhoto} onError={setError} />} />
-        <ErrorText message={error} />
-        <Button title="Continuer" busy={busy} onPress={saveInfo} />
+        <Card>
+          <PrivacyConsent privacy={privacy} value={consent} onChange={setConsent} />
+          <ErrorText message={error} />
+          <Button title="Enregistrer mon profil" busy={busy} disabled={consentMissing(privacy, consent)} onPress={saveInfo} />
+          <Text style={styles.subtitle}>Étape suivante : vérifier puis envoyer votre candidature.</Text>
+        </Card>
       </Page>
     );
   }
 
   return (
-    <Page title="Votre candidature">
+    <Page title="Votre candidature" subtitle="Étape 2 sur 2. Vérifiez l’offre, vos informations et vos pièces, puis envoyez.">
       {offer ? (
         <View style={form.summary}>
           {/* Photographie d'illustration (assets/photos/SOURCES.md). */}
@@ -147,7 +157,10 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
         </View>
       ) : (
         <View style={{ gap: 8 }}>
-          <Text style={styles.subtitle}>Candidature spontanée : elle est étudiée par le service recrutement du groupe, sans annonce précise.</Text>
+          <View accessibilityRole="alert" style={form.spontaneous}>
+            <Icon name="briefcase" size={20} color={colors.goldDeep} />
+            <View style={{ flex: 1 }}><Text style={form.infoTitle}>Candidature spontanée</Text><Text style={form.offerMeta}>Aucune annonce n’est sélectionnée. Votre dossier est étudié par le service recrutement du groupe.</Text></View>
+          </View>
           <Select label="Poste souhaité" value={values.desired_position || ''} onChange={value => setValues({ ...values, desired_position: value })}
             options={[{ value: '', label: '— Choisir —' }, ...locations.positions.map(value => ({ value, label: value }))]} />
         </View>
@@ -161,12 +174,13 @@ function SpaceForm({ account, offer, onClosed }: { account: Account; offer: Offe
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="Vérifier ou modifier mes renseignements" onPress={() => { setError(''); setStep('info'); }} style={form.info}>
         <Icon name="user" size={20} color={colors.navy} />
-        <View style={{ flex: 1 }}><Text style={form.infoTitle}>Mes renseignements</Text><Text style={form.offerMeta}>Enregistrés dans votre profil · vérifier ou modifier</Text></View>
+        <View style={{ flex: 1 }}><Text style={form.infoTitle}>Mes renseignements</Text><Text style={form.offerMeta}>{[`${account.first_name} ${account.last_name}`, account.phone, [values.commune, values.wilaya].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</Text><Text style={form.offerMeta}>Vérifier ou modifier</Text></View>
         <Icon name="chevronRight" size={18} color={colors.soft} />
       </Pressable>
-      <Consent value={consent} onChange={setConsent} />
+      {!savedCv && !cv && <Text style={styles.subtitle}>Aucun CV joint : vous pouvez envoyer sans CV, ou en ajouter un ci-dessus.</Text>}
+      <PrivacyConsent privacy={privacy} value={consent} onChange={setConsent} />
       <ErrorText message={error} />
-      <Button title="Envoyer ma candidature" busy={busy} disabled={!consent} onPress={review} />
+      <Button title="Envoyer ma candidature" icon="send" busy={busy} disabled={consentMissing(privacy, consent)} onPress={review} />
       {offer && (
         <Pressable accessibilityRole="link" onPress={() => router.replace('/offers/apply')} hitSlop={8} style={{ alignSelf: 'center', minHeight: 36, justifyContent: 'center' }}>
           <Text style={styles.link}>Candidature spontanée</Text>
@@ -223,5 +237,6 @@ const form = StyleSheet.create({
   checked: { backgroundColor: colors.navy }, offerTitle: { fontSize: 17.5, fontFamily: fonts.bold, color: colors.ink }, offerMeta: { fontSize: 14.5, fontFamily: fonts.sans, color: colors.muted },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 12 }, thumb: { width: 76, height: 60, borderRadius: 8, backgroundColor: colors.surface },
   message: { minHeight: 92, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 17, lineHeight: 23.5, fontFamily: fonts.sans, color: colors.ink, backgroundColor: colors.white },
+  spontaneous: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 12, borderRadius: 12, backgroundColor: colors.goldSoft },
   info: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, backgroundColor: colors.white, ...shadow }, infoTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.ink },
 });

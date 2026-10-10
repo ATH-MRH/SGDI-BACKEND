@@ -60,6 +60,10 @@ export default function Settings() {
         <Row icon="bulb" title="Notifications et conseils" onPress={() => router.push('/espace')} />
       </Card>
 
+      <Card style={{ gap: 4 }}>
+        <Row icon="shield" title="Protection des données personnelles" subtitle="Notice : finalités, données, destinataires, droits" onPress={() => router.push('/privacy')} />
+      </Card>
+
       {session && (
         <Card>
           <Text accessibilityRole="header" style={styles.heading}>Mes données</Text>
@@ -94,7 +98,7 @@ function Notifications() {
       <Text accessibilityRole="header" style={styles.heading}>Notifications</Text>
       {!settings.data ? (settings.loading ? <Loading /> : <ErrorText message={settings.error} />) : (
         <>
-          <Text style={styles.subtitle}>Toutes vos notifications sont visibles dans l’application, rubrique « Votre espace emploi ».</Text>
+          <Text style={styles.subtitle}>Toutes vos notifications sont visibles dans l’application, rubrique « Votre espace emploi ». Ces réglages sont indépendants de votre consentement au traitement de vos données.</Text>
           {FAMILIES.map(([key, label]) => (
             <View key={key} style={[styles.row, { justifyContent: 'space-between', minHeight: 44 }]}>
               <Text style={[styles.text, { flex: 1 }]}>{label}</Text>

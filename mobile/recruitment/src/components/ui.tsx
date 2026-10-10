@@ -6,16 +6,22 @@ import { Icon, IconName } from './icon';
 import { initials } from '../lib/emploi';
 
 // Système de styles IRON Emploi (planche de référence) : bleu marine, doré, blanc et gris clair ;
-// grands titres avec empattements (Source Serif 4), texte courant sans empattements (Noto Sans).
+// tous les textes en Arial (voir `fonts` ci-dessous).
 export const colors = {
   ink: '#13284B', navy: '#13284B', navyDeep: '#0C1C36', muted: '#66758C', soft: '#8E9AAD', background: '#FFFFFF', surface: '#F4F6F9',
   gold: '#B88A3B', goldDeep: '#96702A', goldSoft: '#F6EEDD', white: '#FFFFFF', border: '#E2E7EE', red: '#B3293A', redSoft: '#FBECEE',
   green: '#1E8E4E', greenSoft: '#E4F4EA', blue: '#2E6BD9', blueSoft: '#E8F0FC', field: '#F4F6F9',
 };
-export const fonts = {
-  serif: 'SourceSerif4_700Bold', serifSemi: 'SourceSerif4_600SemiBold',
-  sans: 'NotoSans_400Regular', medium: 'NotoSans_500Medium', semi: 'NotoSans_600SemiBold', bold: 'NotoSans_700Bold',
-};
+// Police de toute l'application : Arial.
+// - iOS : Arial est fournie par le système (ArialMT, Arial-BoldMT).
+// - Android : Arial n'est pas installée et sa licence n'autorise pas de l'embarquer sans accord. L'application y utilise
+//   Arimo (licence libre OFL), dessinée avec les mêmes largeurs de caractères qu'Arial : ce n'est pas Arial. Pour y afficher
+//   Arial, déposer des fichiers dont les droits sont établis (voir assets/fonts/LISEZ-MOI.md).
+// - Aperçu web : Arial du poste, déclarée dans src/app/_layout.tsx.
+const regular = Platform.select({ ios: 'ArialMT', android: 'Arimo_400Regular', default: 'AppArial' }) as string;
+const strong = Platform.select({ ios: 'Arial-BoldMT', android: 'Arimo_700Bold', default: 'AppArialBold' }) as string;
+// Arial n'a que deux graisses : les anciens niveaux intermédiaires se rangent sur l'une ou l'autre.
+export const fonts = { serif: strong, serifSemi: strong, sans: regular, medium: regular, semi: strong, bold: strong };
 export const shadow: ViewStyle = Platform.select({
   ios: { shadowColor: '#13284B', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } },
   android: { elevation: 2 },

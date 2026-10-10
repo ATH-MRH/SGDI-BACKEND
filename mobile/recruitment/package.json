@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/noto-sans": "^0.4.2",
-    "@expo-google-fonts/source-serif-4": "^0.4.2",
+    "@expo-google-fonts/arimo": "^0.4.3",
+    "@react-native-community/datetimepicker": "9.1.0",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-device": "~57.0.2",

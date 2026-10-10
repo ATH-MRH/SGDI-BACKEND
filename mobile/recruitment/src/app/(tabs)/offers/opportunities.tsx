@@ -6,7 +6,7 @@ import { OfferMeta } from '../../../components/offer-card';
 import { Button, Card, colors, EmptyState, ErrorState, ErrorText, fonts, JobIcon, Loading, shadow, styles } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { alertLabel, JobAlert, jobIcon } from '../../../lib/emploi';
+import { alertLabel, JobAlert, jobIcon, PushSettings } from '../../../lib/emploi';
 import { useFavorites } from '../../../lib/favorites';
 import { useServer } from '../../../lib/server';
 import { useLoad } from '../../../lib/use-load';
@@ -45,8 +45,16 @@ function Alerts() {
   const { session, call } = useCandidateSession();
   const enabled = !!session && mode === 'emploi';
   const alerts = useLoad(signal => call<{ items: JobAlert[] }>('/public/emploi/alerts', { signal }), 'alerts', enabled);
-  const [error, setError] = useState(''), [busy, setBusy] = useState<number | null>(null);
-  const { reload, setData } = alerts, first = useRef(true);
+  const settings = useLoad(signal => call<PushSettings>('/public/emploi/me/settings', { signal }), 'alert-settings', enabled);
+  const [error, setError] = useState(''), [busy, setBusy] = useState<number | null>(null), [switching, setSwitching] = useState(false);
+  const { reload, setData } = alerts, first = useRef(true), { setData: setSettings } = settings;
+  const allOn = settings.data?.alerts_enabled !== false;
+  // Interrupteur général : suspend toutes les alertes sans les supprimer. Sans effet sur le consentement aux données.
+  async function toggleAll(value: boolean) {
+    setSwitching(true); setError('');
+    try { const saved = await call<{ alerts_enabled: boolean }>('/public/emploi/me/settings', { method: 'PUT', body: { alerts_enabled: value } }); setSettings(previous => previous ? { ...previous, alerts_enabled: saved.alerts_enabled } : previous); }
+    catch (e) { setError(errorMessage(e)); } finally { setSwitching(false); }
+  }
   useFocusEffect(useCallback(() => { if (first.current) first.current = false; else reload(); }, [reload]));
 
   async function toggle(alert: JobAlert, active: boolean) {
@@ -66,25 +74,38 @@ function Alerts() {
         : !session ? <Card><EmptyState icon="bell" title="Recevez les nouvelles offres" text="Identifiez-vous pour enregistrer des critères : vous serez prévenu dans l’application quand une offre correspond." action="M’identifier" onAction={() => router.push({ pathname: '/identify', params: { next: 'opportunities' } })} /></Card>
         : alerts.loading && !alerts.data ? <Loading />
         : !alerts.data ? <ErrorState message={alerts.error} onRetry={alerts.reload} />
-        : items.map(alert => (
+        : <>
+          <View style={[row.box, { alignItems: 'center' }]}>
+            <View style={[row.main, { flex: 1 }]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={row.title}>Alertes de nouvelles offres</Text>
+                <Text style={row.meta}>{allOn ? 'Activées : une notification vous prévient quand une offre correspond à une alerte.' : 'Suspendues : vos alertes sont conservées, aucune notification n’est créée.'}</Text>
+              </View>
+            </View>
+            <View style={{ paddingRight: 12 }}>
+              <Switch accessibilityLabel="Alertes de nouvelles offres" value={allOn} disabled={switching || !settings.data} onValueChange={toggleAll} trackColor={{ true: colors.green, false: colors.border }} thumbColor={colors.white} />
+            </View>
+          </View>
+          {items.map(alert => (
           <View key={alert.id} style={row.box}>
             <Pressable accessibilityRole="button" accessibilityLabel={`Modifier l’alerte ${alertLabel(alert)}`} onPress={() => router.push({ pathname: '/offers/alert-edit', params: { id: String(alert.id) } })}
               style={({ pressed }) => [row.main, pressed && { opacity: 0.7 }]}>
               <Icon name="bell" size={24} color={colors.gold} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={row.title}>{alertLabel(alert)}</Text>
-                <Text style={row.meta}>{alert.active ? 'Vous êtes prévenu des nouvelles offres correspondantes.' : 'Alerte en pause.'}</Text>
+                <Text style={row.meta}>{!allOn ? 'Suspendue avec toutes les alertes.' : alert.active ? 'Vous êtes prévenu des nouvelles offres correspondantes.' : 'Alerte en pause.'}</Text>
               </View>
             </Pressable>
             <View style={{ paddingRight: 12, alignSelf: 'center' }}>
-              <Switch accessibilityLabel={`Alerte ${alertLabel(alert)}`} value={alert.active} disabled={busy === alert.id} onValueChange={value => toggle(alert, value)}
+              <Switch accessibilityLabel={`Alerte ${alertLabel(alert)}`} value={alert.active} disabled={busy === alert.id || !allOn} onValueChange={value => toggle(alert, value)}
                 trackColor={{ true: colors.green, false: colors.border }} thumbColor={colors.white} />
             </View>
           </View>
-        ))}
+          ))}
+        </>}
       <ErrorText message={error} />
       {enabled && !!alerts.data && <Button title="Créer une alerte" icon="plus" secondary onPress={() => router.push('/offers/alert-edit')} />}
-      {enabled && <Text style={row.note}>Les alertes créent une notification dans l’application. Elles n’envoient ni SMS ni e-mail.</Text>}
+      {enabled && <Text style={row.note}>Une alerte crée une notification dans l’application. La toucher ouvre l’offre : vous décidez ensuite de postuler ou non. Aucun SMS ni e-mail n’est envoyé.</Text>}
     </>
   );
 }

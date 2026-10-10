@@ -30,7 +30,7 @@ Les offres et les entreprises se consultent sans connexion. L'identification par
 
 ## Apparence
 
-- **Polices embarquées** (licence SIL OFL) : Source Serif 4 pour les titres, Noto Sans pour le texte. Elles sont chargées au démarrage, identiques sur iOS et Android.
+- **Police** : Arial pour tous les textes. Sur iOS c'est l'Arial du système. Sur Android, où Arial n'existe pas et ne peut pas être embarquée sans licence, l'application affiche Arimo (licence libre, mêmes largeurs de caractères) — ce n'est pas Arial ; voir `assets/fonts/LISEZ-MOI.md`. Les dialogues et calendriers du système gardent la police du téléphone.
 - **Styles partagés** : couleurs, typographies, cartes, boutons, pastilles et filtres sont définis dans `src/components/ui.tsx`.
 - **Icônes** vectorielles dessinées pour l'application (`src/components/icon.tsx`), aucune police d'icônes, aucun emoji.
 - **Illustrations** : trois images générées par IA (agent de sécurité de dos, équipe devant un immeuble, poste de surveillance), sans logo ni personne réelle ; origine et droits dans `assets/photos/SOURCES.md`. Elles ne représentent aucun site du groupe.
