@@ -69,7 +69,11 @@ MIN_FRAMES = 2                   # liveness médian + détection d'image figée
 MAX_FRAMES = 5
 MAX_BODY_BYTES = MAX_FRAMES * (test_mode.MAX_FRAME_BYTES * 4 // 3 + 64) + 4096
 FRAME_DIGEST_RETENTION = timedelta(days=7)
-LAST_SEEN_THROTTLE = timedelta(seconds=60)
+# Battement de cœur : une borne en service relit son état toutes les HEARTBEAT_SECONDS, même au
+# repos (aucun passage). La dernière communication est donc écrite à chaque battement ; son
+# absence prolongée signifie une perte de connexion, pas une absence d'activité.
+HEARTBEAT_SECONDS = 30
+LAST_SEEN_THROTTLE = timedelta(seconds=20)
 SIGNATURE_DOMAIN = "ATLAS-TERMINAL-1"
 
 
@@ -162,7 +166,9 @@ def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, i
         BiometricTerminal.pairing_code_hash == _sha256(normalized)).values(
         public_key=key, key_fingerprint=fingerprint, pairing_code_hash=None,
         pairing_expires_at=None, paired_at=_now(), config_version=BiometricTerminal.config_version + 1,
-        meta={**(terminal.meta or {}), "device_label": str(device_label or "")[:120] or None}),
+        # Nouvel appareil : il devra déclarer lui-même son battement de cœur.
+        meta={**{k: v for k, v in (terminal.meta or {}).items() if k != "heartbeat_s"},
+              "device_label": str(device_label or "")[:120] or None}),
         execution_options={"synchronize_session": False})
     if not changed.rowcount:
         db.rollback()
@@ -332,17 +338,22 @@ def _remote_capture():
 
 
 @router.get("/terminal/session")
-def terminal_session(req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
+def terminal_session(hb: int = 0, req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
     """État du terminal pour l'écran de borne : identité, disponibilité du facial / du QR,
-    paramètres de rafale. Aucune donnée employé."""
+    paramètres de rafale. Aucune donnée employé. `hb=1` : battement de cœur périodique — la
+    borne déclare qu'elle le maintient, ce qui permet de reconnaître une vraie perte de connexion."""
     terminal = req.terminal
+    if hb and (terminal.meta or {}).get("heartbeat_s") != HEARTBEAT_SECONDS:
+        terminal.meta = {**(terminal.meta or {}), "heartbeat_s": HEARTBEAT_SECONDS}
+        db.commit()
     site = db.get(Site, terminal.site_id)
     return {"terminal": {"terminal_id": terminal.public_id, "name": terminal.name, "terminal_type": terminal.terminal_type,
                          "site_id": terminal.site_id, "site": site.name if site else None, "society": terminal.society,
                          "location": terminal.location},
             "facial": facial_availability(terminal), "qr": {"available": True},
             "remote_capture": _remote_capture().session_info(),
-            "burst": BURST, "challenge_ttl": CHALLENGE_TTL_SECONDS, "server_time": int(time.time() * 1000)}
+            "burst": BURST, "challenge_ttl": CHALLENGE_TTL_SECONDS, "heartbeat_ms": HEARTBEAT_SECONDS * 1000,
+            "server_time": int(time.time() * 1000)}
 
 
 @router.post("/terminal/challenge")

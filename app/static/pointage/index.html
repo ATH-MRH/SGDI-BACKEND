@@ -250,14 +250,14 @@ body.modal-open{overflow:hidden}
         <div class="terminal-intro card">
           <div class="terminal-intro-icon" aria-hidden="true"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3"><rect x="7" y="5" width="33" height="49" rx="4"/><path d="M19 11h9M20 47h5"/><rect x="31" y="23" width="25" height="37" rx="4"/><path d="M39 29h9m-7 25h5"/></svg></div>
           <div class="terminal-intro-copy"><h2>Terminaux de pointage <span>(tablettes, smartphones)</span></h2>
-            <p>Les terminaux exécutent le Pointage (pointeur.irongs.com, page /borne) ; ils s'administrent ici.</p>
+            <p>Les terminaux exécutent le Pointage (pointeur.irongs.com, page /borne). Enregistrement, association, révocation, suppression et comptes autorisés : Administration Système → Terminaux faciaux. Activation du facial, renommage et audit : ici.</p>
             <p>Un terminal appartient à une société et un site. Il est associé par un code à usage unique ; sa clé ne quitte jamais l'appareil et n'est jamais affichée.</p>
             <p>Le pointage facial est désactivé par défaut et s'active terminal par terminal.</p></div>
           <div class="terminal-intro-art"><svg viewBox="0 0 130 100" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><rect x="12" y="7" width="70" height="84" rx="6" fill="var(--atlas-primary-soft)"/><path d="M23 16h47v62H23z" opacity=".35"/><rect x="62" y="28" width="42" height="64" rx="5" fill="var(--atlas-surface)"/><path d="M74 34h18M78 84h10"/><path d="m105 49 13 5v12c0 9-13 15-13 15s-13-6-13-15V54l13-5Z" fill="var(--atlas-primary-soft)"/><path d="m99 65 4 4 8-9"/></svg><p>Des terminaux sécurisés<br>pour un pointage fiable</p></div>
         </div>
         <div class="terminal-kpis" id="terminal-kpis" aria-label="Indicateurs des terminaux"></div>
         <div class="terminal-toolbar">
-          <div class="terminal-toolbar-actions"><button class="secondary" id="terminal-archive" type="button">Audit des terminaux supprimés</button><button class="primary" id="terminal-add" type="button">+ Ajouter un terminal</button><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button></div>
+          <div class="terminal-toolbar-actions"><button class="secondary" id="terminal-archive" type="button">Audit des terminaux supprimés</button><button class="danger hidden" id="site-facial-off-terminals" type="button">Couper le pointage facial du site</button></div>
           <div class="terminal-filters">
             <label class="terminal-search" for="terminal-q"><span class="sr-only">Rechercher un terminal, site, code ou société</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="terminal-q" type="search" placeholder="Rechercher un terminal, site, code..." autocomplete="off"></label>
             <label class="sr-only" for="terminal-type">Type de terminal</label><select id="terminal-type"><option value="">Tous les types</option><option value="TABLET_ANDROID">Tablette Android</option><option value="SMARTPHONE_ANDROID">Smartphone Android</option><option value="IPHONE">iPhone</option><option value="IPAD">iPad</option></select>
@@ -1120,7 +1120,6 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   // ── Biométrie : terminaux mobiles (tablettes / smartphones) ─────────────────────────
-  const TERMINAL_TYPE_LABEL = { TABLET_ANDROID: "Tablette Android (Samsung)", SMARTPHONE_ANDROID: "Smartphone Android", IPHONE: "iPhone", IPAD: "iPad" };
   const when = (v) => v ? esc(v.replace("T", " ").slice(0, 16)) : "—";
   let terminalCache = [], terminalPage = 1, terminalPageSize = 10, terminalSeq = 0, terminalSnapshotAt = 0;
   // Same recent-activity window as biometrics/remote_capture.py ONLINE_SECONDS.
@@ -1188,12 +1187,12 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         : `<div>${t.pairing_pending ? "Association en attente" : "Non associé"}</div>${pending}`;
       const age = terminalSnapshotAt - Date.parse(t.last_seen_at);
       const online = !t.revoked_at && age >= 0 && age <= TERMINAL_ONLINE_MS;
-      const actions = (t.revoked_at ? terminalAction(t, "audit", "Audit", "audit") : [
-        terminalAction(t, "pair", t.paired ? "Ré-associer" : "Associer", "link"),
+      // Enregistrement, association, révocation et suppression : Administration Système uniquement.
+      const actions = t.revoked_at ? terminalAction(t, "audit", "Audit", "audit") : [
         terminalAction(t, "facial", t.facial_attendance_enabled ? "Couper le facial" : "Activer le facial", "camera"),
         terminalAction(t, "enable", t.enabled ? "Désactiver" : "Activer", "power", t.enabled ? "warning" : ""),
-        terminalAction(t, "rename", "Renommer", "edit"), terminalAction(t, "audit", "Audit", "audit"), terminalAction(t, "revoke", "Révoquer", "cross", "danger"),
-      ].join("")) + terminalAction(t, "delete", "Supprimer", "trash", "danger");
+        terminalAction(t, "rename", "Renommer", "edit"), terminalAction(t, "audit", "Audit", "audit"),
+      ].join("");
       return `<tr data-terminal-id="${esc(t.id)}"><td data-label="Terminal"><div class="terminal-identity"><span class="terminal-device">${terminalIcon(device.icon)}</span><div><b>${esc(t.name)}</b><small>${esc(t.location || "Emplacement non renseigné")}</small></div></div></td>
         <td data-label="Type"><div class="terminal-type">${terminalIcon(/_ANDROID$/.test(t.terminal_type) ? "android" : device.icon)}<div>${esc(device.type)}${device.android ? `<small class="terminal-os">${esc(device.android)}</small>` : ""}</div></div></td>
         <td data-label="Site"><div class="terminal-site"><b>${esc(t.site || "Site non renseigné")}</b><small>${esc(t.society)}</small></div></td>
@@ -1207,13 +1206,10 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     $("terminal-next").disabled = terminalPage >= pages;
     const byId = (id) => terminalCache.find((t) => String(t.id) === String(id));
     const bind = (attr, fn) => $("terminal-rows").querySelectorAll(`[${attr}]`).forEach((b) => b.addEventListener("click", () => fn(byId(b.getAttribute(attr)))));
-    bind("data-term-pair", pairTerminal);
     bind("data-term-facial", (t) => patchTerminal(t, { facial_attendance_enabled: !t.facial_attendance_enabled },
       t.facial_attendance_enabled ? null : `Activer le pointage facial RÉEL sur « ${t.name} » ?\nIl enregistrera des présences dès que la biométrie est activée (BIOMETRIC_ENABLED).`));
     bind("data-term-enable", (t) => patchTerminal(t, { enabled: !t.enabled }, t.enabled ? `Désactiver « ${t.name} » ? Effet immédiat (facial et QR de la borne).` : null));
     bind("data-term-rename", (t) => { const name = prompt("Nouveau nom du terminal", t.name); if (name && name.trim() && name.trim() !== t.name) patchTerminal(t, { name: name.trim() }); });
-    bind("data-term-revoke", revokeTerminal);
-    bind("data-term-delete", deleteTerminal);
     bind("data-term-audit", terminalAudit);
   }
   async function loadTerminals() {
@@ -1257,54 +1253,6 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     catch (ex) { toast(permissionMessage(ex), true); }
   }
 
-  function kioskOrigin() {
-    return location.hostname === "pointage.irongs.com" ? "https://pointeur.irongs.com" : location.origin;
-  }
-
-  async function pairTerminal(t) {
-    if (t.paired && !confirm(`Ré-associer « ${t.name} » ? La clé actuelle restera valable jusqu'à l'association du nouvel appareil.`)) return;
-    try {
-      const r = await api(`/biometrics/terminals/${t.id}/pairing-code`, { method: "POST" });
-      const url = kioskOrigin() + r.pair_path;
-      const m = modal(`<h3>Associer « ${esc(t.name)} »</h3>
-        <div class="sub">Sur la tablette : ouvrez <b>${esc(kioskOrigin())}/borne</b> puis saisissez le code, ou scannez le QR. Usage unique, expire dans ${Math.round(r.expires_in / 60)} min. Ne le transmettez pas.</div>
-        <div class="pair-code" id="pair-code" style="font-size:34px;font-weight:900;letter-spacing:.14em;text-align:center;margin:14px 0">${esc(r.code)}</div>
-        <div id="pair-qr" style="display:flex;justify-content:center"></div>
-        <div class="modal-actions"><button class="primary" type="button" id="pair-close">Fermer</button></div>`);
-      if (window.QRCode) new window.QRCode(m.querySelector("#pair-qr"), { text: url, width: 200, height: 200, correctLevel: window.QRCode.CorrectLevel.M });
-      m.querySelector("#pair-close").addEventListener("click", () => { closeModal(); loadTerminals(); });
-    } catch (ex) { toast(permissionMessage(ex), true); }
-  }
-
-  async function revokeTerminal(t) {
-    const reason = prompt(`Révoquer définitivement « ${t.name} » (tablette perdue, remplacée…) ?\nSa clé sera immédiatement invalidée, mais le terminal restera visible dans la liste et son historique sera conservé.\nMotif obligatoire :`);
-    if (!reason || reason.trim().length < 3) return;
-    try { await api(`/biometrics/terminals/${t.id}/revoke`, { method: "POST", body: { reason: reason.trim() } }); toast("Terminal révoqué"); loadTerminals(); }
-    catch (ex) { toast(permissionMessage(ex), true); }
-  }
-
-  function deleteTerminal(t) {
-    const m = modal(`<h3>Supprimer ce terminal ?</h3><p><b>${esc(t.name)}</b></p><p>Le terminal disparaîtra de la liste et ne pourra plus pointer. Son historique sera conservé. Vous pourrez créer un nouveau terminal ultérieurement.</p><label for="terminal-delete-reason">Motif (facultatif)</label><input id="terminal-delete-reason" maxlength="500"><div class="error" id="terminal-delete-error" role="alert"></div><div class="modal-actions"><button class="secondary" type="button" id="terminal-delete-cancel">Annuler</button><button class="danger" type="button" id="terminal-delete-confirm">Supprimer le terminal</button></div>`);
-    m.querySelector("#terminal-delete-cancel").addEventListener("click", closeModal);
-    m.querySelector("#terminal-delete-confirm").addEventListener("click", async function () {
-      if (this.disabled) return;
-      this.disabled = true;
-      try {
-        await api(`/biometrics/terminals/${t.id}`, { method: "DELETE", body: { reason: m.querySelector("#terminal-delete-reason").value.trim() || null } });
-        // Invalidate an older list response, remove locally and recalculate immediately.
-        terminalSeq++;
-        terminalCache = terminalCache.filter(row => row.id !== t.id);
-        renderTerminalKpis(true); renderTerminals();
-        $("site-facial-off-terminals").classList.toggle("hidden", !$("f-site").value || !terminalCache.some(row => row.facial_attendance_enabled));
-        closeModal(); toast("Terminal supprimé — historique conservé");
-      } catch (ex) {
-        this.disabled = false;
-        const err = m.querySelector("#terminal-delete-error");
-        err.textContent = permissionMessage(ex); err.classList.add("show");
-      }
-    });
-  }
-
   $("terminal-archive").addEventListener("click", async () => {
     try {
       const site = $("f-site").value;
@@ -1325,24 +1273,6 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
     } catch (ex) { toast(permissionMessage(ex), true); }
   }
 
-  $("terminal-add").addEventListener("click", async () => {
-    let sites = [];
-    try { sites = await api("/attendance/sites"); } catch (ex) { toast(ex.message, true); return; }
-    const m = modal(`<h3>Ajouter un terminal</h3><div class="sub">Tablette ou smartphone dédié à un site. Le pointage facial reste désactivé jusqu'à activation explicite. Une caméra Dahua/RTSP se déclare dans Caméras.</div>
-      <form id="term-form"><div class="grid2"><div><label for="t-name">Nom</label><input id="t-name" required placeholder="TAB-ENTREE-01"></div><div><label for="t-type">Type</label><select id="t-type">${Object.keys(TERMINAL_TYPE_LABEL).map((k) => `<option value="${k}">${TERMINAL_TYPE_LABEL[k]}</option>`).join("")}</select></div></div>
-      <label for="t-site">Site</label><select id="t-site">${sites.map((x) => `<option value="${x.id}">${esc(x.name)} — ${esc(x.society)}</option>`).join("")}</select>
-      <label for="t-loc">Emplacement</label><input id="t-loc" placeholder="Poste de garde, entrée">
-      <div class="error" id="t-error" role="alert"></div><div class="modal-actions"><button class="secondary" type="button" id="t-cancel">Annuler</button><button class="primary" type="submit">Créer</button></div></form>`);
-    m.querySelector("#t-cancel").addEventListener("click", closeModal);
-    m.querySelector("#term-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      try {
-        const t = await api("/biometrics/terminals", { method: "POST", body: { name: m.querySelector("#t-name").value.trim(), terminal_type: m.querySelector("#t-type").value,
-          site_id: Number(m.querySelector("#t-site").value), location: m.querySelector("#t-loc").value.trim() || null } });
-        closeModal(); toast("Terminal créé — générez le code d'association"); await loadTerminals(); pairTerminal(t);
-      } catch (ex) { const err = m.querySelector("#t-error"); err.textContent = permissionMessage(ex); err.classList.add("show"); }
-    });
-  });
   $("site-facial-off-terminals").addEventListener("click", async () => {
     const site = $("f-site").value;
     if (!site || !confirm("Couper immédiatement le pointage facial de TOUS les terminaux et caméras de ce site ?\nLe QR et la saisie manuelle restent disponibles.")) return;
@@ -1688,7 +1618,6 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   if (state.token) enter().catch(() => logout());
 })();
 </script>
-<script src="/static/qrcode.min.js" defer></script>
 <script src="/static/pointage/test-mode.js?v=20260930-shared-test-mode" defer></script>
 </body>
 </html>

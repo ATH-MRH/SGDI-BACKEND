@@ -26,6 +26,7 @@
     MESSAGE_MS: 3500,        // refus affichés
     UNAVAILABLE_MS: 5000,    // réseau / serveur indisponible : nouvel essai
     STATUS_POLL_MS: 30000,   // terminal désactivé / facial coupé : relecture de l'état
+    HEARTBEAT_MS: 30000,     // battement de cœur au repos (cadence réelle donnée par le serveur)
     COMMAND_POLL_MS: 2000,   // « ai-je une commande ? » (prise de photo distante) — au repos
     CAPTURE_POLL_MS: 1000,   // pendant une prise de photo
     CAPTURE_RETRY_MS: 1500,  // délai minimal entre deux photos candidates
@@ -248,6 +249,22 @@
     B.remote.employee = out.employee;
     if (out.status === "RETAKE_REQUESTED" || (out.status === "REQUESTED")) { B.remote.status = out.status; await acknowledgeCapture(); return; }
     if (out.status === "PREVIEW_READY" && B.remote.status !== "PREVIEW_READY") { B.remote.status = out.status; layoutGuide("ok"); showCapture("Photo prise — vérification en cours…", "ok"); }
+  }
+
+  // Battement de cœur : même sans aucun passage, la borne relit son état à intervalle fixe. Le
+  // serveur distingue ainsi une borne au repos (elle bat) d'une borne déconnectée (elle se tait).
+  function heartbeatDue() {
+    const now = B.deps.now();
+    if (B.heartbeatAt == null) { B.heartbeatAt = now; return false; }
+    return now - B.heartbeatAt >= ((B.session && B.session.heartbeat_ms) || TIMING.HEARTBEAT_MS);
+  }
+  async function heartbeat() {
+    B.heartbeatAt = B.deps.now();
+    try { B.session = await call("GET", "/terminal/session?hb=1"); }
+    catch (e) { if (e.status === 401 || e.status === 403) handleError(e); return; }   // réseau : nouvel essai au prochain battement
+    if (B.remote) return;
+    if (facialOn()) { if (B.state === "FACIAL_OFF" || B.state === "UNAVAILABLE") SCREENS.READY(); }
+    else if (B.state === "READY") SCREENS.FACIAL_OFF(B.session.facial.message);
   }
 
   function commandDue() {
@@ -521,6 +538,10 @@
     if (commandDue()) {
       B.busy = true;
       try { await pollCommand(); } finally { B.busy = false; }
+    }
+    if (heartbeatDue()) {
+      B.busy = true;
+      try { await heartbeat(); } finally { B.busy = false; }
     }
     if (B.remote) {                                  // terminal réservé : ni QR, ni reconnaissance, ni pointage
       B.busy = true;

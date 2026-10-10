@@ -5,7 +5,7 @@ function renderAdmin(view,sub,arg){
   adminViewEpoch++;
   positionsStopInteractions();
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","commercial-dc","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients","beo"];
+  const systemOnly=["terminaux-faciaux","menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","commercial-dc","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients","beo"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
@@ -21,6 +21,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="beo")return renderAdminBeo(view);
   if(sub==="portail-clients")return renderAdminClientPortalUsers(view);
   if(sub==="supervisors")return renderAdminSupervisors(view);
+  if(sub==="terminaux-faciaux")return renderAdminFacialTerminals(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="commercial-dc")return renderAdminCommercialDc(view);
   if(sub==="loans")return renderAdminLoans(view);

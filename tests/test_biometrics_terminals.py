@@ -125,13 +125,17 @@ def _enrolled(db, site, who=None, vector=None, **kw):
     return emp, who
 
 
-def _user(client, db, *, sites, features, societies=(SOC,)):
+def _user(client, db, *, sites, features, societies=(SOC,), system=False):
+    """`system` : Administration Système (Sécurité des accès × Administrer) — seule habilitée à
+    enregistrer, appairer, révoquer ou supprimer un terminal."""
     name = f"tr{_tag()}"
     user = User(username=name, full_name=name, role="ops", access_level="H3", authorized_societies=list(societies),
                 authorized_sites=list(sites), authorized_modules=["pointage"], password_hash=hash_password("trpass1234"), is_active=True)
     db.add(user); db.flush()
     for feature, action in features:
         db.add(UserFeaturePermission(user_id=user.id, module_key="attendance", feature_key=feature, action_key=action))
+    if system:
+        db.add(UserFeaturePermission(user_id=user.id, module_key="administration", feature_key="security", action_key="admin"))
     db.commit()
     token = client.post("/api/auth/login", json={"username": name, "password": "trpass1234"}).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -198,9 +202,12 @@ def test_pairing_rejects_bad_keys_and_is_rate_limited(client, auth_headers, db):
 def test_terminal_admin_rbac_scope_and_types(client, auth_headers, db):
     site, other = _site(db), _site(db)
     reader = _user(client, db, sites=[site.id], features=[("biometric_status", "read")])
-    admin = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")])
+    admin = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")], system=True)
+    manager = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")])
     body = {"name": "TAB-R", "terminal_type": "TABLET_ANDROID", "site_id": site.id}
     assert client.post(f"{API}/terminals", headers=reader, json=body).status_code == 403          # pointeur ordinaire
+    # Gestion du pointage (biometric_admin) sans Administration Système : ni enregistrement ni appairage.
+    assert client.post(f"{API}/terminals", headers=manager, json=body).status_code == 403
     r = client.post(f"{API}/terminals", headers=admin, json=body)
     assert r.status_code == 200
     assert client.post(f"{API}/terminals", headers=admin, json=body).status_code == 409           # nom unique par site
@@ -599,7 +606,7 @@ def test_delete_and_archive_keep_original_permissions_and_scope(client, auth_hea
     tid, _ = _terminal(client, auth_headers, local)
     other_tid, _ = _terminal(client, auth_headers, outside)
     reader = _user(client, db, sites=[local.id], features=[('biometric_status','read')])
-    manager = _user(client, db, sites=[local.id], features=[('biometric_status','read'),('biometric_admin','admin')])
+    manager = _user(client, db, sites=[local.id], features=[('biometric_status','read'),('biometric_admin','admin')], system=True)
     assert client.delete(f"{API}/terminals/{tid}", headers=reader).status_code == 403
     assert client.get(f"{API}/terminals?include_deleted=true", headers=reader).status_code == 403
     assert client.delete(f"{API}/terminals/{other_tid}", headers=manager).status_code == 404

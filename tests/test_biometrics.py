@@ -521,10 +521,17 @@ def test_camera_inventory_hides_network_details_from_accounts_without_biometric_
                 is_active=True, authorized_modules=["pointeur"], authorized_societies=[SOC], authorized_sites=[site.id]))
     db.commit()
     token = client.post("/api/auth/login", json={"username": username, "password": "cam-audit-1234"}).json()["access_token"]
-    rows = client.get("/api/biometrics/cameras", headers={"Authorization": "Bearer " + token}, params={"site_id": site.id})
+    listing = lambda: client.get("/api/biometrics/cameras", headers={"Authorization": "Bearer " + token}, params={"site_id": site.id})  # noqa: E731
+    # Refus par défaut : sans autorisation explicite sur la caméra, le compte ne la voit même pas.
+    assert listing().status_code == 200 and all(row["id"] != cam_id for row in listing().json())
+    user_id = db.execute(select(User.id).where(User.username == username)).scalar_one()
+    granted = client.post("/api/biometrics/facial-devices/authorizations", headers=auth_headers, json={"key": f"cam:{cam_id}", "user_ids": [user_id]})
+    assert granted.status_code == 200, granted.text
+    rows = listing()
     assert rows.status_code == 200, rows.text
     mine = next(row for row in rows.json() if row["id"] == cam_id)
     assert (mine["host"], mine["http_port"], mine["rtsp_port"], mine["serial_number"], mine["last_check"], mine["profiles"]) == (None, None, None, None, None, {})
+    assert (mine["connection_type"], mine["channel"], mine["credentials_set"], mine["capabilities"]) == (None, None, None, {})
     assert mine["name"] and mine["usage"] == "ATTENDANCE"            # ce dont l'écran du poste a besoin
     admin = next(row for row in client.get("/api/biometrics/cameras", headers=auth_headers, params={"site_id": site.id}).json() if row["id"] == cam_id)
     assert admin["host"] == "192.168.60.20" and admin["serial_number"] == "SN-AUDIT-1"

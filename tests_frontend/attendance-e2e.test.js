@@ -194,6 +194,12 @@ print(a.id, b.id, e1.id, e2.id, e3.id)
     assert.strictEqual(cam.status, 200, JSON.stringify(cam.data));
     assert.ok(!JSON.stringify(cam.data).includes(CAM.pass), "mot de passe caméra jamais renvoyé");
     ids.camA = cam.data.id;
+    // Autorisation explicite du compte Pointeur sur cette caméra (Administration Système) : refus par défaut sinon.
+    const eligible = await api(`/biometrics/facial-devices/users?key=cam:${ids.camA}`, { token: tokens.admin });
+    const grant = await api("/biometrics/facial-devices/authorizations", { method: "POST", token: tokens.admin,
+      body: { key: `cam:${ids.camA}`, user_ids: eligible.data.filter((u) => u.username === "opsE2E").map((u) => u.id) } });
+    assert.strictEqual(grant.status, 200, JSON.stringify(grant.data));
+    assert.strictEqual(grant.data.users.length, 1, "opsE2E autorisé sur la caméra");
   });
 
   await t.test("scénarios hostiles (preuve backend)", async () => {
@@ -343,13 +349,16 @@ print(a.id, b.id, e1.id, e2.id, e3.id)
     await page.type("#username", "opsE2E"); await page.type("#password", "opsE2E-pass");
     await Promise.all([page.click("#loginBtn"), page.waitForSelector("#appView:not(.hidden)", { timeout: 10000 })]);
     await page.click("#faceNav");
+    // Terminaux autorisés listés ; le pointeur les coche et les active (aucun appairage ici).
+    await page.waitForSelector("#ftRows tr", { timeout: 10000 });
+    await page.click('#faceTerminals [data-ft="all"]'); await page.click("#ftActivate");
     const t0 = Date.now();
     await page.waitForFunction(() => /POINTAGE ENREGISTRÉ|DÉJÀ ENREGISTRÉ|REFUSÉ|INCONNU|INDISPONIBLE|AUCUNE/.test(document.getElementById("faceStatus").innerText), { timeout: 30000 });
     const recognized = await page.evaluate(() => document.getElementById("faceStatus").innerText);
     const elapsed = Date.now() - t0;
     assert.match(recognized, /POINTAGE ENREGISTRÉ/, recognized);
     assert.match(recognized, /PHOTO Nadia|Photo Nadia/i); assert.match(recognized, /ATT-E2/); assert.match(recognized, /ENTRÉE/);
-    console.log(`# E2E facial : ouverture de la vue → POINTAGE ENREGISTRÉ en ${elapsed} ms (moteur réel, capture serveur Dahua simulée, zéro clic)`);
+    console.log(`# E2E facial : activation → POINTAGE ENREGISTRÉ en ${elapsed} ms (moteur réel, capture serveur Dahua simulée)`);
     const previewOk = await page.evaluate(() => document.getElementById("facePreview").src.startsWith("blob:"));
     assert.ok(previewOk, "aperçu relayé par le backend");
     const leaked = await page.evaluate((pass) => document.documentElement.innerHTML.includes(pass) || performance.getEntriesByType("resource").some((r) => !r.name.includes("irongs.com")), CAM.pass);
@@ -366,8 +375,8 @@ print(a.id, b.id, e1.id, e2.id, e3.id)
     // 3) Image figée ré-injectée dans le flux : aucun pointage, échec de liveness tracé.
     for (const mode of ["still"]) {
       CAM.frames = cameraFrames(path.join(FACES, "obama1.jpg"), mode); CAM.served = 0;
-      await page.evaluate(() => { PointeurFacial.stop(); document.getElementById("faceStatus").innerText = ""; PointeurFacial.cooldownUntil = 0; });
-      await page.evaluate(() => PointeurFacial.start());
+      await page.evaluate(() => { PointeurFacial.stop(); document.getElementById("faceStatus").innerText = ""; });
+      await page.evaluate(async () => { await PointeurFacial.start(); PointeurFacial.selectAll(); await PointeurFacial.activateSelected(); });
       await page.waitForFunction(() => /REFUSÉ|ENREGISTRÉ/.test(document.getElementById("faceStatus").innerText), { timeout: 30000 });
       const verdict = await page.evaluate(() => document.getElementById("faceStatus").innerText);
       assert.match(verdict, /Présence réelle non confirmée/, `${mode} : ${verdict}`);

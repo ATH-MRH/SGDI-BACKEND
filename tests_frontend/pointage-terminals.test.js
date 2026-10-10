@@ -114,7 +114,7 @@ test('KPI multi-sites : inactifs/révoqués, association absente ou rotation en 
   assert.deepEqual(['total', 'active', 'inactive', 'pairing', 'sites'].map(c.kpi), ['5', '3', '2', '3', '2']);
   assert.match(c.row(2).textContent, /Inactif/);
   assert.match(c.row(4).textContent, /Révoqué/);
-  assert.equal(c.row(4).querySelectorAll('button').length, 2);
+  assert.equal(c.row(4).querySelectorAll('button').length, 1, 'révoqué : audit seul');
   assert.ok(c.row(4).querySelector('[data-term-audit="4"]'));
 });
 
@@ -240,7 +240,7 @@ test('contenu hostile échappé et secrets ignorés : seules les empreintes hexa
 
 test('actions icônes : boutons clavier nommés, audit lecture seule et fermeture sans mutation', async (t) => {
   const c = boot(t); await c.ready();
-  for (const key of ['pair', 'facial', 'enable', 'rename', 'audit', 'revoke', 'delete']) {
+  for (const key of ['facial', 'enable', 'rename', 'audit']) {
     const button = c.row(1).querySelector('[data-term-' + key + ']');
     assert.ok(button); assert.equal(button.tagName, 'BUTTON'); assert.equal(button.type, 'button');
     assert.ok(button.getAttribute('aria-label')); assert.ok(button.getAttribute('title'));
@@ -253,9 +253,8 @@ test('actions icônes : boutons clavier nommés, audit lecture seule et fermetur
 test('annuler les confirmations sensibles ne déclenche aucune mutation', async (t) => {
   const c = boot(t); await c.ready();
   c.w.confirm = () => false;
-  for (const key of ['pair', 'facial', 'enable']) c.click('[data-term-' + key + '="1"]');
-  c.w.prompt = () => null; c.click('[data-term-rename="1"]'); c.click('[data-term-revoke="1"]');
-  c.w.prompt = () => 'ab'; c.click('[data-term-revoke="1"]');
+  for (const key of ['facial', 'enable']) c.click('[data-term-' + key + '="1"]');
+  c.w.prompt = () => null; c.click('[data-term-rename="1"]');
   await nextTurn(); assert.equal(c.writes().length, 0);
 });
 
@@ -272,28 +271,25 @@ test('facial et activation : PATCH exacts, confirmations conservées, états ren
   assert.deepEqual(c.writes().at(-1).body, { enabled: true });
 });
 
-test('ré-associer, renommer et révoquer utilisent les routes et motifs existants', async (t) => {
-  const c = boot(t); await c.ready();
-  c.click('[data-term-pair="1"]'); await waitFor(() => c.d.getElementById('pair-code'));
-  assert.match(c.confirms.at(-1), /clé actuelle restera valable/);
-  assert.equal(c.d.getElementById('pair-code').textContent, 'ABCDE-FGHJK');
-  c.click('#pair-close'); await c.ready(); assert.equal(c.d.getElementById('pair-code'), null);
+test('renommer utilise la route existante ; aucune commande d\'association, de révocation ni de suppression sur cette page', async (t) => {
+  const c = boot(t, { records: [terminal(1), terminal(2, { paired: false }), terminal(3, { revoked_at: iso(), enabled: false, paired: false })] }); await c.ready();
   c.w.prompt = () => '  Nouveau terminal  '; c.click('[data-term-rename="1"]');
   await waitFor(() => c.row(1)?.textContent.includes('Nouveau terminal'));
   assert.deepEqual(c.writes().at(-1).body, { name: 'Nouveau terminal' });
-  c.w.prompt = () => '  Appareil perdu  '; c.click('[data-term-revoke="1"]');
-  await waitFor(() => c.row(1)?.textContent.includes('Révoqué'));
-  assert.deepEqual(c.writes().at(-1), { path: '/api/biometrics/terminals/1/revoke', method: 'POST', query: {}, body: { reason: 'Appareil perdu' } });
-  assert.equal(c.row(1).querySelectorAll('button').length, 2);
+  // Appairage, remplacement, révocation, suppression : Administration Système → Terminaux faciaux.
+  for (const key of ['pair', 'revoke', 'delete']) assert.equal(c.d.querySelectorAll('[data-term-' + key + ']').length, 0, key);
+  assert.doesNotMatch(c.d.getElementById('terminal-rows').textContent, /Associer|Ré-associer|Révoquer|Supprimer/);
+  assert.match(c.d.querySelector('.terminal-intro-copy').textContent, /Enregistrement, association, révocation, suppression et comptes autorisés : Administration Système → Terminaux faciaux/);
+  assert.doesNotMatch(HTML, /pairing-code|\/revoke|method: "DELETE"|pairTerminal|revokeTerminal|deleteTerminal|pair-code/);
+  assert.ok(c.writes().every((x) => x.method === 'PATCH'), 'seules des mises à jour de réglage partent de cette page');
 });
 
-test('création smartphone : données saisies inchangées, aucun facial implicite, association proposée', async (t) => {
-  const c = boot(t); await c.ready(); c.click('#terminal-add'); await waitFor(() => c.d.getElementById('term-form'));
-  c.set('t-name', 'SMARTPHONE HAMOUL 01'); c.set('t-type', 'SMARTPHONE_ANDROID'); c.set('t-site', '4'); c.set('t-loc', 'PCS01');
-  c.d.getElementById('term-form').dispatchEvent(new c.w.Event('submit', { cancelable: true }));
-  await waitFor(() => c.d.getElementById('pair-code'));
-  assert.deepEqual(c.writes().find((x) => x.path === '/api/biometrics/terminals').body, { name: 'SMARTPHONE HAMOUL 01', terminal_type: 'SMARTPHONE_ANDROID', site_id: 4, location: 'PCS01' });
-  assert.ok(c.writes().some((x) => x.path === '/api/biometrics/terminals/900/pairing-code'));
+test('aucune commande d\'enregistrement : pas de bouton « Ajouter un terminal », pas de formulaire, pas de bibliothèque QR', async (t) => {
+  const c = boot(t); await c.ready();
+  assert.equal(c.d.getElementById('terminal-add'), null); assert.equal(c.d.getElementById('term-form'), null);
+  assert.deepEqual([...c.d.querySelectorAll('.terminal-toolbar-actions button')].map((b) => b.id), ['terminal-archive', 'site-facial-off-terminals']);
+  assert.doesNotMatch(HTML, /Ajouter un terminal|qrcode\.min\.js/);
+  assert.equal(c.writes().length, 0);
 });
 
 test('coupure faciale du site conservée, confirmée et toujours liée au site sélectionné', async (t) => {
@@ -322,25 +318,11 @@ test('périmètre vide puis actualisation : zéro KPI, boutons de page désactiv
   assert.equal(c.listCalls().length, before + 1); assert.equal(c.writes().length, 0);
 });
 
- test('suppression confirmée : disparition immédiate, KPI et archive ; annulation sans mutation', async (t) => {
+test('terminaux supprimés : audit en lecture seule conservé, aucune suppression possible ici', async (t) => {
   const c = boot(t, { records: [terminal(1), terminal(2)] }); await c.ready();
-  c.click('[data-term-delete="1"]');
-  assert.match(c.d.querySelector('.modal').textContent, /historique sera conservé/);
-  c.click('#terminal-delete-cancel'); assert.equal(c.writes().length, 0);
-  c.click('[data-term-delete="1"]'); const lists = c.listCalls().length;
-  c.click('#terminal-delete-confirm'); c.click('#terminal-delete-confirm');
-  await waitFor(() => !c.row(1));
-  assert.equal(c.kpi('total'), '1'); assert.equal(c.kpi('active'), '1');
-  assert.equal(c.listCalls().length, lists);
-  assert.equal(c.writes().filter(x => x.method === 'DELETE').length, 1);
+  assert.equal(c.d.querySelectorAll('[data-term-delete]').length, 0);
   c.click('#terminal-archive'); await waitFor(() => c.d.querySelector('.modal'));
-  await waitFor(() => /ADM/.test(c.d.querySelector('.modal').textContent));
-  assert.match(c.d.querySelector('.modal').textContent, /trm_public_1/);
-});
- test('suppression refusée : ligne et compteurs conservés', async (t) => {
-  const c = boot(t, { routes: { 'DELETE /api/biometrics/terminals/1': [403, { detail: 'Interdit' }] } }); await c.ready();
-  c.click('[data-term-delete="1"]'); c.click('#terminal-delete-confirm');
-  await waitFor(() => c.d.getElementById('terminal-delete-error').textContent);
-  assert.ok(c.row(1)); assert.equal(c.kpi('total'), '1');
-  assert.equal(c.d.getElementById('terminal-delete-confirm').disabled, false);
+  assert.match(c.d.querySelector('.modal').textContent, /Audit des terminaux supprimés/);
+  assert.ok(c.listCalls().at(-1).query.include_deleted);
+  assert.equal(c.writes().length, 0);
 });
