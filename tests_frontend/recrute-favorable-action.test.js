@@ -65,7 +65,7 @@ test('Favorable candidate: direct green recruitment action opens the existing tr
     // V7 : la société destinataire vient de la ventilation, elle n'est plus choisie ici.
     assert.doesNotMatch(modal.innerHTML, /<select/);
     assert.match(modal.innerHTML, /Société destinataire : <b>IRON GLOBAL SÉCURITÉ<\/b>/);
-    assert.match(modal.innerHTML, /Recruter et transférer à la DRH/);
+    assert.match(modal.innerHTML, /type="submit"[^>]*>Confirmer le recrutement</);
     assert.match(modal.innerHTML, /transmitCandidateToDrh\(this\)/);
     assert.match(modal.innerHTML, /Aucun employé ni contrat ne sera créé avant validation par la DRH/);
   }
@@ -121,22 +121,22 @@ test('Rendered favorable action transfers the ventilated dossier to DRH in one a
   assert.ok(calls.every(call => !call.url.endsWith('/recruit')), 'No employee or contract is created by this action');
 });
 
-test('V7: recruiting an unventilated candidate is impossible — the interface asks for a ventilation first', async () => {
+test('Unventilated candidate: nothing can be confirmed before the server lists the authorized companies', async () => {
   for (const ventilation of [false, true]) {
     const { context, item, elements } = setup({ society: null, ventilation });
+    const requested = [];
+    context.apiFetch = async url => { requested.push(url); return new Promise(() => {}); };   // options still pending
     vm.runInContext(recruitButtons(context.rowActions(item))[0].action, context);
     const modal = elements.get('recruitmentModal').innerHTML;
-    // Sans permission : blocage expliqué. Avec permission : la société se choisit dans la fenêtre
-    // (parcours couvert par recrute-ventilation-flow.test.js).
-    assert.equal(/Société destinataire requise/.test(modal), !ventilation);
-    assert.equal(/n’a pas la permission de ventiler/.test(modal), !ventilation);
-    assert.equal(/<select id="recruitmentSociety"[^>]*required/.test(modal), ventilation, 'the destination is chosen only with the permission');
-    assert.equal(/type="submit"[^>]*>Ventiler et recruter</.test(modal), ventilation);
-    assert.doesNotMatch(modal, /Recruter et transférer à la DRH/, 'no direct transfer without a destination');
+    // Même fenêtre avec ou sans permission de ventilation (parcours complet : recrute-recruit-flow.test.js).
+    assert.deepEqual(requested, ['/api/drh/candidates/42/transfer-options']);
+    assert.match(modal, /Recherche des sociétés autorisées/);
+    assert.match(modal, /type="submit"[^>]*disabled[^>]*>Confirmer le recrutement</);
+    assert.doesNotMatch(modal, /permission de ventiler/);
     const calls = [];
     context.apiFetch = async url => { calls.push(url); return {}; };
     await context.transmitCandidateToDrh({ querySelector: () => ({}) });
-    assert.deepEqual(calls, [], 'no request leaves the browser');
+    assert.deepEqual(calls, [], 'no transfer leaves the browser without server-provided options');
   }
 });
 
