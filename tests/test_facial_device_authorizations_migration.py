@@ -61,4 +61,4 @@ def test_revision_extends_the_single_head():
                 revisions.add(line.split("=", 1)[1].strip().strip("\"'"))
             if line.startswith("down_revision = "):
                 parents.add(line.split("=", 1)[1].strip().strip("\"'"))
-    assert revisions - parents == {module.revision} and module.down_revision == "20261011_0001"
+    assert revisions - parents == {module.revision} and module.down_revision == "20261013_0002"
