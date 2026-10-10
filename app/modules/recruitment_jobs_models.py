@@ -1,7 +1,9 @@
 """IRON Emploi : sociétés, annonces, espaces candidats et candidatures liées aux annonces."""
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from decimal import Decimal
+
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, deferred, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -45,6 +47,9 @@ class RecruitmentJobOffer(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     reference: Mapped[str | None] = mapped_column(String(60))
     deadline: Mapped[date | None] = mapped_column(Date)
+    # Salaire proposé, facultatif. La période n'est renseignée que si elle est connue : rien n'est supposé (ni mensuel, ni net).
+    salary_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    salary_period: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20), default=OFFER_DRAFT, server_default=OFFER_DRAFT, index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)

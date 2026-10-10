@@ -30,8 +30,10 @@ def _columns(con, table) -> set[str]:
     return {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
 
 
-def test_single_alembic_head_is_the_engagement_revision():
-    assert _alembic("sqlite://", "heads").split() == [REVISION, "(head)"]
+def test_single_alembic_head():
+    # Une seule tête, quelle qu'elle soit : d'autres révisions suivent celle-ci.
+    heads = _alembic('sqlite://', 'heads').split()
+    assert len(heads) == 2 and heads[1] == '(head)'
 
 
 def test_upgrade_extends_an_existing_iron_emploi_database_without_losing_data(tmp_path):

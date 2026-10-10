@@ -166,6 +166,18 @@ sont renvoyés par aucune route publique.
   puis appelle le transfert existant du dossier. Un second appel ne crée rien. La fiche employé
   et le contrat définitif restent créés par la DRH, avec ses contrôles de doublons.
 
+### Profil, consentement et salaire des annonces
+
+- `PUT /public/emploi/me/profile` enregistre le profil et rien d'autre. Il exige un consentement à la
+  notice en vigueur (`privacy_consent`, `privacy_version`) tant qu'il n'a pas été donné pour cette
+  version ; le consentement est daté et conservé à part du profil (`GET /me` → `privacy`).
+- Le profil distingue les langues parlées (`languages`) et écrites (`written_languages`), garde le
+  NIN comme chaîne de 10 ou 18 chiffres, et accepte un nombre d'enfants non renseigné (`null`),
+  distinct de zéro.
+- `alerts_enabled` (réglages) suspend toutes les alertes de nouvelles offres sans les supprimer.
+- Une annonce peut porter un salaire (`salary_amount`) et, seulement si elle est connue, sa période
+  (`salary_period` : heure, jour, mois, an). Révision `20261015_0001`.
+
 ### Notifications push
 
 Le serveur enregistre les appareils et les préférences, et sait relayer vers le service Expo,

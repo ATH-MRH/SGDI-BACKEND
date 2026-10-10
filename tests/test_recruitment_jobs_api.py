@@ -551,6 +551,7 @@ def test_profile_requires_a_versioned_privacy_consent_recorded_once(client, db):
     """Le profil ne s'enregistre qu'avec un consentement à la notice en vigueur ; il est daté, conservé à part
     et n'est pas redemandé tant que la notice ne change pas."""
     headers, _ = session(client)
+    dossiers = db.query(Candidate).count()                                                                 # d'autres tests peuvent en avoir laissé
     me = client.get('/api/public/emploi/me', headers=headers).json()
     assert me['privacy'] == {'version': jobs.PRIVACY_NOTICE_VERSION, 'accepted_version': None, 'accepted_at': None, 'current': False}
     assert client.get('/api/public/emploi/config').json()['privacy_version'] == jobs.PRIVACY_NOTICE_VERSION
@@ -568,7 +569,7 @@ def test_profile_requires_a_versioned_privacy_consent_recorded_once(client, db):
     assert again.status_code == 200 and again.json()['privacy']['accepted_at'] == accepted_at
     # Enregistrer le profil ne crée aucune candidature.
     assert client.get('/api/public/emploi/applications', headers=headers).json()['items'] == []
-    assert db.query(Candidate).count() == 0
+    assert db.query(Candidate).count() == dossiers
 
 
 def test_profile_keeps_nin_as_digits_string_unknown_children_and_written_languages(client, db):
@@ -587,5 +588,23 @@ def test_profile_keeps_nin_as_digits_string_unknown_children_and_written_languag
     put({'nin': '001234567890123456', 'languages': ['Kabyle'], 'written_languages': ['Français'], 'birth_date': '1990-01-01'})
     sent = client.post('/api/public/emploi/applications', headers=headers, json={'offer_id': None, 'desired_position': 'Agent de sécurité', 'request_id': 'profil-0001', 'consent': True})
     assert sent.status_code == 201
-    data = db.query(Candidate).one().data
+    data = db.query(Candidate).order_by(Candidate.id.desc()).first().data
     assert data['nin'] == '001234567890123456' and data['langues'] == ['Kabyle'] and data['languesEcrites'] == ['Français'] and data['nombreEnfants'] == ''
+
+
+def test_offer_salary_is_optional_and_never_assumes_a_period(client, db, securite):
+    """Le salaire d'une annonce est facultatif ; sa période n'est affichée que si le recruteur l'a précisée."""
+    plain = publish(client, securite, title='Sans salaire')
+    assert client.get(f"/api/public/emploi/offers/{plain['id']}").json()['salary'] is None
+    monthly = publish(client, securite, title='Avec salaire', salary_amount=50000.5, salary_period='mois')
+    assert client.get(f"/api/public/emploi/offers/{monthly['id']}").json()['salary'] == {'amount': 50000.5, 'period': 'mois'}
+    unknown = publish(client, securite, title='Période inconnue', salary_amount=45000)
+    assert client.get(f"/api/public/emploi/offers/{unknown['id']}").json()['salary'] == {'amount': 45000.0, 'period': None}
+    listed = {item['title']: item['salary'] for item in client.get('/api/public/emploi/offers').json()['items']}
+    assert listed['Période inconnue'] == {'amount': 45000.0, 'period': None} and listed['Sans salaire'] is None
+    body = {'society': SECURITE, 'title': 'Refusée', 'salary_amount': 100, 'salary_period': 'semaine'}
+    assert client.post('/api/drh/job-offers', headers=securite, json=body).status_code == 422
+    assert client.post('/api/drh/job-offers', headers=securite, json={**body, 'salary_amount': -1, 'salary_period': None}).status_code == 422
+    # Une période sans montant n'est pas conservée.
+    alone = client.post('/api/drh/job-offers', headers=securite, json={'society': SECURITE, 'title': 'Période seule', 'salary_period': 'mois'})
+    assert alone.status_code == 201 and alone.json()['salary'] is None

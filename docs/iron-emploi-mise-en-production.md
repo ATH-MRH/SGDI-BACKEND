@@ -7,9 +7,9 @@ aucun secret : les valeurs restent dans le panneau de l'hébergeur.
 
 - **Serveur** : nouvelles routes `/api/public/emploi/…` et `/api/drh/job-offers/…`, section
   « Traitement IRON Emploi » dans recrute.irongs.com.
-- **Base** : deux révisions Alembic à la suite de `20261013_0002` — `20261014_0001` (annonces,
-  espaces candidats, candidatures) puis `20261014_0002` (traitement des candidatures). Elles ne
-  créent que des tables et des colonnes ; aucune table existante n'est vidée ni réécrite.
+- **Base** : trois révisions Alembic à la suite de `20261013_0002` — `20261014_0001` (annonces,
+  espaces candidats, candidatures), `20261014_0002` (traitement des candidatures) puis
+  `20261015_0001` (salaire facultatif d'une annonce). Elles ne créent que des tables et des colonnes ; aucune table existante n'est vidée ni réécrite.
   `start.sh` les applique au démarrage (`alembic upgrade head`).
 - **Pièces jointes** : CV, photos de profil et pièces de candidature d'IRON Emploi sont enregistrés
   **dans la base PostgreSQL**. Le volume `sgdi_uploads` continue de porter les fichiers des autres
@@ -52,7 +52,7 @@ fichiers : l'important est d'avoir les deux, datés, hors du serveur.
 2. Fusionner la **PR 12** dans `main`. Le déploiement automatique démarre.
 3. Attendre le déploiement, puis vérifier que le code servi est le bon :
    `GET https://pointage.irongs.com/api/version` — `source_commit` égal au commit de fusion.
-4. Vérifier la base : `alembic_version` vaut `20261014_0002`.
+4. Vérifier la base : `alembic_version` vaut `20261015_0001`.
 5. Contrôles en lecture :
    - `GET https://recrute.irongs.com/api/public/emploi/config` → 200 ;
    - `GET https://recrute.irongs.com/api/public/emploi/offers` → liste vide ;
@@ -80,7 +80,7 @@ qu'elle utilise ne changent pas.
 2. Annuler le commit de fusion sur `main` (`git revert -m 1 <commit de fusion>`), ce qui redéploie
    le code précédent.
 
-L'ordre compte : redéployer l'ancien code sur une base restée en `20261014_0002` empêche le
+L'ordre compte : redéployer l'ancien code sur une base restée en `20261015_0001` empêche le
 démarrage (« Can't locate revision »).
 
 **Après des saisies réelles** (annonces publiées, candidatures reçues) — ne pas descendre le
@@ -105,8 +105,29 @@ utilisable pour la candidature spontanée.
 - Avant la première construction : `npx eas-cli@latest init` avec le compte Expo de l'éditeur
   (crée `extra.eas.projectId`), puis `eas build --profile production` pour chaque plateforme.
 
-## 7. Limites à la mise en service
+## 7. Protection des données : informations à fournir par la direction
 
+L'application demande un consentement au traitement des données (case non cochée par défaut) et le
+serveur l'enregistre avec sa date et la version de la notice (`PRIVACY_NOTICE_VERSION`, à changer en
+même temps que `PRIVACY_VERSION` dans l'application dès que le fond de la notice change). La notice
+cite la loi n° 18-07 du 10 juin 2018, modifiée et complétée par la loi n° 25-11 du 24 juillet 2025,
+et l'ANPDP. Elle ne présente l'application ni comme agréée ni comme validée par l'ANPDP.
+
+Les rubriques suivantes y sont affichées comme « à préciser » : elles ne sont pas inventées et
+doivent être fournies, puis relues par un juriste, **avant** toute mise en service auprès de
+candidats réels :
+
+1. dénomination, adresse et coordonnées du responsable du traitement ;
+2. coordonnées du délégué à la protection des données, s'il est désigné ;
+3. référence de la formalité accomplie auprès de l'ANPDP (déclaration ou autorisation), si elle est requise ;
+4. identité et pays de l'hébergeur et des prestataires techniques, et existence d'un transfert hors d'Algérie ;
+5. durées de conservation : candidatures non retenues, dossiers des personnes recrutées, espaces inactifs ;
+6. adresse postale ou électronique à laquelle exercer les droits.
+
+## 8. Limites à la mise en service
+
+- **Notice de protection des données** : incomplète tant que les informations du § 7 manquent.
+- **Police sur Android** : Arimo, et non Arial, faute de licence d'intégration (voir `mobile/recruitment/assets/fonts/LISEZ-MOI.md`).
 - **Notifications push** : préparées, non activées, jamais essayées en réel. Il manque le projet
   EAS, la clé FCM V1 et `google-services.json` (Android), la clé APNs (iOS), puis
   `RECRUITMENT_PUSH_ENABLED=true`. Les notifications dans l'application fonctionnent.

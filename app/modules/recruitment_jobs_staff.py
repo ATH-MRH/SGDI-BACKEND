@@ -1,5 +1,6 @@
 """IRON Emploi — gestion des annonces par les recruteurs (recrute.irongs.com)."""
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -40,8 +41,10 @@ class OfferIn(BaseModel):
     description: LongText
     reference: Annotated[str | None, Field(default=None, max_length=60)]
     deadline: date | None = None
+    salary_amount: Annotated[Decimal | None, Field(default=None, ge=0, le=100_000_000, decimal_places=2)]
+    salary_period: Annotated[str | None, Field(default=None, max_length=20)]
 
-    @field_validator('profession', 'wilaya', 'location', 'contract_type', 'missions', 'profile', 'description', 'reference', mode='before')
+    @field_validator('profession', 'wilaya', 'location', 'contract_type', 'missions', 'profile', 'description', 'reference', 'salary_period', 'salary_amount', mode='before')
     @classmethod
     def blank_is_none(cls, value):
         return (value.strip() or None) if isinstance(value, str) else value
@@ -101,6 +104,10 @@ def _audit(db: Session, request: Request, user: User, action: str, offer: Offer,
 def _apply(offer: Offer, payload: OfferIn, user: User) -> None:
     if payload.contract_type and payload.contract_type not in jobs.CONTRACT_TYPES:
         raise HTTPException(status_code=422, detail='Type de contrat inconnu.')
+    if payload.salary_period and payload.salary_period not in jobs.SALARY_PERIODS:
+        raise HTTPException(status_code=422, detail='Période de salaire inconnue.')
+    # Une période sans montant n'a pas de sens : elle n'est pas conservée.
+    offer.salary_amount, offer.salary_period = payload.salary_amount, payload.salary_period if payload.salary_amount is not None else None
     for field in ('title', 'profession', 'wilaya', 'location', 'contract_type', 'positions', 'missions', 'profile', 'description', 'reference', 'deadline'):
         setattr(offer, field, getattr(payload, field))
     offer.title = offer.title.strip()

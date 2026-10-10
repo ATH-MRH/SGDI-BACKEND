@@ -17,6 +17,7 @@ from app.modules.recruitment_jobs_models import (
 from app.modules.recruitment_sms_service import digest
 
 API_VERSION = 2
+SALARY_PERIODS = ('heure', 'jour', 'mois', 'an')
 # Version de la notice « Protection des données personnelles » affichée par l'application. Tout changement
 # de fond de la notice change cette valeur : le consentement est alors redemandé.
 PRIVACY_NOTICE_VERSION = '2026-10'
@@ -94,6 +95,8 @@ def offer_public(offer: Offer, company: Company, *, detail: bool = False) -> dic
     result = {'id': offer.id, 'title': offer.title, 'profession': offer.profession, 'wilaya': offer.wilaya, 'location': offer.location,
               'contract_type': offer.contract_type, 'positions': offer.positions, 'deadline': offer.deadline.isoformat() if offer.deadline else None,
               'published_at': offer.published_at.isoformat() if offer.published_at else None, 'company': company_public(company)}
+    # Salaire affiché tel que saisi ; la période reste absente si le recruteur ne l'a pas précisée.
+    result['salary'] = ({'amount': float(offer.salary_amount), 'period': offer.salary_period} if offer.salary_amount is not None else None)
     if detail:
         result.update(missions=offer.missions or '', profile=offer.profile or '', description=offer.description or '', reference=offer.reference)
     return result
