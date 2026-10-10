@@ -1,0 +1,99 @@
+name: Mobile CI
+
+# Contrôles ATLAS MOBILE : aucun build signé, aucune soumission store ici.
+on:
+  pull_request:
+    paths:
+      - 'mobile/atlas/**'
+      - 'app/modules/auth/**'
+      - 'app/modules/mobile/**'
+      - 'app/modules/employee_mobile/**'
+      - 'app/core/security.py'
+      - '.github/workflows/mobile-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/atlas/**'
+      - '.github/workflows/mobile-ci.yml'
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: mobile/atlas
+
+jobs:
+  verify:
+    name: Typage, lint, tests, configuration native, bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/atlas/package-lock.json
+
+      - name: Installer les dependances (lockfile strict)
+        run: npm ci
+
+      - name: Typage
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests unitaires et UI
+        run: npm test
+
+      - name: Compatibilite des dependances avec le SDK Expo
+        run: npx expo-doctor
+
+      # Genere les projets iOS/Android (sans compilation ni signature) et controle
+      # identifiants, permissions, ATS, sauvegardes, manifeste de confidentialite.
+      - name: Configuration native (production, staging, development)
+        run: |
+          node scripts/check-native.mjs production
+          node scripts/check-native.mjs staging
+          node scripts/check-native.mjs development
+          node scripts/check-native.mjs production biometrics,push,offline,employeePortal,secureScreen
+
+      - name: Bundle de production sans secret ni URL codee en dur
+        run: npm run check:bundle
+
+  integration:
+    name: Integration mobile / backend ATLAS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Installer le backend
+        working-directory: .
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/atlas/package-lock.json
+
+      - run: npm ci
+
+      # Backend du depot sur SQLite jetable, comptes de test generes a l'execution.
+      - name: Tests d'integration
+        run: npm run test:integration
+        env:
+          ATLAS_PYTHON: python

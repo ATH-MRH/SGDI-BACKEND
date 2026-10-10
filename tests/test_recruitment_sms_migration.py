@@ -31,7 +31,9 @@ def _columns(database) -> set[str]:
 
 
 def test_single_alembic_head():
-    assert _alembic("sqlite://", "heads").split() == [REVISION, "(head)"]
+    # Une seule tête, quelle qu'elle soit : d'autres migrations peuvent suivre celle-ci.
+    heads = _alembic("sqlite://", "heads").split()
+    assert len(heads) == 2 and heads[1] == "(head)"
 
 
 def test_upgrade_adds_tracking_to_an_existing_table_and_is_reversible(tmp_path):

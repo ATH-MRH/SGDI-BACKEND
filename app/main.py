@@ -26,10 +26,12 @@ from app.core.security import decode_staff_token, decode_token, hash_password, i
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
+from app.modules.auth.sessions import ensure_session_active
 from app.modules.auth.dependencies import current_user, _legacy_module_keys, _normalized_module_keys
 from app.modules.irongs.models import SgdiRecord
 from app.core.photo_storage import DOCS_DIR, PUBLIC_DOC_PREFIX, UPLOADS_ROOT, ensure_upload_dirs
 from app.modules.auth import models as _auth_models  # noqa: F401
+from app.modules.mobile import models as _mobile_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.drh import email_alerts as _drh_email_alerts  # noqa: F401
 from app.modules.commercial import models as _commercial_models  # noqa: F401
@@ -359,6 +361,7 @@ def serve_uploaded_document(filename: str, request: Request):
                 raise HTTPException(status_code=401, detail="Token manquant")
             try:
                 payload = decode_staff_token(auth_header.split(" ", 1)[1].strip())
+                ensure_session_active(db, payload)
             except ValueError:
                 raise HTTPException(status_code=401, detail="Token invalide")
             user = get_user(db, int(payload["sub"]))
@@ -1497,6 +1500,7 @@ def irongs_events_ticket(authorization: str | None = Header(default=None)):
     with SessionLocal() as db:
         try:
             payload = decode_staff_token(token)
+            ensure_session_active(db, payload)
             user = get_user(db, int(payload["sub"]))
         except Exception:
             user = None

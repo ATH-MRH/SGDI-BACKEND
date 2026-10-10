@@ -174,6 +174,25 @@ class LoginIn(BaseModel):
     password: str
 
 
+class MobileLoginIn(LoginIn):
+    platform: str | None = Field(default=None, max_length=20)
+    app_version: str | None = Field(default=None, max_length=20)
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=200)
+    app_version: str | None = Field(default=None, max_length=20)
+
+
+class SessionTokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    refresh_token: str
+    refresh_expires_in: int
+    user: "UserOut"
+
+
 class AdminSystemLoginIn(BaseModel):
     username: str | None = None
     password: str

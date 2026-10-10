@@ -6,6 +6,7 @@ from app.core.security import decode_staff_token
 from app.db.session import get_db
 from app.modules.auth.models import User
 from app.modules.auth.service import get_user
+from app.modules.auth.sessions import ensure_session_active
 from app.core.audit import append_audit
 from app.core.scope_policy import ScopeKind, society_scope
 
@@ -214,6 +215,10 @@ def current_user(
     db: Session = Depends(get_db),
 ) -> User:
     payload = current_token_payload(credentials)
+    try:
+        ensure_session_active(db, payload)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expirée")
     user = get_user(db, int(payload["sub"]))
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur inactif")
