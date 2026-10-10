@@ -39,7 +39,14 @@ def test_upgrade_is_additive_idempotent_and_denies_by_default(tmp_path):
         for bad in ("(1,1,1,CURRENT_TIMESTAMP)", "(1,NULL,NULL,CURRENT_TIMESTAMP)"):      # exactement UN équipement
             with pytest.raises(sa.exc.IntegrityError):
                 with db.begin_nested(): db.execute(sa.text(f"INSERT INTO facial_device_authorizations(user_id,terminal_id,camera_id,created_at) VALUES{bad}"))
-        with Operations.context(MigrationContext.configure(db)): module.downgrade()
+        # Downgrade : refusé tant que des autorisations existent (aucune perte silencieuse)…
+        with pytest.raises(RuntimeError, match="Downgrade refusé"):
+            with Operations.context(MigrationContext.configure(db)): module.downgrade()
+        assert db.execute(sa.text("SELECT COUNT(*) FROM facial_device_authorizations")).scalar() == 2
+        # … accepté une fois la table vidée, et rejouable.
+        db.execute(sa.text("DELETE FROM facial_device_authorizations"))
+        for _ in range(2):
+            with Operations.context(MigrationContext.configure(db)): module.downgrade()
         assert not sa.inspect(db).has_table("facial_device_authorizations")
         assert db.execute(sa.text("SELECT COUNT(*) FROM biometric_terminals")).scalar() == 1
 

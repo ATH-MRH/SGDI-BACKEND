@@ -36,5 +36,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if sa.inspect(op.get_bind()).has_table(TABLE):
-        op.drop_table(TABLE)
+    # Un retour arrière applicatif ne l'exige pas (l'ancienne version ignore cette table). Supprimer
+    # la table effacerait des autorisations saisies : refusé tant qu'il en reste.
+    bind = op.get_bind()
+    if not sa.inspect(bind).has_table(TABLE):
+        return
+    if bind.execute(sa.text(f"SELECT 1 FROM {TABLE} LIMIT 1")).first():
+        raise RuntimeError("Downgrade refusé : des autorisations d'équipements faciaux existent. "
+                           "Les retirer explicitement avant de supprimer la table.")
+    op.drop_table(TABLE)
