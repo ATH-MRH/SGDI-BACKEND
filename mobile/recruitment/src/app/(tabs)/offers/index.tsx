@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Icon } from '../../components/icon';
-import { OfferCard } from '../../components/offer-card';
-import { Button, Chip, colors, EmptyState, ErrorState, Loading, styles } from '../../components/ui';
-import { errorMessage } from '../../lib/api';
-import { activeFilterCount, Facets, fetchOffers, Offer, OfferFilters } from '../../lib/emploi';
-import { useServer } from '../../lib/server';
+import { Icon } from '../../../components/icon';
+import { OfferCard } from '../../../components/offer-card';
+import { Button, Chip, colors, EmptyState, ErrorState, fonts, Loading, styles } from '../../../components/ui';
+import { errorMessage } from '../../../lib/api';
+import { activeFilterCount, Facets, fetchOffers, Offer, OfferFilters } from '../../../lib/emploi';
+import { useServer } from '../../../lib/server';
 
 type Params = { q?: string; wilaya?: string; profession?: string };
 
@@ -67,8 +67,8 @@ export default function Offers() {
         <Text accessibilityRole="header" style={styles.title}>Explorer les offres</Text>
         <View style={list.searchRow}>
           <View style={list.search}>
-            <Icon name="search" size={20} color={colors.muted} />
-            <TextInput accessibilityLabel="Rechercher une offre" placeholder="Métier, société, wilaya…" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery}
+            <Icon name="search" size={20} color={colors.navy} />
+            <TextInput accessibilityLabel="Rechercher une offre" placeholder="Métier, entreprise…" placeholderTextColor={colors.muted} value={query} onChangeText={setQuery}
               returnKeyType="search" autoCorrect={false} style={list.searchInput} />
             {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Effacer la recherche" hitSlop={10} onPress={() => setQuery('')}><Icon name="close" size={18} color={colors.muted} /></Pressable>}
           </View>
@@ -141,11 +141,11 @@ function FilterSheet({ facets, value, onClose, onApply }: { facets: Facets; valu
 
 const list = StyleSheet.create({
   header: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 6, gap: 12 }, searchRow: { flexDirection: 'row', gap: 10 },
-  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, minHeight: 50 },
-  searchInput: { flex: 1, fontSize: 16, color: colors.ink, paddingVertical: 11 },
-  filter: { width: 50, height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 14, minHeight: 50 },
+  searchInput: { flex: 1, fontSize: 17.5, fontFamily: fonts.sans, color: colors.ink, paddingVertical: 11 },
+  filter: { width: 50, height: 50, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   dot: { position: 'absolute', top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  dotText: { fontSize: 11, fontWeight: '800', color: colors.navyDeep }, count: { fontSize: 13, color: colors.muted },
+  dotText: { fontSize: 12.5, fontFamily: fonts.bold, color: colors.white }, count: { fontSize: 15, fontFamily: fonts.sans, color: colors.ink },
   content: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 32, gap: 12, flexGrow: 1 },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
   sheetActions: { flexDirection: 'row', gap: 12, padding: 18, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },

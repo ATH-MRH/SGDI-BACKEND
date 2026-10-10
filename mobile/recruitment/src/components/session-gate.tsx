@@ -5,7 +5,7 @@ import { Text } from 'react-native';
 import { useCandidateSession } from '../lib/candidate-session';
 import { useServer } from '../lib/server';
 
-export type Next = 'apply' | 'applications' | 'profile';
+export type Next = 'apply' | 'applications' | 'profile' | 'messages' | 'opportunities' | 'interviews' | 'espace';
 
 /** Écran personnel : n'affiche son contenu qu'avec une session candidat ouverte par SMS. */
 export function SessionGate({ title, reason, next, children }: { title: string; reason: string; next: Next; children: ReactNode }) {

@@ -34,7 +34,8 @@
           "microphonePermission": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font"
     ],
     "scheme": "iron-recruitment"
   }

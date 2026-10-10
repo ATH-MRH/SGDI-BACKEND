@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Redirect, router } from 'expo-router';
-import { CandidateForm } from '../components/candidate-form';
-import { PhotoField } from '../components/photo-field';
-import { Button, Card, ErrorState, ErrorText, Loading, Page } from '../components/ui';
-import { errorMessage } from '../lib/api';
-import { useCandidateSession } from '../lib/candidate-session';
-import { useDocuments } from '../lib/documents';
-import { Account, Experience, formToProfile, FormValues, profileToForm, validateForm } from '../lib/emploi';
-import { useLoad } from '../lib/use-load';
+import { CandidateForm } from '../../../components/candidate-form';
+import { PhotoField } from '../../../components/photo-field';
+import { Button, Card, ErrorState, ErrorText, Loading, Page } from '../../../components/ui';
+import { errorMessage } from '../../../lib/api';
+import { useCandidateSession } from '../../../lib/candidate-session';
+import { useDocuments } from '../../../lib/documents';
+import { Account, Experience, formToProfile, FormValues, profileToForm, validateForm } from '../../../lib/emploi';
+import { useLoad } from '../../../lib/use-load';
 
 export default function ProfileEdit() {
   const { call, session, ready } = useCandidateSession();
   const account = useLoad(signal => call<Account>('/public/emploi/me', { signal }), 'me', !!session);
+  if (!ready) return <Loading />;
   if (ready && !session) return <Redirect href={{ pathname: '/identify', params: { next: 'profile' } }} />;
   if (!account.data && account.loading) return <Loading />;
   if (!account.data) return <ErrorState message={account.error} onRetry={account.reload} />;
@@ -39,7 +40,7 @@ function Editor({ account }: { account: Account }) {
     if (problem) { setError(problem); return; }
     saving.current = true; setBusy(true); setError('');
     try {
-      await call('/public/emploi/me/profile', { method: 'PUT', body: formToProfile(values, experience) });
+      await call('/public/emploi/me/profile', { method: 'PUT', body: formToProfile(values, experience, account.profile) });
       if (photo !== undefined) await savePhoto(photo);
       router.back();
     } catch (e) { setError(errorMessage(e)); }
