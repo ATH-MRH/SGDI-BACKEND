@@ -31,7 +31,8 @@ function boot({ settings, put } = {}) {
         const call = { path: u.pathname, query: Object.fromEntries(u.searchParams), method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null };
         calls.push(call);
         let data = {}, status = 200;
-        if (u.pathname === '/api/auth/me') data = { username: 'DRH01', full_name: 'Resp DRH' };
+        if (u.pathname === '/api/auth/me') data = { username: 'OPS01', full_name: 'Resp OPS' };
+        else if (u.pathname === '/api/attendance/capabilities') data = { writes: { rotation_settings: true } };
         else if (u.pathname === '/api/attendance/sites') data = [{ id: 3, name: 'Site A', society: 'SOC' }];
         else if (u.pathname === '/api/attendance/sheets') data = SHEETS;
         else if (u.pathname === '/api/attendance/sheets/6') data = DETAIL;

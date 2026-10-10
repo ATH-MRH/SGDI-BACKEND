@@ -348,3 +348,51 @@ def test_action_named_admin_is_not_an_administrator(client, drh_wide_headers):
     """L'action « admin » d'un compte non administrateur n'ouvre ni le module ni l'instantané global."""
     for write in ADMIN_WRITES + [LEGACY_ACTION_WRITES[-1]]:
         assert _call(client, drh_wide_headers, write).status_code == 403
+
+
+# ── Écrans : les actions proposées sont celles que le serveur acceptera ──────────────────────
+CONTROL_CENTER_CAPABILITIES = {"correct_presence", "correct_closed_presence", "close_day", "reopen_presence",
+                               "resolve_anomaly", "rotation_settings", "rotation_learning", "rotation_rebuild"}
+OPS_CAPABILITIES = {"qualify_deviation", "rotation_decision"}
+
+
+def _granted(client, headers):
+    response = client.get("/api/attendance/capabilities", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["read_only"] == (not any(body["writes"].values()))
+    return {name for name, allowed in body["writes"].items() if allowed}
+
+
+def test_capabilities_follow_the_owner_module(client, auth_headers, drh_wide_headers, drh_pointage_headers,
+                                             control_center_headers, ops_headers):
+    assert _granted(client, drh_wide_headers) == set()
+    assert _granted(client, drh_pointage_headers) == CONTROL_CENTER_CAPABILITIES
+    assert _granted(client, control_center_headers) == CONTROL_CENTER_CAPABILITIES
+    assert _granted(client, ops_headers) == CONTROL_CENTER_CAPABILITIES | OPS_CAPABILITIES
+    assert _granted(client, auth_headers) == CONTROL_CENTER_CAPABILITIES | OPS_CAPABILITIES
+
+
+def test_capabilities_follow_the_account_actions(client, db):
+    reader = _headers(client, db, "contrat_ops_lecture", role="ops", authorized_modules=["ops"], authorized_actions=["read"])
+    assert _granted(client, reader) == set()
+    editor = _headers(client, db, "contrat_ops_saisie", role="ops", authorized_modules=["ops"],
+                      authorized_actions=["read", "update"])
+    assert _granted(client, editor) == {"correct_presence", "rotation_settings", "rotation_learning"}
+
+
+def test_capabilities_require_authentication(client):
+    assert client.get("/api/attendance/capabilities").status_code == 401
+
+
+@pytest.mark.parametrize("profile", ["drh_wide_headers", "drh_pointage_headers", "control_center_headers", "ops_headers"])
+def test_a_capability_is_shown_only_when_the_route_accepts_the_account(client, request, profile):
+    """Chaque capacité annoncée correspond au verdict réel de la route (et inversement)."""
+    from app.modules.attendance.routes import WRITE_CAPABILITIES
+
+    headers = request.getfixturevalue(profile)
+    granted = _granted(client, headers)
+    for name, (method, path, _action) in WRITE_CAPABILITIES.items():
+        response = getattr(client, method.lower())(path.replace("/0", "/999999"), headers=headers, json={})
+        refused = response.status_code == 403
+        assert refused == (name not in granted), f"{profile} {name}: {response.status_code} {response.text[:160]}"

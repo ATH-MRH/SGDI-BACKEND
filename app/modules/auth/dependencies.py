@@ -143,8 +143,14 @@ MODULE_KEY_ALIASES = {
 
 def request_module_keys(request: Request) -> frozenset[str] | None:
     """Retourne les modules existants capables d'utiliser la route demandee."""
-    path = request.url.path.lower().rstrip("/")
-    if request.method.upper() not in READ_ONLY_METHODS:
+    return route_module_keys(request.method, request.url.path)
+
+
+def route_module_keys(method: str, path: str) -> frozenset[str] | None:
+    """Même décision à partir d'une méthode et d'un chemin : sert au contrôle d'accès ET au calcul
+    des capacités affichées par les écrans — une seule règle pour les deux."""
+    path = path.lower().rstrip("/")
+    if method.upper() not in READ_ONLY_METHODS:
         # Deux jeux de règles d'écriture cohabitent (module propriétaire par route, et préfixes
         # d'écriture du terminal terrain). Chacun fournit au plus une règle ; si les deux visent
         # la même route, seuls les modules admis par LES DEUX restent : le plus strict l'emporte.
@@ -190,23 +196,19 @@ def _legacy_module_keys(user: User) -> set[str]:
     return _normalized_module_keys(list(allowed))
 
 
-def enforce_module_access(db: Session, request: Request, user: User) -> None:
-    """Bloque cote API un module non coche dans le compte utilisateur.
-
-    NULL réutilise la politique historique des comptes legacy au lieu de devenir
-    un accès global. Une liste vide signifie qu'aucun module dédié n'est autorisé.
-    Les rôles Administration conservent leur accès transversal existant.
-    """
-    required = request_module_keys(request)
-    configured = user.authorized_modules
+def user_holds_module(user: User, required: frozenset[str] | None, path: str | None = None) -> bool:
+    """Décision de module d'une route, partagée par le contrôle d'accès et par les écrans
+    qui n'affichent une action que si le serveur l'acceptera. `path` : chemin de la route, pour
+    la seule tolérance qui en dépend (comptes historiques sur le pointage du portail)."""
     if required is None:
-        return
+        return True
     from app.modules.auth.routes import is_admin_role
 
     if is_admin_role(user.role):
-        return
+        return True
+    configured = user.authorized_modules
     allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
-    legacy_path = request.url.path.lower()
+    legacy_path = (path or "").lower()
     if (configured is None and legacy_path.startswith("/api/portal/attendance-")
             and not legacy_path.startswith("/api/portal/attendance-manual")):
         # Comptes historiques (modules NULL) : ces routes n'avaient aucune porte de module ; un
@@ -214,7 +216,17 @@ def enforce_module_access(db: Session, request: Request, user: User) -> None:
         # valoir application de pointage ici — et ici seulement (la saisie manuelle garde sa
         # porte stricte existante). Une liste de modules explicite fait toujours foi.
         allowed = allowed | _LEGACY_ATTENDANCE_ROLE_KEYS.get(str(user.role or "").strip().lower(), frozenset())
-    if allowed.isdisjoint(required):
+    return not allowed.isdisjoint(required)
+
+
+def enforce_module_access(db: Session, request: Request, user: User) -> None:
+    """Bloque cote API un module non coche dans le compte utilisateur.
+
+    NULL réutilise la politique historique des comptes legacy au lieu de devenir
+    un accès global. Une liste vide signifie qu'aucun module dédié n'est autorisé.
+    Les rôles Administration conservent leur accès transversal existant.
+    """
+    if not user_holds_module(user, request_module_keys(request), request.url.path):
         append_audit(
             db,
             action="authorization.module",
@@ -248,8 +260,12 @@ def enforce_application_host(request: Request, user: User) -> None:
 
 def request_action(request: Request) -> str:
     """Traduit une opération HTTP en action métier administrable par utilisateur."""
-    method = request.method.upper()
-    path = request.url.path.lower()
+    return route_action(request.method, request.url.path)
+
+
+def route_action(method: str, path: str) -> str:
+    method = method.upper()
+    path = path.lower()
     if any(part in path for part in ("/export", "/download", "/pdf")):
         return "export"
     if any(part in path for part in ("/validate", "/valider", "/approve", "/refuse", "/close", "/payer", "/recruit", "/convertir", "/annuler")):
@@ -266,6 +282,13 @@ def request_action(request: Request) -> str:
     if path.startswith("/api/auth/users") or path.startswith("/api/auth/access-rules"):
         return "admin" if method not in {"GET", "HEAD", "OPTIONS"} else "read"
     return {"GET": "read", "HEAD": "read", "OPTIONS": "read", "POST": "create", "PUT": "update", "PATCH": "update", "DELETE": "delete"}.get(method, "read")
+
+
+def user_holds_action(user: User, action: str) -> bool:
+    """Liste authorized_actions vide = profil ; « admin » ouvre toutes les actions."""
+    actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
+    actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
+    return not actions or action in actions or "admin" in actions
 
 
 def current_token_payload(
@@ -301,9 +324,7 @@ def current_user(
                      resource_id=request.url.path, result="refused", user=user, request=request)
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun périmètre société explicite")
-    actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
-    actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
-    if actions and request_action(request) not in actions and "admin" not in actions:
+    if not user_holds_action(user, request_action(request)):
         append_audit(db, action="authorization.action", resource="api", resource_id=request.url.path,
                      result="refused", user=user, request=request)
         db.commit()
