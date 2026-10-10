@@ -4,9 +4,9 @@ Référence technique : `docs/biometrics.md` § 14. Ce guide décrit les gestes 
 
 Terminologie : la tablette (ou le smartphone) de production appartient à l'application
 **Pointage** (pointeur.irongs.com, clé de module `pointeur`, page `/borne`). Elle est
-enregistrée, associée (une seule fois), remplacée et révoquée depuis **Administration Système →
-Terminaux faciaux** ; l'activation du facial, le renommage et l'audit restent aussi disponibles
-dans **Gestion du pointage** (pointage.irongs.com, clé `pointage`). La borne ne dépend d'aucune
+enregistrée, associée (une seule fois), remplacée, révoquée et supprimée **uniquement** depuis
+**Administration Système → Terminaux faciaux** ; l'activation du facial, le renommage et l'audit
+restent disponibles dans **Gestion du pointage** (pointage.irongs.com, clé `pointage`). La borne ne dépend d'aucune
 session utilisateur : elle s'authentifie par sa clé d'appareil. Usage de plusieurs équipements
 depuis le poste Pointeur : `docs/pointeur-multi-facial-terminals.md`.
 

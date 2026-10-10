@@ -13,11 +13,11 @@ Aucun second système : les deux circuits existants sont réutilisés tels quels
 
 | Circuit | Table | « Appairage » | Fonctionnement | Rôle du poste Pointeur |
 |---|---|---|---|---|
-| Terminal mobile autonome (page `/borne`) | `biometric_terminals` | code à usage unique (10 min) → clé P-256 créée sur l'appareil, jamais exportée | pointe seul, requêtes signées par l'appareil | **surveillance** : état en ligne / hors ligne, dernière communication, dernier pointage |
+| Terminal mobile autonome (page `/borne`) | `biometric_terminals` | code à usage unique (10 min) → clé P-256 créée sur l'appareil, jamais exportée | pointe seul, requêtes signées par l'appareil | **surveillance** : état de connexion, activité, dernière communication, dernier pointage |
 | Caméra IP lue par le serveur | `cameras` | enregistrement (modèle, adresse, identifiants chiffrés) | le serveur capture l'image | **activation** : une boucle d'essais par caméra, déclenchée par le poste |
 
 Une borne autonome n'est jamais annoncée « activée » par le Pointeur : elle n'a pas de mécanisme
-d'activation distante. L'interface l'affiche « Actif · autonome » ou « Hors ligne ».
+d'activation distante. L'interface affiche son état de connexion et son activité (§ 4.1).
 
 ## 2. Matériel pris en charge
 
@@ -43,7 +43,7 @@ autorisés.
 | Enregistrer un terminal | `POST /api/biometrics/terminals` | Administration Système |
 | Appairer / remplacer le matériel | `POST /api/biometrics/terminals/{id}/pairing-code` | Administration Système |
 | Révoquer | `POST /api/biometrics/terminals/{id}/revoke` | Administration Système |
-| Supprimer | `DELETE /api/biometrics/terminals/{id}` | Administration Système |
+| Supprimer (historique conservé) | `DELETE /api/biometrics/terminals/{id}` | Administration Système |
 | Enregistrer une caméra | `POST /api/biometrics/cameras` | Administration Système |
 | Lister équipements et comptes autorisés | `GET /api/biometrics/facial-devices` (nouvelle) | Administration Système |
 | Comptes éligibles d'un équipement | `GET /api/biometrics/facial-devices/users?key=` (nouvelle) | Administration Système |
@@ -54,6 +54,10 @@ autorisés.
 `administration × security × admin`. La permission `biometric_admin × admin` (Gestion du
 pointage) ne suffit plus pour enregistrer, appairer, révoquer ou supprimer.
 
+**Gestion du pointage ne propose plus aucune de ces commandes** : ni « Ajouter un terminal », ni
+« Associer / Ré-associer », ni « Révoquer », ni « Supprimer ». Il y reste l'activation du facial,
+l'activation du terminal, le renommage, l'audit d'un terminal et l'audit des terminaux supprimés.
+
 L'appairage est conservé côté serveur (clé publique de l'appareil). Il n'est redemandé ni à la
 connexion du Pointeur, ni à l'activation. Un remplacement de matériel génère un nouveau code :
 l'ancienne clé reste valable jusqu'à l'association du nouvel appareil, les autorisations sont
@@ -61,7 +65,7 @@ conservées. Une révocation est définitive (créer un nouveau terminal).
 
 ### Autorisations
 
-Table `facial_device_authorizations` (migration `20261012_0001`, additive) : une ligne = un compte
+Table `facial_device_authorizations` (migration `20261014_0001`, additive) : une ligne = un compte
 × un terminal **ou** une caméra. Refus par défaut. Un compte peut être autorisé sur plusieurs
 équipements, un équipement peut avoir plusieurs comptes.
 
@@ -91,13 +95,42 @@ Au clic sur **Reconnaissance faciale** :
 
 Aucun bouton d'appairage, aucun appel d'administration, uniquement des `GET` et `POST`.
 
+### 4.1 Connexion et activité d'une borne
+
+Une borne en service relit son état toutes les 30 s, **même sans aucun passage**
+(`GET /terminal/session?hb=1`, requête signée) et déclare ainsi qu'elle maintient ce battement.
+Le serveur écrit la dernière communication au plus toutes les 20 s.
+
+| État de connexion | Condition | Affichage Pointeur | Compté « hors ligne » |
+|---|---|---|---|
+| `ONLINE` | communication depuis moins de 90 s | « En ligne · au repos » ou « · en service » | non |
+| `LOST` | la borne battait et s'est tue (trois battements manqués) | « Connexion perdue » | oui |
+| `SILENT` | pas de communication récente d'une borne **sans** battement déclaré (page chargée avant cette version) | « Sans signal » — état inconnu | non |
+| `NEVER` | jamais vue | « Jamais connecté » | oui |
+
+L'**activité** est indépendante : « en service » si un pointage a été accepté sur l'équipement dans
+les 10 dernières minutes, sinon « au repos ». Une borne au repos n'est donc jamais « hors ligne ».
+Un remplacement de matériel efface la déclaration de battement : le nouvel appareil la refait.
+Le battement apprend aussi à la borne, sans passage, une coupure du facial ou une révocation.
+
+### 4.2 Mise en page
+
+En mode facial, la barre d'actions, les compteurs, le bandeau de résultat et les lignes de
+terminaux tiennent dans la zone de pointage sans défilement : trois lignes de 1024 à 1600 px, deux
+lignes à 768, 430 et 390 px (mesuré en Chrome réel, fenêtre de 900 px de haut). Au-delà, la liste
+défile dans son cadre, en-tête fixe. À partir de 1360 px les terminaux sont à gauche de la fiche du
+dernier pointage. La ligne de recherche manuelle est masquée en mode facial (la carte « Saisie
+manuelle » reste disponible).
+
 ### Pannes
 
 | Situation | Comportement |
 |---|---|
 | Aucun terminal autorisé | message dédié, aucune tentative |
 | Aucun terminal disponible (désactivés, non appairés, révoqués) | message dédié |
-| Terminal hors ligne | ligne « Hors ligne », compteur ; les autres continuent |
+| Borne : connexion perdue | ligne « Connexion perdue », compteur « hors ligne » ; les autres continuent |
+| Borne au repos (aucun passage) | « En ligne · au repos » : ce n'est pas une panne |
+| Borne sans battement de cœur | « Sans signal » : état inconnu, à recharger sur l'appareil |
 | Caméra inaccessible (502) | ligne « Caméra inaccessible », nouvel essai après 5 s |
 | Terminal révoqué / autorisation retirée | sa boucle s'arrête (403), il disparaît au relevé suivant |
 | Facial coupé par l'administration (409) | sa boucle s'arrête |
@@ -129,43 +162,110 @@ L'activation et l'arrêt au poste sont tracés (`biometrics.pointer.activate` / 
 
 | Suite | Commande |
 |---|---|
-| Backend (SQLite) | `pytest tests/test_pointeur_multi_facial_terminals.py tests/test_facial_device_authorizations_migration.py` |
-| Concurrence PostgreSQL (base **jetable**) | `ATTENDANCE_PG_URL=postgresql+psycopg2://…/base_jetable pytest tests/test_pointeur_multi_facial_pg_race.py` |
-| Frontend jsdom | `npm test` (dont `pointeur-facial*.test.js`, `admin-facial-terminals.test.js`) |
+| Backend complet (SQLite) | `pytest` — un seul lancement à la fois par worktree (`tests/conftest.py` partage `test_sgdi.db`) |
+| Concurrence PostgreSQL (base **jetable**) | `ATTENDANCE_PG_URL=postgresql+psycopg2://…/base_jetable pytest` |
+| Frontend jsdom | `npm test` (dont `pointeur-facial*.test.js`, `pointeur-borne.test.js`, `pointage-terminals.test.js`, `admin-facial-terminals.test.js`) |
 | Mise en page Chrome réel | `npm run test:pointeur-v5-chrome` |
 | Bout en bout Chrome réel | `npm run test:pointeur-multi-facial-e2e` (serveur isolé, moteur et caméras simulés) |
+| Terminaux de Gestion du pointage | `npm run test:pointage-terminals-e2e` |
+
+### Tests qui exigent le moteur réel (OpenCV)
+
+Ils ne s'exécutent que si `ATLAS_E2E_PYTHON` (python avec `requirements-biometric.txt`),
+`BIOMETRIC_MODELS_DIR` (modèles vérifiés par `scripts/fetch_biometric_models.py`) et
+`BIOMETRIC_TEST_FACES` (`obama1.jpg`, `obama2.jpg`, `biden1.jpg`) sont fournis ; sinon ils sont
+**ignorés**, jamais comptés comme réussis. Les portraits ne sont pas dans le dépôt.
+
+Constat du 2026-10-10, environnement isolé (OpenCV 5.0.0, modèles vérifiés par empreinte, portraits
+publics téléchargés pour l'occasion — pas nécessairement ceux d'origine du projet) :
+
+| Suite | Branche | `origin/main` (71fa92b), même environnement |
+|---|---|---|
+| `biometric-terminal-real-e2e` (borne, vrai moteur, vrai Chrome) | 5/5 | — |
+| `tests/test_biometrics_engine_real.py` | réussi | réussi |
+| `biometric-test-mode-real-e2e` | 4/5 — sous-test 3 en échec | 4/5 — même sous-test, même écart |
+| `attendance-e2e` | 2/6 — sous-tests 2, 4, 5, 6 en échec | 2/6 — mêmes sous-tests, mêmes erreurs |
+| `tests/test_drh_employee_portrait.py` (photos réelles) | 2 cas en échec | les 2 mêmes cas |
+
+`tests/test_feature_permissions_migration.py` (exige `TEST_POSTGRES_ADMIN_URL`) : 14 réussis, 1 échec
+(`test_postgresql_rejects_nonconforming_checks[or-true]`, migration `20260908_0034`), identique sur
+`origin/main`.
+
+Les échecs sont identiques sur `origin/main` : ils ne viennent pas de ce lot. Conséquence à
+connaître : dans `attendance-e2e`, le sous-test 6 (pointage facial réel depuis le poste Pointeur)
+échoue pendant l'enrôlement, **avant** les étapes adaptées par ce lot (autorisation du compte sur la
+caméra, sélection, activation). Ces étapes-là ne sont donc **pas validées avec le moteur réel** ;
+elles le sont avec le moteur simulé (`pointeur-multi-facial-e2e`).
 
 ## 7. Audit pré-déploiement
 
 Aucun déploiement n'est effectué par cette branche. Les points « à vérifier » exigent un accès à
 Coolify ou au site et ne peuvent pas être constatés depuis le dépôt.
 
+### Migration `20261014_0001`
+
+Analysée sur PostgreSQL 16 jetable, à partir du schéma `20261011_0001` (celui d'`origin/main`)
+contenant déjà un site, un compte, un terminal appairé et une caméra :
+
+| Vérification | Résultat |
+|---|---|
+| Upgrade | crée `facial_device_authorizations` ; **0 ligne** du schéma existant supprimée ou modifiée (comparaison `pg_dump -s`) |
+| Données existantes | terminal appairé inchangé (somme de contrôle identique, `paired_at` conservé) ; aucune autorisation créée d'office |
+| Modèle ↔ base | aucun écart sur la table (`alembic.autogenerate.compare_metadata`) |
+| Contraintes | doublon compte × équipement refusé ; ligne sans équipement ou avec deux équipements refusée ; suppression d'un compte ⇒ ses autorisations supprimées (cascade) |
+| Downgrade, table vide | table supprimée ; schéma **identique** à celui d'avant (comparaison `pg_dump -s`) |
+| Downgrade, autorisations présentes | **refusé** (`RuntimeError`) : pas de perte silencieuse ; un retour arrière applicatif n'en a pas besoin, l'ancienne version ignore la table |
+| Rejouabilité | upgrade rejoué sur une base où la table existe déjà : sans erreur |
+| Chaîne | tête unique `20261014_0001` ; upgrade → downgrade → upgrade de toute la chaîne sur SQLite et PostgreSQL (`tests/test_attendance_official_shift_migration.py`) |
+
+`start.sh` exécute `alembic upgrade head` au démarrage du conteneur : la migration s'applique dès
+le déploiement.
+
+### Autres branches en cours (fusions à blanc du 2026-10-10)
+
+`origin/main` n'a pas bougé depuis la création de la branche (71fa92b) : fusion directe sans conflit.
+Conflits que **ce lot** ajouterait avec des branches non fusionnées :
+
+| Branche | Fichiers | Nature |
+|---|---|---|
+| `fix/pointeur-audit-remediation` (PR #10) | `biometrics/routes.py`, `pointeur.html`, `pointeur-borne.html`, `package.json` | même zone fonctionnelle (caméras, borne, poste) : la seconde branche intégrée devra arbitrer à la main |
+| `feat/iron-emploi`, `feat/atlas-mobile-v1` | tests de tête de migration | chacune ajoute une migration fille de `20261011_0001` : **plusieurs têtes Alembic** dès que deux d'entre elles sont fusionnées — la seconde doit re-pointer son `down_revision` |
+| `feat/admin-regularisation-employes` | `administration.js`, `administration-users.js`, `permission_catalog.py`, version frontend | ajouts voisins dans le module Administration |
+| `main` local (2 commits non poussés), `fix/drh-pointage-ops-readonly` | `index.html`, `module-registry.js` | chaîne de version frontend |
+| `refactor/pointeur-compact-ui-v51` | `tests_frontend/pointeur-facial-direct.test.js` | test du même écran |
+
+L'identifiant `20261012_0001` est déjà utilisé par `feat/iron-emploi` : d'où `20261014_0001` ici.
+
+### Autres points
+
 | Point | Constat |
 |---|---|
-| Migration | **Oui** : `20261012_0001` crée `facial_device_authorizations`. Additive, rejouable, aucune ligne existante modifiée. `start.sh` exécute `alembic upgrade head` au démarrage : elle s'applique dès le déploiement. |
-| Compatibilité des terminaux existants | Les terminaux déjà appairés le restent (aucune colonne modifiée, clé conservée) et continuent de pointer seuls. |
-| Changement de comportement à l'ouverture | Refus par défaut : tant que l'Administration Système n'a pas autorisé un compte sur un équipement, ce compte ne voit plus aucune caméra dans « Reconnaissance faciale ». Les autorisations sont à saisir **avant** l'ouverture aux postes. |
-| Changement d'habilitation | Enregistrer / appairer / révoquer / supprimer un terminal et enregistrer une caméra exigent un compte Administration Système. Les comptes `biometric_admin × admin` non administrateurs perdent ces quatre actions. |
+| Compatibilité des terminaux existants | Les terminaux déjà appairés le restent et continuent de pointer seuls. Tant que la page `/borne` d'un appareil n'a pas été rechargée, il n'envoie pas de battement : il s'affiche « Sans signal » au repos (jamais « hors ligne »). |
+| Changement de comportement à l'ouverture | Refus par défaut : tant que l'Administration Système n'a pas autorisé un compte sur un équipement, ce compte ne voit aucun terminal dans « Reconnaissance faciale ». Les autorisations sont à saisir **avant** l'ouverture aux postes. |
+| Changement d'habilitation | Enregistrer / appairer / révoquer / supprimer un terminal et enregistrer une caméra exigent un compte Administration Système ; ces commandes ont disparu de Gestion du pointage. |
+| Liste des caméras | Un compte sans permission de gestion biométrique ne reçoit plus que ses caméras autorisées, sans paramètre de connexion. |
 | Variables | Aucune nouvelle. `BIOMETRIC_ENABLED` et `BIOMETRIC_TEMPLATE_KEY` inchangées ; cette branche n'active aucun traitement biométrique. |
-| Nouveaux traitements biométriques | Aucun : pas de nouvelle capture, pas de nouveau gabarit, pas de nouvelle caméra activée. `facial_attendance_enabled` reste une décision explicite par équipement. |
-| État des caméras | À vérifier sur site (test de connexion de chaque caméra dans Gestion du pointage → Caméras). |
+| Nouveaux traitements biométriques | Aucun : pas de nouvelle capture, pas de nouveau gabarit, pas de nouvelle caméra activée. Le battement de cœur ne transporte aucune image. |
+| Charge | Par borne : une requête signée toutes les 30 s et une écriture de `last_seen_at` au plus toutes les 20 s. Par poste : 1 essai par caméra activée toutes les ~0,9 s (comme aujourd'hui), 1 aperçu par seconde au total, 1 relevé d'état toutes les 10 s. Aucun test de charge réalisé. |
+| État des caméras | À vérifier sur site (test de connexion dans Gestion du pointage → Caméras). |
 | Sauvegarde PostgreSQL récente | À vérifier (Coolify). |
-| Restauration de test | À réaliser sur une base jetable à partir de la sauvegarde, puis `alembic upgrade head`. |
+| Restauration de test | À réaliser sur une copie de la sauvegarde de production, puis `alembic upgrade head`. L'analyse ci-dessus porte sur un schéma reconstruit, pas sur les données de production. |
 | Version réellement déployée | À relever avant déploiement : `GET /api/version` et comparaison de `version` au MD5 de `app/static/sgdi-app.js` du commit attendu (`source_commit` seul ne prouve rien). |
-| Image Docker de rollback | À identifier dans Coolify (image du commit actuellement servi). Retour arrière applicatif possible sans retour arrière de schéma : l'ancienne version ignore la nouvelle table. |
+| Image Docker de rollback | À identifier dans Coolify (image du commit actuellement servi). |
 | Épinglage du SHA dans Coolify | À vérifier (champ « Commit SHA » de la source Git). |
 | Sécurité | Tests RBAC, périmètre 403, secrets absents des réponses : voir § 6. Des constats de sécurité backend ont été identifiés lors de l'audit et sont suivis séparément dans un rapport de sécurité privé. |
-| Performance | Par poste : 1 essai par caméra activée toutes les ~0,9 s (comme aujourd'hui pour une caméra), 1 aperçu par seconde au total, 1 relevé d'état toutes les 10 s. Les limiteurs de débit restent en mémoire par processus. Aucun test de charge réalisé. |
 
-**Décision : NO-GO production** tant que la migration n'a pas été validée sur une restauration de
-test, que les points « à vérifier » ne sont pas constatés et qu'un GO écrit n'a pas été donné.
+**Décision : GO pour préparer le déploiement (revue, fusion planifiée, restauration de test) ;
+NO-GO pour déployer** tant que la restauration de test, l'ordre d'intégration avec les branches
+ci-dessus et les points « à vérifier » ne sont pas traités et qu'un GO écrit n'a pas été donné.
 
 ## 8. Limites connues
 
-- Gestion du pointage affiche encore les boutons d'ajout, d'association, de révocation et de
-  suppression d'un terminal ; le serveur les refuse aux comptes non Administration Système.
 - Les caméras IP sont toujours saisies dans Gestion du pointage → Caméras (par un compte
   Administration Système) ; l'écran d'administration les liste et gère leurs comptes autorisés.
-- Une borne armée et au repos communique peu : elle est considérée en ligne jusqu'à 120 s après
-  sa dernière communication ; au-delà elle s'affiche hors ligne même si elle fonctionne.
+- Une borne dont la page n'a pas été rechargée depuis cette version n'a pas de battement de cœur :
+  « Sans signal » au repos, tant qu'elle n'est pas rechargée.
 - Les caméras n'ont pas de liaison permanente : leur disponibilité réelle n'est connue qu'à l'essai.
+- Le pointage facial réel depuis le poste Pointeur n'a pas pu être validé avec le moteur OpenCV
+  (§ 6) ; il l'est avec le moteur simulé.
+- Les limiteurs de débit restent en mémoire par processus.
