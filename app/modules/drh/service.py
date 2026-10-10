@@ -785,6 +785,7 @@ def _candidate_decision_is_favorable(data: dict[str, Any] | None) -> bool:
 
 
 SOCIETY_REQUIRED = "SOCIETE_DESTINATAIRE_REQUISE"
+SOCIETY_ALREADY_ASSIGNED = "SOCIETE_DESTINATAIRE_DEJA_ATTRIBUEE"
 TRANSFER_TO_RETRY = "TRANSFERT_DRH_A_REPRENDRE"
 ALREADY_TRANSFERRED = "CANDIDAT_DEJA_TRANSFERE"
 
@@ -853,16 +854,38 @@ def ventilate_candidate(db: Session, candidate_id: int, society: str | None, *, 
     return row
 
 
-def transfer_candidate_to_drh(db: Session, candidate_id: int, *, actor: Any | None = None) -> dict[str, Any]:
+def transfer_candidate_to_drh(db: Session, candidate_id: int, *, actor: Any | None = None,
+                              society: str | None = None, reason: str | None = None) -> dict[str, Any]:
     """RECRUTER = finaliser le recrutement et transférer le dossier à la DRH de la société
     destinataire. Le dossier entre dans le circuit DRH existant (« Contrats à établir ») : aucun
     employé ni contrat n'est créé ici, la DRH les établit par son propre service.
 
     Atomique (une seule transaction : le dossier ne quitte Recrutement que si le transfert est
-    validé) et idempotent (verrou de ligne ; un second appel renvoie le transfert existant)."""
+    validé) et idempotent (verrou de ligne ; un second appel renvoie le transfert existant).
+
+    `society` : société destinataire choisie au moment du recrutement, pour un dossier NON
+    ventilé uniquement (l'appelant a déjà vérifié qu'elle est autorisée pour ce compte). La
+    ventilation est alors enregistrée et validée AVANT le transfert, par le service de ventilation
+    existant ; un dossier déjà ventilé n'est jamais réaffecté ici."""
     from app.core.audit import append_audit
+    from app.core.scope_policy import society_key
 
     row = _locked_candidate(db, candidate_id)
+    if society_key(society) and not _candidate_left_recruitment(row):
+        current = str(row.society or "").strip()
+        if current and society_key(current) != society_key(society):
+            raise _business_error(409, SOCIETY_ALREADY_ASSIGNED,
+                                  f"Dossier déjà ventilé vers {current} : la société destinataire ne se change pas lors du recrutement")
+        if not current:
+            # Mêmes préconditions que le transfert : on ne ventile pas un dossier qui ne peut pas être recruté.
+            if _candidate_is_archived(row):
+                raise HTTPException(status_code=409, detail="Ce dossier ne peut pas être transmis à la contractualisation")
+            if not _candidate_decision_is_favorable(row.data if isinstance(row.data, dict) else {}):
+                raise HTTPException(status_code=422, detail="Contrat refusé : seuls les candidats avec une décision Favorable peuvent être contractualisés")
+            ventilate_candidate(db, candidate_id, society, reason=reason, actor=actor, context="recrutement")
+            # La ventilation est validée (verrou relâché) : on reprend le verrou, et un appel
+            # concurrent qui aurait déjà transféré le dossier est rendu tel quel plus bas.
+            row = _locked_candidate(db, candidate_id)
     data = row.data if isinstance(row.data, dict) else {}
     username = getattr(actor, "username", None) or "system"
 
