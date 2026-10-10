@@ -4,6 +4,10 @@ Candidat de validation de compatibilité, **pas une branche de livraison** : auc
 `main`, aucun déploiement, aucune activation de la reconnaissance faciale réelle. Inventaire du
 2026-10-10, à partir de `origin/main` = `71fa92b`.
 
+**Mise à jour du 2026-10-11 : la branche est synchronisée avec `origin/main` = `1958d15`
+(PR #14 ATLAS MOBILE) — voir § 8, qui prévaut sur les § 2, 4 et 6 pour l'état des migrations et
+les résultats des tests.**
+
 ## 1. Contenu
 
 | Étape | Branche intégrée | Tête intégrée | Résultat |
@@ -154,3 +158,72 @@ sur ce candidat.
   `fix/drh-pointage-ops-readonly`, lever les identifiants de migration en double (§ 4), adapter les
   deux suites à moteur réel (§ 6).
 - Reconnaissance faciale réelle : **NO-GO**.
+
+## 8. Synchronisation avec `origin/main` `1958d15` (PR #14 ATLAS MOBILE), 2026-10-11
+
+### Ce qui a changé
+
+- Fusion normale d'`origin/main` (7 commits) ; pas de rebase, historique conservé.
+- Conflits : deux tests de tête de migration, résolus à la main en gardant les contrôles des deux
+  côtés (tête attendue `20261014_0001` ; contrôle « une seule tête, quelle qu'elle soit » de `main`
+  et tête en aval de la révision SMS).
+- Migration `20261014_0001` : **identifiant inchangé**, `down_revision` déplacé de `20261011_0001`
+  vers `20261013_0002`, tête de `main`. Vérifié avant modification : la révision est absente de
+  `main` (donc de la production, qui n'exécute que `main`) et d'aucune base PostgreSQL locale.
+  Elle existe aussi, avec l'ancienne dépendance, dans `feat/pointeur-multi-facial-terminals` :
+  c'est la version de cette branche d'intégration qui doit être retenue.
+
+Chaîne du candidat : 65 migrations, tête unique `20261014_0001`.
+
+### Alembic sur PostgreSQL 16 jetable
+
+Depuis le schéma de `main` (`20261013_0002`) peuplé — compte, site, terminal appairé, caméra, tables
+de sessions et d'appareils mobiles présentes :
+
+| Vérification | Résultat |
+|---|---|
+| Tête | unique : `20261014_0001` |
+| `upgrade head` | table `facial_device_authorizations` créée ; 0 ligne du schéma existant modifiée |
+| Données existantes | comptes, sites, terminaux, caméras inchangés ; terminal appairé identique (somme de contrôle) |
+| Contraintes | clé primaire, 3 clés étrangères, 2 unicités, contrôle « un seul équipement » ; doublon et ligne sans équipement refusés |
+| Index | compte, terminal, caméra |
+| Modèles ↔ base | aucun écart sur les autorisations faciales, les sessions et les appareils mobiles |
+| Downgrade avec autorisations | refusé, autorisations conservées |
+| Downgrade table vide | retour à `20261013_0002`, schéma identique à celui de `main` |
+
+### Tests sur le code combiné
+
+| Suite | Résultat |
+|---|---|
+| `python3 -m pytest -q` + PostgreSQL jetable | **2291 réussis, 0 échec**, 30 ignorés (OpenCV absent, `TEST_POSTGRES_ADMIN_URL` non défini) |
+| `npm test` | **1044 / 1044** (+ 12 / 12) ; `test:drh-next` 115 / 115 ; `test:core-v3` 45 / 45 |
+| Chrome réel (10 suites) | 60 / 60, dont la borne avec le moteur OpenCV réel (5 / 5) |
+
+| Groupe ciblé (backend) | Résultat |
+|---|---|
+| Authentification, types de jetons | 71 |
+| ATLAS Mobile (PR #14) : sessions, appareils, notifications, courses PostgreSQL | 89 |
+| RBAC : modules, périmètres, DRH lecture seule, écritures OPS | 358 |
+| Pointeur : audit P0 à P3, poste, comptes | 105 |
+| OPS | 85 |
+| DRH | 449 |
+| BRQ | 25 |
+| Multi-terminaux, terminaux, biométrie | 125 |
+| Abandon de poste | 18 |
+| PostgreSQL et concurrence | 46 |
+
+Non exécutés : les tests de l'application mobile elle-même (`mobile/`, Expo), dont les dépendances
+ne sont pas installées sur ce poste ; ils relèvent de la CI mobile ajoutée par la PR #14.
+
+### Toujours ouvert
+
+- `attendance-e2e` (1 / 6) et `biometric-test-mode-real-e2e` (1 / 5) : leur caméra simulée est
+  déclarée en `127.0.0.1`, adresse refusée par la protection de l'audit. La protection n'a pas été
+  assouplie ; ce sont les fixtures qui doivent changer.
+- Aucun parcours « caméra IP → moteur réel → pointage » validé de bout en bout.
+- DRH/OPS : seule la version poussée `f01b28a` est intégrée ; le commit local `76a2980` et le
+  travail non commité du chantier ne le sont pas.
+- Identifiants de migration en double dans des branches non fusionnées : `20261013_0001`
+  (`feat/iron-emploi`) et `20261011_0001` (`feat/admin-regularisation-employes`).
+
+**Reconnaissance faciale réelle : NO-GO.**
