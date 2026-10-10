@@ -301,20 +301,28 @@ test('Chrome réel — V7 : portefeuille Groupe, ventilation puis recrutement = 
     assert.deepEqual(await brand(), { name: 'RECRUTEMENT GROUPE', logo: null });
     assert.deepEqual([...new Set(await page.$$eval('#listWrap td[data-label="Société"]', cells => cells.map(cell => cell.textContent.trim())))], ['Non ventilé']);
 
-    // Recruter un dossier non ventilé est impossible : l'interface propose de ventiler d'abord.
+    // Dossier non ventilé : action directe « Ventiler » en ligne, et choix de la société dans la fenêtre « Recruter ».
+    assert.equal(await page.$$eval('#listWrap tbody tr', rows => rows.every(row => row.querySelector('.row-ventilate')?.textContent === 'Ventiler')), true);
     const name = await page.$eval('#listWrap tbody tr:has(.row-recruit) .cand-name', el => el.textContent.trim());
+    const rowId = await page.$eval('#listWrap tbody tr:has(.row-recruit)', row => row.dataset.id);
     await page.click('#listWrap tbody tr:has(.row-recruit) .row-recruit');
-    await page.waitForSelector('#recruitmentModal');
-    assert.match(await page.$eval('#recruitmentModal', el => el.innerText), /Société destinataire requise/);
-    assert.equal(await page.$('#recruitmentModal button[type="submit"]'), null);
-    await page.click('#recruitmentModal .modal-actions .primary');
-    await page.waitForSelector('#ventilationSociety:not([disabled])');
-    assert.deepEqual(await page.$$eval('#ventilationSociety option', options => options.map(option => option.textContent)), ['— Choisir —', SECURITE_LABEL(), SOLUTION_LABEL()]);
-    await page.select('#ventilationSociety', SOLUTION_LABEL());
-    await page.type('#ventilationReason', 'Besoin site pilote');
-    await page.click('#ventilationModal button[type="submit"]');
-    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '5 dossiers' && !document.getElementById('ventilationModal'));
+    await page.waitForSelector('#recruitmentSociety:not([disabled])');
+    assert.deepEqual(await page.$$eval('#recruitmentSociety option', options => options.map(option => option.textContent)), ['— Choisir —', SECURITE_LABEL(), SOLUTION_LABEL()]);
+    assert.deepEqual(await page.$$eval('#recruitmentModal .modal-actions button', buttons => buttons.map(button => button.textContent)), ['Annuler', 'Ventiler', 'Ventiler et recruter']);
+    await shot(page, 'ventilation-recruter-1440-choix');
+    await page.select('#recruitmentSociety', SOLUTION_LABEL());
+    await page.type('#recruitmentReason', 'Besoin site pilote');
+    await page.click('#recruitmentModal .modal-actions .primary');     // « Ventiler » seul
+    // La même fenêtre passe à la confirmation du recrutement ; la ligne n'est plus « Non ventilé ».
+    await page.waitForSelector('#recruitmentModal .rec-ventilation-ok');
+    assert.match(await page.$eval('#recruitmentModal', el => el.innerText), /Dossier ventilé vers IRON GLOBAL SOLUTION\.[\s\S]*Société destinataire : IRON GLOBAL SOLUTION/);
+    assert.equal(await page.$eval('#recruitmentModal button[type="submit"]', el => el.textContent), 'Recruter et transférer à la DRH');
+    assert.equal(await page.$eval(`#listWrap tr[data-id="${rowId}"] td[data-label="Société"]`, el => el.textContent.trim()), SOLUTION_LABEL());
+    assert.equal(await page.$(`#listWrap tr[data-id="${rowId}"] .row-ventilate`), null);
     assert.match(await page.$eval('#banner', el => el.innerText), /ventilé vers IRON GLOBAL SOLUTION/);
+    await shot(page, 'ventilation-recruter-1440-ventile');
+    await page.click('#recruitmentModal .modal-actions .secondary');   // ventilation indépendante du recrutement
+    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '5 dossiers' && !document.getElementById('recruitmentModal'));
 
     // Le même dossier (même identifiant) est maintenant dans le portefeuille Solution, avec son historique.
     await portfolio(SOLUTION_LABEL(), '9 dossiers');
@@ -352,10 +360,21 @@ test('Chrome réel — V7 : portefeuille Groupe, ventilation puis recrutement = 
     await page.close();
   }, true);
 
-  // Sans permission de ventilation : l'action n'apparaît nulle part.
+  // Sans permission de ventilation : l'action n'apparaît nulle part, et la fenêtre « Recruter » l'explique.
   await withApp('many', ['read', 'create', 'update'], async ({ browser, base, state }) => {
     const { page } = await openApp(browser, base, state.data.announcements, 1280);
     await show(page, 'candidates');
+    await page.select('#societySelect', '__unassigned__');
+    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '6 dossiers');
+    assert.equal(await page.$('#listWrap .row-ventilate'), null);
+    await page.click('#listWrap tbody tr:has(.row-recruit) .row-recruit');
+    await page.waitForSelector('#recruitmentModal');
+    assert.match(await page.$eval('#recruitmentModal', el => el.innerText), /Société destinataire requise[\s\S]*n’a pas la permission de ventiler les candidats/);
+    assert.equal(await page.$('#recruitmentModal select'), null);
+    assert.equal(await page.$('#recruitmentModal button[type="submit"]'), null);
+    await page.click('#recruitmentModal .modal-actions .secondary');
+    await page.select('#societySelect', '');
+    await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '74 dossiers');
     await page.click('#listWrap tbody tr .kebab-btn');
     await page.waitForSelector('#rowActionMenu');
     assert.equal((await page.$$eval('#rowActionMenu .row-menu-item', items => items.map(item => item.textContent))).includes('Ventiler'), false);
@@ -366,6 +385,37 @@ test('Chrome réel — V7 : portefeuille Groupe, ventilation puis recrutement = 
     assert.equal(await page.$('#candidateDestination button'), null);
     await page.close();
   });
+});
+test('Chrome réel — « Ventiler et recruter » sur mobile et ordinateur : une seule fenêtre, sans débordement', { skip: SKIP, timeout: 120000 }, async () => {
+  for (const width of [390, 1280]) {
+    await withApp('many', ['read', 'create', 'update'], async ({ browser, base, state }) => {
+      const { page, errors } = await openApp(browser, base, state.data.announcements, width);
+      await show(page, 'candidates');
+      await page.select('#societySelect', '__unassigned__');
+      await page.waitForFunction(() => document.getElementById('candidateTotal').textContent === '6 dossiers');
+      await shot(page, `ventilation-liste-${width}`);
+      const rowId = Number(await page.$eval('#listWrap tbody tr:has(.row-recruit)', row => row.dataset.id));
+      // Les actions de ligne restent dans la carte / la ligne du candidat.
+      const fits = await page.$eval('#listWrap tbody tr:has(.row-recruit)', row => { const box = row.getBoundingClientRect(); const shown = [...row.querySelectorAll('.row-actions button')].filter(button => getComputedStyle(button).display !== 'none'); return shown.some(button => button.classList.contains('row-ventilate')) && shown.every(button => { const r = button.getBoundingClientRect(); return r.width > 0 && r.left >= box.left - 1 && r.right <= box.right + 1; }); });
+      assert.equal(fits, true, `${width}px : actions de ligne hors de la ligne`);
+      await page.click('#listWrap tbody tr:has(.row-recruit) .row-recruit');
+      await page.waitForSelector('#recruitmentSociety:not([disabled])');
+      const modal = await page.$eval('#recruitmentModal .modal', el => { const box = el.getBoundingClientRect(); return { inside: box.left >= 0 && box.right <= innerWidth, noScrollX: el.scrollWidth <= el.clientWidth + 1, buttons: [...el.querySelectorAll('.modal-actions button')].map(button => { const r = button.getBoundingClientRect(); return r.left >= box.left && r.right <= box.right + 1 && r.height >= 30; }) }; });
+      assert.deepEqual(modal, { inside: true, noScrollX: true, buttons: [true, true, true] }, `${width}px`);
+      await shot(page, `ventilation-recruter-${width}-choix`);
+      await page.select('#recruitmentSociety', SECURITE_LABEL());
+      await page.click('#recruitmentModal button[type="submit"]');      // « Ventiler et recruter »
+      await page.waitForFunction(() => !document.getElementById('recruitmentModal') && document.getElementById('candidateTotal').textContent === '5 dossiers');
+      assert.match(await page.$eval('#banner', el => el.innerText), /transféré à la DRH de IRON GLOBAL SÉCURITÉ/);
+      const item = state.data.candidates.find(row => row.id === rowId);
+      assert.deepEqual([item.society, item.mode, item.data.ventilations.length], [SECURITE_LABEL(), 'transferred', 1]);
+      const layout = await page.evaluate(inspectLayout);
+      assert.ok(layout.scrollWidth <= layout.clientWidth, `${width}px : débordement global`);
+      assert.deepEqual(errors, []);
+      await shot(page, `ventilation-recruter-${width}-transfere`);
+      await page.close();
+    }, true);
+  }
 });
 function SECURITE_LABEL() { return SECURITE; }
 function SOLUTION_LABEL() { return SOLUTION; }

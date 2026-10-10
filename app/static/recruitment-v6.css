@@ -116,7 +116,7 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-d
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-datetime strong{font-size:12.5px;color:var(--ink)}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-datetime span{font-size:12px;font-weight:700;color:var(--blue)}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-actions{justify-content:flex-end;gap:6px;flex-wrap:nowrap}
-body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-open,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-convoke,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-recruit{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 10px;border-radius:7px;font-size:11px;font-weight:700;white-space:nowrap}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-open,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-convoke,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-recruit,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-ventilate{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 10px;border-radius:7px;font-size:11px;font-weight:700;white-space:nowrap}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-open{background:var(--blue);border-color:var(--blue);color:#fff}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-open:hover{background:#0056d6;border-color:#0056d6}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .kebab-btn{display:grid;place-items:center;width:30px;height:30px;padding:0;border-radius:7px}
@@ -228,7 +228,7 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-t
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table td[data-label]:not(.rec-cell-main):not(.rec-cell-when):not(.rec-cell-actions)::before{content:attr(data-label);display:block;margin-bottom:3px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .rec-cell-actions{text-align:left;padding-top:2px}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-actions{justify-content:flex-start}
-body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-open,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-recruit{flex:1 1 0;min-height:40px;font-size:12.5px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-open,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-recruit,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .row-ventilate{flex:1 1 0;min-height:40px;font-size:12.5px}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table .kebab-btn{width:40px;height:40px;border:1px solid var(--line)}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-cell-when .rec-datetime{flex-direction:row;align-items:baseline;gap:10px}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-cell-when .rec-datetime strong{font-size:15px}
@@ -267,6 +267,16 @@ body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-h
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-history li span{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .society-select{max-width:230px}
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-destination button{margin-left:8px;min-height:30px;padding:0 10px;font-size:11.5px;vertical-align:middle}
+/* Ventilation depuis la liste et depuis la fenêtre « Recruter » */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-ventilate{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .row-ventilate:hover{background:#e0e7ff;border-color:#a5b4fc}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-ventilation-hint{margin:12px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-ventilation-hint b{color:var(--ink)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-ventilation-ok{margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid #86efac;background:#dcfce7;color:#14532d;font-size:12.5px;font-weight:700}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .banner .banner-action{margin-left:10px;min-height:30px;padding:0 12px;border-radius:7px;border:1px solid #15803d;background:#15803d;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer}
+/* Mobile : les trois actions s'empilent en pleine largeur (responsive-baseline.css) ; sinon elles passent à la ligne. */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-ventilation-actions{flex-wrap:wrap}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-ventilation-actions button{min-height:40px}
 /* Compteurs à chiffres de largeur fixe : un total qui change ne déplace pas la mise en page. */
 body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-tabs .tab-btn .count,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .counter-chip .n,body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-count{font-variant-numeric:tabular-nums}
 
