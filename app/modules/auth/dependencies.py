@@ -34,6 +34,7 @@ SOCIETY_SCOPED_PREFIXES = (
 # introduite ici.
 API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     ("/api/drh/candidates", frozenset({"drh", "recrute"})),
+    ("/api/drh/job-offers", frozenset({"drh", "recrute"})),
     ("/api/drh/leaves", frozenset({"drh", "conges"})),
     ("/api/ops/pointage", frozenset({"ops", "pointage", "pointeur"})),
     ("/api/loans/secretariat", frozenset({"pret", "secretariat"})),
