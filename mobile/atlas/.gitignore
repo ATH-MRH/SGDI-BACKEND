@@ -1,0 +1,42 @@
+# Le .gitignore racine ignore package-lock.json ; ici il est versionné pour
+# garantir des builds EAS reproductibles.
+!package-lock.json
+
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+coverage/
+*.tsbuildinfo
+
+# Projets natifs générés (Continuous Native Generation) : jamais édités à la main.
+/ios
+/android
+
+# Environnements locaux
+.env
+.env.*
+!.env.example
+
+# Signature et identifiants stores : JAMAIS dans Git.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+*.cer
+credentials.json
+google-services.json
+GoogleService-Info.plist
+*service-account*.json
+play-store-*.json
+
+# Artefacts de build
+*.apk
+*.aab
+*.ipa
+*.orig.*

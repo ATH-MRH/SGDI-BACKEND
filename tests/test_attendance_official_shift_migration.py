@@ -10,7 +10,10 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261014_0001"            # tête courante de la chaîne (autorisations des équipements faciaux)
+# Tête courante de la chaîne : autorisations des équipements faciaux, en aval des appareils
+# ATLAS MOBILE (20261013_0002).
+HEAD = "20261014_0001"
+PREVIOUS_HEAD = "20261013_0002"
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
