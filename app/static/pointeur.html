@@ -658,11 +658,11 @@ body.ptr-v5.has-post .shift-staffing{order:3}
   body.ptr-v5 #presentNowCard,body.ptr-v5 #todoCard,body.ptr-v5 #movementsCard{padding:14px}
 }
 </style>
-<script defer src="/static/html5-qrcode.min.js?v=1"></script>
-<script defer src="/static/pointeur-facial.js?v=1"></script>
+<script defer src="/static/html5-qrcode.min.js?v=20261008-audit"></script>
+<script defer src="/static/pointeur-facial.js?v=20261008-audit"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
-<link rel="stylesheet" href="/static/pointeur-workstation.css">
+<link rel="stylesheet" href="/static/pointeur-workstation.css?v=20261008-audit">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -677,7 +677,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
     <label for="password">Mot de passe</label>
     <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
     <button id="loginBtn" class="primary">SE CONNECTER</button>
-    <div id="loginError" class="error"></div>
+    <div id="loginError" class="error" role="alert" aria-live="assertive"></div>
   </form>
   </div>
 </section>
@@ -751,7 +751,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code employé</small></button>
         </div>
         <div class="pointer-search">
-            <input id="manualQuery" autocomplete="off" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
+            <input id="manualQuery" autocomplete="off" aria-label="Rechercher un employé par code, nom ou prénom" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
             <button type="button" class="manual-search-button" onclick="activateInlineManualSearch();runManualSearch(document.getElementById('manualQuery').value.trim())">Rechercher</button></div>
         <div class="action-row">
           <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
@@ -759,7 +759,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <button id="generateQrBtn" class="secondary generate-qr-btn ptr-legacy" tabindex="-1" aria-hidden="true">▦ GÉNÉRER UN QR SITE</button>
         </div>
         <div class="station-foot"><i class="dot" aria-hidden="true"></i><p class="scanner-hint" id="scannerHint">La validation est automatique.</p></div>
-        <div id="result" class="result"></div>
+        <div id="result" class="result" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
           <div id="manualSearchStep">
@@ -770,7 +770,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
           <div id="manualCardStep" class="hidden">
             <div id="manualCard"></div>
             <div id="manualContext" class="v5-context hidden"></div>
-            <button id="manualExtraBtn" type="button" class="v5-extra-btn hidden" onclick="confirmManualPointage('present',{intent:'EXTRA_SHIFT_ENTRY'})">NOUVELLE ENTRÉE DE MAINTIEN</button>
+            <button id="manualExtraBtn" type="button" class="v5-extra-btn hidden" data-intent="EXTRA_SHIFT_ENTRY" onclick="confirmManualPointage('present',{intent:this.dataset.intent||'EXTRA_SHIFT_ENTRY'})">NOUVELLE ENTRÉE DE MAINTIEN</button>
             <div class="manual-actions">
               <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
               <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
@@ -968,7 +968,24 @@ function stopIdleWatch(){
   hideIdleWarning();
 }
 
-function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+// Aucune requête ne reste en attente indéfiniment : sans délai, un appel sans réponse laissait
+// le poste bloqué (scan, saisie manuelle, relève) alors que l'écran indiquait « opérationnel ».
+const REQUEST_TIMEOUT_MS=30000;
+if(typeof window.fetch==="function"&&typeof AbortSignal!=="undefined"&&typeof AbortSignal.timeout==="function"){
+  const nativeFetch=window.fetch.bind(window);
+  window.fetch=(input,init={})=>nativeFetch(input,init&&init.signal?init:{...init,signal:AbortSignal.timeout(REQUEST_TIMEOUT_MS)});
+}
+// Panne de transport (réseau coupé, délai dépassé) : la requête a pu atteindre le serveur. Ce
+// n'est pas un refus ; l'opérateur doit vérifier le dernier pointage avant de recommencer.
+function transportFailure(error){return !!error&&!error.refusal&&(error instanceof TypeError||error.name==="TypeError"||error.name==="AbortError"||error.name==="TimeoutError")}
+const TRANSPORT_MESSAGE="Connexion perdue : le pointage a peut-être été enregistré. Vérifiez le dernier pointage avant de recommencer.";
+// Échappement valable en contenu ET en valeur d'attribut : les guillemets sont neutralisés
+// (l'ancien passage par textContent/innerHTML les laissait intacts dans src, alt, title, value…).
+function esc(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c])}
+// Une photo n'est affichée que si elle vient du serveur ATLAS (fichier ou portrait protégé),
+// d'un blob local ou d'une image en ligne (une image chargée par <img> n'exécute aucun script) ;
+// toute autre valeur (autre schéma, autre domaine) est ignorée. esc() protège l'attribut.
+function safePhotoSrc(value){const src=String(value??"").trim();return /^(\/(uploads|api|static)\/|blob:|data:image\/)/i.test(src)?src:""}
 function isMobileDevice(){return matchMedia("(max-width:759px)").matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)}
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 const SEG_MAP={"0":"abcdef","1":"bc","2":"abdeg","3":"abcdg","4":"bcfg","5":"acdfg","6":"acdefg","7":"abc","8":"abcdefg","9":"abcdfg"};
@@ -1003,6 +1020,7 @@ function updateHeaderClock(){
   const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",timeZone:opsTimeZone});
   const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone});
   el.innerHTML='<span class="seg-date">'+esc(date)+'</span><span class="seg-clock">'+segClockHTML(time)+'</span>';
+  syncTrackingDate();
   el.dataset.time=time;el.dataset.date=opsDate(now);
   tickPost();
 }
@@ -1028,7 +1046,7 @@ async function login(){
   try{
     const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("username").value.trim(),password:document.getElementById("password").value})});
     const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.detail||"Connexion refusée");
+    if(!response.ok)throw new Error(typeof data.detail==="string"&&data.detail?data.detail:"Connexion refusée : vérifiez l’identifiant et le mot de passe.");
     pointerSession={token:data.access_token,user:data.user};
     localStorage.setItem(SESSION_KEY,JSON.stringify(pointerSession));
     await enterApp();
@@ -1250,7 +1268,7 @@ function shiftBannerHTML(post){
 }
 function personAvatarHTML(e){
   const name=[e.nom,e.prenom].filter(Boolean).join(" ");
-  return e.photo?'<img class="v5-avatar" src="'+esc(e.photo)+'" alt="">':'<span class="v5-avatar">'+esc(initialsOf(name))+'</span>';
+  return safePhotoSrc(e.photo)?'<img class="v5-avatar" src="'+esc(safePhotoSrc(e.photo))+'" alt="">':'<span class="v5-avatar">'+esc(initialsOf(name))+'</span>';
 }
 function renderPost(){
   const post=postState;
@@ -1483,7 +1501,7 @@ function showPointerSection(section){
 }
 async function loadPlanning(){
   if(!pointerSession?.token)return;const target=document.getElementById("planningDate")?.value||localDate();
-  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
+  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000"+siteQuery("&",false),{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
 }
 function groupPlanningEvents(date){
   const grouped=new Map();planningEvents.filter(e=>String(e.scanned_at||"").slice(0,10)===date).forEach(e=>{const key=String(e.employee_id||e.matricule||"")+"|"+String(e.cycle||1);let row=grouped.get(key);if(!row){row={key,name:e.nom||"Employé",code:e.matricule||"",site:e.site||"—",siteId:e.site_id,arrival:"",departure:"",absent:false,observation:"",scannedBy:""};grouped.set(key,row)}if(e.action==="absent"){row.absent=true;row.observation=e.observation||"";row.scannedBy=e.scanned_by||""}else if(e.action==="depart")row.departure=eventTime(e.scanned_at);else row.arrival=eventTime(e.scanned_at)});return [...grouped.values()]
@@ -1520,6 +1538,12 @@ async function logout(){
     Object.values(portraitUrls).forEach(u=>{if(String(u).startsWith("blob:"))try{URL.revokeObjectURL(u)}catch(e){}});
     Object.keys(portraitUrls).forEach(k=>delete portraitUrls[k]);
     localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
+    // Données du périmètre du compte : vidées avec la session. Sinon le compte suivant les voyait
+    // jusqu'au premier rafraîchissement réussi — et les gardait si ce rafraîchissement échouait.
+    trackingEvents=[];trackingDailyServer=null;planningEvents=[];serverSummary=null;postState=null;presenceAlertsData=[];
+    manualResults=[];trackingAnomalies=[];authorizedAttendanceSites=[];liveCursor=null;liveRefusalCursor=null;lastScanShownId="";
+    for(const id of ["liveFeedList","trackingBody","planningContent","manualResults","result"]){const node=document.getElementById(id);if(node)node.innerHTML=""}
+    for(const redraw of [()=>{document.getElementById("lastScanCard").innerHTML=lastScanIdleHTML()},renderPost,renderHistory]){try{redraw()}catch(e){/* zone absente de cette vue */}}
     closeManualPanel();resetManualPanel();
     document.getElementById("appView").classList.add("hidden");
     document.getElementById("appView").classList.remove("idle-locking");
@@ -1683,7 +1707,11 @@ async function onQr(token){
   // — contrairement à la caméra qui tourne simplement sans jamais rien décoder, ou à la
   // douchette USB simplement branchée : ceci ne s'exécute QUE sur une lecture réelle.
   noteUserActivity();
-  if(scanBusy)return;
+  if(scanBusy){
+    // Second badge présenté pendant le traitement du premier : il n'est PAS pointé. Le signaler
+    // (son + message) évite qu'un agent reparte en croyant avoir pointé.
+    showResult({kicker:"PATIENTEZ",message:"Pointage précédent en cours — présentez à nouveau votre badge."},"error");playTone(false);return;
+  }
   scanBusy=true;
   try{
     const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null,society:selectedSociety||null})});
@@ -1692,10 +1720,13 @@ async function onQr(token){
     if(!response.ok)throw operationalError(response,data);
     const entry=recordScanEntry(data);
     showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);
-    pollLive();                                                   // la fiche « Dernier pointage » suit sans attendrenavigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
+    pollLive();                                                   // la fiche « Dernier pointage » suit sans attendre
+    navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){
     if(error.refusal)showLastRefusal({id:"x"+Date.now(),heure:opsStamp().slice(11,19),...error.refusal});
-    showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
+    if(transportFailure(error))showResult({kicker:"CONNEXION PERDUE",message:TRANSPORT_MESSAGE},"error");
+    else showResult({message:error.message||"QR invalide"},"error");
+    playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
 function playTone(success){
@@ -1712,11 +1743,11 @@ function playTone(success){
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"||type==="warning"){
-    const action=data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE";
+    const action=data.duplicate?"DÉJÀ ENREGISTRÉ — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE");
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
-    const photo=data.photo?`<img class="employee-photo" src="${esc(data.photo)}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
+    const photo=safePhotoSrc(data.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(data.photo))}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
     el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
-  }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
+  }else el.innerHTML=`<div class="result-kicker">${esc(data.kicker||"SCAN REFUSÉ")}</div><div class="result-name">${esc(data.message)}</div>`;
   clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
 function renderHistory(){
@@ -1742,7 +1773,7 @@ function renderLiveFeed(){
   // Sur une feuille, l'état vient du serveur (une ligne par employé) ; sinon, logique historique.
   const isPresent=row=>fromSheet?row.present:(row.arrivee&&!row.depart&&!row.absent);
   const filtered=source.filter(row=>!liveFeedFilter||(row.date===localDate()&&((liveFeedFilter==="entrees"&&row.arrivee&&!row.absent)||(liveFeedFilter==="sorties"&&row.depart)||(liveFeedFilter==="presents"&&isPresent(row))||(liveFeedFilter==="absents"&&row.absent))));
-  const rowHTML=row=>{const isAbsent=!!row.absent,isIn=isPresent(row),lamp=isIn?lampHTMLForMatricule(row.matricule):"",initials=String(row.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase(),avatar=row.photo?`<img class="live-feed-avatar" src="${esc(row.photo)}" alt="Photo de ${esc(row.name)}">`:`<span class="live-feed-avatar initials">${esc(initials)}</span>`,times=isAbsent?`<div class="live-feed-time"><span class="live-feed-badge absent">ABSENT</span><div class="live-feed-meta">${esc(row.absenceAt||"")}</div></div>`:`<div class="live-feed-time"><span class="live-feed-badge in">ENTRÉE</span><div class="live-feed-meta">${esc(row.arrivee||"—")}</div></div>${row.depart?`<div class="live-feed-time"><span class="live-feed-badge out">SORTIE</span><div class="live-feed-meta">${esc(row.depart)}</div></div>`:""}`,extra=fromSheet?`${row.group?" · Groupe "+esc(row.group):""}${row.events>2?" · "+row.events+" passages":""}${row.anomaly==="DEPART_MANQUANT"?" · départ manquant":""}`:"";return `<div class="live-feed-row ${isAbsent?"live-absent":(isIn?"live-in":"live-out")}"><div class="live-feed-person">${avatar}<div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${extra}${isAbsent&&row.observation?" · "+esc(row.observation):""}</div></div></div><div class="live-feed-times">${times}</div></div>`};
+  const rowHTML=row=>{const isAbsent=!!row.absent,isIn=isPresent(row),lamp=isIn?lampHTMLForMatricule(row.matricule):"",initials=String(row.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase(),avatar=safePhotoSrc(row.photo)?`<img class="live-feed-avatar" src="${esc(safePhotoSrc(row.photo))}" alt="Photo de ${esc(row.name)}">`:`<span class="live-feed-avatar initials">${esc(initials)}</span>`,times=isAbsent?`<div class="live-feed-time"><span class="live-feed-badge absent">ABSENT</span><div class="live-feed-meta">${esc(row.absenceAt||"")}</div></div>`:`<div class="live-feed-time"><span class="live-feed-badge in">ENTRÉE</span><div class="live-feed-meta">${esc(row.arrivee||"—")}</div></div>${row.depart?`<div class="live-feed-time"><span class="live-feed-badge out">SORTIE</span><div class="live-feed-meta">${esc(row.depart)}</div></div>`:""}`,extra=fromSheet?`${row.group?" · Groupe "+esc(row.group):""}${row.events>2?" · "+row.events+" passages":""}${row.anomaly==="DEPART_MANQUANT"?" · départ manquant":""}`:"";return `<div class="live-feed-row ${isAbsent?"live-absent":(isIn?"live-in":"live-out")}"><div class="live-feed-person">${avatar}<div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${extra}${isAbsent&&row.observation?" · "+esc(row.observation):""}</div></div></div><div class="live-feed-times">${times}</div></div>`};
   const groupsHTML=rows=>{const groups=new Map();rows.forEach(row=>{const poste=String(row.poste||"Fonction non renseignée").trim().toUpperCase();if(!groups.has(poste))groups.set(poste,[]);groups.get(poste).push(row)});return groups.size?`<div class="live-feed-groups">${[...groups.entries()].sort(([a],[b])=>a.localeCompare(b,"fr")).map(([poste,group])=>{const pointed=group.filter(row=>!row.absent),absent=group.filter(row=>row.absent);return `<section class="live-feed-group"><header class="live-feed-group-head"><b>${esc(poste)}</b><span>${group.length}</span></header>${pointed.length?`<div class="live-feed-section"><div class="live-feed-section-title"><b>PRÉSENTS / POINTÉS</b><span>${pointed.length}</span></div><div class="live-feed-section-rows">${pointed.slice(0,fromSheet?200:12).map(rowHTML).join("")}</div></div>`:""}${absent.length?`<div class="live-feed-section"><div class="live-feed-section-title absent"><b>ABSENTS</b><span>${absent.length}</span></div><div class="live-feed-section-rows">${absent.slice(0,12).map(rowHTML).join("")}</div></div>`:""}</section>`}).join("")}</div>`:""};
   const empty=`<div class="live-feed-empty">${liveFeedFilter?"Aucun employé pour ce filtre.":(fromSheet?"Aucun pointage sur cette rotation.":"Aucun pointage récent.")}</div>`;
   if(!fromSheet){list.innerHTML=groupsHTML(filtered)||empty;return}
@@ -1810,14 +1841,14 @@ async function runManualSearch(query){
 function renderManualResults(){
   const el=document.getElementById("manualResults");
   if(!manualResults.length){el.innerHTML='<div class="manual-empty">Aucun employé trouvé.</div>';return}
-  el.innerHTML=manualResults.map((row,index)=>`<div class="manual-result-row" onclick="selectManualResult(${index})"><div><div class="manual-result-name">${esc(row.nom)} ${esc(row.prenom)}</div><div class="manual-result-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")}</div></div><div>›</div></div>`).join("");
+  el.innerHTML=manualResults.map((row,index)=>`<div class="manual-result-row" role="button" tabindex="0" onclick="selectManualResult(${index})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectManualResult(${index})}"><div><div class="manual-result-name">${esc(row.nom)} ${esc(row.prenom)}</div><div class="manual-result-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")}</div></div><div>›</div></div>`).join("");
 }
 function selectManualResult(index){
   if(scanBusy)return;
   manualSelected=manualResults[index];
   if(!manualSelected)return;
   const initials=[manualSelected.prenom,manualSelected.nom].filter(Boolean).map(v=>v[0]).join("").toUpperCase();
-  const photo=manualSelected.photo?`<img class="employee-photo" src="${esc(manualSelected.photo)}" alt="Photo de ${esc(manualSelected.nom)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
+  const photo=safePhotoSrc(manualSelected.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(manualSelected.photo))}" alt="Photo de ${esc(manualSelected.nom)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
   document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><dl class="employee-facts"><dt>Code</dt><dd>${esc(manualSelected.matricule)}</dd><dt>Fonction</dt><dd>${esc(manualSelected.poste||"—")}</dd><dt>Société</dt><dd>${esc(manualSelected.societe||"—")}</dd><dt>Site</dt><dd>${esc(manualSelected.site||"—")}</dd></dl><span class="employee-found">● Employé trouvé</span></div></div>`;
   document.getElementById("manualSearchStep").classList.add("hidden");
   document.getElementById("manualCardStep").classList.remove("hidden");
@@ -1847,6 +1878,16 @@ async function loadManualContext(employee){
       if(x.entry_status==="MANUAL_ENTRY_REQUIRED")note="Ce compte n’a pas la permission « Saisie manuelle » : la deuxième vacation ne peut pas être ouverte ici.";
       if(x.entry_status==="EXTRA_BEFORE_WINDOW")note="Nouvelle entrée possible entre "+hm(x.window_opens_at)+" et "+hm(x.window_closes_at)+".";
     }
+    // Reprise de poste : la dernière sortie appartient à une vacation encore en cours (double
+    // scan, sortie ou abandon saisi par erreur). Le serveur exige l'habilitation et un motif.
+    const reentry=!x&&ctx.reentry&&ctx.reentry.available?ctx.reentry:null;
+    if(reentry){
+      rows.push(["Dernière sortie",reentry.previous_exit||""],["Situation","Vacation encore en cours"]);
+      note="Si cette sortie est une erreur (double scan, mauvaise saisie), enregistrez une reprise de poste. La sortie reste au journal et l’opération est signalée.";
+      explicit=true;
+    }
+    button.dataset.intent=reentry?"REENTRY":"EXTRA_SHIFT_ENTRY";
+    button.textContent=reentry?"REPRISE DE POSTE":"NOUVELLE ENTRÉE DE MAINTIEN";
     box.innerHTML='<dl class="v5-facts">'+rows.filter(r=>r[1]).map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>'
       +(note?'<p class="v5-reason">'+esc(note)+'</p>':"")
       +(explicit?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
@@ -1953,11 +1994,12 @@ async function confirmManualPointage(action="present",options={}){
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
     setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},intent?6000:1800);
   }catch(error){
-    const message=error.message||"Pointage impossible";
+    const lost=transportFailure(error);
+    const message=lost?TRANSPORT_MESSAGE:(error.message||"Pointage impossible");
     const block=error.refusal?refusalBlockHTML(error.refusal):null;
     if(block)feedback.innerHTML='<b>'+esc(block.title)+'</b>'+block.body+'<p class="v5-reason">Aucun mouvement enregistré.</p>';else feedback.textContent=message;
     feedback.className="manual-feedback show error";
-    showResult({message},"error");playTone(false);navigator.vibrate?.(180);
+    showResult({message,...(lost?{kicker:"CONNEXION PERDUE"}:{})},"error");playTone(false);navigator.vibrate?.(180);
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
   }finally{
     scanBusy=false;
@@ -2003,6 +2045,10 @@ document.addEventListener("keydown",event=>{
 });
 document.addEventListener("paste",event=>{
   if(!pointerSession||cameraMode||isManualPanelOpen())return;
+  // Coller dans un champ (recherche, motif…) reste un collage : seul un collage hors champ est
+  // traité comme une lecture de badge.
+  const field=event.target&&event.target.closest?event.target.closest("input,textarea,select,[contenteditable]"):null;
+  if(field&&field.id!=="wedgeInput")return;
   const value=event.clipboardData?.getData("text")||"";
   if(value){event.preventDefault();acceptUsbQr(value)}
 });
@@ -2024,11 +2070,23 @@ if("serviceWorker" in navigator){
 let trackingOnlyPresent=false;
 let selectedSociety='',authorizedAttendanceSites=[],trackingTab='today',trackingWindow=null,trackingAnomalies=[];
 const detachedTracking=location.pathname==='/pointeur/suivi';
+// Poste ouvert en continu : au changement de jour opérationnel, la date du suivi et sa borne
+// maximale avancent d'elles-mêmes — sauf si l'opérateur consulte volontairement un autre jour.
+var trackingDateToday='';
+function syncTrackingDate(){
+  const el=document.getElementById('trackingDate');if(!el||!trackingDateToday)return;
+  const today=localDate();if(today===trackingDateToday)return;
+  const followed=!el.value||el.value===trackingDateToday;
+  trackingDateToday=today;el.max=today;
+  if(followed){el.value=today;if(pointerSession?.token){Promise.resolve(loadHistory()).catch(()=>{});Promise.resolve(loadAttendanceAnomalies()).catch(()=>{})}}
+}
 function readAttendanceScope(raw=localStorage.getItem('atlas_pointer_scope')){try{return JSON.parse(raw||'{}')||{}}catch(e){return {}}}
 const societyKey=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
-siteQuery=function(prefix='?'){
+siteQuery=function(prefix='?',withDate=true){
   const params=new URLSearchParams();if(selectedSiteId)params.set('site_id',selectedSiteId);if(selectedSociety)params.set('society',selectedSociety);
-  const date=document.getElementById('trackingDate')?.value;if(date)params.set('date',date);
+  // withDate=false : vues qui portent leur propre fenêtre (planning sur 8 jours). Leur imposer la
+  // date du suivi réduisait la réponse à un seul jour : la référence J-7 était toujours vide.
+  const date=withDate?document.getElementById('trackingDate')?.value:'';if(date)params.set('date',date);
   return params.size?prefix+params.toString():'';
 };
 loadAttendanceSites=async function(){
@@ -2133,7 +2191,7 @@ const originalSetupScanMode=setupScanMode;setupScanMode=function(){if(!detachedT
 const originalStartLive=startLivePolling;startLivePolling=function(){originalStartLive();if(detachedTracking){clearInterval(liveTimer);liveTimer=setInterval(pollLive,5000)}};
 const originalEnterApp=enterApp;enterApp=async function(){
   document.body.classList.toggle('tracking-detached',detachedTracking);
-  const date=document.getElementById('trackingDate');date.value=localDate();date.max=localDate();
+  const date=document.getElementById('trackingDate');date.value=localDate();date.max=localDate();trackingDateToday=localDate();
   if(detachedTracking){document.querySelector('.brand-sub').textContent='Suivi détaillé des pointages';document.getElementById('detachTracking').hidden=true}
   await originalEnterApp();if(detachedTracking){stopScanner();window.PointeurFacial?.stop?.()}
 };

@@ -85,7 +85,14 @@ def collection_policy(name: str) -> LegacyCollectionPolicy:
     return LegacyCollectionPolicy(LegacyAccess.DISABLED, LegacyAccess.DISABLED, frozenset())
 
 
-def user_legacy_modules(user) -> frozenset[str]:
+# Le terminal terrain (rôle ou clé de module « pointeur ») lit les collections OPS dont il a
+# besoin, mais n'écrit jamais par le pont legacy : ses pointages passent par les routes de
+# pointage (heure serveur, périmètre site, permission fine, auteur tracé). Sans cette règle,
+# l'alias pointeur → ops lui ouvrait l'écriture de présences antidatées et d'affectations.
+_READ_ONLY_ALIASES = frozenset({"pointeur"})
+
+
+def user_legacy_modules(user, *, write: bool = False) -> frozenset[str]:
     values = {
         str(value or "").strip().lower()
         for source in (getattr(user, "authorized_modules", None), getattr(user, "authorized_structures", None))
@@ -99,6 +106,8 @@ def user_legacy_modules(user) -> frozenset[str]:
         "dc": "commercial", "achats": "materiel", "stock": "materiel",
         "sg": "secretariat", "secretariat_general": "secretariat",
     }
+    if write:
+        aliases = {key: target for key, target in aliases.items() if key not in _READ_ONLY_ALIASES}
     values.add(aliases.get(role, role))
     values.update(aliases.get(value, value) for value in tuple(values))
     if role in {"admin", "adm", "adm1", "adm2"}:

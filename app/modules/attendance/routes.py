@@ -333,6 +333,33 @@ def correct(presence_id: int, payload: CorrectionIn, request: Request,
             "departure_time": row.departure_time, "closed": row.closed_at is not None}
 
 
+class ExitRegularizationIn(BaseModel):
+    exit_at: datetime
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/events/{event_id}/regularize-exit", status_code=201)
+def regularize_exit(event_id: int, payload: ExitRegularizationIn, request: Request,
+                    db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    """Régularisation d'un oubli de sortie (procédure explicite, motivée, tracée) : ajoute la
+    sortie manquante d'une arrivée restée ouverte. Aucune écriture rétroactive sur une journée
+    clôturée ; la permission renforcée « validate » est exigée dans ce cas."""
+    arrival = db.get(AttendanceEvent, event_id)
+    if arrival is None:
+        raise HTTPException(status_code=404, detail="Arrivée introuvable")
+    allowed = _allowed_assignment_site_ids(db, user)
+    if allowed is not None and (arrival.site_id is None or arrival.site_id not in set(allowed)):
+        raise HTTPException(status_code=404, detail="Arrivée introuvable")
+    _require_action(user, "update")
+    presence = core._presence_for(db, arrival.employee_id, arrival.presence_date)
+    if presence is not None and presence.closed_at is not None:
+        _require_action(user, "validate")
+    result = core.regularize_departure(db, arrival_event_id=event_id, exit_at=payload.exit_at, reason=payload.reason,
+                                       actor=user, request=request)
+    db.commit()
+    return result
+
+
 class CloseIn(BaseModel):
     presence_date: date
     site_id: int | None = None

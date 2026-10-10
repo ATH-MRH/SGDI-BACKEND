@@ -54,12 +54,17 @@ def _site_filter(stmt, column, site_ids):
     return stmt.where(column.in_(site_ids or [-1])) if site_ids is not None else stmt
 
 
-def _last_scan_by_employee(db: Session, employee_ids: set[int]) -> dict[int, AttendanceEvent]:
-    """Dernier ARRIVÉE / DÉPART de chaque employé (toutes sources, tous sites)."""
+def _last_scan_by_employee(db: Session, employee_ids: set[int], since: datetime) -> dict[int, AttendanceEvent]:
+    """Dernier ARRIVÉE / DÉPART de chaque employé (toutes sources, tous sites) depuis `since`
+    (UTC naïf). Chaque appelant choisit ses employés parmi ceux qui ont un passage depuis
+    `since` : leur dernier passage est donc toujours dans cette fenêtre, et le résultat est
+    identique à une lecture complète. Sans cette borne, tout l'historique de chaque employé
+    était relu à chaque relève (toutes les 2 s par poste)."""
     if not employee_ids:
         return {}
     rows = db.execute(select(AttendanceEvent).where(
         AttendanceEvent.employee_id.in_(employee_ids), AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)),
+        AttendanceEvent.occurred_at >= since,
     ).order_by(AttendanceEvent.employee_id, AttendanceEvent.occurred_at, AttendanceEvent.id)).scalars().all()
     last: dict[int, AttendanceEvent] = {}
     for row in rows:
@@ -85,7 +90,7 @@ def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None)
     entries = sum(1 for e in events if e.event_type == EVENT_ARRIVAL and e.presence_date == today)
     exits = sum(1 for e in events if e.event_type == EVENT_DEPARTURE and e.occurred_at >= start_utc)
     candidate_ids = {e.employee_id for e in events if e.event_type == EVENT_ARRIVAL}
-    last = _last_scan_by_employee(db, candidate_ids)
+    last = _last_scan_by_employee(db, candidate_ids, min(window, start_utc))
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({e.site_id for e in last.values() if e.site_id}))).scalars()} if last else {}
     present = sum(1 for emp_id, e in last.items() if _is_present(e, now_local, sites)
                   and (site_ids is None or e.site_id in site_ids))
@@ -236,10 +241,11 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
     sites = {site_id: site} if site is not None else {}
 
     # Présents : dernier passage = ARRIVÉE encore dans son cycle ouvert — UNE ligne par employé.
+    recent_since = core.to_utc_naive(local - core.OPEN_24H_CYCLE_MAX)
     recent = db.execute(select(AttendanceEvent).where(
         AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)), AttendanceEvent.site_id == site_id,
-        AttendanceEvent.occurred_at >= core.to_utc_naive(local - core.OPEN_24H_CYCLE_MAX))).scalars().all()
-    last = _last_scan_by_employee(db, {e.employee_id for e in recent if e.event_type == EVENT_ARRIVAL})
+        AttendanceEvent.occurred_at >= recent_since)).scalars().all()
+    last = _last_scan_by_employee(db, {e.employee_id for e in recent if e.event_type == EVENT_ARRIVAL}, recent_since)
     present = {emp_id: e for emp_id, e in last.items() if e.site_id == site_id and _is_present(e, local, sites)}
 
     expected_ids: set[int] = set()
@@ -400,7 +406,7 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
     else:
         events = db.execute(stmt.where(AttendanceEvent.id > after_id).order_by(AttendanceEvent.id).limit(MAX_EVENTS)).scalars().all()
     employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_({e.employee_id for e in events}))).scalars()} if events else {}
-    current = _last_scan_by_employee(db, set(employees))
+    current = _last_scan_by_employee(db, set(employees), min(e.occurred_at for e in events)) if events else {}
     site_rows = {e.site_id for e in events if e.site_id} | {e.site_id for e in current.values() if e.site_id}
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_(site_rows))).scalars()} if site_rows else {}
     from app.modules.auth.models import AuditEvent

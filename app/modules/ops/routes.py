@@ -568,9 +568,21 @@ def create_daily_presence(payload: DailyPresenceCreate, request: Request, db: Se
 
     if payload.site_id:
         _ensure_site_allowed(db, user, payload.site_id)
+    elif _authorized_site_ids(user):
+        # Compte restreint à des sites : sans site, la présence échapperait à tout contrôle.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site obligatoire pour ce compte")
     employee = db.get(Employee, payload.employee_id)
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
+    # L'employé appartient au périmètre société du compte : la société n'est jamais déduite du
+    # site envoyé (un site autorisé ne donne pas accès aux employés d'une autre société).
+    _ensure_society_allowed(user, employee.society)
+    restricted_sites = _authorized_site_ids(user)
+    if restricted_sites and db.execute(
+        select(Assignment.id).where(Assignment.employee_id == employee.id, Assignment.active == 1,
+                                    Assignment.site_id.in_(restricted_sites)).limit(1)
+    ).first() is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employé hors du périmètre de sites de ce compte")
     row = attendance_core.record_day_status(
         db, employee=employee, site_id=payload.site_id, day=payload.presence_date, status=payload.status,
         source=SOURCE_MANUAL, actor=user, arrival_time=payload.arrival_time,

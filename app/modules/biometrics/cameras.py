@@ -110,6 +110,11 @@ class CameraAdapter:
         return result
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401, ARG002
+        raise urllib.error.HTTPError(req.full_url, code, "Redirection refusée", headers, fp)
+
+
 class DahuaCameraAdapter(CameraAdapter):
     """API HTTP Dahua : instantané /cgi-bin/snapshot.cgi (authentification Digest) ; flux RTSP
     /cam/realmonitor?channel=N&subtype=0 (principal) ou 1 (sous-flux)."""
@@ -120,7 +125,9 @@ class DahuaCameraAdapter(CameraAdapter):
         username, password = self._credentials()
         manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
         manager.add_password(None, url, username, password)
-        opener = urllib.request.build_opener(urllib.request.HTTPDigestAuthHandler(manager),
+        # Aucune redirection suivie : la caméra répond elle-même, ou la lecture échoue. Une
+        # redirection enverrait la requête (et ses identifiants) vers une autre destination.
+        opener = urllib.request.build_opener(_NoRedirect(), urllib.request.HTTPDigestAuthHandler(manager),
                                              urllib.request.HTTPBasicAuthHandler(manager))
         try:
             with opener.open(url, timeout=TIMEOUT) as response:
