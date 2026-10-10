@@ -35,7 +35,13 @@
         }
       ],
       "expo-sharing",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#0E2747"
+        }
+      ]
     ],
     "scheme": "iron-recruitment"
   }

@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CandidateSessionProvider } from '../lib/candidate-session';
 import { FavoritesProvider } from '../lib/favorites';
 import { ServerProvider } from '../lib/server';
+import { PushProvider } from '../lib/push';
 import { SessionProvider } from '../lib/session';
 import { SummaryProvider } from '../lib/summary';
 import { stackOptions } from '../components/tab-stack';
@@ -24,12 +25,14 @@ export default function Layout() {
           <CandidateSessionProvider>
             <FavoritesProvider>
               <SummaryProvider>
-                <StatusBar style="dark" />
-                <Stack screenOptions={stackOptions}>
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen name="login" options={{ title: 'Accès administration' }} />
-                  <Stack.Screen name="staff" options={{ title: 'Espace RH' }} />
-                </Stack>
+                <PushProvider>
+                  <StatusBar style="dark" />
+                  <Stack screenOptions={stackOptions}>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="login" options={{ title: 'Accès administration' }} />
+                    <Stack.Screen name="staff" options={{ title: 'Espace RH' }} />
+                  </Stack>
+                </PushProvider>
               </SummaryProvider>
             </FavoritesProvider>
           </CandidateSessionProvider>

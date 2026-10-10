@@ -15,8 +15,7 @@ export default function Opportunities() {
   const { items, remove } = useFavorites();
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: '' }} />
-      <Text accessibilityRole="header" style={styles.title}>Mes opportunités</Text>
+      <Stack.Screen options={{ title: 'Mes opportunités' }} />
       <Text accessibilityRole="header" style={styles.heading}>{`Offres enregistrées (${items.length})`}</Text>
       {!items.length ? <Card><EmptyState icon="bookmark" title="Aucune offre enregistrée" text="Touchez le signet d’une offre pour la retrouver ici. Vos favoris restent sur ce téléphone." action="Explorer les offres" onAction={() => router.navigate('/offers')} /></Card>
         : items.map(item => (

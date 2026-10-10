@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
 import { StateBadge, Stepper } from '../../../components/application-state';
 import { CvCard } from '../../../components/cv-card';
 import { Icon } from '../../../components/icon';
@@ -34,7 +34,7 @@ export default function ApplicationScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>{data.kind === 'offer' ? 'CANDIDATURE À UNE OFFRE' : 'CANDIDATURE SPONTANÉE'}</Text>
-      <Text accessibilityRole="header" style={[styles.title, { marginTop: -8 }]}>{data.offer?.title || data.position}</Text>
+      <Stack.Screen options={{ title: data.offer?.title || data.position || '' }} />
       {!!data.offer && <Text style={[styles.subtitle, { marginTop: -8 }]}>{[data.offer.company.name, data.offer.wilaya, data.offer.contract_type].filter(Boolean).join(' · ')}</Text>}
       <Card>
         <Fact label="Référence" value={data.reference} selectable />

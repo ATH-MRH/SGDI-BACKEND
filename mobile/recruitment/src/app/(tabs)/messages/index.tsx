@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SessionGate } from '../../../components/session-gate';
 import { Card, colors, EmptyState, ErrorState, fonts, Loading, Monogram, Screen, shadow, styles } from '../../../components/ui';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { Conversation, logoUri, messageTime } from '../../../lib/emploi';
+import { Conversation, messageTime } from '../../../lib/emploi';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
 
@@ -35,7 +35,7 @@ function List() {
             <Pressable key={item.application_id} accessibilityRole="button"
               accessibilityLabel={`${item.title}${item.unread ? `, ${item.unread} message${item.unread > 1 ? 's' : ''} non lu${item.unread > 1 ? 's' : ''}` : ''}`}
               onPress={() => router.push({ pathname: '/messages/[id]', params: { id: String(item.application_id) } })} style={({ pressed }) => [row.box, pressed && { opacity: 0.85 }]}>
-              <Monogram name={item.company?.name || 'IRON Emploi'} uri={item.company ? logoUri(item.company) : null} size={46} round />
+              <Monogram name={item.company?.name || 'IRON Emploi'} size={46} round />
               <View style={{ flex: 1, gap: 2 }}>
                 <View style={row.head}>
                   <Text style={[row.title, item.unread > 0 && { fontFamily: fonts.bold }]} numberOfLines={1}>{item.title}</Text>

@@ -33,19 +33,35 @@ Les offres et les entreprises se consultent sans connexion. L'identification par
 - **Polices embarquées** (licence SIL OFL) : Source Serif 4 pour les titres, Noto Sans pour le texte. Elles sont chargées au démarrage, identiques sur iOS et Android.
 - **Styles partagés** : couleurs, typographies, cartes, boutons, pastilles et filtres sont définis dans `src/components/ui.tsx`.
 - **Icônes** vectorielles dessinées pour l'application (`src/components/icon.tsx`), aucune police d'icônes, aucun emoji.
-- **Photographies** : trois images d'illustration sous licence CC0, documentées dans `assets/photos/SOURCES.md`. Ce ne sont pas des bâtiments du groupe. La planche montre un agent de sécurité de dos ; faute de photographie libre équivalente, la bannière des offres montre des bâtiments.
-- **Logos** : ceux des sociétés sont servis par le serveur ; à défaut, des initiales. Aucun logo n'est inventé.
+- **Illustrations** : trois images générées par IA (agent de sécurité de dos, équipe devant un immeuble, poste de surveillance), sans logo ni personne réelle ; origine et droits dans `assets/photos/SOURCES.md`. Elles ne représentent aucun site du groupe.
+- **Identité** : les pages société et les conversations portent le monogramme IRON EMPLOI (bleu marine et doré). Aucun logo officiel n'est reproduit ni inventé.
+- **Retour** : sur les écrans secondaires, la flèche est sur la ligne du titre, comme sur la planche (`src/components/tab-stack.tsx`).
 
 ## Notifications
 
 Les notifications dans l'application sont réelles : elles sont créées par le serveur (réception, changement d'état, message, entretien, offre correspondant à une alerte) et relues à l'ouverture et toutes les minutes.
 
-Les notifications **push** ne sont pas activées. Ce qui existe : l'enregistrement d'un appareil et les préférences par famille côté serveur, un relais vers le service push d'Expo désactivé par défaut (`RECRUITMENT_PUSH_ENABLED`), et l'écran de préférences. Ce qui manque pour les activer :
+Dans « Votre espace emploi », chaque notification tient sur deux lignes ; la toucher ouvre son détail, avec un bouton vers l'écran concerné.
 
-1. le module `expo-notifications` et une version installable de l'application (Expo Go ne reçoit pas de push distant sur Android) ;
-2. un projet EAS (`projectId`) ;
-3. les identifiants Firebase (Android) et APNs (iOS) du compte développeur ;
-4. un essai réel sur iPhone et Samsung.
+### Notifications push
+
+Ce qui est en place :
+
+- le module `expo-notifications` et son réglage dans `app.json` ;
+- `src/lib/push.tsx` : demande d'autorisation (depuis Paramètres, jamais d'office), canal Android, enregistrement du jeton auprès du serveur, relecture des pastilles à la réception, ouverture de l'écran concerné quand la notification est touchée, désinscription de ce téléphone à la déconnexion ;
+- côté serveur : appareils, préférences par famille, relais vers le service Expo, désactivé tant que `RECRUITMENT_PUSH_ENABLED` n'est pas à `true`.
+
+Ce qui manque pour les activer — **aucun envoi réel n'a encore été essayé** :
+
+| Élément | Où le créer | Où le déposer |
+|---|---|---|
+| Projet EAS (`projectId`) | `npx eas-cli@latest init`, avec le compte Expo de l'éditeur | `app.json` → `extra.eas.projectId` (ce n'est pas un secret) |
+| Android — clé FCM V1 | Console Firebase : projet, application Android `com.irongs.recruitment`, puis compte de service | `google-services.json` référencé par `android.googleServicesFile` ; clé du compte de service envoyée à Expo par `eas credentials`, jamais dans Git |
+| iOS — clé APNs | Compte Apple Developer (payant), identifiant `com.irongs.recruitment` avec « Push Notifications » | Gérée par `eas credentials` ; rien dans Git |
+| Version installable | `eas build` (Expo Go ne reçoit pas de push distant) | Téléphones d'essai |
+| Ouverture côté serveur | `RECRUITMENT_PUSH_ENABLED=true` sur le serveur de recette d'abord | Variables du serveur |
+
+Tant qu'un élément manque, l'écran Paramètres dit lequel (Expo Go, simulateur, configuration absente, autorisation refusée) au lieu d'afficher un faux état actif.
 
 ## Serveur
 
@@ -93,11 +109,24 @@ npx expo export --platform ios --platform android
 
 ## Tester sur un téléphone
 
-### Sans installation (Expo Go)
+### Environnement d'essai local (iPhone et Samsung, Expo Go)
 
-1. Installer **Expo Go** depuis l'App Store (iPhone) ou le Play Store (Samsung).
-2. Sur le Mac, dans `mobile/recruitment` : `npm ci` puis `npx expo start`.
-3. Le téléphone et le Mac sur le même Wi-Fi : scanner le QR code (appareil photo sur iPhone, Expo Go sur Samsung).
+Un serveur local, une base PostgreSQL isolée et des données fictives ; rien ne touche la production ni SMSGate. Il faut la copie de travail du serveur (branche `feat/iron-emploi`) à côté de celle-ci, ou son chemin dans `ATLAS_BACKEND`.
+
+```sh
+sh scripts/test-env/start-backend.sh   # base, migrations, annonces et candidat fictifs, serveur sur le Wi-Fi
+sh scripts/test-env/start-app.sh       # application reliée à ce serveur, QR code à scanner
+sh scripts/test-env/sms-code.sh        # affiche le code demandé dans l'application
+sh scripts/test-env/stop.sh            # arrêt ; « --effacer » supprime aussi la base et les fichiers
+```
+
+1. Installer **Expo Go** (App Store, Play Store). Téléphones et Mac sur le même Wi-Fi.
+2. Scanner le QR code : appareil photo sur iPhone, Expo Go sur Samsung.
+3. Pour s'identifier, saisir n'importe quel numéro algérien fictif, par exemple `0770 12 34 56` (candidat déjà pourvu de candidatures, messages et entretien), puis lancer `sms-code.sh` sur le Mac et recopier le code.
+
+**Pourquoi aucun SMS n'arrive** : dans cet environnement le serveur est réglé sur le fournisseur `poll`. Il ne contacte ni SMSGate ni un opérateur ; il met le message en file pour une passerelle, et `sms-code.sh` joue cette passerelle avec une clé tirée au hasard, valable pour cette base seulement. Le code reste vérifié par le serveur, avec ses limites d'essais et de durée. En production le fournisseur est SMSGate : cette file n'y est pas servie et la clé locale n'y existe pas.
+
+Les secrets locaux, les journaux et les pièces déposées vont dans `.test-env/`, ignoré par Git. L'espace recruteur de cet environnement est à `http://<adresse-du-Mac>:8765/static/recrute.html` (identifiants dans `.test-env/env`).
 
 Si Expo Go refuse le projet (version de SDK différente), utiliser une version installable.
 
@@ -118,7 +147,7 @@ Aucun binaire n'a été produit ni publié par ce dépôt.
 ## Limites connues
 
 - Aucun essai n'a eu lieu sur un iPhone ou un Samsung : la revue visuelle s'est faite dans l'aperçu web (320, 375, 390 et 430 points de large).
-- Notifications push non activées (voir plus haut). « En ligne » n'est jamais affiché dans les messages : la présence n'est pas mesurée.
+- Notifications push préparées mais non activées et jamais essayées en réel (voir plus haut). « En ligne » n'est jamais affiché dans les messages : la présence n'est pas mesurée.
 - Les messages n'acceptent pas de pièce jointe ; les pièces demandées se déposent depuis le détail de la candidature.
 - Un même numéro de téléphone ne peut ouvrir qu'un espace, sous le nom utilisé à la première inscription.
 - Les dates se saisissent au format AAAA-MM-JJ.

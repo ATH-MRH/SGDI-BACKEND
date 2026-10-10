@@ -1,6 +1,6 @@
 // Contrat de l'API IRON Emploi (/api/public/emploi) et conversions profil <-> formulaire.
 // Aucun import React Native ici : ce module est testé tel quel par `npm test`.
-import { ORIGIN, request } from './api.ts';
+import { request } from './api.ts';
 
 export type Company = { id: number; name: string; sector: string | null; city: string | null; logo_url: string | null };
 export type CompanySummary = Company & { open_offers: number };
@@ -64,7 +64,6 @@ export const fetchOffer = (id: number, signal?: AbortSignal) => request<OfferDet
 export const fetchCompany = (id: number, signal?: AbortSignal) => request<CompanyDetail>(`/public/emploi/companies/${id}`, { signal });
 
 /** Les logos sont des fichiers de marque servis par le serveur ; rien d'autre n'est chargé. */
-export const logoUri = (company: Pick<Company, 'logo_url'>) => company.logo_url && company.logo_url.startsWith('/static/') ? ORIGIN + company.logo_url : null;
 
 export function initials(name: string): string {
   const words = name.replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean);
@@ -238,6 +237,33 @@ export function notificationTarget(item: Pick<AppNotification, 'kind' | 'applica
   if (item.kind === 'offer' && item.offer_id) return { pathname: '/offers/[id]', params: { id: String(item.offer_id) } };
   if (item.application_id) return { pathname: '/applications/[id]', params: { id: String(item.application_id) } };
   return { pathname: '/applications' };
+}
+
+export type PushStatus = 'unsupported' | 'expo-go' | 'simulator' | 'unconfigured' | 'idle' | 'denied' | 'registered' | 'error';
+/** Ce qui empêche les notifications push sur cet appareil, avant toute demande d'autorisation. */
+export function pushProblem(env: { os: string; expoGo: boolean; physical: boolean; projectId?: string }): PushStatus | null {
+  if (env.os !== 'ios' && env.os !== 'android') return 'unsupported';
+  if (env.expoGo) return 'expo-go';
+  if (!env.physical) return 'simulator';
+  return env.projectId ? null : 'unconfigured';
+}
+export const PUSH_TEXT: Record<PushStatus, string> = {
+  unsupported: 'Les notifications push ne sont pas disponibles dans cet aperçu.',
+  'expo-go': 'Les notifications push demandent l’application installée : elles ne fonctionnent pas dans Expo Go.',
+  simulator: 'Les notifications push demandent un vrai téléphone.',
+  unconfigured: 'Les notifications push ne sont pas encore configurées pour cette version de l’application.',
+  idle: 'Les notifications push ne sont pas activées sur ce téléphone.',
+  denied: 'Les notifications sont refusées pour IRON Emploi dans les réglages du téléphone. Autorisez-les dans les réglages pour les recevoir.',
+  registered: 'Ce téléphone est enregistré pour les notifications push.',
+  error: 'L’enregistrement de ce téléphone n’a pas abouti. Réessayez plus tard.',
+};
+
+/** Libellé du bouton qui mène de la notification à l'écran concerné. */
+export function notificationLabel(item: Pick<AppNotification, 'kind' | 'application_id' | 'offer_id'>): string {
+  if (item.kind === 'message' && item.application_id) return 'Ouvrir la conversation';
+  if (item.kind === 'interview') return 'Voir mes entretiens';
+  if (item.kind === 'offer' && item.offer_id) return 'Voir l’offre';
+  return item.application_id ? 'Voir la candidature' : 'Voir mes candidatures';
 }
 
 export type TipSection = { heading: string; points: string[] };

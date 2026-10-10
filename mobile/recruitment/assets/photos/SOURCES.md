@@ -1,15 +1,15 @@
-# Photographies de l’application
+# Illustrations de l’application
 
-Photographies d’illustration, sans lien avec IRON GLOBAL : aucun de ces bâtiments n’est un site du groupe et l’application ne les présente jamais comme tels.
+Images d’illustration **générées par intelligence artificielle** (outil de génération d’images de Canva, compte de l’éditeur, le 10 octobre 2026). Elles ne montrent aucune personne réelle, aucun site ni aucun uniforme d’IRON GLOBAL, et l’application ne les présente jamais comme tels : pas de logo, pas d’insigne, pas de texte lisible, visages non visibles.
 
-Toutes proviennent de Wikimedia Commons, sous licence CC0 (domaine public, sans obligation d’attribution). Elles sont redimensionnées à 1 400 pixels de large et compressées (JPEG).
+Elles sont exportées à 1 920 pixels de large, puis réduites à 1 600 pixels et compressées (JPEG).
 
-| Fichier | Usage | Titre d’origine | Licence | Source |
-|---|---|---|---|---|
-| `accueil.jpg` (205 Ko) | Bannière de l’accueil | Highrise beach apartments (Unsplash).jpg | CC0 | <https://commons.wikimedia.org/wiki/File:Highrise_beach_apartments_(Unsplash).jpg> |
-| `societe.jpg` (304 Ko) | Bannière des pages société | Hotel and palm trees (Unsplash).jpg | CC0 | <https://commons.wikimedia.org/wiki/File:Hotel_and_palm_trees_(Unsplash).jpg> |
-| `offre.jpg` (329 Ko) | Bannière des offres et vignette de candidature | Skyscrapers by railway station (Unsplash).jpg | CC0 | <https://commons.wikimedia.org/wiki/File:Skyscrapers_by_railway_station_(Unsplash).jpg> |
+| Fichier | Usage | Contenu | Origine |
+|---|---|---|---|
+| `accueil.jpg` (4:3) | Bannière de l’accueil | Trois professionnels de dos (sécurité, logistique, entretien) devant un immeuble blanc et des palmiers | Image générée, Canva |
+| `offre.jpg` (16:9) | Bannière des offres et vignette de candidature | Agent de sécurité de dos devant un immeuble vitré | Image générée, Canva |
+| `societe.jpg` (16:9) | Bannière des pages société | Deux opérateurs de dos devant un mur d’écrans | Image générée, Canva |
 
-Pour remplacer une photographie par une image officielle du groupe, déposer un fichier du même nom dans ce dossier.
+Droits : les images générées dans Canva sont utilisables par le titulaire du compte selon les conditions d’utilisation de Canva applicables aux contenus générés par IA. À faire vérifier par l’éditeur avant la mise en ligne sur les stores, comme toute image.
 
-La planche de référence montre un agent de sécurité de dos : aucune photographie libre de droits équivalente n’a été retenue, la bannière des offres utilise donc une vue de bâtiments.
+Pour remplacer une illustration par une photographie officielle du groupe, déposer un fichier du même nom dans ce dossier.

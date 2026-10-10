@@ -42,3 +42,6 @@ yarn-error.*
 
 # Le dépôt parent ignore tous les package-lock.json ; celui-ci fige les versions de l'application.
 !package-lock.json
+
+# Environnement d'essai local (secrets tirés au hasard, journaux, pièces)
+.test-env/

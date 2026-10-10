@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, Stack, useLocalSearchParams } from 'expo-router';
 import { Button, Card, Chip, ErrorState, ErrorText, Loading, styles } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
@@ -55,7 +55,7 @@ function Editor({ facets, existing }: { facets: Facets; existing?: JobAlert }) {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text accessibilityRole="header" style={styles.title}>{existing ? 'Modifier l’alerte' : 'Créer une alerte'}</Text>
+      <Stack.Screen options={{ title: existing ? 'Modifier l’alerte' : 'Créer une alerte' }} />
       <Text style={styles.subtitle}>Vous recevez une notification dans l’application lorsqu’une nouvelle offre correspond à tous les critères choisis.</Text>
       {groups.map(group => (
         <View key={group.key} style={{ gap: 10 }}>

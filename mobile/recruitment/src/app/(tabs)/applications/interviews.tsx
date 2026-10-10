@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 import { Icon } from '../../../components/icon';
 import { Badge, Button, Card, colors, EmptyState, ErrorState, ErrorText, fonts, Loading, Segmented, shadow, styles, Tone } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
@@ -46,7 +46,7 @@ export default function Interviews() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text accessibilityRole="header" style={styles.title}>Mes entretiens</Text>
+      <Stack.Screen options={{ title: 'Mes entretiens' }} />
       <Segmented value={tab} onChange={setTab} options={[{ value: 'upcoming', label: `À venir (${upcoming.length})` }, { value: 'past', label: `Passés (${past.length})` }]} />
       <ErrorText message={error} />
       {!shown.length ? <Card><EmptyState icon="calendar" title={tab === 'upcoming' ? 'Aucun entretien à venir' : 'Aucun entretien passé'} text={tab === 'upcoming' ? 'Lorsqu’un recruteur vous propose un entretien, il apparaît ici et vous recevez une notification.' : undefined} /></Card>

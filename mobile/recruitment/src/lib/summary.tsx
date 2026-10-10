@@ -16,7 +16,7 @@ export function SummaryProvider({ children }: { children: ReactNode }) {
     if (!active) return;
     const controller = new AbortController();
     call<Summary>('/public/emploi/summary', { signal: controller.signal }).then(setLoaded).catch(() => {});
-    // Relecture périodique tant que l'application est ouverte : il n'y a pas de push dans cette version.
+    // Relecture périodique tant que l'application est ouverte : le push, quand il est actif, ne fait qu'accélérer cette relecture.
     const timer = setInterval(() => setTick(value => value + 1), 60000);
     return () => { controller.abort(); clearInterval(timer); };
   }, [active, call, tick]);

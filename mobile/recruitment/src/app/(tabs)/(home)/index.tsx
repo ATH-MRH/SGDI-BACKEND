@@ -26,7 +26,7 @@ export default function Home() {
         {/* Photographie d'illustration (voir assets/photos/SOURCES.md) : ce n'est pas un bâtiment du groupe. */}
         <View style={home.hero}>
           <Image accessibilityIgnoresInvertColors source={require('../../../../assets/photos/accueil.jpg')} resizeMode="cover" style={home.photo} />
-          <LinearGradient colors={['rgba(255,255,255,0.86)', 'rgba(255,255,255,0.62)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.3)', '#FFFFFF']} locations={[0, 0.22, 0.42, 0.6, 0.9]} style={home.fade} />
+          <LinearGradient colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.2)', '#FFFFFF']} locations={[0, 0.2, 0.38, 0.62, 0.9]} style={home.fade} />
           <SafeAreaView edges={['top', 'left', 'right']} style={home.heroInner}>
             <View style={home.topRow}>
               <View style={{ flex: 1 }}>
@@ -91,7 +91,7 @@ const home = StyleSheet.create({
   hero: { height: 300, backgroundColor: colors.white, overflow: 'hidden' }, photo: { position: 'absolute', top: 0, left: 0, width: '100%', height: 250 },
   fade: { position: 'absolute', top: 0, left: 0, right: 0, height: 300 }, heroInner: { flex: 1, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6, justifyContent: 'space-between' },
   topRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  brand: { color: colors.navy, fontSize: 30, fontFamily: fonts.serif, letterSpacing: 0.8 }, brandLight: { fontFamily: fonts.serifSemi }, tagline: { color: colors.gold, fontSize: 15.5, fontFamily: fonts.medium, marginTop: 1 },
+  brand: { color: colors.navy, fontSize: 30, fontFamily: fonts.serif, letterSpacing: 0.8 }, brandLight: { fontFamily: fonts.serifSemi }, tagline: { color: colors.goldDeep, fontSize: 15.5, fontFamily: fonts.medium, marginTop: 1 },
   round: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center', ...shadow },
   dot: { position: 'absolute', top: 8, right: 9, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.gold, borderWidth: 1.5, borderColor: colors.white },
   headline: { color: colors.navy, fontSize: 30, lineHeight: 35, fontFamily: fonts.serif },

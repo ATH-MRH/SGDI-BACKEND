@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TextInputProps, useWindowDimensions, View, ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, IconName } from './icon';
 import { initials } from '../lib/emploi';
 
@@ -22,10 +23,12 @@ export const shadow: ViewStyle = Platform.select({
 }) as ViewStyle;
 
 export function Page({ title, subtitle, children }: {title: string; subtitle?: string; children: React.ReactNode}) {
+  const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-        <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}>
+      {/* Le titre est porté par l'en-tête, sur la ligne de la flèche de retour. */}
+      <Stack.Screen options={{ title }} />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingTop: 8 }]}>
         {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         {children}
       </ScrollView>

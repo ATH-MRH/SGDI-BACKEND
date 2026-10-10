@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../../../../components/icon';
 import { OfferMeta } from '../../../../components/offer-card';
 import { Card, colors, EmptyState, ErrorState, FloatingButton, fonts, JobIcon, Loading, Monogram, shadow, styles } from '../../../../components/ui';
-import { fetchCompany, jobIcon, logoUri } from '../../../../lib/emploi';
+import { fetchCompany, jobIcon } from '../../../../lib/emploi';
 import { useLoad } from '../../../../lib/use-load';
 
 const back = () => (router.canGoBack() ? router.back() : router.replace('/offers'));
@@ -39,7 +39,7 @@ export default function CompanyScreen() {
       </View>
       <View style={page.body}>
         <View style={page.identity}>
-          <View style={page.logo}><Monogram name={data.name} uri={logoUri(data)} size={64} /></View>
+          <View style={page.logo}><Monogram name={data.name} size={64} /></View>
           <View style={{ flex: 1, paddingTop: 26 }}>
             <Text accessibilityRole="header" style={page.name}>{data.name}</Text>
             {!!data.sector && <Text style={page.sector}>{data.sector}</Text>}

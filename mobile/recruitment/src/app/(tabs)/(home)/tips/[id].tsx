@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Button, Card, colors, EmptyState, fonts, styles } from '../../../../components/ui';
 import { findTip } from '../../../../lib/tips';
 
@@ -9,7 +9,7 @@ export default function TipScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>CONSEIL · CONTENU ÉDITORIAL · {tip.minutes} MIN</Text>
-      <Text accessibilityRole="header" style={styles.title}>{tip.title}</Text>
+      <Stack.Screen options={{ title: tip.title }} />
       <Text style={styles.subtitle}>{tip.summary}</Text>
       {tip.sections.map(section => (
         <Card key={section.heading}>

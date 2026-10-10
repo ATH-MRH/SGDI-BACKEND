@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HEADER_HEIGHT } from '../../../components/tab-stack';
 import { Icon } from '../../../components/icon';
 import { colors, EmptyState, ErrorState, fonts, Loading, Monogram, styles } from '../../../components/ui';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { ChatMessage, logoUri, messageTime, newRequestId, Thread } from '../../../lib/emploi';
+import { ChatMessage, messageTime, newRequestId, Thread } from '../../../lib/emploi';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
 
@@ -16,6 +17,7 @@ export default function ThreadScreen() {
   const id = Number(useLocalSearchParams<{ id: string }>().id);
   const { call, session, ready } = useCandidateSession();
   const { refresh } = useSummary();
+  const insets = useSafeAreaInsets();
   const thread = useLoad(signal => call<Thread>(`/public/emploi/applications/${id}/messages`, { signal }), `thread:${id}`, !!session && Number.isFinite(id));
   const [draft, setDraft] = useState(''), [outgoing, setOutgoing] = useState<Outgoing[]>([]);
   const list = useRef<FlatList<ChatMessage | Outgoing>>(null);
@@ -55,11 +57,11 @@ export default function ThreadScreen() {
     <SafeAreaView style={styles.page} edges={['bottom', 'left', 'right']}>
       <Stack.Screen options={{ headerTitle: () => (
         <View style={chat.header}>
-          <Monogram name={data.company?.name || 'IRON Emploi'} uri={data.company ? logoUri(data.company) : null} size={34} round />
+          <Monogram name={data.company?.name || 'IRON Emploi'} size={34} round />
           <View style={{ flexShrink: 1 }}><Text style={chat.headerTitle} numberOfLines={1}>Équipe recrutement</Text><Text style={chat.headerSub} numberOfLines={1}>{data.title}</Text></View>
         </View>
       ) }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + HEADER_HEIGHT + 8 : 0}>
         <FlatList ref={list} data={rows} keyExtractor={item => 'id' in item ? `m${item.id}` : `o${item.client_id}`} contentContainerStyle={chat.list}
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })} keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<EmptyState icon="chat" title="Aucun message" text="Écrivez au service recrutement au sujet de cette candidature. La réponse arrive ici." />}

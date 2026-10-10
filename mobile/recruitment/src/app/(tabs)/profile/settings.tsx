@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ScrollView, Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { Button, Card, colors, ErrorText, Loading, Row, styles } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
 import { confirm } from '../../../lib/confirm';
-import { formatDate, PushSettings } from '../../../lib/emploi';
+import { formatDate, PUSH_TEXT, PushSettings } from '../../../lib/emploi';
+import { usePush } from '../../../lib/push';
 import { useLoad } from '../../../lib/use-load';
 import { useFavorites } from '../../../lib/favorites';
 import { useServer } from '../../../lib/server';
@@ -14,11 +15,11 @@ import { useServer } from '../../../lib/server';
 export default function Settings() {
   const { mode } = useServer();
   const { session, signOut, forget, call } = useCandidateSession();
-  const favorites = useFavorites();
+  const favorites = useFavorites(), push = usePush();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const home = () => { if (router.canDismiss()) router.dismissAll(); router.navigate('/'); };
 
-  async function logout() { setBusy(true); try { await signOut(); home(); } finally { setBusy(false); } }
+  async function logout() { setBusy(true); try { await push.unregister(); await signOut(); home(); } finally { setBusy(false); } }
   async function deleteSpace() {
     setBusy(true); setError('');
     try { await call('/public/emploi/me', { method: 'DELETE' }); await forget(); home(); }
@@ -28,6 +29,7 @@ export default function Settings() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      <Stack.Screen options={{ title: 'Paramètres' }} />
       <Card>
         <Text accessibilityRole="header" style={styles.heading}>Session</Text>
         {session ? (
@@ -76,7 +78,7 @@ export default function Settings() {
 const FAMILIES: [keyof PushSettings['push'], string][] = [['applications', 'Avancement de mes candidatures'], ['messages', 'Messages du recrutement'], ['interviews', 'Entretiens'], ['offers', 'Offres correspondant à mes alertes']];
 
 function Notifications() {
-  const { call } = useCandidateSession();
+  const { call } = useCandidateSession(), push = usePush();
   const settings = useLoad(signal => call<PushSettings>('/public/emploi/me/settings', { signal }), 'settings');
   const [error, setError] = useState('');
   const { setData } = settings;
@@ -99,9 +101,8 @@ function Notifications() {
               <Switch accessibilityLabel={`Notifications push : ${label}`} value={settings.data!.push[key]} onValueChange={value => toggle(key, value)} trackColor={{ true: colors.green, false: colors.border }} thumbColor={colors.white} />
             </View>
           ))}
-          <Text style={[styles.subtitle, { fontSize: 14 }]}>{settings.data.push_available && settings.data.devices > 0
-            ? 'Ces réglages s’appliquent aux notifications push de ce téléphone.'
-            : 'Les notifications push (hors de l’application) ne sont pas encore activées. Ces préférences sont enregistrées et s’appliqueront à leur mise en service.'}</Text>
+          <Text style={[styles.subtitle, { fontSize: 14 }]}>{PUSH_TEXT[push.status]}{push.status === 'registered' && !settings.data.push_available ? ' L’envoi n’est pas encore ouvert côté serveur : vos préférences s’appliqueront à sa mise en service.' : ''}</Text>
+          {push.status === 'idle' && <Button title="Activer les notifications sur ce téléphone" icon="bell" secondary busy={push.busy} onPress={push.enable} />}
         </>
       )}
       <ErrorText message={error} />

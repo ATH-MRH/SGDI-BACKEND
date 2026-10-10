@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {API, ApiError, ORIGIN, request} from '../src/lib/api.ts';
-import {activeFilterCount, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, logoUri, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
+import {activeFilterCount, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
 
 const response = (data, status = 200) => new Response(status === 204 ? null : JSON.stringify(data), {status});
 const identity = {first_name: 'Nadia', last_name: 'Test', phone: '+213551122334'};
@@ -98,8 +98,6 @@ test('affichage : texte du recruteur en lignes, dates, initiales, logos du serve
   assert.deepEqual(lines(''), []);
   assert.equal(formatDate('2026-11-02'), '2 nov. 2026'); assert.equal(formatDate('2026-10-13T10:00:00'), '13 oct. 2026'); assert.equal(formatDate(null), '');
   assert.equal(initials('IRON Global Sécurité'), 'IS'); assert.equal(initials('Nadia'), 'NA');
-  assert.equal(logoUri({logo_url: '/static/iron-securite-logo.png'}), 'https://recrute.irongs.com/static/iron-securite-logo.png');
-  assert.equal(logoUri({logo_url: 'https://ailleurs.example/logo.png'}), null); assert.equal(logoUri({logo_url: null}), null);
 });
 
 test('suivi : chaque candidature à une annonce a son état, une candidature spontanée suit le dossier', () => {
@@ -183,4 +181,22 @@ test('présentation : icône de métier, libellé d’alerte, conseil rédigé p
     [{heading: 'La veille', points: ['Relisez l’annonce', 'Préparez vos documents']}, {heading: 'Le jour même', points: ['Arrivez en avance']}]);
   assert.deepEqual(parseTipBody('- Idée sans titre'), [{heading: '', points: ['Idée sans titre']}]);
   assert.equal(fileSize(245 * 1024), '245 Ko'); assert.equal(fileSize(5 * 1048576), '5,0 Mo'); assert.equal(fileSize(10), '1 Ko');
+});
+
+test('notifications push : ce qui bloque est identifié avant toute demande d’autorisation', () => {
+  const phone = { os: 'ios', expoGo: false, physical: true, projectId: 'p' };
+  assert.equal(pushProblem(phone), null);
+  assert.equal(pushProblem({ ...phone, os: 'web' }), 'unsupported');
+  assert.equal(pushProblem({ ...phone, expoGo: true }), 'expo-go');
+  assert.equal(pushProblem({ ...phone, physical: false }), 'simulator');
+  assert.equal(pushProblem({ ...phone, projectId: undefined }), 'unconfigured');
+  for (const status of ['unsupported', 'expo-go', 'simulator', 'unconfigured', 'idle', 'denied', 'registered', 'error']) assert.ok(PUSH_TEXT[status]);
+});
+
+test('notification : le bouton du détail annonce l’écran ouvert', () => {
+  assert.equal(notificationLabel({ kind: 'message', application_id: 4, offer_id: null }), 'Ouvrir la conversation');
+  assert.equal(notificationLabel({ kind: 'interview', application_id: 4, offer_id: null }), 'Voir mes entretiens');
+  assert.equal(notificationLabel({ kind: 'offer', application_id: null, offer_id: 9 }), 'Voir l’offre');
+  assert.equal(notificationLabel({ kind: 'application', application_id: 4, offer_id: null }), 'Voir la candidature');
+  assert.equal(notificationLabel({ kind: 'application', application_id: null, offer_id: null }), 'Voir mes candidatures');
 });
