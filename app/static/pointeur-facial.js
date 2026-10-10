@@ -357,9 +357,9 @@
       const st = rowState(dev);
       return `<tr data-key="${esc(dev.key)}" class="${F.focusKey === dev.key ? "is-focus" : ""}">
         <td class="ft-check"><input type="checkbox" data-key="${esc(dev.key)}" aria-label="Sélectionner ${esc(dev.name)}"${F.selected.has(dev.key) ? " checked" : ""}></td>
-        <td><b>${esc(dev.name)}</b><small>${esc(dev.hardware || "")}${dev.location ? " · " + esc(dev.location) : ""}</small></td>
+        <td title="${esc(dev.hardware || "")}"><b>${esc(dev.name)}</b>${dev.location ? `<small>${esc(dev.location)}</small>` : ""}</td>
         <td>${esc(dev.site || "")}</td>
-        <td><span class="ft-state" data-tone="${st.tone}">${esc(st.label)}</span>${st.detail ? `<small>${esc(st.detail)}</small>` : ""}</td>
+        <td><span class="ft-state" data-tone="${st.tone}">${esc(st.label)}</span>${st.detail && st.detail !== st.label ? `<small>${esc(st.detail)}</small>` : ""}</td>
         <td class="ft-time">${esc(activity(dev))}</td></tr>`;
     }).join("");
     const states = F.devices.map((dev) => [dev, rowState(dev)]);

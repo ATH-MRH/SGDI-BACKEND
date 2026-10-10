@@ -53,7 +53,7 @@ test('liste des terminaux autorisés : Nom | Site | État | Sélection — rien 
   assert.equal(r.of('/pointer/terminals')[0].search, '', 'tous les sites autorisés du compte');
   assert.deepEqual([...r.d.querySelectorAll('.ft-table thead th')].map((th) => th.textContent.trim()), ['', 'Terminal', 'Site', 'État', 'Dernière activité']);
   assert.deepEqual(r.rows().map((x) => [x.key, x.cells[2], x.checked]), [['cam:7', 'SITE 12', false], ['cam:8', 'SITE 13', false], ['trm:3', 'SITE 12', false], ['trm:4', 'SITE 13', false]]);
-  assert.match(r.row('cam:7').cells[1], /CAM-7.*DAHUA IPC/); assert.match(r.row('cam:7').cells[3], /Disponible/);
+  assert.match(r.row('cam:7').cells[1], /CAM-7.*Entrée/); assert.equal(r.d.querySelector('#ftRows tr[data-key="cam:7"] td[title]').title, 'DAHUA IPC'); assert.match(r.row('cam:7').cells[3], /Disponible/);
   assert.match(r.row('trm:3').cells[3], /En ligne · au repos.*Terminal autonome/); assert.match(r.row('trm:4').cells[3], /Jamais connecté/);
   assert.equal(r.row('trm:4').cells[4], 'Jamais');
   assert.match(r.text('faceStatus'), /SÉLECTIONNEZ LES TERMINAUX/);
@@ -103,7 +103,7 @@ test('activation simultanée : chaque caméra a sa boucle ; la panne de l\'une n
   await wait(2300);
   assert.equal(r.of('/cameras/7/recognize').length, 1, 'caméra en panne : nouvel essai seulement après la temporisation');
   assert.ok(r.of('/cameras/8/recognize').length >= 2, 'l\'autre caméra continue à sa cadence');
-  assert.match(r.row('cam:7').cells[3], /Caméra inaccessible/); assert.match(r.row('cam:8').cells[3], /^Actif/);
+  assert.equal(r.row('cam:7').cells[3], 'Caméra inaccessible', 'libellé sans répétition'); assert.match(r.row('cam:8').cells[3], /^Actif/);
   assert.equal(r.count('ftCountSelected'), '2'); assert.equal(r.count('ftCountActive'), '1'); assert.equal(r.count('ftCountOffline'), '1');
   assert.notEqual(r.row('cam:8').cells[4], '—', 'dernière activité : heure réelle du dernier échange');
   assert.equal(r.F.runners.size, 2);

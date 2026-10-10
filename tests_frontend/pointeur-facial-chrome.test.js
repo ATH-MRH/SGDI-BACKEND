@@ -41,7 +41,13 @@ const PROBE = `
     rows:[...document.querySelectorAll('#ftRows tr')].map(tr=>[tr.dataset.key,tr.cells[3].innerText.replace(/\\s+/g,' ').trim(),tr.querySelector('input').checked]),
     counters:['ftCountSelected','ftCountActive','ftCountOffline'].map(id=>document.getElementById(id).textContent).join('/'),
     buttons:[...document.querySelectorAll('#faceView button')].filter(shown).map(b=>b.textContent.trim()),
-    perCamera:Object.fromEntries(Object.entries(perCamera)),status:document.getElementById('faceStatus').innerText.replace(/\\s+/g,' ').trim(),
+    perCamera:Object.fromEntries(Object.entries(perCamera)),
+    seen:(()=>{const card=document.getElementById('scannerCard').getBoundingClientRect();
+      const inside=el=>{if(!shown(el))return false;const r=el.getBoundingClientRect();return r.top>=card.top-1&&r.bottom<=Math.min(card.bottom,innerHeight)+1&&r.left>=card.left-1&&r.right<=card.right+1};
+      return {scroll:document.getElementById('scannerCard').scrollTop,toolbar:[...document.querySelectorAll('#faceTerminals .ft-btn')].every(inside),
+        counters:inside(document.getElementById('ftCountOffline')),status:inside(document.getElementById('faceStatus')),
+        rows:[...document.querySelectorAll('#ftRows tr')].filter(tr=>{const r=tr.getBoundingClientRect(),box=tr.closest('.ft-scroll').getBoundingClientRect();
+          return r.top>=Math.max(card.top,box.top)-1&&r.bottom<=Math.min(card.bottom,box.bottom,innerHeight)+1}).length}})(),status:document.getElementById('faceStatus').innerText.replace(/\\s+/g,' ').trim(),
     banner:shown(document.getElementById('shiftBanner')),kpis:document.querySelectorAll('#postKpis .v5-kpi').length,
     qrBits:['usbReader','reader','cameraModeBtn'].filter(id=>shown(document.getElementById(id))),pressed:document.getElementById('faceModeBtn').getAttribute('aria-pressed'),
     host:location.pathname,boxes:Object.fromEntries(['shiftBanner','postKpis','scannerCard','faceView'].map(id=>[id,box(id)])),
@@ -140,6 +146,11 @@ for (const width of WIDTHS) {
         assert.deepEqual(out.later.rows.map((r) => r[2]), [true, true, true]);
         assert.match(out.later.rows[0][1], /^Actif/); assert.match(out.later.rows[1][1], /^Actif/); assert.match(out.later.rows[2][1], /^Actif · au repos/);
         assert.equal(out.later.counters, '3/3/0', 'sélectionnés / actifs / hors ligne');
+        // Sélection et état visibles SANS défilement : barre d'actions, compteurs, résultat et lignes.
+        const seen = out.later.seen;
+        console.log(`# ${width}px — visibles sans défilement : ${JSON.stringify(seen)}`);
+        assert.equal(seen.scroll, 0); assert.ok(seen.toolbar && seen.counters && seen.status, `${width}px : ${JSON.stringify(seen)}`);
+        assert.ok(seen.rows >= (width >= 1024 ? 3 : 2), `${width}px : ${seen.rows} ligne(s) de terminal visible(s) sur 3`);
         assert.ok(out.after.perCamera['7'] >= 1 && out.after.perCamera['8'] >= 1, 'les deux caméras tournent en même temps');
         assert.ok(out.later.perCamera['7'] > out.after.perCamera['7'] && out.later.perCamera['8'] > out.after.perCamera['8'], 'chacune continue seule');
         assert.equal(out.after.preview, true, 'aperçu relayé affiché');

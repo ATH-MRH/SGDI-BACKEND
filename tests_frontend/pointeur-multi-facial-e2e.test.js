@@ -126,6 +126,12 @@ async function clickText(page, selector, text) {
   assert.fail(`bouton absent : ${selector} / ${text}`);
 }
 const b64u = (buffer) => Buffer.from(buffer).toString('base64url');
+// L'écran d'administration se redessine après chaque relecture : on attend l'élément puis on clique
+// dans la page (jamais sur une référence devenue obsolète).
+async function tap(page, selector) {
+  await page.waitForSelector(selector);
+  await page.evaluate((sel) => document.querySelector(sel).click(), selector);
+}
 
 // Tablette simulée : clé P-256 créée « sur l'appareil », requêtes signées comme le fait /borne.
 function makeDevice() {
@@ -159,6 +165,16 @@ test('Multi-terminaux faciaux — Administration Système puis Pointeur, Chrome 
   const cameras = {}, errors = [];
   const device = makeDevice();
   const watch = (page) => {
+    // Attentes par évaluations répétées depuis Node : une attente installée DANS la page
+    // (waitForFunction) peut rester sans réponse quand le shell d'administration se redessine.
+    page.waitForFunction = async (fn, options = {}, ...args) => {
+      const deadline = Date.now() + (options.timeout || 30000);
+      for (;;) {
+        if (await page.evaluate(fn, ...args).catch(() => false)) return;
+        if (Date.now() > deadline) throw new Error(`Waiting failed: ${options.timeout || 30000}ms exceeded`);
+        await delay(150);
+      }
+    };
     page.on('pageerror', (error) => errors.push(`${page.url()} — ${error.message}`));
     page.on('dialog', async (dialog) => { if (dialog.type() === 'prompt') await dialog.accept('Retrait après essai'); else await dialog.accept(); });
   };
@@ -210,8 +226,8 @@ test('Multi-terminaux faciaux — Administration Système puis Pointeur, Chrome 
     await admin.evaluate(() => { location.hash = '#/admin/terminaux-faciaux'; });
     await admin.waitForSelector('#admin-facial-terminals');
     assert.equal(await admin.evaluate(() => location.hash), '#/admin/terminaux-faciaux');
-    assert.equal(await admin.$$eval('[data-facial-row]', (rows) => rows.length), 3, 'les trois caméras déjà enregistrées');
-    await admin.click('#admin-facial-add');
+    await admin.waitForFunction(() => document.querySelectorAll('[data-facial-row]').length === 3);      // les trois caméras déjà enregistrées
+    await tap(admin, '#admin-facial-add');
     await admin.waitForSelector('#admin-facial-form');
     await admin.type('#af-name', 'TABLETTE POSTE DE GARDE');
     await admin.select('#af-type', 'TABLET_ANDROID');
@@ -228,32 +244,32 @@ test('Multi-terminaux faciaux — Administration Système puis Pointeur, Chrome 
     device.terminalId = paired.data.terminal_id;
     assert.equal((await api('/biometrics/terminal/pair', { method: 'POST', body: { code, public_key: makeDevice().jwk } })).status, 401, 'code à usage unique');
     await clickText(admin, '#modal-host button', 'Fermer');
-    await admin.waitForFunction(() => [...document.querySelectorAll('[data-facial-row]')].some((row) => /TABLETTE POSTE DE GARDE/.test(row.textContent) && /Appairé le/.test(row.textContent)));
-    terminalId = Number((await admin.$$eval('[data-facial-row]', (rows) => rows.find((row) => /TABLETTE POSTE DE GARDE/.test(row.textContent)).dataset.facialRow)).split(':')[1]);
+    await admin.waitForFunction(() => [...document.querySelectorAll('[data-facial-row]')].some((row) => /TABLETTE POSTE DE GARDE/i.test(row.textContent) && /Appairé le/i.test(row.textContent)));
+    terminalId = Number((await admin.$$eval('[data-facial-row]', (rows) => rows.find((row) => /TABLETTE POSTE DE GARDE/i.test(row.textContent)).dataset.facialRow)).split(':')[1]);
   });
 
   await t.test('Administration Système : autoriser le pointage facial et le compte Pointeur, périmètre respecté', async () => {
     const key = `trm:${terminalId}`;
-    await admin.click(`[data-facial-toggle="${key}"]`);
-    await admin.waitForFunction((k) => /Couper le pointage facial/.test(document.querySelector(`[data-facial-toggle="${k}"]`)?.textContent || ''), {}, key);
+    await tap(admin, `[data-facial-toggle="${key}"]`);
+    await admin.waitForFunction((k) => /Couper le pointage facial/i.test(document.querySelector(`[data-facial-toggle="${k}"]`)?.textContent || ''), {}, key);
     for (const target of [key, `cam:${cameras['CAM ENTREE HAMOUL']}`, `cam:${cameras['CAM QUAI DEPOT']}`]) {
-      await admin.click(`[data-facial-users="${target}"]`);
+      await tap(admin, `[data-facial-users="${target}"]`);
       await admin.waitForSelector('#admin-facial-users .admin-facial-user');
       assert.deepEqual(await admin.$$eval('#admin-facial-users label', (labels) => labels.map((l) => l.textContent.trim().split(' ')[0])), ['PTG01']);
-      await admin.click('#admin-facial-users .admin-facial-user');
-      await admin.click('#admin-facial-users-save');
-      await admin.waitForFunction((k) => /1 compte/.test(document.querySelector(`[data-facial-row="${k}"]`)?.textContent || ''), {}, target);
+      await tap(admin, '#admin-facial-users .admin-facial-user');
+      await tap(admin, '#admin-facial-users-save');
+      await admin.waitForFunction((k) => /1 compte/i.test(document.querySelector(`[data-facial-row="${k}"]`)?.textContent || ''), {}, target);
     }
     // Caméra d'une autre société : le compte Pointeur n'y est pas éligible, et le serveur le refuse.
     const foreign = `cam:${cameras['CAM HORS PERIMETRE']}`;
-    await admin.click(`[data-facial-users="${foreign}"]`);
+    await tap(admin, `[data-facial-users="${foreign}"]`);
     await admin.waitForSelector('#admin-facial-users');
-    assert.match(await admin.$eval('#admin-facial-users', (el) => el.textContent), /Aucun compte Pointage n'a ce site dans son périmètre/);
+    assert.match(await admin.$eval('#admin-facial-users', (el) => el.textContent), /Aucun compte Pointage n'a ce site dans son périmètre/i);
     await clickText(admin, '#modal-host button', 'Annuler');
     assert.equal((await api('/biometrics/facial-devices/authorizations', { method: 'POST', token: adminToken, body: { key: foreign, user_ids: [fixture.pointer] } })).status, 422);
     assert.equal((await device.call('GET', '/terminal/session')).status, 200, 'la borne appairée communique avec sa clé');
-    await admin.click('#admin-facial-terminals .btn-secondary');           // Actualiser
-    await admin.waitForFunction((k) => /Actif/.test(document.querySelector(`[data-facial-row="${k}"] .pill`)?.textContent || ''), {}, key);
+    await tap(admin, '#admin-facial-terminals .btn-secondary');           // Actualiser
+    await admin.waitForFunction((k) => /^actif$/i.test(document.querySelector(`[data-facial-row="${k}"] .pill`)?.textContent.trim() || ''), {}, key);       // le shell met les libellés en capitales après rendu
     await shot(admin, '02-admin-terminaux-faciaux');
     const html = await admin.$eval('#admin-facial-terminals', (el) => el.innerHTML);
     assert.doesNotMatch(html, /10\.20\.30\.40|secret-e2e|"x":|fingerprint/i, 'ni adresse, ni identifiant, ni clé à l\'écran');

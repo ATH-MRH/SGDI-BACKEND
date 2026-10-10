@@ -227,6 +227,50 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 /* Poste sans défilement de page : en mode facial la carte défile, ses blocs ne s'écrasent pas. */
 #appView #scannerCard.facial-mode>*{flex-shrink:0}
 #appView #scannerCard.facial-mode .last-scan{flex:0 0 auto}
+/* Mode facial : la sélection et l'état des terminaux restent sous les yeux. Bandeau de résultat et
+   barre d'actions compacts ; la liste défile DANS son cadre (en-tête fixe) au lieu de pousser la page. */
+#appView #scannerCard.facial-mode .face-view{margin:0}
+#appView #scannerCard.facial-mode .face-head{align-items:center}
+#appView #scannerCard.facial-mode .face-head .scanner-hint{display:none}
+#appView #scannerCard.facial-mode .face-status{font-size:14px;padding:8px 10px;margin:6px 0;border-radius:10px}
+#appView #scannerCard.facial-mode .face-status small{font-size:12px;margin-top:2px}
+#appView #scannerCard.facial-mode .face-check{font-size:16px}
+#appView #scannerCard.facial-mode .face-name{font-size:18px;margin-top:2px}
+#appView #scannerCard.facial-mode .face-meta{font-size:13px;margin-top:2px}
+#appView #scannerCard.facial-mode .face-terminals{margin:6px 0 0}
+#appView #scannerCard.facial-mode .ft-toolbar{gap:6px}
+#appView #scannerCard.facial-mode .ft-btn{min-height:30px;padding:0 8px;font-size:11.5px}
+#appView #scannerCard.facial-mode .ft-counters{margin:6px 0 4px;font-size:12.5px}
+#appView #scannerCard.facial-mode .ft-scroll{max-height:clamp(112px,27vh,320px);overflow:auto}
+#appView #scannerCard.facial-mode .ft-table thead th{position:sticky;top:0;z-index:1;padding:6px 10px}
+#appView #scannerCard.facial-mode .ft-table td{padding:4px 8px}
+#appView #scannerCard.facial-mode .ft-table td small{margin-top:0}
+/* La recherche manuelle reste accessible par la carte « Saisie manuelle » ; en mode facial sa
+   ligne est rendue à la liste. Résultat sur deux lignes : la fiche détaillée est juste à côté. */
+#appView #scannerCard.facial-mode .pointer-search{display:none}
+#appView #scannerCard.facial-mode .face-check,#appView #scannerCard.facial-mode .face-name{display:inline}
+#appView #scannerCard.facial-mode .face-name:not(:empty)::before{content:" · "}
+#appView #scannerCard.facial-mode .ft-table td small{display:inline;margin-left:6px}
+/* Le poste accorde plus de hauteur à la zone de pointage tant que le mode facial est ouvert. */
+#appView .main:has(#scannerCard.facial-mode){grid-template-rows:minmax(0,3.5fr) minmax(0,1fr)}
+/* Les terminaux passent AVANT la fiche du dernier pointage (côte à côte sur écran large). */
+#appView #scannerCard.facial-mode>.last-scan{order:1}
+#appView #scannerCard.facial-mode .ft-counters{flex-wrap:nowrap;gap:6px 14px;white-space:nowrap}
+#appView #scannerCard.facial-mode .ft-counters .ft-last{flex:1 1 0;min-width:0}
+#appView #scannerCard.facial-mode .ft-table .ft-time{font-size:12px}
+/* Petit écran : le titre de la carte et l'en-tête du mode sont rendus à la liste des terminaux ;
+   l'état du poste reste affiché dans le bandeau du haut (« En ligne »). */
+@media(max-width:899px){#appView #scannerCard.facial-mode :is(.station-head,.face-head){display:none}
+  #appView .main:has(#scannerCard.facial-mode){grid-template-rows:minmax(0,6fr) minmax(0,1fr)}
+  #appView #scannerCard.facial-mode .ft-btn{padding:0 7px;font-size:11px}
+  #appView #scannerCard.facial-mode .ft-counters{flex-wrap:wrap;white-space:normal}#appView #scannerCard.facial-mode .ft-counters .ft-last{flex:1 1 100%}}
+/* Écran large : terminaux à gauche, fiche du dernier pointage à droite — les deux visibles ensemble. */
+@media(min-width:1360px){
+  #appView #scannerCard.facial-mode{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);grid-auto-flow:row dense;grid-auto-rows:min-content;align-content:start}
+  #appView #scannerCard.facial-mode>*{grid-column:1/-1}
+  #appView #scannerCard.facial-mode>.face-view{grid-column:1}
+  #appView #scannerCard.facial-mode>.last-scan{grid-column:2;align-self:start}
+}
 .ft-counters{display:flex;flex-wrap:wrap;gap:8px 18px;margin:12px 0 8px;font-size:13px}
 .ft-counters div{display:flex;gap:6px;align-items:baseline;min-width:0}
 .ft-counters dt{color:var(--muted);font-weight:700}
