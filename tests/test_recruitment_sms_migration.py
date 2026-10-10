@@ -31,7 +31,7 @@ def _columns(database) -> set[str]:
 
 
 def test_single_alembic_head():
-    assert _alembic("sqlite://", "heads").split() == ["20261012_0001", "(head)"]     # tête unique, en aval de cette révision
+    assert _alembic("sqlite://", "heads").split() == ["20261014_0001", "(head)"]     # tête unique, en aval de cette révision
 
 
 def test_upgrade_adds_tracking_to_an_existing_table_and_is_reversible(tmp_path):

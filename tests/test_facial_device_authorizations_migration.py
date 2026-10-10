@@ -11,7 +11,7 @@ VERSIONS = Path(__file__).resolve().parents[1] / "migrations/versions"
 
 
 def _module():
-    spec = importlib.util.spec_from_file_location("facial_device_auth_migration", VERSIONS / "20261012_0001_facial_device_authorizations.py")
+    spec = importlib.util.spec_from_file_location("facial_device_auth_migration", VERSIONS / "20261014_0001_facial_device_authorizations.py")
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module
 

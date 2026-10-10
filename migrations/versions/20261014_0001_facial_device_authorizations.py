@@ -1,12 +1,14 @@
 """Explicit per-user authorizations on already registered facial devices.
 
-Revision ID: 20261012_0001
+Revision ID: 20261014_0001
 Revises: 20261011_0001
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261012_0001"
+# Identifiant volontairement distinct de ceux déjà pris par d'autres branches en cours
+# (20261012_0001 et 20261013_000x) : aucune collision d'identifiant à l'intégration.
+revision = "20261014_0001"
 down_revision = "20261011_0001"
 branch_labels = None
 depends_on = None
