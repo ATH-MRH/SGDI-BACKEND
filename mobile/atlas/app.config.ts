@@ -177,15 +177,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       // Aucune permission système tant qu'aucune fonction ne l'utilise (INTERNET
       // est ajoutée par la plateforme). Voir docs/PRIVACY-DATA-SAFETY.md.
-      permissions: [],
+      // Exception : à partir d'Android 14, le module natif d'expo-screen-capture enregistre
+      // un observateur de capture d'écran dès le lancement, que l'application s'en serve
+      // ou non. Sans cette permission (accordée à l'installation, sans demande à
+      // l'utilisateur), le système refuse l'enregistrement et l'application s'arrête.
+      permissions: ['android.permission.DETECT_SCREEN_CAPTURE'],
       // Permissions ajoutées par le gabarit natif mais inutilisées par l'app.
       blockedPermissions: [
         'android.permission.READ_EXTERNAL_STORAGE',
         'android.permission.WRITE_EXTERNAL_STORAGE',
         'android.permission.VIBRATE',
-        // Déclarée par expo-screen-capture pour DÉTECTER les captures : l'application
-        // ne fait que les bloquer (fonction secureScreen), elle n'écoute rien.
-        'android.permission.DETECT_SCREEN_CAPTURE',
+        // Déclarée par expo-screen-capture pour repérer les captures sur Android 13 en
+        // lisant la galerie : l'application ne lit jamais les photos de l'utilisateur.
+        'android.permission.READ_MEDIA_IMAGES',
         ...(isDevelopment ? [] : ['android.permission.SYSTEM_ALERT_WINDOW']),
         // Déclarées par expo-local-authentication : retirées tant que le
         // verrouillage biométrique n'est pas activé pour ce build.

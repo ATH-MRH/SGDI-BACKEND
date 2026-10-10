@@ -65,12 +65,18 @@ try {
     .map((match) => match[1])
     .sort();
   const allowed = [
+    // Exigée au lancement par le module natif d'expo-screen-capture à partir d'Android 14.
+    'android.permission.DETECT_SCREEN_CAPTURE',
     'android.permission.INTERNET',
     ...(isDev ? ['android.permission.SYSTEM_ALERT_WINDOW'] : []),
     // Verrouillage biométrique local : uniquement si la fonction est incluse dans le build.
     ...(biometrics ? ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT'] : []),
   ].sort();
   check(JSON.stringify(permissions) === JSON.stringify(allowed), `permissions = ${allowed.join(', ')} (trouvé : ${permissions.join(', ')})`);
+  // Lecture de la galerie : déclarée par le manifeste d'expo-screen-capture, jamais utilisée.
+  for (const unused of ['READ_MEDIA_IMAGES', 'READ_EXTERNAL_STORAGE']) {
+    check(new RegExp(`<uses-permission[^>]*android\\.permission\\.${unused}[^>]*tools:node="remove"`).test(manifest), `permission ${unused} retirée`);
+  }
   // Les permissions de notification viennent du manifeste de la bibliothèque : sans la
   // fonction push, l'application doit les retirer explicitement à la fusion.
   const removesNotifications = /<uses-permission[^>]*android\.permission\.POST_NOTIFICATIONS[^>]*tools:node="remove"/.test(manifest);
