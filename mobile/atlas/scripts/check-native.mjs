@@ -100,7 +100,14 @@ try {
   check(plistValue('CFBundleDisplayName')?.[1] === displayName, `nom affiché « ${displayName} »`);
   check(/^\d+\.\d+\.\d+$/.test(plistValue('CFBundleShortVersionString')?.[1] ?? ''), 'CFBundleShortVersionString au format x.y.z');
   check(Boolean(plistValue('CFBundleVersion')), 'CFBundleVersion présent');
-  const usage = [...plist.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)].map((match) => match[1]);
+  // Le client de développement (expo-dev-client) écrit un texte d'accès au réseau local dans
+  // l'Info.plist source et ajoute une phase de build qui le retire de tout binaire non Debug.
+  // Le texte n'est donc toléré que si cette phase est bien présente.
+  const stripsDevKeys = pbx.includes('Strip Local Network Keys for Release');
+  check(stripsDevKeys, 'phase de build retirant les clés du client de développement hors Debug');
+  const usage = [...plist.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)]
+    .map((match) => match[1])
+    .filter((key) => !(stripsDevKeys && key === 'NSLocalNetworkUsageDescription'));
   const expectedUsage = biometrics ? ['NSFaceIDUsageDescription'] : [];
   check(
     JSON.stringify(usage.sort()) === JSON.stringify(expectedUsage),
