@@ -26,5 +26,19 @@ export const api: ApiClient = createApiClient({
   },
 });
 
+/**
+ * Jeton d'accès valide pour une ressource chargée hors du client HTTP (image). Renouvelle la
+ * session si le jeton a expiré ; null si elle n'est pas renouvelable ou si le réseau manque.
+ */
+export async function ensureAccessToken(): Promise<string | null> {
+  const token = getSessionToken();
+  if (token) return token;
+  try {
+    return await renewSession((refreshToken) => refreshSession(api, refreshToken, clientInfo), null);
+  } catch {
+    return null;
+  }
+}
+
 export { ApiError, errorAction, errorMessageKey } from './errors';
 export type { ApiUser, LoginResponse, Page, ScopeSite } from './types';

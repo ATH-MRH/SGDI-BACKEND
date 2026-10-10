@@ -228,12 +228,12 @@ Thème clair uniquement : fond gris très clair, cartes blanches, bleu marine AT
 | Famille | Composants (`src/components/ui`) |
 |---|---|
 | Structure | `Screen` (en-tête fixe, défilement, zones sûres), `AtlasHeader` et `HeaderAction`, `ScreenHeader`, `SectionHeader`, `TabStrip`, `Card` |
-| Indicateurs | `KpiCard`, `Kpi`, `ChartCard`, `StatLine`, `ProgressBar` |
+| Indicateurs | `KpiCard`, `Kpi`, `MetricStrip`, `ChartCard`, `StatLine`, `ProgressBar` |
 | Graphiques | `BarChart`, `RingGauge`, `Distribution` — dessinés avec des vues, sans dépendance native |
-| Listes | `EmployeeRow`, `SiteRow`, `IncidentRow`, `ListItem`, `InfoRow`, `PagedList` |
+| Listes | `EmployeeRow`, `SiteRow`, `IncidentRow`, `ListItem`, `InfoRow`, `InfoGrid`, `PagedList` |
 | Identité | `EmployeeHeader`, `EmployeePhoto`, `Avatar` |
 | Statut et information | `Badge` (statut), `Chip` (information), `Banner` (alerte dans le flux), `IconTile` |
-| Actions | `Button`, `ActionTile`, `FilterButton`, `Segmented`, `OptionRow`, `ConfirmDialog` |
+| Actions | `Button`, `PillButton`, `ActionTile`, `FilterButton`, `Segmented`, `OptionRow`, `ConfirmDialog` |
 | Saisie | `FormField`, `SearchBar` |
 | États | `Loader`, `Skeleton`, `EmptyState`, `ErrorState` |
 
@@ -242,7 +242,7 @@ Les mêmes composants sont exportés sous leur nom de catalogue (`AtlasKpiCard`,
 Règles :
 
 - **Aucune valeur inventée.** Un indicateur inconnu affiche « — » ou « Indisponible », un graphique sans donnée laisse sa barre ou son anneau vide, et un bloc sans source backend est masqué.
-- **Photo employé** : `EmployeePhoto` demande le portrait au backend (`GET /api/drh/employees/{id}/portrait`), sur l'hôte ATLAS configuré uniquement. Sans photo, sans droit ou hors connexion, les initiales sont affichées.
+- **Photo employé** : la photo d'une fiche est rangée côté backend dans `extra.photo` ; le mobile n'en garde que l'existence (`hasPhoto`), jamais l'adresse. `EmployeePhoto` demande le portrait 3:4 à la route authentifiée `GET /api/drh/employees/{id}/portrait`, sur l'hôte ATLAS configuré uniquement. Un jeton d'accès expiré est renouvelé avant la demande, et la photo est redemandée après un renouvellement de session. Sans photo dans la fiche, sans droit ou hors connexion, les initiales sont affichées.
 - **Statut toujours écrit** : la couleur et la pastille ne font que renforcer le libellé.
 - **Cible tactile** de 48 points minimum ; chaque élément interactif a un libellé d'accessibilité.
 - **Styles en ligne** : ne jamais lire une propriété nommée `value` dans un objet de style en ligne. Le plugin Babel de Reanimated la traite comme une valeur animée ; la lire dans une constante avant.
@@ -273,7 +273,7 @@ Barre du bas : **Accueil**, **OPS**, **DRH**, **Modules**, **Plus**. Les onglets
 /abandons                Abandons de poste ; /abandons/new déclaration
 /incidents               Incidents et saisies en attente ; /incidents/new déclaration
 /brq                     Bulletin de renseignement quotidien
-/drh/employees           Collaborateurs ; /drh/employees/[id] fiche : informations, position, pointage, congés, documents
+/drh/employees           Collaborateurs ; /drh/employees/[id] fiche : aperçu, position, pointage, planning et congés, documents
 /drh/leaves              Congés à valider ; /drh/leave-request dépôt d'une demande
 /recruitment             Candidats
 /employee                Espace employé (session employé uniquement)

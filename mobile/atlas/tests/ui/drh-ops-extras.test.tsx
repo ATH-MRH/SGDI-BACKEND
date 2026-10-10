@@ -95,10 +95,14 @@ describe('fiche employé — pointage et demande de congé', () => {
     mockParams = { id: '5' };
     mock.fetchEmployeeAttendance.mockResolvedValue([{ id: 9, date: '2026-10-07', status: 'present', site: 'Site Nord', arrival: '07:02', departure: '' }]);
     await show(<EmployeeDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId('employee-tabs-attendance')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('employee-tabs-attendance'));
     await waitFor(() => expect(screen.getByTestId('employee-attendance')).toHaveTextContent(/07\/10\/2026/));
     expect(screen.getByTestId('employee-attendance')).toHaveTextContent(/Arrivée 07:02/);
     expect(mock.fetchEmployeeAttendance).toHaveBeenCalledWith({}, 5);
     // Consultation seule : pas de dépôt de demande sans droit de création.
+    await fireEvent.press(screen.getByTestId('employee-tabs-planning'));
+    await waitFor(() => expect(screen.getByTestId('employee-leaves')).toBeTruthy());
     expect(screen.queryByTestId('employee-leave-new')).toBeNull();
   });
 
@@ -107,8 +111,49 @@ describe('fiche employé — pointage et demande de congé', () => {
     mockParams = { id: '5' };
     mock.fetchEmployeeAttendance.mockRejectedValue(new ApiError({ kind: 'forbidden', status: 403 }));
     await show(<EmployeeDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId('employee-tabs-attendance')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('employee-tabs-attendance'));
     await waitFor(() => expect(screen.getByTestId('employee-attendance')).toHaveTextContent(/indisponible/i));
     expect(screen.getByText('BENALI Karim')).toBeTruthy();
+  });
+
+  it("l'aperçu reste compact : l'essentiel, sans les listes de pointage, de congés ni de documents", async () => {
+    signIn(['drh']);
+    mockParams = { id: '5' };
+    mock.fetchEmployeeAttendance.mockResolvedValue([
+      { id: 9, date: '2026-10-07', status: 'present', site: 'Site Nord', arrival: '07:02', departure: '' },
+      { id: 8, date: '2026-10-06', status: 'absent', site: 'Site Nord', arrival: '', departure: '' },
+      { id: 7, date: '2026-10-05', status: 'non_pointe', site: 'Site Nord', arrival: '', departure: '' },
+    ]);
+    await show(<EmployeeDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId('employee-stats')).toHaveTextContent(/1\/3Présence1Absences1Non pointés/));
+    expect(screen.getByTestId('employee-info')).toHaveTextContent(/Essentiel/);
+    expect(screen.getByTestId('employee-today-status')).toBeTruthy();
+    for (const hidden of ['employee-attendance', 'employee-leaves', 'employee-documents', 'employee-position']) {
+      expect(screen.queryByTestId(hidden)).toBeNull();
+    }
+    // Les raccourcis de l'en-tête ouvrent le bon onglet.
+    await fireEvent.press(screen.getByTestId('employee-go-documents'));
+    await waitFor(() => expect(screen.getByTestId('employee-documents')).toBeTruthy());
+    expect(screen.getByTestId('employee-tabs-documents').props.accessibilityState.selected).toBe(true);
+    expect(screen.queryByTestId('employee-info')).toBeNull();
+  });
+
+  it("la fiche de position dit « Non disponible » pour ce qu'ATLAS n'enregistre pas, sans rien inventer", async () => {
+    signIn(['drh']);
+    mockParams = { id: '5' };
+    mock.fetchEmployeeAttendance.mockResolvedValue([]);
+    mock.fetchSitePlanning.mockResolvedValue([]);
+    await show(<EmployeeDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId('employee-tabs-position')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('employee-tabs-position'));
+    await waitFor(() => expect(screen.getByTestId('employee-position')).toBeTruthy());
+    expect(screen.getByLabelText('Département : Non disponible')).toBeTruthy();
+    expect(screen.getByLabelText('Service : Non disponible')).toBeTruthy();
+    expect(screen.getByLabelText('Supérieur hiérarchique : Non disponible')).toBeTruthy();
+    expect(screen.getByTestId('employee-mission')).toHaveTextContent(/Non disponible/);
+    await waitFor(() => expect(screen.getByTestId('employee-today')).toHaveTextContent(/Aucun pointage/));
+    expect(screen.getByLabelText('Retard : Non disponible')).toBeTruthy();
   });
 
   it('propose le dépôt d\'une demande avec le droit de création', async () => {
@@ -116,6 +161,8 @@ describe('fiche employé — pointage et demande de congé', () => {
     mockParams = { id: '5' };
     mock.fetchEmployeeAttendance.mockResolvedValue([]);
     await show(<EmployeeDetailScreen />);
+    await waitFor(() => expect(screen.getByTestId('employee-tabs-planning')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('employee-tabs-planning'));
     await waitFor(() => expect(screen.getByTestId('employee-leave-new')).toBeTruthy());
     await fireEvent.press(screen.getByTestId('employee-leave-new'));
     expect(mockPush).toHaveBeenCalledWith('/drh/leave-request?employee_id=5');

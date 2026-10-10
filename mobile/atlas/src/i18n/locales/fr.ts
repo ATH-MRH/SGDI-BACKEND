@@ -416,7 +416,7 @@ export const fr = {
   'modules.unavailable': 'Non disponible sur mobile',
   'modules.inEmployeeSheet': 'Dans la fiche employé',
   'employees.count': '{count} collaborateurs · {society}',
-  'employees.tab.overview': 'Vue d\'ensemble',
+  'employees.tab.overview': 'Aperçu',
   'employees.tab.info': 'Informations',
   'employees.tab.position': 'Position',
   'employees.tab.attendance': 'Pointage',
@@ -453,6 +453,28 @@ export const fr = {
   'more.subtitle': 'Compte, périmètre et réglages',
   'more.account': 'Compte',
   'more.scope': 'Périmètre',
+
+  // Fiche employé compacte
+  'employees.tab.planning': 'Planning',
+  'employees.stats.presence': 'Présence',
+  'employees.stats.absences': 'Absences',
+  'employees.stats.period': 'Sur les {days} derniers jours enregistrés',
+  'employees.overview.title': 'Essentiel',
+  'employees.today.statusOf': 'Statut du jour',
+  'employees.position.block': 'Position',
+  'employees.position.departmentOnly': 'Département',
+  'employees.position.service': 'Service',
+  'employees.schedule.block': 'Horaires',
+  'employees.schedule.shift': 'Vacation',
+  'employees.schedule.hours': 'Horaires prévus',
+  'employees.schedule.days': 'Jours travaillés',
+  'employees.schedule.daysValue': '{worked} sur {total}',
+  'employees.schedule.next': 'Prochaine vacation',
+  'employees.today.block': 'Présence du jour',
+  'employees.today.late': 'Retard',
+  'employees.mission.block': 'Mission et responsabilités',
+  'employees.mission.unavailable': 'Non disponible : ATLAS n\'enregistre pas encore de fiche de mission.',
+  'employees.photo.failed': 'Diagnostic : la fiche a une photo, mais le portrait n\'a pas pu être chargé.',
 } as const;
 
 export type TranslationKey = keyof typeof fr;

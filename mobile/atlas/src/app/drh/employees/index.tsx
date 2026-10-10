@@ -64,6 +64,7 @@ export default function EmployeesScreen() {
             <EmployeeRow
               testID={`employee-${employee.id}`}
               employeeId={employee.id}
+              hasPhoto={employee.hasPhoto}
               name={fullName(employee.lastName, employee.firstName)}
               code={employee.code}
               position={employee.position}

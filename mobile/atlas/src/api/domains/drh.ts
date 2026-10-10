@@ -23,7 +23,17 @@ export type Employee = {
   siteId: number | null;
   siteName: string | null;
   group: string | null;
+  /** Une photo est enregistrée dans la fiche. Son adresse n'est pas conservée : le portrait est servi par une route authentifiée. */
+  hasPhoto: boolean;
 };
+
+const PHOTO_FIELDS = ['photo', 'photoUrl', 'photo_url'] as const;
+
+function hasPhotoField(extra: unknown): boolean {
+  const fields = asRecord(extra);
+  const legacy = asRecord(fields._legacy);
+  return PHOTO_FIELDS.some((key) => asNullableString(fields[key]) !== null || asNullableString(legacy[key]) !== null);
+}
 
 function toEmployee(raw: unknown): Employee {
   const row = asRecord(raw);
@@ -43,6 +53,7 @@ function toEmployee(raw: unknown): Employee {
     siteId: asNullableNumber(row.current_site_id),
     siteName: asNullableString(row.current_site_name),
     group: asNullableString(row.current_group_code),
+    hasPhoto: hasPhotoField(row.extra),
   };
 }
 

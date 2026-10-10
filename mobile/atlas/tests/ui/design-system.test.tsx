@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { presenceRate } from '@/api/domains/attendance';
 import { fetchDrhDashboard } from '@/api/domains/drh';
 import type { ApiClient } from '@/api/client';
-import { BarChart, Banner, Distribution, EmployeePhoto, EmployeeRow, KpiCard, RingGauge, SiteRow } from '@/components/ui';
+import { BarChart, Banner, Distribution, EmployeeHeader, EmployeePhoto, EmployeeRow, InfoGrid, KpiCard, MetricStrip, RingGauge, SiteRow, TabStrip } from '@/components/ui';
 import { percent, shortDate, weekdayKey } from '@/features/cockpit/presentation';
 import { isIncidentOpen } from '@/features/cockpit/useCockpitInsights';
 import { employeeStatusTone } from '@/features/status';
@@ -11,7 +11,19 @@ import { employeeStatusTone } from '@/features/status';
 let mockToken: string | null = null;
 let mockApiUrl: string | null = 'https://atlas.example.test';
 
-jest.mock('@/auth/session', () => ({ getSessionToken: () => mockToken }));
+const mockEnsure = jest.fn(async (): Promise<string | null> => null);
+let mockRenewed: ((session: { token: string }) => void) | null = null;
+
+jest.mock('@/api', () => ({ ensureAccessToken: () => mockEnsure() }));
+jest.mock('@/auth/session', () => ({
+  getSessionToken: () => mockToken,
+  onSessionRenewed: (listener: (session: { token: string }) => void) => {
+    mockRenewed = listener;
+    return () => {
+      mockRenewed = null;
+    };
+  },
+}));
 jest.mock('@/config/env', () => ({
   get env() {
     return { apiUrl: mockApiUrl, variant: 'staging', features: {}, storeUrls: { ios: null, android: null } };
@@ -20,6 +32,9 @@ jest.mock('@/config/env', () => ({
 }));
 
 beforeEach(() => {
+  mockEnsure.mockReset();
+  mockEnsure.mockResolvedValue(null);
+  mockRenewed = null;
   mockToken = null;
   mockApiUrl = 'https://atlas.example.test';
 });
@@ -123,6 +138,52 @@ describe('photo employé', () => {
     expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
   });
 
+  it("une fiche sans photo n'envoie aucune requête, même avec une session", async () => {
+    mockToken = 'jeton-de-test';
+    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto={false} />);
+    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+    expect(mockEnsure).not.toHaveBeenCalled();
+  });
+
+  it("un jeton d'accès expiré est renouvelé, puis la photo est demandée avec le nouveau jeton", async () => {
+    mockToken = null;
+    mockEnsure.mockResolvedValue('jeton-renouvele');
+    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
+    const photo = await screen.findByTestId('photo', { includeHiddenElements: true });
+    expect(mockEnsure).toHaveBeenCalledTimes(1);
+    expect(photo.props.source.headers).toEqual({ Authorization: 'Bearer jeton-renouvele' });
+  });
+
+  it('une session non renouvelable laisse les initiales', async () => {
+    mockToken = null;
+    mockEnsure.mockResolvedValue(null);
+    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
+    await act(async () => undefined);
+    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('une photo en échec affiche les initiales, prévient l’écran, et est redemandée quand la session est renouvelée', async () => {
+    mockToken = 'jeton-perime-cote-serveur';
+    const onUnavailable = jest.fn();
+    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" onUnavailable={onUnavailable} />);
+    await fireEvent(screen.getByTestId('photo', { includeHiddenElements: true }), 'error');
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+
+    mockToken = 'jeton-suivant';
+    await act(async () => mockRenewed?.({ token: 'jeton-suivant' }));
+    expect(screen.getByTestId('photo', { includeHiddenElements: true }).props.source.headers).toEqual({ Authorization: 'Bearer jeton-suivant' });
+  });
+
+  it('le portrait est montré au format 3:4, sans recadrage carré', async () => {
+    mockToken = 'jeton-de-test';
+    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" size={66} portrait />);
+    expect(screen.getByTestId('photo', { includeHiddenElements: true }).props.style).toMatchObject({ width: 66, height: 88 });
+  });
+
   it("sans URL d'API, aucune photo n'est demandée", async () => {
     mockToken = 'jeton-de-test';
     mockApiUrl = null;
@@ -203,5 +264,90 @@ describe('synthèse RH', () => {
     expect(dashboard).toEqual({
       employeesTotal: 0, byStatus: [], candidatesByStatus: [], candidatesTotal: 0, leavesPending: 0, trialPeriods: [], bySite: [], withoutSite: 0,
     });
+  });
+});
+
+describe('fiche employé compacte', () => {
+  const LONG_NAME = 'BENABDERRAHMANE-BOUKHALFA Mohammed Abdelkader Seif-Eddine';
+
+  it("l'en-tête garde un nom très long sur deux lignes, sans réduction de police, avec matricule, fonction, société et site", async () => {
+    await render(
+      <EmployeeHeader
+        testID="header"
+        employeeId={null}
+        name={LONG_NAME}
+        code="IGS-2025-000123-AGT"
+        position="Chef de poste de sécurité incendie et d’assistance à personnes"
+        society="Iron Global Sécurité et Services"
+        site="Site Hassi Messaoud — Base de vie Nord"
+        hasPhoto={false}
+      />,
+    );
+    const heading = screen.getByTestId('employee-name-heading');
+    expect(heading).toHaveTextContent(LONG_NAME);
+    expect(heading.props.numberOfLines).toBe(2);
+    expect(heading.props.adjustsFontSizeToFit).toBeUndefined();
+    const header = screen.getByTestId('header');
+    expect(header).toHaveTextContent(/IGS-2025-000123-AGT/);
+    expect(header).toHaveTextContent(/Chef de poste de sécurité incendie/);
+    expect(header).toHaveTextContent(/Iron Global Sécurité et Services/);
+    expect(header).toHaveTextContent(/Site Hassi Messaoud/);
+    // Sans photo : initiales, et aucune image demandée.
+    expect(screen.queryByTestId('employee-photo', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText('BS', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it("l'en-tête n'affiche ni société ni site quand ils sont inconnus", async () => {
+    await render(<EmployeeHeader testID="header" employeeId={null} name="BENALI Karim" hasPhoto={false} />);
+    expect(screen.getByTestId('header')).toHaveTextContent('BKBENALI Karim');
+  });
+
+  it('les onglets remplissent la ligne à largeur égale : aucun titre ne dépasse du bord', async () => {
+    const onChange = jest.fn();
+    await render(
+      <TabStrip
+        fill
+        testID="tabs"
+        value="overview"
+        onChange={onChange}
+        options={[
+          { value: 'overview', label: 'Aperçu' },
+          { value: 'position', label: 'Position' },
+          { value: 'attendance', label: 'Pointage' },
+          { value: 'planning', label: 'Planning' },
+          { value: 'documents', label: 'Documents' },
+        ]}
+      />,
+    );
+    for (const key of ['overview', 'position', 'attendance', 'planning', 'documents']) {
+      const tab = screen.getByTestId(`tabs-${key}`);
+      expect(tab.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ flex: 1 })]));
+      expect(tab.props.accessibilityState.selected).toBe(key === 'overview');
+    }
+    // Pas de défilement horizontal en mode rempli.
+    expect(screen.getByTestId('tabs').type).toBe('View');
+    await fireEvent.press(screen.getByTestId('tabs-planning'));
+    expect(onChange).toHaveBeenCalledWith('planning');
+  });
+
+  it('le bandeau tient trois indicateurs sur une ligne', async () => {
+    await render(
+      <MetricStrip
+        testID="strip"
+        caption="Sur les 14 derniers jours enregistrés"
+        metrics={[
+          { key: 'a', label: 'Présence', value: '12/14', tone: 'success' },
+          { key: 'b', label: 'Absences', value: '1', tone: 'danger' },
+          { key: 'c', label: 'Non pointés', value: '1', tone: 'warning' },
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('strip')).toHaveTextContent('12/14Présence1Absences1Non pointésSur les 14 derniers jours enregistrés');
+  });
+
+  it('la grille annonce chaque couple libellé / valeur', async () => {
+    await render(<InfoGrid testID="grid" cells={[{ key: 'a', label: 'Contrat', value: 'CDD' }, { key: 'b', label: 'Département', value: 'Non disponible', muted: true, wide: true }]} />);
+    expect(screen.getByLabelText('Contrat : CDD')).toBeTruthy();
+    expect(screen.getByLabelText('Département : Non disponible')).toBeTruthy();
   });
 });

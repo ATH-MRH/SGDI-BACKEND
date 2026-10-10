@@ -40,15 +40,17 @@ type EmployeeRowProps = {
   /** Ligne d'information : site, horaires, heure d'arrivée. */
   detail?: string | null;
   badge?: ReactNode;
+  /** false : la fiche n'a pas de photo, rien n'est demandé au serveur. */
+  hasPhoto?: boolean;
   onPress?: () => void;
   testID?: string;
 };
 
 /** Ligne d'employé : photo, nom, matricule, fonction, et un statut à droite. */
-export function EmployeeRow({ employeeId, name, code, position, detail, badge, onPress, testID }: EmployeeRowProps) {
+export function EmployeeRow({ employeeId, name, code, position, detail, badge, hasPhoto, onPress, testID }: EmployeeRowProps) {
   return (
     <RowShell testID={testID} onPress={onPress} accessibilityLabel={[name, code, position, detail].filter(Boolean).join(', ')}>
-      <EmployeePhoto employeeId={employeeId} name={name} size={46} />
+      <EmployeePhoto employeeId={employeeId} name={name} size={46} hasPhoto={hasPhoto} />
       <View style={styles.texts}>
         <AppText variant="bodyStrong" color={colors.navy} numberOfLines={1}>
           {name}
