@@ -1,0 +1,20 @@
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Button, Card, colors, ErrorText, Field, styles } from '../../components/ui';
+import { ApiError, CandidatePage, errorMessage, request } from '../../lib/api';
+import { useSession } from '../../lib/session';
+export default function Staff() {
+  const {token, user, logout} = useSession();
+  const [query, setQuery] = useState(''), [search, setSearch] = useState(''), [mode, setMode] = useState('new'), [page, setPage] = useState(1), [data, setData] = useState<CandidatePage | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
+  useEffect(() => { const controller = new AbortController(); // Reset the previous result before starting this server subscription.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusy(true); setData(null); setError('');
+    request<CandidatePage>(`/drh/candidates/page?mode=${mode}&page=${page}&page_size=25&q=${encodeURIComponent(search)}`, {token: token!, signal: controller.signal})
+      .then(result => {if (!controller.signal.aborted) setData(result);})
+      .catch(async e => {if (!controller.signal.aborted) {setError(errorMessage(e)); if (e instanceof ApiError && e.status === 401) await logout();}})
+      .finally(() => {if (!controller.signal.aborted) setBusy(false);});
+    return () => controller.abort();
+  }, [token, search, mode, page, refresh, logout]);
+  return <View style={{flex: 1, backgroundColor: colors.background, padding: 18, gap: 12}}><View style={[styles.row, {justifyContent: 'space-between'}]}><Text style={styles.heading}>{user?.full_name}</Text><Pressable accessibilityRole="button" onPress={() => logout().catch(e => setError(errorMessage(e)))}><Text style={styles.link}>Déconnexion</Text></Pressable></View><Field label="Rechercher un candidat" value={query} onChangeText={setQuery} onSubmitEditing={() => {setPage(1); setSearch(query.trim());}} returnKeyType="search"/><Button title="Rechercher" secondary onPress={() => {setPage(1); setSearch(query.trim()); setRefresh(v => v + 1);}}/><View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8}}>{[['new', 'Nouveaux'], ['reserve', 'Réserve'], ['recruited', 'Transmis / recrutés']].map(([key, label]) => <Pressable accessibilityRole="button" accessibilityState={{selected: mode === key}} key={key} onPress={() => {setMode(key); setPage(1);}}><Text style={[styles.badge, mode === key && {backgroundColor: colors.ink, color: colors.white}]}>{label}</Text></Pressable>)}</View><ErrorText message={error}/>{error && <Button title="Réessayer" onPress={() => setRefresh(v => v + 1)}/>}<Text style={styles.subtitle}>{data ? `${data.total} candidature(s)` : 'Chargement du vivier…'}</Text><FlatList data={data?.items || []} keyExtractor={item => String(item.id)} refreshing={busy} onRefresh={() => setRefresh(v => v + 1)} contentContainerStyle={{gap: 12, paddingBottom: 12}} ListEmptyComponent={busy ? <ActivityIndicator/> : !error ? <Text style={styles.subtitle}>Aucun dossier dans cette sélection.</Text> : null} renderItem={({item}) => <Pressable accessibilityRole="button" onPress={() => router.push({pathname: '/staff/candidate', params: {id: String(item.id), mode, page: String(data?.page || page), q: search}})}><Card><Text style={styles.heading}>{item.last_name} {item.first_name}</Text><Text style={styles.subtitle}>{item.desired_position || 'Poste non renseigné'} · {item.society || 'Vivier groupe'}</Text><Text style={styles.badge}>{item.status}</Text></Card></Pressable>}/><View style={styles.row}><View style={{flex: 1}}><Button title="Précédent" secondary disabled={busy || !data || data.page <= 1} onPress={() => setPage((data?.page || page) - 1)}/></View><Text>{data?.page || page} / {data?.pages || 1}</Text><View style={{flex: 1}}><Button title="Suivant" secondary disabled={busy || !data || data.page >= data.pages} onPress={() => setPage((data?.page || page) + 1)}/></View></View></View>;
+}

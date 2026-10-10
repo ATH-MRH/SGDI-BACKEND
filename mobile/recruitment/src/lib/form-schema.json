@@ -1,0 +1,502 @@
+[
+  {
+    "title": "1. Identification du candidat",
+    "fields": [
+      {
+        "key": "last_name",
+        "label": "Nom",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "first_name",
+        "label": "Prénom",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "birth_date",
+        "label": "Date de naissance",
+        "options": [],
+        "numeric": false,
+        "date": true,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "birth_place",
+        "label": "Lieu de naissance",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "sex",
+        "label": "Sexe",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "M",
+            "label": "Masculin"
+          },
+          {
+            "value": "F",
+            "label": "Féminin"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "family_status",
+        "label": "Situation familiale",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "Célibataire",
+            "label": "Célibataire"
+          },
+          {
+            "value": "Marié(e)",
+            "label": "Marié(e)"
+          },
+          {
+            "value": "Divorcé(e)",
+            "label": "Divorcé(e)"
+          },
+          {
+            "value": "Veuf(ve)",
+            "label": "Veuf(ve)"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "children_count",
+        "label": "Nombre d’enfants",
+        "options": [],
+        "numeric": true,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "blood_group",
+        "label": "Groupe sanguin",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "A+",
+            "label": "A+"
+          },
+          {
+            "value": "A-",
+            "label": "A-"
+          },
+          {
+            "value": "B+",
+            "label": "B+"
+          },
+          {
+            "value": "B-",
+            "label": "B-"
+          },
+          {
+            "value": "AB+",
+            "label": "AB+"
+          },
+          {
+            "value": "AB-",
+            "label": "AB-"
+          },
+          {
+            "value": "O+",
+            "label": "O+"
+          },
+          {
+            "value": "O-",
+            "label": "O-"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "father_name",
+        "label": "Nom du père",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "mother_name",
+        "label": "Nom de la mère",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "nin",
+        "label": "NIN",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": 20
+      },
+      {
+        "key": "cnas_number",
+        "label": "N° CNAS",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": 20
+      }
+    ]
+  },
+  {
+    "title": "2. Coordonnées",
+    "fields": [
+      {
+        "key": "phone",
+        "label": "Téléphone",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "email",
+        "label": "Email",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "address",
+        "label": "Adresse",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "commune",
+        "label": "Commune",
+        "options": [
+          {
+            "value": "",
+            "label": "— Choisir d’abord la wilaya —"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "wilaya",
+        "label": "Wilaya",
+        "options": [
+          {
+            "value": "",
+            "label": "— Choisir la wilaya —"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "emergency_name",
+        "label": "Contact d’urgence",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "emergency_relation",
+        "label": "Lien avec le candidat",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "emergency_phone",
+        "label": "Téléphone d’urgence",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      }
+    ]
+  },
+  {
+    "title": "3. Candidature et profil",
+    "fields": [
+      {
+        "key": "desired_position",
+        "label": "Poste souhaité",
+        "options": [
+          {
+            "value": "",
+            "label": "— Choisir —"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "expected_salary",
+        "label": "Salaire demandé (DA/mois)",
+        "options": [],
+        "numeric": true,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "availability",
+        "label": "Disponibilité",
+        "options": [
+          {
+            "value": "",
+            "label": "— Choisir —"
+          },
+          {
+            "value": "Immédiatement",
+            "label": "Immédiatement"
+          },
+          {
+            "value": "01 mois",
+            "label": "01 mois"
+          },
+          {
+            "value": "02 mois",
+            "label": "02 mois"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "source",
+        "label": "Source de candidature",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "military_service",
+        "label": "Service militaire",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "Oui",
+            "label": "Oui"
+          },
+          {
+            "value": "Non",
+            "label": "Non"
+          },
+          {
+            "value": "Exempté",
+            "label": "Exempté"
+          },
+          {
+            "value": "Sursitaire",
+            "label": "Sursitaire"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "height",
+        "label": "Taille (cm)",
+        "options": [],
+        "numeric": true,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "shoe_size",
+        "label": "Pointure",
+        "options": [],
+        "numeric": true,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "shirt_size",
+        "label": "Taille chemise",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "XS",
+            "label": "XS"
+          },
+          {
+            "value": "S",
+            "label": "S"
+          },
+          {
+            "value": "M",
+            "label": "M"
+          },
+          {
+            "value": "L",
+            "label": "L"
+          },
+          {
+            "value": "XL",
+            "label": "XL"
+          },
+          {
+            "value": "XXL",
+            "label": "XXL"
+          },
+          {
+            "value": "XXXL",
+            "label": "XXXL"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "languages",
+        "label": "Langues parlées",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "notes",
+        "label": "Notes du recruteur",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": true,
+        "maxLength": null
+      }
+    ]
+  },
+  {
+    "title": "4. Avis du recruteur",
+    "fields": [
+      {
+        "key": "decision",
+        "label": "Décision",
+        "options": [
+          {
+            "value": "",
+            "label": "—"
+          },
+          {
+            "value": "Favorable",
+            "label": "Favorable"
+          },
+          {
+            "value": "Défavorable",
+            "label": "Défavorable"
+          },
+          {
+            "value": "Instance",
+            "label": "Instance"
+          }
+        ],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "opinion_date",
+        "label": "Date de l’avis",
+        "options": [],
+        "numeric": false,
+        "date": true,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "recruiter",
+        "label": "Recruteur",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": false,
+        "maxLength": null
+      },
+      {
+        "key": "comment",
+        "label": "Commentaire / motivation",
+        "options": [],
+        "numeric": false,
+        "date": false,
+        "multiline": true,
+        "maxLength": null
+      }
+    ]
+  }
+]

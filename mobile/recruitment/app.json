@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "IRON Emploi",
+    "slug": "iron-recruitment",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.irongs.recruitment"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E2747",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.irongs.recruitment"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choisissez une photo pour votre dossier de candidature.",
+          "cameraPermission": "Prenez une photo pour votre dossier de candidature.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#0E2747"
+        }
+      ]
+    ],
+    "scheme": "iron-recruitment"
+  }
+}
