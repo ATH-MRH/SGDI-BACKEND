@@ -126,9 +126,13 @@ test('V7: recruiting an unventilated candidate is impossible — the interface a
     const { context, item, elements } = setup({ society: null, ventilation });
     vm.runInContext(recruitButtons(context.rowActions(item))[0].action, context);
     const modal = elements.get('recruitmentModal').innerHTML;
-    assert.match(modal, /Société destinataire requise/);
-    assert.doesNotMatch(modal, /type="submit"/, 'no transfer can be submitted without a destination');
-    assert.equal(/openCandidateVentilation\(42\)/.test(modal), ventilation, 'Ventiler is offered only with the permission');
+    // Sans permission : blocage expliqué. Avec permission : la société se choisit dans la fenêtre
+    // (parcours couvert par recrute-ventilation-flow.test.js).
+    assert.equal(/Société destinataire requise/.test(modal), !ventilation);
+    assert.equal(/n’a pas la permission de ventiler/.test(modal), !ventilation);
+    assert.equal(/<select id="recruitmentSociety"[^>]*required/.test(modal), ventilation, 'the destination is chosen only with the permission');
+    assert.equal(/type="submit"[^>]*>Ventiler et recruter</.test(modal), ventilation);
+    assert.doesNotMatch(modal, /Recruter et transférer à la DRH/, 'no direct transfer without a destination');
     const calls = [];
     context.apiFetch = async url => { calls.push(url); return {}; };
     await context.transmitCandidateToDrh({ querySelector: () => ({}) });
