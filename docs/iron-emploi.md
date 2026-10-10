@@ -170,8 +170,10 @@ sont renvoyés par aucune route publique.
 
 Le serveur enregistre les appareils et les préférences, et sait relayer vers le service Expo,
 mais l'envoi est **désactivé** tant que `RECRUITMENT_PUSH_ENABLED=true` n'est pas posé. Rien
-n'a été essayé sur un téléphone : l'application n'embarque pas encore le module de notifications,
-et l'activation demande un identifiant de projet EAS et les accès FCM (Android) et APNs (iOS).
+n'a été essayé sur un téléphone. L'application embarque le module de notifications (autorisation,
+enregistrement de l'appareil, ouverture de l'écran concerné, désinscription à la déconnexion), mais
+l'activation demande encore un identifiant de projet EAS, les accès FCM (Android) et APNs (iOS) et
+une version installable : le détail est dans `mobile/recruitment/README.md`.
 Les notifications dans l'application, elles, fonctionnent sans réglage.
 
 ## 7. Mise en service
