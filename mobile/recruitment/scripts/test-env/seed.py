@@ -11,7 +11,7 @@ def call(path, body=None, token=None, method=None, headers=None):
             return json.loads(r.read() or 'null')
     except urllib.error.HTTPError as e:
         raise SystemExit(f'{method or "?"} {path} -> {e.code} {e.read()[:300]}')
-staff = call('/auth/login', {'username': os.environ['ADMIN_SYSTEM_USERNAME'], 'password': os.environ['ADMIN_SYSTEM_PASSWORD']})['access_token']
+staff = call('/auth/login', {'username': os.environ['ADMIN_INITIAL_USERNAME'], 'password': os.environ['ADMIN_INITIAL_PASSWORD']})['access_token']
 SEC, SOL, SER = 'IRON Global Sécurité', 'IRON Global Solution', 'IRON Global Services'
 OFFERS = [
  (SEC, 'Agent de sécurité', 'Sécurité', 'Alger', None, 'CDI', 'Assurer la surveillance et la sécurité du site\nContrôler les accès et les flux de personnes\nPrévenir les risques et signaler les anomalies', 'Expérience souhaitée en sécurité\nBon sens du relationnel\nRigueur et réactivité\nDisponibilité pour travail en horaires décalés'),
