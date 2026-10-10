@@ -5,9 +5,9 @@ Candidat de validation de compatibilité, **pas une branche de livraison** : auc
 2026-10-10, à partir de `origin/main` = `71fa92b`.
 
 **Mise à jour du 2026-10-11 : la branche est synchronisée avec `origin/main` = `1958d15`
-(PR #14 ATLAS MOBILE) — § 8 — et contient la version finale du lot DRH/OPS (`9bb6331`) — § 9.
-Ces deux sections prévalent sur les § 1, 2, 4 et 6 pour l'état des branches, des migrations et
-les résultats des tests.**
+(PR #14 ATLAS MOBILE) — § 8 —, contient la version finale du lot DRH/OPS (`9bb6331`) — § 9 — et
+est resynchronisée avec `origin/main` = `311b45b` (PR #15) — § 10. Ces sections prévalent sur les
+§ 1, 2, 4 et 6 ; les résultats à jour sont ceux du § 10.**
 
 ## 1. Contenu
 
@@ -286,5 +286,43 @@ vérifie qu'elle est refusée à DRH seul et ouverte aux modules propriétaires.
   (`feat/iron-emploi`), `20261011_0001` (`feat/admin-regularisation-employes`).
 - `feat/pointeur-multi-facial-terminals` porte encore l'ancienne dépendance de `20261014_0001` :
   c'est la version de cette branche d'intégration qui fait foi.
+
+**Reconnaissance faciale réelle : NO-GO.**
+
+## 10. Synchronisation avec `origin/main` `311b45b` (PR #15, ventilation des candidats), 2026-10-11
+
+Merge normal, sans rebase. La PR #15 touche 8 fichiers (recrutement, `permission_catalog.py`,
+`package.json`) et n'ajoute aucune migration.
+
+Conflit : `package.json`, liste de `npm test`. Résolu à la main : la liste de l'intégration est
+conservée et le test ajouté par `main` (`recrute-ventilation-flow`) y est inséré à sa place ; tous
+les scripts des deux branches sont présents (94 fichiers de test). `permission_catalog.py`, modifié
+des deux côtés, a fusionné automatiquement.
+
+| Contrôle | Résultat |
+|---|---|
+| Alembic | 65 révisions, aucun identifiant en double, tête unique `20261014_0001`, `down_revision` `20261013_0002` |
+| PostgreSQL 16 jetable, depuis le schéma de production (`20261013_0002`) peuplé | `upgrade head` : 0 ligne du schéma existant modifiée, données conservées, terminal appairé identique, 7 contraintes ; downgrade refusé tant qu'une autorisation existe |
+| `python3 -m pytest -q` + PostgreSQL jetable | **2313 réussis, 0 échec**, 30 ignorés (OpenCV absent, `TEST_POSTGRES_ADMIN_URL` non défini) |
+| `npm test` | **1060 / 1060** (+ 12 / 12) ; `test:drh-next` 115 / 115 ; `test:core-v3` 45 / 45 |
+| Chrome réel (12 suites, dont le recrutement) | 70 / 70, dont la borne avec le moteur OpenCV réel (5 / 5) |
+
+| Groupe ciblé (backend) | Résultat |
+|---|---|
+| DRH | 464 |
+| OPS, mouvements du personnel | 92 |
+| BRQ | 25 |
+| Recrutement (dont la ventilation de la PR #15) | 64 |
+| Pointeur, présence, abandon de poste | 146 |
+| Multi-terminaux, biométrie | 125 |
+| RBAC | 92 |
+| Authentification, types de jetons | 71 |
+| ATLAS Mobile | 89 |
+| PostgreSQL et concurrence | 51 |
+
+Toujours ouvert, inchangé : `attendance-e2e` (1 / 6) et `biometric-test-mode-real-e2e` (1 / 5),
+dont la caméra simulée est en `127.0.0.1` ; aucun parcours « caméra IP → moteur réel → pointage »
+validé ; identifiants de migration en double dans `feat/iron-emploi` et
+`feat/admin-regularisation-employes`.
 
 **Reconnaissance faciale réelle : NO-GO.**
