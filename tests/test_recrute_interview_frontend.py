@@ -49,9 +49,11 @@ def test_favorable_candidate_gets_direct_green_recruit_action():
 
 def test_recruitment_society_is_proposed_in_interview_and_transfer_uses_the_ventilated_society():
     assert 'name="societeRecrutement" required' in HTML
-    # V7 : « Recruter » ne choisit plus la société ; il transfère le dossier déjà ventilé.
-    assert '/transfer-drh`,{method:"POST"}' in HTML
-    assert 'Société destinataire requise' in HTML
+    # « Recruter » transfère le dossier ventilé tel quel ; pour un dossier non ventilé, la société
+    # vient des options du serveur et part dans le même appel de transfert.
+    assert '/transfer-drh`,assignment?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(assignment)}:{method:"POST"}' in HTML
+    assert '/transfer-options`' in HTML
+    assert 'Choisissez la société destinataire.' in HTML
     assert 'body:JSON.stringify({society,data:' not in HTML
     assert '/ventilation`,{method:"POST"' in HTML
 
