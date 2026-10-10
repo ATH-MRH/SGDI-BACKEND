@@ -27,6 +27,10 @@ export LOG_LEVEL=WARNING
 ENV
 fi
 . "$STATE/env"
+# L'aperçu web de l'application (navigateur du Mac ou d'un téléphone) est une autre origine que le serveur :
+# elle est autorisée ici, pour l'adresse Wi-Fi du moment.
+IP="$(lan_ip)"
+export CORS_ALLOWED_ORIGINS="http://localhost:8091,http://127.0.0.1:8091,http://localhost:8082,http://127.0.0.1:8082${IP:+,http://$IP:8082,http://$IP:8091}"
 NEW=0
 if ! psql -h "$PGHOST_DIR" -lqt | cut -d '|' -f 1 | grep -qw "$DB"; then createdb -h "$PGHOST_DIR" "$DB"; NEW=1; fi
 cd "$BACKEND"
