@@ -1,7 +1,7 @@
 import base64
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from datetime import datetime
@@ -790,13 +790,85 @@ def ventilate_candidate(candidate_id: int, payload: CandidateVentilationIn, db: 
     return _action_success(service.ventilate_candidate(db, candidate_id, target, reason=payload.reason, actor=user))
 
 
+def _can_assign_on_recruitment(db: Session, user: User) -> bool:
+    """Choisir la société destinataire d'un dossier NON ventilé au moment de le recruter.
+
+    Ce n'est pas la ventilation (réaffecter un dossier, le remettre au vivier, le ventiler sans le
+    recruter), qui garde sa permission dédiée. C'est le droit de recruter, borné au périmètre
+    société du compte : il exige les actions générales « create » et « update » EXPLICITES (une
+    liste d'actions vide n'accorde rien ici), ou la permission de ventilation / l'administration
+    globale."""
+    if _can_ventilate(db, user):
+        return True
+    actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])}
+    return "admin" in actions or {"create", "update"} <= actions
+
+
+def _recruitment_target(db: Session, user: User, society: str | None) -> str | None:
+    """Libellé canonique de la société choisie si elle appartient au périmètre du compte."""
+    key = _society_key(society)
+    return next((label for label in _ventilation_targets(db, user) if _society_key(label) == key), None) if key else None
+
+
+class CandidateTransferIn(BaseModel):
+    society: str | None = Field(default=None, max_length=150)
+    reason: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/candidates/{candidate_id}/transfer-options")
+def candidate_transfer_options(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Ce que « Recruter » peut faire de ce dossier pour ce compte. Le serveur décide seul de la
+    société destinataire possible : conservée (déjà ventilé), automatique (une seule société
+    autorisée), à choisir (plusieurs) ou aucune."""
+    _ensure_recruitment_access(user)
+    row = service.get_or_404(db, Candidate, candidate_id)
+    current = str(row.society or "").strip()
+    favorable = service._candidate_decision_is_favorable(row.data if isinstance(row.data, dict) else {})
+    out = {"candidate_id": row.id, "society": current or None, "ventilated": bool(current), "favorable": favorable,
+           "selection": "assigned", "societies": [current] if current else [], "can_recruit": False, "reason": None}
+    if service._candidate_left_recruitment(row):
+        return {**out, "reason": "Dossier déjà transféré à la DRH."}
+    if service._candidate_is_archived(row):
+        return {**out, "reason": "Ce dossier est archivé : il ne peut pas être recruté."}
+    if current:
+        allowed = _allowed_societies(user)
+        if allowed and not _canonical_allowed_society(user, current):
+            return {**out, "reason": f"Votre compte n’est pas autorisé à recruter pour {current}."}
+    else:
+        if not _can_assign_on_recruitment(db, user):
+            return {**out, "selection": "none", "reason": "Votre compte n’est pas autorisé à recruter un candidat non ventilé : les actions Créer et Modifier du module Recrutement sont requises."}
+        societies = _ventilation_targets(db, user)
+        out = {**out, "societies": societies, "selection": "automatic" if len(societies) == 1 else "required" if societies else "none"}
+        if not societies:
+            return {**out, "reason": "Aucune société n’est autorisée pour ce compte : le recrutement est impossible."}
+    if not favorable:
+        return {**out, "reason": "Seuls les candidats avec un avis Favorable peuvent être recrutés."}
+    return {**out, "can_recruit": True}
+
+
 @router.post("/candidates/{candidate_id}/transfer-drh")
-def transfer_candidate_to_drh(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    """Recruter : transfert atomique et idempotent du dossier à la DRH de la société destinataire."""
+def transfer_candidate_to_drh(candidate_id: int, payload: CandidateTransferIn | None = Body(default=None),
+                              db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Recruter : transfert atomique et idempotent du dossier à la DRH de la société destinataire.
+
+    Pour un dossier non ventilé, `society` désigne la société destinataire : elle doit appartenir
+    au périmètre du compte, et la ventilation est enregistrée avant le transfert."""
     _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
-    return _action_success(service.transfer_candidate_to_drh(db, candidate_id, actor=user))
+    target = None
+    if payload is not None and _society_key(payload.society):
+        if _society_key(existing.society):
+            target = payload.society                     # le service refuse tout changement de société
+        else:
+            target = _recruitment_target(db, user, payload.society) if _can_assign_on_recruitment(db, user) else None
+            if target is None:
+                append_audit(db, action="authorization.recruitment.assignment", resource="candidate", resource_id=candidate_id,
+                             result="refused", user=user, new_state={"society": str(payload.society)[:150]})
+                db.commit()
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée pour ce recrutement")
+    return _action_success(service.transfer_candidate_to_drh(
+        db, candidate_id, actor=user, society=target, reason=payload.reason if payload is not None and target else None))
 
 
 def _action_success(data):

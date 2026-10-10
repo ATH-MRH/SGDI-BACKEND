@@ -165,7 +165,7 @@ tr:last-child td{border-bottom:0}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
-<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261010-ventilation-flow" media="screen">
+<link rel="stylesheet" href="/static/recruitment-v6.css?v=20261011-recruit-flow" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
@@ -1241,7 +1241,6 @@ async function changeAvis(id,value){
   }catch(error){showBanner(esc(error.message),"error");loadTab(activeTab)}
 }
 let ventilationCandidate=null;
-const VENTILATION_DENIED_HINT="Votre compte n’a pas la permission de ventiler les candidats. Demandez à un administrateur de ventiler ce dossier ou de vous accorder la permission de ventilation (Recrutement › Contractualisation).";
 function applyCandidateVentilation(item,result,fallback){
   // Reflète la réponse du serveur dans la ligne déjà chargée : le statut « Non ventilé » change sans rechargement.
   const saved=result?.data||{};
@@ -1291,84 +1290,81 @@ async function saveCandidateVentilation(form){
     refreshRecruitCurrentSection();
   }catch(error){const output=document.getElementById("ventilationError");if(output){output.textContent=error.message||"Ventilation impossible";output.classList.add("show")}button.disabled=false;button.textContent="Ventiler";}
 }
-let recruitmentCandidate=null,recruitmentListStale=false;
+let recruitmentCandidate=null,recruitmentOptions=null,recruitmentBusy=false;
 function openCandidateRecruitment(id){
   const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));
   if(!item)return;
-  recruitmentCandidate=item;
-  renderCandidateRecruitment(item);
+  recruitmentCandidate=item;recruitmentBusy=false;
+  const society=String(item.society||"").trim();
+  // Dossier déjà ventilé : la société enregistrée est conservée (le serveur revérifie le périmètre à la
+  // confirmation). Dossier non ventilé : le serveur dit quelles sociétés ce compte peut choisir.
+  renderCandidateRecruitment(item,society?{selection:"assigned",society,societies:[society],can_recruit:true}:null);
+  if(!society)loadCandidateRecruitmentOptions(item);
 }
-function candidateRecruitmentVentilationStep(){
-  // Dossier non ventilé : la société destinataire se choisit ici, parmi les cibles autorisées par le serveur.
-  if(!recruitmentCanVentilate())return `<div class="error show" role="alert">Société destinataire requise : ce dossier n’est pas encore ventilé.</div><p class="rec-ventilation-hint">${VENTILATION_DENIED_HINT}</p><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button></div>`;
-  return `<p class="rec-destination">Société destinataire : <b>Non ventilé (vivier Groupe)</b></p><label for="recruitmentSociety">Société destinataire *</label><select id="recruitmentSociety" name="society" required disabled><option value="">Chargement…</option></select><label for="recruitmentReason">Motif de ventilation (facultatif)</label><input id="recruitmentReason" name="reason" maxlength="500"><p class="rec-ventilation-hint"><b>Ventiler</b> affecte le dossier à la société choisie. <b>Ventiler et recruter</b> le transfère ensuite à la DRH de cette société (rubrique <b>Contrats à établir</b>).</p><div id="recruitmentError" class="error"></div><div class="modal-actions rec-ventilation-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="button" class="primary" disabled onclick="ventilateCandidateFromRecruitment(this.form,false)">Ventiler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px" disabled>Ventiler et recruter</button></div>`;
+async function loadCandidateRecruitmentOptions(item){
+  let options;
+  try{options=await apiFetch(`/api/drh/candidates/${item.id}/transfer-options`)}
+  catch(error){options={selection:"none",societies:[],can_recruit:false,reason:error.message||"Sociétés autorisées indisponibles"}}
+  if(recruitmentCandidate!==item)return;
+  // La liste affichée peut être en retard : un dossier ventilé entre-temps garde sa société.
+  if(options.society&&!String(item.society||"").trim()){item.society=options.society;refreshCandidateRows()}
+  renderCandidateRecruitment(item,options);
 }
-function renderCandidateRecruitment(item,notice=""){
+function candidateRecruitmentDestination(options,selected){
+  const society=options?.selection==="assigned"?options.society:options?.selection==="automatic"?options.societies[0]:"";
+  if(!options)return `<p class="rec-destination" aria-busy="true">Société destinataire : <b>Recherche des sociétés autorisées…</b></p>`;
+  if(society)return `<p class="rec-destination">Société destinataire : <b>${esc(society)}</b>${options.selection==="automatic"?" <span>(sélection automatique)</span>":""}</p>`;
+  if(options.selection!=="required")return `<p class="rec-destination">Société destinataire : <b>Aucune société autorisée</b></p>`;
+  return `<label for="recruitmentSociety">Société destinataire *</label><select id="recruitmentSociety" name="society" required><option value="">— Choisir —</option>${options.societies.map(value=>`<option value="${esc(value)}"${value===selected?" selected":""}>${esc(value)}</option>`).join("")}</select>`;
+}
+function renderCandidateRecruitment(item,options,state={}){
+  recruitmentOptions=options;
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  const destination=String(item.society||"").trim();
+  const ventilated=!!String(item.society||"").trim(),retry=item.data?.drhTransfer?.status==="failed";
+  const opinion=item.data?.avisDecision||"";
+  const error=state.error||(options&&!options.can_recruit?options.reason||"Recrutement impossible pour ce dossier.":retry?"Transfert DRH à reprendre : la tentative précédente n’a pas abouti.":"");
   document.getElementById("recruitmentModal")?.remove();
   const modal=document.createElement("div");modal.id="recruitmentModal";modal.className="modal-backdrop";
   // Recruter = finaliser le recrutement ET transférer le dossier à la DRH de la société destinataire.
-  const body=destination
-    ?`${notice?`<div class="rec-ventilation-ok" role="status">${esc(notice)}</div>`:""}<p class="rec-destination">Société destinataire : <b>${esc(destination)}</b></p><p style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px">Le dossier sera transféré à la DRH de cette société (rubrique <b>Contrats à établir</b>) et quittera Recrutement. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p><div id="recruitmentError" class="error"${item.data?.drhTransfer?.status==="failed"?' style="display:block"':""}>${item.data?.drhTransfer?.status==="failed"?"Transfert DRH à reprendre : la tentative précédente n’a pas abouti.":""}</div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button><button type="submit" class="row-recruit" style="font-size:12px;padding:10px 16px">${item.data?.drhTransfer?.status==="failed"?"Réessayer le transfert":"Recruter et transférer à la DRH"}</button></div>`
-    :candidateRecruitmentVentilationStep();
+  const confirmation=options?.can_recruit?`<p class="rec-recruit-note">${ventilated?"Après confirmation, le dossier sera transféré à la DRH de cette société":"Après confirmation, le dossier sera ventilé vers cette société puis transféré à sa DRH"} (rubrique <b>Contrats à établir</b>) et quittera Recrutement. Aucun employé ni contrat ne sera créé avant validation par la DRH.</p>`:"";
+  const body=`<dl class="rec-recruit-summary"><div><dt>Candidat</dt><dd>${esc(fullName)}</dd></div><div><dt>Poste demandé</dt><dd>${esc(item.desired_position||"Poste non renseigné")}</dd></div><div><dt>Avis du recruteur</dt><dd><span class="pill ${opinion==="Favorable"?"pill-green":"pill-gray"}">${esc(opinion||"Non renseigné")}</span></dd></div><div><dt>Ventilation</dt><dd><span class="pill ${ventilated?"pill-indigo":"pill-gray"}">${ventilated?"Ventilé":"Non ventilé"}</span></dd></div></dl>${candidateRecruitmentDestination(options,state.selected)}${confirmation}<div id="recruitmentError" class="error${error?" show":""}" role="alert">${esc(error)}</div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateRecruitment()">Annuler</button>${!options||options.can_recruit?`<button type="submit" class="row-recruit rec-recruit-confirm"${options?"":" disabled"}>${retry?"Réessayer le transfert":"Confirmer le recrutement"}</button>`:""}</div>`;
   modal.innerHTML=`<div class="modal" style="max-width:560px"><div class="modal-head"><div><h2>Recruter le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(fullName)} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" aria-label="Fermer" onclick="closeCandidateRecruitment()">×</button></div><form onsubmit="event.preventDefault();transmitCandidateToDrh(this)">${body}</form></div>`;
   modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateRecruitment()});document.body.appendChild(modal);
-  if(!destination&&recruitmentCanVentilate())loadCandidateRecruitmentTargets(item);
 }
-async function loadCandidateRecruitmentTargets(item){
-  const fail=message=>{const output=document.getElementById("recruitmentError");if(output&&recruitmentCandidate===item){output.textContent=message;output.classList.add("show")}};
-  try{
-    // Uniquement les sociétés vers lesquelles ce compte peut légitimement ventiler (serveur).
-    const result=await apiFetch("/api/drh/candidates/ventilation-targets");
-    if(recruitmentCandidate!==item)return;
-    const select=document.getElementById("recruitmentSociety");if(!select)return;
-    const targets=(result?.societies||[]).filter(Boolean);
-    if(!targets.length){select.innerHTML='<option value="">Aucune société autorisée</option>';fail("Aucune société n’est autorisée pour la ventilation avec ce compte.");return}
-    select.innerHTML='<option value="">— Choisir —</option>'+targets.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");
-    if(targets.length===1)select.value=targets[0];
-    select.disabled=false;select.form.querySelectorAll("button[disabled]").forEach(button=>{button.disabled=false});
-  }catch(error){fail(error.message||"Sociétés indisponibles")}
-}
-async function ventilateCandidateFromRecruitment(form,thenRecruit){
-  const item=recruitmentCandidate;if(!item||!recruitmentCanVentilate()||String(item.society||"").trim())return;
-  const output=document.getElementById("recruitmentError");
-  const fail=message=>{if(output){output.textContent=message;output.classList.add("show")}};
-  const value=String(form.elements.society?.value||"").trim();
-  if(!value){fail("Choisissez la société destinataire.");return}
-  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  const buttons=[...form.querySelectorAll("button")];buttons.forEach(button=>{button.disabled=true});
-  try{
-    // Même endpoint que l'action « Ventiler » : permission, périmètre et audit restent contrôlés par le serveur.
-    const result=await apiFetch(`/api/drh/candidates/${item.id}/ventilation`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({society:value,reason:String(form.elements.reason?.value||"").trim()||null})});
-    applyCandidateVentilation(item,result,value);
-  }catch(error){fail(error.message||"Ventilation impossible");buttons.forEach(button=>{button.disabled=false});return}
-  recruitmentListStale=true;
-  showBanner(`Dossier de ${esc(fullName)} ventilé vers ${esc(item.society)}.`,"success");
-  refreshCandidateRows();
-  if(recruitmentCandidate!==item)return;
-  // Même fenêtre : le dossier est ventilé, le recrutement se poursuit sans la fermer ni la rouvrir.
-  renderCandidateRecruitment(item,`Dossier ventilé vers ${item.society}.`);
-  if(thenRecruit)await transmitCandidateToDrh(document.getElementById("recruitmentModal").querySelector("form"));
-}
-function closeCandidateRecruitment(){
-  document.getElementById("recruitmentModal")?.remove();recruitmentCandidate=null;
-  // Une ventilation faite ici sans recrutement : la liste et les compteurs repartent du serveur.
-  if(recruitmentListStale){recruitmentListStale=false;refreshRecruitCurrentSection()}
-}
+function closeCandidateRecruitment(){document.getElementById("recruitmentModal")?.remove();recruitmentCandidate=null;recruitmentOptions=null;recruitmentBusy=false;}
 async function transmitCandidateToDrh(form){
-  const item=recruitmentCandidate;if(!item)return;
-  const society=String(item.society||"").trim();
-  // Sans société destinataire, aucun transfert : « Ventiler et recruter » ventile d'abord, puis revient ici.
-  if(!society)return form.elements?.society?ventilateCandidateFromRecruitment(form,true):undefined;
+  const item=recruitmentCandidate,options=recruitmentOptions;if(!item||recruitmentBusy)return;
+  const fail=message=>{const output=document.getElementById("recruitmentError");if(output){output.textContent=message;output.classList.add("show")}};
+  let society=String(item.society||"").trim(),assignment=null;
+  if(!society){
+    // Dossier non ventilé : la société vient des options du serveur, qui la revalide à la confirmation.
+    if(!options?.can_recruit)return;
+    society=options.selection==="automatic"?options.societies[0]:String(form.elements?.society?.value||"").trim();
+    if(!society){fail("Choisissez la société destinataire.");return}
+    assignment={society};
+  }
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="TRANSFERT…";
+  const button=form.querySelector('button[type="submit"]'),label=assignment?"Confirmer le recrutement":"Réessayer le transfert";
+  recruitmentBusy=true;button.disabled=true;button.textContent="RECRUTEMENT EN COURS…";button.classList?.add("is-busy");button.setAttribute?.("aria-busy","true");
   try{
-    // Transfert atomique et idempotent : un double clic ou un nouvel essai ne crée jamais deux dossiers.
-    await apiFetch(`/api/drh/candidates/${item.id}/transfer-drh`,{method:"POST"});
-    recruitmentListStale=false;closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transféré à la DRH de ${esc(society)} (« Contrats à établir »). Il n’apparaît plus dans Recrutement.`,"success");
+    // Ventilation (si nécessaire) puis transfert, côté serveur. Idempotent : un double clic ou un nouvel
+    // essai ne crée jamais deux dossiers.
+    const result=await apiFetch(`/api/drh/candidates/${item.id}/transfer-drh`,assignment?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(assignment)}:{method:"POST"});
+    society=result?.data?.society||society;
+    closeCandidateRecruitment();showBanner(`Dossier de ${esc(fullName)} transféré à la DRH de ${esc(society)} (« Contrats à établir »). Il n’apparaît plus dans Recrutement.`,"success");
     await loadTab(activeTab);
-  }catch(error){const output=document.getElementById("recruitmentError");if(output){output.textContent=error.message||"Transfert DRH impossible";output.classList.add("show")}button.disabled=false;button.textContent="Réessayer le transfert";}
+  }catch(error){
+    recruitmentBusy=false;
+    const message=error.message||"Transfert DRH impossible";
+    if(assignment&&error.code==="TRANSFERT_DRH_A_REPRENDRE"&&recruitmentCandidate===item){
+      // La ventilation est acquise, seul le transfert reste à reprendre : la société n'est plus à choisir.
+      item.society=String(society).toUpperCase();item.data={...(item.data||{}),drhTransfer:{status:"failed"}};
+      refreshCandidateRows();
+      renderCandidateRecruitment(item,{selection:"assigned",society:item.society,societies:[item.society],can_recruit:true},{error:message});
+      return;
+    }
+    fail(message);button.disabled=false;button.textContent=label;button.classList?.remove("is-busy");button.removeAttribute?.("aria-busy");
+  }
 }
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
 const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
