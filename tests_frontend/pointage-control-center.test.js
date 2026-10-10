@@ -322,14 +322,10 @@ const TERM = { id: 4, terminal_id: 'trm_public', name: 'TAB-ENTREE-01', terminal
   key_fingerprint: 'abcd1234abcd1234', pairing_pending: false, pairing_expires_at: null, last_seen_at: '2026-09-30T08:05:00Z',
   revoked_at: null, revoked_reason: null, config_version: 2, device_label: 'Mozilla/5.0 (Linux; Android 14; SM-X210)' };
 
-test('terminaux : liste sans secret, code d\'association à usage unique, activation explicite, révocation motivée', async () => {
+test('terminaux : liste sans secret, activation explicite, audit — aucune commande d\'association, de révocation ni de création', async () => {
   const { d, w, calls, dom } = bootBio({
     '/api/biometrics/terminals': [200, [TERM]],
-    'POST /api/biometrics/terminals': [200, { ...TERM, id: 9, paired: false, name: 'TAB-NEW' }],
-    'POST /api/biometrics/terminals/4/pairing-code': [200, { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHJK' }],
-    'POST /api/biometrics/terminals/9/pairing-code': [200, { code: 'ZZZZZ-YYYYY', expires_in: 600, pair_path: '/borne#pair=ZZZZZYYYYY' }],
     'PATCH /api/biometrics/terminals/4': [200, { ...TERM, facial_attendance_enabled: true }],
-    'POST /api/biometrics/terminals/4/revoke': [200, { ...TERM, revoked_at: '2026-09-30T09:00:00Z' }],
     '/api/biometrics/terminals/4/audit': [200, [{ at: '2026-09-30T08:05:00Z', action: 'biometrics.terminal.recognize', result: 'success', state: 'ATTENDANCE_RECORDED', matricule: 'A0001', reason: null }]],
   }, 'terminals');
   const confirms = [];
@@ -343,32 +339,13 @@ test('terminaux : liste sans secret, code d\'association à usage unique, activa
   await tick(80);
   assert.match(confirms.at(-1), /pointage facial RÉEL/);
   assert.deepEqual(calls.find((c) => c.method === 'PATCH').body, { facial_attendance_enabled: true });
-  // Code d'association : affiché une fois, lien vers la borne, jamais stocké par la page.
-  d.querySelector('[data-term-pair="4"]').click();
-  await tick(80);
-  assert.equal(d.getElementById('pair-code').textContent, 'ABCDE-FGHJK');
-  assert.match(d.querySelector('.modal').textContent, /pointeur\.irongs\.com\/borne/);
-  d.getElementById('pair-close').click();
-  await tick(40);
-  assert.equal(d.getElementById('pair-code'), null);
   // Audit du terminal.
   d.querySelector('[data-term-audit="4"]').click();
   await tick(80);
   assert.match(d.querySelector('.modal').textContent, /recognize.*success.*ATTENDANCE_RECORDED.*A0001/);
   d.getElementById('audit-close').click();
-  // Révocation : motif obligatoire.
-  w.prompt = () => 'Tablette perdue';
-  d.querySelector('[data-term-revoke="4"]').click();
-  await tick(80);
-  assert.deepEqual(calls.find((c) => c.path.endsWith('/revoke')).body, { reason: 'Tablette perdue' });
-  // Création : facial jamais activé à la création, code proposé aussitôt.
-  d.getElementById('terminal-add').click();
-  await tick(80);
-  d.getElementById('t-name').value = 'TAB-NEW';
-  d.getElementById('term-form').dispatchEvent(new w.Event('submit', { cancelable: true }));
-  await tick(120);
-  const created = calls.find((c) => c.method === 'POST' && c.path === '/api/biometrics/terminals').body;
-  assert.deepEqual(created, { name: 'TAB-NEW', terminal_type: 'TABLET_ANDROID', site_id: 3, location: null });
-  assert.equal(d.getElementById('pair-code').textContent, 'ZZZZZ-YYYYY');
+  // Association, révocation, suppression, création : Administration Système uniquement.
+  assert.equal(d.querySelectorAll('[data-term-pair], [data-term-revoke], [data-term-delete], #terminal-add, #term-form, #pair-code').length, 0);
+  assert.ok(calls.every((c) => !/pairing-code|\/revoke/.test(c.path) && !(c.method === 'POST' && c.path === '/api/biometrics/terminals') && c.method !== 'DELETE'));
   dom.window.close();
 });
