@@ -18,7 +18,9 @@ function row(over = {}) {
   };
 }
 
-function boot({ standalone = false, board, anomalies = [] } = {}) {
+const ALL_WRITES = { writes: { correct_presence: true, correct_closed_presence: true, close_day: true, reopen_presence: true, resolve_anomaly: true, rotation_settings: true, rotation_learning: true, rotation_rebuild: true, qualify_deviation: true, rotation_decision: true }, read_only: false };
+
+function boot({ standalone = false, board, anomalies = [], capabilities = ALL_WRITES } = {}) {
   const calls = [], navigations = [];
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', (e) => { if (/navigation/i.test(e.message)) navigations.push(e.message); });
@@ -32,6 +34,7 @@ function boot({ standalone = false, board, anomalies = [] } = {}) {
         calls.push({ path: u.pathname, query: Object.fromEntries(u.searchParams), method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
         let data = {};
         if (u.pathname === '/api/auth/me') data = { username: 'OPS01', full_name: 'Chef OPS' };
+        else if (u.pathname === '/api/attendance/capabilities') { if (capabilities === 'error') return { ok: false, status: 500, text: async () => '{}' }; data = capabilities; }
         else if (u.pathname === '/api/attendance/sites') data = [{ id: 3, name: 'Site A', society: 'SOC' }];
         else if (u.pathname === '/api/attendance/board') data = board || { date: '2027-04-05', kpi: { expected: 3, present: 1, absent: 1, not_pointed: 1, late: 0, conge: 0, maladie: 0, repos: 0, anomalies: 1, incomplete: 0 }, total: 60, page: Number(u.searchParams.get('page')), page_size: 25, pages: 3, items: [row()] };
         else if (u.pathname === '/api/attendance/anomalies') data = { total: anomalies.length, page: 1, page_size: 25, pages: 1, items: anomalies };
@@ -370,5 +373,76 @@ test('terminaux : liste sans secret, code d\'association à usage unique, activa
   const created = calls.find((c) => c.method === 'POST' && c.path === '/api/biometrics/terminals').body;
   assert.deepEqual(created, { name: 'TAB-NEW', terminal_type: 'TABLET_ANDROID', site_id: 3, location: null });
   assert.equal(d.getElementById('pair-code').textContent, 'ZZZZZ-YYYYY');
+  dom.window.close();
+});
+
+// ── Permissions effectives : les contrôles d'écriture suivent /attendance/capabilities ─────
+const NO_WRITES = { writes: Object.fromEntries(Object.keys(ALL_WRITES.writes).map((k) => [k, false])), read_only: true };
+const OPEN_ANOMALY = [{ id: 5, type: 'LATE', severity: 'warning', nom: 'Ouali Amine', message: 'Arrivée à 08:40', status: 'OPEN', date: '2027-04-05' }];
+const isWrite = (c) => c.method !== 'GET' && c.path !== '/api/auth/login';
+const visible = (el) => !!el && !el.classList.contains('hidden');
+
+test('compte en consultation (DRH seul) : aucun contrôle d’écriture, consultation et filtres intacts', async () => {
+  const { d, w, calls, dom } = boot({ capabilities: NO_WRITES, anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.ok(calls.some((c) => c.path === '/api/attendance/capabilities' && c.method === 'GET'));
+  assert.match(d.getElementById('brand-user').textContent, /consultation/);
+  assert.match(d.getElementById('board-rows').textContent, /Ouali Amine/, 'la situation du jour reste lisible');
+  assert.equal(d.querySelectorAll('[data-correct]').length, 0, 'pas de bouton Corriger');
+  assert.equal(visible(d.getElementById('close-btn')), false, 'pas de bouton Clôturer');
+  assert.equal(visible(d.getElementById('s-settings')), false, 'pas de bouton Paramètres de rotation');
+  assert.ok(d.querySelector('[data-bio]'), 'la consultation de la fiche biométrique reste proposée');
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.match(d.getElementById('anomaly-rows').textContent, /Arrivée à 08:40/);
+  assert.equal(d.querySelectorAll('[data-resolve]').length, 0, 'pas de bouton Traiter');
+  d.querySelector('[data-view="board"]').click();
+  d.getElementById('f-status').value = 'absent';
+  d.getElementById('f-status').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await tick(60);
+  assert.ok(calls.some((c) => c.path === '/api/attendance/board' && c.query.status === 'absent'), 'les filtres interrogent toujours le serveur');
+  d.getElementById('close-btn').click();
+  await tick(60);
+  assert.equal(d.querySelector('.modal'), null, 'un clic forcé sur un contrôle masqué n’ouvre rien');
+  assert.deepEqual(calls.filter(isWrite), [], 'aucune requête d’écriture émise');
+  dom.window.close();
+});
+
+test('capacités indisponibles : l’écran reste en consultation (refus par défaut)', async () => {
+  const { d, calls, dom } = boot({ capabilities: 'error' });
+  await tick(60);
+  assert.match(d.getElementById('board-rows').textContent, /Ouali Amine/);
+  assert.equal(d.querySelectorAll('[data-correct]').length, 0);
+  assert.equal(visible(d.getElementById('close-btn')), false);
+  assert.deepEqual(calls.filter(isWrite), []);
+  dom.window.close();
+});
+
+test('droits partiels : seules les actions réellement accordées sont proposées', async () => {
+  const capabilities = { writes: { ...NO_WRITES.writes, correct_presence: true, resolve_anomaly: true } };
+  const board = { date: '2027-04-05', kpi: { expected: 2, present: 2, absent: 0, not_pointed: 0, late: 0, conge: 0, maladie: 0, repos: 0, anomalies: 0, incomplete: 0 },
+    total: 2, page: 1, page_size: 25, pages: 1, items: [row(), row({ employee_id: 2, matricule: 'M002', nom: 'Saidi Lina', presence_id: 12, closed: true })] };
+  const { d, dom } = boot({ capabilities, board, anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.doesNotMatch(d.getElementById('brand-user').textContent, /consultation/);
+  assert.ok(d.querySelector('[data-correct="11"]'), 'journée ouverte : correction accordée');
+  assert.equal(d.querySelector('[data-correct="12"]'), null, 'journée clôturée : correction renforcée non accordée');
+  assert.equal(visible(d.getElementById('close-btn')), false, 'clôture non accordée');
+  assert.equal(visible(d.getElementById('s-settings')), false);
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.ok(d.querySelector('[data-resolve="5"]'), 'traitement d’anomalie accordé');
+  dom.window.close();
+});
+
+test('compte opérationnel : tous les contrôles d’écriture restent proposés', async () => {
+  const { d, dom } = boot({ anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.ok(d.querySelector('[data-correct="11"]'));
+  assert.equal(visible(d.getElementById('close-btn')), true);
+  assert.equal(visible(d.getElementById('s-settings')), true);
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.ok(d.querySelector('[data-resolve="5"]'));
   dom.window.close();
 });

@@ -443,7 +443,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
 
   function logout() {
     if (window.ATLASTestMode) window.ATLASTestMode.stop();
-    state.token = ""; state.user = null;
+    state.token = ""; state.user = null; writeCaps = {};
     pointerSeq++; pointerRows = []; pointerCaps = {actions:[],sites:[],societies:[]};
     $("pointer-rows").replaceChildren(); $("pointer-kpis").replaceChildren(); closeModal();
     sessionStorage.removeItem(TOKEN_KEY);
@@ -453,8 +453,10 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
 
   async function enter() {
     state.user = await api("/auth/me");
-    const sites = await api("/attendance/sites");
-    $("brand-user").textContent = (state.user.full_name || state.user.username) + " · " + sites.length + " site(s) autorisé(s)";
+    const [caps, sites] = await Promise.all([api("/attendance/capabilities").catch(() => ({})), api("/attendance/sites")]);
+    writeCaps = caps && typeof caps.writes === "object" && caps.writes ? caps.writes : {};
+    applyWriteCaps();
+    $("brand-user").textContent = (state.user.full_name || state.user.username) + " · " + sites.length + " site(s) autorisé(s)" + (Object.values(writeCaps).some((v) => v === true) ? "" : " · consultation");
     $("f-site").innerHTML = '<option value="">Tous les sites autorisés</option>' + sites.map((s) => `<option value="${s.id}">${esc(s.name)}${s.society ? " — " + esc(s.society) : ""}</option>`).join("");
     if (!$("f-date").value) $("f-date").value = today();
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
@@ -496,6 +498,14 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
 
 
   let pointerCaps = { actions: [], sites: [], societies: [] }, pointerRows = [], pointerSeq = 0;
+  // Écritures réellement accordées à ce compte par le serveur (/attendance/capabilities). Sans
+  // réponse, aucune n'est proposée : l'écran reste en consultation.
+  let writeCaps = {};
+  const canWrite = (name) => writeCaps[name] === true;
+  function applyWriteCaps() {
+    $("close-btn").classList.toggle("hidden", !canWrite("close_day"));
+    $("s-settings").classList.toggle("hidden", !canWrite("rotation_settings"));
+  }
   async function initPointers() {
     const caps = await api('/attendance/pointers/capabilities').catch(() => ({}));
     pointerCaps = {actions:Array.isArray(caps?.actions)?caps.actions.filter(a=>['read','create','update'].includes(a)):[],sites:Array.isArray(caps?.sites)?caps.sites:[],societies:Array.isArray(caps?.societies)?caps.societies:[]};
@@ -604,7 +614,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <td>${esc(r.arrival) || "—"}</td><td>${esc(r.departure) || "—"}${r.incomplete ? ' <span class="pill sev-warning">Incomplet</span>' : ""}</td>
         <td><span class="pill st-${esc(r.status)}">${esc(STATUS_LABEL[r.status] || r.status)}</span>${r.closed ? ' <span class="pill st-repos" title="Journée clôturée">🔒</span>' : ""}</td>
         <td class="src">${esc(SOURCE_LABEL[r.source] || r.source) || "—"}</td><td>${anomalies}</td>
-        <td><div class="row-actions">${r.presence_id ? `<button class="link" type="button" data-correct="${r.presence_id}">Corriger</button>` : ""}<button class="link" type="button" data-bio="${r.employee_id}">Biométrie</button></div></td>
+        <td><div class="row-actions">${r.presence_id && canWrite(r.closed ? "correct_closed_presence" : "correct_presence") ? `<button class="link" type="button" data-correct="${r.presence_id}">Corriger</button>` : ""}<button class="link" type="button" data-bio="${r.employee_id}">Biométrie</button></div></td>
       </tr>`;
     }).join("") : '<tr><td colspan="10" class="empty">Aucun employé ne correspond à ces critères.</td></tr>';
     $("board-rows").querySelectorAll("[data-correct]").forEach((b) => b.addEventListener("click", () => openCorrection(rows.find((r) => String(r.presence_id) === b.dataset.correct))));
@@ -644,7 +654,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   });
 
   function openCorrection(row) {
-    if (!row) return;
+    if (!row || !canWrite(row.closed ? "correct_closed_presence" : "correct_presence")) return;
     const m = modal(`<h3>Corriger le pointage</h3><div class="sub">${esc(row.nom)} · ${esc(row.matricule)} · ${esc(row.site)}${row.closed ? " · <b>journée clôturée</b> (validation requise)" : ""}</div>
       <form id="corr-form">
         <label for="c-status">Statut</label><select id="c-status">${Object.keys(STATUS_LABEL).filter((k) => k !== "non_pointe").map((k) => `<option value="${k}"${k === row.status ? " selected" : ""}>${STATUS_LABEL[k]}</option>`).join("")}</select>
@@ -672,6 +682,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
 
   // ── Clôture ─────────────────────────────────────────────────────────────────────────
   $("close-btn").addEventListener("click", async () => {
+    if (!canWrite("close_day")) return;
     const day = $("f-date").value || today(), siteId = $("f-site").value;
     let open = [];
     try {
@@ -711,7 +722,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         <td>${esc(a.date)}</td><td class="who"><b>${esc(a.nom) || "—"}</b><small>${esc(a.matricule)}</small></td><td>${esc(a.site) || "—"}</td>
         <td><span class="pill sev-${esc(a.severity)}">${esc(ANOMALY_LABEL[a.type] || a.type)}</span></td><td>${esc(a.message)}${a.resolution ? `<br><small>↳ ${esc(a.resolution)} — ${esc(a.resolved_by)}</small>` : ""}</td>
         <td>${a.status === "OPEN" ? "Ouverte" : a.status === "RESOLVED" ? "Résolue" : "Classée"}</td>
-        <td><div class="row-actions">${a.status === "OPEN" ? `<button class="link" type="button" data-resolve="${a.id}">Traiter</button>` : ""}</div></td></tr>`).join("")
+        <td><div class="row-actions">${a.status === "OPEN" && canWrite("resolve_anomaly") ? `<button class="link" type="button" data-resolve="${a.id}">Traiter</button>` : ""}</div></td></tr>`).join("")
         : '<tr><td colspan="7" class="empty">Aucune anomalie.</td></tr>';
       $("anomaly-rows").querySelectorAll("[data-resolve]").forEach((b) => b.addEventListener("click", () => openResolve(data.items.find((a) => String(a.id) === b.dataset.resolve))));
       $("anomaly-total").textContent = `${data.total} anomalie(s) · page ${data.page}/${data.pages}`;
@@ -720,6 +731,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   function openResolve(a) {
+    if (!a || !canWrite("resolve_anomaly")) return;
     const m = modal(`<h3>Traiter l'anomalie</h3><div class="sub">${esc(ANOMALY_LABEL[a.type] || a.type)} · ${esc(a.nom)} · ${esc(a.date)}</div><p>${esc(a.message)}</p>
       <form id="r-form"><label for="r-status">Décision</label><select id="r-status"><option value="RESOLVED">Résolue</option><option value="DISMISSED">Classée sans suite</option></select>
       <label for="r-text">Résolution (obligatoire)</label><textarea id="r-text" required minlength="3"></textarea><div class="error" id="r-error" role="alert"></div>
@@ -831,6 +843,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   async function openRotationSettings() {
+    if (!canWrite("rotation_settings")) return;
     const siteId = $("f-site").value;
     if (!siteId) { toast("Choisissez d'abord un site dans le filtre en haut de page.", true); return; }
     let cfg;
@@ -897,8 +910,8 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       <div class="pl-head"><div><h3>${esc(s.site) || "—"}</h3><small>${s.sheets_configured ? "Feuilles de rotation actives" : "Feuilles de rotation inactives"}${measured ? " · modèle v" + esc(s.model_version) + " · moteur " + esc(s.engine_version) : ""}</small></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill pl-${esc(shown.toLowerCase())}">${esc(PL_STATE[shown] || shown)}</span>
           <button class="link" type="button" data-pl-groups="${s.site_id}">Groupes détectés</button>
-          <button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="${s.mode === "OFF" ? "LEARNING" : "OFF"}">${s.mode === "OFF" ? "Activer l'apprentissage" : "Suspendre l'apprentissage"}</button>
-          ${s.mode === "LEARNING" ? `<button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="ACTIVE">Activer la comparaison prévu / réel</button>` : ""}${s.mode === "ACTIVE" ? `<button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="LEARNING">Revenir à l'apprentissage seul</button>` : ""}</div></div>
+          ${canWrite("rotation_learning") ? `<button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="${s.mode === "OFF" ? "LEARNING" : "OFF"}">${s.mode === "OFF" ? "Activer l'apprentissage" : "Suspendre l'apprentissage"}</button>
+          ${s.mode === "LEARNING" ? `<button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="ACTIVE">Activer la comparaison prévu / réel</button>` : ""}${s.mode === "ACTIVE" ? `<button class="secondary" type="button" data-pl-site="${s.site_id}" data-pl-mode="LEARNING">Revenir à l'apprentissage seul</button>` : ""}` : ""}</div></div>
       ${s.mode !== "OFF" && shown === "LEARNING" ? '<div class="pl-banner">PLANNING EN COURS D\'APPRENTISSAGE — aucune alerte de rotation n\'est émise.</div>' : ""}
       ${s.mode === "ACTIVE" && shown === "STABLE" ? '<div class="state info" style="margin:0 0 12px">Comparaison prévu / réel active : un écart fiable est signalé au Pointeur et à OPS, le pointage reste enregistré.</div>' : ""}
       ${shown === "REVIEW_REQUIRED" ? '<div class="pl-banner" style="background:#fee2e2;color:#991b1b">MODÈLE À REVOIR — les observations contredisent une condition ci-dessous.</div>' : ""}
@@ -915,6 +928,7 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
   }
 
   async function setPlanningMode(siteId, mode) {
+    if (!canWrite("rotation_learning")) return;
     try { await api("/attendance/rotation-learning/" + siteId, { method: "PUT", body: { mode } }); toast(mode === "OFF" ? "Apprentissage suspendu (modèle conservé)" : mode === "ACTIVE" ? "Comparaison prévu / réel activée pour ce site" : "Apprentissage activé pour ce site"); loadPlanning(); }
     catch (ex) { toast(ex.message, true); }
   }
