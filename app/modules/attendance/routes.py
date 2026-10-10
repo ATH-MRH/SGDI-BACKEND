@@ -40,7 +40,9 @@ from app.modules.attendance.models import (
     RotationSetting,
 )
 from app.core.audit import append_audit
-from app.modules.auth.dependencies import AUTHORIZED_ACTIONS, current_user
+from app.modules.auth.dependencies import (
+    current_user, route_action, route_module_keys, user_holds_action, user_holds_module,
+)
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, DailyPresence, Site
@@ -57,10 +59,33 @@ KPI_STATUSES = ("present", "absent", "conge", "maladie", "repos", "mission")
 def _require_action(user: User, action: str) -> None:
     """Action au-delà de la déduction HTTP (ex. correction d'une journée clôturée) : même
     politique authorized_actions que le reste du backend (liste vide = profil)."""
-    actions = [str(v).strip().lower() for v in (user.authorized_actions or [])]
-    actions = [v for v in actions if v in AUTHORIZED_ACTIONS]
-    if actions and action not in actions and "admin" not in actions:
+    if not user_holds_action(user, action):
         raise HTTPException(status_code=403, detail=f"Action non autorisée : {action}")
+
+
+# Écritures du centre de contrôle : route réelle + action exigée par la route elle-même. Le
+# droit affiché est calculé par les fonctions qui protègent la route — jamais par une règle
+# propre à l'écran.
+WRITE_CAPABILITIES: dict[str, tuple[str, str, str]] = {
+    "correct_presence": ("PATCH", "/api/attendance/presences/0", "update"),
+    "correct_closed_presence": ("PATCH", "/api/attendance/presences/0", "validate"),
+    "close_day": ("POST", "/api/attendance/close", "validate"),
+    "reopen_presence": ("POST", "/api/attendance/presences/0/unlock", "unlock"),
+    "resolve_anomaly": ("PATCH", "/api/attendance/anomalies/0", "validate"),
+    "rotation_settings": ("PUT", "/api/attendance/rotation-settings/0", "update"),
+    "rotation_learning": ("PUT", "/api/attendance/rotation-learning/0", "update"),
+    "rotation_rebuild": ("POST", "/api/attendance/rotation-learning/0/rebuild", "admin"),
+    "qualify_deviation": ("POST", "/api/attendance/rotation-deviations/0/qualify", "validate"),
+    "rotation_decision": ("POST", "/api/attendance/rotation-planning/0/decisions", "validate"),
+}
+
+
+def write_capabilities(user: User) -> dict[str, bool]:
+    return {
+        name: user_holds_module(user, route_module_keys(method, path))
+        and user_holds_action(user, route_action(method, path)) and user_holds_action(user, action)
+        for name, (method, path, action) in WRITE_CAPABILITIES.items()
+    }
 
 
 def _scope(db: Session, user: User, site_id: int | None) -> list[int] | None:
@@ -81,6 +106,13 @@ def _presence_in_scope(db: Session, user: User, row: DailyPresence) -> None:
 
 def _local_hhmm(value: datetime | None) -> str:
     return core.to_local(value).strftime("%H:%M") if value else ""
+
+
+@router.get("/capabilities")
+def capabilities(user: User = Depends(current_user)) -> dict[str, Any]:
+    """Écritures que CE compte peut réellement faire : les écrans masquent les autres."""
+    writes = write_capabilities(user)
+    return {"writes": writes, "read_only": not any(writes.values())}
 
 
 @router.get("/workspace")
