@@ -328,6 +328,35 @@ def ensure_item_allowed_for_user(item: dict[str, Any], user: Any | None, collect
         raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
 
 
+# Collections SQL dont une ligne désigne un employé et un site réels : la société déclarée dans
+# l'élément envoyé ne suffit pas (un élément sans société passait le contrôle ci-dessus).
+_EMPLOYEE_SITE_COLLECTIONS = frozenset({"feuillePresence", "pointages", "assignments", "affectations"})
+_EMPLOYEE_REF_FIELDS = ("employee_id", "employeeId", "agentBackendId", "agentId", "matricule")
+_SITE_REF_FIELDS = ("site_id", "siteBackendId", "siteId", "site", "siteName")
+
+
+def ensure_item_refs_allowed_for_user(db: Session, item: dict[str, Any], user: Any | None, collection: str | None = None) -> None:
+    """Contrôle le périmètre sur l'employé et le site RÉSOLUS en base (mêmes champs que les
+    écritures SQL du pont), jamais sur la société déclarée par le client."""
+    if collection not in _EMPLOYEE_SITE_COLLECTIONS or not isinstance(item, dict) or _snapshot_unrestricted(user):
+        return
+    from app.modules.irongs.sql_bridge import employee_by_ref, site_by_ref
+    from app.modules.ops.routes import _authorized_site_ids, _site_society
+
+    allowed = _user_allowed_societies(user)
+    employee = employee_by_ref(db, next((item.get(field) for field in _EMPLOYEE_REF_FIELDS if item.get(field)), None))
+    site = site_by_ref(db, next((item.get(field) for field in _SITE_REF_FIELDS if item.get(field)), None))
+    if employee is not None and allowed and _society_key(employee.society) not in allowed:
+        raise HTTPException(status_code=403, detail="Employé hors du périmètre société de ce compte")
+    if site is not None:
+        site_society = _site_society(site)
+        if allowed and site_society and _society_key(site_society) not in allowed:
+            raise HTTPException(status_code=403, detail="Site hors du périmètre société de ce compte")
+        site_ids = _authorized_site_ids(user)
+        if site_ids and site.id not in site_ids:
+            raise HTTPException(status_code=403, detail="Site non autorisé pour ce compte")
+
+
 def _item_refs(item: dict[str, Any], fields: tuple[str, ...]) -> set[str]:
     refs: set[str] = set()
     for field in fields:

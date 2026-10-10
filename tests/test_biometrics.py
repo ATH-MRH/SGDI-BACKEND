@@ -445,13 +445,98 @@ def test_rtsp_camera_unreachable_is_reported_without_credentials(client, auth_he
     site = _site(db)
     model = client.post("/api/biometrics/camera-models", headers=auth_headers, json={
         "manufacturer": "Générique", "model": f"RTSP {_tag()}", "adapter": "GENERIC_RTSP"}).json()
-    r = client.post("/api/biometrics/cameras", headers=auth_headers, json={
-        "name": f"RTSP-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "127.0.0.1", "rtsp_port": 9,
-        "usage": "ATTENDANCE", "username": "rtspuser", "password": "Rtsp-P4ss!"})
+    body = {"name": f"RTSP-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "192.168.50.9", "rtsp_port": 9,
+            "usage": "ATTENDANCE", "username": "rtspuser", "password": "Rtsp-P4ss!"}
+    # L'API refuse une caméra sur la boucle locale (requête serveur détournée).
+    assert client.post("/api/biometrics/cameras", headers=auth_headers, json={**body, "host": "127.0.0.1"}).status_code == 422
+    r = client.post("/api/biometrics/cameras", headers=auth_headers, json=body)
     assert r.status_code == 200, r.text
+    # Port fermé local pour l'adaptateur réel : fixé en base, hors API, pour un test hors réseau.
+    from app.modules.biometrics.models import Camera
+    db.get(Camera, r.json()["id"]).host = "127.0.0.1"
+    db.commit()
     report = client.post(f"/api/biometrics/cameras/{r.json()['id']}/test", headers=auth_headers)
     assert report.status_code == 200
     assert report.json()["connection"]["ok"] is False
     assert "Rtsp-P4ss" not in report.text and "rtspuser" not in report.text
     audits = db.execute(select(AuditEvent).where(AuditEvent.resource == "camera", AuditEvent.resource_id == str(r.json()["id"]))).scalars().all()
     assert audits and all("Rtsp-P4ss" not in json.dumps([a.old_state, a.new_state], default=str) for a in audits)
+
+
+# ── Audit pointeur.irongs.com — P2 : caméras (exposition, destination, identifiants), seuils ─
+def _audit_camera(client, auth_headers, db, **extra):
+    site = _site(db)
+    model = client.post("/api/biometrics/camera-models", headers=auth_headers, json={
+        "manufacturer": "Générique", "model": f"AUDIT {_tag()}", "adapter": "GENERIC_RTSP"}).json()
+    body = {"name": f"AUD-{_tag()}", "camera_model_id": model["id"], "site_id": site.id, "host": "192.168.60.20", "http_port": 8080,
+            "rtsp_port": 554, "serial_number": "SN-AUDIT-1", "usage": "ATTENDANCE", "username": "camuser", "password": "Cam-P4ss!", **extra}
+    return site, body, client.post("/api/biometrics/cameras", headers=auth_headers, json=body)
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "169.254.169.254", "0.0.0.0", "localhost", "cam.localhost", "10.0.0.5:8080",
+                                  "user@10.0.0.5", "10.0.0.5/admin", "a b", "10.0.0.5?x=1", "224.0.0.1", "service.internal", "12345"])
+def test_camera_host_must_be_a_plain_host_outside_loopback_and_link_local(client, auth_headers, db, host):
+    _site_, _body, response = _audit_camera(client, auth_headers, db, host=host)
+    assert response.status_code == 422, (host, response.text)
+
+
+@pytest.mark.parametrize("host", ["192.168.1.20", "10.12.0.7", "cam-entree.site.lan", "nvr01"])
+def test_camera_on_the_site_network_is_still_accepted(client, auth_headers, db, host):
+    _site_, _body, response = _audit_camera(client, auth_headers, db, host=host)
+    assert response.status_code == 200, (host, response.text)
+
+
+def test_camera_stream_path_cannot_leave_the_camera(client, auth_headers, db):
+    for path in ("//autre-hote/flux", "flux-relatif", "/flux\r\nDESCRIBE", "/flux avec espace", "/a@b"):
+        _site_, _body, response = _audit_camera(client, auth_headers, db, profiles={"RECOGNITION_REALTIME": {"path": path}})
+        assert response.status_code == 422, (path, response.text)
+    _site_, _body, ok = _audit_camera(client, auth_headers, db, profiles={"RECOGNITION_REALTIME": {"path": "/cam/realmonitor?channel=1&subtype=0"}})
+    assert ok.status_code == 200, ok.text
+
+
+def test_changing_the_camera_destination_clears_the_stored_credentials(client, auth_headers, db):
+    _site_, _body, created = _audit_camera(client, auth_headers, db)
+    cam = created.json()
+    assert cam["credentials_set"] is True
+    renamed = client.patch(f"/api/biometrics/cameras/{cam['id']}", headers=auth_headers, json={"name": "Renommée"}).json()
+    assert renamed["credentials_set"] is True and renamed["credentials_cleared"] is False       # sans changement de destination : conservés
+    moved = client.patch(f"/api/biometrics/cameras/{cam['id']}", headers=auth_headers, json={"host": "192.168.60.99"}).json()
+    assert moved["credentials_set"] is False and moved["credentials_cleared"] is True
+    again = client.patch(f"/api/biometrics/cameras/{cam['id']}", headers=auth_headers,
+                         json={"host": "192.168.60.21", "username": "camuser", "password": "Nouveau-P4ss!"}).json()
+    assert again["credentials_set"] is True and again["credentials_cleared"] is False            # ressaisis avec la nouvelle adresse
+    assert client.patch(f"/api/biometrics/cameras/{cam['id']}", headers=auth_headers, json={"host": "127.0.0.1"}).status_code == 422
+
+
+def test_camera_inventory_hides_network_details_from_accounts_without_biometric_permission(client, auth_headers, db):
+    import uuid as _uuid
+
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    site, _body, created = _audit_camera(client, auth_headers, db)
+    cam_id = created.json()["id"]
+    username = f"PTGCAM{_uuid.uuid4().int % 10**6:06d}"
+    db.add(User(username=username, full_name=username, role="pointeur", access_level="H2", password_hash=hash_password("cam-audit-1234"),
+                is_active=True, authorized_modules=["pointeur"], authorized_societies=[SOC], authorized_sites=[site.id]))
+    db.commit()
+    token = client.post("/api/auth/login", json={"username": username, "password": "cam-audit-1234"}).json()["access_token"]
+    rows = client.get("/api/biometrics/cameras", headers={"Authorization": "Bearer " + token}, params={"site_id": site.id})
+    assert rows.status_code == 200, rows.text
+    mine = next(row for row in rows.json() if row["id"] == cam_id)
+    assert (mine["host"], mine["http_port"], mine["rtsp_port"], mine["serial_number"], mine["last_check"], mine["profiles"]) == (None, None, None, None, None, {})
+    assert mine["name"] and mine["usage"] == "ATTENDANCE"            # ce dont l'écran du poste a besoin
+    admin = next(row for row in client.get("/api/biometrics/cameras", headers=auth_headers, params={"site_id": site.id}).json() if row["id"] == cam_id)
+    assert admin["host"] == "192.168.60.20" and admin["serial_number"] == "SN-AUDIT-1"
+
+
+@pytest.mark.parametrize("values", [
+    {"liveness_threshold": 0.01}, {"recognition_threshold": 0.05}, {"duplicate_threshold": 0.99}, {"review_margin": -0.1},
+    {"review_margin": 0.9}, {"cooldown_seconds": -5}, {"quality_min_face_px": 1}, {"quality_min_sharpness": -1},
+])
+def test_biometric_thresholds_have_floors_and_ceilings(client, auth_headers, db, values):
+    before = service.active_config(db).version
+    response = client.post("/api/biometrics/config", headers=auth_headers, json={"provenance": "Test : valeur hors bornes refusée", **values})
+    assert response.status_code == 422, (values, response.text)
+    db.expire_all()
+    assert service.active_config(db).version == before               # aucune version créée

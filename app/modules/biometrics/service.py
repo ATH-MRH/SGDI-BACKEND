@@ -101,6 +101,13 @@ def active_config(db: Session) -> BiometricConfig:
     return row
 
 
+CONFIG_BOUNDS: dict[str, tuple[float, float]] = {
+    "recognition_threshold": (0.25, 0.95), "duplicate_threshold": (0.25, 0.95), "liveness_threshold": (0.5, 0.99),
+    "quality_min_detection_score": (0.2, 0.99), "review_margin": (0.0, 0.5), "quality_min_face_px": (20, 2000),
+    "quality_min_sharpness": (0.0, 100000.0), "cooldown_seconds": (0, 86400),
+}
+
+
 def new_config_version(db: Session, *, values: dict[str, Any], provenance: str, actor: Any) -> BiometricConfig:
     if not str(provenance or "").strip():
         raise HTTPException(422, detail="Provenance obligatoire : d'où viennent ces seuils ?")
@@ -113,6 +120,11 @@ def new_config_version(db: Session, *, values: dict[str, Any], provenance: str, 
     for key in ("recognition_threshold", "duplicate_threshold", "liveness_threshold", "quality_min_detection_score"):
         if not 0 < float(data[key]) < 1:
             raise HTTPException(422, detail=f"{key} doit être compris entre 0 et 1")
+    # Planchers et plafonds : une valeur dans ]0;1[ ne suffit pas (0,01 neutraliserait la
+    # reconnaissance ou le contrôle de présence réelle pour toutes les sociétés).
+    for key, (low, high) in CONFIG_BOUNDS.items():
+        if not low <= float(data[key]) <= high:
+            raise HTTPException(422, detail=f"{key} doit être compris entre {low} et {high}")
     row = BiometricConfig(version=current.version + 1, provenance=provenance.strip(),
                           created_by=getattr(actor, "username", None), **data)
     db.add(row)
@@ -640,8 +652,6 @@ def _candidates(db: Session, site_id: int, employee_hint: int | None,
         Assignment.site_id == site_id, Assignment.active == 1, Assignment.start_date <= today,
         (Assignment.end_date.is_(None)) | (Assignment.end_date >= today))
     employee_ids = set(db.execute(stmt).scalars())
-    if employee_hint is not None:
-        employee_ids &= {employee_hint}
     if not employee_ids:
         return []
     rows = db.execute(select(BiometricTemplate).where(BiometricTemplate.employee_id.in_(employee_ids),
@@ -730,6 +740,11 @@ def match_and_record(db: Session, *, source: FacialSource, decision: FrameDecisi
     if top_score < cfg.recognition_threshold + cfg.review_margin:
         return {**base, "state": "REVIEW_REQUIRED", "recorded": False, "message": "Reconnaissance incertaine — nouvel essai",
                 "confidence": round(top_score, 4)}
+    if employee_hint is not None and top_employee.id != employee_hint:
+        # Identifiant préalable (QR, matricule) : il ne réduit plus la comparaison à un seul
+        # gabarit — un sosie restait indétecté. Le meilleur candidat du site doit être l'employé
+        # désigné ; sinon aucun pointage.
+        return {**base, "state": "REFUSED", "recorded": False, "message": "Le visage ne correspond pas à l'employé désigné"}
     # Contrôles employé (au moment du pointage, pas seulement à l'enrôlement).
     if not consent_admissible(db, top_employee.id):
         deactivate_templates(db, employee_id=top_employee.id, reason="Consentement non admissible au pointage", actor=actor)

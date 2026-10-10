@@ -396,7 +396,35 @@ def serve_uploaded_document(filename: str, request: Request):
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
+
+
+class _GuardedUploads(StaticFiles):
+    """Montage /uploads sans le sous-arbre photos/.
+
+    Les photos et les documents (photos/docs) ne sont servis que par les routes explicites
+    ci-dessus, qui portent le contrôle des noms imprévisibles, l'authentification et le
+    périmètre. Ces routes ne correspondent qu'à la forme canonique du chemin : toute variante
+    (barre oblique doublée ou finale, segment « . ») tombait sur ce montage, qui normalise le
+    chemin et servait le fichier sans aucun contrôle. Le montage refuse donc tout ce qui se
+    résout sous photos/ ; les autres dossiers (rapports, synthèse vocale) restent servis."""
+
+    async def get_response(self, path: str, scope):
+        from app.core.photo_storage import PHOTOS_DIR
+
+        first = path.replace("\\", "/").lstrip("/").split("/", 1)[0].casefold()
+        blocked = first == "photos"
+        if not blocked:
+            try:
+                (UPLOADS_ROOT / path).resolve().relative_to(PHOTOS_DIR.resolve())
+                blocked = True                                       # lien symbolique ou casse du système de fichiers
+            except (ValueError, OSError):
+                blocked = False
+        if blocked:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return await super().get_response(path, scope)
+
+
+app.mount("/uploads", _GuardedUploads(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
 
 
 class SlowRequestMiddleware:

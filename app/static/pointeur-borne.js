@@ -333,6 +333,8 @@
     }
   }
 
+  const REQUEST_TIMEOUT_MS = 30000;
+
   async function call(method, path, body) {
     const full = "/api/biometrics" + path;
     const raw = body === undefined ? "" : JSON.stringify(body);
@@ -340,7 +342,10 @@
     const headers = Object.assign({ "Content-Type": "application/json" }, B.identity ? await signedHeaders(method, full, bytes) : {});
     let res;
     try {
-      res = await B.deps.fetch(full, { method, headers, body: raw || undefined, cache: "no-store" });
+      // Délai d'expiration : sans lui, une requête sans réponse laissait la borne figée sur
+      // « ANALYSE EN COURS… » (B.busy jamais relâché), jusqu'au rechargement de la page.
+      const signal = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : undefined;
+      res = await B.deps.fetch(full, { method, headers, body: raw || undefined, cache: "no-store", signal });
     } catch (e) {
       throw new ApiError(0, { code: "NETWORK", message: UNAVAILABLE });
     }
@@ -558,6 +563,9 @@
     try {
       handleResult(await call("POST", "/terminal/qr", { token }));
     } catch (e) {
+      // Panne de transport ou erreur serveur : le QR n'a pas été traité. Il doit pouvoir être
+      // présenté de nouveau (il restait ignoré sans message jusqu'au rechargement de la page).
+      if (!e || !e.status || e.status >= 500) B._lastQr = null;
       if (!handleError(e)) { show("QR_REFUSED", "QR REFUSÉ", esc(e.message), "error"); pause(TIMING.MESSAGE_MS); }
     } finally { B.busy = false; }
     return true;
@@ -656,7 +664,11 @@
     if (facialOn()) SCREENS.READY();
     else { SCREENS.FACIAL_OFF(B.session.facial.message); poll(TIMING.STATUS_POLL_MS); }
     start();
-    try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) { /* facultatif */ }
+    const keepAwake = async () => { try { if (navigator.wakeLock && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch (e) { /* facultatif */ } };
+    await keepAwake();
+    // Le navigateur relâche le verrou d'écran quand la page passe en arrière-plan : il est
+    // redemandé au retour, sinon la borne se met en veille après une première interruption.
+    document.addEventListener("visibilitychange", keepAwake);
   }
 
   B.boot = boot;

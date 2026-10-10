@@ -474,6 +474,59 @@ def set_config(payload: ConfigIn, db: Session = Depends(get_db), user: User = De
 
 
 # ── Caméras ──────────────────────────────────────────────────────────────────────────────
+# Champs réseau d'une caméra : utiles à l'administration biométrique seulement. L'écran du
+# pointeur n'a besoin que de l'identité, du rôle et de l'état de la caméra.
+_CAMERA_NETWORK_FIELDS = ("host", "http_port", "rtsp_port", "serial_number", "last_check")
+_CAMERA_HOST_RE = __import__("re").compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
+PREVIEW_MAX_PER_MINUTE = 240      # aperçu du poste : une image par seconde, marge comprise
+RECOGNIZE_MAX_PER_MINUTE = 120
+
+
+def _has_biometric_feature(db: Session, user: User) -> bool:
+    return is_global_administrator(user) or any(
+        g.module_key == "attendance" and g.feature_key.startswith("biometric_") for g in load_feature_permissions(db, user.id))
+
+
+def _validated_camera_host(value: str) -> str:
+    """Nom d'hôte ou adresse IPv4 d'une caméra du réseau du site. Refuse tout ce qui détournerait
+    la requête du serveur : séparateurs d'URL, identifiants embarqués, boucle locale, adresses de
+    lien local (métadonnées d'infrastructure), adresses non routables."""
+    import ipaddress
+
+    host = str(value or "").strip()
+    if not _CAMERA_HOST_RE.match(host) or ".." in host:
+        raise HTTPException(422, detail="Adresse de caméra invalide : nom d'hôte ou adresse IPv4 attendu")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if host.lower() in {"localhost", "localhost.localdomain"} or host.lower().endswith((".localhost", ".internal")):
+            raise HTTPException(422, detail="Adresse de caméra refusée") from None
+        if host.replace(".", "").isdigit():
+            raise HTTPException(422, detail="Adresse de caméra invalide") from None
+        return host
+    if address.is_loopback or address.is_link_local or address.is_unspecified or address.is_multicast or address.is_reserved:
+        raise HTTPException(422, detail="Adresse de caméra refusée")
+    return host
+
+
+def _validated_profiles(profiles: dict | None) -> dict:
+    """Chemins de flux : relatifs à la caméra, sans saut de ligne ni changement d'hôte."""
+    for name, profile in (profiles or {}).items():
+        path = profile.get("path") if isinstance(profile, dict) else None
+        if path is None:
+            continue
+        text = str(path)
+        if not text.startswith("/") or text.startswith("//") or any(ch in text for ch in "\r\n\t @\\") or len(text) > 300:
+            raise HTTPException(422, detail=f"Chemin de flux invalide pour le profil {name}")
+    return profiles or {}
+
+
+def _throttle(kind: str, user: User, camera: Camera, limit: int) -> None:
+    key = f"camera-{kind}:{user.id}:{camera.id}"
+    if rate_limit.record_failure(key, 60) > limit:
+        raise HTTPException(429, detail="Trop de requêtes sur cette caméra — réessayez dans un instant")
+
+
 def _camera_out(cam: Camera, site: Site | None = None) -> dict[str, Any]:
     return {"id": cam.id, "name": cam.name, "manufacturer": cam.manufacturer, "model": cam.model, "adapter": cam.adapter,
             "camera_model_id": cam.camera_model_id, "society": cam.society, "site_id": cam.site_id,
@@ -526,7 +579,13 @@ def cameras(site_id: int | None = None, db: Session = Depends(get_db), user: Use
         stmt = stmt.where(Camera.site_id.in_(allowed or [-1]))
     rows = db.execute(stmt.order_by(Camera.site_id, Camera.name)).scalars().all()
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({r.site_id for r in rows}))).scalars()} if rows else {}
-    return [_camera_out(r, sites.get(r.site_id)) for r in rows]
+    out = [_camera_out(r, sites.get(r.site_id)) for r in rows]
+    if not _has_biometric_feature(db, user):
+        # Pointeur, OPS, DRH sans permission biométrique : ni adresse, ni ports, ni numéro de série.
+        for row in out:
+            row.update({field: None for field in _CAMERA_NETWORK_FIELDS})
+            row["profiles"] = {}
+    return out
 
 
 class CameraIn(BaseModel):
@@ -609,9 +668,9 @@ def add_camera(payload: CameraIn, db: Session = Depends(get_db), user: User = De
         raise HTTPException(422, detail="Le site n'a pas de société : une caméra appartient à une société ET un site")
     camera = Camera(name=payload.name.strip(), camera_model_id=model.id, manufacturer=model.manufacturer, model=model.model,
                     adapter=model.adapter, society=society, site_id=site.id, location=payload.location,
-                    serial_number=payload.serial_number, host=payload.host.strip(), http_port=payload.http_port,
+                    serial_number=payload.serial_number, host=_validated_camera_host(payload.host), http_port=payload.http_port,
                     rtsp_port=payload.rtsp_port, connection_type=payload.connection_type, channel=payload.channel,
-                    resolution=payload.resolution or model.resolution, fps=payload.fps, profiles=payload.profiles or {},
+                    resolution=payload.resolution or model.resolution, fps=payload.fps, profiles=_validated_profiles(payload.profiles),
                     capabilities=model.capabilities or {}, usage=payload.usage, role=payload.role,
                     is_default=payload.is_default, active=payload.active,
                     facial_attendance_enabled=payload.facial_attendance_enabled)
@@ -634,7 +693,18 @@ def update_camera(camera_id: int, payload: CameraPatch, db: Session = Depends(ge
     _validate_usage_role(changes.get("usage"), changes.get("role"), camera.adapter)
     _check_facial_activation(changes.get("facial_attendance_enabled", camera.facial_attendance_enabled),
                              changes.get("usage", camera.usage), camera.adapter)
+    if "host" in changes and changes["host"] is not None:
+        changes["host"] = _validated_camera_host(changes["host"])
+    if changes.get("profiles") is not None:
+        changes["profiles"] = _validated_profiles(changes["profiles"])
     secret_changed = "username" in changes or "password" in changes
+    # Changer la destination réseau sans ressaisir le mot de passe l'efface : les identifiants
+    # enregistrés pour une caméra ne sont jamais présentés à une autre adresse.
+    target_changed = any(key in changes and changes[key] is not None and changes[key] != getattr(camera, key)
+                         for key in ("host", "http_port", "rtsp_port"))
+    credentials_cleared = bool(target_changed and not secret_changed and camera.credentials_encrypted)
+    if credentials_cleared:
+        camera.credentials_encrypted = None
     if secret_changed:
         current = crypto.decrypt_secret(camera.credentials_encrypted)
         current.update({k: changes.pop(k) or "" for k in ("username", "password") if k in changes})
@@ -643,9 +713,10 @@ def update_camera(camera_id: int, payload: CameraPatch, db: Session = Depends(ge
         setattr(camera, key, value)
     _single_default(db, camera)
     append_audit(db, action="biometrics.camera.update", resource="camera", resource_id=camera.id, result="success",
-                 user=user, society=camera.society, new_state={**changes, "credentials_changed": secret_changed})
+                 user=user, society=camera.society,
+                 new_state={**changes, "credentials_changed": secret_changed, "credentials_cleared": credentials_cleared})
     db.commit()
-    return _camera_out(camera, db.get(Site, camera.site_id))
+    return {**_camera_out(camera, db.get(Site, camera.site_id)), "credentials_cleared": credentials_cleared}
 
 
 @router.post("/cameras/{camera_id}/test")
@@ -669,6 +740,7 @@ def preview(camera_id: int, db: Session = Depends(get_db), user: User = Depends(
         raise HTTPException(409, detail="Caméra du terminal : aperçu local")
     if not camera.active:
         raise HTTPException(409, detail="Caméra désactivée")
+    _throttle("preview", user, camera, PREVIEW_MAX_PER_MINUTE)
     try:
         data = adapter_for(camera).snapshot("PREVIEW_LOW_BANDWIDTH")
     except CameraError as exc:
@@ -709,6 +781,7 @@ def recognize(camera_id: int, payload: RecognizeIn, db: Session = Depends(get_db
         raise HTTPException(409, detail="Caméra non autorisée pour le pointage")
     if not camera.facial_attendance_enabled:
         raise HTTPException(409, detail="Pointage facial non activé pour cette caméra (activation pilote requise)")
+    _throttle("recognize", user, camera, RECOGNIZE_MAX_PER_MINUTE)
     # Les images sont TOUJOURS lues par le serveur sur la caméra : aucune image fournie par
     # le client n'est acceptée pour pointer (voir docs/biometrics.md, injection numérique).
     frames = _frames_for(camera, None)

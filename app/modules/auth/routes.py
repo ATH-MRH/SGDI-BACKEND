@@ -730,13 +730,37 @@ def admin_system_recovery(payload: AdminRecoveryIn, request: Request, db: Sessio
 def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
     ip = _client_ip(request)
     _enforce_login_rate(ip)
+    # Compteur par COMPTE visé, en plus du compteur par adresse : le compteur par adresse est
+    # remis à zéro par toute connexion réussie depuis cette adresse (un titulaire de compte
+    # pouvait ainsi tester sans limite les mots de passe des autres) et dépend d'un en-tête
+    # fourni par le client. Celui-ci ne s'efface que par la réussite du compte lui-même.
+    account_key = "login-user:" + str(payload.username or "").strip().lower()[:150]
+    if rate_limit.failure_count(account_key, settings.login_window_seconds) >= settings.login_max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives de connexion. Réessayez dans quelques minutes.",
+            headers={"Retry-After": str(settings.login_window_seconds)},
+        )
     try:
         token, user = authenticate(db, payload.username, payload.password)
+    except HTTPException as exc:
+        rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
+        failures = rate_limit.record_failure(account_key, settings.login_window_seconds)
+        if failures in (1, settings.login_max_attempts):
+            # Trace des échecs (jamais le mot de passe) : le premier, puis le blocage — pas une
+            # ligne par essai, pour ne pas inonder le journal pendant une attaque.
+            append_audit(db, action="auth.login", resource="user", resource_id=str(payload.username or "")[:150], result="refused",
+                         request=request, new_state={"reason": str(exc.detail)[:120], "failures": failures,
+                                                     "blocked": failures >= settings.login_max_attempts})
+            db.commit()
+        raise
+    try:
         enforce_subdomain_login_scope(request, user)
     except HTTPException:
         rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise
     rate_limit.clear(f"login:{ip}")
+    rate_limit.clear(account_key)
     if str(user.role).lower() == "pointeur":
         append_audit(db, action="auth.login", resource="user", resource_id=user.id, result="success", user=user, request=request)
         db.commit()
