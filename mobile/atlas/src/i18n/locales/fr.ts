@@ -474,7 +474,8 @@ export const fr = {
   'employees.today.late': 'Retard',
   'employees.mission.block': 'Mission et responsabilités',
   'employees.mission.unavailable': 'Non disponible : ATLAS n\'enregistre pas encore de fiche de mission.',
-  'employees.photo.failed': 'Diagnostic : la fiche a une photo, mais le portrait n\'a pas pu être chargé.',
+  'employees.photo.failed': 'Diagnostic : la fiche a une photo, mais le portrait n\'a pas pu être chargé (HTTP {status}, {reason}).',
+  'employees.photo.missingFile': 'Diagnostic : la fiche référence une photo, mais le serveur n\'a aucun fichier exploitable pour elle (HTTP {status}, {reason}).',
 } as const;
 
 export type TranslationKey = keyof typeof fr;

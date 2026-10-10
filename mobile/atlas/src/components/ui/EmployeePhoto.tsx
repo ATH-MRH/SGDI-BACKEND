@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
-import { ensureAccessToken } from '@/api';
-import { getSessionToken, onSessionRenewed } from '@/auth/session';
-import { env } from '@/config/env';
+import { usePortrait, type PortraitIssue } from '@/features/employees/usePortrait';
 import { colors } from '@/theme/tokens';
 
 import { Avatar } from './Avatar';
@@ -18,51 +16,34 @@ type Props = {
   portrait?: boolean;
   /** false : la fiche n'a aucune photo, rien n'est demandé. Inconnu (undefined) : la photo est tentée. */
   hasPhoto?: boolean;
-  /** La photo a été demandée et n'a pas pu être affichée. */
-  onUnavailable?: () => void;
+  /** La photo a été demandée et n'a pas pu être affichée ; `issue` dit pourquoi. */
+  onUnavailable?: (issue: PortraitIssue) => void;
   testID?: string;
 };
 
+const UNREADABLE: PortraitIssue = { kind: 'error', status: 200, reason: 'undecodable' };
+
 /**
- * Portrait d'un employé, servi par le backend ATLAS (GET /api/drh/employees/{id}/portrait).
- *
- * La route est authentifiée : le jeton n'est envoyé qu'à l'hôte ATLAS configuré, sur ce chemin
- * fixe. Un jeton expiré est renouvelé avant la demande, et la photo est redemandée quand la
- * session est renouvelée. Sans photo, sans droit ou hors connexion, les initiales sont
+ * Portrait d'un employé. L'image est chargée par une requête authentifiée (voir usePortrait)
+ * et affichée depuis la mémoire : <Image> ne reçoit jamais l'adresse du backend ni le jeton.
+ * Sans photo, hors périmètre, hors connexion ou pendant le chargement, les initiales sont
  * affichées : jamais d'image de remplacement.
  */
 export function EmployeePhoto({ employeeId, name, size = 44, square = false, portrait = false, hasPhoto, onUnavailable, testID }: Props) {
-  const wanted = hasPhoto !== false && Boolean(env.apiUrl) && typeof employeeId === 'number' && Number.isInteger(employeeId) && employeeId > 0;
-  // Jeton obtenu après un renouvellement ; le jeton courant de la session est toujours préféré.
-  const [renewedToken, setRenewedToken] = useState<string | null>(null);
-  // Employé dont la photo a échoué : changer d'employé relance une tentative.
-  const [failedFor, setFailedFor] = useState<number | null>(null);
-  const token = wanted ? (getSessionToken() ?? renewedToken) : null;
-  const failed = failedFor !== null && failedFor === employeeId;
+  const { uri, issue } = usePortrait(employeeId, hasPhoto !== false);
+  // Image reçue mais illisible par la plateforme : on retombe sur les initiales.
+  const [brokenUri, setBrokenUri] = useState<string | null>(null);
+  const broken = uri !== null && brokenUri === uri;
 
   useEffect(() => {
-    if (!wanted) return undefined;
-    let active = true;
-    // Jeton d'accès expiré : il est renouvelé ici, sinon la photo ne serait jamais demandée.
-    if (!getSessionToken()) {
-      void ensureAccessToken().then((fresh) => {
-        if (active && fresh) setRenewedToken(fresh);
-      });
-    }
-    const unsubscribe = onSessionRenewed((session) => {
-      if (!active) return;
-      setRenewedToken(session.token);
-      setFailedFor(null);
-    });
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [wanted, employeeId]);
+    if (issue) onUnavailable?.(issue);
+    // Signalé une fois par changement d'état du portrait.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issue?.kind, issue?.status, issue?.reason]);
 
   const height = portrait ? Math.round((size * 4) / 3) : size;
   const borderRadius = square || portrait ? Math.round(size * 0.18) : size / 2;
-  if (!wanted || !token || failed) {
+  if (!uri || broken) {
     return (
       <View style={portrait ? [styles.center, { width: size, height }] : undefined}>
         <Avatar name={name} size={size} square={square || portrait} />
@@ -73,10 +54,10 @@ export function EmployeePhoto({ employeeId, name, size = 44, square = false, por
     <View style={[styles.frame, { width: size, height, borderRadius }]} accessibilityElementsHidden importantForAccessibility="no">
       <Image
         testID={testID}
-        source={{ uri: `${env.apiUrl}/api/drh/employees/${employeeId}/portrait`, headers: { Authorization: `Bearer ${token}` } }}
+        source={{ uri }}
         onError={() => {
-          setFailedFor(employeeId ?? null);
-          onUnavailable?.();
+          setBrokenUri(uri);
+          onUnavailable?.(UNREADABLE);
         }}
         resizeMode="cover"
         style={{ width: size, height, borderRadius }}

@@ -1,3 +1,4 @@
+import { base64ByteLength, blobToBase64, imageTypeOf, MAX_IMAGE_BYTES } from './binary';
 import { ApiError, errorFromResponse } from './errors';
 
 export type QueryValue = string | number | boolean | null | undefined;
@@ -37,6 +38,13 @@ export type ApiClient = {
   put<T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>): Promise<T>;
   patch<T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'body'>): Promise<T>;
   delete<T>(path: string, options?: Omit<RequestOptions, 'body'>): Promise<T>;
+  /**
+   * Image servie par une route authentifiée, sous forme d'URI `data:` gardée en mémoire.
+   * Même jeton et même renouvellement que les autres appels. Un refus (401, 403, 404) lève
+   * une ApiError sans fermer la session ni recharger le profil : l'absence d'une photo n'est
+   * pas un événement de session.
+   */
+  getImage(path: string, options?: Pick<RequestOptions, 'signal' | 'timeoutMs'>): Promise<string>;
 };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -87,7 +95,13 @@ export function createApiClient(deps: ApiClientDeps): ApiClient {
     }
   }
 
-  async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+  /** Envoie une requête avec le jeton courant ; sur un 401, renouvelle la session et réessaie une fois. */
+  async function exchange(
+    method: string,
+    path: string,
+    options: RequestOptions,
+    accept: string,
+  ): Promise<{ response: Response; correlationId: string; authenticated: boolean }> {
     if (!deps.baseUrl) throw new ApiError({ kind: 'config' });
     const url = buildUrl(deps.baseUrl, path, options.query);
     const authenticated = options.authenticated !== false;
@@ -95,28 +109,46 @@ export function createApiClient(deps: ApiClientDeps): ApiClient {
     let token: string | null = null;
     if (authenticated) {
       token = deps.getToken() ?? (await renew(null));
-      if (!token) {
-        deps.onUnauthorized();
-        throw new ApiError({ kind: 'unauthorized', status: 401 });
-      }
+      if (!token) return { response: new Response(null, { status: 401 }), correlationId: '', authenticated };
     }
 
-    let attempt = await send(method, url, options, token);
+    let attempt = await send(method, url, options, token, accept);
     if (attempt.response.status === 401 && authenticated) {
       // Jeton d'accès expiré ou session renouvelée ailleurs : un seul nouvel essai.
       const fresh = await renew(token);
-      if (fresh && fresh !== token) attempt = await send(method, url, options, fresh);
+      if (fresh && fresh !== token) attempt = await send(method, url, options, fresh, accept);
     }
+    return { ...attempt, authenticated };
+  }
 
-    const { response, correlationId } = attempt;
+  async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
+    const { response, correlationId, authenticated } = await exchange(method, path, options, 'application/json');
     const body = await readBody(response);
     if (!response.ok) {
       if (response.status === 401 && authenticated) deps.onUnauthorized();
       if (response.status === 403 && authenticated) deps.onForbidden?.();
       if (response.status === 426) deps.onUpgradeRequired?.();
-      throw errorFromResponse(response.status, body, response.headers, correlationId);
+      throw errorFromResponse(response.status, body, response.headers, correlationId || undefined);
     }
     return body as T;
+  }
+
+  async function getImage(path: string, options: Pick<RequestOptions, 'signal' | 'timeoutMs'> = {}): Promise<string> {
+    const { response, correlationId } = await exchange('GET', path, options, 'image/jpeg, image/png, image/webp');
+    if (!response.ok) {
+      throw errorFromResponse(response.status, await readBody(response), response.headers, correlationId || undefined);
+    }
+    const type = imageTypeOf(response.headers.get('content-type'));
+    if (!type) throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
+    let base64 = '';
+    try {
+      base64 = await blobToBase64(await response.blob());
+    } catch {
+      throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
+    }
+    const size = base64ByteLength(base64);
+    if (size === 0 || size > MAX_IMAGE_BYTES) throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
+    return `data:${type};base64,${base64}`;
   }
 
   async function send(
@@ -124,10 +156,11 @@ export function createApiClient(deps: ApiClientDeps): ApiClient {
     url: string,
     options: RequestOptions,
     token: string | null,
+    accept: string,
   ): Promise<{ response: Response; correlationId: string }> {
     const correlationId = newCorrelationId();
     const headers: Record<string, string> = {
-      Accept: 'application/json',
+      Accept: accept,
       ...deps.clientHeaders,
       'X-Correlation-Id': correlationId,
     };
@@ -166,5 +199,6 @@ export function createApiClient(deps: ApiClientDeps): ApiClient {
     put: (path, body, options) => request('PUT', path, { ...options, body }),
     patch: (path, body, options) => request('PATCH', path, { ...options, body }),
     delete: (path, options) => request('DELETE', path, options),
+    getImage,
   };
 }

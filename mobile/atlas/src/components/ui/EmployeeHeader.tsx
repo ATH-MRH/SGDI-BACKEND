@@ -5,6 +5,8 @@ import { StyleSheet, View } from 'react-native';
 import { colors, elevation, radius, spacing } from '@/theme/tokens';
 
 import { AppText } from './AppText';
+import type { PortraitIssue } from '@/features/employees/usePortrait';
+
 import { EmployeePhoto } from './EmployeePhoto';
 
 type Props = {
@@ -15,7 +17,7 @@ type Props = {
   society?: string | null;
   site?: string | null;
   hasPhoto?: boolean;
-  onPhotoUnavailable?: () => void;
+  onPhotoUnavailable?: (issue: PortraitIssue) => void;
   status?: ReactNode;
   /** Boutons d'action compacts, alignés sous l'identité. */
   actions?: ReactNode;

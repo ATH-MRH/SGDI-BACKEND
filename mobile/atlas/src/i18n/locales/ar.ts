@@ -476,5 +476,6 @@ export const ar: Record<TranslationKey, string> = {
   'employees.today.late': 'التأخر',
   'employees.mission.block': 'المهمة والمسؤوليات',
   'employees.mission.unavailable': 'غير متوفر: لا يسجّل ATLAS بطاقة مهمة بعد.',
-  'employees.photo.failed': 'تشخيص: للبطاقة صورة، لكن تعذّر تحميلها.',
+  'employees.photo.failed': 'تشخيص: للبطاقة صورة، لكن تعذّر تحميلها (HTTP {status}، {reason}).',
+  'employees.photo.missingFile': 'تشخيص: البطاقة تشير إلى صورة، لكن الخادم لا يملك ملفًا صالحًا لها (HTTP {status}، {reason}).',
 };

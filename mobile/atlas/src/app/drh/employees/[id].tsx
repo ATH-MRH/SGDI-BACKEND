@@ -29,6 +29,7 @@ import {
 } from '@/components/ui';
 import { env } from '@/config/env';
 import { access } from '@/features/access';
+import type { PortraitIssue } from '@/features/employees/usePortrait';
 import { employeeStatusTone, leaveStatus, presenceStatus } from '@/features/status';
 import { t } from '@/i18n';
 import { colors, spacing } from '@/theme/tokens';
@@ -62,7 +63,7 @@ export default function EmployeeDetailScreen() {
   const employeeId = Number(id);
   const user = useCurrentUser();
   const [tab, setTab] = useState<Tab>('overview');
-  const [photoFailed, setPhotoFailed] = useState(false);
+  const [photoIssue, setPhotoIssue] = useState<PortraitIssue | null>(null);
   const allowed = access.employees(user) && Number.isInteger(employeeId) && employeeId > 0;
   const withAttendance = access.attendance(user);
 
@@ -152,7 +153,7 @@ export default function EmployeeDetailScreen() {
               society={data.society}
               site={data.siteName}
               hasPhoto={data.hasPhoto}
-              onPhotoUnavailable={() => setPhotoFailed(true)}
+              onPhotoUnavailable={setPhotoIssue}
               status={<Badge label={data.status} tone={employeeStatusTone(data.status)} testID="employee-status" />}
               actions={
                 <>
@@ -165,9 +166,12 @@ export default function EmployeeDetailScreen() {
               }
             />
             {/* Diagnostic réservé au build de développement : la fiche a une photo, elle n'a pas pu être chargée. */}
-            {env.variant === 'development' && data.hasPhoto && photoFailed ? (
-              <AppText variant="caption" color={colors.warning} testID="employee-photo-diagnostic">
-                {t('employees.photo.failed')}
+            {env.variant === 'development' && data.hasPhoto && photoIssue ? (
+              <AppText variant="caption" color={colors.warning} testID="employee-photo-diagnostic" selectable>
+                {t(photoIssue.kind === 'none' ? 'employees.photo.missingFile' : 'employees.photo.failed', {
+                  status: photoIssue.status === null ? '—' : String(photoIssue.status),
+                  reason: photoIssue.reason,
+                })}
               </AppText>
             ) : null}
 

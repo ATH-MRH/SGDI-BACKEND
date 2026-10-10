@@ -1,42 +1,38 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import type { ReactElement } from 'react';
 
 import { presenceRate } from '@/api/domains/attendance';
 import { fetchDrhDashboard } from '@/api/domains/drh';
 import type { ApiClient } from '@/api/client';
+import { ApiError } from '@/api/errors';
 import { BarChart, Banner, Distribution, EmployeeHeader, EmployeePhoto, EmployeeRow, InfoGrid, KpiCard, MetricStrip, RingGauge, SiteRow, TabStrip } from '@/components/ui';
 import { percent, shortDate, weekdayKey } from '@/features/cockpit/presentation';
 import { isIncidentOpen } from '@/features/cockpit/useCockpitInsights';
+import { portraitKey } from '@/features/employees/usePortrait';
 import { employeeStatusTone } from '@/features/status';
 
-let mockToken: string | null = null;
-let mockApiUrl: string | null = 'https://atlas.example.test';
+const JPEG = 'data:image/jpeg;base64,/9j/AAAA';
+const mockGetImage = jest.fn<Promise<string>, [string]>();
 
-const mockEnsure = jest.fn(async (): Promise<string | null> => null);
-let mockRenewed: ((session: { token: string }) => void) | null = null;
+jest.mock('@/api', () => ({ ...jest.requireActual('@/api/errors'), api: { getImage: (path: string) => mockGetImage(path) } }));
 
-jest.mock('@/api', () => ({ ensureAccessToken: () => mockEnsure() }));
-jest.mock('@/auth/session', () => ({
-  getSessionToken: () => mockToken,
-  onSessionRenewed: (listener: (session: { token: string }) => void) => {
-    mockRenewed = listener;
-    return () => {
-      mockRenewed = null;
-    };
-  },
-}));
-jest.mock('@/config/env', () => ({
-  get env() {
-    return { apiUrl: mockApiUrl, variant: 'staging', features: {}, storeUrls: { ios: null, android: null } };
-  },
-  isFeatureEnabled: () => false,
-}));
+let client: QueryClient;
+
+/** Rendu avec un cache de données neuf, comme après une ouverture de session. */
+async function show(ui: ReactElement) {
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+const hidden = { includeHiddenElements: true } as const;
+
+// Sans cela, les minuteries de purge du cache retiennent le processus de test.
+afterEach(() => client.clear());
 
 beforeEach(() => {
-  mockEnsure.mockReset();
-  mockEnsure.mockResolvedValue(null);
-  mockRenewed = null;
-  mockToken = null;
-  mockApiUrl = 'https://atlas.example.test';
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  mockGetImage.mockReset();
+  mockGetImage.mockResolvedValue(JPEG);
 });
 
 describe('indicateurs : jamais de valeur inventée', () => {
@@ -117,87 +113,126 @@ describe('graphiques simples', () => {
 });
 
 describe('photo employé', () => {
-  it('sans session, les initiales remplacent la photo et aucun appel ne part', async () => {
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" />);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
-    // La photo est décorative : elle est masquée aux lecteurs d'écran, le nom est porté par la ligne.
-    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+  it('200 : la photo est chargée par une requête authentifiée, puis affichée depuis la mémoire', async () => {
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
+    // Pendant le chargement : les initiales.
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
+    const photo = await screen.findByTestId('photo', hidden);
+    expect(mockGetImage).toHaveBeenCalledWith('/api/drh/employees/5/portrait');
+    // <Image> ne reçoit ni l'adresse du backend ni le jeton.
+    expect(photo.props.source).toEqual({ uri: JPEG });
+    expect(screen.queryByText('BK', hidden)).toBeNull();
   });
 
-  it("avec une session, la photo est demandée à l'hôte ATLAS configuré, sur la route du portrait", async () => {
-    mockToken = 'jeton-de-test';
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" />);
-    const source = screen.getByTestId('photo', { includeHiddenElements: true }).props.source;
-    expect(source.uri).toBe('https://atlas.example.test/api/drh/employees/5/portrait');
-    expect(source.headers).toEqual({ Authorization: 'Bearer jeton-de-test' });
+  it('404 : initiales, et la cause est transmise à l’écran', async () => {
+    mockGetImage.mockRejectedValue(new ApiError({ kind: 'not_found', status: 404 }));
+    const onUnavailable = jest.fn();
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto onUnavailable={onUnavailable} />);
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalledWith({ kind: 'none', status: 404, reason: 'not_found' }));
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
+    // Réponse définitive : elle est mise en cache, la photo n'est pas redemandée à chaque ligne.
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
+    expect(mockGetImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('403 : initiales, sans autre effet', async () => {
+    mockGetImage.mockRejectedValue(new ApiError({ kind: 'forbidden', status: 403 }));
+    const onUnavailable = jest.fn();
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" onUnavailable={onUnavailable} />);
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalledWith({ kind: 'forbidden', status: 403, reason: 'forbidden' }));
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
+  });
+
+  it.each([
+    ['session refusée', new ApiError({ kind: 'unauthorized', status: 401 }), { kind: 'error', status: 401, reason: 'unauthorized' }],
+    ['réseau indisponible', new ApiError({ kind: 'network' }), { kind: 'error', status: null, reason: 'network' }],
+    ['erreur serveur', new ApiError({ kind: 'server', status: 500 }), { kind: 'error', status: 500, reason: 'server' }],
+    ['réponse qui n’est pas une image', new ApiError({ kind: 'invalid_response', status: 200 }), { kind: 'error', status: 200, reason: 'invalid_response' }],
+  ])('%s : initiales et diagnostic précis', async (_label, error, expected) => {
+    mockGetImage.mockRejectedValue(error);
+    const onUnavailable = jest.fn();
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto onUnavailable={onUnavailable} />);
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalledWith(expected));
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
+  });
+
+  it('une image reçue mais illisible par la plateforme retombe sur les initiales', async () => {
+    const onUnavailable = jest.fn();
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" onUnavailable={onUnavailable} />);
+    await fireEvent(await screen.findByTestId('photo', hidden), 'error');
+    expect(onUnavailable).toHaveBeenCalledWith({ kind: 'error', status: 200, reason: 'undecodable' });
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
+  });
+
+  it("une fiche sans photo n'envoie aucune requête", async () => {
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto={false} />);
+    await act(async () => undefined);
+    expect(mockGetImage).not.toHaveBeenCalled();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
   });
 
   it.each([null, undefined, 0, -3, 2.5])('un identifiant inutilisable (%p) ne déclenche aucune requête', async (id) => {
-    mockToken = 'jeton-de-test';
-    await render(<EmployeePhoto testID="photo" employeeId={id} name="BENALI Karim" />);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
-  });
-
-  it("une fiche sans photo n'envoie aucune requête, même avec une session", async () => {
-    mockToken = 'jeton-de-test';
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto={false} />);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
-    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
-    expect(mockEnsure).not.toHaveBeenCalled();
-  });
-
-  it("un jeton d'accès expiré est renouvelé, puis la photo est demandée avec le nouveau jeton", async () => {
-    mockToken = null;
-    mockEnsure.mockResolvedValue('jeton-renouvele');
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
-    const photo = await screen.findByTestId('photo', { includeHiddenElements: true });
-    expect(mockEnsure).toHaveBeenCalledTimes(1);
-    expect(photo.props.source.headers).toEqual({ Authorization: 'Bearer jeton-renouvele' });
-  });
-
-  it('une session non renouvelable laisse les initiales', async () => {
-    mockToken = null;
-    mockEnsure.mockResolvedValue(null);
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
+    await show(<EmployeePhoto testID="photo" employeeId={id} name="BENALI Karim" />);
     await act(async () => undefined);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
-    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+    expect(mockGetImage).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
   });
 
-  it('une photo en échec affiche les initiales, prévient l’écran, et est redemandée quand la session est renouvelée', async () => {
-    mockToken = 'jeton-perime-cote-serveur';
-    const onUnavailable = jest.fn();
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" onUnavailable={onUnavailable} />);
-    await fireEvent(screen.getByTestId('photo', { includeHiddenElements: true }), 'error');
-    expect(onUnavailable).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
-    expect(screen.getByText('BK', { includeHiddenElements: true })).toBeTruthy();
+  it('le cache est par employé : la même photo n’est demandée qu’une fois, celle d’un autre employé à part', async () => {
+    mockGetImage.mockImplementation(async (path) => `${JPEG}#${path}`);
+    await show(
+      <>
+        <EmployeePhoto testID="a" employeeId={5} name="BENALI Karim" />
+        <EmployeePhoto testID="a-bis" employeeId={5} name="BENALI Karim" />
+        <EmployeePhoto testID="b" employeeId={6} name="SAADI Lina" />
+      </>,
+    );
+    const first = await screen.findByTestId('a', hidden);
+    expect(first.props.source.uri).toBe(`${JPEG}#/api/drh/employees/5/portrait`);
+    expect(screen.getByTestId('a-bis', hidden).props.source.uri).toBe(first.props.source.uri);
+    expect((await screen.findByTestId('b', hidden)).props.source.uri).toBe(`${JPEG}#/api/drh/employees/6/portrait`);
+    expect(mockGetImage).toHaveBeenCalledTimes(2);
+  });
 
-    mockToken = 'jeton-suivant';
-    await act(async () => mockRenewed?.({ token: 'jeton-suivant' }));
-    expect(screen.getByTestId('photo', { includeHiddenElements: true }).props.source.headers).toEqual({ Authorization: 'Bearer jeton-suivant' });
+  it('fermeture de session : le cache est vidé et la photo d’un compte ne sert jamais à un autre', async () => {
+    mockGetImage.mockResolvedValueOnce(`${JPEG}#compte-a`);
+    const view = await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" />);
+    expect((await screen.findByTestId('photo', hidden)).props.source.uri).toBe(`${JPEG}#compte-a`);
+    expect(client.getQueryData(portraitKey(5))).toEqual({ uri: `${JPEG}#compte-a`, issue: null });
+    await view.unmount();
+
+    // Ce que fait AuthProvider à chaque fermeture de session (déconnexion, session refusée).
+    client.clear();
+    expect(client.getQueryData(portraitKey(5))).toBeUndefined();
+
+    // Le compte suivant n'a pas accès à cet employé : il ne voit jamais l'ancienne image.
+    mockGetImage.mockRejectedValue(new ApiError({ kind: 'forbidden', status: 403 }));
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" />);
+    await waitFor(() => expect(mockGetImage).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('photo', hidden)).toBeNull();
+    expect(screen.getByText('BK', hidden)).toBeTruthy();
   });
 
   it('le portrait est montré au format 3:4, sans recadrage carré', async () => {
-    mockToken = 'jeton-de-test';
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" size={66} portrait />);
-    expect(screen.getByTestId('photo', { includeHiddenElements: true }).props.style).toMatchObject({ width: 66, height: 88 });
-  });
-
-  it("sans URL d'API, aucune photo n'est demandée", async () => {
-    mockToken = 'jeton-de-test';
-    mockApiUrl = null;
-    await render(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" />);
-    expect(screen.queryByTestId('photo', { includeHiddenElements: true })).toBeNull();
+    await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" size={66} portrait />);
+    expect((await screen.findByTestId('photo', hidden)).props.style).toMatchObject({ width: 66, height: 88 });
   });
 });
 
 describe('lignes de liste', () => {
   it('une ligne employé montre nom, matricule, fonction et statut ; elle n’est un bouton que si elle ouvre quelque chose', async () => {
-    const view = await render(<EmployeeRow testID="row" employeeId={null} name="BENALI Karim" code="AGT005" position="Agent" detail="Site Nord" />);
+    const view = await show(<EmployeeRow testID="row" employeeId={null} name="BENALI Karim" code="AGT005" position="Agent" detail="Site Nord" />);
     expect(screen.getByTestId('row')).toHaveTextContent(/BENALI Karim.*AGT005.*Agent · Site Nord/);
     expect(screen.getByTestId('row').props.accessibilityRole).not.toBe('button');
-    await view.rerender(<EmployeeRow testID="row" employeeId={null} name="BENALI Karim" onPress={() => undefined} />);
+    await view.rerender(
+      <QueryClientProvider client={client}>
+        <EmployeeRow testID="row" employeeId={null} name="BENALI Karim" onPress={() => undefined} />
+      </QueryClientProvider>,
+    );
     expect(screen.getByTestId('row').props.accessibilityRole).toBe('button');
   });
 
@@ -271,7 +306,7 @@ describe('fiche employé compacte', () => {
   const LONG_NAME = 'BENABDERRAHMANE-BOUKHALFA Mohammed Abdelkader Seif-Eddine';
 
   it("l'en-tête garde un nom très long sur deux lignes, sans réduction de police, avec matricule, fonction, société et site", async () => {
-    await render(
+    await show(
       <EmployeeHeader
         testID="header"
         employeeId={null}
@@ -293,12 +328,12 @@ describe('fiche employé compacte', () => {
     expect(header).toHaveTextContent(/Iron Global Sécurité et Services/);
     expect(header).toHaveTextContent(/Site Hassi Messaoud/);
     // Sans photo : initiales, et aucune image demandée.
-    expect(screen.queryByTestId('employee-photo', { includeHiddenElements: true })).toBeNull();
-    expect(screen.getByText('BS', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByTestId('employee-photo', hidden)).toBeNull();
+    expect(screen.getByText('BS', hidden)).toBeTruthy();
   });
 
   it("l'en-tête n'affiche ni société ni site quand ils sont inconnus", async () => {
-    await render(<EmployeeHeader testID="header" employeeId={null} name="BENALI Karim" hasPhoto={false} />);
+    await show(<EmployeeHeader testID="header" employeeId={null} name="BENALI Karim" hasPhoto={false} />);
     expect(screen.getByTestId('header')).toHaveTextContent('BKBENALI Karim');
   });
 
