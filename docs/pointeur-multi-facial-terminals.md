@@ -65,7 +65,7 @@ conservées. Une révocation est définitive (créer un nouveau terminal).
 
 ### Autorisations
 
-Table `facial_device_authorizations` (migration `20261014_0001`, additive) : une ligne = un compte
+Table `facial_device_authorizations` (migration `20261017_0001`, additive) : une ligne = un compte
 × un terminal **ou** une caméra. Refus par défaut. Un compte peut être autorisé sur plusieurs
 équipements, un équipement peut avoir plusieurs comptes.
 
@@ -202,7 +202,7 @@ elles le sont avec le moteur simulé (`pointeur-multi-facial-e2e`).
 Aucun déploiement n'est effectué par cette branche. Les points « à vérifier » exigent un accès à
 Coolify ou au site et ne peuvent pas être constatés depuis le dépôt.
 
-### Migration `20261014_0001`
+### Migration `20261017_0001`
 
 Analysée sur PostgreSQL 16 jetable, à partir du schéma `20261011_0001` (celui d'`origin/main`)
 contenant déjà un site, un compte, un terminal appairé et une caméra :
@@ -216,7 +216,7 @@ contenant déjà un site, un compte, un terminal appairé et une caméra :
 | Downgrade, table vide | table supprimée ; schéma **identique** à celui d'avant (comparaison `pg_dump -s`) |
 | Downgrade, autorisations présentes | **refusé** (`RuntimeError`) : pas de perte silencieuse ; un retour arrière applicatif n'en a pas besoin, l'ancienne version ignore la table |
 | Rejouabilité | upgrade rejoué sur une base où la table existe déjà : sans erreur |
-| Chaîne | tête unique `20261014_0001` ; upgrade → downgrade → upgrade de toute la chaîne sur SQLite et PostgreSQL (`tests/test_attendance_official_shift_migration.py`) |
+| Chaîne | tête unique `20261017_0001` (fille de `20261014_0001`, tête de `main`) ; upgrade → downgrade → upgrade de toute la chaîne sur SQLite et PostgreSQL (`tests/test_attendance_official_shift_migration.py`) |
 
 `start.sh` exécute `alembic upgrade head` au démarrage du conteneur : la migration s'applique dès
 le déploiement.
@@ -234,7 +234,9 @@ Conflits que **ce lot** ajouterait avec des branches non fusionnées :
 | `main` local (2 commits non poussés), `fix/drh-pointage-ops-readonly` | `index.html`, `module-registry.js` | chaîne de version frontend |
 | `refactor/pointeur-compact-ui-v51` | `tests_frontend/pointeur-facial-direct.test.js` | test du même écran |
 
-L'identifiant `20261012_0001` est déjà utilisé par `feat/iron-emploi` : d'où `20261014_0001` ici.
+La migration a d'abord porté l'identifiant `20261014_0001`, pris ensuite par une migration de `main`
+(`contract_dc_client_site`, appliquée en production). Elle a été renommée `20261017_0001` : les
+identifiants `20261015_0001` et `20261016_0001` sont déjà utilisés par des branches en cours.
 
 ### Autres points
 

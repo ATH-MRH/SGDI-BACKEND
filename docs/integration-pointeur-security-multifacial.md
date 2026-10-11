@@ -326,3 +326,104 @@ validé ; identifiants de migration en double dans `feat/iron-emploi` et
 `feat/admin-regularisation-employes`.
 
 **Reconnaissance faciale réelle : NO-GO.**
+
+## 11. Conflit d'identifiant Alembic, synchronisation avec `origin/main` `7bbb549` et intégration de la branche de sécurité, 2026-10-11
+
+### Constat
+
+La PR #19 a ajouté sur `main` la migration `20261014_0001_contract_dc_client_site`, appliquée en
+production. La migration des autorisations faciales de cette branche portait le **même
+identifiant et le même parent** (`20261013_0002`). Fusionnée telle quelle, elle aurait donné deux
+fichiers pour une révision : au mieux un refus d'Alembic au démarrage, au pire une base déjà
+marquée `20261014_0001`, considérée à jour, sans la table `facial_device_authorizations`.
+
+### Correction
+
+| Élément | Avant | Après |
+|---|---|---|
+| Fichier | `20261014_0001_facial_device_authorizations.py` | `20261017_0001_facial_device_authorizations.py` |
+| `revision` | `20261014_0001` | `20261017_0001` |
+| `down_revision` | `20261013_0002` | `20261014_0001` (tête de `main`, révision de production) |
+| Contenu, protection du downgrade | — | inchangés |
+
+La migration de `main` n'est ni renommée ni modifiée. L'identifiant `20261015_0001`, d'abord
+envisagé, est déjà pris par `feat/drh-badge-studio` et `feat/iron-emploi` ; `20261016_0001` par
+`feat/iron-emploi`. `20261017_0001` est absent de toutes les branches locales et distantes.
+
+Vérifié avant de renommer, en lecture seule : la table `facial_device_authorizations` est absente
+de la base de production et de la seconde base du même serveur ; l'ancienne révision n'a donc été
+appliquée que sur des bases jetables.
+
+### Opérations Git
+
+1. Renommage de la révision (commit dédié).
+2. Fusion normale d'`origin/main` `7bbb549` (PR #16, #17, #19, #21). Deux conflits, résolus à la
+   main : `package.json` (liste de tests de l'intégration conservée, le test supprimé par `main`
+   remplacé par celui qu'il ajoute : 94 fichiers, aucun perdu) et
+   `tests/test_attendance_official_shift_migration.py` (tête de chaîne). Le `down_revision` de la
+   migration faciale est déplacé dans ce même commit de fusion.
+3. Fusion explicite de `security/pointeur-biometric-key-backups` (`a6c688a`), sans conflit et sans
+   modifier cette branche : chiffrement biométrique à deux clés, outil de rechiffrement, verrou
+   d'enrôlement, sauvegardes chiffrées, restauration d'essai, surveillance, contrôle indépendant
+   des contraintes de permissions. Aucune migration.
+4. Correctif du contrôle des contraintes : il signalait à tort un écart sur une base rechargée
+   depuis une sauvegarde (PostgreSQL y réécrit les listes des contraintes).
+
+### Alembic sur PostgreSQL 16 jetable
+
+Base au schéma de production (`20261014_0001`, 129 tables), peuplée de données fictives (site,
+compte, salariés, trois terminaux dont un révoqué, caméra, consentement, gabarits, pointages),
+puis **sauvegardée, restaurée dans une seconde base, et migrée** :
+
+| Contrôle | Résultat |
+|---|---|
+| Chaîne | 66 révisions, aucun identifiant en double, tête unique `20261017_0001` |
+| Restauration | 129 tables, 315 contraintes, révision et nombre de lignes de chaque table conformes |
+| `upgrade head` | une table créée, `facial_device_authorizations` ; 0 ligne du schéma existant retirée |
+| Données existantes | identiques avant et après (empreinte de chaque table peuplée) |
+| Nouvelle table | 7 contraintes, 6 index, aucune autorisation créée d'office ; doublon, ligne sans équipement, ligne à deux équipements et compte inexistant refusés |
+| Modèles ↔ base | aucun écart sur la table ; aucune table manquante ni en trop |
+| Contraintes de permissions | conformes aux modèles (`scripts/check_permission_constraints.py`) |
+| Downgrade avec une autorisation | refusé, autorisation conservée |
+| Downgrade table vide | retour à `20261014_0001`, schéma identique à celui de départ |
+| Rejouabilité | `upgrade head` rejoué sans erreur |
+
+### Tests sur le code combiné
+
+| Suite | Résultat |
+|---|---|
+| `python3 -m pytest -q` + PostgreSQL jetable (`ATTENDANCE_PG_URL`, `TEST_POSTGRES_ADMIN_URL`) | **2422 réussis, 0 échec**, 17 ignorés, 1 échec attendu |
+| `npm test` | **1063 / 1063** (+ 12 / 12), trois passes au repos ; `test:drh-next` 115 / 115 ; `test:core-v3` 45 / 45 |
+| Chrome réel (poste Pointeur facial, multi-terminaux, terminaux, pointage lecture seule, poste V5, bi-écran, abandon de poste, recrutement) | 42 / 42 |
+
+| Groupe ciblé (backend) | Résultat |
+|---|---|
+| Authentification, jetons, sessions | 166 |
+| RBAC, permissions | 168 |
+| Pointeur, présence, abandon de poste | 199 |
+| DRH | 544 |
+| OPS, mouvements du personnel | 82 |
+| BRQ | 25 |
+| Multi-terminaux, biométrie, clés | 200 |
+| PostgreSQL, concurrence, migrations, sauvegardes | 157 |
+
+Ignorés (17) : 16 exigent OpenCV, les modèles ou des portraits de test, absents de
+l'environnement standard ; 1 est propre à PostgreSQL dans un contexte SQLite. Échec attendu (1) :
+le cas connu du contrôle de la migration `20260908_0034`, figée, couvert par
+`scripts/check_permission_constraints.py`.
+
+Hors périmètre, à l'identique sur `origin/main` `7bbb549` : `admin-users-v2-e2e` (1 / 7 en Chrome
+réel). Une exécution de `npm test` lancée pendant qu'une suite backend tournait a compté 1 échec
+sur 1063, non reproduit au repos et non identifié.
+
+### Toujours ouvert
+
+- `feat/drh-badge-studio` porte une migration `20261015_0001`, elle aussi fille de
+  `20261014_0001`. Si elle rejoint `main` avant cette branche, la chaîne aura deux têtes : il
+  faudra de nouveau déplacer le `down_revision` de `20261017_0001` (sans changer son identifiant).
+- `feat/pointeur-multi-facial-terminals` et `security/pointeur-biometric-key-backups` portent
+  encore l'ancien nom de la migration : c'est la version de cette branche qui fait foi.
+- Aucun parcours « caméra IP → moteur réel → pointage » validé ; `attendance-e2e` et
+  `biometric-test-mode-real-e2e` inchangés.
+
+**Reconnaissance faciale réelle : NO-GO pour toute nouvelle activation.**
