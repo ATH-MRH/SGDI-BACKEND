@@ -1,7 +1,7 @@
 import base64
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from datetime import datetime
@@ -23,7 +23,7 @@ from app.core.photo_storage import DOCS_DIR, UPLOADS_ROOT
 from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import User
 from app.core.security import verify_password
-from app.modules.drh import service
+from app.modules.drh import dc_client_sites, service
 from app.modules.drh.convocation_email import send_candidate_convocation_email
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
@@ -661,6 +661,7 @@ def candidates_page(
     society: str | None = None,
     desired_position: str | None = None,
     recruiter_opinion: str | None = None,
+    status: str | None = None,
     sort_key: str | None = None,
     sort_direction: str | None = None,
     db: Session = Depends(get_db),
@@ -678,6 +679,7 @@ def candidates_page(
         q=q,
         desired_position=desired_position,
         recruiter_opinion=recruiter_opinion,
+        status=status,
         sort_key=sort_key,
         sort_direction=sort_direction,
         page=page,
@@ -1029,17 +1031,66 @@ def contracts(employee_id: int | None = None, status: str | None = None, db: Ses
     return _filter_employee_owned_rows(db, user, rows)
 
 
+@router.get("/contracts/dc-client-sites")
+def contract_dc_client_sites(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Champ « Client / site » du formulaire de contractualisation : clients et sites actifs
+    de la société active, lus dans le module Commercial (dc.irongs.com)."""
+    effective_society = _effective_society_filter(user, society)
+    if not effective_society:
+        raise HTTPException(status_code=422, detail="Société active requise")
+    return {
+        "source": dc_client_sites.DC_SOURCE,
+        "society": effective_society,
+        "items": dc_client_sites.list_client_site_options(db, effective_society),
+    }
+
+
+def _contract_dc_link(db: Session, user: User, *, dc_client_id: int | None, dc_site_id: int | None, society: str | None) -> dict:
+    return dc_client_sites.resolve_contract_selection(
+        db, dc_client_id=dc_client_id, dc_site_id=dc_site_id, society=society,
+        allowed_societies=_allowed_societies(user),
+    )
+
+
+def _store_contract_dc_link(db: Session, user: User, request: Request, contract: Contract, link: dict, society: str | None) -> None:
+    old_state = {key: getattr(contract, key) for key in link}
+    for key, value in link.items():
+        setattr(contract, key, value)
+    append_audit(
+        db, action="drh.contract.dc_client_site", resource="contract", resource_id=contract.id, result="success",
+        user=user, request=request, society=society, old_state=old_state, new_state=dict(link),
+    )
+    db.commit()
+    db.refresh(contract)
+
+
 @router.post("/contracts", response_model=ContractOut)
-def create_contract(payload: ContractCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_employee_allowed(db, user, payload.employee_id)
-    return service.create_row(db, Contract, payload)
+def create_contract(payload: ContractCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    society = employee.society
+    link = _contract_dc_link(db, user, dc_client_id=payload.dc_client_id, dc_site_id=payload.dc_site_id, society=society)
+    row = service.create_row(db, Contract, payload)
+    if link["dc_client_id"] is not None:
+        _store_contract_dc_link(db, user, request, row, link, society)
+    return row
 
 
 @router.put("/contracts/{contract_id}", response_model=ContractOut)
-def update_contract(contract_id: int, payload: ContractUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def update_contract(contract_id: int, payload: ContractUpdate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Contract, contract_id)
-    _ensure_employee_allowed(db, user, existing.employee_id)
-    return service.update_row(db, Contract, contract_id, payload)
+    employee = _ensure_employee_allowed(db, user, existing.employee_id)
+    society = employee.society
+    link = None
+    if payload.model_fields_set & {"dc_client_id", "dc_site_id"}:
+        link = _contract_dc_link(
+            db, user, society=society,
+            dc_client_id=payload.dc_client_id if "dc_client_id" in payload.model_fields_set else existing.dc_client_id,
+            dc_site_id=payload.dc_site_id,
+        )
+    row = service.update_row(db, Contract, contract_id, payload)
+    if link is not None:
+        _store_contract_dc_link(db, user, request, row, link, society)
+    return row
 
 
 @router.get("/leaves", response_model=list[LeaveOut])
@@ -1335,9 +1386,18 @@ def generate_contract(payload: GenerateContractRequest, db: Session = Depends(ge
 
 
 @router.post("/generated-contracts/from-form", response_model=GeneratedContractOut)
-def generate_contract_from_form(payload: DirectContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def generate_contract_from_form(payload: DirectContractRequest, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
-    return service.generate_contract_from_form(db, payload, user)
+    link = _contract_dc_link(db, user, dc_client_id=payload.dc_client_id, dc_site_id=payload.dc_site_id, society=payload.society)
+    row = service.generate_contract_from_form(db, payload, user, dc_link=link)
+    if link["dc_client_id"] is not None and row.contract_id:
+        append_audit(
+            db, action="drh.contract.dc_client_site", resource="contract", resource_id=row.contract_id, result="success",
+            user=user, request=request, society=payload.society, new_state=dict(link),
+        )
+        db.commit()
+        db.refresh(row)
+    return row
 
 
 @router.post("/generated-contracts/preview-from-form")

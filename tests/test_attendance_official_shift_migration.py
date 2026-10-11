@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261013_0002"            # tête courante de la chaîne (appareils ATLAS MOBILE)
+HEAD = "20261014_0001"            # tête courante : rattachement contrat DRH ↔ client / site DC
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 

@@ -67,6 +67,11 @@ class Contract(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(40), default="actif", index=True)
     template_code: Mapped[str | None] = mapped_column(String(80))
     content: Mapped[str | None] = mapped_column(Text)
+    # Client / site officiel du module Commercial (dc.irongs.com). Le libellé est une copie
+    # figée à l'enregistrement, pour l'historique ; seuls les identifiants font foi.
+    dc_client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id", ondelete="SET NULL"), nullable=True, index=True)
+    dc_site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True)
+    dc_client_site_label: Mapped[str | None] = mapped_column(String(380), nullable=True)
 
 
 class ContractTemplate(Base, TimestampMixin):
