@@ -20,7 +20,7 @@ API_VERSION = 2
 SALARY_PERIODS = ('heure', 'jour', 'mois', 'an')
 # Version de la notice « Protection des données personnelles » affichée par l'application. Tout changement
 # de fond de la notice change cette valeur : le consentement est alors redemandé.
-PRIVACY_NOTICE_VERSION = '2026-10'
+PRIVACY_NOTICE_VERSION = '2026-10-11'
 
 
 def privacy_state(account) -> dict:

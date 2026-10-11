@@ -40,7 +40,8 @@ La PR 13 ne contient aucune migration : elle n'ajoute que `mobile/recruitment/` 
 3. `GET https://recrute.irongs.com/api/public/mobile/config` répond `"sms_available": true` :
    l'identification des candidats dépend de SMSGate.
 4. Une sauvegarde datée du jour, **vérifiée et copiée hors du serveur** (§ 3).
-5. Les informations du § 7 fournies et relues, si la mise en service s'adresse à de vrais candidats.
+5. Les deux informations encore attendues au § 8 fournies et la notice relue par un juriste, si la
+   mise en service s'adresse à de vrais candidats.
 6. Une fenêtre calme : le démarrage applique les migrations avant d'accepter le trafic.
 
 ## 3. Sauvegarde avant fusion
@@ -216,22 +217,73 @@ même temps que `PRIVACY_VERSION` dans l'application dès que le fond de la noti
 cite la loi n° 18-07 du 10 juin 2018, modifiée et complétée par la loi n° 25-11 du 24 juillet 2025,
 et l'ANPDP. Elle ne présente l'application ni comme agréée ni comme validée par l'ANPDP.
 
-Les rubriques suivantes y sont affichées comme « à préciser » : elles ne sont pas inventées et
-doivent être fournies, puis relues par un juriste, **avant** toute mise en service auprès de
-candidats réels.
+### Informations confirmées par la direction (11 octobre 2026), portées dans la notice version `2026-10-11`
 
-| Rubrique | À fournir |
+| Rubrique | Contenu de la notice |
 | --- | --- |
-| 1. Responsable du traitement | Dénomination sociale, forme juridique, adresse du siège, téléphone, e-mail |
-| 2. Délégué à la protection des données | Désigné : oui / non. Si oui : nom, e-mail, téléphone |
-| 3. Formalité ANPDP | Déclaration ou autorisation : faite / en cours / non requise. Référence et date |
-| 4. Hébergement et transferts | Hébergeur du serveur et pays ; prestataires techniques et pays ; transfert hors d'Algérie : oui / non, et sur quel fondement |
-| 5. Durées de conservation | Candidatures non retenues ; dossiers des personnes recrutées ; espaces candidats inactifs |
-| 6. Exercice des droits | Adresse électronique ou postale, et délai de réponse annoncé |
+| Responsable du traitement | SARL IRON GLOBAL SOLUTION, 76 Ahmed Sayeh, Les Sources, Bir Mourad Raïs — contact@irongs.com — +213 770 112 034 |
+| Déléguée à la protection des données | Narimane ZOUBIR — bdm@irongs.com — +213 770 112 034 |
+| Formalité ANPDP | La direction déclare qu'elle couvre les dossiers de recrutement. **Référence et date : à fournir** |
+| Hébergement | OVHcloud, serveur situé en France (voir ci-dessous). **Fondement du transfert hors d'Algérie : à fournir** |
+| Durées de conservation | Candidature non retenue : 24 mois à compter du refus. Espace inactif : 24 mois après la dernière activité. Dossier numérique d'une personne recrutée : 24 mois après son départ ; dossier papier : 10 ans après son départ |
+| Exercice des droits | contact@irongs.com, à l'attention de la déléguée. Aucun délai de réponse n'est annoncé : il n'a pas été fourni |
+
+La notice affiche encore deux rubriques « à préciser » (référence et date de la formalité ANPDP,
+fondement du transfert). `npm test` échoue si cette liste change sans que le test soit mis à jour.
+
+### Prestataires qui traitent les données
+
+Constat du 11 octobre 2026, par lecture du code, du DNS et des registres d'adresses.
+
+| Prestataire | Rôle | Localisation constatée | Dans la notice |
+| --- | --- | --- | --- |
+| OVHcloud | Serveur : application, base PostgreSQL, fichiers, SMSGate | Adresse du serveur enregistrée au nom d'OVH SAS, pays FR ; trafic acheminé par les centres OVH de France. À confirmer dans l'espace client OVH (centre exact) | Oui |
+| o2switch | Messagerie du domaine irongs.com : e-mails de convocation, boîte contact@irongs.com | France | Oui |
+| Opérateur mobile de la SIM de l'entreprise | Remise des SMS de vérification | Algérie ; nom de l'opérateur à fournir | Oui, sans le nommer |
+| Service public SMSGate (`api.sms-gate.app`) | Réveil du téléphone passerelle par notification | Hors d'Algérie. Nature exacte des données transmises à faire confirmer | Non |
+| Expo, Google (FCM), Apple (APNs) | Notifications push | Hors d'Algérie. **Non activé** : aucune donnée transmise aujourd'hui | Non ; à ajouter avant toute activation |
+| Apple App Store, Google Play | Distribution de l'application | Ne reçoivent pas les données de candidature | Non |
+
+L'application n'embarque ni mesure d'audience ni outil de suivi tiers. Les sauvegardes (§ 3) sont
+des copies des mêmes données : leur lieu de conservation relève de la même notice.
+
+### Durées annoncées et suppression réellement en place
+
+Les durées de la notice sont des **engagements de la direction**. Le serveur ne supprime
+automatiquement aucune candidature ni aucun espace candidat.
+
+| Donnée | Durée annoncée | Ce que fait le serveur aujourd'hui |
+| --- | --- | --- |
+| Candidature non retenue | 24 mois à compter du refus | Aucune suppression automatique. La date du refus est connue (`outcome_communicated_at`, `status_updated_at`) |
+| Espace candidat inactif | 24 mois après la dernière activité | Aucune suppression automatique. La dernière activité n'est pas enregistrée : seule la dernière modification du profil est datée |
+| Dossier numérique d'une personne recrutée | 24 mois après son départ | Aucune suppression automatique. La date de départ relève du module DRH |
+| Dossier papier d'une personne recrutée | 10 ans après son départ | Hors application |
+| Session de l'espace candidat | — | Expire après 30 jours, puis supprimée |
+| Code SMS de vérification | — | Valable 5 minutes, ligne supprimée après 24 heures |
+| Suppression de l'espace par le candidat | Immédiate | Efface profil, CV, photo, alertes et notifications ; les candidatures transmises restent au service recrutement, sans lien avec l'espace |
+
+Tant qu'une purge n'est pas développée, le respect des durées repose sur une suppression manuelle
+par le service recrutement et la DRH, à organiser (qui, à quelle fréquence, avec quelle trace). Les
+dossiers du vivier antérieurs à IRON Emploi sont concernés dès la mise en service : certains peuvent
+déjà dépasser 24 mois.
+
+### Points à faire valider par un juriste
+
+1. Référence, date et périmètre exact de la formalité ANPDP : couvre-t-elle l'application mobile
+   et l'hébergement hors d'Algérie ?
+2. Fondement et formalités du transfert de données vers la France.
+3. Qualité de la SARL IRON GLOBAL SOLUTION vis-à-vis des autres sociétés du groupe qui publient
+   des annonces et accèdent aux dossiers.
+4. Durées de conservation, en particulier celle du dossier d'une personne recrutée au regard des
+   obligations de l'employeur.
+5. Délai de réponse aux demandes d'exercice des droits, à annoncer ou non.
+6. Texte du consentement et de la notice dans leur ensemble.
 
 ## 9. Limites à la mise en service
 
-- **Notice de protection des données** : incomplète tant que les informations du § 8 manquent.
+- **Notice de protection des données** : deux rubriques restent à fournir (référence ANPDP, fondement du
+  transfert) et le texte n'a pas été relu par un juriste (§ 8).
+- **Durées de conservation** : annoncées dans la notice, sans suppression automatique côté serveur (§ 8).
 - **Police sur Android** : Arimo, et non Arial, faute de licence d'intégration (voir `mobile/recruitment/assets/fonts/LISEZ-MOI.md`).
 - **Notifications push** : préparées, non activées, jamais essayées en réel. Il manque le projet
   EAS, la clé FCM V1 et `google-services.json` (Android), la clé APNs (iOS), puis

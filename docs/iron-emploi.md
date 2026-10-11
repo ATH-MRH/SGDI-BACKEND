@@ -171,6 +171,10 @@ sont renvoyés par aucune route publique.
 - `PUT /public/emploi/me/profile` enregistre le profil et rien d'autre. Il exige un consentement à la
   notice en vigueur (`privacy_consent`, `privacy_version`) tant qu'il n'a pas été donné pour cette
   version ; le consentement est daté et conservé à part du profil (`GET /me` → `privacy`).
+- Le texte de la notice est dans l'application (`mobile/recruitment/src/lib/privacy.ts`). Le serveur n'en
+  porte que la version, `PRIVACY_NOTICE_VERSION` (`2026-10-11`), qui doit rester égale à `PRIVACY_VERSION` :
+  un écart fait refuser l'enregistrement du profil (409). Le serveur n'applique aucune durée de
+  conservation aux candidatures ni aux espaces ; voir `docs/iron-emploi-mise-en-production.md`, § 8.
 - Le profil distingue les langues parlées (`languages`) et écrites (`written_languages`), garde le
   NIN comme chaîne de 10 ou 18 chiffres, et accepte un nombre d'enfants non renseigné (`null`),
   distinct de zéro.
