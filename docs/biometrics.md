@@ -173,9 +173,11 @@ VRAIE CAMÉRA DAHUA**) ; décision sur le mode kiosque (§11).
 6. Accorder les permissions biométriques explicites aux seules personnes habilitées.
 7. Dérouler le protocole du §8, calibrer, puis enrôler.
 
-**Rotation de clé** : un gabarit chiffré avec une ancienne clé devient illisible ; le système le
-signale explicitement (erreur, jamais d'ignorance silencieuse qui laisserait passer un doublon).
-Procédure : désactiver les gabarits, changer la clé, ré-enrôler.
+**Rotation de clé** : un gabarit chiffré avec une clé absente de la configuration est illisible ;
+le système le signale explicitement (erreur, jamais d'ignorance silencieuse qui laisserait passer
+un doublon). Une rotation se fait donc à deux clés — `BIOMETRIC_TEMPLATE_KEY` (active) et
+`BIOMETRIC_TEMPLATE_KEY_PREVIOUS` (ancienne, en lecture seule le temps de rechiffrer) — sans
+réenrôlement : procédure dans `docs/biometric-key-rotation.md`.
 
 ## 10. Migration des photos à nom prévisible — procédure de production
 
