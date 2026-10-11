@@ -579,6 +579,134 @@ function openDrhCandidateReadOnly(id){
 }
 window.openDrhCandidateReadOnly=openDrhCandidateReadOnly;
 
+// Liste DRH en lecture seule : recherche, filtres et tri sont appliqués par le serveur,
+// avant pagination. Ils ne modifient aucun dossier (data-no-lock : actifs en mode verrouillé).
+const drhCandIcon=paths=>`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+const DRH_CAND_ICONS={
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  sort:'<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  sortAsc:'<path d="m7 14 5-5 5 5"/>',
+  sortDesc:'<path d="m7 10 5 5 5-5"/>',
+  prev:'<path d="m15 18-6-6 6-6"/>',
+  next:'<path d="m9 18 6-6-6-6"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  external:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>'
+};
+const DRH_CAND_NO_POSITION="Poste non renseigné";
+let drhRecruitmentFilters={scope:"",q:"",status:"",position:"",sortKey:"",sortDirection:"asc"};
+let drhRecruitmentFacets={scope:"",statuses:new Set(),positions:new Set()};
+let drhRecruitmentSearchTimer=null;
+function drhRecruitmentFilterState(){
+  const scope=drhCandidateScope();
+  if(drhRecruitmentFilters.scope!==scope)drhRecruitmentFilters={scope,q:"",status:"",position:"",sortKey:"",sortDirection:"asc"};
+  return drhRecruitmentFilters;
+}
+function drhRecruitmentQuery(society,mode,f){
+  return {society,mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),q:f.q.trim(),status:f.status,desired_position:f.position,sort_key:f.sortKey,sort_direction:f.sortKey?f.sortDirection:""};
+}
+function drhRecruitmentApplyFilters(mode){sessionStorage.setItem(recrutementPageStorageKey(mode),"1");renderView()}
+function setDrhRecruitmentFilter(mode,key,value){
+  const f=drhRecruitmentFilterState(),next=String(value||"");
+  if(!["q","status","position"].includes(key)||f[key]===next)return;
+  f[key]=next;
+  drhRecruitmentApplyFilters(mode);
+}
+function drhRecruitmentSearchInput(mode,value){
+  clearTimeout(drhRecruitmentSearchTimer);
+  drhRecruitmentSearchTimer=setTimeout(()=>setDrhRecruitmentFilter(mode,"q",value),300);
+}
+function sortDrhRecruitment(mode,key){
+  const f=drhRecruitmentFilterState();
+  f.sortDirection=f.sortKey===key&&f.sortDirection==="asc"?"desc":"asc";
+  f.sortKey=key;
+  drhRecruitmentApplyFilters(mode);
+}
+function resetDrhRecruitmentFilters(mode){
+  clearTimeout(drhRecruitmentSearchTimer);
+  const search=document.getElementById("drh-cand-search");
+  if(search)search.value="";
+  drhRecruitmentFilters.scope="";
+  drhRecruitmentApplyFilters(mode);
+}
+function drhCandidateStatusLabel(status){
+  const key=String(status||"").trim().toLowerCase();
+  if(!key)return "—";
+  if(key==="a_contractualiser")return "À contractualiser";
+  const text=key.replace(/_/g," ");
+  return text.charAt(0).toLocaleUpperCase("fr-FR")+text.slice(1);
+}
+function drhCandidateReference(c){
+  const d=c.data||{};
+  const stored=d.referenceDossier||d.numeroDossier||d.reference;
+  if(stored)return String(stored);
+  const year=/^\d{4}/.exec(String(c.created_at||""));
+  return `#C-${year?year[0]+"-":""}${String(c.id??"").padStart(5,"0")}`;
+}
+function drhCandidateDate(c){
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(c.created_at||""));
+  return m?`${m[3]}/${m[2]}/${m[1]}`:"";
+}
+function closeDrhCandidateMenus(){
+  document.querySelectorAll(".drh-cand-menu:not([hidden])").forEach(menu=>{menu.hidden=true;menu.previousElementSibling?.setAttribute("aria-expanded","false")});
+}
+function toggleDrhCandidateMenu(button){
+  const menu=button.nextElementSibling,open=menu.hidden;
+  closeDrhCandidateMenus();
+  if(!open)return;
+  // Position fixe : le tableau défile horizontalement et rognerait un menu en absolu.
+  const r=button.getBoundingClientRect();
+  menu.hidden=false;
+  menu.style.top=`${Math.max(8,Math.min(r.bottom+6,window.innerHeight-menu.offsetHeight-8))}px`;
+  menu.style.left=`${Math.max(8,r.right-menu.offsetWidth)}px`;
+  button.setAttribute("aria-expanded","true");
+}
+async function copyDrhCandidateReference(reference){
+  closeDrhCandidateMenus();
+  try{await navigator.clipboard.writeText(reference);toast("N° de dossier copié","info")}
+  catch(_e){toast("Copie impossible : "+reference,"info")}
+}
+document.addEventListener("click",e=>{if(!e.target.closest?.(".drh-cand-more"))closeDrhCandidateMenus()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrhCandidateMenus()});
+window.addEventListener("scroll",closeDrhCandidateMenus,true);
+window.addEventListener("resize",closeDrhCandidateMenus);
+
+async function exportDrhRecruitmentCsv(mode,button){
+  const society=drhActiveSocieteFilter(),scope=drhCandidateScope();
+  if(!society||!isDrhModuleContext())return;
+  const query=drhRecruitmentQuery(society,mode,drhRecruitmentFilterState());
+  if(button)button.disabled=true;
+  try{
+    const items=[];
+    for(let page=1,pages=1;page<=pages;page++){
+      const result=await SGDI.rh.candidatesPage({...query,page,page_size:100});
+      if(scope!==drhCandidateScope())return;
+      items.push(...(result.items||[]));
+      pages=result.pages||1;
+    }
+    // Neutralise les formules à l'ouverture dans un tableur.
+    const cell=v=>{let s=String(v??"");if(/^[=+\-@\t\r]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`};
+    const lines=[["Dossier","Nom","Prénom","Poste","Société","Téléphone","Statut","Date de candidature"],
+      ...items.map(c=>[drhCandidateReference(c),c.last_name,c.first_name,c.desired_position,c.society,c.phone,drhCandidateStatusLabel(c.status),drhCandidateDate(c)])];
+    const url=URL.createObjectURL(new Blob(["﻿"+lines.map(r=>r.map(cell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}));
+    const a=document.createElement("a");
+    a.href=url;a.download=`candidatures-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(error){
+    toast("Export impossible : "+(error.message||String(error)),"error");
+  }finally{
+    if(button)button.disabled=false;
+  }
+}
+Object.assign(window,{setDrhRecruitmentFilter,drhRecruitmentSearchInput,sortDrhRecruitment,resetDrhRecruitmentFilters,toggleDrhCandidateMenu,copyDrhCandidateReference,exportDrhRecruitmentCsv});
+
 async function renderDrhRecruitmentReadOnly(view,mode="new"){
   const requestSeq=++sgdiRecruitmentRequestSeq;
   const hash=location.hash;
@@ -589,15 +717,42 @@ async function renderDrhRecruitmentReadOnly(view,mode="new"){
   const current=()=>requestSeq===sgdiRecruitmentRequestSeq&&location.hash===hash&&generation===sgdiViewRenderGeneration&&isDrhModuleContext()&&session?.username===account&&drhActiveSocieteFilter()===society&&view.isConnected;
   if(!society){view.innerHTML='<div class="card p-6">Choisissez une société pour consulter ses candidatures.</div>';return}
   view.innerHTML='<div class="card p-6">Chargement des candidatures…</div>';
+  const f=drhRecruitmentFilterState();
   try{
     // Filter on the server before pagination; counters use the same active scope.
-    const result=await SGDI.rh.candidatesPage({society,mode:mode==="new"?"drh_pending":recrutementModeToApi(mode),page:recrutementCurrentPage(mode),page_size:25});
+    const result=await SGDI.rh.candidatesPage({...drhRecruitmentQuery(society,mode,f),page:recrutementCurrentPage(mode),page_size:25});
     if(!current())return;
-    drhReadOnlyCandidates=new Map((result.items||[]).map(c=>[String(c.id),c]));
+    const items=result.items||[];
+    drhReadOnlyCandidates=new Map(items.map(c=>[String(c.id),c]));
     drhReadOnlyCandidateScope=drhCandidateScope();
-    const rows=(result.items||[]).map(c=>`<tr><td>${escapeHTML([c.last_name,c.first_name].filter(Boolean).join(" "))}</td><td>${escapeHTML(c.desired_position||"—")}</td><td>${escapeHTML(c.society||"—")}</td><td>${escapeHTML(c.phone||"—")}</td><td>${escapeHTML(c.status||"—")}</td><td><button type="button" class="btn btn-ghost" data-candidate-id="${escapeHTML(String(c.id))}" onclick="openDrhCandidateReadOnly(this.dataset.candidateId)">Consulter</button></td></tr>`).join("");
+    const facetScope=drhReadOnlyCandidateScope+"|"+mode;
+    if(drhRecruitmentFacets.scope!==facetScope)drhRecruitmentFacets={scope:facetScope,statuses:new Set(),positions:new Set()};
+    items.forEach(c=>{
+      const status=String(c.status||"").trim().toLowerCase();
+      if(status)drhRecruitmentFacets.statuses.add(status);
+      drhRecruitmentFacets.positions.add(String(c.desired_position||DRH_CAND_NO_POSITION));
+    });
+    const esc=v=>escapeHTML(String(v??""));
+    const options=(values,selected,label)=>`<option value="">${label}</option>`+[...new Set([...values,selected].filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr")).map(v=>`<option value="${esc(v)}"${v===selected?" selected":""}>${esc(values===drhRecruitmentFacets.statuses?drhCandidateStatusLabel(v):v)}</option>`).join("");
+    const rows=items.map(c=>{
+      const name=[c.last_name,c.first_name].filter(Boolean).join(" ");
+      const initials=[c.last_name,c.first_name].map(v=>String(v||"").trim().charAt(0)).join("").toLocaleUpperCase("fr-FR")||"?";
+      const status=String(c.status||"").trim().toLowerCase(),reference=drhCandidateReference(c),date=drhCandidateDate(c),id=esc(c.id);
+      return `<tr><td><div class="drh-cand-person"><span class="drh-cand-avatar" data-tone="${(Number(c.id)||0)%4}" aria-hidden="true">${esc(initials)}</span><div><strong>${esc(name||"—")}</strong>${date?`<small>Candidature le ${date}</small>`:""}</div></div></td><td>${esc(c.desired_position||"—")}</td><td>${esc(c.society||"—")}</td><td>${esc(c.phone||"—")}</td><td><span class="drh-cand-status"${status==="a_contractualiser"?' data-tone="pending"':""}>${esc(drhCandidateStatusLabel(status))}</span></td><td class="drh-cand-ref">${esc(reference)}</td><td><div class="drh-cand-actions"><button type="button" class="drh-cand-btn" data-candidate-id="${id}" onclick="openDrhCandidateReadOnly(this.dataset.candidateId)">${drhCandIcon(DRH_CAND_ICONS.eye)}Consulter</button><div class="drh-cand-more"><button type="button" class="drh-cand-btn drh-cand-btn-icon" aria-haspopup="menu" aria-expanded="false" aria-label="Autres actions pour ${esc(name)}" onclick="toggleDrhCandidateMenu(this)">${drhCandIcon(DRH_CAND_ICONS.more)}</button><div class="drh-cand-menu" role="menu" hidden><button type="button" role="menuitem" data-candidate-id="${id}" onclick="closeDrhCandidateMenus();openDrhCandidateReadOnly(this.dataset.candidateId)">${drhCandIcon(DRH_CAND_ICONS.eye)}Consulter la fiche</button><button type="button" role="menuitem" data-reference="${esc(reference)}" onclick="copyDrhCandidateReference(this.dataset.reference)">${drhCandIcon(DRH_CAND_ICONS.copy)}Copier le n° de dossier</button></div></div></div></td></tr>`;
+    }).join("");
+    const head=[["Candidat","candidate"],["Poste","position"],["Société","society"],["Téléphone","phone"],["Statut","status"],["Dossier","dossier"]].map(([label,key])=>{
+      const active=f.sortKey===key;
+      return `<th${active?` aria-sort="${f.sortDirection==="desc"?"descending":"ascending"}"`:""}><button type="button" class="drh-cand-sort" onclick="sortDrhRecruitment('${mode}','${key}')">${label}${drhCandIcon(active?(f.sortDirection==="desc"?DRH_CAND_ICONS.sortDesc:DRH_CAND_ICONS.sortAsc):DRH_CAND_ICONS.sort)}</button></th>`;
+    }).join("");
+    // Une saisie en cours ne doit pas être écrasée par la réponse de la requête précédente.
+    const liveSearch=document.getElementById("drh-cand-search");
+    const searchValue=liveSearch&&view.contains(liveSearch)&&document.activeElement===liveSearch?liveSearch.value:f.q;
+    const filtered=!!(f.q.trim()||f.status||f.position);
     const page=result.page||1,pages=result.pages||1;
-    view.innerHTML=`<div data-drh-recruitment-readonly="1"><header class="drh-recruitment-heading"><h1 class="text-2xl font-bold">Candidatures — lecture seule</h1><p class="text-slate-500 mb-4">Dossiers partagés avec le module Recrutement. Leur traitement s’effectue dans recrute.irongs.com.</p></header><div class="card overflow-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Dossier</th></tr></thead><tbody>${rows||'<tr><td colspan="6">Aucune candidature.</td></tr>'}</tbody></table><div class="p-3 flex justify-between"><span>${result.total||0} candidature(s) · page ${page}/${pages}</span><div><button class="btn btn-ghost" ${page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${page-1})">Précédent</button><button class="btn btn-ghost" ${page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${page+1})">Suivant</button></div></div></div></div>`;
+    view.innerHTML=`<div class="drh-cand-page" data-drh-recruitment-readonly="1"><header class="drh-recruitment-heading"><span class="drh-cand-hero-icon">${drhCandIcon(DRH_CAND_ICONS.users)}</span><h1>Candidatures — lecture seule</h1><p>Dossiers partagés avec le module Recrutement. Leur traitement s’effectue dans recrute.irongs.com.</p><div class="drh-cand-note" role="note">${drhCandIcon(DRH_CAND_ICONS.info)}<div><strong>Lecture seule</strong><span>Pour traiter les candidatures, utilisez le module Recrutement.</span></div></div></header>
+      <div class="drh-cand-toolbar" data-drh-recruitment-filters role="search"><label class="drh-cand-search">${drhCandIcon(DRH_CAND_ICONS.search)}<input type="search" id="drh-cand-search" name="drh-cand-search" data-no-lock autocomplete="off" aria-label="Rechercher un candidat" placeholder="Rechercher un candidat (nom, poste, téléphone...)" value="${esc(searchValue)}" oninput="drhRecruitmentSearchInput('${mode}',this.value)"></label><label class="drh-cand-select"><span>Statut</span><select name="drh-cand-status" data-no-lock onchange="setDrhRecruitmentFilter('${mode}','status',this.value)">${options(drhRecruitmentFacets.statuses,f.status,"Tous")}</select></label><label class="drh-cand-select"><span>Poste</span><select name="drh-cand-position" data-no-lock onchange="setDrhRecruitmentFilter('${mode}','position',this.value)">${options(drhRecruitmentFacets.positions,f.position,"Tous")}</select></label><button type="button" class="drh-cand-btn" name="drh-cand-reset" onclick="resetDrhRecruitmentFilters('${mode}')">${drhCandIcon(DRH_CAND_ICONS.reset)}Réinitialiser</button><button type="button" class="drh-cand-btn drh-cand-btn-accent" name="drh-cand-export" onclick="exportDrhRecruitmentCsv('${mode}',this)">${drhCandIcon(DRH_CAND_ICONS.download)}Exporter</button></div>
+      <div class="drh-cand-card"><div class="drh-cand-table-wrap"><table><thead><tr>${head}<th>Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="drh-cand-empty">${filtered?"Aucune candidature ne correspond à ces critères.":"Aucune candidature."}</td></tr>`}</tbody></table></div><div class="drh-cand-pagination"><span>${result.total||0} candidat(e)s • page ${page}/${pages}</span><nav aria-label="Pagination"><button type="button" class="drh-cand-btn" ${page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${page-1})">${drhCandIcon(DRH_CAND_ICONS.prev)}Précédent</button><span class="drh-cand-page-current" aria-current="page">${page}</span><button type="button" class="drh-cand-btn" ${page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${page+1})">Suivant${drhCandIcon(DRH_CAND_ICONS.next)}</button></nav></div></div>
+      <aside class="drh-cand-banner">${drhCandIcon(DRH_CAND_ICONS.file)}<div><strong>Accéder au traitement des candidatures</strong><span>Pour effectuer des actions (entretien, validation, rejet, etc.), rendez-vous dans le module Recrutement.</span></div><a class="drh-cand-btn drh-cand-btn-lg" href="https://recrute.irongs.com" target="_blank" rel="noopener">Ouvrir le module Recrutement${drhCandIcon(DRH_CAND_ICONS.external)}</a></aside></div>`;
     normalizeCentralPage(view);
   }catch(error){
     if(current())view.innerHTML=`<div class="card p-6" role="alert">Chargement impossible : ${escapeHTML(error.message||String(error))}<button class="btn btn-ghost" onclick="renderView()">Réessayer</button></div>`;

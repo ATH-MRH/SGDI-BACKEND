@@ -40,6 +40,7 @@ Il doit être mis à jour à chaque lot qui ajoute une donnée, une permission o
 | Plateforme | Permission | Raison | Présente |
 |---|---|---|---|
 | Android | `INTERNET` | Communication avec le backend ATLAS | Toujours |
+| Android | `DETECT_SCREEN_CAPTURE` | Exigée au lancement par la bibliothèque de protection d'écran à partir d'Android 14. Accordée à l'installation, sans demande à l'utilisateur ; ne donne accès à aucune image ni donnée. L'application n'écoute pas les captures | Toujours |
 | Android | `USE_BIOMETRIC`, `USE_FINGERPRINT` | Verrouillage local de la session | Seulement si la fonction `biometrics` est activée au build |
 | Android | `POST_NOTIFICATIONS` et permissions de réception | Notifications push | Seulement si la fonction `push` est activée au build |
 | iOS | Capacité Push Notifications | Notifications push | Seulement si la fonction `push` est activée au build |
@@ -47,7 +48,7 @@ Il doit être mis à jour à chaque lot qui ajoute une donnée, une permission o
 
 Un build sans la fonction `biometrics` ne déclare aucune de ces permissions, bien que la bibliothèque soit embarquée : elles sont retirées explicitement.
 
-Les permissions que le gabarit natif ajoute par défaut (stockage externe, superposition d'écran, vibreur) sont explicitement retirées. `npm run check:native` échoue si une permission non prévue apparaît.
+Les permissions que le gabarit natif ou une bibliothèque ajoutent par défaut (stockage externe, lecture des photos, superposition d'écran, vibreur, pastilles de compteur des lanceurs, provenance d'installation) sont explicitement retirées. La liste complète du build de production Android, bibliothèques comprises, est dans ANDROID-PRODUCTION, § 2. `npm run check:native` échoue si une permission non prévue apparaît.
 
 ## 2. Permissions prévues, à n'ajouter qu'avec la fonction
 

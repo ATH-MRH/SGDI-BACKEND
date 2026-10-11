@@ -318,6 +318,7 @@ def list_candidates_page(
     q: str | None = None,
     desired_position: str | None = None,
     recruiter_opinion: str | None = None,
+    status: str | None = None,
     sort_key: str | None = None,
     sort_direction: str | None = None,
     page: int = 1,
@@ -372,6 +373,9 @@ def list_candidates_page(
             row for row in rows
             if str((row.data if isinstance(row.data, dict) else {}).get("avisDecision") or "Non évalué") == recruiter_opinion
         ]
+    wanted_status = str(status or "").strip().lower()
+    if wanted_status:
+        rows = [row for row in rows if str(row.status or "").strip().lower() == wanted_status]
     key = str(sort_key or "").strip().lower()
     if key:
         def candidate_sort_value(row: Candidate):
@@ -785,6 +789,7 @@ def _candidate_decision_is_favorable(data: dict[str, Any] | None) -> bool:
 
 
 SOCIETY_REQUIRED = "SOCIETE_DESTINATAIRE_REQUISE"
+SOCIETY_ALREADY_ASSIGNED = "SOCIETE_DESTINATAIRE_DEJA_ATTRIBUEE"
 TRANSFER_TO_RETRY = "TRANSFERT_DRH_A_REPRENDRE"
 ALREADY_TRANSFERRED = "CANDIDAT_DEJA_TRANSFERE"
 
@@ -853,16 +858,38 @@ def ventilate_candidate(db: Session, candidate_id: int, society: str | None, *, 
     return row
 
 
-def transfer_candidate_to_drh(db: Session, candidate_id: int, *, actor: Any | None = None) -> dict[str, Any]:
+def transfer_candidate_to_drh(db: Session, candidate_id: int, *, actor: Any | None = None,
+                              society: str | None = None, reason: str | None = None) -> dict[str, Any]:
     """RECRUTER = finaliser le recrutement et transférer le dossier à la DRH de la société
     destinataire. Le dossier entre dans le circuit DRH existant (« Contrats à établir ») : aucun
     employé ni contrat n'est créé ici, la DRH les établit par son propre service.
 
     Atomique (une seule transaction : le dossier ne quitte Recrutement que si le transfert est
-    validé) et idempotent (verrou de ligne ; un second appel renvoie le transfert existant)."""
+    validé) et idempotent (verrou de ligne ; un second appel renvoie le transfert existant).
+
+    `society` : société destinataire choisie au moment du recrutement, pour un dossier NON
+    ventilé uniquement (l'appelant a déjà vérifié qu'elle est autorisée pour ce compte). La
+    ventilation est alors enregistrée et validée AVANT le transfert, par le service de ventilation
+    existant ; un dossier déjà ventilé n'est jamais réaffecté ici."""
     from app.core.audit import append_audit
+    from app.core.scope_policy import society_key
 
     row = _locked_candidate(db, candidate_id)
+    if society_key(society) and not _candidate_left_recruitment(row):
+        current = str(row.society or "").strip()
+        if current and society_key(current) != society_key(society):
+            raise _business_error(409, SOCIETY_ALREADY_ASSIGNED,
+                                  f"Dossier déjà ventilé vers {current} : la société destinataire ne se change pas lors du recrutement")
+        if not current:
+            # Mêmes préconditions que le transfert : on ne ventile pas un dossier qui ne peut pas être recruté.
+            if _candidate_is_archived(row):
+                raise HTTPException(status_code=409, detail="Ce dossier ne peut pas être transmis à la contractualisation")
+            if not _candidate_decision_is_favorable(row.data if isinstance(row.data, dict) else {}):
+                raise HTTPException(status_code=422, detail="Contrat refusé : seuls les candidats avec une décision Favorable peuvent être contractualisés")
+            ventilate_candidate(db, candidate_id, society, reason=reason, actor=actor, context="recrutement")
+            # La ventilation est validée (verrou relâché) : on reprend le verrou, et un appel
+            # concurrent qui aurait déjà transféré le dossier est rendu tel quel plus bas.
+            row = _locked_candidate(db, candidate_id)
     data = row.data if isinstance(row.data, dict) else {}
     username = getattr(actor, "username", None) or "system"
 
@@ -1968,6 +1995,7 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
         status="actif",
         template_code=template.code,
         content=f"Contrat généré automatiquement: {reference}",
+        **(getattr(request, "dc_link", None) or {}),
     )
     db.add(contract)
     db.flush()
@@ -1987,7 +2015,9 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
     return row
 
 
-def generate_contract_from_form(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
+def generate_contract_from_form(
+    db: Session, request: Any, user: Any | None = None, dc_link: dict[str, Any] | None = None,
+) -> GeneratedContract:
     first_name = str(request.first_name or "").strip()
     last_name = str(request.last_name or "").strip()
     if len(first_name) < 2 or len(last_name) < 2:
@@ -2066,6 +2096,7 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
         end_date=request.end_date,
         salary_net=request.salary_net,
         output_format=request.output_format or "docx",
+        dc_link=dc_link,
         values={
             **(request.values if isinstance(getattr(request, "values", None), dict) else {}),
             "CODE": code or employee.code or "",

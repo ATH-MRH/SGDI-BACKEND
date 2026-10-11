@@ -29,6 +29,13 @@ Aucun push, aucun déploiement. Aucune migration : le modèle existant suffit.
 - **Permission** : refusée par défaut. Administrateur global, ou permission centrale
   `recruitment / contractualization / update`. Un compte limité ne ventile que vers ses sociétés
   et ne peut pas retirer un dossier à une société hors de son périmètre. Refus audités.
+- **Société choisie au recrutement** (11 octobre 2026) : `POST …/transfer-drh` accepte `society`
+  pour un dossier NON ventilé. Ce n'est pas la ventilation : c'est le droit de recruter, borné au
+  périmètre société du compte, avec les actions générales `create` et `update` explicites (ou la
+  permission de ventilation / l'administration globale). La ventilation est enregistrée (contexte
+  `recrutement`) et validée avant le transfert ; un dossier déjà ventilé n'est jamais réaffecté
+  par ce chemin (`409 SOCIETE_DESTINATAIRE_DEJA_ATTRIBUEE`). `GET …/transfer-options` indique la
+  sélection possible : `assigned`, `automatic` (une société), `required` (plusieurs) ou `none`.
 - **Sociétés proposées** : périmètre explicite du compte ; pour un périmètre global, sociétés
   réellement connues (comptes, employés, candidats). Aucune liste codée en dur.
 - **Recruter = transfert DRH** (`POST /api/drh/candidates/{id}/transfer-drh`) : préconditions
@@ -53,8 +60,10 @@ Aucun push, aucun déploiement. Aucune migration : le modèle existant suffit.
   « RECRUTEMENT GROUPE » (aucun logo Groupe n'existe).
 - Action **Ventiler** (menu de ligne et fiche candidat), visible seulement avec la permission ;
   la fenêtre montre la société actuelle, les cibles autorisées, le retour au vivier et l'historique.
-- **Recruter** n'offre plus de choix de société : sans société destinataire, la fenêtre demande de
-  ventiler d'abord ; sinon elle confirme le transfert à la DRH.
+- **Recruter** : dossier ventilé → confirmation du transfert à la DRH de sa société. Dossier non
+  ventilé → société unique du compte affichée (« sélection automatique »), ou sélecteur
+  obligatoire limité aux sociétés du compte ; aucune société → blocage expliqué. Toujours après
+  confirmation explicite.
 - « Candidats recrutés » disparaît (navigation et onglet). Le tableau de bord remplace l'indicateur
   « Recrutés » par **« Transférés DRH ce mois »** (statistique historique, sans lien vers une liste)
   et le pipeline devient Nouvelles · Présélection · Convoqués · Entretiens · Réserve.

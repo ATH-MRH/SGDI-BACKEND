@@ -231,12 +231,13 @@ test('l’aperçu du contrat fusionne le modèle avec les données du futur empl
   assert.match(src, /Le modèle Word sera automatiquement rempli avec toutes les informations saisies du futur employé/);
 });
 
-test('le champ client du contrat charge les clients PostgreSQL et les sites', () => {
-  assert.match(src, /function loadNewContractClients\(\)/);
-  assert.match(src, /await SGDI\.commercial\.clients\(\)/);
-  assert.match(src, /db\.clients=rows\.map\(clientFromApi\)/);
-  assert.match(src, /<optgroup label="Clients">/);
-  assert.match(src, /<optgroup label="Sites opérationnels">/);
+test('le champ client / site du contrat lit exclusivement la source DC', () => {
+  assert.match(src, /async function loadNewContractClients\(\)/);
+  assert.match(src, /await SGDI\.rh\.contractDcClientSites\(/);
+  assert.match(src, /"\/drh\/contracts\/dc-client-sites"/);
+  // Plus de liste locale, de groupe « Sites opérationnels » ni de saisie libre.
+  assert.doesNotMatch(src, /function newContractClientOptions|<optgroup label="Sites opérationnels">|name="clientAutre"|__autre__/);
+  assert.doesNotMatch(src, /db\.clients=rows\.map\(clientFromApi\)/);
   assert.match(src, /loadNewContractClients\(\);updateNewContractSalaryWords/);
 });
 
@@ -249,13 +250,22 @@ test('les dates et la durée du contrat sont alignées sur une même ligne', () 
   assert.match(css, /\.nc-contract-dates-row\{grid-column:1\/-1;display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 });
 
-test('la contractualisation permet de compléter le contact d’urgence obligatoire', () => {
+test('la contractualisation permet de compléter le contact d’urgence, sans le rendre obligatoire', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  const form = src.split('function renderContractualisation(view,id){')[1].split('function updateNewContractSummary')[0];
   assert.match(src, /class="nc-candidate-contact-row"/);
-  assert.match(src, /name="candidateWilaya" required/);
-  assert.match(src, /name="contactUrgenceLien"[^>]*required/);
-  assert.match(src, /name="contactUrgenceNom"[^>]*required/);
-  assert.match(src, /name="contactUrgenceTel"[^>]*required/);
+  for (const name of ['numeroPieceIdentite', 'candidateWilaya', 'contactUrgenceLien', 'contactUrgenceNom', 'contactUrgenceTel']) {
+    const field = form.split(`name="${name}"`)[1].split('>')[0];
+    assert.doesNotMatch(field, /\srequired/, name);
+  }
+  // Poste, dates et durée restent obligatoires.
+  for (const name of ['poste', 'dateDebut', 'dureeContrat']) assert.match(form.split(`name="${name}"`)[1].split('>')[0], /\srequired/, name);
+  // Le format du téléphone d'urgence n'est contrôlé que s'il est saisi.
+  assert.match(src, /if\(draft\.contactUrgenceTel&&String\(draft\.contactUrgenceTel\)/);
+  // Pièce d'identité : facultative pour un candidat (aperçu et archivage), exigée pour un employé existant.
+  assert.match(src, /if\(!draft\.numeroPieceIdentite&&!contractDraftIsFromCandidate\(draft\.a\)\)\{toast\("N° pièce d'identité obligatoire"/);
+  assert.match(src, /if\(!draft\.numeroPieceIdentite&&!draft\.identityOptional\)return fail\(/);
+  assert.match(src, /openEmployeeContractReviewWindow\(agent,\{\.\.\.draft,a:agent,identityOptional:true\}\)/);
   assert.match(src, /c\.wilaya=String\(candidateDetails\.get\("candidateWilaya"\)/);
   assert.match(css, /\.nc-candidate-contact-row\{grid-column:1\/-1;display:grid;grid-template-columns:repeat\(4/);
 });

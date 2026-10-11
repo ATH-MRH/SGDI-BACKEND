@@ -6,7 +6,7 @@ import { ApiError, errorMessageKey } from '@/api/errors';
 import { useAuth } from '@/auth/AuthProvider';
 import { Segmented } from '@/components/Segmented';
 import { useEmployee } from '@/employee/EmployeeProvider';
-import { AppText, Button, FormField, Screen } from '@/components/ui';
+import { AppText, Banner, Button, Card, FormField, Screen } from '@/components/ui';
 import { VersionLabel } from '@/components/VersionLabel';
 import { t } from '@/i18n';
 import { colors, radius, spacing, touchTarget } from '@/theme/tokens';
@@ -60,107 +60,116 @@ export default function LoginScreen() {
     <Screen edges={['top', 'bottom', 'left', 'right']} testID="login-screen">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.form}>
         <View style={styles.header}>
-          <View style={styles.mark}>
-            <AppText variant="title" color={colors.onPrimary}>
-              A
-            </AppText>
+          <View style={styles.mark} accessibilityElementsHidden importantForAccessibility="no">
+            <AppText style={styles.markLetter}>A</AppText>
+            <View style={styles.markAccent} />
           </View>
-          <AppText variant="title" accessibilityRole="header">
+          <AppText variant="display" color={colors.navy} accessibilityRole="header" style={styles.wordmark}>
             {t('app.name')}
           </AppText>
-          <AppText color={colors.textSecondary}>{t(mode === 'employee' ? 'login.employee.subtitle' : 'login.subtitle')}</AppText>
+          <AppText variant="overline" color={colors.steel} style={styles.tagline}>
+            {t('login.tagline')}
+          </AppText>
         </View>
 
-        {employee.available ? (
-          <Segmented
-            testID="login-mode"
-            value={mode}
-            onChange={(next) => {
-              setMode(next);
-              setMessage(null);
-              setPassword('');
-            }}
-            options={[
-              { value: 'staff', label: t('login.mode.staff') },
-              { value: 'employee', label: t('login.mode.employee') },
-            ]}
+        <Card style={styles.card}>
+          <AppText color={colors.textSecondary}>{t(mode === 'employee' ? 'login.employee.subtitle' : 'login.subtitle')}</AppText>
+
+          {employee.available ? (
+            <Segmented
+              testID="login-mode"
+              value={mode}
+              onChange={(next) => {
+                setMode(next);
+                setMessage(null);
+                setPassword('');
+              }}
+              options={[
+                { value: 'staff', label: t('login.mode.staff') },
+                { value: 'employee', label: t('login.mode.employee') },
+              ]}
+            />
+          ) : null}
+
+          <FormField
+            testID="login-username"
+            label={t(mode === 'employee' ? 'login.employee.username' : 'login.username')}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+            textContentType="username"
+            returnKeyType="next"
+            editable={!submitting}
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
-        ) : null}
+          <FormField
+            ref={passwordRef}
+            testID="login-password"
+            label={t('login.password')}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!passwordVisible}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="go"
+            editable={!submitting}
+            onSubmitEditing={() => void submit()}
+          />
+          <Pressable
+            testID="login-toggle-password"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: passwordVisible }}
+            accessibilityLabel={t('login.showPassword')}
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={styles.toggle}>
+            <Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.primary} />
+            <AppText variant="label" color={colors.primary}>
+              {t(passwordVisible ? 'login.hidePassword' : 'login.showPassword')}
+            </AppText>
+          </Pressable>
 
-        <FormField
-          testID="login-username"
-          label={t(mode === 'employee' ? 'login.employee.username' : 'login.username')}
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="username"
-          textContentType="username"
-          returnKeyType="next"
-          editable={!submitting}
-          onSubmitEditing={() => passwordRef.current?.focus()}
-        />
-        <FormField
-          ref={passwordRef}
-          testID="login-password"
-          label={t('login.password')}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!passwordVisible}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="current-password"
-          textContentType="password"
-          returnKeyType="go"
-          editable={!submitting}
-          onSubmitEditing={() => void submit()}
-        />
-        <Pressable
-          testID="login-toggle-password"
-          accessibilityRole="switch"
-          accessibilityState={{ checked: passwordVisible }}
-          accessibilityLabel={t('login.showPassword')}
-          onPress={() => setPasswordVisible((visible) => !visible)}
-          style={styles.toggle}>
-          <Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.primary} />
-          <AppText variant="label" color={colors.primary}>
-            {t(passwordVisible ? 'login.hidePassword' : 'login.showPassword')}
-          </AppText>
-        </Pressable>
+          {message ? <Banner tone="danger" message={message} testID="login-error" /> : null}
 
-        {message ? (
-          <View style={styles.error} accessibilityRole="alert" testID="login-error">
-            <AppText variant="label" color={colors.danger}>
-              {message}
+          <Button testID="login-submit" icon="log-in-outline" label={t('login.submit')} loading={submitting} onPress={() => void submit()} />
+        </Card>
+
+        <View style={styles.footer}>
+          <View style={styles.secure}>
+            <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+            <AppText variant="caption" color={colors.textMuted}>
+              {t('login.secure')}
             </AppText>
           </View>
-        ) : null}
-
-        <Button testID="login-submit" label={t('login.submit')} loading={submitting} onPress={() => void submit()} />
-        <VersionLabel />
+          <VersionLabel />
+        </View>
       </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.lg, paddingTop: spacing.xxxl },
-  header: { gap: spacing.sm, marginBottom: spacing.md },
+  form: { gap: spacing.xl, paddingTop: spacing.xxl },
+  header: { alignItems: 'center', gap: spacing.xs },
   mark: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.lg,
+    width: 72,
+    height: 72,
+    borderRadius: radius.xl,
     backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
   },
-  toggle: { minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, alignSelf: 'flex-start' },
-  error: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    padding: spacing.md,
-  },
+  markLetter: { color: colors.onNavy, fontSize: 38, lineHeight: 44, fontWeight: '800' },
+  markAccent: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: colors.danger },
+  wordmark: { letterSpacing: 1.5 },
+  tagline: { textAlign: 'center' },
+  card: { gap: spacing.lg, padding: spacing.xl },
+  toggle: { minHeight: touchTarget - 8, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, alignSelf: 'flex-start' },
+  footer: { alignItems: 'center', gap: spacing.sm },
+  secure: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
 });

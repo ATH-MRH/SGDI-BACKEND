@@ -1,15 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
-import { AppText, Card, ListItem, Screen, ScreenHeader } from '@/components/ui';
+import { StyleSheet, View } from 'react-native';
+
+import { ActionTile, AtlasHeader, Banner, Screen } from '@/components/ui';
 import { moduleEntries } from '@/features/entries';
 import { findVisibleModule } from '@/features/modules';
 import { t } from '@/i18n';
 import { currentSiteLabel, societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
-import { colors } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 
 /**
  * Accueil d'un module métier. La garde est ici, pas dans le menu : une route
@@ -25,27 +26,24 @@ export default function ModuleScreen() {
 
   return (
     <Gate allowed={module !== null}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID={`module-screen-${module?.key ?? 'none'}`}>
-        <ScreenHeader title={module ? t(module.title) : ''} subtitle={`${societyLabel(scope)} · ${currentSiteLabel(scope)}`} />
+      <Screen
+        edges={['top', 'bottom', 'left', 'right']}
+        testID={`module-screen-${module?.key ?? 'none'}`}
+        header={<AtlasHeader back title={module ? t(module.title) : ''} subtitle={`${societyLabel(scope)} · ${currentSiteLabel(scope)}`} />}>
         {entries.length > 0 ? (
-          <Card>
+          <View style={styles.grid}>
             {entries.map((entry) => (
-              <ListItem
-                key={entry.key}
-                testID={`entry-${entry.key}`}
-                icon={entry.icon}
-                title={t(entry.title)}
-                onPress={() => router.push(entry.route as never)}
-                trailing={<Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
-              />
+              <ActionTile key={entry.key} testID={`entry-${entry.key}`} icon={entry.icon} label={t(entry.title)} onPress={() => router.push(entry.route as never)} />
             ))}
-          </Card>
+          </View>
         ) : (
-          <Card testID="module-soon">
-            <AppText color={colors.textSecondary}>{t('module.soon.body')}</AppText>
-          </Card>
+          <Banner testID="module-soon" tone="info" message={t('module.soon.body')} />
         )}
       </Screen>
     </Gate>
   );
 }
+
+const styles = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+});

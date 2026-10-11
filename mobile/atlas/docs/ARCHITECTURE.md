@@ -223,13 +223,31 @@ Derrière la fonction `push` (`src/push`). Sans elle, ni la capacité iOS ni les
 
 ## Design system
 
-Tokens (`src/theme/tokens.ts`) repris du design system web (`app/static/design-system/tokens.css`) : mêmes couleurs, mêmes espacements, mêmes rayons.
+Thème clair uniquement : fond gris très clair, cartes blanches, bleu marine ATLAS dominant. Le rouge et l'orange sont réservés aux alertes et aux états critiques, le vert aux succès. Les tokens (`src/theme/tokens.ts`) reprennent les teintes du design system web (`app/static/design-system/tokens.css`).
 
-Composants livrés : `AppText`, `Button`, `Card`, `Badge`, `StatusBadge`, `Kpi`, `ListItem`, `OptionRow`, `Segmented`, `Avatar`, `FormField`, `SearchBar`, `PagedList`, `ConfirmDialog`, `Screen`, `ScreenHeader`, `Loader`, `Skeleton`, `EmptyState`, `ErrorState`.
+| Famille | Composants (`src/components/ui`) |
+|---|---|
+| Structure | `Screen` (en-tête fixe, défilement, zones sûres), `AtlasHeader` et `HeaderAction`, `ScreenHeader`, `SectionHeader`, `TabStrip`, `Card` |
+| Indicateurs | `KpiCard`, `Kpi`, `MetricStrip`, `ChartCard`, `StatLine`, `ProgressBar` |
+| Graphiques | `BarChart`, `RingGauge`, `Distribution` — dessinés avec des vues, sans dépendance native |
+| Listes | `EmployeeRow`, `SiteRow`, `IncidentRow`, `ListItem`, `InfoRow`, `InfoGrid`, `PagedList` |
+| Identité | `EmployeeHeader`, `EmployeePhoto`, `Avatar` |
+| Statut et information | `Badge` (statut), `Chip` (information), `Banner` (alerte dans le flux), `IconTile` |
+| Actions | `Button`, `PillButton`, `ActionTile`, `FilterButton`, `Segmented`, `OptionRow`, `ConfirmDialog` |
+| Saisie | `FormField`, `SearchBar` |
+| États | `Loader`, `Skeleton`, `EmptyState`, `ErrorState` |
 
-À créer avec les écrans qui en auront besoin : `FilterSheet`, `BottomSheet`, `DatePicker` (les dates sont saisies au clavier), `FileUploader`, `PhotoUploader`.
+Les mêmes composants sont exportés sous leur nom de catalogue (`AtlasKpiCard`, `AtlasEmployeeRow`, `AtlasChartCard`…).
 
-Règles : cible tactile de 48 points minimum ; un statut est toujours écrit, la couleur ne fait que le renforcer ; chaque élément interactif a un libellé d'accessibilité ; thème clair uniquement. Le mode sombre n'est pas livré : les écrans lisent les couleurs comme des constantes, il faudra d'abord les faire passer par un thème.
+Règles :
+
+- **Aucune valeur inventée.** Un indicateur inconnu affiche « — » ou « Indisponible », un graphique sans donnée laisse sa barre ou son anneau vide, et un bloc sans source backend est masqué.
+- **Photo employé** : la photo d'une fiche est rangée côté backend dans `extra.photo` ; le mobile n'en garde que l'existence (`hasPhoto`), jamais l'adresse. Le portrait 3:4 est servi par la route authentifiée `GET /api/drh/employees/{id}/portrait`. Il est chargé par le client HTTP (`api.getImage` : même jeton, même renouvellement sur 401, type et taille contrôlés), puis gardé en mémoire sous forme d'URI `data:` dans le cache de données (`usePortrait`). `<Image>` ne reçoit donc ni l'adresse du backend ni le jeton, rien n'est écrit sur le disque, et le cache est vidé à chaque fermeture de session. 404 (aucune photo exploitable) et 403 (hors périmètre) affichent les initiales ; en build de développement, la fiche employé indique le code HTTP et la cause quand une photo annoncée ne se charge pas.
+- **Statut toujours écrit** : la couleur et la pastille ne font que renforcer le libellé.
+- **Cible tactile** de 48 points minimum ; chaque élément interactif a un libellé d'accessibilité.
+- **Styles en ligne** : ne jamais lire une propriété nommée `value` dans un objet de style en ligne. Le plugin Babel de Reanimated la traite comme une valeur animée ; la lire dans une constante avant.
+
+À créer avec les écrans qui en auront besoin : `BottomSheet`, `DatePicker` (les dates sont saisies au clavier), `FileUploader`, `PhotoUploader`. Le mode sombre n'est pas livré.
 
 ## Internationalisation
 
@@ -237,21 +255,25 @@ Français (référence) et arabe. Un test vérifie que chaque langue couvre tout
 
 ## Navigation
 
+Barre du bas : **Accueil**, **OPS**, **DRH**, **Modules**, **Plus**. Les onglets OPS et DRH n'existent que pour les comptes qui ont le module.
+
 ```
 /login                   hors session
-/(tabs)/                 Accueil : cockpit selon les droits et le contexte
-/(tabs)/tasks            Tâches à traiter
+/(tabs)/                 Accueil : cockpit — indicateurs, présence du jour et des 7 derniers jours, alertes et incidents récents, accès rapides
+/(tabs)/ops              Tableau de bord OPS : situation du jour, sites, incidents ouverts, actions
+/(tabs)/drh              Tableau de bord RH : effectifs, répartitions, congés à valider, périodes d'essai
+/(tabs)/modules          Lanceur : modules et fonctions accordés ; briques sans écran mobile grisées
+/(tabs)/profile          Plus : compte, périmètre, sécurité, notifications, version, déconnexion
+/(tabs)/tasks            Tâches à traiter (ouvert depuis l'accueil, le lanceur et Plus)
 /(tabs)/alerts           Alertes ; /alerts/[id] détail et actions
-/(tabs)/modules          Modules accordés au profil
-/(tabs)/profile          Profil, périmètre, sécurité, notifications, version, déconnexion
 /scope                   Contexte de travail (société, site)
 /module/[key]            Entrée d'un module, avec garde d'accès
-/ops/sites               Sites ; /ops/sites/[id] effectifs, pointage du jour, planning
-/attendance              Effectifs et pointage ; /attendance-correct correction motivée d'une ligne
+/ops/sites               Sites ; /ops/sites/[id] fiche site : effectifs, présence du jour, agents, planning
+/attendance              Pointage du jour : anneau de présence, recherche, filtres ; /attendance-correct correction motivée
 /abandons                Abandons de poste ; /abandons/new déclaration
 /incidents               Incidents et saisies en attente ; /incidents/new déclaration
 /brq                     Bulletin de renseignement quotidien
-/drh/employees           Employés ; /drh/employees/[id] fiche, pointage, congés, documents
+/drh/employees           Collaborateurs ; /drh/employees/[id] fiche : aperçu, position, pointage, planning et congés, documents
 /drh/leaves              Congés à valider ; /drh/leave-request dépôt d'une demande
 /recruitment             Candidats
 /employee                Espace employé (session employé uniquement)

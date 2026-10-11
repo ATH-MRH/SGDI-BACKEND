@@ -4,9 +4,10 @@ import { StyleSheet, Switch, View } from 'react-native';
 
 import { useAuth, useCurrentUser } from '@/auth/AuthProvider';
 import { grantedActions, societyScope } from '@/auth/permissions';
-import { AppText, Avatar, Badge, Button, Card, ListItem, Screen } from '@/components/ui';
+import { ActionTile, AppText, AtlasHeader, Avatar, Badge, Banner, Button, Card, IconTile, InfoRow, ListItem, Screen, SectionHeader } from '@/components/ui';
 import { VersionLabel } from '@/components/VersionLabel';
 import { env } from '@/config/env';
+import { access } from '@/features/access';
 import { visibleModules } from '@/features/modules';
 import { t } from '@/i18n';
 import { useLock } from '@/lock/LockProvider';
@@ -65,36 +66,55 @@ export default function ProfileScreen() {
   }
 
   return (
-    <Screen testID="profile-screen">
-      <View style={styles.identity}>
+    <Screen testID="profile-screen" header={<AtlasHeader title={t('tabs.more')} subtitle={t('more.subtitle')} />}>
+      <Card style={styles.identity}>
         <Avatar name={displayName} size={64} />
         <View style={styles.identityText}>
-          <AppText variant="heading" accessibilityRole="header" numberOfLines={2}>
+          <AppText variant="heading" color={colors.navy} accessibilityRole="header" numberOfLines={2}>
             {displayName}
           </AppText>
-          <AppText color={colors.textSecondary}>{user.role}</AppText>
+          <Badge label={user.role} tone="info" />
+        </View>
+      </Card>
+
+      <View style={styles.section}>
+        <SectionHeader title={t('home.shortcuts.title')} />
+        <View style={styles.grid}>
+          <ActionTile testID="more-tasks" icon="checkbox-outline" label={t('tabs.tasks')} onPress={() => router.push('/tasks' as never)} />
+          {access.alerts(user) ? (
+            <ActionTile testID="more-alerts" icon="notifications-outline" tone="warning" label={t('tabs.alerts')} onPress={() => router.push('/alerts' as never)} />
+          ) : null}
         </View>
       </View>
 
       <Card>
-        <ListItem title={t('profile.fullName')} subtitle={user.full_name || t('common.none')} />
-        <ListItem title={t('profile.username')} subtitle={user.username} />
-        <ListItem title={t('profile.role')} subtitle={user.role} />
-        <ListItem title={t('profile.email')} subtitle={user.email || t('common.none')} />
+        <SectionHeader title={t('more.account')} />
+        <View>
+          <InfoRow icon="person-outline" label={t('profile.fullName')} value={user.full_name || t('common.none')} />
+          <InfoRow icon="at-outline" label={t('profile.username')} value={user.username} />
+          <InfoRow icon="ribbon-outline" label={t('profile.role')} value={user.role} />
+          <InfoRow icon="mail-outline" label={t('profile.email')} value={user.email || t('common.none')} last />
+        </View>
       </Card>
 
       <Card>
-        <ListItem testID="profile-societies" title={t('profile.societies')} subtitle={societiesLabel} />
-        <ListItem testID="profile-sites" title={t('profile.sites')} subtitle={sitesLabel} />
-        <ListItem
-          testID="profile-modules"
-          title={t('profile.modules')}
-          subtitle={modules.length ? modules.map((module) => t(module.title)).join(', ') : t('common.none')}
-        />
+        <SectionHeader title={t('more.scope')} />
+        <View>
+          <InfoRow testID="profile-societies" icon="briefcase-outline" label={t('profile.societies')} value={societiesLabel} />
+          <InfoRow testID="profile-sites" icon="location-outline" label={t('profile.sites')} value={sitesLabel} />
+          <InfoRow
+            testID="profile-modules"
+            icon="grid-outline"
+            label={t('profile.modules')}
+            value={modules.length ? modules.map((module) => t(module.title)).join(', ') : t('common.none')}
+            last
+          />
+        </View>
         {scope.canChangeSociety || scope.canChangeSite ? (
           <Button
             testID="profile-change-scope"
             variant="secondary"
+            icon="swap-horizontal-outline"
             label={t('home.context.change')}
             onPress={() => router.push('/scope')}
           />
@@ -103,53 +123,47 @@ export default function ProfileScreen() {
 
       {lock.supported ? (
         <Card testID="profile-security">
-          <AppText variant="label" color={colors.textSecondary}>
-            {t('profile.security')}
-          </AppText>
+          <SectionHeader title={t('profile.security')} />
           <View style={styles.switchRow}>
-            <AppText style={styles.switchLabel}>{t('profile.lock.toggle')}</AppText>
+            <IconTile icon="finger-print-outline" size={38} />
+            <AppText variant="bodyStrong" style={styles.switchLabel}>
+              {t('profile.lock.toggle')}
+            </AppText>
             <Switch
               testID="profile-lock-switch"
               accessibilityLabel={t('profile.lock.toggle')}
               value={lock.enabled}
               disabled={lockBusy}
+              trackColor={{ true: colors.navy, false: colors.borderStrong }}
               onValueChange={(next) => void toggleLock(next)}
             />
           </View>
           <AppText variant="caption" color={colors.textSecondary}>
             {t('profile.lock.hint')}
           </AppText>
-          {lockNotice ? (
-            <AppText variant="label" color={colors.warning} accessibilityRole="alert" testID="profile-lock-notice">
-              {lockNotice}
-            </AppText>
-          ) : null}
+          {lockNotice ? <Banner tone="warning" message={lockNotice} testID="profile-lock-notice" /> : null}
           {lock.enabled ? (
-            <Button testID="profile-lock-now" variant="secondary" label={t('profile.lock.lockNow')} onPress={lock.lockNow} />
+            <Button testID="profile-lock-now" variant="secondary" icon="lock-closed-outline" label={t('profile.lock.lockNow')} onPress={lock.lockNow} />
           ) : null}
         </Card>
       ) : null}
 
       {push.available ? (
         <Card testID="profile-push">
-          <AppText variant="label" color={colors.textSecondary}>
-            {t('profile.push')}
-          </AppText>
+          <SectionHeader title={t('profile.push')} />
           <AppText color={colors.textSecondary} testID="profile-push-status">
             {t(`profile.push.${push.status}`)}
           </AppText>
           {push.status === 'undetermined' ? (
-            <Button testID="profile-push-enable" variant="secondary" label={t('profile.push.enable')} onPress={() => void push.enable()} />
+            <Button testID="profile-push-enable" variant="secondary" icon="notifications-outline" label={t('profile.push.enable')} onPress={() => void push.enable()} />
           ) : null}
         </Card>
       ) : null}
 
-      <Button testID="sign-out" variant="danger" label={t('profile.signOut')} onPress={() => void signOut()} />
+      <Button testID="sign-out" variant="danger" icon="log-out-outline" label={t('profile.signOut')} onPress={() => void signOut()} />
 
       <Card>
-        <AppText variant="label" color={colors.textSecondary}>
-          {t('profile.about')}
-        </AppText>
+        <SectionHeader title={t('profile.about')} />
         <VersionLabel />
         <View style={styles.environment}>
           <AppText variant="caption" color={colors.textMuted}>
@@ -165,9 +179,7 @@ export default function ProfileScreen() {
 
       {env.variant === 'development' ? (
         <Card testID="profile-diagnostics">
-          <AppText variant="label" color={colors.textSecondary}>
-            {t('profile.diagnostics')}
-          </AppText>
+          <SectionHeader title={t('profile.diagnostics')} />
           <ListItem title={t('profile.diag.apiHost')} subtitle={hostOf(env.apiUrl)} />
           <ListItem title={t('profile.diag.modules')} subtitle={(user.effective_modules ?? []).join(', ') || t('common.none')} />
           <ListItem title={t('profile.diag.actions')} subtitle={grantedActions(user).join(', ') || t('common.none')} />
@@ -185,6 +197,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   identityText: { flex: 1, gap: spacing.xs },
+  section: { gap: spacing.md },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   switchRow: { minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   switchLabel: { flex: 1 },
   environment: { alignItems: 'center', gap: spacing.xs },

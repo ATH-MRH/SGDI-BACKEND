@@ -11561,3 +11561,79 @@ body:has(.drh-portal-home) #app{
   .company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-icon,
   .company-portal.drh-portal-home .drh-home-card:hover .drh-home-card-arrow{transform:none}
 }
+
+/* DRH — liste des candidatures en lecture seule. */
+.drh-cand-page{--dc-navy:#0b2a5b;--dc-royal:#1d4ed8;--dc-line:#e3e9f2;--dc-ink:#0f1f3d;--dc-muted:#64748b;display:grid;gap:16px;color:var(--dc-ink)}
+.drh-cand-page svg{width:18px;height:18px;flex:none}
+.drh-cand-page>.drh-recruitment-heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:18px;align-items:center}
+.drh-cand-hero-icon{grid-row:1/3;width:72px;height:72px;border-radius:16px;background:#fff;border:1px solid var(--dc-line);display:grid;place-items:center;color:var(--dc-royal);box-shadow:0 1px 2px rgba(15,31,61,.05)}
+.drh-cand-page .drh-cand-hero-icon svg{width:38px;height:38px;stroke-width:1.7}
+.drh-cand-page>.drh-recruitment-heading>h1{grid-column:2;align-self:end;margin:0!important;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-.01em;color:var(--dc-navy)}
+.drh-cand-page>.drh-recruitment-heading>p{grid-column:2;align-self:start;margin:6px 0 0;font-size:14px;color:var(--dc-muted)}
+.drh-cand-note{grid-column:3;grid-row:1/3;display:flex;align-items:center;gap:14px;max-width:440px;padding:14px 20px;border-radius:14px;background:#eaf0fa;color:var(--dc-royal)}
+.drh-cand-page .drh-cand-note svg{width:34px;height:34px}
+.drh-cand-note strong,.drh-cand-banner strong{display:block;font-size:15px;font-weight:700;color:var(--dc-navy)}
+.drh-cand-note span{display:block;margin-top:2px;font-size:12px;color:var(--dc-muted)}
+.drh-cand-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px;border:1px solid var(--dc-line);border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(15,31,61,.04)}
+.drh-cand-search{flex:1 1 320px;display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border:1px solid #cfd9e8;border-radius:10px;background:#fff;color:var(--dc-royal)}
+body #view .drh-cand-page .drh-cand-search input[type="search"]{flex:1;min-width:0;height:100%;border:0!important;border-radius:0!important;-webkit-appearance:none;appearance:none;outline:0!important;box-shadow:none!important;background:transparent!important;padding:0!important;font-size:14px;color:var(--dc-ink)}
+.drh-cand-search input::placeholder{color:#8a97ab}
+.drh-cand-select{flex:0 1 180px;display:flex;flex-direction:column;justify-content:center;height:48px;padding:0 12px;border:1px solid #cfd9e8;border-radius:10px;background:#fff}
+.drh-cand-select span{font-size:11px;line-height:1.2;color:var(--dc-muted)}
+body #view .drh-cand-page .drh-cand-select select{width:100%;height:auto!important;min-height:0!important;border:0!important;border-radius:0!important;outline:0!important;box-shadow:none!important;background-color:transparent!important;padding:0 18px 0 0!important;font-size:14px;font-weight:600;color:var(--dc-ink)}
+.drh-cand-search:focus-within,.drh-cand-select:focus-within{border-color:var(--dc-royal);box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+.drh-cand-page .drh-cand-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border:1px solid #cfd9e8;border-radius:10px;background:#fff;color:var(--dc-royal);font-size:14px;font-weight:600;white-space:nowrap;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s}
+.drh-cand-page .drh-cand-btn:hover:not(:disabled){background:#f1f5fd;border-color:#a9bfe8}
+.drh-cand-page .drh-cand-btn:focus-visible,.drh-cand-sort:focus-visible,.drh-cand-menu button:focus-visible{outline:2px solid var(--dc-royal);outline-offset:2px}
+body #view .drh-cand-page .drh-cand-btn:disabled{color:#9aa7ba!important;background:#fff!important;border-color:#e3e9f2!important;opacity:1!important;cursor:not-allowed}
+.drh-cand-toolbar .drh-cand-btn{height:48px}
+.drh-cand-page .drh-cand-btn-accent{background:#f1f5fd;border-color:#a9bfe8}
+.drh-cand-page .drh-cand-btn-icon{width:40px;padding:0;color:var(--dc-navy)}
+.drh-cand-page .drh-cand-btn-lg{height:52px;padding:0 24px;border-color:var(--dc-royal);font-size:15px}
+.drh-cand-card{border:1px solid var(--dc-line);border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(15,31,61,.04);overflow:hidden}
+.drh-cand-table-wrap{overflow-x:auto}
+.drh-cand-card table{width:100%;border-collapse:collapse}
+body #view .drh-cand-page .drh-cand-card table thead,body #view .drh-cand-page .drh-cand-card table thead tr{background:#fff!important}
+body #view .drh-cand-page .drh-cand-card table thead th{padding:14px 20px!important;text-align:left;font-size:12px!important;font-weight:700;letter-spacing:.05em!important;color:#24385c!important;background:#fff!important;border-bottom:1px solid var(--dc-line)!important;white-space:nowrap}
+body #view .drh-cand-page .drh-cand-card table tbody td{padding:14px 20px!important;font-size:14px;color:var(--dc-ink);border-bottom:1px solid var(--dc-line)!important;vertical-align:middle}
+.drh-cand-card tbody tr:hover td{background:#f8fafd}
+.drh-cand-sort{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;font:inherit;letter-spacing:inherit;text-transform:uppercase;color:inherit;cursor:pointer}
+.drh-cand-page .drh-cand-sort svg{width:14px;height:14px;color:#8a97ab}
+.drh-cand-card th[aria-sort] .drh-cand-sort svg{color:var(--dc-royal)}
+.drh-cand-person{display:flex;align-items:center;gap:14px}
+.drh-cand-person strong{display:block;font-weight:700}
+.drh-cand-person small{display:block;margin-top:2px;font-size:13px;color:var(--dc-muted)}
+.drh-cand-avatar{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:700;background:#e2ecfb;color:#1d4ed8}
+.drh-cand-avatar[data-tone="1"]{background:#def3e8;color:#15803d}
+.drh-cand-avatar[data-tone="2"]{background:#ece4fb;color:#6d28d9}
+.drh-cand-avatar[data-tone="3"]{background:#fdebd8;color:#b45309}
+.drh-cand-status{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:8px;background:#eef2f7;color:#334155;font-size:13px;font-weight:600;white-space:nowrap}
+.drh-cand-status::before{content:"";width:8px;height:8px;border-radius:50%;background:#94a3b8}
+.drh-cand-status[data-tone="pending"]{background:#fff0dc;color:#9a4a06}
+.drh-cand-status[data-tone="pending"]::before{background:#f59e0b}
+.drh-cand-ref{white-space:nowrap;font-variant-numeric:tabular-nums}
+.drh-cand-actions{display:flex;align-items:center;gap:10px}
+.drh-cand-actions .drh-cand-btn{height:40px}
+.drh-cand-menu{position:fixed;z-index:60;min-width:230px;padding:6px;border:1px solid var(--dc-line);border-radius:12px;background:#fff;box-shadow:0 12px 32px rgba(15,31,61,.16)}
+.drh-cand-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;border-radius:8px;background:none;font-size:14px;color:var(--dc-ink);text-align:left;cursor:pointer}
+.drh-cand-menu button:hover{background:#f1f5fd}
+.drh-cand-page td.drh-cand-empty{padding:40px 20px!important;text-align:center;color:var(--dc-muted)}
+.drh-cand-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;font-size:15px}
+.drh-cand-pagination nav{display:flex;align-items:center;gap:8px}
+.drh-cand-pagination .drh-cand-btn{height:40px}
+.drh-cand-page-current{display:grid;place-items:center;min-width:40px;height:40px;border-radius:8px;background:var(--dc-royal);color:#fff;font-weight:700}
+.drh-cand-banner{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:18px 24px;border:1px solid #c9d8f3;border-radius:14px;background:#eaf1fd;color:var(--dc-royal)}
+.drh-cand-page .drh-cand-banner>svg{width:40px;height:40px;stroke-width:1.6}
+.drh-cand-banner>div{flex:1 1 320px}
+.drh-cand-banner span{display:block;margin-top:2px;font-size:14px;color:#33466b}
+@media(max-width:900px){
+  .drh-cand-page>.drh-recruitment-heading{grid-template-columns:auto minmax(0,1fr);row-gap:0}
+  .drh-cand-hero-icon{width:56px;height:56px}
+  .drh-cand-note{grid-column:1/-1;grid-row:auto;max-width:none;margin-top:14px}
+  .drh-cand-select{flex:1 1 150px}
+}
+
+/* Contrat DRH — état du champ « Client / site » (source dc.irongs.com). */
+.nc-client-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:#64748b}
+.nc-client-status:empty{display:none}
+.nc-client-status[data-state="error"]{color:#b91c1c;font-weight:600}

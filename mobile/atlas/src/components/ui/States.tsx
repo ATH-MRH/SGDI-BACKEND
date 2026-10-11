@@ -14,7 +14,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 export function Loader({ label = t('common.loading') }: { label?: string }) {
   return (
     <View style={styles.center} accessibilityRole="progressbar" accessibilityLabel={label}>
-      <ActivityIndicator size="large" color={colors.primary} />
+      <ActivityIndicator size="large" color={colors.navy} />
     </View>
   );
 }
@@ -24,8 +24,10 @@ type EmptyProps = { title: string; body?: string; icon?: IconName; testID?: stri
 export function EmptyState({ title, body, icon = 'file-tray-outline', testID }: EmptyProps) {
   return (
     <View style={styles.center} testID={testID}>
-      <Ionicons name={icon} size={40} color={colors.textMuted} />
-      <AppText variant="heading" style={styles.centered}>
+      <View style={styles.iconWrap}>
+        <Ionicons name={icon} size={28} color={colors.steel} />
+      </View>
+      <AppText variant="heading" color={colors.navy} style={styles.centered}>
         {title}
       </AppText>
       {body ? (
@@ -55,7 +57,9 @@ export function ErrorState({ error, title, onRetry, onSignIn, onBack, testID }: 
   const reference = error instanceof ApiError && error.kind === 'server' ? error.correlationId : undefined;
   return (
     <View style={styles.center} testID={testID} accessibilityRole="alert">
-      <Ionicons name="cloud-offline-outline" size={40} color={colors.danger} />
+      <View style={[styles.iconWrap, styles.iconDanger]}>
+        <Ionicons name="cloud-offline-outline" size={28} color={colors.danger} />
+      </View>
       {title ? (
         <AppText variant="heading" style={styles.centered}>
           {title}
@@ -89,5 +93,16 @@ export function Skeleton({ height = 16, width = '100%' }: { height?: number; wid
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl, gap: spacing.md },
   centered: { textAlign: 'center' },
-  skeleton: { backgroundColor: colors.border, borderRadius: radius.sm },
+  skeleton: { backgroundColor: colors.divider, borderRadius: radius.sm },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  iconDanger: { backgroundColor: colors.dangerSoft, borderColor: colors.dangerSoft },
 });

@@ -1806,7 +1806,7 @@ window.SGDI_API={
     deleteCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
     recruitCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/recruit",{method:"POST",legacy:false}),
     marquerContractualisation:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/marquer-contractualisation",{method:"POST",legacy:false}),
-    leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:(employeeId)=>sgdiApi("/drh/contracts"+(employeeId?"?employee_id="+encodeURIComponent(employeeId):""),{legacy:false}),createContract:(payload)=>sgdiApi("/drh/contracts",{method:"POST",body:payload,legacy:false}),updateContract:(id,payload)=>sgdiApi("/drh/contracts/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false}),
+    leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:(employeeId)=>sgdiApi("/drh/contracts"+(employeeId?"?employee_id="+encodeURIComponent(employeeId):""),{legacy:false}),contractDcClientSites:(society)=>sgdiApi("/drh/contracts/dc-client-sites"+sgdiQuery({society}),{legacy:false}),createContract:(payload)=>sgdiApi("/drh/contracts",{method:"POST",body:payload,legacy:false}),updateContract:(id,payload)=>sgdiApi("/drh/contracts/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false}),
     contractTemplates:()=>sgdiApi("/drh/contract-templates",{legacy:false}),
     createContractTemplate:(formData)=>sgdiApi("/drh/contract-templates",{method:"POST",body:formData,legacy:false}),
     updateContractTemplate:(id,formData)=>sgdiApi("/drh/contract-templates/"+encodeURIComponent(id),{method:"PUT",body:formData,legacy:false}),
@@ -10320,7 +10320,8 @@ async function persistEmployeeContractRecord(a,draft){
     salary_net:Number(draft.salaireNet||0)||0,
     status:"actif",
     template_code:draft.templateCode||"",
-    content:draft.reference||""
+    content:draft.reference||"",
+    ...(draft.dcLinkLoaded?{dc_client_id:draft.dcClientId,dc_site_id:draft.dcSiteId}:{})
   };
   const existing=(await SGDI.rh.contracts(employeeId)).find(c=>String(c.status||"").toLowerCase()==="actif")||null;
   return existing?SGDI.rh.updateContract(existing.id,payload):SGDI.rh.createContract(payload);
@@ -10395,7 +10396,7 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
   if(!a)return fail("Employé introuvable pour enregistrement du contrat");
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin)return fail("Contrat incomplet : date début, durée et date fin obligatoires");
   if(!draft.poste)return fail("Contrat incomplet : poste / fonction obligatoire");
-  if(!draft.numeroPieceIdentite)return fail("Contrat incomplet : N° pièce d'identité obligatoire");
+  if(!draft.numeroPieceIdentite&&!draft.identityOptional)return fail("Contrat incomplet : N° pièce d'identité obligatoire");
   try{
     a=await ensureContractEmployeeRecord(a,draft);
   }catch(e){return fail("Contrat non enregistré : "+(e.message||e))}
@@ -11321,6 +11322,8 @@ function employeeNewContractDefaults(a){
     wilaya:a?.wilayaContrat||a?.wilaya||site?.wilaya||"",
     commune:a?.commune||site?.commune||"",
     client:a?.client||site?.client||"",
+    dcClientId:a?.dcClientId||"",
+    dcSiteId:a?.dcSiteId||"",
     salaireNet:a?.salaireNet||a?.salaire||"",
     salaireLettres:"",
     numeroCnas:a?.numeroCnas||"",
@@ -11338,57 +11341,52 @@ function updateNewContractReference(){
   if(f.reference)f.reference.value=newContractDecisionReference(a,start);
   if(f.dateFin)f.dateFin.value=contractEndDate(start,f.dureeContrat?.value||"")||"";
 }
-function newContractClientOptions(selectedClient,forcedSociete){
-  const selected=String(selectedClient||"").trim().toLowerCase();
-  // La société du candidat/employé prime toujours sur le filtre société global du
-  // compte DRH : sinon la liste apparaît vide dès que ce filtre diffère de la société
-  // réelle du dossier en cours, alors que des sites existent bel et bien pour elle.
-  const soc=forcedSociete||(typeof effectifSocieteFilter==="function"?effectifSocieteFilter():(typeof mySoc==="function"?mySoc():""));
-  const seen=new Set();
-  const activeClients=(db.clients||[]).filter(c=>c&&String(c.statut||c.status||"actif").toLowerCase()!=="inactif");
-  const scopedClients=soc?activeClients.filter(c=>!c.societe||normalizeSocieteName(c.societe)===normalizeSocieteName(soc)):activeClients;
-  const clients=(scopedClients.length?scopedClients:activeClients).sort((a,b)=>String(a.nom||a.raisonSociale||"").localeCompare(String(b.nom||b.raisonSociale||""),"fr"));
-  const clientOptions=clients.map(c=>{
-    const name=String(c.nom||c.raisonSociale||"").trim();if(!name)return "";
-    const key=name.toLowerCase();if(seen.has("client:"+key))return "";seen.add("client:"+key);
-    return `<option value="${escapeHTML(name)}" data-adresse="${escapeHTML(c.adresse||"")}" data-wilaya="${escapeHTML(c.wilaya||"")}" data-commune="${escapeHTML(c.commune||"")}" ${selected===key?"selected":""}>${escapeHTML(name)}</option>`;
-  }).filter(Boolean).join("");
-  const activeSites=(db.sites||[]).filter(s=>s&&s.actif!==false);
-  // Si le filtrage par société ne renvoie aucun résultat (site non tagué, données
-  // incohérentes...), mieux vaut proposer tous les sites actifs qu'un menu vide qui
-  // bloque la création du contrat — l'utilisateur choisit alors manuellement.
-  const socMatches=soc?activeSites.filter(s=>siteMatchesSociete(s,soc)):activeSites;
-  const sites=(socMatches.length?socMatches:activeSites).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
-  const options=sites.map(s=>{
-    const siteName=String(s.nom||s.intitule||"").trim();
-    const client=String(s.client||siteName||"").trim();
-    if(!client)return "";
-    const key=(siteName+"|"+client).toLowerCase();
-    if(seen.has(key))return "";
-    seen.add(key);
-    const label=siteName&&siteName!==client?`${siteName} - ${client}`:client;
-    const isSelected=selected&&(selected===client.toLowerCase()||selected===siteName.toLowerCase());
-    return `<option value="${escapeHTML(client)}" data-site="${escapeHTML(siteName)}" data-adresse="${escapeHTML(s.adresse||"")}" data-wilaya="${escapeHTML(s.wilaya||"")}" data-commune="${escapeHTML(s.commune||"")}" ${isSelected?"selected":""}>${escapeHTML(label)}</option>`;
-  }).filter(Boolean).join("");
-  const hasSelected=clientOptions.includes("selected")||options.includes("selected");
-  const custom=selected&&!hasSelected?`<option value="__autre__" selected>Autre</option>`:"";
-  return `<option value="">— Choisir un client / site —</option>${custom}${clientOptions?`<optgroup label="Clients">${clientOptions}</optgroup>`:""}${options?`<optgroup label="Sites opérationnels">${options}</optgroup>`:""}<option value="__autre__">Autre</option>`;
+// Champ « Client / site » du contrat : source officielle dc.irongs.com (module Commercial).
+// La liste n'est jamais construite localement ; l'option porte les identifiants DC, le nom
+// du client n'est conservé que comme libellé du document.
+const NEW_CONTRACT_DC_ERROR="Impossible de charger les clients et sites depuis DC. Réessayez.";
+function newContractClientFieldHTML(p,societe){
+  const selected=p.dcClientId?`${p.dcClientId}:${p.dcSiteId||""}`:"";
+  return `<select class="select" name="dcClientSite" data-society="${escapeHTML(societe||"")}" data-selected="${escapeHTML(selected)}" data-state="loading" disabled onchange="this.dataset.touched='1';updateNewContractClientFromSelect(this)"><option value="">Chargement des clients et sites…</option></select><input type="hidden" name="client" value="${escapeHTML(p.client||"")}"/><input type="hidden" name="dcClientId" value="${escapeHTML(p.dcClientId||"")}"/><input type="hidden" name="dcSiteId" value="${escapeHTML(p.dcSiteId||"")}"/><input type="hidden" name="dcClientSiteLabel" value=""/><div class="nc-client-status" data-new-contract-client-status role="status" aria-live="polite"></div>`;
 }
 async function loadNewContractClients(){
   const form=document.getElementById("employee-new-contract-form");if(!form)return;
-  const select=form.querySelector('[name="client"]');if(!select)return;
+  const select=form.querySelector('[name="dcClientSite"]');if(!select)return;
+  const status=form.querySelector("[data-new-contract-client-status]");
+  const request=String(Number(select.dataset.request||0)+1);
+  select.dataset.request=request;
+  const show=(state,placeholder,message,retry)=>{
+    select.dataset.state=state;
+    select.disabled=state!=="ready";
+    if(placeholder!==null)select.innerHTML=`<option value="">${escapeHTML(placeholder)}</option>`;
+    if(status){
+      status.dataset.state=state;
+      status.innerHTML=(message?`<span>${escapeHTML(message)}</span>`:"")+(retry?'<button type="button" class="btn btn-ghost text-xs" onclick="loadNewContractClients()">Réessayer</button>':"");
+    }
+  };
+  show("loading","Chargement des clients et sites…","");
+  let items;
   try{
-    const rows=await SGDI.commercial.clients();
-    if(Array.isArray(rows))db.clients=rows.map(clientFromApi);
-  }catch(e){console.warn("Chargement clients du contrat indisponible",e)}
-  const current=select.value==="__autre__"?(form.clientAutre?.value||""):select.value;
-  const employee=findEmployeeByRef(form.agentId?.value);
-  select.innerHTML=newContractClientOptions(current,employee?.societe||currentStructureSocieteFilter()||mySoc()||"");
-  updateNewContractClientFromSelect(select);
-}
-function newContractClientCustomField(selectedClient){
-  const selected=String(selectedClient||"").trim();
-  return `<div data-new-contract-client-other class="nc-field full hidden"><label>Autre client</label><input class="input" name="clientAutre" value="${escapeHTML(selected)}" placeholder="Saisir le client"/></div>`;
+    const result=await SGDI.rh.contractDcClientSites(select.dataset.society||"");
+    if(!Array.isArray(result?.items))throw new Error("Réponse DC invalide");
+    items=result.items;
+  }catch(e){
+    if(!select.isConnected||select.dataset.request!==request)return;
+    console.warn("Clients et sites DC indisponibles",e);
+    show("error","Clients et sites indisponibles",NEW_CONTRACT_DC_ERROR,true);
+    return;
+  }
+  if(!select.isConnected||select.dataset.request!==request)return;
+  if(!items.length){show("empty","Aucun client ni site disponible","Aucun client ni site actif dans DC pour cette société.");updateNewContractClientFromSelect(select);return}
+  show("ready",null,"");
+  select.innerHTML='<option value="">— Choisir un client / site —</option>'+items.map(item=>`<option value="${escapeHTML(`${item.dc_client_id}:${item.dc_site_id??""}`)}" data-client-id="${escapeHTML(String(item.dc_client_id))}" data-site-id="${escapeHTML(String(item.dc_site_id??""))}" data-client-name="${escapeHTML(item.client_name||"")}" data-adresse="${escapeHTML(item.address||"")}" data-wilaya="${escapeHTML(item.wilaya||"")}" data-commune="${escapeHTML(item.commune||"")}">${escapeHTML(item.label||item.client_name||"")}</option>`).join("");
+  const wanted=select.dataset.selected||"";
+  const known=wanted&&Array.from(select.options).some(o=>o.value===wanted);
+  if(known)select.value=wanted;
+  // Ancien contrat saisi par nom : aucun rapprochement par libellé, l'utilisateur resélectionne.
+  const legacy=form.querySelector('[name="client"]')?.value||"";
+  if(!known&&(wanted||legacy)&&status)status.innerHTML=`<span>${escapeHTML(wanted?"Le client / site enregistré n'est plus actif dans DC. Sélectionnez-en un autre.":`Client saisi auparavant : « ${legacy} ». Sélectionnez le client / site correspondant.`)}</span>`;
+  updateNewContractClientFromSelect(select,true);
 }
 function newContractPosteOptions(selectedPoste){
   const selected=String(selectedPoste||"").trim();
@@ -11403,14 +11401,21 @@ function newContractPeriodeEssaiOptions(selectedValue){
   const selected=String(selectedValue||"3m");
   return PERIODES_ESSAI_CONTRAT.map(x=>`<option value="${escapeHTML(x.value)}" ${x.value===selected?"selected":""}>${escapeHTML(x.label)}</option>`).join("");
 }
-function updateNewContractClientFromSelect(select){
-  const form=select?.form;if(!form)return;
-  const opt=select.selectedOptions&&select.selectedOptions[0];
-  const other=form.querySelector("[data-new-contract-client-other]");
-  if(other)other.classList.toggle("hidden",select.value!=="__autre__");
-  if(opt?.dataset?.adresse&&select.value!=="__autre__"&&form.adresseSite)form.adresseSite.value=opt.dataset.adresse;
-  if(opt?.dataset?.wilaya&&form.wilaya)form.wilaya.value=opt.dataset.wilaya;
-  if(opt?.dataset?.commune&&form.commune)form.commune.value=opt.dataset.commune;
+function updateNewContractClientFromSelect(select,restoring){
+  const form=select?.form;if(!form||select.name!=="dcClientSite")return;
+  // Sans liste DC chargée, rien n'est sélectionnable : les identifiants enregistrés restent tels quels.
+  if(select.dataset.state!=="ready"&&select.dataset.state!=="empty")return;
+  const opt=select.value?select.selectedOptions[0]:null;
+  const set=(name,value)=>{const field=form.querySelector(`[name="${name}"]`);if(field)field.value=value};
+  set("dcClientId",opt?.dataset.clientId||"");
+  set("dcSiteId",opt?.dataset.siteId||"");
+  set("dcClientSiteLabel",opt?opt.textContent:"");
+  if(opt||select.dataset.touched==="1")set("client",opt?.dataset.clientName||"");
+  // À la réouverture d'un contrat, l'adresse déjà saisie n'est pas réécrite.
+  if(restoring||!opt)return;
+  if(opt.dataset.adresse)set("adresseSite",opt.dataset.adresse);
+  if(opt.dataset.wilaya)set("wilaya",opt.dataset.wilaya);
+  if(opt.dataset.commune)set("commune",opt.dataset.commune);
 }
 function updateNewContractSalaryWords(input,formatAmount){
   const f=input?.form||document.getElementById("employee-new-contract-form");if(!f)return;
@@ -11448,7 +11453,12 @@ function employeeNewContractDraftFromForm(form){
     adresseSite:String(fd.get("adresseSite")||"").trim(),
     wilaya:String(fd.get("wilaya")||"").trim(),
     commune:String(fd.get("commune")||"").trim(),
-    client:String(fd.get("client")==="__autre__"?fd.get("clientAutre")||"":fd.get("client")||"").trim(),
+    client:String(fd.get("client")||"").trim(),
+    // Identifiants DC transmis seulement si la liste officielle a pu être chargée.
+    dcLinkLoaded:["ready","empty"].includes(form.querySelector('[name="dcClientSite"]')?.dataset.state),
+    dcClientId:Number(fd.get("dcClientId"))||null,
+    dcSiteId:Number(fd.get("dcSiteId"))||null,
+    dcClientSiteLabel:String(fd.get("dcClientSiteLabel")||"").trim(),
     salaireNet,
     salaireLettres:String(fd.get("salaireLettres")||moneyToFrenchWords(fd.get("salaireNet"))).trim(),
     numeroCnas:String(fd.get("numeroCnas")||a?.numeroCnas||"").trim(),
@@ -11703,6 +11713,9 @@ function employeeContractReviewScript(){
   })();
   </script>`;
 }
+// Contractualisation d'un candidat : le N° de pièce d'identité est facultatif. Il reste
+// obligatoire pour le « Nouveau contrat » d'un employé existant.
+function contractDraftIsFromCandidate(a){return String(a?.id||"").startsWith("cand:")}
 function openEmployeeContractReviewWindow(a,draft){
   const w=window.open("","_blank","width=980,height=760");
   if(!w){toast("Fenêtre contrat bloquée par le navigateur","error");return null}
@@ -11717,6 +11730,7 @@ function openEmployeeContractReviewWindow(a,draft){
     dateFin:draft.dateFin||"",
     periodeEssai:draft.periodeEssai||"",
     numeroPieceIdentite:draft.numeroPieceIdentite||"",
+    identityOptional:!!draft.identityOptional||contractDraftIsFromCandidate(a),
     nin:draft.nin||"",
     adresseSite:draft.adresseSite||"",
     wilaya:draft.wilaya||"",
@@ -11770,7 +11784,7 @@ async function printEmployeeNewContractFromForm(form){
   if(!draft.a){toast("Employé introuvable","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
-  if(!draft.numeroPieceIdentite){toast("N° pièce d'identité obligatoire","error");return}
+  if(!draft.numeroPieceIdentite&&!contractDraftIsFromCandidate(draft.a)){toast("N° pièce d'identité obligatoire","error");return}
   // L'aperçu avant validation est toujours une fenêtre HTML. Le modèle Word
   // sélectionné reste réservé à la génération et au téléchargement final.
   openEmployeeContractReviewWindow(draft.a,draft);
@@ -11801,6 +11815,7 @@ function employeeNewContractPayload(draft){
     wilaya:draft.wilaya||a.wilaya||"",
     commune:draft.commune||a.commune||"",
     client:draft.client||"",
+    ...(draft.dcLinkLoaded?{dc_client_id:draft.dcClientId,dc_site_id:draft.dcSiteId}:{}),
     recruitment_reason:"Nécessité de service",
     salary_net:draft.salaireNet||0,
     salary_details:draft.salaireLettres||"",
@@ -11857,7 +11872,7 @@ function openEmployeeNewContractModal(agentId,options){
         <div><label class="label">N° pièce d'identité *</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
         <div><label class="label">N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
         <div class="md:col-span-2"><label class="label">Poste / fonction</label><select class="select" name="poste" required>${newContractPosteOptions(p.poste)}</select></div>
-        <div><label class="label">Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selected.societe)}</select></div>${newContractClientCustomField(p.client)}
+        <div><label class="label">Client / site</label>${newContractClientFieldHTML(p,selected.societe||currentStructureSocieteFilter()||mySoc()||"")}</div>
         <div><label class="label">Adresse</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
         <div><label class="label">Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
         <div><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
@@ -11875,7 +11890,6 @@ function openEmployeeNewContractModal(agentId,options){
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Éditer contrat</button><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>
     </form></div>`);
   updateNewContractReference();
-  updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));
   loadNewContractClients();
   updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));
 }
@@ -12033,18 +12047,17 @@ function renderContractualisation(view,id){
           <div class="nc-body">
             <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
             <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
-            <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selectedSociete)}</select></div>
-            <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
+            <div class="nc-field"><label>Client / site</label>${newContractClientFieldHTML(p,selectedSociete)}</div>
+            <div class="nc-field"><label>N° pièce d'identité</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','nin',this.value)"/></div>
             <div class="nc-candidate-contact-row">
-              <div class="nc-field"><label>Wilaya du candidat <span class="req">*</span></label><select class="select" name="candidateWilaya" required><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
-              <div class="nc-field"><label>Lien contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}" required/></div>
-              <div class="nc-field"><label>Nom contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}" required/></div>
-              <div class="nc-field"><label>Téléphone d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)" required/></div>
+              <div class="nc-field"><label>Wilaya du candidat</label><select class="select" name="candidateWilaya"><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
+              <div class="nc-field"><label>Lien contact d'urgence</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}"/></div>
+              <div class="nc-field"><label>Nom contact d'urgence</label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}"/></div>
+              <div class="nc-field"><label>Téléphone d'urgence</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)"/></div>
             </div>
           </div>
         </div>
-        ${newContractClientCustomField(p.client)}
         <div class="nc-section">
           <div class="nc-section-head"><div class="nc-icon">②</div><div><h2>Type &amp; durée</h2><span>Nature du contrat et jalons de dates</span></div></div>
           <div class="nc-body">
@@ -12113,7 +12126,7 @@ function renderContractualisation(view,id){
         </div>
       </div>
     </form>`;
-  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels();bindNewContractRequiredFields(document.getElementById("employee-new-contract-form"))},0);
+  setTimeout(()=>{updateNewContractReference();loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels();bindNewContractRequiredFields(document.getElementById("employee-new-contract-form"))},0);
 }
 async function persistCandidateContractIdentity(id,field,value){
   if(!["numeroPieceIdentite","nin"].includes(field))return;
@@ -12265,7 +12278,8 @@ async function confirmCandidateNewContract(form,id){
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
   const draft=employeeNewContractDraftFromForm(form);
   const candidateDetails=new FormData(form);
-  if(String(draft.contactUrgenceTel||"").replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
+  // Facultatif : le format n'est contrôlé que si un numéro est saisi.
+  if(draft.contactUrgenceTel&&String(draft.contactUrgenceTel).replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
   c.typeContrat=draft.typeContrat;
@@ -12283,6 +12297,7 @@ async function confirmCandidateNewContract(form,id){
   c.contactUrgenceTel=formatPhoneSGDI(String(candidateDetails.get("contactUrgenceTel")||"").trim());
   c.salaireNet=draft.salaireNet;
   c.client=draft.client||c.client||"";
+  if(draft.dcLinkLoaded){c.dcClientId=draft.dcClientId;c.dcSiteId=draft.dcSiteId;c.dcClientSiteLabel=draft.dcClientSiteLabel}
   c.adresseSite=draft.adresseSite||c.adresseSite||"";
   c.wilayaContrat=draft.wilaya||c.wilayaContrat||"";
   c.commune=draft.commune||c.commune||"";
@@ -12301,6 +12316,7 @@ async function confirmCandidateNewContract(form,id){
     agent.contactUrgenceNom=draft.contactUrgenceNom||agent.contactUrgenceNom||"";
     agent.contactUrgenceTel=draft.contactUrgenceTel||agent.contactUrgenceTel||"";
     agent.client=draft.client||agent.client||"";
+    if(draft.dcLinkLoaded){agent.dcClientId=draft.dcClientId;agent.dcSiteId=draft.dcSiteId;agent.dcClientSiteLabel=draft.dcClientSiteLabel}
     agent.adresseSite=draft.adresseSite||agent.adresseSite||"";
     agent.wilayaContrat=draft.wilaya||agent.wilayaContrat||"";
     agent.commune=draft.commune||agent.commune||"";
@@ -12325,7 +12341,7 @@ async function confirmCandidateNewContract(form,id){
     form.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
     delete form.dataset.dirty;
     sgdiUpdateSaveButton("clean");
-    openEmployeeContractReviewWindow(agent,{...draft,a:agent});
+    openEmployeeContractReviewWindow(agent,{...draft,a:agent,identityOptional:true});
     toastCenter("CONTRAT VALIDÉ ET EMPLOYÉ CRÉÉ","success");
     navigate(`agents/${agent.id}`);
   }catch(e){
