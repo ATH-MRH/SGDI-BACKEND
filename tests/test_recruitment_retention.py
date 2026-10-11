@@ -91,6 +91,8 @@ def test_report_lists_only_what_is_due_and_deletes_nothing(db):
         Candidate, Employee, RecruitmentApplication, RecruitmentCandidateAccount, RecruitmentMessage, RecruitmentNotification)}
 
     report = retention.retention_report(db, TODAY)
+    # La base de test est partagée : seuls les dossiers créés ici sont contrôlés.
+    mine = lambda section: [item for item in report[section] if item['name'].startswith('Retention ')]  # noqa: E731
 
     assert report['dry_run'] is True and report['due_before'] == '2028-03-15' and report['retention_months'] == 24
     assert [item['application_id'] for item in report['declined_applications']] == [due.id]
@@ -101,10 +103,10 @@ def test_report_lists_only_what_is_due_and_deletes_nothing(db):
     account = report['inactive_accounts'][0]
     assert account['would_delete'] == {'account': 1, 'cv': 1, 'photo': 0, 'alerts': 0, 'notifications': 1, 'push_devices': 0, 'sessions': 0}
     assert account['would_keep'] == {'applications_detached': 1} and account['basis'] == 'dernière activité'
-    assert [item['name'] for item in report['declined_dossiers']] == ['Retention F Test']
-    assert [item['employee_code'] for item in report['departed_recruits']] == ['RET-1']
-    assert sorted(item['reason'] for item in report['undated']) == ['date de départ non enregistrée', 'date de l’avis défavorable non enregistrée']
-    assert report['counts'] == {'declined_applications': 1, 'declined_dossiers': 1, 'inactive_accounts': 1, 'departed_recruits': 1, 'undated': 2}
+    assert [item['name'] for item in mine('declined_dossiers')] == ['Retention F Test']
+    assert [(item['name'], item['employee_code']) for item in mine('departed_recruits')] == [('Retention RET-1 Test', 'RET-1')]
+    assert sorted(item['reason'] for item in mine('undated')) == ['date de départ non enregistrée', 'date de l’avis défavorable non enregistrée']
+    assert report['counts'] == {name: len(report[name]) for name in ('declined_applications', 'declined_dossiers', 'inactive_accounts', 'departed_recruits', 'undated')}
     after = {model.__tablename__: db.query(model).count() for model in (
         Candidate, Employee, RecruitmentApplication, RecruitmentCandidateAccount, RecruitmentMessage, RecruitmentNotification)}
     assert after == before
