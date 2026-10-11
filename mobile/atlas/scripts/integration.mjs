@@ -86,6 +86,9 @@ try {
       ATLAS_IT_TOKEN_ATTENDANCE_QR: fixtures.attendance_qr,
       ATLAS_IT_TOKEN_SSE_TICKET: fixtures.sse_ticket,
       ATLAS_IT_OTHER_SITE_ID: String(fixtures.other_site_id),
+      ATLAS_IT_PHOTO_EMPLOYEE_ID: fixtures.photo_employee_id ? String(fixtures.photo_employee_id) : '',
+      ATLAS_IT_LOST_PHOTO_EMPLOYEE_ID: String(fixtures.lost_photo_employee_id),
+      ATLAS_IT_NO_PHOTO_EMPLOYEE_ID: String(fixtures.no_photo_employee_id),
       ATLAS_IT_FOREIGN_SITE_ID: String(fixtures.foreign_site_id),
     },
   });

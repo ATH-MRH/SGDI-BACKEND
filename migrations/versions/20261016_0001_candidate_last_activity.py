@@ -1,7 +1,7 @@
 """IRON Emploi : dernière activité d'un espace candidat, pour faire courir sa durée de conservation.
 
 Révision additive et rejouable : une colonne et son index ajoutés à `recruitment_candidate_accounts` s'ils
-manquent (une base neuve les reçoit déjà de 20261014_0001, qui crée ses tables depuis les modèles courants).
+manquent (une base neuve les reçoit déjà de 20261014_0002, qui crée ses tables depuis les modèles courants).
 Les espaces existants reçoivent leur dernière date connue (modification du profil, sinon création).
 Aucune ligne n'est supprimée.
 

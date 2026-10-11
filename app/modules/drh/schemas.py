@@ -176,6 +176,8 @@ class ContractBase(_UpperMixin):
     status: str = "actif"
     template_code: str | None = None
     content: str | None = None
+    dc_client_id: int | None = None
+    dc_site_id: int | None = None
 
 
 class ContractCreate(ContractBase):
@@ -192,10 +194,13 @@ class ContractUpdate(BaseModel):
     status: str | None = None
     template_code: str | None = None
     content: str | None = None
+    dc_client_id: int | None = None
+    dc_site_id: int | None = None
 
 
 class ContractOut(ContractBase):
     id: int
+    dc_client_site_label: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -419,6 +424,8 @@ class DirectContractRequest(BaseModel):
     wilaya: str | None = None
     commune: str | None = None
     client: str | None = None
+    dc_client_id: int | None = None
+    dc_site_id: int | None = None
     recruitment_reason: str | None = None
     salary_net: float | None = None
     salary_details: str | None = None

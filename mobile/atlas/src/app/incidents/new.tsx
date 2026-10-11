@@ -99,8 +99,7 @@ export default function NewIncidentScreen() {
 
   return (
     <Gate allowed={allowed}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID="incident-new-screen">
-        <ScreenHeader title={t('incidents.new')} />
+      <Screen edges={['top', 'bottom', 'left', 'right']} testID="incident-new-screen" header={<ScreenHeader title={t('incidents.new')} />}>
 
         <Card>
           <AppText variant="label" color={colors.textSecondary}>

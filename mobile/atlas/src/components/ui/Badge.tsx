@@ -6,11 +6,12 @@ import { AppText } from './AppText';
 
 type Props = { label: string; tone?: Tone; testID?: string };
 
-/** Le statut est toujours porté par le libellé : la couleur ne fait que le renforcer. */
+/** Le statut est toujours porté par le libellé : la couleur et la pastille ne font que le renforcer. */
 export function Badge({ label, tone = 'neutral', testID }: Props) {
   const palette = toneColors[tone];
   return (
-    <View testID={testID} style={[styles.badge, { backgroundColor: palette.bg, borderColor: palette.fg }]}>
+    <View testID={testID} style={[styles.badge, { backgroundColor: palette.bg }]}>
+      <View style={[styles.dot, { backgroundColor: palette.fg }]} />
       <AppText variant="caption" color={palette.fg} style={styles.label} numberOfLines={1}>
         {label}
       </AppText>
@@ -21,10 +22,14 @@ export function Badge({ label, tone = 'neutral', testID }: Props) {
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 3,
+    maxWidth: '100%',
   },
-  label: { fontWeight: '600' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  label: { fontWeight: '600', flexShrink: 1 },
 });

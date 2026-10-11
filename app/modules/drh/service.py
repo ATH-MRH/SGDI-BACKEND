@@ -318,6 +318,7 @@ def list_candidates_page(
     q: str | None = None,
     desired_position: str | None = None,
     recruiter_opinion: str | None = None,
+    status: str | None = None,
     sort_key: str | None = None,
     sort_direction: str | None = None,
     page: int = 1,
@@ -372,6 +373,9 @@ def list_candidates_page(
             row for row in rows
             if str((row.data if isinstance(row.data, dict) else {}).get("avisDecision") or "Non évalué") == recruiter_opinion
         ]
+    wanted_status = str(status or "").strip().lower()
+    if wanted_status:
+        rows = [row for row in rows if str(row.status or "").strip().lower() == wanted_status]
     key = str(sort_key or "").strip().lower()
     if key:
         def candidate_sort_value(row: Candidate):
@@ -1991,6 +1995,7 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
         status="actif",
         template_code=template.code,
         content=f"Contrat généré automatiquement: {reference}",
+        **(getattr(request, "dc_link", None) or {}),
     )
     db.add(contract)
     db.flush()
@@ -2010,7 +2015,9 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
     return row
 
 
-def generate_contract_from_form(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
+def generate_contract_from_form(
+    db: Session, request: Any, user: Any | None = None, dc_link: dict[str, Any] | None = None,
+) -> GeneratedContract:
     first_name = str(request.first_name or "").strip()
     last_name = str(request.last_name or "").strip()
     if len(first_name) < 2 or len(last_name) < 2:
@@ -2089,6 +2096,7 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
         end_date=request.end_date,
         salary_net=request.salary_net,
         output_format=request.output_format or "docx",
+        dc_link=dc_link,
         values={
             **(request.values if isinstance(getattr(request, "values", None), dict) else {}),
             "CODE": code or employee.code or "",

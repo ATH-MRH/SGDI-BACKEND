@@ -8,6 +8,7 @@ import http from 'node:http';
 
 import { fetchProfile, login, logout, parseLoginResponse, refreshSession } from '@/api/auth';
 import { createApiClient } from '@/api/client';
+import { fetchEmployee } from '@/api/domains/drh';
 import { createIncident, fetchIncidents } from '@/api/domains/incidents';
 import { ApiError } from '@/api/errors';
 import type { Page } from '@/api/types';
@@ -47,7 +48,8 @@ const nodeFetch = ((url: string, init: RequestInit = {}) =>
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('end', () => {
           const status = response.statusCode ?? 0;
-          const body = status === 204 ? null : Buffer.concat(chunks).toString('utf8');
+          // Octets bruts : une image ne survit pas à un décodage en texte.
+          const body = status === 204 ? null : (Buffer.concat(chunks) as unknown as BodyInit);
           resolve(new Response(body, { status, headers: response.headers as Record<string, string> }));
         });
       },
@@ -439,6 +441,71 @@ describeIntegration('backend ATLAS réel', () => {
       // Aucune de ces absences n'est prise pour un refus de session.
       expect(s.onUnauthorized).not.toHaveBeenCalled();
       expect((await fetchProfile(s.client)).username.toLowerCase()).toBe('itops');
+    });
+  });
+
+  describe('portrait employé (GET /api/drh/employees/{id}/portrait)', () => {
+    const photoId = Number(process.env.ATLAS_IT_PHOTO_EMPLOYEE_ID);
+    const lostId = Number(process.env.ATLAS_IT_LOST_PHOTO_EMPLOYEE_ID);
+    const plainId = Number(process.env.ATLAS_IT_NO_PHOTO_EMPLOYEE_ID);
+    // Le portrait est produit par une bibliothèque d'image du backend ; sans elle, le cas 200 n'existe pas.
+    const itWithImaging = photoId > 0 ? it : it.skip;
+
+    itWithImaging('200 : la fiche annonce une photo et le portrait arrive en JPEG, par le client authentifié', async () => {
+      const s = session();
+      await s.signIn('ATLAS_IT_ADMIN');
+      expect((await fetchEmployee(s.client, photoId)).hasPhoto).toBe(true);
+      const uri = await s.client.getImage(`/api/drh/employees/${photoId}/portrait`);
+      expect(uri.startsWith('data:image/jpeg;base64,/9j/')).toBe(true);
+      // JPEG complet : il se termine par le marqueur de fin d'image (FF D9).
+      const bytes = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64');
+      expect(bytes.length).toBeGreaterThan(500);
+      expect([bytes[0], bytes[1], bytes[bytes.length - 2], bytes[bytes.length - 1]]).toEqual([0xff, 0xd8, 0xff, 0xd9]);
+    });
+
+    itWithImaging('401 puis renouvellement puis 200 : un jeton refusé est remplacé et le portrait arrive au second essai', async () => {
+      const fresh = (await session().signIn('ATLAS_IT_ADMIN')).token;
+      let token = 'jeton.perime.refuse';
+      const refreshToken = jest.fn(async () => (token = fresh));
+      const onUnauthorized = jest.fn();
+      const client = createApiClient({ baseUrl: baseUrl ?? null, getToken: () => token, refreshToken, onUnauthorized, fetchImpl: nodeFetch });
+      const uri = await client.getImage(`/api/drh/employees/${photoId}/portrait`);
+      expect(uri.startsWith('data:image/jpeg;base64,/9j/')).toBe(true);
+      expect(refreshToken).toHaveBeenCalledTimes(1);
+      expect(refreshToken).toHaveBeenCalledWith('jeton.perime.refuse');
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('404 : une fiche qui référence une photo absente du serveur annonce une photo, mais n’a pas de portrait', async () => {
+      const s = session();
+      await s.signIn('ATLAS_IT_ADMIN');
+      expect((await fetchEmployee(s.client, lostId)).hasPhoto).toBe(true);
+      const error = await failure(s.client.getImage(`/api/drh/employees/${lostId}/portrait`));
+      expect([error.kind, error.status]).toEqual(['not_found', 404]);
+      expect(s.onUnauthorized).not.toHaveBeenCalled();
+    });
+
+    it('404 : une fiche sans photo ne l’annonce pas et n’a pas de portrait', async () => {
+      const s = session();
+      await s.signIn('ATLAS_IT_ADMIN');
+      expect((await fetchEmployee(s.client, plainId)).hasPhoto).toBe(false);
+      expect((await failure(s.client.getImage(`/api/drh/employees/${plainId}/portrait`))).status).toBe(404);
+    });
+
+    it('403 : un compte sans le module RH ne reçoit aucun portrait', async () => {
+      const s = session();
+      await s.signIn('ATLAS_IT_OPS');
+      const error = await failure(s.client.getImage(`/api/drh/employees/${lostId}/portrait`));
+      expect([error.kind, error.status]).toEqual(['forbidden', 403]);
+    });
+
+    it('401 : sans jeton, avec un jeton invalide ou un jeton d’une autre famille', async () => {
+      const s = session();
+      for (const token of [null, 'pas.un.jeton', process.env.ATLAS_IT_TOKEN_CLIENT_PORTAL ?? '', process.env.ATLAS_IT_TOKEN_EMPLOYEE_PORTAL ?? '']) {
+        s.setToken(token);
+        const error = await failure(s.client.getImage(`/api/drh/employees/${lostId}/portrait`));
+        expect([error.kind, error.status]).toEqual(['unauthorized', 401]);
+      }
     });
   });
 

@@ -713,6 +713,7 @@ async function confirmEmployeeNewContract(form){
   a.wilayaContrat=draft.wilaya||a.wilayaContrat||"";
   a.commune=draft.commune||a.commune||"";
   a.client=draft.client||a.client||"";
+  if(draft.dcLinkLoaded){a.dcClientId=draft.dcClientId;a.dcSiteId=draft.dcSiteId;a.dcClientSiteLabel=draft.dcClientSiteLabel}
   a.missionsContrat=draft.missions||a.missionsContrat||"";
   a.articleOverridesContrat=draft.articleOverrides||a.articleOverridesContrat||{};
   a.statut=a.statut||"actif";

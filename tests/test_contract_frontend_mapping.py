@@ -42,15 +42,17 @@ def test_preview_before_validation_always_opens_html_window():
     assert "preview-from-form" not in preview
 
 
-def test_contract_form_requires_candidate_wilaya_and_emergency_contact():
+def test_contract_form_offers_optional_candidate_wilaya_and_emergency_contact():
     contractualisation = JS.split("function renderContractualisation(view,id){", 1)[1].split(
         "function updateNewContractSummary", 1
     )[0]
     assert "nc-candidate-contact-row" in contractualisation
-    assert 'name="candidateWilaya" required' in contractualisation
-    assert 'name="contactUrgenceLien"' in contractualisation
-    assert 'name="contactUrgenceNom"' in contractualisation
-    assert 'name="contactUrgenceTel"' in contractualisation
+    # Champs proposés mais facultatifs : seuls le poste et les dates du contrat restent obligatoires.
+    for name in ("numeroPieceIdentite", "candidateWilaya", "contactUrgenceLien", "contactUrgenceNom", "contactUrgenceTel"):
+        field = contractualisation.split(f'name="{name}"', 1)[1].split(">", 1)[0]
+        assert " required" not in field, name
+    for name in ("poste", "dateDebut", "dureeContrat"):
+        assert " required" in contractualisation.split(f'name="{name}"', 1)[1].split(">", 1)[0], name
 
 
 def test_identity_document_and_nin_are_persisted_separately():

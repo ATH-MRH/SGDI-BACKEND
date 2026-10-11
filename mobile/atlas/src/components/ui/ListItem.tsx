@@ -1,24 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { colors, spacing, touchTarget } from '@/theme/tokens';
+import { colors, spacing, touchTarget, type Tone } from '@/theme/tokens';
 
 import { AppText } from './AppText';
+import { IconTile, type IconName } from './IconTile';
 
 type Props = {
   title: string;
   subtitle?: string;
-  icon?: ComponentProps<typeof Ionicons>['name'];
+  icon?: IconName;
+  iconTone?: Tone | 'brand';
+  /** Élément placé avant le texte à la place de l'icône (photo, avatar). */
+  leading?: ReactNode;
   trailing?: ReactNode;
   onPress?: () => void;
   testID?: string;
 };
 
-export function ListItem({ title, subtitle, icon, trailing, onPress, testID }: Props) {
+export function ListItem({ title, subtitle, icon, iconTone = 'brand', leading, trailing, onPress, testID }: Props) {
   const content = (
     <>
-      {icon ? <Ionicons name={icon} size={22} color={colors.primary} /> : null}
+      {leading ?? (icon ? <IconTile icon={icon} tone={iconTone} size={38} /> : null)}
       <View style={styles.texts}>
         <AppText variant="bodyStrong" numberOfLines={2}>
           {title}
@@ -30,6 +34,7 @@ export function ListItem({ title, subtitle, icon, trailing, onPress, testID }: P
         ) : null}
       </View>
       {trailing}
+      {onPress && !trailing ? <Ionicons name="chevron-forward" size={18} color={colors.textMuted} /> : null}
     </>
   );
 
