@@ -231,12 +231,13 @@ test('l’aperçu du contrat fusionne le modèle avec les données du futur empl
   assert.match(src, /Le modèle Word sera automatiquement rempli avec toutes les informations saisies du futur employé/);
 });
 
-test('le champ client du contrat charge les clients PostgreSQL et les sites', () => {
-  assert.match(src, /function loadNewContractClients\(\)/);
-  assert.match(src, /await SGDI\.commercial\.clients\(\)/);
-  assert.match(src, /db\.clients=rows\.map\(clientFromApi\)/);
-  assert.match(src, /<optgroup label="Clients">/);
-  assert.match(src, /<optgroup label="Sites opérationnels">/);
+test('le champ client / site du contrat lit exclusivement la source DC', () => {
+  assert.match(src, /async function loadNewContractClients\(\)/);
+  assert.match(src, /await SGDI\.rh\.contractDcClientSites\(/);
+  assert.match(src, /"\/drh\/contracts\/dc-client-sites"/);
+  // Plus de liste locale, de groupe « Sites opérationnels » ni de saisie libre.
+  assert.doesNotMatch(src, /function newContractClientOptions|<optgroup label="Sites opérationnels">|name="clientAutre"|__autre__/);
+  assert.doesNotMatch(src, /db\.clients=rows\.map\(clientFromApi\)/);
   assert.match(src, /loadNewContractClients\(\);updateNewContractSalaryWords/);
 });
 
