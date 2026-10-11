@@ -21,6 +21,8 @@
 #   BACKUP_KEEP_MIN             nombre minimal de sauvegardes conservées (défaut 7)
 #   BACKUP_MIN_FREE_MB          espace libre exigé avant de commencer (défaut 1024)
 #   BACKUP_OFFSITE_RCLONE_DEST  destination rclone hors serveur, ex. « coffre:bucket/atlas »
+#   BACKUP_OFFSITE_MONTHLY_RCLONE_DEST  destination des archives mensuelles (rétention longue) :
+#                               reçoit la première sauvegarde réussie de chaque mois
 #   BACKUP_OFFSITE_REQUIRED     1 : l'absence ou l'échec de la copie externe est un échec
 #                               (défaut : 1 si une destination est définie, sinon 0)
 #   BACKUP_ALERT_COMMAND        commande lancée en cas d'échec (message dans ATLAS_BACKUP_MESSAGE)
@@ -48,6 +50,7 @@ MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-1024}"
 FILES_DIRS="${BACKUP_FILES_DIRS:-}"
 FILES_EXCLUDE="${BACKUP_FILES_EXCLUDE:-*.tmp .cache}"
 OFFSITE_DEST="${BACKUP_OFFSITE_RCLONE_DEST:-}"
+OFFSITE_MONTHLY_DEST="${BACKUP_OFFSITE_MONTHLY_RCLONE_DEST:-}"
 if [ -n "$OFFSITE_DEST" ]; then OFFSITE_REQUIRED="${BACKUP_OFFSITE_REQUIRED:-1}"; else OFFSITE_REQUIRED="${BACKUP_OFFSITE_REQUIRED:-0}"; fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -123,6 +126,7 @@ else
 fi
 if [ -n "$OFFSITE_DEST" ]; then need rclone
 elif [ "$OFFSITE_REQUIRED" = 1 ]; then die "copie hors serveur exigée mais BACKUP_OFFSITE_RCLONE_DEST est vide"; fi
+[ -z "$OFFSITE_MONTHLY_DEST" ] || [ -n "$OFFSITE_DEST" ] || die "BACKUP_OFFSITE_MONTHLY_RCLONE_DEST exige BACKUP_OFFSITE_RCLONE_DEST"
 for entry in $FILES_DIRS; do
   case "$entry" in
     *=*) [ -d "${entry#*=}" ] || die "dossier à sauvegarder introuvable : ${entry#*=}" ;;
@@ -230,17 +234,43 @@ SEALED=1
 log "  créé : ${NAME} ($(size_of "$OUT") octets)"
 
 # ── Copie hors serveur ───────────────────────────────────────────────────────────────────
+offsite_copy() {  # offsite_copy <destination> : copie l'archive et sa somme, puis vérifie
+  rclone copyto --immutable "$OUT" "$1/${NAME}" \
+    && rclone copyto --immutable "${OUT}.sha256" "$1/${NAME}.sha256" \
+    && rclone check --one-way --include "${NAME}" "$BACKUP_DIR" "$1"
+}
+
 if [ -n "$OFFSITE_DEST" ]; then
   STEP="copie hors serveur"
   OFFSITE_STATE="échec"
-  if rclone copyto --immutable "$OUT" "${OFFSITE_DEST}/${NAME}" \
-     && rclone copyto --immutable "${OUT}.sha256" "${OFFSITE_DEST}/${NAME}.sha256" \
-     && rclone check --one-way --include "${NAME}" "$BACKUP_DIR" "$OFFSITE_DEST"; then
+  offsite_ok=1
+  if offsite_copy "$OFFSITE_DEST"; then
     OFFSITE_STATE="copiée et vérifiée"
     log "  copie hors serveur vérifiée"
-  elif [ "$OFFSITE_REQUIRED" = 1 ]; then
-    die "copie hors serveur en échec"
+    # Archive mensuelle : la première sauvegarde réussie de chaque mois, dans une destination
+    # à part dont la rétention est plus longue.
+    if [ -n "$OFFSITE_MONTHLY_DEST" ]; then
+      STEP="copie mensuelle hors serveur"
+      month="$(printf '%s' "$STAMP" | cut -c1-6)"
+      if this_month="$(rclone lsf --include "${BACKUP_PREFIX}${month}*${BACKUP_SUFFIX}" "$OFFSITE_MONTHLY_DEST")"; then
+        if [ -n "$this_month" ]; then
+          log "  archive mensuelle ${month} déjà présente"
+        elif offsite_copy "$OFFSITE_MONTHLY_DEST"; then
+          OFFSITE_STATE="copiée et vérifiée, archive mensuelle ${month} créée"
+          log "  archive mensuelle ${month} créée et vérifiée"
+        else
+          offsite_ok=0
+        fi
+      else
+        offsite_ok=0
+      fi
+      [ "$offsite_ok" = 1 ] || OFFSITE_STATE="copiée, archive mensuelle en échec"
+    fi
   else
+    offsite_ok=0
+  fi
+  if [ "$offsite_ok" = 0 ]; then
+    [ "$OFFSITE_REQUIRED" != 1 ] || die "copie hors serveur en échec"
     log "  ATTENTION : copie hors serveur en échec, sauvegarde locale conservée" >&2
   fi
 else

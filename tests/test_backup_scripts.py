@@ -391,6 +391,35 @@ def test_a_second_run_in_the_same_second_never_overwrites_an_archive(env):
     assert existing.read_bytes() == b"ancienne sauvegarde fictive"
 
 
+def test_monthly_archive_is_the_first_successful_backup_of_each_month(env, tmp_path):
+    daily, monthly = tmp_path / "daily", tmp_path / "monthly"
+    daily.mkdir(); monthly.mkdir()
+    stub = _rclone_stub(tmp_path, f'''dir() {{ case "$1" in fictif-quotidien:*) echo "{daily}" ;; fictif-mensuel:*) echo "{monthly}" ;; *) echo "$1" ;; esac; }}
+case "$1" in
+  copyto) shift; [ "$1" = --immutable ] && shift; cp "$1" "$(dir "$2")/$(basename "$2")" ;;
+  check) name=$(printf '%s\\n' "$@" | sed -n '/^atlas-backup_/p'); for last; do :; done; cmp -s "{env["BACKUP_DIR"]}/$name" "$(dir "$last")/$name" ;;
+  lsf) for last; do :; done; pattern=$(printf '%s\\n' "$@" | sed -n '/^atlas-backup_/p'); (cd "$(dir "$last")" && ls $pattern 2>/dev/null) || true ;;
+esac
+''')
+    offsite = {**env, "PATH": f"{stub}:{env['PATH']}", "BACKUP_OFFSITE_RCLONE_DEST": "fictif-quotidien:atlas",
+               "BACKUP_OFFSITE_MONTHLY_RCLONE_DEST": "fictif-mensuel:atlas"}
+
+    first = _run(BACKUP, offsite)
+    assert first.returncode == 0, first.stderr
+    assert "archive mensuelle" in _status(env)["offsite"] and "créée" in _status(env)["offsite"]
+    time.sleep(1.1)
+    second = _run(BACKUP, offsite)
+    assert second.returncode == 0 and "déjà présente" in second.stdout
+
+    archives = [p.name for p in _archives(env)]
+    assert sorted(p.name for p in daily.glob("*.tar.gpg")) == archives          # deux quotidiennes
+    assert [p.name for p in monthly.glob("*.tar.gpg")] == archives[:1]          # une seule mensuelle
+    assert (monthly / f"{archives[0]}.sha256").exists()
+
+    refused = _run(BACKUP, {**env, "BACKUP_OFFSITE_MONTHLY_RCLONE_DEST": "fictif-mensuel:atlas"})
+    assert refused.returncode != 0 and "exige BACKUP_OFFSITE_RCLONE_DEST" in refused.stderr
+
+
 def test_offsite_required_without_destination_is_refused(env):
     result = _run(BACKUP, {**env, "BACKUP_OFFSITE_REQUIRED": "1"})
     assert result.returncode != 0 and "copie hors serveur exigée" in result.stderr
