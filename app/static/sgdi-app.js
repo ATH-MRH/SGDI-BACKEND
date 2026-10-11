@@ -12030,102 +12030,187 @@ function renderContractualisation(view,id){
   if(blockedAgent){view.innerHTML=`<div class="max-w-3xl mx-auto card p-8 text-center" style="border:2px solid #111827"><div style="font-size:42px">⛔</div><h1 class="text-2xl font-black mb-2">CONTRACTUALISATION BLOQUÉE</h1><p class="text-sm text-slate-600 mb-4">Ce candidat correspond à une personne inscrite sur la BLACKLIST : <b>${escapeHTML((blockedAgent.nom||"")+" "+(blockedAgent.prenom||""))}</b> · ${escapeHTML(blockedAgent.matricule||"")}. Il ne peut plus signer de contrat.</p><div class="p-3 rounded bg-red-50 text-red-800 text-sm mb-4"><b>Motif :</b> ${escapeHTML(blockedAgent.blacklistMotif||"Non précisé")}</div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div>`;return}
   ensureContratsPersonnel();
   const proxy=candidateContractAgentProxy(c);
-  const p=employeeNewContractDefaults(proxy);
+  const p={...employeeNewContractDefaults(proxy),...candidateContractDraftValues(c)};
   const selectedSociete=c.societe||currentStructureSocieteFilter()||mySoc()||"";
   if(selectedSociete&&!c.societe){c.societe=selectedSociete;saveDB()}
   const verifs=contractVerificationItems();
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
   const candidateFullName=(c.nom||"")+" "+(c.prenom||"");
-  const candidateInitials=(candidateFullName.trim()?candidateFullName.trim().split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join(""):"CD").toUpperCase();
-  view.innerHTML=`<div class="flex justify-between mb-4 gap-3 items-start flex-wrap"><div><p class="nc-eyebrow">Contrats à établir</p><h1 class="text-2xl font-black uppercase">Nouveau contrat — ${escapeHTML(candidateFullName)}</h1><p class="text-slate-500 text-sm">Même formulaire que Gestion des effectifs > Nouveau contrat. Documents contractualisation : <b>${nbOk}/9</b>.</p></div><div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
-    <form id="employee-new-contract-form" onsubmit="event.preventDefault();confirmCandidateNewContract(this,'${jsString(c.id)}')" class="nc-layout">
+  const stepTitles=["Candidat &amp; poste","Type &amp; durée","Lieu d'affectation","Rémunération &amp; paiement","Modèle de contrat","Informations complémentaires"];
+  const optional='<span class="nc2-opt">Facultatif</span>';
+  const cardHead=(n,hint)=>`<div class="nc2-card-head"><span class="nc2-num" aria-hidden="true">${n}</span><h2 id="nc2-step-${n}">${stepTitles[n-1]}</h2>${hint?`<span class="nc2-hint">${hint}</span>`:""}</div>`;
+  const candidateId=jsString(c.id);
+  view.innerHTML=`<div class="nc2-head"><div><nav class="nc2-crumbs" aria-label="Fil d'Ariane"><a href="#/contrats/a_contractualiser">Contrats à établir</a><span aria-hidden="true">/</span><span>Nouveau contrat</span></nav><h1 data-keep-case>Nouveau contrat — ${escapeHTML(candidateFullName)}</h1><p>Formulaire simplifié de contractualisation</p></div></div>
+    <form id="employee-new-contract-form" class="nc2-form" data-draft-model="${escapeHTML(p.contratPersonnelId||"")}" onsubmit="event.preventDefault();submitCandidateContractWizard(this,'${candidateId}')">
       <input type="hidden" name="agentId" value="${escapeHTML(proxy.id)}"/>
-      <div class="nc-main">
-        <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">①</div><div><h2>Candidat &amp; poste</h2><span>Identité et affectation du candidat</span></div></div>
-          <div class="nc-body">
-            <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
-            <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
-            <div class="nc-field"><label>Client / site</label>${newContractClientFieldHTML(p,selectedSociete)}</div>
-            <div class="nc-field"><label>N° pièce d'identité</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
-            <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','nin',this.value)"/></div>
-            <div class="nc-candidate-contact-row">
-              <div class="nc-field"><label>Wilaya du candidat</label><select class="select" name="candidateWilaya"><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
-              <div class="nc-field"><label>Lien contact d'urgence</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}"/></div>
-              <div class="nc-field"><label>Nom contact d'urgence</label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}"/></div>
-              <div class="nc-field"><label>Téléphone d'urgence</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)"/></div>
+      <input type="hidden" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/>
+      <input type="hidden" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}"/>
+      <ol class="nc2-steps" aria-label="Blocs du formulaire">${stepTitles.map((title,i)=>`<li><button type="button" data-nc-step-tab="${i+1}" onclick="goToNewContractStep(this.form,${i+1})"><span aria-hidden="true">${i+1}</span>${title}</button></li>`).join("")}</ol>
+      <div class="nc2-grid">
+        <div class="nc2-main">
+          <section class="nc2-card" data-nc-step="1" aria-labelledby="nc2-step-1">
+            ${cardHead(1)}
+            <div class="nc2-fields">
+              <div class="nc-field"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
+              <div class="nc-field"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
+              <div class="nc-field"><label>Client / site</label>${newContractClientFieldHTML(p,selectedSociete)}</div>
+              <div class="nc-field"><label>N° pièce d'identité ${optional}</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" onchange="persistCandidateContractIdentity('${candidateId}','numeroPieceIdentite',this.value)"/></div>
+              <div class="nc-field"><label>N° identité nationale ${optional}</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${candidateId}','nin',this.value)"/></div>
+              <div class="nc-field"><label>Wilaya du candidat ${optional}</label><select class="select" name="candidateWilaya"><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
             </div>
-          </div>
-        </div>
-        <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">②</div><div><h2>Type &amp; durée</h2><span>Nature du contrat et jalons de dates</span></div></div>
-          <div class="nc-body">
-            <div class="nc-contract-basics-row">
-              <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary();loadNewContractContractModels()"><option selected>CDD</option></select></div>
-              <div class="nc-field"><label>Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
-              <div class="nc-field"><label>Période d'essai</label><select class="select" name="periodeEssai" onchange="updateNewContractSummary()">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
+            <fieldset class="nc2-group"><legend>Contact d'urgence ${optional}</legend>
+              <div class="nc-candidate-contact-row">
+                <div class="nc-field"><label>Lien contact d'urgence</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}"/></div>
+                <div class="nc-field"><label>Nom contact d'urgence</label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}"/></div>
+                <div class="nc-field"><label>Téléphone d'urgence</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)"/></div>
+              </div>
+            </fieldset>
+          </section>
+          <section class="nc2-card" data-nc-step="2" aria-labelledby="nc2-step-2">
+            ${cardHead(2)}
+            <div class="nc2-rows">
+              <div class="nc-contract-basics-row">
+                <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary();loadNewContractContractModels()"><option selected>CDD</option></select></div>
+                <div class="nc-field"><label>Date contrat <span class="req">*</span></label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
+                <div class="nc-field"><label>Période d'essai</label><select class="select" name="periodeEssai" onchange="updateNewContractSummary()">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
+              </div>
+              <div class="nc-contract-dates-row">
+                <div class="nc-field"><label>Date début du contrat <span class="req">*</span></label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
+                <div class="nc-field"><label>Durée du contrat <span class="req">*</span></label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
+                <div class="nc-field computed"><label>Date fin du contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
+              </div>
             </div>
-            <div class="nc-contract-dates-row">
-              <div class="nc-field"><label>Date début du contrat</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
-              <div class="nc-field"><label>Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
-              <div class="nc-field computed"><label>Date fin du contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
+          </section>
+          <section class="nc2-card" data-nc-step="3" aria-labelledby="nc2-step-3">
+            ${cardHead(3,"Prérempli depuis le client / site choisi")}
+            <div class="nc2-fields nc2-fields-place">
+              <div class="nc-field"><label>Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
+              <div class="nc-field"><label>Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
+              <div class="nc-field"><label>Adresse complète</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
             </div>
-          </div>
-        </div>
-        <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">③</div><div><h2>Lieu d'affectation</h2><span>Adresse du site rattaché au contrat</span></div></div>
-          <div class="nc-body">
-            <div class="nc-field"><label>Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
-            <div class="nc-field"><label>Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
-            <div class="nc-field full"><label>Adresse</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
-          </div>
-        </div>
-        <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">④</div><div><h2>Rémunération &amp; paiement</h2><span>Salaire net et coordonnées de versement</span></div></div>
-          <div class="nc-body">
-            <div class="nc-field"><label>Salaire net</label><input class="input" name="salaireNet" inputmode="decimal" oninput="updateNewContractSalaryWords(this,false);updateNewContractSummary()" onblur="updateNewContractSalaryWords(this,true);updateNewContractSummary()" value="${p.salaireNet?escapeHTML(formatMoneyInputValue(p.salaireNet)):""}"/></div>
-            <div class="nc-field"><label>N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/></div>
-            <div class="nc-field computed full"><label>Salaire en lettres</label><input class="input bg-slate-50" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}" readonly/></div>
-            <div class="nc-field"><label>Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
-            <div class="nc-field"><label>Banque</label><select class="select" name="banque">${banquesAlgerieOptionsHTML(p.banque)}</select></div>
-            <div class="nc-field full"><label>RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
-          </div>
-        </div>
-        <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">⑤</div><div><h2>Modèle de contrat</h2><span>Document Word utilisé pour générer le contrat</span></div></div>
-          <div class="nc-body" style="grid-template-columns:1fr">
-            <div class="nc-field full"><label>Modèle</label><select class="select" name="contratPersonnelId" data-loaded="0" onchange="updateNewContractModelPreview()"><option value="aps">Modèle standard APS (par défaut)</option></select></div>
+          </section>
+          <section class="nc2-card" data-nc-step="4" aria-labelledby="nc2-step-4">
+            ${cardHead(4)}
+            <div class="nc2-fields nc2-fields-4">
+              <div class="nc-field"><label>Salaire net</label><input class="input" name="salaireNet" inputmode="decimal" oninput="updateNewContractSalaryWords(this,false);updateNewContractSummary()" onblur="updateNewContractSalaryWords(this,true);updateNewContractSummary()" value="${p.salaireNet?escapeHTML(formatMoneyInputValue(p.salaireNet)):""}"/></div>
+              <div class="nc-field"><label>Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
+              <div class="nc-field"><label>Banque</label><select class="select" name="banque">${banquesAlgerieOptionsHTML(p.banque)}</select></div>
+              <div class="nc-field"><label>RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
+            </div>
+          </section>
+          <section class="nc2-card" data-nc-step="5" aria-labelledby="nc2-step-5">
+            ${cardHead(5)}
+            <div class="nc2-model-row">
+              <div class="nc-field"><label>Modèle</label><select class="select" name="contratPersonnelId" data-loaded="0" onchange="updateNewContractModelPreview();updateNewContractSummary()"><option value="aps">Modèle standard APS (par défaut)</option></select></div>
+              <span id="nc-articles-toggle-row"><button type="button" class="nc2-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles</button></span>
+              <button type="button" class="nc2-btn" onclick="printEmployeeNewContractFromForm(this.form)">Aperçu du contrat</button>
+            </div>
             <div id="nc-model-preview" class="nc-model-preview"></div>
-            <div class="nc-field"><label>Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
-            <div id="nc-articles-toggle-row" class="nc-link-row"><button type="button" class="nc-link-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
             <div id="new-contract-articles-editor" class="hidden"></div>
-            <div class="nc-field"><label>Observation</label><textarea class="textarea" name="observation" rows="3"></textarea></div>
+          </section>
+          <details class="nc2-card nc2-card-secondary" data-nc-step="6" aria-labelledby="nc2-step-6"${p.missions||p.observation?" open":""}>
+            <summary>${cardHead(6,optional)}</summary>
+            <div class="nc2-fields nc2-fields-2">
+              <div class="nc-field"><label>Mission et attributions</label><textarea class="textarea" name="missions" rows="2" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
+              <div class="nc-field"><label>Observation</label><textarea class="textarea" name="observation" rows="2">${escapeHTML(p.observation||"")}</textarea></div>
+            </div>
+          </details>
+          <div class="nc2-actions">
+            <button type="button" class="nc2-btn" data-nc-prev onclick="navigate('contrats/a_contractualiser')">Précédent</button>
+            <span class="nc2-actions-note">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</span>
+            <button type="button" class="nc2-btn nc2-btn-soft" onclick="saveCandidateContractDraft(this.form,'${candidateId}',this)">Enregistrer brouillon</button>
+            <button type="submit" class="nc2-btn nc2-btn-primary" data-nc-submit data-no-critical-auth="1">Valider et créer l'employé</button>
           </div>
         </div>
-      </div>
-      <div class="nc-side">
-        <div class="nc-candidate-card">
-          <div class="nc-candidate-top"><div class="nc-avatar">${escapeHTML(candidateInitials)}</div><div><div class="nc-candidate-name">${escapeHTML(candidateFullName)}</div><div class="nc-candidate-role">${escapeHTML(p.poste||"Poste à définir")}</div></div></div>
-          <div class="nc-ref-box"><label>Référence contrat</label><input name="reference" value="${escapeHTML(p.reference)}" readonly/></div>
-        </div>
-        <div class="nc-summary-card">
-          <h3>Résumé du contrat</h3>
-          <div class="nc-summary-row"><span>Type</span><span id="nc-sum-type">CDD</span></div>
-          <div class="nc-summary-row"><span>Début</span><span id="nc-sum-debut">—</span></div>
-          <div class="nc-summary-row"><span>Fin</span><span id="nc-sum-fin">—</span></div>
-          <div class="nc-summary-row"><span>Essai</span><span id="nc-sum-essai">—</span></div>
-          <div class="nc-summary-row"><span>Salaire net</span><span id="nc-sum-salaire">—</span></div>
-          <div class="nc-summary-salary" id="nc-sum-lettres">—</div>
-        </div>
-        <div class="nc-actions-card">
-          <button class="btn btn-success" data-no-critical-auth="1">✓ Valider et créer l'employé</button>
-          <button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Aperçu avant validation</button>
-          <button type="button" class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">Annuler</button>
-          <div class="nc-helper">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</div>
-        </div>
+        <aside class="nc2-side" aria-label="Résumé du contrat">
+          <div class="nc2-card nc2-summary">
+            <div class="nc2-summary-head"><h2>Résumé</h2><span class="nc2-status">Brouillon</span></div>
+            <dl>
+              <dt>Candidat</dt><dd>${escapeHTML(candidateFullName)}</dd>
+              <dt>Poste</dt><dd id="nc-sum-poste">—</dd>
+              <dt>Client / site</dt><dd id="nc-sum-client">—</dd>
+              <dt>Type contrat</dt><dd id="nc-sum-type">CDD</dd>
+              <dt>Date début</dt><dd id="nc-sum-debut">—</dd>
+              <dt>Date fin</dt><dd id="nc-sum-fin">—</dd>
+              <dt>Durée</dt><dd id="nc-sum-duree">—</dd>
+              <dt>Période d'essai</dt><dd id="nc-sum-essai">—</dd>
+              <dt>Salaire net</dt><dd id="nc-sum-salaire">—</dd>
+              <dt>Mode paiement</dt><dd id="nc-sum-mode">—</dd>
+              <dt>Banque</dt><dd id="nc-sum-banque">—</dd>
+              <dt>Documents</dt><dd><button type="button" class="nc2-link" onclick="openContractDocumentsModal('${candidateId}')">${nbOk}/9 · Gérer</button></dd>
+            </dl>
+            <div class="nc-summary-salary" id="nc-sum-lettres">—</div>
+            <label class="nc2-ref">Référence contrat<input name="reference" value="${escapeHTML(p.reference)}" readonly/></label>
+          </div>
+          <div class="nc2-card nc2-checks">
+            <h2>Avant validation</h2>
+            <ul>${[["poste","Poste renseigné"],["client","Client / site renseigné"],["dates","Dates contrat renseignées"],["salaire","Salaire renseigné"],["modele","Modèle sélectionné"]].map(([key,label])=>`<li data-nc-check="${key}" data-done="0"><span class="nc2-check" aria-hidden="true"></span><span>${label}</span><span class="nc2-check-state">À faire</span></li>`).join("")}</ul>
+          </div>
+        </aside>
       </div>
     </form>`;
-  setTimeout(()=>{updateNewContractReference();loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels();bindNewContractRequiredFields(document.getElementById("employee-new-contract-form"))},0);
+  setTimeout(()=>{
+    const form=document.getElementById("employee-new-contract-form");if(!form)return;
+    updateNewContractReference();loadNewContractClients();updateNewContractSalaryWords(form.querySelector('[name="salaireNet"]'));updateNewContractSummary();
+    loadNewContractContractModels().then(()=>{
+      const model=form.querySelector('[name="contratPersonnelId"]'),wanted=form.dataset.draftModel;
+      if(model&&wanted&&Array.from(model.options).some(o=>o.value===wanted)){model.value=wanted;updateNewContractModelPreview()}
+      updateNewContractSummary();
+    });
+    bindNewContractRequiredFields(form);
+    form.addEventListener("input",updateNewContractSummary);
+    form.addEventListener("change",updateNewContractSummary);
+  },0);
+}
+// Contractualisation d'un candidat : six blocs affichés ensemble. La barre de blocs amène
+// directement à l'un d'eux.
+function goToNewContractStep(form,step,focus=true){
+  const f=form||document.getElementById("employee-new-contract-form");if(!f)return;
+  const section=f.querySelector(`[data-nc-step="${Number(step)||1}"]`);if(!section)return;
+  if(section.tagName==="DETAILS")section.open=true;
+  section.scrollIntoView?.({behavior:"smooth",block:"start"});
+  if(focus)section.querySelector("input:not([readonly]):not([type=hidden]),select:not([disabled]),textarea")?.focus({preventScroll:true});
+}
+function submitCandidateContractWizard(form,id){
+  if(!refreshNewContractRequiredFields(form)){
+    const missing=form.querySelector(".nc-required-missing"),section=missing?.closest("[data-nc-step]");
+    if(section)goToNewContractStep(form,section.dataset.ncStep,false);
+    missing?.focus({preventScroll:true});
+    toast("Les champs obligatoires incomplets sont signalés en rouge.","error");
+    return;
+  }
+  return confirmCandidateNewContract(form,id);
+}
+// Brouillon : saisie conservée à part sur la candidature (contractDraft), sans toucher aux
+// champs que seule la validation écrit (dates de recrutement, poste du contrat…).
+const CANDIDATE_CONTRACT_DRAFT_FIELDS=["typeContrat","poste","dateDecision","dateDebut","dureeContrat","dateFin","periodeEssai","numeroPieceIdentite","nin","candidateWilaya","contactUrgenceLien","contactUrgenceNom","contactUrgenceTel","adresseSite","wilaya","commune","client","dcClientId","dcSiteId","salaireNet","modePaiement","banque","iban","missions","observation","contratPersonnelId"];
+function candidateContractDraftValues(c){
+  const saved=c&&typeof c.contractDraft==="object"&&c.contractDraft?c.contractDraft:{};
+  return Object.fromEntries(CANDIDATE_CONTRACT_DRAFT_FIELDS.filter(key=>saved[key]!==undefined&&saved[key]!==null&&saved[key]!=="").map(key=>[key,saved[key]]));
+}
+async function saveCandidateContractDraft(form,id,button){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  // Formulaire verrouillé : ses champs désactivés ne sont pas lus, un brouillon vide écraserait l'existant.
+  if(sgdiViewModeActive){toast("Déverrouillez le formulaire pour enregistrer le brouillon","info");return}
+  const draft=employeeNewContractDraftFromForm(form);
+  if(draft.contactUrgenceTel&&String(draft.contactUrgenceTel).replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
+  const previous=c.contractDraft;
+  c.contractDraft={...Object.fromEntries(CANDIDATE_CONTRACT_DRAFT_FIELDS.map(key=>[key,draft[key]??""])),savedAt:new Date().toISOString(),savedBy:session?.username||""};
+  // Client / site : sans liste DC chargée, le rattachement déjà enregistré est conservé.
+  if(!draft.dcLinkLoaded)for(const key of ["client","dcClientId","dcSiteId"])c.contractDraft[key]=previous?.[key]??c.contractDraft[key];
+  if(button)button.disabled=true;
+  try{
+    await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});
+    sgdiFormHasUnsavedChanges=false;
+    form.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
+    delete form.dataset.dirty;
+    toast("Brouillon enregistré","success");
+  }catch(e){
+    c.contractDraft=previous;
+    toast("Brouillon non enregistré : "+(e.message||e),"error");
+  }finally{
+    if(button)button.disabled=false;
+  }
 }
 async function persistCandidateContractIdentity(id,field,value){
   if(!["numeroPieceIdentite","nin"].includes(field))return;
@@ -12147,6 +12232,34 @@ function updateNewContractSummary(){
   set("nc-sum-salaire",f.salaireNet?.value?f.salaireNet.value+" DA":"");
   const lettres=document.getElementById("nc-sum-lettres");
   if(lettres)lettres.textContent=f.salaireLettres?.value?`« ${f.salaireLettres.value} »`:"—";
+  // Formulaire candidat en blocs : résumé complet et points à vérifier avant validation.
+  if(!f.classList.contains("nc2-form"))return;
+  const field=name=>f.querySelector(`[name="${name}"]`);
+  const text=name=>{const el=field(name);return el?.value?(el.selectedOptions?.[0]?.textContent||el.value):""};
+  const clientSite=field("dcClientSite")?.value?text("dcClientSite"):(field("client")?.value||"");
+  set("nc-sum-type",text("typeContrat"));
+  set("nc-sum-debut",field("dateDebut")?.value?formatDate(field("dateDebut").value):"");
+  set("nc-sum-fin",field("dateFin")?.value?formatDate(field("dateFin").value):"");
+  set("nc-sum-essai",text("periodeEssai"));
+  set("nc-sum-salaire",field("salaireNet")?.value?field("salaireNet").value+" DA":"");
+  if(lettres){const words=field("salaireLettres")?.value||"";lettres.textContent=words?`« ${words} »`:"—";lettres.hidden=!words}
+  set("nc-sum-poste",text("poste"));
+  set("nc-sum-client",clientSite);
+  set("nc-sum-duree",text("dureeContrat"));
+  set("nc-sum-mode",text("modePaiement"));
+  set("nc-sum-banque",text("banque"));
+  const checks={
+    poste:!!field("poste")?.value,
+    client:!!clientSite,
+    dates:["dateDecision","dateDebut","dureeContrat","dateFin"].every(name=>!!field(name)?.value),
+    salaire:parseMoneyInput(field("salaireNet")?.value)>0,
+    modele:!!field("contratPersonnelId")?.value
+  };
+  f.querySelectorAll("[data-nc-check]").forEach(item=>{
+    const done=!!checks[item.dataset.ncCheck];
+    item.dataset.done=done?"1":"0";
+    const state=item.querySelector(".nc2-check-state");if(state)state.textContent=done?"Fait":"À faire";
+  });
 }
 function refreshNewContractRequiredFields(form){
   const f=form||document.getElementById("employee-new-contract-form");if(!f)return true;

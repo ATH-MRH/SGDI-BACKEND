@@ -11630,3 +11630,73 @@ body #view .drh-cand-page .drh-cand-card table tbody td{padding:14px 20px!import
 .nc-client-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:#64748b}
 .nc-client-status:empty{display:none}
 .nc-client-status[data-state="error"]{color:#b91c1c;font-weight:600}
+
+/* DRH — contractualisation d'un candidat : formulaire en étapes (zone de contenu uniquement). */
+.nc2-crumbs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;font-size:13px;color:#5b6b82}
+.nc2-crumbs a{color:#1d4ed8;font-weight:600;text-decoration:none}
+.nc2-crumbs a:hover{text-decoration:underline}
+body #view .nc2-head h1{margin:0;font-size:26px;line-height:1.2;font-weight:800;color:#0b2a5b}
+body #view .nc2-head p{margin:4px 0 0;font-size:14px;color:#5b6b82}
+.nc2-form{display:flex;flex-direction:column;gap:16px;margin-top:16px;color:#0f1f3d}
+.nc2-form [hidden]{display:none!important}
+.nc2-steps{list-style:none;margin:0;padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 10px;background:#fff;border:1px solid #e3e9f2;border-radius:14px}
+body #view .nc2-steps button{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px 0 7px;border:0;border-radius:999px;background:none;font-size:13.5px;font-weight:500;color:#44546c;cursor:pointer}
+body #view .nc2-steps button span{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#e8effc;color:#163a9e;font-size:13px;font-weight:700}
+body #view .nc2-steps button:hover{background:#f3f6fb}
+.nc2-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.nc2-main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.nc2-card{display:flex;flex-direction:column;gap:14px;padding:18px 22px 20px;scroll-margin-top:16px;background:#fff;border:1px solid #e3e9f2;border-radius:14px;box-shadow:0 1px 2px rgba(15,31,61,.04)}
+.nc2-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.nc2-num{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#1d4ed8;color:#fff;font-weight:700}
+body #view .nc2-card h2{margin:0;font-size:17px;font-weight:700;color:#0b2a5b}
+.nc2-hint{font-size:12.5px;color:#5b6b82}
+.nc2-opt{padding:1px 8px;border-radius:999px;background:#eef2f7;color:#44546c;font-size:11px;font-weight:500;letter-spacing:0;text-transform:none}
+.nc2-fields,.nc2-form .nc-contract-basics-row,.nc2-form .nc-contract-dates-row,.nc2-form .nc-candidate-contact-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 16px}
+.nc2-fields-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.nc2-fields-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.nc2-fields-place{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr)}
+.nc2-rows{display:flex;flex-direction:column;gap:14px}
+.nc2-form .nc-field label{gap:8px;font-size:13px;font-weight:600;color:#24385c;letter-spacing:0;text-transform:none}
+.nc2-form .nc-field .input,.nc2-form .nc-field .select{min-height:44px}
+.nc2-form .nc-field .textarea{min-height:64px}
+.nc2-group{min-width:0;margin:0;padding:12px 16px 16px;border:1px solid #e3e9f2;border-radius:12px;background:#f8fafd}
+.nc2-group legend{display:flex;align-items:center;gap:8px;padding:0 8px;font-size:13px;font-weight:700;color:#24385c}
+.nc2-model-row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.nc2-model-row .nc-field{flex:1 1 260px}
+.nc2-card-secondary{background:#fbfcfe;box-shadow:none}
+.nc2-card-secondary .nc2-num{background:#eef2f7;color:#44546c}
+details.nc2-card>summary{list-style:none;cursor:pointer;border-radius:8px}
+details.nc2-card>summary::-webkit-details-marker{display:none}
+details.nc2-card>summary:focus-visible{outline:2px solid #1d4ed8;outline-offset:4px}
+details.nc2-card>summary .nc2-card-head::after{content:"";margin-left:auto;width:9px;height:9px;border-right:2px solid #44546c;border-bottom:2px solid #44546c;transform:rotate(45deg);transition:transform .15s}
+details.nc2-card[open]>summary .nc2-card-head::after{transform:rotate(-135deg)}
+details.nc2-card:not([open]){gap:0;padding-bottom:20px}
+body #view .nc2-form .nc2-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border:1px solid #cfd9e8;border-radius:10px;background:#fff;color:#1d4ed8;font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer}
+body #view .nc2-form .nc2-btn:hover:not(:disabled){background:#f1f5fd;border-color:#a9bfe8}
+body #view .nc2-form .nc2-btn:focus-visible,body #view .nc2-steps button:focus-visible,.nc2-link:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}
+body #view .nc2-form .nc2-btn:disabled{color:#8a97ab!important;background:#fff!important;border-color:#e3e9f2!important;cursor:not-allowed;opacity:1!important}
+body #view .nc2-form .nc2-btn-soft{background:#f1f5fd;border-color:#a9bfe8}
+body #view .nc2-form .nc2-btn-primary{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:700}
+body #view .nc2-form .nc2-btn-primary:hover:not(:disabled){background:#163a9e;border-color:#163a9e}
+.nc2-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 18px;background:#fff;border:1px solid #e3e9f2;border-radius:14px}
+.nc2-actions [data-nc-prev]{margin-right:auto}
+.nc2-actions-note{flex:1 1 240px;font-size:12px;line-height:1.45;color:#5b6b82}
+.nc2-side{display:flex;flex-direction:column;gap:16px;min-width:0;position:sticky;top:16px}
+.nc2-side .nc2-card{gap:12px;padding:18px 20px}
+body #view .nc2-side h2{font-size:15px}
+.nc2-summary-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.nc2-status{padding:4px 12px;border-radius:999px;background:#fff0dc;color:#8a4a06;font-size:12px;font-weight:700}
+.nc2-summary dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:8px 12px;margin:0;font-size:13.5px}
+.nc2-summary dt{color:#5b6b82}
+.nc2-summary dd{margin:0;font-weight:600;text-align:right;overflow-wrap:anywhere}
+body #view .nc2-link{padding:0;border:0;background:none;color:#1d4ed8;font-size:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+.nc2-ref{display:flex;flex-direction:column;gap:2px;font-size:12px;color:#5b6b82}
+body #view .nc2-form .nc2-ref input{width:100%;min-height:0;height:auto;padding:0!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;color:#0f1f3d;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.nc2-checks ul{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none;font-size:13.5px}
+.nc2-checks li{display:flex;align-items:center;gap:10px;color:#44546c}
+.nc2-checks li[data-done="1"]{color:#0f1f3d;font-weight:600}
+.nc2-check{flex:none;box-sizing:border-box;width:20px;height:20px;border:2px dashed #8a97ab;border-radius:50%}
+.nc2-checks li[data-done="1"] .nc2-check{border:0;background:#1d4ed8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/12px no-repeat}
+.nc2-check-state{margin-left:auto;font-size:12px;font-weight:500;color:#5b6b82}
+@media(max-width:1100px){.nc2-grid{grid-template-columns:1fr}.nc2-side{position:static}.nc2-fields-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.nc2-fields,.nc2-fields-4,.nc2-fields-2,.nc2-fields-place,.nc2-form .nc-contract-basics-row,.nc2-form .nc-contract-dates-row,.nc2-form .nc-candidate-contact-row{grid-template-columns:1fr}.nc2-form .nc-field.full{grid-column:auto}.nc2-card{padding:16px}}
