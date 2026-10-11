@@ -156,12 +156,16 @@ def ensure_enabled() -> FaceEngine:
 
 
 def enrollment_enabled() -> bool:
+    if settings.biometric_enrollment_locked:
+        return False
     return bool(settings.biometric_enabled or settings.biometric_enrollment_enabled)
 
 
 def ensure_enrollment_enabled() -> FaceEngine:
     """Enrôlement supervisé : autorisé par BIOMETRIC_ENROLLMENT_ENABLED SANS activer le
     pointage facial (préparation d'un pilote), ou par BIOMETRIC_ENABLED."""
+    if settings.biometric_enrollment_locked:
+        raise HTTPException(503, detail="Enrôlement biométrique verrouillé (BIOMETRIC_ENROLLMENT_LOCKED=true)")
     if not enrollment_enabled():
         raise HTTPException(503, detail="Enrôlement biométrique désactivé (BIOMETRIC_ENROLLMENT_ENABLED=false)")
     return _engine_with_key()
