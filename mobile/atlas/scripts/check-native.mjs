@@ -8,10 +8,12 @@
  *   ex. node scripts/check-native.mjs production biometrics,push
  */
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { DEV_CLIENT_PACKAGES } from './strip-dev-client.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const variant = process.argv[2] ?? 'production';
@@ -42,7 +44,16 @@ try {
   for (const entry of ['app.config.ts', 'package.json', 'tsconfig.json', 'assets', 'src']) {
     cpSync(join(root, entry), join(work, entry), { recursive: true });
   }
-  symlinkSync(join(root, 'node_modules'), join(work, 'node_modules'), 'dir');
+  if (isDev) {
+    symlinkSync(join(root, 'node_modules'), join(work, 'node_modules'), 'dir');
+  } else {
+    // Même état que sur la machine de build : hors développement, le client de développement
+    // est retiré de node_modules avant la génération (scripts/strip-dev-client.mjs).
+    mkdirSync(join(work, 'node_modules'));
+    for (const name of readdirSync(join(root, 'node_modules'))) {
+      if (!DEV_CLIENT_PACKAGES.includes(name)) symlinkSync(join(root, 'node_modules', name), join(work, 'node_modules', name));
+    }
+  }
 
   execFileSync('npx', ['expo', 'prebuild', '--no-install', '--clean', '--platform', 'all'], {
     cwd: work,
@@ -77,6 +88,13 @@ try {
   for (const unused of ['READ_MEDIA_IMAGES', 'READ_EXTERNAL_STORAGE']) {
     check(new RegExp(`<uses-permission[^>]*android\\.permission\\.${unused}[^>]*tools:node="remove"`).test(manifest), `permission ${unused} retirée`);
   }
+  // Permissions apportées par des bibliothèques (pastilles de lanceur de ShortcutBadger,
+  // provenance d'installation) : invisibles ici, elles n'apparaissent qu'à la fusion des
+  // manifestes. Chacune doit donc porter une règle de retrait.
+  const removed = [...manifest.matchAll(/<uses-permission[^>]*android:name="([^"]+)"[^>]*tools:node="remove"/g)].map((match) => match[1]);
+  const libraryOnly = ['com.sec.android.provider.badge.permission.READ', 'com.huawei.android.launcher.permission.CHANGE_BADGE', 'android.permission.READ_APP_BADGE', 'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE'];
+  check(libraryOnly.every((name) => removed.includes(name)), 'permissions de pastille de lanceur et de provenance d\'installation retirées');
+  check(removed.filter((name) => /badge|launcher|badger|sonyericsson|sonymobile/i.test(name)).length === 16, '16 permissions de pastille retirées');
   // Les permissions de notification viennent du manifeste de la bibliothèque : sans la
   // fonction push, l'application doit les retirer explicitement à la fusion.
   const removesNotifications = /<uses-permission[^>]*android\.permission\.POST_NOTIFICATIONS[^>]*tools:node="remove"/.test(manifest);
@@ -89,6 +107,11 @@ try {
   check(manifest.includes('android:supportsRtl="true"'), 'RTL supporté (arabe)');
   check(manifest.includes(`android:scheme="${scheme}"`), `schéma de lien ${scheme}://`);
   check(manifest.includes('secure_store_data_extraction_rules'), 'jetons exclus des sauvegardes/transferts');
+  // Le client de développement ajoute un schéma de lien et ses modules natifs : attendus en
+  // développement, interdits ailleurs.
+  const linked = execFileSync('npx', ['expo-modules-autolinking', 'resolve', '--platform', 'android', '--json'], { cwd: work, encoding: 'utf8' });
+  const devClientTraces = [manifest.includes('android:scheme="exp+'), DEV_CLIENT_PACKAGES.some((name) => linked.includes(`"${name}"`))];
+  check(devClientTraces.every((trace) => trace === isDev), `client de développement ${isDev ? 'présent' : 'absent'} (schéma exp+…, modules natifs liés)`);
   const sdk = readFileSync(join(root, 'node_modules/react-native/gradle/libs.versions.toml'), 'utf8');
   const targetSdk = Number(/targetSdk = "(\d+)"/.exec(sdk)?.[1]);
   check(targetSdk >= 35, `targetSdk ${targetSdk} >= 35 (exigence Google Play en vigueur à vérifier à chaque release)`);
@@ -108,12 +131,13 @@ try {
   check(Boolean(plistValue('CFBundleVersion')), 'CFBundleVersion présent');
   // Le client de développement (expo-dev-client) écrit un texte d'accès au réseau local dans
   // l'Info.plist source et ajoute une phase de build qui le retire de tout binaire non Debug.
-  // Le texte n'est donc toléré que si cette phase est bien présente.
+  // En développement, le texte n'est toléré que si cette phase est présente ; ailleurs, le
+  // client est absent et ni l'un ni l'autre ne doit exister.
   const stripsDevKeys = pbx.includes('Strip Local Network Keys for Release');
-  check(stripsDevKeys, 'phase de build retirant les clés du client de développement hors Debug');
+  check(stripsDevKeys === isDev, `phase de build du client de développement ${isDev ? 'présente' : 'absente'}`);
   const usage = [...plist.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)]
     .map((match) => match[1])
-    .filter((key) => !(stripsDevKeys && key === 'NSLocalNetworkUsageDescription'));
+    .filter((key) => !(isDev && stripsDevKeys && key === 'NSLocalNetworkUsageDescription'));
   const expectedUsage = biometrics ? ['NSFaceIDUsageDescription'] : [];
   check(
     JSON.stringify(usage.sort()) === JSON.stringify(expectedUsage),

@@ -112,6 +112,60 @@ function resolveStoreUrl(name: 'ATLAS_STORE_URL_IOS' | 'ATLAS_STORE_URL_ANDROID'
   return raw;
 }
 
+/**
+ * Un build EAS de test ou de production ne doit pas embarquer le client de développement :
+ * scripts/strip-dev-client.mjs le retire après l'installation. S'il est encore là, le build
+ * est refusé plutôt que publié avec lui.
+ */
+function assertNoDevClient(variant: AppVariant): void {
+  if (variant === 'development' || process.env.EAS_BUILD !== 'true') return;
+  try {
+    require.resolve('expo-dev-client/package.json');
+  } catch {
+    return;
+  }
+  throw new Error(`expo-dev-client est installé pour la variante "${variant}" : le build est refusé.`);
+}
+
+/**
+ * Permissions de pastille de compteur des lanceurs (Samsung, Huawei, Sony, HTC, Oppo…),
+ * déclarées par la bibliothèque ShortcutBadger qu'embarque expo-notifications. L'application
+ * n'affiche aucun compteur sur son icône : elles sont retirées de tous les builds.
+ */
+export const LAUNCHER_BADGE_PERMISSIONS = [
+  'android.permission.READ_APP_BADGE',
+  'com.anddoes.launcher.permission.UPDATE_COUNT',
+  'com.htc.launcher.permission.READ_SETTINGS',
+  'com.htc.launcher.permission.UPDATE_SHORTCUT',
+  'com.huawei.android.launcher.permission.CHANGE_BADGE',
+  'com.huawei.android.launcher.permission.READ_SETTINGS',
+  'com.huawei.android.launcher.permission.WRITE_SETTINGS',
+  'com.majeur.launcher.permission.UPDATE_BADGE',
+  'com.oppo.launcher.permission.READ_SETTINGS',
+  'com.oppo.launcher.permission.WRITE_SETTINGS',
+  'com.sec.android.provider.badge.permission.READ',
+  'com.sec.android.provider.badge.permission.WRITE',
+  'com.sonyericsson.home.permission.BROADCAST_BADGE',
+  'com.sonymobile.home.permission.PROVIDER_INSERT_BADGE',
+  'me.everything.badger.permission.BADGE_COUNT_READ',
+  'me.everything.badger.permission.BADGE_COUNT_WRITE',
+];
+
+/**
+ * Fichier Firebase d'Android (google-services.json), requis pour obtenir un jeton de
+ * notification. Il n'est jamais dans Git : EAS le fournit par une variable de type fichier,
+ * GOOGLE_SERVICES_JSON, qui contient son chemin sur la machine de build. Un build EAS qui
+ * inclut les notifications sans ce fichier est refusé : il ne recevrait jamais rien.
+ */
+function resolveGoogleServicesFile(pushEnabled: boolean): string | undefined {
+  const path = (process.env.GOOGLE_SERVICES_JSON ?? '').trim();
+  if (!pushEnabled) return undefined;
+  if (!path && process.env.EAS_BUILD === 'true' && process.env.EAS_BUILD_PLATFORM === 'android') {
+    throw new Error('La fonction "push" exige la variable EAS de type fichier GOOGLE_SERVICES_JSON (google-services.json).');
+  }
+  return path || undefined;
+}
+
 const withoutPushEntitlement: ConfigPlugin = (config) =>
   withEntitlementsPlist(config, (mod) => {
     delete mod.modResults['aps-environment'];
@@ -120,6 +174,7 @@ const withoutPushEntitlement: ConfigPlugin = (config) =>
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = resolveVariant();
+  assertNoDevClient(variant);
   const identity = VARIANTS[variant];
   const isDevelopment = variant === 'development';
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -170,6 +225,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       package: identity.identifier,
+      googleServicesFile: resolveGoogleServicesFile(features.push),
       adaptiveIcon: {
         backgroundColor: '#0A2D6B',
         foregroundImage: './assets/images/android-icon-foreground.png',
@@ -191,6 +247,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         // lisant la galerie : l'application ne lit jamais les photos de l'utilisateur.
         'android.permission.READ_MEDIA_IMAGES',
         ...(isDevelopment ? [] : ['android.permission.SYSTEM_ALERT_WINDOW']),
+        ...LAUNCHER_BADGE_PERMISSIONS,
+        // Déclarée par expo-application pour lire la provenance de l'installation,
+        // que l'application ne demande jamais.
+        'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
         // Déclarées par expo-local-authentication : retirées tant que le
         // verrouillage biométrique n'est pas activé pour ce build.
         ...(features.biometrics
