@@ -48,7 +48,7 @@ Il doit être mis à jour à chaque lot qui ajoute une donnée, une permission o
 
 Un build sans la fonction `biometrics` ne déclare aucune de ces permissions, bien que la bibliothèque soit embarquée : elles sont retirées explicitement.
 
-Les permissions que le gabarit natif ou une bibliothèque ajoutent par défaut (stockage externe, lecture des photos, superposition d'écran, vibreur) sont explicitement retirées. `npm run check:native` échoue si une permission non prévue apparaît.
+Les permissions que le gabarit natif ou une bibliothèque ajoutent par défaut (stockage externe, lecture des photos, superposition d'écran, vibreur, pastilles de compteur des lanceurs, provenance d'installation) sont explicitement retirées. La liste complète du build de production Android, bibliothèques comprises, est dans ANDROID-PRODUCTION, § 2. `npm run check:native` échoue si une permission non prévue apparaît.
 
 ## 2. Permissions prévues, à n'ajouter qu'avec la fonction
 
