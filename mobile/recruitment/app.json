@@ -44,6 +44,13 @@
       ],
       "@react-native-community/datetimepicker"
     ],
-    "scheme": "iron-recruitment"
+    "scheme": "iron-recruitment",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "597ed109-0010-4c6e-b9c4-e299b232c5c8"
+      }
+    },
+    "owner": "irongs01"
   }
 }
