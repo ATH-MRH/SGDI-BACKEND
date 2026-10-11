@@ -17,6 +17,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas as pdf_canvas
 
+from app.modules.drh import badge_text
 from app.modules.drh.badge_design import cover_box, decode_image, fill_fields, split_runs
 
 PT_TO_MM = 25.4 / 72
@@ -39,6 +40,15 @@ class BadgeItem:
 def _font(element: dict[str, Any], bold: bool) -> str:
     names = _FONT_NAMES.get(element.get("font"), _FONT_NAMES["Helvetica"])
     return names[(1 if bold else 0) + (2 if element.get("italic") else 0)]
+
+
+def _prepared(element: dict[str, Any], text: str, bold: bool) -> tuple[str, str]:
+    """(texte à dessiner, police) : un texte hors latin passe par la police embarquée, lettres
+    liées et ordre d'affichage calculés (arabe de droite à gauche, latin de gauche à droite)."""
+    unicode_font = badge_text.font_for(text, bold)
+    if unicode_font is None:
+        return text, _font(element, bold)
+    return badge_text.visual(text), unicode_font
 
 
 def _rounded(c, x: float, y: float, w: float, h: float, radius: float):
@@ -68,28 +78,29 @@ def _draw_text(c, element: dict[str, Any], w: float, h: float, values: dict[str,
     c.setFillColor(HexColor(element["color"]))
     upper = element.get("uppercase")
     if element.get("wrap"):
-        font = _font(element, bool(element.get("bold")))
+        bold = bool(element.get("bold"))
         text = fill_fields(element["text"].replace("**", ""), values, uppercase=upper)
-        lines: list[str] = []
+        lines: list[tuple[str, str]] = []
         for paragraph in text.split("\n"):
             current = ""
-            for word in paragraph.split():
+            for word in paragraph.split():                  # coupure sur le texte logique, mise en forme par ligne
                 trial = f"{current} {word}".strip()
-                if current and stringWidth(trial, font, size) > w:
-                    lines.append(current)
+                shown, font = _prepared(element, trial, bold)
+                if current and stringWidth(shown, font, size) > w:
+                    lines.append(_prepared(element, current, bold))
                     current = word
                 else:
                     current = trial
-            lines.append(current)
+            lines.append(_prepared(element, current, bold))
         leading = size * 1.2
         top = len(lines) * leading / 2
-        c.setFont(font, size)
-        for index, line in enumerate(lines):
+        for index, (line, font) in enumerate(lines):
+            c.setFont(font, size)
             width = stringWidth(line, font, size)
             x = {"center": -width / 2, "right": w / 2 - width}.get(element["align"], -w / 2)
             c.drawString(x, top - index * leading - leading / 2 - size * 0.35, line)
         return
-    runs = [(fill_fields(text, values, uppercase=upper), _font(element, bold)) for text, bold in split_runs(element["text"], bool(element.get("bold")))]
+    runs = [_prepared(element, fill_fields(text, values, uppercase=upper), bold) for text, bold in split_runs(element["text"], bool(element.get("bold")))]
     total = sum(stringWidth(text, font, size) for text, font in runs)
     if element.get("autoFit") and total > w > 0:
         size = max(3.0, size * w / total)

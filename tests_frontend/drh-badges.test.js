@@ -281,3 +281,33 @@ test("the legacy badge screen draws its QR from the server and logs every print 
   assert.doesNotMatch(POSITIONS + BADGES + STUDIO, /qrserver/);
   assert.match(SHELL, /Impression non tracée, donc annulée/);
 });
+
+test("the preview draws Arabic and mixed names with the bundled font, each run isolated for its own direction", () => {
+  const { dom, w } = setup({});
+  const B = w.BadgeStudio;
+  for (const latin of ["ÉLÉONORE BEN-AÏSSA", "Zoé Œuvre – « ça » €", "K26", ""]) assert.equal(B.isLatin(latin), true, latin);
+  for (const other of ["عبد القادر", "Mohamed محمد", "漢字"]) assert.equal(B.isLatin(other), false, other);
+  const design = { width: 54, height: 86, pages: [{ name: "Recto", background: "#FFFFFF", elements: [
+    { id: "nom", type: "text", text: "{{nom}}", x: 3, y: 43, w: 48, h: 5, size: 11.5, bold: true, color: "#111111", align: "center", uppercase: true, autoFit: true, opacity: 1 },
+    { id: "prenom", type: "text", text: "{{prenom}}", x: 3, y: 48, w: 48, h: 4, size: 8, color: "#222222", align: "center", uppercase: true, opacity: 1 },
+    { id: "code", type: "text", text: "CODE : **{{matricule}}**", x: 3, y: 53, w: 48, h: 4, size: 9, color: "#111111", align: "center", opacity: 1 },
+    { id: "bloc", type: "text", text: "{{fonction}}", x: 3, y: 60, w: 20, h: 12, size: 8, color: "#111111", align: "right", wrap: true, opacity: 1 },
+  ] }] };
+  const cases = [["عبد القادر", "Mohamed"], ["Abdelkader", "محمد"], ["Bensalem", "ياسين"], ["بن سالم", "Yacine"], ["عبد القادر Abdelkader", "Zoé محمد"]];
+  for (const [nom, prenom] of cases) {
+    const svg = B.badgeSvg(design, 0, { values: { nom, prenom, matricule: "K26", fonction: "مشرف الموقع الرئيسي" } }, {});
+    for (const value of [nom, prenom]) {
+      if (B.isLatin(value)) { assert.ok(svg.includes(`>${value.toUpperCase()}</tspan>`), value); continue; }
+      const shown = value.toUpperCase();
+      assert.ok(svg.includes(`font-family="BadgeUnicode, sans-serif" font-style="normal">⁨${shown}⁩</tspan>`), value);   // texte logique, isolé
+    }
+    assert.match(svg, /<tspan font-weight="400">CODE : <\/tspan><tspan font-weight="700">K26<\/tspan>/);               // segments latins inchangés
+    assert.match(svg, /text-anchor="end"[^>]*font-family="BadgeUnicode, sans-serif"[^>]*>⁨/);                      // bloc multiligne arabe
+  }
+  const accents = B.badgeSvg(design, 0, { values: { nom: "Éléonore", prenom: "Zoé", matricule: "K1", fonction: "Contrôleur" } }, {});
+  assert.doesNotMatch(accents, /BadgeUnicode|⁨/);                                                                   // le français garde Helvetica
+  assert.ok(BADGES.includes("url(/static/fonts/${file})") && BADGES.includes('"DejaVuSans.ttf"') && BADGES.includes('"DejaVuSans-Bold.ttf"'));
+  assert.doesNotMatch(BADGES + STUDIO, /https?:\/\/(?!www\.w3\.org)/);                                                  // aucune ressource externe
+  for (const file of ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVu-LICENSE.txt"]) assert.ok(fs.existsSync(path.join(ROOT, "app/static/fonts", file)), file);
+  dom.window.close();
+});

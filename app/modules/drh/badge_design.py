@@ -298,17 +298,11 @@ def qr_svg(data: str, *, color: str = "#000000") -> str:
 
 
 def unprintable(text: Any) -> str:
-    """Caractères qu'aucune police du PDF ne sait dessiner (Helvetica, Times et Courier
-    couvrent le latin de Windows-1252 : français accentué compris, pas l'arabe)."""
-    seen: list[str] = []
-    for char in str(text or ""):
-        if char in "\n\t" or char in seen:
-            continue
-        try:
-            char.encode("cp1252")
-        except UnicodeEncodeError:
-            seen.append(char)
-    return "".join(seen)
+    """Caractères qu'aucune police du badge ne sait dessiner. Le latin accentué (polices
+    standard) et l'arabe (police embarquée, voir badge_text) sont imprimables."""
+    from app.modules.drh import badge_text
+
+    return badge_text.unsupported(str(text or ""))
 
 
 def _luminance(color: str) -> float:

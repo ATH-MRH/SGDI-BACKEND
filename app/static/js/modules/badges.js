@@ -106,13 +106,34 @@
     return state.templates;
   }
 
+  // ── Texte multilingue ─────────────────────────────────────────────────────
+  // Hors du latin de Windows-1252 (arabe…), le PDF utilise la police DejaVu Sans embarquée ;
+  // l'aperçu charge la MÊME police depuis l'application (aucun service externe). Le navigateur
+  // lie les lettres arabes et ordonne la ligne lui-même ; chaque segment est isolé (FSI…PDI)
+  // pour que son sens soit celui de son premier caractère, comme dans le PDF.
+  const UNICODE_FAMILY = "BadgeUnicode";
+  const NON_LATIN = /[^\u0000-\u007F\u00A0-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018-\u201A\u201C-\u201E\u2020-\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/;
+  const isLatin = text => !NON_LATIN.test(String(text || ""));
+  const isolate = text => "\u2068" + text + "\u2069";
+  let unicodeFont = null;
+  /** Charge la police embarquée (une fois) ; l'aperçu est redessiné quand elle est prête. */
+  function loadUnicodeFont() {
+    if (unicodeFont || typeof FontFace === "undefined" || !document.fonts) return unicodeFont || Promise.resolve(false);
+    const face = (weight, file) => new FontFace(UNICODE_FAMILY, `url(/static/fonts/${file})`, { weight });
+    unicodeFont = Promise.all([face("400", "DejaVuSans.ttf").load(), face("700", "DejaVuSans-Bold.ttf").load()])
+      .then(faces => { faces.forEach(f => document.fonts.add(f)); return true; })
+      .catch(() => false);
+    return unicodeFont;
+  }
+
   // ── Rendu SVG d'une face ──────────────────────────────────────────────────
   function textWidth(text, font, bold, italic) {
     if (textWidth.ctx === undefined) {
       try { textWidth.ctx = document.createElement("canvas").getContext("2d") || null; } catch (e) { textWidth.ctx = null; }
     }
     if (!textWidth.ctx) return String(text).length * (bold ? 0.6 : 0.55);
-    textWidth.ctx.font = (italic ? "italic " : "") + (bold ? "bold " : "") + "100px " + (FONT_CSS[font] || FONT_CSS.Helvetica);
+    const latin = isLatin(text);
+    textWidth.ctx.font = (italic && latin ? "italic " : "") + (bold ? "bold " : "") + "100px " + (latin ? (FONT_CSS[font] || FONT_CSS.Helvetica) : UNICODE_FAMILY + ", sans-serif");
     return textWidth.ctx.measureText(text).width / 100;
   }
   function fillFields(text, values, upper) {
@@ -142,10 +163,12 @@
     return `<rect x="${num(el.x)}" y="${num(el.y)}" width="${num(el.w)}" height="${num(el.h)}" rx="${num(Math.min(el.radius || 0, el.w / 2, el.h / 2))}" ${paint}/>`;
   }
   function textSvg(el, values) {
+    if (!unicodeFont && !isLatin(el.text)) loadUnicodeFont();
     let size = num(el.size, 10) * PT;
     const family = FONT_CSS[el.font] || FONT_CSS.Helvetica;
     const attrs = `font-family="${family}" fill="${color(el.color, "#111111")}"${el.italic ? ' font-style="italic"' : ""} style="white-space:pre"`;
     const anchor = { center: "middle", right: "end" }[el.align] || "start";
+    const unicodeAttrs = ` font-family="${UNICODE_FAMILY}, sans-serif" font-style="normal"`;
     const x = num(el.align === "center" ? el.x + el.w / 2 : el.align === "right" ? el.x + el.w : el.x);
     if (el.wrap) {
       const lines = [];
@@ -158,13 +181,14 @@
         lines.push(current);
       });
       const leading = size * 1.2, top = el.y + el.h / 2 - lines.length * leading / 2;
-      return lines.map((line, i) => `<text x="${x}" y="${num(top + i * leading + leading / 2 + size * 0.35)}" font-size="${num(size)}" text-anchor="${anchor}"${el.bold ? ' font-weight="700"' : ""} ${attrs}>${esc(line)}</text>`).join("");
+      return lines.map((line, i) => `<text x="${x}" y="${num(top + i * leading + leading / 2 + size * 0.35)}" font-size="${num(size)}" text-anchor="${anchor}"${el.bold ? ' font-weight="700"' : ""} ${attrs}${isLatin(line) ? "" : unicodeAttrs}>${esc(isLatin(line) ? line : isolate(line))}</text>`).join("");
     }
     const runs = String(el.text || "").split("**").map((part, i) => ({ text: fillFields(part, values, el.uppercase), bold: !!el.bold || i % 2 === 1 })).filter(run => run.text);
     const total = runs.reduce((sum, run) => sum + textWidth(run.text, el.font, run.bold, el.italic), 0) * size;
     if (el.autoFit && total > el.w && el.w > 0) size = Math.max(3 * PT, size * el.w / total);
     return `<text x="${x}" y="${num(el.y + el.h / 2 + size * 0.35)}" font-size="${num(size)}" text-anchor="${anchor}" ${attrs}>` +
-      runs.map(run => `<tspan font-weight="${run.bold ? 700 : 400}">${esc(run.text)}</tspan>`).join("") + "</text>";
+      runs.map(run => isLatin(run.text) ? `<tspan font-weight="${run.bold ? 700 : 400}">${esc(run.text)}</tspan>`
+        : `<tspan font-weight="${run.bold ? 700 : 400}"${unicodeAttrs}>${esc(isolate(run.text))}</tspan>`).join("") + "</text>";
   }
   function qrSvg(el, matrix) {
     const rows = Array.isArray(matrix) ? matrix : [];
@@ -177,6 +201,7 @@
   }
   function badgeSvg(design, pageIndex, ctx, options) {
     ctx = ctx || {}; options = options || {};
+    if (!unicodeFont && Object.values(ctx.values || {}).some(value => !isLatin(value))) loadUnicodeFont();
     const W = num(design.width, 54), H = num(design.height, 86);
     const page = (design.pages || [])[pageIndex] || { elements: [], background: "#FFFFFF" };
     const uid = "bs" + (++state.uid);
@@ -360,7 +385,9 @@
       if (!host.isConnected) return;
       host.innerHTML = previewHTML(template.design, { values: { ...SAMPLE, ...emp, numero: emp.badge ? emp.badge.number : "—", date_emission: dateFr(new Date().toISOString()), validite: "—" }, qr: emp.qr, photo, crop: create.crop }, { realistic: create.realistic, width: 270 });
     };
-    if (emp.has_photo) loadPhoto(`/employees/${emp.id}/photo`).then(draw); else draw(null);
+    const start = () => { if (emp.has_photo) loadPhoto(`/employees/${emp.id}/photo`).then(draw); else draw(null); };
+    // Texte non latin : attendre la police embarquée pour que les largeurs mesurées soient les bonnes.
+    if (Object.values(emp).some(value => typeof value === "string" && !isLatin(value))) loadUnicodeFont().then(start); else start();
   }
   async function renderCreate(view, alive, param) {
     loading(view, "creer");
@@ -509,6 +536,7 @@
   async function showIssued(badge) {
     if (typeof openModal !== "function") return;
     const [detail, photo] = await Promise.all([api("/" + badge.id), badge.has_photo ? loadPhoto(`/${badge.id}/photo`) : null]);
+    if (Object.values(detail.values || {}).some(value => !isLatin(value))) await loadUnicodeFont();
     openModal(`<h2 class="text-xl font-bold mb-3">Badge ${esc(detail.number)} — tel qu'émis</h2><div class="bs-modal-preview">${previewHTML(detail.design, { values: detail.values, qr: detail.qr, photo, crop: detail.crop }, { realistic: true, width: 230 })}</div><div class="flex justify-end mt-4"><button class="btn btn-ghost" id="bs-issued-close">Fermer</button></div>`);
     document.getElementById("bs-issued-close").onclick = closeModal;
   }
@@ -728,7 +756,7 @@
   function destroyAll() { state.seq++; clearTimeout(searchTimer); forgetPhotos(); if (window.BadgeStudioEditor) window.BadgeStudioEditor.destroy(); }
   window.renderBadgeStudio = renderBadgeStudio;
   window.badgeStudioDestroy = destroyAll;
-  window.BadgeStudio = { can, NO_RIGHT, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos };
+  window.BadgeStudio = { isLatin, loadUnicodeFont, can, NO_RIGHT, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos };
 
   SGDIModules.registerModule({
     key: "badges", routes: [], dependencies: ["badges-studio"], init: function () {},

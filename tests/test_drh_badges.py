@@ -12,7 +12,7 @@ from app.core.photo_storage import PHOTOS_DIR, ensure_upload_dirs
 from app.core.security import hash_password
 from app.core.config import settings
 from app.modules.auth.models import AuditEvent, User, UserFeaturePermission
-from app.modules.drh import badge_design, badge_pdf, portrait
+from app.modules.drh import badge_design, badge_pdf, badge_text, portrait
 from app.modules.drh.badge_models import BadgeEvent, BadgeTemplate, EmployeeBadge
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, Site
@@ -430,26 +430,141 @@ def test_legacy_screen_prints_are_logged(client, db, drh):
 
 # ── Polices, contrôles de maquette, interrupteur ──────────────────────────────
 
-def test_french_accents_print_and_non_latin_text_is_refused_before_printing(client, db, drh):
+def test_french_accents_keep_the_standard_fonts_and_unknown_scripts_are_refused(client, db, drh):
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
     accented = "ÉLÉONORE BEN-AÏSSA ÇA Œuvre àèùâêîôû"
-    assert badge_design.unprintable(accented) == ""
-    assert stringWidth("É", "Helvetica-Bold", 10) > 0 and stringWidth("ÉÈÇ", "Helvetica", 10) > stringWidth("E", "Helvetica", 10)
+    assert badge_design.unprintable(accented) == "" and badge_text.font_for(accented, True) is None
+    assert stringWidth("ÉÈÇ", "Helvetica", 10) > stringWidth("E", "Helvetica", 10)
     item = badge_pdf.BadgeItem(design=badge_design.reference_design(), values={"nom": accented, "prenom": "Zoé", "matricule": "K1",
                                "fonction": "Contrôleur d'accès", "site_code": "SIÈGE"}, qr=badge_design.qr_matrix("x"))
-    assert badge_pdf.render_cards([item]).startswith(b"%PDF")
+    pdf = badge_pdf.render_cards([item])
+    assert pdf.startswith(b"%PDF") and b"FontFile2" not in pdf and b"Helvetica-Bold" in pdf     # aucune police embarquée nécessaire
 
-    assert badge_design.unprintable("عبد القادر Mohamed") != ""
     emp = _employee(db)
-    emp.last_name = "عبد القادر"
+    emp.last_name = "漢字"                                                                        # écriture sans police dans l'application
     db.commit()
-    prepared = client.get(f"{API}/employees/{emp.id}", headers=drh).json()
-    assert prepared["unprintable"] == ["Nom", "Nom et prénom"]
+    assert client.get(f"{API}/employees/{emp.id}", headers=drh).json()["unprintable"] == ["Nom", "Nom et prénom"]
     refused = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh)
     assert refused.status_code == 409 and "non imprimables" in refused.json()["detail"]
-    proof = client.post(f"{API}/preview/pdf", json={"employee_id": emp.id}, headers=drh)       # une épreuve ne plante pas
-    assert proof.status_code == 200
+    assert client.post(f"{API}/preview/pdf", json={"employee_id": emp.id}, headers=drh).status_code == 200   # une épreuve ne plante pas
+
+
+# ── Arabe : lettres liées, droite à gauche, noms mixtes, police embarquée ─────
+
+AR_NOM, AR_PRENOM = "عبد القادر", "محمد"
+ARABIC_CASES = {
+    "nom arabe seul": (AR_NOM, "Mohamed"),
+    "prénom arabe seul": ("Abdelkader", AR_PRENOM),
+    "nom français, prénom arabe": ("Bensalem", "ياسين"),
+    "nom arabe, prénom français": ("بن سالم", "Yacine"),
+    "nom et prénom arabes": (AR_NOM, AR_PRENOM),
+    "nom mixte": ("عبد القادر Abdelkader", "Zoé محمد"),
+    "texte long": ("بوزيدي بلقاسم الطاهر عبد الله بن محمد الأمين بن عبد الرحمان", "عبد الرحمان"),
+}
+
+
+def _is_arabic(char):
+    return "\u0600" <= char <= "\u06ff" or "\ufb50" <= char <= "\ufdff" or "\ufe70" <= char <= "\ufeff"
+
+
+def test_arabic_letters_are_joined_and_ordered_right_to_left():
+    shown = badge_text.visual(AR_NOM)
+    assert shown != AR_NOM and all("\ufe70" <= char <= "\ufeff" for char in shown if not char.isspace())   # formes liées
+    # « عبد » : ain initial, ba médian, dal final — affichés de droite à gauche, donc dal en premier.
+    assert badge_text.visual("عبد") == "\ufeaa\ufe92\ufecb"
+    assert badge_text.visual("لا") == "\ufefb"                                                    # ligature lam-alef
+    assert "\ufdf2" not in badge_text.visual("عبد الله")                                            # pas de signe absent de la police
+    assert badge_text.visual("Mohamed") == "Mohamed" and badge_text.visual("Zoé") == "Zoé"         # latin intact
+
+    mixed = badge_text.visual("عبد القادر Mohamed")                                                 # ligne commençant en arabe : droite à gauche
+    assert mixed.startswith("Mohamed ") and _is_arabic(mixed[-1])
+    latin_first = badge_text.visual("Mohamed عبد القادر")                                           # ligne commençant en latin : gauche à droite
+    assert latin_first.startswith("Mohamed ") and _is_arabic(latin_first[-1])
+    assert badge_text.visual("K26 موقع").startswith("K26 ")
+    for text in (AR_NOM, "عبد الله", "ياسين 12", *[" ".join(pair) for pair in ARABIC_CASES.values()]):
+        assert badge_text.unsupported(text) == "", text
+    assert badge_text.font_for(AR_NOM, True) == "BadgeUnicode-Bold" and badge_text.font_for(AR_NOM, False) == "BadgeUnicode"
+    assert badge_text.unsupported("漢字 محمد") == "漢字"
+
+
+@pytest.mark.parametrize("case", list(ARABIC_CASES))
+def test_arabic_and_mixed_names_are_issued_and_printed_without_any_network(case, client, db, drh, monkeypatch):
+    import re
+    import socket
+
+    from reportlab.lib.units import mm
+
+    nom, prenom = ARABIC_CASES[case]
+    emp = _employee(db)
+    emp.last_name, emp.first_name = nom, prenom
+    db.commit()
+    prepared = client.get(f"{API}/employees/{emp.id}", headers=drh).json()
+    assert prepared["unprintable"] == [] and prepared["nom"] == nom and prepared["prenom"] == prenom
+
+    def no_network(*args, **kwargs):
+        raise AssertionError("aucun accès réseau ne doit être nécessaire pour un badge")
+
+    monkeypatch.setattr(socket, "create_connection", no_network)
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    issued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh)
+    assert issued.status_code == 200, issued.text
+    badge = issued.json()
+    assert badge["values"]["nom"] == nom and badge["values"]["prenom"] == prenom              # texte d'origine conservé tel quel
+
+    card = client.post(f"{API}/print/pdf", json={"badge_ids": [badge["id"]], "layout": "card"}, headers=drh)
+    assert card.status_code == 200 and card.content.startswith(b"%PDF")
+    assert b"FontFile2" in card.content and b"DejaVuSans" in card.content                          # police arabe embarquée dans le PDF
+    box = re.search(rb"/MediaBox \[ 0 0 ([0-9.]+) ([0-9.]+) \]", card.content)
+    assert abs(float(box.group(1)) - 54 * mm) < 0.01 and abs(float(box.group(2)) - 86 * mm) < 0.01
+    sheet = client.post(f"{API}/print/pdf", json={"badge_ids": [badge["id"]], "layout": "a4"}, headers=drh)
+    assert sheet.status_code == 200 and b"FontFile2" in sheet.content and sheet.content.count(b"/Type /Page\n") == 1
+
+    # Le QR ne dépend pas du texte : même adresse signée, toujours relue telle quelle.
+    url = db.get(EmployeeBadge, badge["id"]).snapshot["qr_url"]
+    assert badge["qr"] == badge_design.qr_matrix(url) and url.isascii()
+    assert client.get("/api/" + url.split("://", 1)[1].split("/", 1)[1]).json()["badgeActif"] is True
+
+
+def test_qr_still_decodes_on_a_badge_with_arabic_text():
+    cv2 = pytest.importorskip("cv2")
+    import numpy
+
+    data = "https://drh.irongs.com/public/badge/77?t=0123456789abcdef0123456789abcdef&b=12"
+    item = badge_pdf.BadgeItem(design=badge_design.reference_design(), qr=badge_design.qr_matrix(data),
+                               values={"nom": AR_NOM, "prenom": AR_PRENOM, "matricule": "K26", "fonction": "كاريست", "site_code": "الموقع 01"})
+    assert badge_pdf.render_cards([item]).startswith(b"%PDF")
+    rows = item.qr                                                    # la matrice dessinée dans le PDF
+    scale, quiet = 8, 4
+    image = numpy.full(((len(rows) + 2 * quiet) * scale,) * 2, 255, dtype=numpy.uint8)
+    for r, line in enumerate(rows):
+        for c, bit in enumerate(line):
+            if bit == "1":
+                image[(r + quiet) * scale:(r + quiet + 1) * scale, (c + quiet) * scale:(c + quiet + 1) * scale] = 0
+    assert cv2.QRCodeDetector().detectAndDecode(image)[0] == data
+
+
+def test_long_arabic_text_shrinks_to_fit_and_wraps_inside_its_frame():
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from reportlab.lib.units import mm
+
+    long_name = ARABIC_CASES["texte long"][0]
+    shown = badge_text.visual(long_name)
+    natural = stringWidth(shown, "BadgeUnicode-Bold", 11.5)
+    assert natural > 48 * mm                                           # ne tient pas à sa taille nominale…
+    fitted = max(3.0, 11.5 * 48 * mm / natural)
+    assert stringWidth(shown, "BadgeUnicode-Bold", fitted) <= 48 * mm + 0.01     # …réduit, il tient dans le cadre du nom
+    design = badge_design.sanitize_design({"pages": [{"elements": [
+        {"type": "text", "id": "bloc", "text": "{{nom}}", "x": 4, "y": 20, "w": 46, "h": 30, "size": 9, "wrap": True, "align": "right"}]}]})
+    assert badge_design.design_warnings(design)[0].startswith("Aucun QR code")
+    pdf = badge_pdf.render_cards([badge_pdf.BadgeItem(design=design, values={"nom": long_name})])
+    assert pdf.startswith(b"%PDF") and b"FontFile2" in pdf
+
+
+def test_arabic_font_is_bundled_with_the_application():
+    regular, bold = badge_text.FONT_DIR / "DejaVuSans.ttf", badge_text.FONT_DIR / "DejaVuSans-Bold.ttf"
+    assert regular.is_file() and bold.is_file() and (badge_text.FONT_DIR / "DejaVu-LICENSE.txt").is_file()
+    assert regular.stat().st_size > 500_000 and badge_text.FONT_DIR.parts[-3:] == ("app", "static", "fonts")
 
 
 def test_design_warnings_control_the_qr_code_and_printable_text():
@@ -457,11 +572,13 @@ def test_design_warnings_control_the_qr_code_and_printable_text():
     assert badge_design.design_warnings(reference) == []
     design = badge_design.sanitize_design({"pages": [{"background": "#FFFFFF", "elements": [
         {"type": "qr", "id": "petit", "name": "Petit", "x": 50, "y": 2, "w": 8, "h": 11, "color": "#FFEE88", "opacity": 0.5},
-        {"type": "text", "id": "ar", "name": "Arabe", "text": "مرحبا {{nom}}", "x": 0, "y": 0, "w": 10, "h": 4},
+        {"type": "text", "id": "cjk", "name": "Kanji", "text": "漢字 {{nom}}", "x": 0, "y": 0, "w": 10, "h": 4},
+        {"type": "text", "id": "ar", "name": "Arabe", "text": "مرحبا {{nom}}", "x": 0, "y": 5, "w": 10, "h": 4},
     ]}]})
     text = " ".join(badge_design.design_warnings(design))
-    for expected in ("12 mm au minimum", "carré", "dépasse de la carte", "opaque", "contraste insuffisant", "non imprimables", "Aucune photo"):
+    for expected in ("12 mm au minimum", "carré", "dépasse de la carte", "opaque", "contraste insuffisant", "« Kanji » : caractères non imprimables", "Aucune photo"):
         assert expected in text, expected
+    assert "« Arabe »" not in text                                     # un texte arabe dans un modèle est imprimable
     assert "Aucun QR code" in " ".join(badge_design.design_warnings(badge_design.sanitize_design({"pages": [{"elements": []}]})))
 
 
