@@ -41,6 +41,7 @@ Le navigateur la dessine en SVG (`app/static/js/modules/badges.js`), le serveur 
 - Champs disponibles dans un texte : `{{societe}}`, `{{nom}}`, `{{prenom}}`, `{{nom_complet}}`,
   `{{matricule}}`, `{{fonction}}`, `{{site}}`, `{{site_code}}`, `{{statut}}`, `{{numero}}`,
   `{{date_emission}}`, `{{validite}}`. Gras local entre `**doubles astérisques**`.
+- Voir « Polices et alphabets » pour le français et l'arabe.
 - Toute maquette enregistrée ou imprimée passe par `sanitize_design` : seules les propriétés
   connues sont conservées, bornées et typées ; les images embarquées sont des PNG ou JPEG
   vérifiés, 600 Ko au plus chacune.
@@ -96,13 +97,28 @@ pas été accordées.
 - Le studio contrôle le QR en direct et à l'enregistrement : 12 mm de côté au minimum, cadre
   carré, entièrement sur la carte, opaque, sombre sur fond clair.
 
-## Polices et alphabets
+## Polices et alphabets (français et arabe)
 
-Le PDF utilise Helvetica, Times et Courier : tout le français accentué est imprimé. Un texte dans
-un autre alphabet (arabe, par exemple) n'est pas imprimable avec ces polices : l'émission est
-alors refusée avec un message explicite, plutôt que d'imprimer des caractères illisibles.
-Prise en charge prévue si le besoin est confirmé : police embarquée couvrant l'arabe, mise en
-forme des lettres liées et sens d'écriture droite-à-gauche, côté PDF et côté aperçu.
+- **Latin, français accentué compris** : polices standard du PDF (Helvetica, Times, Courier),
+  inchangées.
+- **Arabe et noms mixtes** : dès qu'un texte sort du latin, il est dessiné avec **DejaVu Sans**
+  (normal et gras), embarquée dans l'application (`app/static/fonts/`, licence jointe) et
+  incorporée au PDF. Le serveur met les lettres en forme liée (`arabic-reshaper`) et calcule
+  l'ordre d'affichage bidirectionnel Unicode (`python-bidi`) : l'arabe se lit de droite à
+  gauche, les mots latins et les nombres restent de gauche à droite dans la même ligne. Le sens
+  d'une ligne est celui de son premier caractère directionnel. Voir
+  `app/modules/drh/badge_text.py`.
+- **Aperçu** : le navigateur charge la même police depuis l'application et fait lui-même la
+  mise en forme ; chaque segment est isolé pour suivre la même règle de sens que le PDF.
+- Aucun texte, aucune police et aucun QR ne passent par un service externe ; générer un badge
+  ne demande aucun accès réseau.
+- Le texte de la fiche est conservé tel quel dans l'instantané du badge ; seule sa mise en forme
+  est calculée au rendu.
+- Une écriture sans police dans l'application (idéogrammes, par exemple) reste refusée à
+  l'émission, avec un message explicite.
+- Limites connues : pas d'italique en arabe ; les ligatures décoratives (« الله » en un seul
+  signe) sont écrites en lettres liées ordinaires ; DejaVu Sans est une police sobre, non
+  calligraphique.
 
 ## Écran historique (`#/fiches/badge`)
 
@@ -134,9 +150,13 @@ Ne jamais lancer `alembic downgrade` en production comme procédure automatique.
    `true` pour rétablir.
 2. **Revenir au code précédent** si nécessaire : avec le code courant,
    `alembic stamp 20261014_0001` (n'écrit que la révision, ne supprime rien), puis redéployer le
-   commit précédent. Les tables et les badges émis restent en base. Au retour du studio,
-   `alembic upgrade head` les retrouve tels quels (répété sur PostgreSQL local : 6 badges,
-   13 événements et 4 permissions conservés).
+   commit précédent. Répété sur PostgreSQL local avec le code de `main` : il démarre et
+   fonctionne sur la base contenant les nouvelles tables ; badges, modèles et historique sont
+   intacts au retour (`alembic upgrade head`). Pendant ce retour arrière :
+   - le QR des badges émis par le studio répond « lien invalide » (l'ancien code ne connaît pas
+     le lien propre à chaque badge) ; il revalide dès le retour au code du studio ;
+   - réenregistrer les droits d'un utilisateur dans l'ancienne Matrice des droits efface ses
+     permissions badges (la simple consultation ne les touche pas) : elles sont à réattribuer.
 3. **Garde-fou** : si `alembic downgrade` est tout de même exécuté, les tables et les
    permissions sont conservées dès qu'elles contiennent des données ; elles ne sont retirées
    que si le studio n'a jamais servi.
@@ -145,6 +165,7 @@ Ne jamais lancer `alembic downgrade` en production comme procédure automatique.
 ## Tests
 
 - `tests/test_drh_badges.py` : maquette, émission et instantané, remplacement, révocation,
-  impression, lot, modèles, périmètre société et rôles.
+  impression, lot, modèles, périmètre société, permissions, QR, arabe et noms mixtes,
+  interrupteur, retour arrière.
 - `tests_frontend/drh-badges.test.js` : rendu SVG et échappement, aperçus, écrans, émission,
   éditeur (ajout, alignement, verrouillage, annulation, enregistrement).
