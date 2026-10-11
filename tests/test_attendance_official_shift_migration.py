@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261014_0001"            # tête courante : rattachement contrat DRH ↔ client / site DC
+HEAD = "20261015_0001"            # tête courante : Studio Badges DRH
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
