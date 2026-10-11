@@ -16489,6 +16489,7 @@ function openAgentDocumentsModal(id){
 
 
 let badgePublicLinkCache={};
+let badgePublicQrCache={};
 let badgePublicLinkPending={};
 function badgePublicLinkRef(a){return String(a?.backendId||a?.id||a?.matricule||"")}
 // La page publique /public/badge/{ref} exige un jeton signé côté serveur (settings.
@@ -16503,7 +16504,7 @@ async function fetchBadgePublicLink(a){
   const p=(async()=>{
     try{
       const links=await sgdiApi("/public-links/employee/"+encodeURIComponent(ref),{legacy:false});
-      if(links&&links.badge_page){badgePublicLinkCache[ref]=links.badge_page;return links.badge_page}
+      if(links&&links.badge_page){badgePublicLinkCache[ref]=links.badge_page;if(/^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(links.badge_qr||""))badgePublicQrCache[ref]=links.badge_qr;return links.badge_page}
     }catch(e){console.warn("Lien public badge indisponible",e)}
     return null;
   })();
@@ -16525,9 +16526,22 @@ function badgeVerifyURL(a){
   const origin=location.origin&&location.origin!=="null"?location.origin:"";
   return `${origin}/public/badge/${encodeURIComponent(ref)}`;
 }
-function badgeQrSrc(a,size){
-  const data=encodeURIComponent(badgeVerifyURL(a));
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size||180}x${size||180}&margin=1&data=${data}`;
+// QR du badge : dessiné par le serveur avec le lien signé (/api/public-links/employee). Le lien
+// n'est jamais confié à un service externe ; tant qu'il n'est pas reçu, l'emplacement reste vide.
+const BADGE_QR_PENDING="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+function badgeQrSrc(a){
+  const ref=badgePublicLinkRef(a);
+  if(badgePublicQrCache[ref])return badgePublicQrCache[ref];
+  ensureBadgePublicLink(a);
+  return BADGE_QR_PENDING;
+}
+// Écran de badge historique (portails sans Studio Badges) : toute impression est tracée côté
+// serveur AVANT d'être lancée ; sans trace, pas d'impression.
+async function badgeLegacyPrintLog(agents){
+  const ids=(agents||[]).map(a=>Number(a&&a.backendId)).filter(n=>Number.isInteger(n)&&n>0);
+  if(!ids.length)return true;
+  try{await sgdiApi("/public-links/badge-print-log",{method:"POST",body:{employee_ids:ids},legacy:false});return true}
+  catch(e){toast("Impression non tracée, donc annulée : "+(e&&e.message||e),"error");return false}
 }
 
 function badgePhotoCrop(a){

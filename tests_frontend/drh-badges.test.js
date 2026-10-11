@@ -30,7 +30,10 @@ const EMPLOYEE = {
   default_template_id: 1, can_issue: true, settings: {},
 };
 
+const ALL = { create: true, validate: true, export: true, admin: true };
+
 function setup(routes, hash) {
+  routes = { "/permissions": { value: ALL }, ...routes };
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="view"></div><div id="modal-host"></div></body></html>', {
     runScripts: "outside-only", url: "https://drh.irongs.com/" + (hash || "#/drh/badges/dashboard"),
   });
@@ -171,6 +174,31 @@ test("the studio edits a copy of the reference: add, move, undo, arrange, save",
   assert.equal(ed.id, null);                                             // le modèle de référence s'ouvre en copie
   assert.equal(view.querySelectorAll('[data-st="tool"]').length, 13);
   assert.equal(view.querySelector('[data-st="save"]').dataset.noSaveOverlay, "1");   // pas d'indicateur global « Enregistrement en cours »
+
+  // Règles graduées en millimètres, grille, aimant et guides.
+  const rulerH = view.querySelector('[data-st-ruler="h"]'), rulerV = view.querySelector('[data-st-ruler="v"]');
+  assert.equal(Number(rulerH.getAttribute("width")), 54 * ed.zoom); assert.equal(Number(rulerV.getAttribute("height")), 86 * ed.zoom);
+  assert.deepEqual([...rulerH.querySelectorAll("text")].map(t => t.textContent), ["0", "10", "20", "30", "40", "50"]);
+  assert.equal(rulerV.querySelectorAll("text").length, 9);
+  assert.match(rulerH.getAttribute("aria-label"), /millimètres \(54 mm\)/);
+  assert.ok(view.querySelector(".bs-st-grid"));
+  view.querySelector('[data-st="toggle-grid"]').click();
+  assert.equal(view.querySelector(".bs-st-grid"), null);
+  assert.equal(ed.snap, true);
+  ed.guides.v.push(20);
+  view.querySelector('[data-st="toggle-grid"]').click();
+  assert.equal(view.querySelectorAll('.bs-st-guide[data-guide="v"]').length, 1);
+  assert.equal(view.querySelectorAll(".bs-st-pin").length, 1);
+  view.querySelector('[data-st="clear-guides"]').click();
+  assert.equal(ed.guides.v.length, 0);
+  assert.match(view.querySelector("[data-st-warnings]").textContent, /QR code conforme/);
+  const qr = ed.design.pages[0].elements.find(e => e.type === "qr");
+  qr.w = 8; qr.color = "#FFEE88";
+  view.querySelector('[data-st="toggle-snap"]').click();
+  assert.equal(ed.snap, false);
+  assert.match(view.querySelector("[data-st-warnings]").textContent, /12 mm au minimum[\s\S]*carré[\s\S]*contraste insuffisant/);
+  qr.w = 14; qr.color = "#111111";
+  view.querySelector('[data-st="toggle-snap"]').click();
   assert.equal(view.querySelectorAll(".bs-st-layers li").length, 5);
   const count = () => ed.design.pages[0].elements.length;
 
@@ -212,4 +240,44 @@ test("the studio edits a copy of the reference: add, move, undo, arrange, save",
   assert.equal(w.location.hash, "#/drh/badges/studio/5");
   w.badgeStudioDestroy();
   dom.window.close();
+});
+
+test("without explicit badge permissions the screens stay read-only", async () => {
+  const badge = { id: 3, number: "BDG-2026-000003", status: "ACTIF", issued_at: "2026-10-01T08:00:00", print_count: 0, employee_id: 7 };
+  const { dom, w, view } = setup({
+    "/permissions": { value: { create: false, validate: false, export: false, admin: false } },
+    "/templates": { value: { items: [{ ...TEMPLATE, is_system: false, warnings: ["QR « QR code » : 8 mm de côté, 12 mm au minimum pour une lecture fiable."] }], fields: {}, fonts: ["Helvetica"] } },
+    "/employees/7": { value: { ...EMPLOYEE, nom: "عبد القادر", unprintable: ["Nom"], badge, badges: [badge] } },
+    "/employees": { value: { items: [], total: 0, page: 1, pages: 1 } },
+    "/settings": { value: { data: { number_prefix: "BDG", validity_months: 0, photo_source: "portrait", require_photo: true, print_layout: "card", sheet_margin_mm: 10, sheet_gap_mm: 4, crop_marks: true }, card: { width_mm: 54, height_mm: 86 } } },
+  }, "#/drh/badges/creer/7");
+  w.renderBadgeStudio(view, "creer"); await settle();
+  for (const action of ["issue", "print", "revoke"]) assert.equal(view.querySelector(`[data-bs="${action}"]`), null, action);
+  assert.ok(view.querySelector('[data-bs="show-issued"]')); assert.ok(view.querySelector('[data-bs="proof"]'));
+  assert.match(view.textContent, /Permission requise/); assert.match(view.textContent, /Caractères non imprimables[\s\S]*Nom/);
+  w.location.hash = "#/drh/badges/modeles";
+  w.renderBadgeStudio(view, "modeles"); await settle();
+  assert.equal(view.querySelector('[data-bs="tpl-duplicate"],[data-bs="tpl-archive"],[data-bs="tpl-default"],a[href*="studio/"]:not(.bs-tabs a)'), null);
+  assert.match(view.querySelector(".bs-warnings").textContent, /12 mm au minimum/);
+  w.location.hash = "#/drh/badges/lot";
+  w.renderBadgeStudio(view, "lot"); await settle();
+  assert.equal(view.querySelector('[data-bs="lot-issue-print"],[data-bs="lot-print"]'), null);
+  w.location.hash = "#/drh/badges/parametres";
+  w.renderBadgeStudio(view, "parametres"); await settle();
+  assert.equal(view.querySelector('button[type="submit"]'), null);
+  w.location.hash = "#/drh/badges/studio/1";
+  w.renderBadgeStudio(view, "studio"); await settle();
+  assert.equal(view.querySelector('[data-st="save"]'), null);
+  w.badgeStudioDestroy();
+  dom.window.close();
+});
+
+test("the legacy badge screen draws its QR from the server and logs every print before printing", () => {
+  const start = SHELL.indexOf("function badgeQrSrc(");
+  const body = SHELL.slice(start, SHELL.indexOf("\n}", start));
+  assert.doesNotMatch(body, /https?:\/\//);
+  assert.match(body, /badgePublicQrCache\[ref\]/);
+  assert.equal((POSITIONS.match(/if\(!\(await badgeLegacyPrintLog\(/g) || []).length, 2);
+  assert.doesNotMatch(POSITIONS + BADGES + STUDIO, /qrserver/);
+  assert.match(SHELL, /Impression non tracée, donc annulée/);
 });

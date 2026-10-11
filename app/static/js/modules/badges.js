@@ -21,13 +21,19 @@
     Helvetica: "Helvetica, Arial, sans-serif", Times: "'Times New Roman', Times, serif", Courier: "'Courier New', Courier, monospace",
   };
   const ACTION_LABELS = {
-    EMISSION: "Émission", IMPRESSION: "Impression", REVOCATION: "Révocation", MODELE_CREE: "Modèle créé",
+    EMISSION: "Émission", IMPRESSION: "Impression", IMPRESSION_HORS_STUDIO: "Impression (écran historique)", REVOCATION: "Révocation", MODELE_CREE: "Modèle créé",
     MODELE_MODIFIE: "Modèle modifié", MODELE_DUPLIQUE: "Modèle dupliqué", MODELE_DEFAUT: "Modèle par défaut",
     MODELE_ARCHIVE: "Modèle archivé", PARAMETRES: "Paramètres",
   };
   const STATUS = { ACTIF: ["Actif", "ok"], REVOQUE: ["Révoqué", "bad"], REMPLACE: ["Remplacé", "muted"] };
 
-  const state = { seq: 0, templates: null, fields: {}, fonts: [], photos: new Map(), selection: new Set(), uid: 0 };
+  const state = { seq: 0, templates: null, fields: {}, fonts: [], photos: new Map(), selection: new Set(), uid: 0, rights: null };
+  const NO_RIGHT = "Permission requise (Administration › Matrice des droits › DRH › Badges du personnel).";
+  const can = action => !!(state.rights && state.rights[action]);
+  async function loadRights(force) {
+    if (!state.rights || force) state.rights = await api("/permissions");
+    return state.rights;
+  }
 
   // ── Outils ────────────────────────────────────────────────────────────────
   function esc(value) {
@@ -306,7 +312,7 @@
         <div><strong data-bs-count>${state.selection.size}</strong> employé(s) sélectionné(s)<button class="btn btn-ghost" data-bs="clear-selection">Vider la sélection</button></div>
         <label>Modèle<select class="select" data-bs-field="lot-template"><option value="">Modèle par défaut de la société</option>${templateOptions(listState.template)}</select></label>
         <label>Sortie<select class="select" data-bs-field="lot-layout"><option value="">Selon les paramètres</option><option value="card" ${listState.layout === "card" ? "selected" : ""}>Une carte par page</option><option value="a4" ${listState.layout === "a4" ? "selected" : ""}>Planche A4</option></select></label>
-        <div class="bs-lot-actions"><button class="btn btn-primary" data-bs="lot-issue-print">Émettre les badges manquants et imprimer</button><button class="btn btn-secondary" data-bs="lot-print">Imprimer les badges déjà émis</button></div>
+        <div class="bs-lot-actions">${can("create") && can("export") ? `<button class="btn btn-primary" data-bs="lot-issue-print">Émettre les badges manquants et imprimer</button>` : ""}${can("export") ? `<button class="btn btn-secondary" data-bs="lot-print">Imprimer les badges déjà émis</button>` : `<p class="bs-note is-warn">${NO_RIGHT}</p>`}</div>
         <div data-bs-report></div></div>` : "";
     shell(view, mode, `${lotBar}
       <div class="bs-filters"><input class="input bs-search" type="search" placeholder="Rechercher un nom, un matricule, un site…" value="${esc(listState.q)}" data-bs-field="q" aria-label="Rechercher">
@@ -398,9 +404,10 @@
       <div class="bs-col">
         <div class="card bs-panel"><h2>${badge ? "Badge en cours" : "Émission"}</h2>
           ${badge ? `<dl class="bs-dl"><div><dt>Numéro</dt><dd>${esc(badge.number)}</dd></div><div><dt>État</dt><dd>${statusPill(badge)}</dd></div><div><dt>Émis le</dt><dd>${esc(dateFr(badge.issued_at))} par ${esc(badge.issued_by || "—")}</dd></div><div><dt>Validité</dt><dd>${badge.valid_until ? esc(dateFr(badge.valid_until)) : "Sans date de fin"}</dd></div><div><dt>Impressions</dt><dd>${esc(badge.print_count)}</dd></div></dl>
-            <div class="bs-actions"><button class="btn btn-primary" data-bs="print" data-layout="card">Imprimer (carte)</button><button class="btn btn-secondary" data-bs="print" data-layout="a4">Imprimer (planche A4)</button>
-            <button class="btn btn-ghost" data-bs="show-issued">Voir le badge émis</button><button class="btn btn-danger" data-bs="revoke">Révoquer</button></div><hr>` : ""}
-          ${emp.can_issue ? `<label>Fin de validité (facultatif)<input class="input" type="date" data-bs-field="valid-until"></label>
+            <div class="bs-actions">${can("export") ? `<button class="btn btn-primary" data-bs="print" data-layout="card">Imprimer (carte)</button><button class="btn btn-secondary" data-bs="print" data-layout="a4">Imprimer (planche A4)</button>` : ""}
+            <button class="btn btn-ghost" data-bs="show-issued">Voir le badge émis</button>${can("validate") ? `<button class="btn btn-danger" data-bs="revoke">Révoquer</button>` : ""}</div><hr>` : ""}
+          ${(emp.unprintable || []).length ? `<p class="bs-note is-bad">Caractères non imprimables (alphabet non latin) : ${esc(emp.unprintable.join(", "))}. Saisissez ces informations en caractères latins sur la fiche.</p>` : ""}
+          ${!can("create") ? `<p class="bs-note is-warn">Émission : ${NO_RIGHT}</p><div class="bs-actions"><button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>` : (emp.unprintable || []).length ? "" : emp.can_issue ? `<label>Fin de validité (facultatif)<input class="input" type="date" data-bs-field="valid-until"></label>
             <div class="bs-actions"><button class="btn ${badge ? "btn-secondary" : "btn-primary"}" data-bs="issue">${badge ? "Émettre un nouveau badge (remplace l'actuel)" : "Émettre le badge"}</button>
             <button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>
             <p class="bs-muted">L'émission fige les informations et la photo telles qu'elles sont aujourd'hui.</p>` : `<p class="bs-note is-bad">Employé sortant : aucun badge ne peut être émis.</p>`}</div>
@@ -517,13 +524,13 @@
           <p>${t.is_system ? `<span class="bs-pill is-muted">Référence</span>` : ""}${t.is_default ? `<span class="bs-pill is-ok">Par défaut</span>` : ""}<span class="bs-pill is-none">${esc(t.society || "Toutes sociétés")}</span></p>
           <small>${num(t.width_mm)} × ${num(t.height_mm)} mm · ${t.design.pages.length > 1 ? "recto verso" : "recto"} · version ${esc(t.version)}</small>
           <div class="bs-actions">
-            ${t.is_system ? "" : `<a class="btn btn-primary" href="#/drh/badges/studio/${t.id}">Modifier</a>`}
-            <button class="btn btn-secondary" data-bs="tpl-duplicate" data-id="${t.id}">Dupliquer</button>
-            ${t.is_default ? "" : `<button class="btn btn-ghost" data-bs="tpl-default" data-id="${t.id}">Définir par défaut</button>`}
+            ${t.is_system || !can("admin") ? "" : `<a class="btn btn-primary" href="#/drh/badges/studio/${t.id}">Modifier</a>`}
+            ${can("admin") ? `<button class="btn btn-secondary" data-bs="tpl-duplicate" data-id="${t.id}">Dupliquer</button>` : ""}
+            ${t.is_default || !can("admin") ? "" : `<button class="btn btn-ghost" data-bs="tpl-default" data-id="${t.id}">Définir par défaut</button>`}
             <button class="btn btn-ghost" data-bs="tpl-proof" data-id="${t.id}">Épreuve PDF</button>
-            ${t.is_system || t.is_default ? "" : `<button class="btn btn-danger" data-bs="tpl-archive" data-id="${t.id}">Archiver</button>`}
-          </div></div></article>`).join("")}</div>`,
-      `<a class="btn btn-primary" href="#/drh/badges/studio/nouveau">Nouveau modèle</a>`);
+            ${t.is_system || t.is_default || !can("admin") ? "" : `<button class="btn btn-danger" data-bs="tpl-archive" data-id="${t.id}">Archiver</button>`}
+          </div>${(t.warnings || []).length ? `<ul class="bs-warnings">${t.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}</div></article>`).join("")}</div>`,
+      can("admin") ? `<a class="btn btn-primary" href="#/drh/badges/studio/nouveau">Nouveau modèle</a>` : "");
   }
 
   // ── Historique ────────────────────────────────────────────────────────────
@@ -555,7 +562,7 @@
       <label>Marge de la planche A4 (mm)<input class="input" type="number" min="5" max="30" step="0.5" name="sheet_margin_mm" value="${esc(d.sheet_margin_mm)}"></label>
       <label>Espace entre les cartes (mm)<input class="input" type="number" min="0" max="20" step="0.5" name="sheet_gap_mm" value="${esc(d.sheet_gap_mm)}"></label>
       <label class="bs-inline"><input type="checkbox" name="crop_marks" ${d.crop_marks ? "checked" : ""}> Traits de coupe sur la planche A4</label>
-      <div class="bs-actions"><button class="btn btn-primary" type="submit" data-no-save-overlay="1">Enregistrer les paramètres</button></div></form>`);
+      <div class="bs-actions">${can("admin") ? `<button class="btn btn-primary" type="submit" data-no-save-overlay="1">Enregistrer les paramètres</button>` : `<p class="bs-note is-warn">${NO_RIGHT}</p>`}</div></form>`);
   }
 
   // ── Routage et événements ─────────────────────────────────────────────────
@@ -583,7 +590,8 @@
         return window.BadgeStudioEditor.mount(view, param, alive);
       },
     }[screen];
-    Promise.resolve().then(run).catch(error => { if (alive()) failure(view, screen, error); });
+    loading(view, screen);
+    loadRights().then(() => (alive() ? run() : null)).catch(error => { if (alive()) failure(view, screen, error); });
   }
   function bind(view) {
     if (view.dataset.bsBound) return;
@@ -712,7 +720,7 @@
 .bs-slot{position:absolute;top:calc(var(--bs-card-w)*.03);left:50%;transform:translateX(-50%);width:calc(var(--bs-card-w)*.26);height:calc(var(--bs-card-w)*.045);border-radius:999px;background:rgba(148,163,184,.25);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.95),inset 0 1px 3px rgba(15,23,42,.3)}
 .bs-gloss{position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.34) 0,rgba(255,255,255,0) 24%,rgba(255,255,255,0) 66%,rgba(255,255,255,.2) 100%)}
 .bs-templates{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}.bs-template{display:flex;gap:14px;padding:14px}.bs-template-thumb{flex:none}.bs-template-body{display:flex;flex-direction:column;gap:8px;min-width:0}.bs-template h3{margin:0;font-size:15px;font-weight:900}.bs-template p{margin:0;display:flex;flex-wrap:wrap;gap:4px}.bs-template small{color:var(--bs-muted);font-size:11.5px}
-.bs-settings{max-width:620px}.bs-modal-preview{display:flex;justify-content:center;background:#e8edf3;border-radius:14px;padding:18px}
+.bs-settings{max-width:620px}.bs-warnings{margin:0;padding:8px 10px 8px 26px;background:#fef3c7;color:#92400e;border-radius:10px;font-size:12px;font-weight:700}.bs-modal-preview{display:flex;justify-content:center;background:#e8edf3;border-radius:14px;padding:18px}
 @media(max-width:640px){.bs-head{border-radius:14px}.bs-dl{grid-template-columns:1fr}.bs-template{flex-direction:column;align-items:center}}`;
     document.head.appendChild(style);
   }
@@ -720,7 +728,7 @@
   function destroyAll() { state.seq++; clearTimeout(searchTimer); forgetPhotos(); if (window.BadgeStudioEditor) window.BadgeStudioEditor.destroy(); }
   window.renderBadgeStudio = renderBadgeStudio;
   window.badgeStudioDestroy = destroyAll;
-  window.BadgeStudio = { api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos };
+  window.BadgeStudio = { can, NO_RIGHT, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos };
 
   SGDIModules.registerModule({
     key: "badges", routes: [], dependencies: ["badges-studio"], init: function () {},

@@ -27,7 +27,9 @@
   };
   const ico = name => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${ICONS[name] || ""}"/></svg>`;
   const TYPE_LABELS = { text: "Texte", photo: "Photo", qr: "QR code", image: "Image", shape: "Forme", line: "Ligne" };
-  const ed = { view: null, id: null, system: false, name: "", society: "", design: null, page: 0, sel: [], zoom: 6, undo: [], redo: [], clip: [], dirty: false, drag: null, typing: false, fieldMenu: false };
+  const ed = { view: null, id: null, system: false, name: "", society: "", design: null, page: 0, sel: [], zoom: 6, undo: [], redo: [], clip: [], dirty: false, drag: null, typing: false, fieldMenu: false,
+    grid: true, snap: true, guides: { v: [], h: [] } };
+  const RULER = 22, SNAP_REACH = 0.8;
 
   const clone = value => JSON.parse(JSON.stringify(value));
   const page = () => ed.design.pages[ed.page];
@@ -73,7 +75,7 @@
     ed.name = source ? (source.is_system ? source.name + " — copie" : source.name) : "Nouveau modèle";
     ed.society = (source && source.society) || B().society() || "";
     ed.design = clone(base.design);
-    ed.page = 0; ed.sel = []; ed.undo = []; ed.redo = []; ed.dirty = false; ed.drag = null;
+    ed.page = 0; ed.sel = []; ed.undo = []; ed.redo = []; ed.dirty = false; ed.drag = null; ed.guides = { v: [], h: [] };
     let restored = false;
     try {
       const draft = JSON.parse(sessionStorage.getItem(draftKey()) || "null");
@@ -112,6 +114,7 @@
           ${d.pages.length < 2 ? `<button data-st="add-back" title="Ajouter un verso">+ Verso</button>` : `<button data-st="remove-back" title="Supprimer le verso">− Verso</button>`}</div>
         <div class="bs-st-group" role="group" aria-label="Historique"><button data-st="undo" title="Annuler (Ctrl+Z)" aria-label="Annuler" ${ed.undo.length ? "" : "disabled"}>${ico("undo")}</button><button data-st="redo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir" ${ed.redo.length ? "" : "disabled"}>${ico("redo")}</button></div>
         <div class="bs-st-group" role="group" aria-label="Zoom"><button data-st="zoom-out" title="Réduire">−</button><button data-st="zoom-fit" title="Ajuster">${Math.round(ed.zoom / 6 * 100)} %</button><button data-st="zoom-in" title="Agrandir">+</button></div>
+        <div class="bs-st-group" role="group" aria-label="Repères"><button class="${ed.grid ? "is-active" : ""}" data-st="toggle-grid" aria-pressed="${ed.grid}" title="Afficher la grille (5 mm)">Grille</button><button class="${ed.snap ? "is-active" : ""}" data-st="toggle-snap" aria-pressed="${ed.snap}" title="Aimanter à la grille de ${GRID} mm, aux guides et aux bords">Aimant</button><button data-st="clear-guides" title="Supprimer tous les guides" ${ed.guides.v.length + ed.guides.h.length ? "" : "disabled"}>Guides ×</button></div>
         <span class="bs-pill is-warn" data-st-dirty ${ed.dirty ? "" : "hidden"}>Non enregistré</span>
       </div>
       <div class="bs-st-main">
@@ -120,12 +123,51 @@
           <input type="file" accept="image/png,image/jpeg" data-st="file" hidden>
           <h2 data-st-layers>Calques</h2><ul class="bs-st-layers">${layersHTML()}</ul></aside>
         <section class="bs-st-stage" data-st-stage tabindex="0" aria-label="Surface de conception">
-          <div class="bs-st-canvas" data-st-canvas style="width:${d.width * ed.zoom}px;height:${d.height * ed.zoom}px"><div data-st-art></div><svg class="bs-st-overlay" data-st-overlay viewBox="0 0 ${d.width} ${d.height}"></svg></div></section>
-        <aside class="bs-st-right card">${arrangeHTML()}<div data-st-props>${propsHTML()}</div></aside>
+          <div class="bs-st-frame"><div class="bs-st-corner" title="Règles graduées en millimètres : cliquez ou tirez pour poser un guide">mm</div>${rulerSvg("h")}${rulerSvg("v")}
+          <div class="bs-st-canvas" data-st-canvas style="width:${d.width * ed.zoom}px;height:${d.height * ed.zoom}px"><div data-st-art></div><svg class="bs-st-overlay" data-st-overlay viewBox="0 0 ${d.width} ${d.height}"></svg></div></div></section>
+        <aside class="bs-st-right card">${arrangeHTML()}<div data-st-props>${propsHTML()}</div><div data-st-warnings>${warningsHTML()}</div></aside>
       </div></div>`,
-      `<button class="btn btn-ghost" data-st="preview">Aperçu réaliste</button><button class="btn btn-ghost" data-st="proof">Épreuve PDF</button>${ed.id ? `<button class="btn btn-secondary" data-st="save-copy" data-no-save-overlay="1">Enregistrer une copie</button>` : ""}<button class="btn btn-primary" data-st="save" data-no-save-overlay="1">${ed.id ? "Enregistrer" : "Enregistrer le modèle"}</button>`);
+      `<button class="btn btn-ghost" data-st="preview">Aperçu réaliste</button><button class="btn btn-ghost" data-st="proof">Épreuve PDF</button>${!B().can("admin") ? `<span class="bs-pill is-warn" title="${B().NO_RIGHT}">Enregistrement : permission requise</span>` : `${ed.id ? `<button class="btn btn-secondary" data-st="save-copy" data-no-save-overlay="1">Enregistrer une copie</button>` : ""}<button class="btn btn-primary" data-st="save" data-no-save-overlay="1">${ed.id ? "Enregistrer" : "Enregistrer le modèle"}</button>`}`);
     bind(view);
     renderCanvas();
+  }
+  /** Règle graduée en millimètres (un trait par mm, renforcé tous les 5 mm, chiffré tous les 10). */
+  function rulerSvg(axis) {
+    const horizontal = axis === "h", length = horizontal ? ed.design.width : ed.design.height, z = ed.zoom;
+    let marks = "";
+    for (let mm = 0; mm <= Math.floor(length); mm++) {
+      if (z < 4 && mm % 5) continue;
+      const size = mm % 10 === 0 ? 11 : mm % 5 === 0 ? 7 : 4, at = Math.round(mm * z * 10) / 10;
+      marks += horizontal ? `<line x1="${at}" y1="${RULER}" x2="${at}" y2="${RULER - size}"/>` : `<line x1="${RULER}" y1="${at}" x2="${RULER - size}" y2="${at}"/>`;
+      if (mm % 10 === 0) marks += horizontal ? `<text x="${at + 2}" y="9">${mm}</text>` : `<text x="2" y="${at + 9}">${mm}</text>`;
+    }
+    const pins = ed.guides[horizontal ? "v" : "h"].map(g => horizontal ? `<path class="bs-st-pin" d="M${g * z - 4} ${RULER - 7}h8l-4 7z"/>` : `<path class="bs-st-pin" d="M${RULER - 7} ${g * z - 4}v8l7-4z"/>`).join("");
+    return `<svg class="bs-st-ruler bs-st-ruler-${axis}" data-st-ruler="${axis}" width="${horizontal ? length * z : RULER}" height="${horizontal ? RULER : length * z}" role="img" aria-label="Règle ${horizontal ? "horizontale" : "verticale"} en millimètres (${length} mm)">${marks}${pins}</svg>`;
+  }
+  function luminance(hex) {
+    const c = [1, 3, 5].map(i => parseInt(String(hex || "#000000").slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  /** Contrôle du QR en direct (mêmes règles que le serveur à l'enregistrement). */
+  function warnings() {
+    const out = [], d = ed.design;
+    let hasQr = false;
+    d.pages.forEach(pg => pg.elements.filter(el => el.type === "qr" && !el.hidden).forEach(el => {
+      hasQr = true;
+      const name = el.name || "QR code";
+      if (Math.min(el.w, el.h) < 12) out.push(`${name} : ${round(Math.min(el.w, el.h))} mm de côté, 12 mm au minimum.`);
+      if (Math.abs(el.w - el.h) > 0.5) out.push(`${name} : le cadre doit être carré.`);
+      if (el.x < 0 || el.y < 0 || el.x + el.w > d.width || el.y + el.h > d.height) out.push(`${name} : il dépasse de la carte.`);
+      if (el.opacity < 1) out.push(`${name} : il doit rester opaque.`);
+      const light = luminance(el.background || pg.background), dark = luminance(el.color);
+      if (dark > light || (light + 0.05) / (dark + 0.05) < 4) out.push(`${name} : contraste insuffisant (QR sombre sur fond clair).`);
+    }));
+    if (!hasQr) out.push("Aucun QR code : le badge ne pourra pas être vérifié par scan.");
+    return out;
+  }
+  function warningsHTML() {
+    const list = warnings();
+    return list.length ? `<h2>Contrôles</h2><ul class="bs-warnings">${list.map(w => `<li>${B().esc(w)}</li>`).join("")}</ul>` : `<h2>Contrôles</h2><p class="bs-note is-ok">QR code conforme : taille, forme et contraste.</p>`;
   }
   function renderCanvas() {
     const view = ed.view;
@@ -134,7 +176,21 @@
     if (!art || !overlay) return;
     art.innerHTML = B().badgeSvg(ed.design, ed.page, { values: B().SAMPLE, qr: sampleQr() }, { editable: true });
     const h = 7 / ed.zoom, stroke = 1.4 / ed.zoom;
+    const side = view.querySelector("[data-st-warnings]");
+    if (side && !ed.drag) side.innerHTML = warningsHTML();
     let out = "";
+    if (ed.grid) {
+      let d5 = "";
+      for (let x = 5; x < ed.design.width; x += 5) d5 += `M${x} 0V${ed.design.height}`;
+      for (let y = 5; y < ed.design.height; y += 5) d5 += `M0 ${y}H${ed.design.width}`;
+      out += `<path class="bs-st-grid" d="${d5}" fill="none" stroke="rgba(13,110,204,.22)" stroke-width="${0.6 / ed.zoom}"/>`;
+    }
+    const guide = (axis, g, i) => {
+      const at = axis === "v" ? `x1="${g}" y1="-200" x2="${g}" y2="${ed.design.height + 200}"` : `x1="-200" y1="${g}" x2="${ed.design.width + 200}" y2="${g}"`;
+      return `<line ${at} stroke="#06b6d4" stroke-width="${stroke}"/><line class="bs-st-guide" data-guide="${axis}" data-i="${i}" ${at} stroke="transparent" stroke-width="${9 / ed.zoom}"/>`;
+    };
+    ed.guides.v.forEach((g, i) => { out += guide("v", g, i); });
+    ed.guides.h.forEach((g, i) => { out += guide("h", g, i); });
     if (ed.drag && ed.drag.guideX !== undefined && ed.drag.guideX !== null) out += `<line x1="${ed.drag.guideX}" y1="-5" x2="${ed.drag.guideX}" y2="${ed.design.height + 5}" stroke="#ec4899" stroke-width="${stroke}"/>`;
     if (ed.drag && ed.drag.guideY !== undefined && ed.drag.guideY !== null) out += `<line x1="-5" y1="${ed.drag.guideY}" x2="${ed.design.width + 5}" y2="${ed.drag.guideY}" stroke="#ec4899" stroke-width="${stroke}"/>`;
     const items = selected();
@@ -349,6 +405,8 @@
   }
 
   // ── Souris : déplacement, redimensionnement, rotation, sélection au lasso ──
+  let soon = 0;
+  function renderAllSoon() { cancelAnimationFrame(soon); soon = requestAnimationFrame(renderAll); }
   function toMm(event) {
     const rect = ed.view.querySelector("[data-st-canvas]").getBoundingClientRect();
     return { x: (event.clientX - rect.left) / ed.zoom, y: (event.clientY - rect.top) / ed.zoom };
@@ -356,6 +414,17 @@
   function onDown(event) {
     if (event.button !== 0 || !event.target.closest("[data-st-stage]")) return;
     const p = toMm(event), handle = event.target.closest(".bs-st-handle");
+    const ruler = event.target.closest("[data-st-ruler]"), line = event.target.closest(".bs-st-guide");
+    if (ruler || line) {                                              // poser ou déplacer un guide
+      const axis = line ? line.dataset.guide : (ruler.dataset.stRuler === "h" ? "v" : "h");
+      const index = line ? Number(line.dataset.i) : ed.guides[axis].push(snap(axis === "v" ? p.x : p.y)) - 1;
+      ed.drag = { mode: "guide", axis, index };
+      renderAllSoon();
+      event.preventDefault();
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      return;
+    }
     const single = selected().length === 1 ? selected()[0] : null;
     if (handle && single) {
       ed.drag = handle.dataset.rotate ? { mode: "rotate", el: single, start: clone(single) } : { mode: "resize", el: single, start: clone(single), hx: Number(handle.dataset.hx), hy: Number(handle.dataset.hy), p0: p };
@@ -382,14 +451,25 @@
     if (!drag || !ed.view) return;
     const p = toMm(event);
     if ((drag.mode === "move" || drag.mode === "resize" || drag.mode === "rotate") && !drag.saved) { checkpoint(); drag.saved = true; }
-    if (drag.mode === "move") {
+    if (drag.mode === "guide") {
+      ed.guides[drag.axis][drag.index] = snap(drag.axis === "v" ? p.x : p.y);
+    } else if (drag.mode === "move") {
+      const magnet = ed.snap && !event.altKey;
       let dx = p.x - drag.p0.x, dy = p.y - drag.p0.y;
       drag.guideX = drag.guideY = null;
-      drag.starts.forEach(s => { s.el.x = event.altKey ? round(s.x + dx) : snap(s.x + dx); s.el.y = event.altKey ? round(s.y + dy) : snap(s.y + dy); });
-      if (drag.starts.length === 1 && !event.altKey) {            // aimantation au centre de la carte
-        const el = drag.starts[0].el, cx = ed.design.width / 2, cy = ed.design.height / 2;
-        if (Math.abs(el.x + el.w / 2 - cx) < 0.8) { el.x = round(cx - el.w / 2); drag.guideX = cx; }
-        if (Math.abs(el.y + el.h / 2 - cy) < 0.8) { el.y = round(cy - el.h / 2); drag.guideY = cy; }
+      drag.starts.forEach(s => { s.el.x = magnet ? snap(s.x + dx) : round(s.x + dx); s.el.y = magnet ? snap(s.y + dy) : round(s.y + dy); });
+      if (magnet && drag.starts.length) {       // aimantation aux guides, aux bords et au centre de la carte
+        const els = drag.starts.map(s => s.el);
+        const box = { x0: Math.min(...els.map(e => e.x)), y0: Math.min(...els.map(e => e.y)), x1: Math.max(...els.map(e => e.x + e.w)), y1: Math.max(...els.map(e => e.y + e.h)) };
+        const pull = (targets, a, b) => {
+          let best = null;
+          targets.forEach(t => [a, (a + b) / 2, b].forEach(edge => { const delta = t - edge; if (Math.abs(delta) < SNAP_REACH && (!best || Math.abs(delta) < Math.abs(best.delta))) best = { delta, at: t }; }));
+          return best;
+        };
+        const sx = pull([0, ed.design.width / 2, ed.design.width, ...ed.guides.v], box.x0, box.x1);
+        const sy = pull([0, ed.design.height / 2, ed.design.height, ...ed.guides.h], box.y0, box.y1);
+        if (sx) { els.forEach(e => { e.x = round(e.x + sx.delta); }); drag.guideX = sx.at; }
+        if (sy) { els.forEach(e => { e.y = round(e.y + sy.delta); }); drag.guideY = sy.at; }
       }
     } else if (drag.mode === "resize") {
       const s = drag.start, angle = (s.rotation || 0) * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
@@ -397,7 +477,7 @@
       let lx = gx * cos + gy * sin, ly = -gx * sin + gy * cos;        // déplacement dans le repère de l'élément
       let w = Math.max(0.5, s.w + drag.hx * lx), h = Math.max(0.5, s.h + drag.hy * ly);
       if (event.shiftKey && drag.hx && drag.hy) { const k = Math.max(w / s.w, h / s.h); w = s.w * k; h = s.h * k; }
-      if (!event.altKey) { w = Math.max(GRID, snap(w)); h = Math.max(GRID, snap(h)); }
+      if (ed.snap && !event.altKey) { w = Math.max(GRID, snap(w)); h = Math.max(GRID, snap(h)); }
       const sx = drag.hx * (w - s.w) / 2, sy = drag.hy * (h - s.h) / 2; // le bord opposé reste fixe
       const cx = s.x + s.w / 2 + sx * cos - sy * sin, cy = s.y + s.h / 2 + sx * sin + sy * cos;
       Object.assign(drag.el, { w: round(w), h: round(h), x: round(cx - w / 2), y: round(cy - h / 2) });
@@ -413,12 +493,22 @@
       ed.sel = [...new Set([...drag.base, ...hit])];
     }
     renderCanvas();
+    if (drag.mode === "guide") {
+      const axis = drag.axis === "v" ? "h" : "v", old = ed.view.querySelector(`[data-st-ruler="${axis}"]`);
+      if (old) old.outerHTML = rulerSvg(axis);
+    }
   }
   function onUp() {
     document.removeEventListener("pointermove", onMove);
     document.removeEventListener("pointerup", onUp);
     const drag = ed.drag;
     ed.drag = null;
+    if (drag && drag.mode === "guide") {                                // un guide sorti de la carte est supprimé
+      const value = ed.guides[drag.axis][drag.index], limit = drag.axis === "v" ? ed.design.width : ed.design.height;
+      if (value < 0 || value > limit) ed.guides[drag.axis].splice(drag.index, 1);
+      renderAll();
+      return;
+    }
     if (drag && drag.saved) changed();
     renderCanvas();
     refreshSide();
@@ -428,7 +518,7 @@
     if (document.querySelector("#modal-host .modal-bg")) return;
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((event.target && event.target.tagName) || "");
     const mod = event.ctrlKey || event.metaKey, key = event.key.toLowerCase();
-    if (mod && key === "s") { event.preventDefault(); save(false); return; }
+    if (mod && key === "s") { event.preventDefault(); if (B().can("admin")) save(false); return; }
     if (typing) return;
     const step = event.shiftKey ? 5 : GRID;
     const arrows = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] };
@@ -448,6 +538,12 @@
     if (view.dataset.stBound) return;
     view.dataset.stBound = "1";
     view.addEventListener("pointerdown", event => { if (ed.view === view && view.querySelector(".bs-studio")) onDown(event); });
+    view.addEventListener("wheel", event => {                           // Ctrl/⌘ + molette : zoom de la surface seule
+      if (ed.view !== view || !(event.ctrlKey || event.metaKey) || !event.target.closest("[data-st-stage]")) return;
+      event.preventDefault();
+      ed.zoom = Math.max(2, Math.min(16, ed.zoom + (event.deltaY < 0 ? 1 : -1)));
+      renderAll();
+    }, { passive: false });
     view.addEventListener("click", event => {
       const target = event.target.closest("[data-st]");
       if (!target || ed.view !== view || !view.querySelector(".bs-studio")) return;
@@ -462,6 +558,9 @@
       else if (action === "zoom-in") { ed.zoom = Math.min(16, ed.zoom + 1); renderAll(); }
       else if (action === "zoom-out") { ed.zoom = Math.max(2, ed.zoom - 1); renderAll(); }
       else if (action === "zoom-fit") fitZoom();
+      else if (action === "toggle-grid") { ed.grid = !ed.grid; renderAll(); }
+      else if (action === "toggle-snap") { ed.snap = !ed.snap; renderAll(); }
+      else if (action === "clear-guides") { ed.guides = { v: [], h: [] }; renderAll(); }
       else if (action === "layer") { const id = target.dataset.id; select(event.shiftKey ? (ed.sel.includes(id) ? ed.sel.filter(x => x !== id) : [...ed.sel, id]) : [id]); }
       else if (action === "layer-hide" || action === "layer-lock") { const el = byId(target.dataset.id); if (el) { checkpoint(); if (action === "layer-hide") el.hidden = !el.hidden; else el.locked = !el.locked; changed(); renderCanvas(); refreshSide(); } }
       else if (action.startsWith("align-")) align(action.slice(6));
@@ -534,7 +633,10 @@
 .bs-st-layers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}.bs-st-layers li{display:grid;grid-template-columns:1fr auto auto;gap:2px;border-radius:8px}.bs-st-layers li.is-active{background:#dbeafe}
 .bs-st-layers button{border:0;background:transparent;padding:6px;cursor:pointer;font-size:12px;border-radius:8px}.bs-st-layer{text-align:left;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-st-stage{background:#e7ecf2;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:14px 14px;border-radius:16px;border:1px solid var(--bs-line);min-height:560px;max-height:calc(100vh - 150px);overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:44px 40px;touch-action:none;outline:0}
-.bs-st-stage:focus-visible{border-color:var(--bs-blue)}.bs-st-canvas{position:relative;flex:none;background:#fff;box-shadow:0 8px 26px rgba(15,23,42,.22)}.bs-st-canvas .bs-svg{position:absolute;inset:0;user-select:none}.bs-st-canvas [data-el]{cursor:move}
+.bs-st-stage:focus-visible{border-color:var(--bs-blue)}
+.bs-st-frame{display:grid;grid-template-columns:22px auto;grid-template-rows:22px auto;flex:none}.bs-st-corner{background:#cbd5e1;color:#334155;font-size:9px;font-weight:800;display:grid;place-items:center}
+.bs-st-ruler{display:block;background:#f1f5f9;cursor:crosshair;user-select:none}.bs-st-ruler line{stroke:#64748b;stroke-width:1}.bs-st-ruler text{font-size:9px;fill:#334155;font-family:Arial,sans-serif}.bs-st-pin{fill:#06b6d4}
+.bs-st-guide{pointer-events:stroke;cursor:move}.bs-st-ruler-h{cursor:row-resize}.bs-st-ruler-v{cursor:col-resize}.bs-st-canvas{position:relative;flex:none;background:#fff;box-shadow:0 8px 26px rgba(15,23,42,.22)}.bs-st-canvas .bs-svg{position:absolute;inset:0;user-select:none}.bs-st-canvas [data-el]{cursor:move}
 .bs-st-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.bs-st-handle{pointer-events:all;cursor:pointer}
 .bs-st-arrange{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.bs-st-arrange button{border:1px solid var(--bs-line);background:#fff;border-radius:9px;padding:7px 0;color:var(--bs-navy);cursor:pointer}.bs-st-arrange button:hover:not(:disabled){border-color:var(--bs-blue);background:#f0f7ff}.bs-st-arrange button:disabled{opacity:.4;cursor:default}
 .bs-st-form{display:flex;flex-direction:column;gap:8px}.bs-st-form label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;font-weight:800;color:#42566f}.bs-st-form label.bs-inline{flex-direction:row;align-items:center;gap:6px;font-weight:700}

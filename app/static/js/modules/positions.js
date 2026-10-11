@@ -542,7 +542,7 @@ function renderBadgeModule(view){
   const format=sessionStorage.getItem("badgeFormat")||"vertical";
   const verso=sessionStorage.getItem("badgeVerso")||"oui";
   view.innerHTML=`<div class="mb-4 flex items-start justify-between gap-3 flex-wrap">
-    <div><h1 class="text-2xl font-bold">Création de badge</h1><p class="text-slate-500 text-sm">Module DRH · création, aperçu et impression des badges personnel.</p></div>
+    <div><h1 class="text-2xl font-bold">Création de badge</h1><p class="text-slate-500 text-sm">Écran historique · chaque impression est tracée. L'émission officielle, la révocation et les modèles se gèrent dans le Portail DRH › Gestion des badges.</p></div>
 	    <div class="flex gap-2 flex-wrap"><a href="#/fiches/toutes" class="btn btn-ghost text-sm">Retour fiches</a>${selected?`<button class="btn btn-secondary text-sm" onclick="previewBadge('${selected.id}')">Aperçu badge</button><button class="btn btn-primary text-sm" onclick="printBadge('${selected.id}')">Imprimer badge</button>`:""}</div>
   </div>
   <div class="badge-builder-grid grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -810,6 +810,7 @@ async function printBadge(id){
   const w=window.open("","_blank","width=900,height=700");
   if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation du badge…</body>`);w.document.close()}
   await fetchBadgePublicLink(a);
+  if(!(await badgeLegacyPrintLog([a]))){if(w&&!w.closed)w.close();return}
   if(!w||w.closed)return;
   w.document.open();
   w.document.write(`<!doctype html><html><head><title>Badge ${escapeHTML(a.matricule||"")}</title>${badgePrintStyles()}</head><body><main class="badge-print-page">${badgeHTML(a,opts)}</main><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
@@ -824,6 +825,7 @@ async function printBadgesSelection(){
   const w=window.open("","_blank","width=900,height=700");
   if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation des badges…</body>`);w.document.close()}
   await Promise.all(agents.map(fetchBadgePublicLink));
+  if(!(await badgeLegacyPrintLog(agents))){if(w&&!w.closed)w.close();return}
   if(!w||w.closed)return;
   const html=agents.map(a=>badgeHTML(a,opts)).join("");
   w.document.open();
