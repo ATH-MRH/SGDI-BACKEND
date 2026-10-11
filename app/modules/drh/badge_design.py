@@ -285,3 +285,72 @@ def cover_box(image_w: float, image_h: float, frame_w: float, frame_h: float, cr
 def clean_crop(raw: Any) -> dict[str, float]:
     raw = raw if isinstance(raw, dict) else {}
     return {"zoom": _number(raw.get("zoom"), 1, 4, 1), "dx": _number(raw.get("dx"), -0.5, 0.5, 0), "dy": _number(raw.get("dy"), -0.5, 0.5, 0)}
+
+
+def qr_svg(data: str, *, color: str = "#000000") -> str:
+    """QR en SVG autonome (pages publiques, écran historique) — toujours généré ici."""
+    rows = qr_matrix(data)
+    size = len(rows)
+    path = "".join(f"M{column} {row}h1v1h-1z" for row, line in enumerate(rows) for column, bit in enumerate(line) if bit == "1")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 {size + 4} {size + 4}" width="100%" height="100%" '
+            f'shape-rendering="crispEdges" role="img" aria-label="QR"><rect x="-2" y="-2" width="{size + 4}" height="{size + 4}" fill="#FFFFFF"/>'
+            f'<path d="{path}" fill="{color}"/></svg>')
+
+
+def unprintable(text: Any) -> str:
+    """Caractères qu'aucune police du PDF ne sait dessiner (Helvetica, Times et Courier
+    couvrent le latin de Windows-1252 : français accentué compris, pas l'arabe)."""
+    seen: list[str] = []
+    for char in str(text or ""):
+        if char in "\n\t" or char in seen:
+            continue
+        try:
+            char.encode("cp1252")
+        except UnicodeEncodeError:
+            seen.append(char)
+    return "".join(seen)
+
+
+def _luminance(color: str) -> float:
+    channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+QR_MIN_MM = 12.0
+QR_MIN_CONTRAST = 4.0
+
+
+def design_warnings(design: dict[str, Any]) -> list[str]:
+    """Contrôles d'une maquette avant impression : QR lisible (taille, contraste, forme
+    carrée, entièrement sur la carte), textes imprimables, photo présente."""
+    warnings: list[str] = []
+    width, height = design["width"], design["height"]
+    kinds: set[str] = set()
+    for page in design["pages"]:
+        for element in page["elements"]:
+            if element.get("hidden"):
+                continue
+            kinds.add(element["type"])
+            label = element.get("name") or element["id"]
+            if element["type"] == "qr":
+                if min(element["w"], element["h"]) < QR_MIN_MM:
+                    warnings.append(f"QR « {label} » : {min(element['w'], element['h']):g} mm de côté, {QR_MIN_MM:g} mm au minimum pour une lecture fiable.")
+                if abs(element["w"] - element["h"]) > 0.5:
+                    warnings.append(f"QR « {label} » : le cadre doit être carré.")
+                if element["x"] < 0 or element["y"] < 0 or element["x"] + element["w"] > width or element["y"] + element["h"] > height:
+                    warnings.append(f"QR « {label} » : il dépasse de la carte.")
+                if element.get("opacity", 1) < 1:
+                    warnings.append(f"QR « {label} » : il doit rester opaque.")
+                light, dark = _luminance(element.get("background") or page["background"]), _luminance(element["color"])
+                if dark > light or (light + 0.05) / (dark + 0.05) < QR_MIN_CONTRAST:
+                    warnings.append(f"QR « {label} » : contraste insuffisant, utilisez un QR sombre sur fond clair.")
+            elif element["type"] == "text":
+                bad = unprintable(_FIELD_RE.sub("", element["text"]))
+                if bad:
+                    warnings.append(f"Texte « {label} » : caractères non imprimables ({bad[:12]}).")
+    if "qr" not in kinds:
+        warnings.append("Aucun QR code : le badge ne pourra pas être vérifié par scan.")
+    if "photo" not in kinds:
+        warnings.append("Aucune photo sur le badge.")
+    return warnings

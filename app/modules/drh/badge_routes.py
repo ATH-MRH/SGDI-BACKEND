@@ -19,6 +19,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.audit import append_audit
+from app.core.config import settings
+from app.core.granular_permissions import is_global_administrator, load_feature_permissions
 from app.core.pagination import paginate_list
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -35,7 +37,16 @@ from app.modules.drh.routes import (
 from app.modules.ops.models import Assignment, Site
 
 logger = logging.getLogger("sgdi.drh.badges")
-router = APIRouter(prefix="/badges", dependencies=[Depends(current_user)])
+
+
+def _enabled() -> None:
+    """Interrupteur d'exploitation (BADGE_STUDIO_ENABLED=false) : coupe le studio sans
+    migration ni perte de données — premier geste d'un retour arrière."""
+    if not settings.badge_studio_enabled:
+        raise HTTPException(status_code=503, detail="Le Studio Badges est momentanément désactivé.")
+
+
+router = APIRouter(prefix="/badges", dependencies=[Depends(_enabled), Depends(current_user)])
 
 MAX_BATCH = 200
 DEFAULT_SETTINGS: dict[str, Any] = {
@@ -58,13 +69,31 @@ PDF_HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "
 
 # ── Accès ────────────────────────────────────────────────────────────────────
 
+# Permissions fines (Administration › Matrice des droits › DRH › Badges du personnel). L'accès
+# au module DRH permet de CONSULTER ; chaque action ci-dessous exige une permission explicite.
+RIGHTS = {"create": "émettre, renouveler ou remplacer un badge", "validate": "révoquer un badge",
+          "export": "imprimer un badge", "admin": "gérer les modèles et les paramètres des badges"}
+
+
 def _access(user: User) -> None:
     _ensure_recruitment_access(user)
 
 
-def _manage(user: User) -> None:
-    """Modèles, paramètres et révocation : réservés à la DRH (pas aux comptes recrutement)."""
-    _ensure_recruitment_access(user, destructive=True)
+def badge_rights(db: Session, user: User) -> dict[str, bool]:
+    if is_global_administrator(user):
+        return {action: True for action in RIGHTS}
+    granted = {grant.action_key for grant in load_feature_permissions(db, user.id)
+               if grant.module_key == "drh" and grant.feature_key == "badges"}
+    return {action: action in granted for action in RIGHTS}
+
+
+def _require(db: Session, user: User, request: Request, action: str) -> None:
+    _access(user)
+    if not badge_rights(db, user)[action]:
+        append_audit(db, action="authorization.badge", resource="api", resource_id=f"badges:{action}",
+                     result="refused", user=user, request=request)
+        db.commit()
+        raise HTTPException(status_code=403, detail=f"Permission explicite requise pour {RIGHTS[action]} (DRH › Badges du personnel).")
 
 
 def _society_visible(user: User, society: str | None) -> bool:
@@ -131,6 +160,10 @@ def employee_values(employee: Employee, current: tuple[Assignment, Site] | None)
     }
 
 
+def unprintable_fields(values: dict[str, Any]) -> list[str]:
+    return [badge_design.FIELDS[key] for key, value in values.items() if key in badge_design.FIELDS and badge_design.unprintable(value)]
+
+
 def _photo_value(employee: Employee) -> str:
     data = _employee_data(employee)
     return next((str(data.get(key)) for key in ("photo", "photoUrl", "photo_url") if data.get(key)), "")
@@ -178,13 +211,19 @@ def employee_photo(db: Session, employee: Employee, source: str = "portrait") ->
     return _normalize_jpeg(path.read_bytes())
 
 
-def _qr_url(request: Request, employee: Employee) -> str:
+def _qr_url(request: Request, employee: Employee, badge_id: int | None = None) -> str:
+    """Adresse de vérification. Pour un badge émis, elle porte SON numéro interne (b=) et un
+    jeton propre : révoqué ou remplacé, ce badge-là ne se valide plus, même si l'employé en
+    reçoit un nouveau."""
     from urllib.parse import quote
 
     from app.main import _public_employee_token
 
     ref = str(employee.id)
-    return f"{str(request.base_url).rstrip('/')}/public/badge/{quote(ref, safe='')}?t={_public_employee_token('badge', ref)}"
+    base = f"{str(request.base_url).rstrip('/')}/public/badge/{quote(ref, safe='')}"
+    if badge_id is None:
+        return f"{base}?t={_public_employee_token('badge', ref)}"
+    return f"{base}?t={_public_employee_token('badge', f'{ref}:{badge_id}')}&b={badge_id}"
 
 
 # ── Paramètres ───────────────────────────────────────────────────────────────
@@ -268,6 +307,7 @@ def _template_out(template: BadgeTemplate, *, with_design: bool = True) -> dict[
            "created_at": template.created_at, "updated_at": template.updated_at}
     if with_design:
         out["design"] = template.design
+        out["warnings"] = badge_design.design_warnings(template.design)
     return out
 
 
@@ -309,7 +349,7 @@ def list_templates(include_archived: bool = False, db: Session = Depends(get_db)
 
 @router.post("/templates")
 def create_template(payload: TemplateIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "admin")
     design = _design_or_422(payload.design)
     template = BadgeTemplate(name=payload.name.strip(), description=(payload.description or "").strip() or None,
                              society=_template_society(user, payload.society), width_mm=design["width"], height_mm=design["height"],
@@ -323,7 +363,7 @@ def create_template(payload: TemplateIn, request: Request, db: Session = Depends
 
 @router.put("/templates/{template_id}")
 def update_template(template_id: int, payload: TemplateIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "admin")
     template = _template_or_404(db, user, template_id)
     if template.is_system:
         raise HTTPException(status_code=409, detail="Le modèle de référence n'est pas modifiable : dupliquez-le pour le personnaliser.")
@@ -345,7 +385,7 @@ def update_template(template_id: int, payload: TemplateIn, request: Request, db:
 @router.post("/templates/{template_id}/duplicate")
 def duplicate_template(template_id: int, request: Request, society: str | None = Query(None, max_length=150),
                        db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "admin")
     source = _template_or_404(db, user, template_id)
     allowed = _allowed_societies(user)
     target = society or source.society or (allowed[0] if allowed else None)
@@ -368,7 +408,7 @@ def _clear_other_defaults(db: Session, template: BadgeTemplate) -> None:
 
 @router.post("/templates/{template_id}/default")
 def set_default_template(template_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "admin")
     template = _template_or_404(db, user, template_id)
     _template_society(user, template.society)
     if not template.active:
@@ -383,7 +423,7 @@ def set_default_template(template_id: int, request: Request, db: Session = Depen
 @router.delete("/templates/{template_id}")
 def archive_template(template_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Archive (jamais de suppression physique : des badges émis s'y réfèrent)."""
-    _manage(user)
+    _require(db, user, request, "admin")
     template = _template_or_404(db, user, template_id)
     if template.is_system:
         raise HTTPException(status_code=409, detail="Le modèle de référence ne peut pas être archivé.")
@@ -440,17 +480,21 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
                 crop: dict[str, Any] | None, valid_until: date | None) -> EmployeeBadge:
     if str(employee.status or "").strip().lower() == "sortant":
         raise HTTPException(status_code=409, detail="Employé sortant : aucun badge ne peut être émis.")
-    settings = load_settings(db, employee.society)
-    photo = employee_photo(db, employee, settings["photo_source"])
-    if photo is None and settings["require_photo"]:
+    options = load_settings(db, employee.society)
+    photo = employee_photo(db, employee, options["photo_source"])
+    if photo is None and options["require_photo"]:
         raise HTTPException(status_code=409, detail="Photo manquante : ajoutez la photo de l'employé avant d'émettre le badge.")
     # Verrou de la fiche (PostgreSQL) : deux émissions simultanées ne laissent pas deux badges actifs.
     db.execute(select(Employee.id).where(Employee.id == employee.id).with_for_update())
     current = _current_sites(db, [employee.id]).get(employee.id)
     values = employee_values(employee, current)
+    problems = unprintable_fields(values)
+    if problems:
+        raise HTTPException(status_code=409, detail="Caractères non imprimables sur le badge (alphabet non latin) : " + ", ".join(problems)
+                            + ". Saisissez ces informations en caractères latins sur la fiche.")
     today = date.today()
-    if valid_until is None and settings["validity_months"]:
-        valid_until = _add_months(today, settings["validity_months"])
+    if valid_until is None and options["validity_months"]:
+        valid_until = _add_months(today, options["validity_months"])
     if valid_until is not None and valid_until < today:
         raise HTTPException(status_code=422, detail="La fin de validité ne peut pas être dans le passé.")
     replaced = db.execute(select(EmployeeBadge).where(EmployeeBadge.employee_id == employee.id, EmployeeBadge.status == STATUS_ACTIVE)).scalars().all()
@@ -463,10 +507,10 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
                           photo=photo, issued_at=datetime.utcnow(), issued_by=user.username, valid_until=valid_until)
     db.add(badge)
     db.flush()
-    badge.number = f"{settings['number_prefix']}-{today.year}-{badge.id:06d}"
+    badge.number = f"{options['number_prefix']}-{today.year}-{badge.id:06d}"
     values.update(numero=badge.number, date_emission=today.strftime("%d/%m/%Y"),
                   validite=valid_until.strftime("%d/%m/%Y") if valid_until else "")
-    badge.snapshot = {"values": values, "crop": badge_design.clean_crop(crop), "qr_url": _qr_url(request, employee),
+    badge.snapshot = {"values": values, "crop": badge_design.clean_crop(crop), "qr_url": _qr_url(request, employee, badge.id),
                       "site_id": current[1].id if current else None, "template_version": template.version}
     _set_public_badge_state(employee, True)
     _log(db, user, request, "EMISSION", f"Badge {badge.number} émis pour {values['nom_complet']} ({values['matricule']})", badge=badge,
@@ -522,12 +566,19 @@ def _active_badges(db: Session, employee_ids: list[int]) -> dict[int, EmployeeBa
 
 
 def _employee_row(employee: Employee, current: tuple[Assignment, Site] | None, badge: EmployeeBadge | None) -> dict[str, Any]:
-    return {"id": employee.id, **employee_values(employee, current), "employee_status": employee.status,
+    values = employee_values(employee, current)
+    return {"id": employee.id, **values, "employee_status": employee.status, "unprintable": unprintable_fields(values),
             "has_photo": bool(_photo_value(employee)), "badge": _badge_out(badge) if badge else None}
 
 
 def _is_sortant(employee: Employee) -> bool:
     return str(employee.status or "").strip().lower() == "sortant"
+
+
+@router.get("/permissions")
+def my_badge_rights(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, bool]:
+    _access(user)
+    return badge_rights(db, user)
 
 
 @router.get("/dashboard")
@@ -590,10 +641,10 @@ def badge_employee(employee_id: int, request: Request, db: Session = Depends(get
     current = _current_sites(db, [employee.id]).get(employee.id)
     history = db.execute(select(EmployeeBadge).where(EmployeeBadge.employee_id == employee.id).order_by(EmployeeBadge.id.desc())).scalars().all()
     active = next((row for row in history if row.status == STATUS_ACTIVE), None)
-    settings = load_settings(db, employee.society)
+    badge_settings = load_settings(db, employee.society)
     return {**_employee_row(employee, current, active), "qr": badge_design.qr_matrix(_qr_url(request, employee)),
             "default_template_id": default_template(db, employee.society).id, "badges": [_badge_out(row) for row in history],
-            "settings": settings, "can_issue": not _is_sortant(employee)}
+            "settings": badge_settings, "can_issue": not _is_sortant(employee), "rights": badge_rights(db, user)}
 
 
 @router.get("/employees/{employee_id}/photo")
@@ -608,7 +659,7 @@ def badge_employee_photo(employee_id: int, db: Session = Depends(get_db), user: 
 
 @router.post("/issue")
 def issue(payload: IssueIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _access(user)
+    _require(db, user, request, "create")
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
     template = _template_or_404(db, user, payload.template_id) if payload.template_id else default_template(db, employee.society)
     if not template.active:
@@ -622,7 +673,7 @@ def issue(payload: IssueIn, request: Request, db: Session = Depends(get_db), use
 def issue_batch(payload: IssueBatchIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Émission en lot : chaque employé est traité séparément ; un refus (photo manquante,
     société non autorisée…) n'empêche pas les autres."""
-    _access(user)
+    _require(db, user, request, "create")
     template = _template_or_404(db, user, payload.template_id) if payload.template_id else None
     if template is not None and not template.active:
         raise HTTPException(status_code=409, detail="Ce modèle est archivé.")
@@ -710,7 +761,7 @@ class SettingsIn(BaseModel):
 
 @router.put("/settings")
 def put_settings(payload: SettingsIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "admin")
     society = _template_society(user, payload.society)
     scope = society or "*"
     data = _clean_settings(payload.data)
@@ -775,18 +826,18 @@ def preview_pdf(payload: PreviewIn, request: Request, db: Session = Depends(get_
 @router.post("/print/pdf")
 def print_pdf(payload: PrintIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
     """PDF d'impression des badges émis (un ou plusieurs). Chaque impression est comptée et tracée."""
-    _access(user)
+    _require(db, user, request, "export")
     badges = [_badge_or_404(db, user, badge_id) for badge_id in dict.fromkeys(payload.badge_ids)]
     blocked = [badge.number for badge in badges if badge.status != STATUS_ACTIVE]
     if blocked:
         raise HTTPException(status_code=409, detail="Badges non imprimables (révoqués ou remplacés) : " + ", ".join(str(n) for n in blocked))
-    settings = load_settings(db, badges[0].society)
-    layout = payload.layout if payload.layout in ("card", "a4") else settings["print_layout"]
+    options = load_settings(db, badges[0].society)
+    layout = payload.layout if payload.layout in ("card", "a4") else options["print_layout"]
     items = [_item(badge) for badge in badges]
     title = f"Badge {badges[0].number}" if len(badges) == 1 else f"Badges ({len(badges)})"
     if layout == "a4":
-        content = badge_pdf.render_sheets(items, margin_mm=settings["sheet_margin_mm"], gap_mm=settings["sheet_gap_mm"],
-                                          crop_marks=settings["crop_marks"], title=title)
+        content = badge_pdf.render_sheets(items, margin_mm=options["sheet_margin_mm"], gap_mm=options["sheet_gap_mm"],
+                                          crop_marks=options["crop_marks"], title=title)
     else:
         content = badge_pdf.render_cards(items, title=title)
     now = datetime.utcnow()
@@ -818,7 +869,7 @@ def badge_photo(badge_id: int, db: Session = Depends(get_db), user: User = Depen
 
 @router.post("/{badge_id}/revoke")
 def revoke_badge(badge_id: int, payload: RevokeIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    _manage(user)
+    _require(db, user, request, "validate")
     badge = _badge_or_404(db, user, badge_id)
     if payload.reason not in REVOKE_REASONS:
         raise HTTPException(status_code=422, detail="Motif de révocation inconnu.")

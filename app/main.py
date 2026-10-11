@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import logging
@@ -8,9 +9,11 @@ import re
 import socket
 import time
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 import anyio.to_thread
+from pydantic import BaseModel, Field
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -1168,23 +1171,77 @@ def public_employee_links(employee_ref: str, request: Request, user: User = Depe
     base = str(request.base_url).rstrip("/")
     badge_token = _public_employee_token("badge", ref)
     dotation_token = _public_employee_token("dotation", ref)
+    from app.modules.drh.badge_design import qr_svg
+
+    badge_page = f"{base}/public/badge/{quote(ref, safe='')}?t={badge_token}"
     return {
         "badge_api": f"{base}/api/public/badge/{quote(ref, safe='')}?t={badge_token}",
-        "badge_page": f"{base}/public/badge/{quote(ref, safe='')}?t={badge_token}",
+        "badge_page": badge_page,
+        # QR du lien signé, dessiné ici : le navigateur n'a aucun service externe à appeler.
+        "badge_qr": "data:image/svg+xml;base64," + base64.b64encode(qr_svg(badge_page).encode("utf-8")).decode("ascii"),
         "dotation_page": f"{base}/public/dotation/{quote(ref, safe='')}?t={dotation_token}",
     }
 
 
+class _LegacyBadgePrint(BaseModel):
+    employee_ids: list[int] = Field(min_length=1, max_length=500)
+
+
+@app.post("/api/public-links/badge-print-log", include_in_schema=False)
+def legacy_badge_print_log(payload: _LegacyBadgePrint, request: Request, user: User = Depends(current_user)) -> dict[str, int]:
+    """Trace une impression faite depuis l'écran de badge historique (portails sans accès au
+    Studio Badges DRH) : chaque badge imprimé figure dans l'historique et le journal d'audit."""
+    from app.core.audit import append_audit
+    from app.modules.drh.badge_models import BadgeEvent
+    from app.modules.drh.models import Employee
+
+    allowed = {str(value).strip() for value in (user.authorized_societies if isinstance(user.authorized_societies, list) else []) if str(value).strip()}
+    logged = 0
+    with SessionLocal() as db:
+        rows = db.query(Employee).filter(Employee.id.in_(set(payload.employee_ids))).all()
+        for employee in rows:
+            if allowed and employee.society not in allowed:
+                continue
+            db.add(BadgeEvent(action="IMPRESSION_HORS_STUDIO", employee_id=employee.id, society=employee.society, user_id=user.id,
+                              username=user.username, label=f"Badge de {employee.last_name} {employee.first_name} ({employee.code}) imprimé depuis l'écran historique"[:300],
+                              details={"batch": len(rows)}))
+            logged += 1
+        if logged:
+            append_audit(db, action="badge.impression_hors_studio", resource="employee_badge", result="success", user=user,
+                         request=request, new_state={"employees": [row.id for row in rows][:200], "logged": logged})
+            db.commit()
+    return {"logged": logged}
+
+
+def _issued_badge_active(employee_id: Any, badge_id: int) -> bool:
+    """État du badge ÉMIS désigné par le QR (b=) : actif, non expiré et bien celui de cet employé."""
+    from datetime import date as _date
+
+    from app.modules.drh.badge_models import STATUS_ACTIVE, EmployeeBadge
+
+    with SessionLocal() as db:
+        badge = db.get(EmployeeBadge, badge_id)
+        return bool(badge is not None and str(badge.employee_id) == str(employee_id) and badge.status == STATUS_ACTIVE
+                    and not (badge.valid_until and badge.valid_until < _date.today()))
+
+
+def _public_badge(employee_ref: str, token: str | None, badge_id: int | None) -> dict:
+    ref = str(employee_ref or "").strip()
+    _require_public_employee_token("badge", f"{ref}:{badge_id}" if badge_id is not None else ref, token)
+    data = _public_employee_badge_data(ref)
+    if badge_id is not None:
+        data["badgeActif"] = bool(data.get("badgeActif") is not False and _issued_badge_active(data.get("backendId"), badge_id))
+    return data
+
+
 @app.get("/api/public/badge/{employee_ref}", include_in_schema=False)
-def public_employee_badge(employee_ref: str, t: str | None = None) -> dict:
-    _require_public_employee_token("badge", employee_ref, t)
-    return _public_employee_badge_data(employee_ref)
+def public_employee_badge(employee_ref: str, t: str | None = None, b: int | None = None) -> dict:
+    return _public_badge(employee_ref, t, b)
 
 
 @app.get("/public/badge/{employee_ref}", include_in_schema=False)
-def public_employee_badge_page(employee_ref: str, request: Request, t: str | None = None) -> HTMLResponse:
-    _require_public_employee_token("badge", employee_ref, t)
-    data = _public_employee_badge_data(employee_ref)
+def public_employee_badge_page(employee_ref: str, request: Request, t: str | None = None, b: int | None = None) -> HTMLResponse:
+    data = _public_badge(employee_ref, t, b)
     raw_nom = str(data.get("nom") or "").strip()
     raw_prenom = str(data.get("prenom") or "").strip()
     name = html.escape(" ".join([raw_nom, raw_prenom]).strip())
@@ -1200,7 +1257,9 @@ def public_employee_badge_page(employee_ref: str, request: Request, t: str | Non
     state_class = "active" if badge_active else "inactive"
     photo = str(data.get("photo") or "")
     photo_html = f'<img src="{html.escape(photo, quote=True)}" alt="Photo">' if photo.startswith(("data:image/", "/uploads/")) else "PHOTO"
-    qr_src = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=1&data=" + quote(str(request.url), safe="")
+    from app.modules.drh.badge_design import qr_svg
+
+    qr_markup = qr_svg(str(request.url))          # généré ici, jamais par un service externe
     content = f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Badge {matricule}</title>
@@ -1222,7 +1281,7 @@ body{{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;backgroun
 <body><main class="phone-badge"><div class="ok {state_class}">{badge_label}</div>
 <div class="photo">{photo_html}</div>
 	<section class="identity"><h1>{name or (nom + " " + prenom)}</h1><div class="code">Code : {matricule}</div><div class="function">Fonction : {fonction}</div><div class="blood">Groupe sanguin : {groupe_sanguin}</div></section>
-<div class="qr"><img src="{html.escape(qr_src, quote=True)}" alt="QR pointage"></div></main></body></html>"""
+<div class="qr">{qr_markup}</div></main></body></html>"""
     return HTMLResponse(content, headers={"Cache-Control": "no-cache, max-age=0"})
 
 

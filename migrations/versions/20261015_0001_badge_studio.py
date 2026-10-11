@@ -1,7 +1,7 @@
 """Studio Badges DRH : modèles, badges émis (instantané), historique et paramètres.
 
-Additive : quatre nouvelles tables, aucune table existante modifiée. Le retour arrière supprime
-ces quatre tables (les badges émis et leur historique sont alors perdus).
+Additive : quatre nouvelles tables, aucune table existante modifiée. Le retour arrière conserve
+ces tables dès qu'elles contiennent des données (voir downgrade).
 
 Revision ID: 20261015_0001
 Revises: 20261014_0001
@@ -106,7 +106,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    tables = set(sa.inspect(op.get_bind()).get_table_names())
+    """Non destructif : dès qu'un badge, un événement, un réglage ou un modèle personnalisé
+    existe, les tables sont CONSERVÉES (seule la révision recule) ; upgrade() les retrouve
+    telles quelles. Elles ne sont supprimées que si le studio n'a jamais servi."""
+    bind = op.get_bind()
+    tables = set(sa.inspect(bind).get_table_names())
+    used = False
+    for table, where in (("employee_badges", ""), ("badge_events", ""), ("badge_settings", ""), ("badge_templates", " WHERE is_system = 0")):
+        if table in tables and bind.execute(sa.text(f"SELECT 1 FROM {table}{where} LIMIT 1")).first():
+            used = True
+    if used:
+        print("Studio Badges : données présentes, tables conservées (retour arrière non destructif).")
+        return
     for table in ("badge_settings", "badge_events", "employee_badges", "badge_templates"):
         if table in tables:
             op.drop_table(table)
