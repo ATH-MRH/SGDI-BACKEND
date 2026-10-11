@@ -225,12 +225,15 @@ test('DRH recruitment requests the active society without edit controls', async 
   assert.equal(request.society,'Selected society');
   assert.equal(request.mode,"drh_pending");
   assert.match(view.textContent,/PUBLIC CANDIDATE/);
-  assert.match(view.textContent,/a_contractualiser/);
+  assert.match(view.textContent,/À contractualiser/);
   assert.match(view.textContent,/Selected society/);
-  assert.equal(view.querySelectorAll('input,select,textarea,form,script').length,0);
+  // Seuls les filtres de consultation (recherche, statut, poste) sont des champs : aucun champ d'édition.
+  assert.equal(view.querySelectorAll('textarea,form,script').length,0);
+  assert.deepEqual(Array.from(view.querySelectorAll('input,select'),el=>[el.name,!!el.closest('[data-drh-recruitment-filters]'),el.hasAttribute('data-no-lock')]),[['drh-cand-search',true,true],['drh-cand-status',true,true],['drh-cand-position',true,true]]);
   assert.match(view.textContent,/lecture seule/);
   await app.T().renderCandidatForm(view,null);
-  assert.equal(view.querySelectorAll('form,input,textarea').length,0);
+  assert.equal(view.querySelectorAll('form,textarea').length,0);
+  assert.equal(view.querySelectorAll('input:not([data-drh-recruitment-filters] *)').length,0);
   app.dom.window.close();
 });
 
@@ -469,6 +472,126 @@ test('ribbon percentages require an explicit meaningful denominator', () => {
   app.dom.window.close();
 });
 
+
+test('DRH recruitment filters, sort and export are applied by the server and escaped', async () => {
+  const app=loadSgdiApp(['renderDrhRecruitmentReadOnly','setDrhRecruitmentFilter','sortDrhRecruitment','resetDrhRecruitmentFilters','exportDrhRecruitmentCsv']);
+  const t=app.T(),view=app.window.document.getElementById('view');
+  t.setSession({username:'RH',transverse:'drh',societe:'A'});
+  const requests=[];
+  const item={id:158,last_name:'HASHAS',first_name:'ZAKARIA',society:'A',status:'a_contractualiser',desired_position:'"><img src=x onerror=alert(1)>',phone:'=1+1',created_at:'2026-09-12T08:00:00'};
+  app.window.SGDI={rh:{candidatesPage:async params=>{requests.push(params);return {items:[item],total:1,page:1,pages:1}}}};
+  app.window.renderView=()=>t.renderDrhRecruitmentReadOnly(view);
+  await t.renderDrhRecruitmentReadOnly(view);
+  assert.equal(view.querySelectorAll('img').length,0);
+  assert.match(view.textContent,/HASHAS ZAKARIA/);assert.match(view.textContent,/Candidature le 12\/09\/2026/);assert.match(view.textContent,/#C-2026-00158/);
+  assert.equal(view.querySelector('select[name="drh-cand-position"]').options[1].value,item.desired_position);
+  app.window.sessionStorage.setItem('recrutementPage:new:A','4');
+  t.setDrhRecruitmentFilter('new','status','a_contractualiser');
+  t.setDrhRecruitmentFilter('new','position','MAGASINIER');
+  t.setDrhRecruitmentFilter('new','q',' hashas ');
+  t.sortDrhRecruitment('new','candidate');t.sortDrhRecruitment('new','candidate');
+  await new Promise(r=>setTimeout(r,0));
+  const last=requests.at(-1);
+  assert.deepEqual([last.q,last.status,last.desired_position,last.sort_key,last.sort_direction,last.page,last.mode,last.society],['hashas','a_contractualiser','MAGASINIER','candidate','desc',1,'drh_pending','A']);
+  let csv;
+  app.window.Blob=function(parts){csv=parts.join('')};
+  app.window.URL.createObjectURL=()=>'blob:test';app.window.URL.revokeObjectURL=()=>{};
+  await t.exportDrhRecruitmentCsv('new');
+  assert.equal(requests.at(-1).page_size,100);assert.equal(requests.at(-1).status,'a_contractualiser');
+  assert.match(csv,/"#C-2026-00158";"HASHAS";"ZAKARIA"/);assert.match(csv,/"'=1\+1";"À contractualiser";"12\/09\/2026"/);
+  t.resetDrhRecruitmentFilters('new');
+  await new Promise(r=>setTimeout(r,0));
+  assert.deepEqual([requests.at(-1).q,requests.at(-1).status,requests.at(-1).desired_position,requests.at(-1).sort_key],['','','','']);
+  app.dom.window.close();
+});
+
+test('contract client / site field loads from DC, handles empty and error states, and stores DC identifiers', async () => {
+  const app=loadSgdiApp(['newContractClientFieldHTML','loadNewContractClients','updateNewContractClientFromSelect','employeeNewContractDraftFromForm','employeeNewContractPayload','persistEmployeeContractRecord']);
+  const t=app.T(),doc=app.window.document;
+  t.setSession({username:'RH',transverse:'drh',societe:'A'});
+  const mount=p=>{
+    doc.getElementById('view').innerHTML=`<form id="employee-new-contract-form"><input type="hidden" name="agentId" value=""><div>${t.newContractClientFieldHTML(p,'A')}</div><input name="adresseSite" value="Adresse saisie"><input name="wilaya"><input name="commune"></form>`;
+    const form=doc.getElementById('employee-new-contract-form');
+    return {form,select:form.querySelector('[name="dcClientSite"]'),status:form.querySelector('[data-new-contract-client-status]')};
+  };
+  const items=[
+    {dc_client_id:7,dc_site_id:null,client_name:'ALPHA',site_name:null,label:'ALPHA',address:'Siège',commune:null,wilaya:null},
+    {dc_client_id:8,dc_site_id:21,client_name:'BETA',site_name:'SITE A',label:'BETA — SITE A',address:'Zone A',commune:'Rouiba',wilaya:'Alger'},
+    {dc_client_id:8,dc_site_id:22,client_name:'BETA',site_name:'<img src=x onerror=alert(1)>',label:'BETA — <img src=x onerror=alert(1)>',address:null,commune:null,wilaya:null},
+  ];
+  let calls=[],respond;
+  app.window.SGDI={rh:{contractDcClientSites:society=>{calls.push(society);return new Promise((resolve,reject)=>{respond={resolve,reject}})}}};
+
+  // Chargement : rien n'est sélectionnable tant que DC n'a pas répondu.
+  let {form,select,status}=mount({client:'',dcClientId:'',dcSiteId:''});
+  let pending=t.loadNewContractClients();
+  assert.equal(select.disabled,true);assert.match(select.textContent,/Chargement des clients et sites/);
+  respond.resolve({source:'dc.irongs.com',items});await pending;
+  assert.deepEqual(calls,['A']);
+  assert.equal(select.disabled,false);
+  assert.deepEqual(Array.from(select.options,o=>[o.value,o.textContent]),[['','— Choisir un client / site —'],['7:','ALPHA'],['8:21','BETA — SITE A'],['8:22','BETA — <img src=x onerror=alert(1)>']]);
+  assert.equal(form.querySelectorAll('img,optgroup').length,0);
+
+  // Client avec site : identifiants DC + libellé figé ; le nom reste un simple libellé de document.
+  select.value='8:21';select.dataset.touched='1';t.updateNewContractClientFromSelect(select);
+  let draft=t.employeeNewContractDraftFromForm(form);
+  assert.deepEqual([draft.dcLinkLoaded,draft.dcClientId,draft.dcSiteId,draft.dcClientSiteLabel,draft.client],[true,8,21,'BETA — SITE A','BETA']);
+  assert.deepEqual(['adresseSite','wilaya','commune'].map(n=>form.querySelector(`[name="${n}"]`).value),['Zone A','Alger','Rouiba']);
+  const generated=t.employeeNewContractPayload({...draft,a:{nom:'TEST',prenom:'CANDIDAT'}});
+  assert.deepEqual([generated.dc_client_id,generated.dc_site_id,generated.client],[8,21,'BETA']);
+  let saved;
+  app.window.SGDI.rh.contracts=async()=>[];app.window.SGDI.rh.createContract=async payload=>{saved=payload;return payload};
+  await t.persistEmployeeContractRecord({backendId:5},draft);
+  assert.deepEqual([saved.employee_id,saved.dc_client_id,saved.dc_site_id],[5,8,21]);
+  assert.equal('dc_client_site_label' in saved,false);
+
+  // Client sans site.
+  select.value='7:';t.updateNewContractClientFromSelect(select);
+  draft=t.employeeNewContractDraftFromForm(form);
+  assert.deepEqual([draft.dcClientId,draft.dcSiteId,draft.dcClientSiteLabel,draft.client],[7,null,'ALPHA','ALPHA']);
+
+  // Réouverture : la sélection est restaurée par identifiants, sans réécrire l'adresse saisie.
+  ({form,select,status}=mount({client:'ANCIEN NOM',dcClientId:8,dcSiteId:22}));
+  pending=t.loadNewContractClients();respond.resolve({items});await pending;
+  assert.equal(select.value,'8:22');assert.equal(form.querySelector('[name="adresseSite"]').value,'Adresse saisie');
+  assert.equal(t.employeeNewContractDraftFromForm(form).dcSiteId,22);
+
+  // Ancien contrat saisi par nom : jamais rapproché par libellé.
+  ({form,select,status}=mount({client:'ALPHA',dcClientId:'',dcSiteId:''}));
+  pending=t.loadNewContractClients();respond.resolve({items});await pending;
+  assert.equal(select.value,'');assert.match(status.textContent,/Client saisi auparavant : « ALPHA »/);
+  draft=t.employeeNewContractDraftFromForm(form);
+  assert.deepEqual([draft.dcClientId,draft.client],[null,'ALPHA']);
+
+  // Aucune donnée.
+  ({form,select,status}=mount({client:'',dcClientId:'',dcSiteId:''}));
+  pending=t.loadNewContractClients();respond.resolve({items:[]});await pending;
+  assert.equal(select.disabled,true);assert.match(status.textContent,/Aucun client ni site actif dans DC/);
+  assert.equal(status.querySelector('button'),null);
+
+  // Erreur DC : message imposé, aucune sélection possible, identifiants non transmis, puis retry.
+  ({form,select,status}=mount({client:'BETA',dcClientId:8,dcSiteId:21}));
+  pending=t.loadNewContractClients();respond.reject(new Error('503'));await pending;
+  assert.equal(select.disabled,true);assert.equal(select.options.length,1);assert.equal(select.value,'');
+  assert.equal(status.querySelector('span').textContent,'Impossible de charger les clients et sites depuis DC. Réessayez.');
+  draft=t.employeeNewContractDraftFromForm(form);
+  assert.equal(draft.dcLinkLoaded,false);
+  saved=null;await t.persistEmployeeContractRecord({backendId:5},draft);
+  assert.equal('dc_client_id' in saved,false);assert.equal('dc_site_id' in saved,false);
+  assert.equal('dc_client_id' in t.employeeNewContractPayload({...draft,a:{nom:'TEST',prenom:'CANDIDAT'}}),false);
+  const retry=status.querySelector('button');
+  assert.equal(retry.textContent,'Réessayer');assert.equal(retry.getAttribute('onclick'),'loadNewContractClients()');
+  pending=t.loadNewContractClients();respond.resolve({items});await pending;
+  assert.equal(select.disabled,false);assert.equal(select.value,'8:21');assert.equal(status.textContent,'');
+  assert.equal(t.employeeNewContractDraftFromForm(form).dcLinkLoaded,true);
+
+  // Une réponse tardive d'un chargement précédent n'écrase pas le plus récent.
+  const first=t.loadNewContractClients(),stale=respond;
+  const second=t.loadNewContractClients();respond.resolve({items:[items[0]]});await second;
+  stale.resolve({items});await first;
+  assert.equal(select.options.length,2);
+  app.dom.window.close();
+});
 
 test('DRH society switch rejects the old response and keeps pagination scoped', async () => {
   const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
