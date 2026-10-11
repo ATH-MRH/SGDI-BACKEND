@@ -279,3 +279,15 @@ test('candidatures : prochaine étape réelle, et rubrique du profil à complét
   assert.match(profileHint({ profile: { ...base, experience: [{}], skills: ['x'], availability: 'Immédiatement' }, cv: null }), /CV/);
   assert.equal(profileHint({ profile: { ...base, experience: [{}], skills: ['x'], availability: 'Immédiatement', email: 'a@b.c', emergency_phone: '0550', sex: 'M' }, cv: { name: 'cv.pdf' } }), '');
 });
+
+test('notice de protection des données : informations confirmées présentes, seules deux rubriques restent à préciser', async () => {
+  const {CONSENT_TEXT, PRIVACY_NOTICE, PRIVACY_VERSION, pendingItems} = await import('../src/lib/privacy.ts');
+  const text = PRIVACY_NOTICE.flatMap(section => [...(section.paragraphs || []), ...(section.points || [])]).join('\n');
+  assert.equal(PRIVACY_VERSION, '2026-10-11', 'doit rester égale à PRIVACY_NOTICE_VERSION du serveur');
+  for (const expected of ['SARL IRON GLOBAL SOLUTION', '76 Ahmed Sayeh, Les Sources, Bir Mourad Raïs', 'contact@irongs.com', '+213 770 112 034', 'Narimane ZOUBIR', 'bdm@irongs.com',
+    'OVHcloud', 'o2switch', '24 mois à compter du refus', '24 mois après votre dernière activité', '24 mois après son départ', '10 ans après son départ'])
+    assert.ok(text.includes(expected), expected);
+  assert.deepEqual(pendingItems(), ['Référence et date de la formalité accomplie auprès de l’ANPDP', 'Fondement du transfert de données hors d’Algérie']);
+  assert.ok(!/délai de réponse|jours ouvr/i.test(text), 'aucun délai de réponse n’a été confirmé');
+  assert.ok(CONSENT_TEXT.includes('IRON GLOBAL SOLUTION'));
+});
