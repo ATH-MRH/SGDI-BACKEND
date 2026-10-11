@@ -10395,7 +10395,7 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
   if(!a)return fail("Employé introuvable pour enregistrement du contrat");
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin)return fail("Contrat incomplet : date début, durée et date fin obligatoires");
   if(!draft.poste)return fail("Contrat incomplet : poste / fonction obligatoire");
-  if(!draft.numeroPieceIdentite)return fail("Contrat incomplet : N° pièce d'identité obligatoire");
+  if(!draft.numeroPieceIdentite&&!draft.identityOptional)return fail("Contrat incomplet : N° pièce d'identité obligatoire");
   try{
     a=await ensureContractEmployeeRecord(a,draft);
   }catch(e){return fail("Contrat non enregistré : "+(e.message||e))}
@@ -11712,6 +11712,9 @@ function employeeContractReviewScript(){
   })();
   </script>`;
 }
+// Contractualisation d'un candidat : le N° de pièce d'identité est facultatif. Il reste
+// obligatoire pour le « Nouveau contrat » d'un employé existant.
+function contractDraftIsFromCandidate(a){return String(a?.id||"").startsWith("cand:")}
 function openEmployeeContractReviewWindow(a,draft){
   const w=window.open("","_blank","width=980,height=760");
   if(!w){toast("Fenêtre contrat bloquée par le navigateur","error");return null}
@@ -11726,6 +11729,7 @@ function openEmployeeContractReviewWindow(a,draft){
     dateFin:draft.dateFin||"",
     periodeEssai:draft.periodeEssai||"",
     numeroPieceIdentite:draft.numeroPieceIdentite||"",
+    identityOptional:!!draft.identityOptional||contractDraftIsFromCandidate(a),
     nin:draft.nin||"",
     adresseSite:draft.adresseSite||"",
     wilaya:draft.wilaya||"",
@@ -11779,7 +11783,7 @@ async function printEmployeeNewContractFromForm(form){
   if(!draft.a){toast("Employé introuvable","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
-  if(!draft.numeroPieceIdentite){toast("N° pièce d'identité obligatoire","error");return}
+  if(!draft.numeroPieceIdentite&&!contractDraftIsFromCandidate(draft.a)){toast("N° pièce d'identité obligatoire","error");return}
   // L'aperçu avant validation est toujours une fenêtre HTML. Le modèle Word
   // sélectionné reste réservé à la génération et au téléchargement final.
   openEmployeeContractReviewWindow(draft.a,draft);
@@ -12043,13 +12047,13 @@ function renderContractualisation(view,id){
             <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
             <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
             <div class="nc-field"><label>Client / site</label>${newContractClientFieldHTML(p,selectedSociete)}</div>
-            <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
+            <div class="nc-field"><label>N° pièce d'identité</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','nin',this.value)"/></div>
             <div class="nc-candidate-contact-row">
-              <div class="nc-field"><label>Wilaya du candidat <span class="req">*</span></label><select class="select" name="candidateWilaya" required><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
-              <div class="nc-field"><label>Lien contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}" required/></div>
-              <div class="nc-field"><label>Nom contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}" required/></div>
-              <div class="nc-field"><label>Téléphone d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)" required/></div>
+              <div class="nc-field"><label>Wilaya du candidat</label><select class="select" name="candidateWilaya"><option value="">— Choisir la wilaya —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${wilayaCodeFromValue(p.candidateWilaya)===wilayaCodeFromValue(w)?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
+              <div class="nc-field"><label>Lien contact d'urgence</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(p.contactUrgenceLien||"")}"/></div>
+              <div class="nc-field"><label>Nom contact d'urgence</label><input class="input" name="contactUrgenceNom" value="${escapeHTML(p.contactUrgenceNom||"")}"/></div>
+              <div class="nc-field"><label>Téléphone d'urgence</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(p.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)"/></div>
             </div>
           </div>
         </div>
@@ -12273,7 +12277,8 @@ async function confirmCandidateNewContract(form,id){
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
   const draft=employeeNewContractDraftFromForm(form);
   const candidateDetails=new FormData(form);
-  if(String(draft.contactUrgenceTel||"").replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
+  // Facultatif : le format n'est contrôlé que si un numéro est saisi.
+  if(draft.contactUrgenceTel&&String(draft.contactUrgenceTel).replace(/\D/g,"").length!==10){toast("Le téléphone d'urgence doit respecter le format 0000 00 00 00","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
   c.typeContrat=draft.typeContrat;
@@ -12335,7 +12340,7 @@ async function confirmCandidateNewContract(form,id){
     form.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
     delete form.dataset.dirty;
     sgdiUpdateSaveButton("clean");
-    openEmployeeContractReviewWindow(agent,{...draft,a:agent});
+    openEmployeeContractReviewWindow(agent,{...draft,a:agent,identityOptional:true});
     toastCenter("CONTRAT VALIDÉ ET EMPLOYÉ CRÉÉ","success");
     navigate(`agents/${agent.id}`);
   }catch(e){
