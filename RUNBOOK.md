@@ -153,13 +153,12 @@ Obligatoire dès que l'app est joignable depuis Internet :
 ## PHASE D — Sauvegardes & résilience (serveur bureau)
 
 La base vit chez vous → les sauvegardes sont VOTRE responsabilité.
+Sauvegarde chiffrée, copie hors serveur, planification et surveillance : `docs/backups.md`.
 ```bash
-# Test manuel
-BACKUP_PASSPHRASE='phrase_forte' bash scripts/backup.sh
-
-# Cron quotidien 2h + copie hors-site
-0 2 * * * cd /opt/sgdi && BACKUP_PASSPHRASE='phrase_forte' OFFSITE_DEST='user@nas:/backups/sgdi' \
-  bash scripts/backup.sh >> /var/log/sgdi-backup.log 2>&1
+# Test manuel (configuration dans un fichier privé, droits 600)
+BACKUP_ENV_FILE=/etc/atlas-backup.env bash scripts/backup.sh
+# Restauration d'essai dans une base jetable
+bash scripts/backup_restore_test.sh <archive>.tar.gpg
 ```
 - [ ] Tester une **restauration** au moins une fois (une sauvegarde non testée n'est pas une sauvegarde).
 - [ ] Onduleur en place.
