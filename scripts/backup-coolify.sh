@@ -25,7 +25,10 @@ STAMP="$(date -u +%Y%m%d_%H%M%SZ)"
 OUT="${BACKUP_DIR}/${STAMP}"
 
 fail() { echo "ÉCHEC : $*" >&2; exit 1; }
-in_db() { docker exec -i "$DB_CONTAINER" sh -c "$1"; }
+# Sans -i et avec </dev/null : lancé par « ssh … 'bash -s' < script », le script EST l'entrée standard ;
+# un docker exec -i l'avalerait et bash s'arrêterait là, sans erreur ni sauvegarde.
+in_db() { docker exec "$DB_CONTAINER" sh -c "$1" </dev/null; }
+in_db_stdin() { docker exec -i "$DB_CONTAINER" sh -c "$1"; }
 sql() { in_db "psql -U \"\$POSTGRES_USER\" -d '$DB_NAME' -v ON_ERROR_STOP=1 -Atc \"$1\""; }
 
 [ "$(docker inspect -f '{{.State.Running}}' "$DB_CONTAINER" 2>/dev/null)" = "true" ] || fail "conteneur $DB_CONTAINER introuvable ou arrêté"
@@ -46,7 +49,7 @@ tar -czf "$OUT/files.tar.gz" -C "$FILES_DIR" .
 echo "[3/4] Vérification"
 [ -s "$OUT/db.dump" ] || fail "export PostgreSQL vide"
 TABLES_LIVE="$(sql "select count(*) from pg_tables where schemaname='public'")"
-TABLES_DUMP="$(in_db "pg_restore --list" < "$OUT/db.dump" | grep -c ' TABLE DATA public ' || true)"
+TABLES_DUMP="$(in_db_stdin "pg_restore --list" < "$OUT/db.dump" | grep -c ' TABLE DATA public ' || true)"
 [ "$TABLES_DUMP" -eq "$TABLES_LIVE" ] || fail "l'export contient $TABLES_DUMP tables, la base en a $TABLES_LIVE"
 FILES_LIVE="$(find "$FILES_DIR" -type f | wc -l | tr -d ' ')"
 FILES_ARCHIVE="$(tar -tzf "$OUT/files.tar.gz" | grep -vc '/$' || true)"
