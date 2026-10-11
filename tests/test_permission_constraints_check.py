@@ -48,6 +48,14 @@ def test_only_the_order_of_terms_and_values_is_ignored():
     assert checker.canonical(PAIRS) == checker.canonical(PAIRS_REORDERED)
 
 
+def test_form_reloaded_from_a_dump_is_the_same_constraint():
+    """Après un pg_dump / pg_restore, PostgreSQL réécrit la liste avec une conversion par valeur."""
+    reloaded = "((action_key)::text = ANY (ARRAY[('read'::character varying)::text, ('create'::character varying)::text]))"
+    assert checker.canonical(reloaded) == checker.canonical(A)
+    assert checker.canonical(reloaded.replace("('create'::character varying)::text", "('pay'::character varying)::text")) != checker.canonical(A)
+    assert checker.canonical(f"({reloaded} OR (1 = 1))") != checker.canonical(A)
+
+
 @pytest.mark.parametrize("altered", (
     f"({A} OR (1 = 1))",
     f"({A} OR true)",
@@ -92,6 +100,23 @@ def test_altered_constraint_is_reported_by_name(migrated, table, constraint, exp
              f"ALTER TABLE {table} ADD CONSTRAINT {constraint} CHECK ({expression})")
 
     assert _differences(migrated) == [f"{table} : contrainte {constraint} différente du modèle"]
+
+
+def test_database_reloaded_from_a_dump_is_still_conforming(migrated):
+    """Recréer chaque contrainte à partir de sa définition relue (ce que fait une restauration)
+    change son écriture, pas son sens : le contrôle ne doit pas crier au loup après une reprise."""
+    engine = create_engine(migrated)
+    with engine.begin() as connection:
+        rows = connection.execute(text("SELECT conrelid::regclass::text, conname, pg_get_constraintdef(oid) FROM pg_constraint "
+                                       "WHERE contype = 'c' AND conrelid IN (to_regclass('user_feature_permissions'), to_regclass('user_module_permissions'))")).all()
+        for table, name, definition in rows:
+            connection.execute(text(f"ALTER TABLE {table} DROP CONSTRAINT {name}"))
+            connection.execute(text(f"ALTER TABLE {table} ADD CONSTRAINT {name} {definition}"))
+        rewritten = sum(1 for table, name, definition in rows if definition != connection.execute(text(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n AND conrelid = to_regclass(:t)"), {"n": name, "t": table}).scalar())
+    engine.dispose()
+    assert rewritten > 0, "PostgreSQL n'a réécrit aucune contrainte : le scénario ne teste rien"
+    assert _differences(migrated) == []
 
 
 def test_missing_and_unexpected_constraints_are_reported(migrated):

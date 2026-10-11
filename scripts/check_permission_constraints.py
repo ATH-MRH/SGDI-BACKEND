@@ -15,6 +15,7 @@ session et la transaction est annulée.
 
 Codes de retour : 0 conforme ; 1 écart ; 3 base non PostgreSQL ou table absente.
 """
+import re
 import sys
 
 from sqlalchemy import CheckConstraint, Column, MetaData, Table, text
@@ -65,13 +66,35 @@ def _balanced(expression: str) -> bool:
     return depth == 0 and not quoted
 
 
+_TEXT_CAST = re.compile(r"::(?:character varying|varchar|text)(?:\[\])?")
+_WRAPPED_ARRAY = re.compile(r"\(\s*(ARRAY\[[^\[\]]*\])\s*\)")
+_WRAPPED_ATOM = re.compile(r"\(\s*('(?:[^']|'')*'|[a-z_][a-z0-9_]*)\s*\)")
+
+
+def _plain(expression: str) -> str:
+    """Retire les conversions entre types texte et les parenthèses autour d'une valeur seule.
+    PostgreSQL écrit la même contrainte de deux façons selon qu'elle vient d'être créée ou
+    qu'elle a été rechargée depuis une sauvegarde (« ARRAY['a'::varchar]::text[] » ou
+    « ARRAY[('a'::varchar)::text] ») : seule cette différence d'écriture est effacée."""
+    expression = _TEXT_CAST.sub("", expression)
+    previous = None
+    while previous != expression:
+        previous = expression
+        expression = _WRAPPED_ARRAY.sub(r"\1", _WRAPPED_ATOM.sub(r"\1", expression))
+    return expression
+
+
 def canonical(expression: str):
     """Forme comparable d'une définition déjà normalisée par PostgreSQL, insensible à l'ordre."""
+    return _canonical(_plain(expression))
+
+
+def _canonical(expression: str):
     expression = _unwrap(expression)
     for operator, tag in ((" OR ", "or"), (" AND ", "and")):
         parts = _split(expression, operator)
         if len(parts) > 1:
-            return (tag, tuple(sorted((canonical(part) for part in parts), key=repr)))
+            return (tag, tuple(sorted((_canonical(part) for part in parts), key=repr)))
     start = expression.find("ARRAY[")
     if start >= 0 and expression.count("ARRAY[") == 1:
         end = _closing_bracket(expression, start + 6)
