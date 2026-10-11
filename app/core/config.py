@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # voir docs/biometrics.md). Sans clé, aucun gabarit ne peut être enregistré.
     biometric_enabled: bool = False
     biometric_template_key: str | None = None
+    # Rotation de la clé des gabarits : ancienne clé, acceptée en LECTURE seulement le temps de
+    # rechiffrer. Vide en temps normal. Voir docs/biometric-key-rotation.md.
+    biometric_template_key_previous: str | None = None
     biometric_models_dir: str = "/app/models/biometrics"
     # Mode Test biométrique (caméra du navigateur : Mac, PC, tablette, smartphone) — DÉSACTIVÉ
     # par défaut et INDÉPENDANT de biometric_enabled : il peut fonctionner sans activer le vrai
