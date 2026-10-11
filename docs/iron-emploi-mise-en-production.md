@@ -3,109 +3,212 @@
 Procédure pour mettre en service le serveur (PR 12) puis l'application (PR 13). Elle ne contient
 aucun secret : les valeurs restent dans le panneau de l'hébergeur.
 
+État vérifié le 11 octobre 2026 : la production sert le commit `ad76687d` de `main`, dont la tête
+Alembic est `20261013_0002`.
+
 ## 1. Ce que change la mise en production
 
 - **Serveur** : nouvelles routes `/api/public/emploi/…` et `/api/drh/job-offers/…`, section
   « Traitement IRON Emploi » dans recrute.irongs.com.
-- **Base** : trois révisions Alembic à la suite de `20261013_0002` — `20261014_0001` (annonces,
-  espaces candidats, candidatures), `20261014_0002` (traitement des candidatures) puis
-  `20261015_0001` (salaire facultatif d'une annonce). Elles ne créent que des tables et des colonnes ; aucune table existante n'est vidée ni réécrite.
-  `start.sh` les applique au démarrage (`alembic upgrade head`).
-- **Pièces jointes** : CV, photos de profil et pièces de candidature d'IRON Emploi sont enregistrés
-  **dans la base PostgreSQL**. Le volume `sgdi_uploads` continue de porter les fichiers des autres
-  modules. Une sauvegarde complète couvre donc la base **et** ce volume.
 - **Variables** : aucune nouvelle variable obligatoire. `RECRUITMENT_PUSH_ENABLED` reste absente ou
   à `false`. Les réglages SMSGate ne changent pas.
+- **Pièces jointes** : CV, photos de profil et pièces de candidature d'IRON Emploi sont enregistrés
+  **dans la base PostgreSQL** (texte en base64). Les photos et documents des autres modules restent
+  dans le dossier des fichiers monté sous `/app/uploads/photos`. Une sauvegarde complète couvre donc
+  la base **et** ce dossier.
+
+### Migrations attendues
+
+`start.sh` exécute `alembic upgrade head` à chaque démarrage. En partant de `20261013_0002`, la
+fusion de la PR 12 applique trois révisions, dans cet ordre :
+
+| Révision | Effet |
+| --- | --- |
+| `20261014_0001` | Crée 5 tables : `recruitment_companies`, `recruitment_job_offers`, `recruitment_candidate_accounts`, `recruitment_candidate_sessions`, `recruitment_applications`. |
+| `20261014_0002` | Crée 11 tables (`recruitment_messages`, `recruitment_interviews`, `recruitment_job_alerts`, `recruitment_notifications`, `recruitment_push_devices`, `recruitment_application_documents`, `recruitment_document_requests`, `recruitment_application_notes`, `recruitment_application_events`, `recruitment_application_contracts`, `recruitment_tips`) et ajoute des colonnes aux tables créées par la révision précédente. |
+| `20261015_0001` | Ajoute `salary_amount` et `salary_period` à `recruitment_job_offers`. |
+
+Soit 16 tables nouvelles (129 → 145 sur une base à jour) et **aucune modification d'une table
+existante**. Les trois révisions sont rejouables : elles ne créent que ce qui manque.
+
+La PR 13 ne contient aucune migration : elle n'ajoute que `mobile/recruitment/` et une tâche de CI.
 
 ## 2. Conditions préalables
 
-1. PR 12 et PR 13 à jour avec `main`, CI verte.
-2. `GET https://recrute.irongs.com/api/public/mobile/config` répond `"sms_available": true` :
+1. PR 12 à jour avec `main`, CI verte.
+2. PR 13 remise à jour avec `main` **après** la fusion de la PR 12, CI verte.
+3. `GET https://recrute.irongs.com/api/public/mobile/config` répond `"sms_available": true` :
    l'identification des candidats dépend de SMSGate.
-3. Une sauvegarde datée du jour, **vérifiée** (voir § 3).
-4. Une fenêtre calme : le démarrage applique les migrations avant d'accepter le trafic.
+4. Une sauvegarde datée du jour, **vérifiée et copiée hors du serveur** (§ 3).
+5. Les informations du § 7 fournies et relues, si la mise en service s'adresse à de vrais candidats.
+6. Une fenêtre calme : le démarrage applique les migrations avant d'accepter le trafic.
 
 ## 3. Sauvegarde avant fusion
 
-Sur le serveur, dans le dossier du projet (phrase de chiffrement fournie par l'environnement,
-jamais écrite dans un fichier versionné) :
+La production tourne sous Coolify : PostgreSQL est un conteneur distinct de l'application, et les
+fichiers sont un dossier de l'hôte monté dans l'application. `scripts/backup.sh` (docker compose,
+volume `sgdi_uploads`) ne s'y applique pas ; utiliser `scripts/backup-coolify.sh`.
 
-```sh
-BACKUP_PASSPHRASE=… bash scripts/backup.sh
-```
+1. **Repérer les deux cibles** sur le serveur, sans afficher de variables d'environnement :
+   - le conteneur PostgreSQL : c'est l'hôte de `DATABASE_URL` de l'application ;
+   - le dossier des fichiers : la source du montage `/app/uploads/photos`, lue par
+     `docker inspect <conteneur_application> --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'`.
+2. **Lancer la sauvegarde**, depuis le poste de travail (le script est envoyé par SSH, rien n'est
+   installé sur le serveur) :
 
-Le script produit `sgdi-backup_<date>.tar.gz.gpg` : export PostgreSQL (`pg_dump -Fc`) et archive
-du volume `sgdi_uploads`, chiffrés. Avant de continuer :
+   ```sh
+   ssh <serveur> 'bash -s -- <conteneur_postgres> <dossier_fichiers>' < scripts/backup-coolify.sh
+   ```
 
-- vérifier que le fichier existe, que sa taille est cohérente avec la veille ;
-- le copier hors du serveur ;
-- noter la révision en place : `select version_num from alembic_version;` doit donner
-  `20261013_0002`.
+   Le script écrit dans `/root/backups/atlas/<date>/` : `db.dump` (`pg_dump -Fc`),
+   `files.tar.gz`, `INVENTAIRE.txt` et `SHA256SUMS`. Il ne modifie ni la base ni les fichiers, et
+   s'arrête en erreur si l'export ne contient pas toutes les tables de la base ou si l'archive ne
+   contient pas tous les fichiers.
+3. **Contrôler l'inventaire** affiché : `alembic_version=20261013_0002`, nombre de tables et de
+   fichiers cohérent.
+4. **Copier hors du serveur** puis recontrôler les empreintes sur la copie :
 
-Si la production tourne sous Coolify sans ce dossier de projet, utiliser la sauvegarde PostgreSQL
-de Coolify (ou un `pg_dump -Fc` dans le conteneur de la base) et une archive du volume des
-fichiers : l'important est d'avoir les deux, datés, hors du serveur.
+   ```sh
+   scp -r <serveur>:/root/backups/atlas/<date> <dossier_local>/
+   cd <dossier_local>/<date> && shasum -a 256 -c SHA256SUMS
+   ```
+
+5. **Essayer la restauration** de la copie dans une base PostgreSQL 17 neuve, hors production :
+
+   ```sh
+   createdb atlas_verif_<date>
+   pg_restore --no-owner -d atlas_verif_<date> db.dump
+   psql -d atlas_verif_<date> -Atc "select version_num from alembic_version"
+   ```
+
+   Une sauvegarde qui n'a pas été restaurée au moins une fois n'est pas considérée comme vérifiée.
+
+La sauvegarde contient des données personnelles en clair : la conserver sur un support chiffré, et
+supprimer la copie du serveur une fois la mise en production validée.
 
 ## 4. Ordre des opérations
 
 1. Sauvegarde (§ 3).
 2. Fusionner la **PR 12** dans `main`. Le déploiement automatique démarre.
-3. Attendre le déploiement, puis vérifier que le code servi est le bon :
-   `GET https://pointage.irongs.com/api/version` — `source_commit` égal au commit de fusion.
-4. Vérifier la base : `alembic_version` vaut `20261015_0001`.
-5. Contrôles en lecture :
-   - `GET https://recrute.irongs.com/api/public/emploi/config` → 200 ;
-   - `GET https://recrute.irongs.com/api/public/emploi/offers` → liste vide ;
-   - recrute.irongs.com → « Traitement IRON Emploi » s'ouvre ; les sections existantes
-     (Candidatures, Entretiens, Annonces) fonctionnent comme avant.
-6. Saisir les contenus réels : présentation des sociétés, une première annonce **en brouillon**,
+3. Contrôles après déploiement (§ 5).
+4. Saisir les contenus réels : présentation des sociétés, une première annonce **en brouillon**,
    relecture, publication.
-7. Essai réel de bout en bout avec un numéro du personnel : identification par SMS, candidature
+5. Essai réel de bout en bout avec un numéro du personnel : identification par SMS, candidature
    avec CV, dossier visible côté recruteur, message, convocation. Retirer ensuite cette candidature
    d'essai.
-8. Fusionner la **PR 13** (code de l'application ; elle ne change pas le serveur).
-9. Construire l'application (§ 6), l'essayer sur un iPhone et un Android contre la production,
+6. Mettre la **PR 13** à jour avec `main`, attendre la CI, la fusionner (code de l'application ;
+   elle ne change pas le serveur).
+7. Construire l'application (§ 7), l'essayer sur un iPhone et un Android contre la production,
    puis la soumettre aux stores.
 
 L'application déjà distribuée continue de fonctionner pendant toute l'opération : les routes
 qu'elle utilise ne changent pas.
 
-## 5. Retour arrière
+## 5. Contrôles après déploiement
 
-**Avant toute saisie réelle** (étapes 2 à 5) — retour complet :
+Tous en lecture, depuis n'importe quel poste.
 
-1. Avec le code de la PR 12 encore en place, ramener le schéma :
-   `python3 -m alembic downgrade 20261013_0002` dans le conteneur applicatif. Les tables IRON
-   Emploi sont supprimées ; rien d'autre n'est touché.
+1. **Code servi** : `GET https://pointage.irongs.com/api/version` — `source_commit` égal au commit
+   de fusion **et** `version` égal aux 12 premiers caractères de
+   `git show <commit>:app/static/sgdi-app.js | md5`. `source_commit` seul ne prouve pas que l'image
+   a été reconstruite.
+2. **Démarrage** : `GET https://pointage.irongs.com/health` → 200. Si l'application ne démarre
+   pas, lire le journal de déploiement dans Coolify avant toute autre action : une migration en
+   échec arrête le conteneur avant qu'il n'accepte le trafic.
+3. **Base** : `alembic_version` vaut `20261015_0001`.
+4. **Nouvelles routes** :
+   - `GET https://recrute.irongs.com/api/public/emploi/config` → 200 (404 avant la fusion) ;
+   - `GET https://recrute.irongs.com/api/public/emploi/offers` → liste vide.
+5. **Non-régression** :
+   - `GET https://recrute.irongs.com/api/public/mobile/config` → `"sms_available": true` ;
+   - recrute.irongs.com : connexion, Candidatures, Entretiens et Annonces comme avant ;
+     « Traitement IRON Emploi » s'ouvre ;
+   - drh, ops et pointage : connexion et une page de liste chacune ;
+   - une photo d'employé s'affiche (le dossier des fichiers est toujours monté).
+
+## 6. Retour arrière
+
+Redéployer l'ancien code sans précaution **empêche le démarrage** : il ne connaît pas
+`20261015_0001` (« Can't locate revision »). Il faut d'abord ramener `alembic_version`. Deux
+méthodes, essayées toutes deux sur une base PostgreSQL 17 locale.
+
+### A. Retour arrière qui conserve les données (à préférer)
+
+1. Avec le code de la PR 12 encore en place, dans le conteneur applicatif :
+   `python3 -m alembic stamp 20261013_0002`. Seul le numéro de version change ; les tables IRON
+   Emploi et leur contenu restent en place.
 2. Annuler le commit de fusion sur `main` (`git revert -m 1 <commit de fusion>`), ce qui redéploie
-   le code précédent.
+   le code précédent. Il démarre normalement et ignore les tables IRON Emploi.
+3. Une fois le correctif prêt, le redéployer : `alembic upgrade head` rejoue les trois révisions
+   sans rien recréer ni effacer, et les annonces et candidatures déjà saisies sont retrouvées.
 
-L'ordre compte : redéployer l'ancien code sur une base restée en `20261015_0001` empêche le
-démarrage (« Can't locate revision »).
+Pendant l'intervalle, l'application mobile IRON Emploi reçoit des erreurs sur les routes
+`/api/public/emploi/…` ; la candidature spontanée continue de fonctionner.
 
-**Après des saisies réelles** (annonces publiées, candidatures reçues) — ne pas descendre le
-schéma, cela effacerait ces données. Préférer :
+### B. Retour complet (uniquement avant toute saisie réelle)
 
-- dépublier les annonces (les candidats ne peuvent plus postuler) ;
-- corriger par un nouveau commit ;
-- en dernier recours seulement, restaurer la sauvegarde du § 3, en acceptant de perdre ce qui a
-  été saisi depuis dans **tous** les modules.
+`python3 -m alembic downgrade 20261013_0002` avec le code de la PR 12, puis le `git revert`. Les
+16 tables IRON Emploi sont **supprimées avec leur contenu** ; rien d'autre n'est touché.
 
-**Application** : une version publiée ne se retire pas des téléphones. Le retour arrière consiste
-à dépublier les annonces côté serveur ; l'application affiche alors une liste vide et reste
-utilisable pour la candidature spontanée.
+### Sans retour arrière du code
 
-## 6. Application : configuration pour le serveur réel
+Si le défaut ne touche qu'IRON Emploi, dépublier les annonces suffit (les candidats ne peuvent plus
+postuler) et la correction passe par un nouveau commit.
 
-- Sans réglage, l'application appelle `https://recrute.irongs.com/api`. Une adresse sans HTTPS
-  n'est acceptée qu'en développement : une version construite pour les stores l'ignore.
-- Ne pas définir `EXPO_PUBLIC_API_URL` pour les profils `preview` et `production`.
-- `scripts/test-env/` (base locale, passerelle SMS fictive) ne sert qu'aux essais sur le poste de
-  développement et n'est pas embarqué dans l'application.
-- Avant la première construction : `npx eas-cli@latest init` avec le compte Expo de l'éditeur
-  (crée `extra.eas.projectId`), puis `eas build --profile production` pour chaque plateforme.
+### En dernier recours
 
-## 7. Protection des données : informations à fournir par la direction
+Restaurer la sauvegarde du § 3 ramène **tous** les modules à l'heure de la sauvegarde : tout ce qui
+a été saisi depuis (pointage, DRH, candidatures) est perdu. À ne décider qu'en cas de base
+endommagée.
+
+### Application
+
+Une version publiée ne se retire pas des téléphones. Le retour arrière consiste à dépublier les
+annonces côté serveur ; l'application affiche alors une liste vide et reste utilisable pour la
+candidature spontanée.
+
+## 7. Application : construction iOS et Android
+
+L'application est dans `mobile/recruitment/` (Expo SDK 57, version 2.0.0, identifiant
+`com.irongs.recruitment` sur les deux plateformes).
+
+**Avant la première construction**
+
+1. Comptes : compte Expo de l'éditeur, compte Apple Developer, compte Google Play Console. Si une
+   version est déjà publiée sous `com.irongs.recruitment`, utiliser **les mêmes comptes et la même
+   clé de signature Android** : sinon les stores refusent la mise à jour.
+2. `npx eas-cli@latest login`, puis `npx eas-cli@latest init` dans `mobile/recruitment/` : crée
+   `extra.eas.projectId` dans `app.json` (ce n'est pas un secret, à commiter).
+3. Ne **pas** définir `EXPO_PUBLIC_API_URL` pour les profils `preview` et `production` : sans
+   réglage, l'application appelle `https://recrute.irongs.com/api`, et une adresse sans HTTPS est
+   ignorée hors développement.
+
+**Version d'essai interne** (profil `preview`)
+
+```sh
+npx eas-cli@latest build --platform android --profile preview   # APK à installer directement
+npx eas-cli@latest build --platform ios --profile preview       # iPhone enregistré par « eas device:create »
+```
+
+L'installer sur un iPhone et un Android, et refaire le parcours complet contre la production :
+identification par SMS, consultation des annonces, candidature avec CV, suivi, déconnexion.
+
+**Version des stores** (profil `production`, numéro de construction incrémenté par EAS)
+
+```sh
+npx eas-cli@latest build --platform android --profile production   # AAB
+npx eas-cli@latest build --platform ios --profile production
+npx eas-cli@latest submit --platform android
+npx eas-cli@latest submit --platform ios
+```
+
+Passer par une diffusion restreinte (test interne Google Play, TestFlight) avant la publication.
+Les fiches des stores demandent l'adresse d'une politique de confidentialité : elle dépend du § 8.
+
+`scripts/test-env/` (base locale, passerelle SMS fictive) ne sert qu'aux essais sur le poste de
+développement et n'est pas embarqué dans l'application.
+
+## 8. Protection des données : informations à fournir par la direction
 
 L'application demande un consentement au traitement des données (case non cochée par défaut) et le
 serveur l'enregistre avec sa date et la version de la notice (`PRIVACY_NOTICE_VERSION`, à changer en
@@ -115,18 +218,20 @@ et l'ANPDP. Elle ne présente l'application ni comme agréée ni comme validée 
 
 Les rubriques suivantes y sont affichées comme « à préciser » : elles ne sont pas inventées et
 doivent être fournies, puis relues par un juriste, **avant** toute mise en service auprès de
-candidats réels :
+candidats réels.
 
-1. dénomination, adresse et coordonnées du responsable du traitement ;
-2. coordonnées du délégué à la protection des données, s'il est désigné ;
-3. référence de la formalité accomplie auprès de l'ANPDP (déclaration ou autorisation), si elle est requise ;
-4. identité et pays de l'hébergeur et des prestataires techniques, et existence d'un transfert hors d'Algérie ;
-5. durées de conservation : candidatures non retenues, dossiers des personnes recrutées, espaces inactifs ;
-6. adresse postale ou électronique à laquelle exercer les droits.
+| Rubrique | À fournir |
+| --- | --- |
+| 1. Responsable du traitement | Dénomination sociale, forme juridique, adresse du siège, téléphone, e-mail |
+| 2. Délégué à la protection des données | Désigné : oui / non. Si oui : nom, e-mail, téléphone |
+| 3. Formalité ANPDP | Déclaration ou autorisation : faite / en cours / non requise. Référence et date |
+| 4. Hébergement et transferts | Hébergeur du serveur et pays ; prestataires techniques et pays ; transfert hors d'Algérie : oui / non, et sur quel fondement |
+| 5. Durées de conservation | Candidatures non retenues ; dossiers des personnes recrutées ; espaces candidats inactifs |
+| 6. Exercice des droits | Adresse électronique ou postale, et délai de réponse annoncé |
 
-## 8. Limites à la mise en service
+## 9. Limites à la mise en service
 
-- **Notice de protection des données** : incomplète tant que les informations du § 7 manquent.
+- **Notice de protection des données** : incomplète tant que les informations du § 8 manquent.
 - **Police sur Android** : Arimo, et non Arial, faute de licence d'intégration (voir `mobile/recruitment/assets/fonts/LISEZ-MOI.md`).
 - **Notifications push** : préparées, non activées, jamais essayées en réel. Il manque le projet
   EAS, la clé FCM V1 et `google-services.json` (Android), la clé APNs (iOS), puis
