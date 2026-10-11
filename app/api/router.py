@@ -23,6 +23,7 @@ from app.modules.recruitment_jobs_public import router as recruitment_jobs_publi
 from app.modules.recruitment_jobs_staff import router as recruitment_jobs_staff_router
 from app.modules.recruitment_engage_public import router as recruitment_engage_public_router
 from app.modules.recruitment_engage_staff import router as recruitment_engage_staff_router
+from app.modules.recruitment_retention import router as recruitment_retention_router
 from app.modules.loans.routes import router as loans_router
 from app.modules.alerts.routes import router as alerts_router
 from app.modules.finance_core.routes import router as finance_core_router
@@ -67,6 +68,7 @@ api_router.include_router(ronde_router, prefix="/ronde", tags=["Contrôleur de R
 api_router.include_router(public_candidates_router, prefix="/public", tags=["Candidatures publiques"])
 api_router.include_router(recruitment_jobs_public_router, prefix="/public/emploi", tags=["IRON Emploi — public"])
 api_router.include_router(recruitment_engage_public_router, prefix="/public/emploi", tags=["IRON Emploi — espace candidat"])
+api_router.include_router(recruitment_retention_router, prefix="/drh/recruitment-retention", tags=["Recrutement — durées de conservation"])
 # Avant les routes d'annonces : « /workspace » ou « /conversations » ne doivent pas être lus comme un identifiant d'annonce.
 api_router.include_router(recruitment_engage_staff_router, prefix="/drh/job-offers", tags=["Recrutement — traitement des candidatures"])
 api_router.include_router(recruitment_jobs_staff_router, prefix="/drh/job-offers", tags=["Recrutement — annonces"])

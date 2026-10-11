@@ -20,16 +20,17 @@ Alembic est `20261013_0002`.
 ### Migrations attendues
 
 `start.sh` exécute `alembic upgrade head` à chaque démarrage. En partant de `20261013_0002`, la
-fusion de la PR 12 applique trois révisions, dans cet ordre :
+fusion de la PR 12 applique quatre révisions, dans cet ordre :
 
 | Révision | Effet |
 | --- | --- |
 | `20261014_0001` | Crée 5 tables : `recruitment_companies`, `recruitment_job_offers`, `recruitment_candidate_accounts`, `recruitment_candidate_sessions`, `recruitment_applications`. |
 | `20261014_0002` | Crée 11 tables (`recruitment_messages`, `recruitment_interviews`, `recruitment_job_alerts`, `recruitment_notifications`, `recruitment_push_devices`, `recruitment_application_documents`, `recruitment_document_requests`, `recruitment_application_notes`, `recruitment_application_events`, `recruitment_application_contracts`, `recruitment_tips`) et ajoute des colonnes aux tables créées par la révision précédente. |
 | `20261015_0001` | Ajoute `salary_amount` et `salary_period` à `recruitment_job_offers`. |
+| `20261016_0001` | Ajoute `last_activity_at` et son index à `recruitment_candidate_accounts`, et y reporte la dernière date connue des espaces existants. |
 
 Soit 16 tables nouvelles (129 → 145 sur une base à jour) et **aucune modification d'une table
-existante**. Les trois révisions sont rejouables : elles ne créent que ce qui manque.
+existante**. Les quatre révisions sont rejouables : elles ne créent que ce qui manque.
 
 La PR 13 ne contient aucune migration : elle n'ajoute que `mobile/recruitment/` et une tâche de CI.
 
@@ -116,7 +117,7 @@ Tous en lecture, depuis n'importe quel poste.
 2. **Démarrage** : `GET https://pointage.irongs.com/health` → 200. Si l'application ne démarre
    pas, lire le journal de déploiement dans Coolify avant toute autre action : une migration en
    échec arrête le conteneur avant qu'il n'accepte le trafic.
-3. **Base** : `alembic_version` vaut `20261015_0001`.
+3. **Base** : `alembic_version` vaut `20261016_0001`.
 4. **Nouvelles routes** :
    - `GET https://recrute.irongs.com/api/public/emploi/config` → 200 (404 avant la fusion) ;
    - `GET https://recrute.irongs.com/api/public/emploi/offers` → liste vide.
@@ -130,7 +131,7 @@ Tous en lecture, depuis n'importe quel poste.
 ## 6. Retour arrière
 
 Redéployer l'ancien code sans précaution **empêche le démarrage** : il ne connaît pas
-`20261015_0001` (« Can't locate revision »). Il faut d'abord ramener `alembic_version`. Deux
+`20261016_0001` (« Can't locate revision »). Il faut d'abord ramener `alembic_version`. Deux
 méthodes, essayées toutes deux sur une base PostgreSQL 17 locale.
 
 ### A. Retour arrière qui conserve les données (à préférer)
@@ -140,7 +141,7 @@ méthodes, essayées toutes deux sur une base PostgreSQL 17 locale.
    Emploi et leur contenu restent en place.
 2. Annuler le commit de fusion sur `main` (`git revert -m 1 <commit de fusion>`), ce qui redéploie
    le code précédent. Il démarre normalement et ignore les tables IRON Emploi.
-3. Une fois le correctif prêt, le redéployer : `alembic upgrade head` rejoue les trois révisions
+3. Une fois le correctif prêt, le redéployer : `alembic upgrade head` rejoue les quatre révisions
    sans rien recréer ni effacer, et les annonces et candidatures déjà saisies sont retrouvées.
 
 Pendant l'intervalle, l'application mobile IRON Emploi reçoit des erreurs sur les routes
@@ -240,12 +241,27 @@ Constat du 11 octobre 2026, par lecture du code, du DNS et des registres d'adres
 | OVHcloud | Serveur : application, base PostgreSQL, fichiers, SMSGate | Adresse du serveur enregistrée au nom d'OVH SAS, pays FR ; trafic acheminé par les centres OVH de France. À confirmer dans l'espace client OVH (centre exact) | Oui |
 | o2switch | Messagerie du domaine irongs.com : e-mails de convocation, boîte contact@irongs.com | France | Oui |
 | Opérateur mobile de la SIM de l'entreprise | Remise des SMS de vérification | Algérie ; nom de l'opérateur à fournir | Oui, sans le nommer |
-| Service public SMSGate (`api.sms-gate.app`) | Réveil du téléphone passerelle par notification | Hors d'Algérie. Nature exacte des données transmises à faire confirmer | Non |
+| Service public SMSGate (`api.sms-gate.app`) | Réveil du téléphone passerelle par notification | Hors d'Algérie. Ne reçoit **aucune donnée de candidat** (voir ci-dessous) | Non : pas de donnée de candidat transmise ; à faire confirmer par le juriste |
 | Expo, Google (FCM), Apple (APNs) | Notifications push | Hors d'Algérie. **Non activé** : aucune donnée transmise aujourd'hui | Non ; à ajouter avant toute activation |
 | Apple App Store, Google Play | Distribution de l'application | Ne reçoivent pas les données de candidature | Non |
 
 L'application n'embarque ni mesure d'audience ni outil de suivi tiers. Les sauvegardes (§ 3) sont
 des copies des mêmes données : leur lieu de conservation relève de la même notice.
+
+### Ce qui passe par `api.sms-gate.app`
+
+Constat fait dans le code source public de SMSGate, version 1.49.0 (celle du serveur privé), sans
+toucher à l'installation. Quand un code est déposé, le serveur privé envoie au relais public une
+requête qui contient : le jeton de notification **du téléphone passerelle de l'entreprise** et le
+type d'événement « message en file », sans autre donnée. Le relais la transmet au service de
+notification de Google, qui réveille le téléphone ; celui-ci vient alors chercher le SMS sur le
+serveur privé. Le numéro du candidat, son nom et le texte du SMS ne quittent donc pas le serveur
+privé par cette voie ; ils ne vont qu'au téléphone passerelle, puis à l'opérateur mobile.
+
+Ce constat vaut pour le mode privé décrit dans `docs/recruitment-smsgate.md`. Le relais voit
+l'adresse du serveur et la fréquence des envois. SMSGate conserve par ailleurs les messages
+(numéro et texte) dans sa propre base, sur le même serveur : leur durée de conservation dans
+SMSGate reste à fixer.
 
 ### Durées annoncées et suppression réellement en place
 
@@ -255,12 +271,20 @@ automatiquement aucune candidature ni aucun espace candidat.
 | Donnée | Durée annoncée | Ce que fait le serveur aujourd'hui |
 | --- | --- | --- |
 | Candidature non retenue | 24 mois à compter du refus | Aucune suppression automatique. La date du refus est connue (`outcome_communicated_at`, `status_updated_at`) |
-| Espace candidat inactif | 24 mois après la dernière activité | Aucune suppression automatique. La dernière activité n'est pas enregistrée : seule la dernière modification du profil est datée |
+| Espace candidat inactif | 24 mois après la dernière activité | Aucune suppression automatique. La dernière activité est enregistrée (`last_activity_at`, à un jour près) à chaque utilisation de l'espace |
 | Dossier numérique d'une personne recrutée | 24 mois après son départ | Aucune suppression automatique. La date de départ relève du module DRH |
 | Dossier papier d'une personne recrutée | 10 ans après son départ | Hors application |
 | Session de l'espace candidat | — | Expire après 30 jours, puis supprimée |
 | Code SMS de vérification | — | Valable 5 minutes, ligne supprimée après 24 heures |
 | Suppression de l'espace par le candidat | Immédiate | Efface profil, CV, photo, alertes et notifications ; les candidatures transmises restent au service recrutement, sans lien avec l'espace |
+
+**Aperçu des échéances.** `GET /api/drh/recruitment-retention` (administrateur ou recruteur à
+périmètre global ; `?as_of=AAAA-MM-JJ` pour simuler une date) liste, sans rien modifier : les
+candidatures refusées, les dossiers du vivier refusés, les espaces inactifs et les dossiers des
+personnes recrutées puis parties qui ont dépassé 24 mois, avec pour chacun ce qu'une suppression
+retirerait (pièces, messages, entretiens, notes, CV, photo…) et ce qui serait conservé. Les
+dossiers sans date exploitable (avis défavorable non daté, départ non daté) sont listés à part,
+à dater à la main. Aucune route de suppression n'existe : l'aperçu sert à décider.
 
 Tant qu'une purge n'est pas développée, le respect des durées repose sur une suppression manuelle
 par le service recrutement et la DRH, à organiser (qui, à quelle fréquence, avec quelle trace). Les

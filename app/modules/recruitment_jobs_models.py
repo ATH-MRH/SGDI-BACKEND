@@ -73,6 +73,9 @@ class RecruitmentCandidateAccount(Base, TimestampMixin):
     candidate_id: Mapped[int | None] = mapped_column(ForeignKey('candidates.id', ondelete='SET NULL'), index=True)
     # Préférences de l'espace (notifications push par famille d'événements).
     settings: Mapped[dict | None] = mapped_column(JSON)
+    # Dernière utilisation de l'espace par le candidat, à un jour près : fait courir la durée de conservation
+    # d'un espace inactif. `updated_at` ne date que les modifications du profil.
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
 
 class RecruitmentCandidateSession(Base):

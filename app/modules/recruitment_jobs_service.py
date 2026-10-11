@@ -5,7 +5,7 @@ import time
 from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.scope_policy import society_key
@@ -41,6 +41,7 @@ def record_privacy_consent(account, consent: bool, version: str | None) -> None:
         raise HTTPException(status_code=409, detail='La notice de protection des données a été mise à jour. Mettez à jour l’application pour la consulter.')
     account.settings = {**(account.settings or {}), 'privacy': {'version': PRIVACY_NOTICE_VERSION, 'accepted_at': datetime.utcnow().isoformat()}}
 SESSION_TTL = 30 * 86400
+ACTIVITY_GRANULARITY = timedelta(days=1)
 MAX_SESSIONS = 5
 CONTRACT_TYPES = ('CDI', 'CDD', 'CTA', 'Stage', 'Apprentissage', 'Autre')
 # Logos de marque réellement présents dans app/static ; aucun autre chemin n'est accepté.
@@ -231,10 +232,23 @@ def account_from_token(db: Session, secret: str, token: str, *, lock: bool = Fal
     session = db.scalar(select(CandidateSession).where(CandidateSession.token_digest == digest(secret, 'emploi-session', token),
                                                        CandidateSession.expires_at > now))
     stmt = select(Account).where(Account.id == (session.account_id if session else -1))
-    account = db.scalar(stmt.with_for_update() if lock else stmt)
+    account = db.scalar(stmt)
     if account is None:
         raise HTTPException(status_code=401, detail='Votre session a expiré. Identifiez-vous à nouveau par SMS.')
-    return account
+    touch_activity(db, account)
+    # Relue sous verrou : l'espace a pu changer (dossier rattaché par une requête concurrente) depuis la première lecture.
+    return db.scalar(stmt.with_for_update().execution_options(populate_existing=True)) if lock else account
+
+
+def touch_activity(db: Session, account: Account) -> None:
+    """Date la dernière utilisation de l'espace, au plus une écriture par jour et par espace. Appelée en tête
+    de requête, avant tout verrou : la validation ne porte que cette date. `updated_at` reste la date de la
+    dernière modification du profil."""
+    moment = datetime.utcnow()
+    if account.last_activity_at and moment - account.last_activity_at < ACTIVITY_GRANULARITY:
+        return
+    db.execute(update(Account).where(Account.id == account.id).values(last_activity_at=moment, updated_at=Account.updated_at))
+    db.commit()
 
 
 def open_session(db: Session, secret: str, challenge, *, now: int | None = None) -> tuple[Account, str]:
@@ -242,7 +256,7 @@ def open_session(db: Session, secret: str, challenge, *, now: int | None = None)
     now = int(time.time()) if now is None else now
     account = db.scalar(select(Account).where(Account.phone == challenge.phone).with_for_update())
     if account is None:
-        account = Account(phone=challenge.phone, first_name=challenge.first_name, last_name=challenge.last_name, profile={})
+        account = Account(phone=challenge.phone, first_name=challenge.first_name, last_name=challenge.last_name, profile={}, last_activity_at=datetime.utcnow())
         db.add(account)
         db.flush()
         _adopt_verified_dossiers(db, account)

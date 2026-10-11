@@ -175,6 +175,9 @@ sont renvoyés par aucune route publique.
   porte que la version, `PRIVACY_NOTICE_VERSION` (`2026-10-11`), qui doit rester égale à `PRIVACY_VERSION` :
   un écart fait refuser l'enregistrement du profil (409). Le serveur n'applique aucune durée de
   conservation aux candidatures ni aux espaces ; voir `docs/iron-emploi-mise-en-production.md`, § 8.
+- Chaque utilisation de l'espace date `last_activity_at` (au plus une écriture par jour, sans toucher
+  `updated_at`). `GET /drh/recruitment-retention` donne l'aperçu, en lecture seule, des dossiers arrivés à
+  échéance (24 mois) et de ce qu'une suppression retirerait. Révision `20261016_0001`.
 - Le profil distingue les langues parlées (`languages`) et écrites (`written_languages`), garde le
   NIN comme chaîne de 10 ou 18 chiffres, et accepte un nombre d'enfants non renseigné (`null`),
   distinct de zéro.
