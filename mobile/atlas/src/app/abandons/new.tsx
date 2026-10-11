@@ -71,8 +71,7 @@ export default function NewAbandonScreen() {
 
   return (
     <Gate allowed={allowed}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID="abandon-new-screen">
-        <ScreenHeader title={t('abandons.declare')} />
+      <Screen edges={['top', 'bottom', 'left', 'right']} testID="abandon-new-screen" header={<ScreenHeader title={t('abandons.declare')} />}>
 
         {!employee ? (
           <>

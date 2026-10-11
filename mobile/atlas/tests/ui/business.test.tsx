@@ -523,8 +523,10 @@ describe('DRH', () => {
     mock.fetchEmployeeDocuments.mockResolvedValue([{ id: 1, label: 'Contrat', fileName: 'contrat.pdf', mimeType: 'application/pdf', createdAt: '2025-01-15T10:00:00' }]);
     const view = await show(<EmployeeDetailScreen />);
     await waitFor(() => expect(screen.getByTestId('employee-status')).toHaveTextContent('actif'));
+    await fireEvent.press(screen.getByTestId('employee-tabs-documents'));
     await waitFor(() => expect(screen.getByTestId('employee-documents')).toHaveTextContent(/Contrat/));
-    expect(screen.getByTestId('employee-leaves')).toHaveTextContent(/10\/10\/2026 – 12\/10\/2026/);
+    await fireEvent.press(screen.getByTestId('employee-tabs-planning'));
+    await waitFor(() => expect(screen.getByTestId('employee-leaves')).toHaveTextContent(/10\/10\/2026 – 12\/10\/2026/));
     await view.unmount();
 
     for (const fn of Object.values(mock)) fn.mockClear();

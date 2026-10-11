@@ -90,10 +90,35 @@ from app.modules.drh.models import Employee, Leave  # noqa: E402
 from app.modules.irongs import service as collections  # noqa: E402
 from app.modules.ops.models import Assignment  # noqa: E402
 
+# Photos de fiche, pour le portrait servi au mobile : ITEMP1 a un fichier réel, ITEMP2 référence
+# un fichier absent du disque (cas d'une photo perdue côté serveur), ITEMP3 n'a aucune photo.
+from app.core.photo_storage import PHOTOS_DIR, PUBLIC_PHOTO_PREFIX  # noqa: E402
+
+portrait_supported = True
+try:
+    import io
+
+    from PIL import Image
+
+    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    buffer = io.BytesIO()
+    Image.new("RGB", (600, 800), (176, 148, 122)).save(buffer, "JPEG")
+    (PHOTOS_DIR / "itemp1.jpg").write_bytes(buffer.getvalue())
+except ImportError:
+    portrait_supported = False
+
+photos = {"ITEMP1": {"photo": f"{PUBLIC_PHOTO_PREFIX}/itemp1.jpg"}, "ITEMP2": {"photo": f"{PUBLIC_PHOTO_PREFIX}/absent.jpg"}}
+employee_ids: dict[str, int] = {}
+plain = Employee(code="ITEMP3", first_name="Prenom", last_name="ITEMP3", society="Societe A", status="actif", position="Agent", extra={})
+session.add(plain)
+session.flush()
+employee_ids["ITEMP3"] = plain.id
+
 for code, reason in (("ITEMP1", "Motif un"), ("ITEMP2", "Motif deux")):
-    employee = Employee(code=code, first_name="Prenom", last_name=code, society="Societe A", status="actif", position="Agent")
+    employee = Employee(code=code, first_name="Prenom", last_name=code, society="Societe A", status="actif", position="Agent", extra=photos[code])
     session.add(employee)
     session.flush()
+    employee_ids[code] = employee.id
     session.add(Assignment(employee_id=employee.id, site_id=site_a1.id, group_code="A", start_date=date(2026, 1, 1), active=1))
     session.add(Leave(employee_id=employee.id, leave_type="conge", start_date=date(2026, 11, 1), end_date=date(2026, 11, 3), reason=reason, status="instance"))
     session.commit()
@@ -115,6 +140,9 @@ print("ATLAS_IT " + json.dumps({
     "attendance_qr": create_access_token(subject, {"attendance_qr": True, "employee_id": 1, "nonce": "n"}, ttl_seconds=120),
     "sse_ticket": create_access_token(subject, {"sse_ticket": True}, ttl_minutes=1),
     "other_site_id": other_site_id,
+    "photo_employee_id": employee_ids["ITEMP1"] if portrait_supported else None,
+    "lost_photo_employee_id": employee_ids["ITEMP2"],
+    "no_photo_employee_id": employee_ids["ITEMP3"],
     "foreign_site_id": foreign_site_id,
 }), flush=True)
 uvicorn.run(app, host="127.0.0.1", port=port, log_level="error")

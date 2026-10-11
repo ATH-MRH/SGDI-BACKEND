@@ -11,13 +11,15 @@ export function initialsOf(name: string): string {
   return (first + last).toUpperCase() || '?';
 }
 
-export function Avatar({ name, size = 48 }: { name: string; size?: number }) {
+type Props = { name: string; size?: number; square?: boolean };
+
+export function Avatar({ name, size = 48, square = false }: Props) {
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
-      style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      <AppText variant="bodyStrong" color={colors.onPrimary}>
+      style={[styles.avatar, { width: size, height: size, borderRadius: square ? Math.round(size * 0.22) : size / 2 }]}>
+      <AppText color={colors.navy} style={{ fontSize: Math.max(12, Math.round(size * 0.36)), fontWeight: '700' }}>
         {initialsOf(name)}
       </AppText>
     </View>
@@ -25,5 +27,11 @@ export function Avatar({ name, size = 48 }: { name: string; size?: number }) {
 }
 
 const styles = StyleSheet.create({
-  avatar: { backgroundColor: colors.navy, alignItems: 'center', justifyContent: 'center' },
+  avatar: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

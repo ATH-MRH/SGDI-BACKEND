@@ -63,6 +63,9 @@ jest.mock('@/lock/LockProvider', () => ({ useLock: () => mockLock }));
 jest.mock('@/features/cockpit/useCockpit', () => ({
   useCockpit: () => ({ cards: mockCards, date: '2026-10-07', isRefreshing: false, refresh: jest.fn() }),
 }));
+jest.mock('@/features/cockpit/useCockpitInsights', () => ({
+  useCockpitInsights: () => ({ week: null, today: null, sitesTotal: null, drh: null, alerts: null, incidents: null, incidentsOpen: null, isRefreshing: false, refresh: jest.fn() }),
+}));
 jest.mock('@/config/env', () => ({
   get env() {
     return { variant: mockVariant, apiUrl: 'https://atlas.example.test', features: {}, lockTimeoutMs: 120_000, storeUrls: mockStoreUrls };
@@ -194,7 +197,9 @@ describe('accueil et modules dynamiques', () => {
   it("l'accueil affiche le contexte de travail et permet de le changer s'il y a un choix", async () => {
     signIn({ authorized_societies: ['Societe A', 'Societe B'], authorized_sites: [], effective_modules: ['ops'] });
     await render(<HomeScreen />);
-    expect(screen.getByText('Bonjour Agent Ops')).toBeTruthy();
+    // Le prénom est affiché sous « Bonjour, » ; le nom complet reste annoncé aux lecteurs d'écran.
+    expect(screen.getByText('Bonjour,')).toBeTruthy();
+    expect(screen.getByLabelText('Bonjour Agent Ops')).toHaveTextContent('Agent');
     expect(screen.getByText('Toutes mes sociétés')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('home-scope'));
     expect(mockPush).toHaveBeenCalledWith('/scope');

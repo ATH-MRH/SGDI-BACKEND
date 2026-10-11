@@ -34,8 +34,18 @@
       "distribution": "store",
       "autoIncrement": true,
       "channel": "production",
-      "env": { "APP_VARIANT": "production", "EXPO_PUBLIC_API_URL": "https://atlas.irongs.com" },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_API_URL": "https://atlas.irongs.com",
+        "ATLAS_FEATURES": "biometrics,offline,updateCheck"
+      },
       "android": { "buildType": "app-bundle" }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "autoIncrement": false,
+      "android": { "buildType": "apk" }
     }
   },
   "submit": {

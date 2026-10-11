@@ -135,9 +135,13 @@ describe('configuration de build', () => {
 
   it('ne demande aucune permission système ni texte Face ID sans la fonction biométrie', () => {
     const config = resolve(PROD);
-    expect(config.android?.permissions).toEqual([]);
+    // Seule permission déclarée : sans elle, le module natif de capture d'écran arrête
+    // l'application au lancement sur Android 14 et plus. Elle ne donne accès à aucune donnée.
+    expect(config.android?.permissions).toEqual(['android.permission.DETECT_SCREEN_CAPTURE']);
+    expect(config.android?.blockedPermissions).not.toContain('android.permission.DETECT_SCREEN_CAPTURE');
     expect(config.android?.blockedPermissions).toEqual(
       expect.arrayContaining([
+        'android.permission.READ_MEDIA_IMAGES',
         'android.permission.READ_EXTERNAL_STORAGE',
         'android.permission.WRITE_EXTERNAL_STORAGE',
         'android.permission.SYSTEM_ALERT_WINDOW',
@@ -172,7 +176,7 @@ describe('configuration de build', () => {
     const secureStore = config.plugins?.find((entry) => Array.isArray(entry) && entry[0] === 'expo-secure-store');
     expect((secureStore as [string, { faceIDPermission: unknown }])[1].faceIDPermission).toBe(text);
     expect(config.android?.blockedPermissions).not.toContain('android.permission.USE_BIOMETRIC');
-    expect(config.android?.permissions).toEqual([]);
+    expect(config.android?.permissions).toEqual(['android.permission.DETECT_SCREEN_CAPTURE']);
   });
 
   it('borne le délai de verrouillage et le rend configurable au build', () => {

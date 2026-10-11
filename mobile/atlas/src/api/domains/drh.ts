@@ -23,7 +23,17 @@ export type Employee = {
   siteId: number | null;
   siteName: string | null;
   group: string | null;
+  /** Une photo est enregistrée dans la fiche. Son adresse n'est pas conservée : le portrait est servi par une route authentifiée. */
+  hasPhoto: boolean;
 };
+
+const PHOTO_FIELDS = ['photo', 'photoUrl', 'photo_url'] as const;
+
+function hasPhotoField(extra: unknown): boolean {
+  const fields = asRecord(extra);
+  const legacy = asRecord(fields._legacy);
+  return PHOTO_FIELDS.some((key) => asNullableString(fields[key]) !== null || asNullableString(legacy[key]) !== null);
+}
 
 function toEmployee(raw: unknown): Employee {
   const row = asRecord(raw);
@@ -43,6 +53,7 @@ function toEmployee(raw: unknown): Employee {
     siteId: asNullableNumber(row.current_site_id),
     siteName: asNullableString(row.current_site_name),
     group: asNullableString(row.current_group_code),
+    hasPhoto: hasPhotoField(row.extra),
   };
 }
 
@@ -197,7 +208,54 @@ export async function fetchCandidatesPage(
   };
 }
 
-export async function fetchPendingLeavesCount(client: ApiClient, society?: string): Promise<number> {
+/** Synthèse RH calculée par le backend (GET /api/drh/dashboard) sur le périmètre du compte. */
+export type DrhDashboard = {
+  employeesTotal: number;
+  /** Effectif par statut RH, tel que le backend le range (actif, suspendu, sortant…). */
+  byStatus: { status: string; count: number }[];
+  /** Candidatures par statut. */
+  candidatesByStatus: { status: string; count: number }[];
+  candidatesTotal: number;
+  leavesPending: number;
+  /** Périodes d'essai en cours, avec leur échéance. */
+  trialPeriods: { id: number; code: string; name: string; endDate: string }[];
+  /** Dix sites les plus peuplés (employés actifs). */
+  bySite: { site: string; count: number }[];
+  withoutSite: number;
+};
+
+function toCounts(raw: unknown): { status: string; count: number }[] {
+  return Object.entries(asRecord(raw))
+    .map(([status, count]) => ({ status, count: asNumber(count) }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+export async function fetchDrhDashboard(client: ApiClient, society?: string): Promise<DrhDashboard> {
   const raw = asRecord(await client.get<unknown>('/api/drh/dashboard', { query: { society } }));
-  return asNumber(raw.leaves_pending);
+  const candidatesByStatus = toCounts(raw.candidates_by_status);
+  return {
+    employeesTotal: asNumber(raw.employees_total),
+    byStatus: toCounts(raw.employees_by_status),
+    candidatesByStatus,
+    candidatesTotal: candidatesByStatus.reduce((sum, entry) => sum + entry.count, 0),
+    leavesPending: asNumber(raw.leaves_pending),
+    trialPeriods: asArray(raw.trial_periods)
+      .map((entry) => {
+        const row = asRecord(entry);
+        return { id: asNumber(row.id), code: asString(row.code), name: asString(row.name), endDate: asString(row.trial_end_date) };
+      })
+      .filter((entry) => entry.id > 0),
+    bySite: asArray(raw.employees_by_site)
+      .map((entry) => {
+        const row = asRecord(entry);
+        return { site: asString(row.site), count: asNumber(row.count) };
+      })
+      .filter((entry) => entry.site && entry.count > 0),
+    withoutSite: asNumber(raw.employees_without_site),
+  };
+}
+
+export async function fetchPendingLeavesCount(client: ApiClient, society?: string): Promise<number> {
+  return (await fetchDrhDashboard(client, society)).leavesPending;
 }

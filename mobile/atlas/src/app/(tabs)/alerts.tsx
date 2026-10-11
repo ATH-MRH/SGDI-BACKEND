@@ -10,7 +10,7 @@ import { queryKeys } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Card, EmptyState, ListItem, PagedList } from '@/components/ui';
+import { AtlasHeader, EmptyState, IncidentRow, PagedList } from '@/components/ui';
 import { access } from '@/features/access';
 import { ALERT_STATUS, SEVERITY } from '@/features/status';
 import { usePagedList } from '@/hooks/usePagedList';
@@ -43,6 +43,7 @@ export default function AlertsScreen() {
   if (!allowed) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="alerts-screen">
+        <AtlasHeader back title={t('tabs.alerts')} />
         <EmptyState icon="notifications-outline" title={t('alerts.empty.title')} body={t('alerts.none.body')} testID="alerts-no-access" />
       </SafeAreaView>
     );
@@ -50,6 +51,7 @@ export default function AlertsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="alerts-screen">
+      <AtlasHeader back title={t('tabs.alerts')} subtitle={list.total > 0 ? t('alerts.count', { count: list.total }) : undefined} />
       <PagedList
         testID="alerts-list"
         list={list}
@@ -58,9 +60,6 @@ export default function AlertsScreen() {
         emptyBody={t('alerts.empty.body')}
         header={
           <View style={styles.header}>
-            <AppText variant="title" accessibilityRole="header">
-              {t('tabs.alerts')}
-            </AppText>
             <Segmented
               testID="alerts-filter"
               value={filter}
@@ -74,15 +73,15 @@ export default function AlertsScreen() {
           </View>
         }
         renderItem={(alert) => (
-          <Card>
-            <ListItem
-              testID={`alert-${alert.id}`}
-              title={alert.title}
-              subtitle={[t(SEVERITY[alert.severity].label), formatDateTime(alert.lastDetectedAt), alert.society].filter(Boolean).join(' · ')}
-              onPress={() => router.push(`/alerts/${alert.id}` as never)}
-              trailing={<StatusBadge status={ALERT_STATUS[alert.status]} fallback={alert.status} />}
-            />
-          </Card>
+          <IncidentRow
+            testID={`alert-${alert.id}`}
+            tone={SEVERITY[alert.severity].tone}
+            icon="notifications-outline"
+            title={alert.title}
+            detail={[t(SEVERITY[alert.severity].label), formatDateTime(alert.lastDetectedAt), alert.society].filter(Boolean).join(' · ')}
+            badge={<StatusBadge status={ALERT_STATUS[alert.status]} fallback={alert.status} />}
+            onPress={() => router.push(`/alerts/${alert.id}` as never)}
+          />
         )}
       />
     </SafeAreaView>

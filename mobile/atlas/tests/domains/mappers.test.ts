@@ -149,10 +149,21 @@ describe('DRH', () => {
     const page = await fetchEmployeesPage(fake({ items: [raw], total: 1, page: 1, page_size: 25, pages: 1 }).client, { q: 'ben' });
     const employee = page.items[0]!;
     expect(employee).toEqual({ id: 5, code: 'AGT005', firstName: 'Karim', lastName: 'BENALI', position: 'Chef de poste', society: 'Societe A', status: 'actif', contractType: 'CDD',
-      recruitDate: '2025-01-15', contractEndDate: null, phone: '0550', email: null, siteId: 3, siteName: 'Site Nord', group: 'A' });
+      recruitDate: '2025-01-15', contractEndDate: null, phone: '0550', email: null, siteId: 3, siteName: 'Site Nord', group: 'A', hasPhoto: false });
     const serialized = JSON.stringify(employee);
-    for (const forbidden of ['45000', 'salary', 'nin', 'base64', '_legacy']) expect(serialized).not.toContain(forbidden);
+    for (const forbidden of ['45000', 'salary', 'nin', 'base64', '_legacy', '/uploads/']) expect(serialized).not.toContain(forbidden);
     expect((await fetchEmployee(fake(raw).client, 5)).code).toBe('AGT005');
+  });
+
+  it("signale qu'une photo est enregistrée sans en garder l'adresse", async () => {
+    for (const extra of [{ photo: '/uploads/photos/agt005.jpg' }, { photoUrl: '/uploads/photos/a.jpg' }, { _legacy: { photo_url: '/uploads/photos/b.jpg' } }]) {
+      const employee = await fetchEmployee(fake({ ...raw, extra }).client, 5);
+      expect(employee.hasPhoto).toBe(true);
+      expect(JSON.stringify(employee)).not.toContain('/uploads/');
+    }
+    for (const extra of [null, {}, { photo: '' }, { photo: '   ' }, { photo: 42 }, { photoData: 'data:image/jpeg;base64,AAAA' }]) {
+      expect((await fetchEmployee(fake({ ...raw, extra }).client, 5)).hasPhoto).toBe(false);
+    }
   });
 
   it('lit les congés et transmet la décision au backend', async () => {

@@ -33,13 +33,13 @@ const styles = StyleSheet.create({
   field: { gap: spacing.xs },
   input: {
     ...typography.body,
-    minHeight: touchTarget,
+    minHeight: touchTarget + 2,
     color: colors.text,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.md + 2,
   },
   inputError: { borderColor: colors.danger },
 });

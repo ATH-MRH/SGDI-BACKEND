@@ -26,7 +26,7 @@ export function OptionRow({ label, selected, onPress, testID }: Props) {
       <Ionicons
         name={selected ? 'checkmark-circle' : 'ellipse-outline'}
         size={22}
-        color={selected ? colors.primary : colors.borderStrong}
+        color={selected ? colors.navy : colors.borderStrong}
       />
     </Pressable>
   );
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  selected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  selected: { borderColor: colors.navy, backgroundColor: colors.primarySoft },
   pressed: { opacity: 0.7 },
   label: { flex: 1 },
 });

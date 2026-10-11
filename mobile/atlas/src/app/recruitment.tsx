@@ -7,7 +7,7 @@ import { fetchCandidatesPage, type Candidate, type CandidateMode } from '@/api/d
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { Segmented } from '@/components/Segmented';
-import { Badge, Card, ListItem, PagedList, ScreenHeader, SearchBar } from '@/components/ui';
+import { AtlasHeader, Badge, EmployeeRow, PagedList, SearchBar } from '@/components/ui';
 import { access } from '@/features/access';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePagedList } from '@/hooks/usePagedList';
@@ -32,7 +32,7 @@ export default function RecruitmentScreen() {
   return (
     <Gate allowed={allowed}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="recruitment-screen">
-        <ScreenHeader title={t('entry.candidates')} />
+        <AtlasHeader back title={t('entry.candidates')} subtitle={list.total > 0 ? t('candidates.count', { count: list.total }) : undefined} />
         <View style={styles.filters}>
           <SearchBar testID="candidates-search" value={search} onChangeText={setSearch} placeholder={t('candidates.search')} />
           <Segmented
@@ -54,14 +54,14 @@ export default function RecruitmentScreen() {
           emptyTitle={t('candidates.empty.title')}
           emptyBody={q ? t('search.noResult', { q }) : undefined}
           renderItem={(candidate) => (
-            <Card>
-              <ListItem
-                testID={`candidate-${candidate.id}`}
-                title={fullName(candidate.lastName, candidate.firstName)}
-                subtitle={[candidate.desiredPosition, candidate.society, formatDate(candidate.createdAt)].filter(Boolean).join(' · ')}
-                trailing={<Badge label={candidate.status} />}
-              />
-            </Card>
+            <EmployeeRow
+              testID={`candidate-${candidate.id}`}
+              employeeId={null}
+              name={fullName(candidate.lastName, candidate.firstName)}
+              position={candidate.desiredPosition}
+              detail={[candidate.society, formatDate(candidate.createdAt)].filter(Boolean).join(' · ') || null}
+              badge={<Badge label={candidate.status} tone="info" />}
+            />
           )}
         />
       </SafeAreaView>
@@ -71,5 +71,5 @@ export default function RecruitmentScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
+  filters: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
 });
