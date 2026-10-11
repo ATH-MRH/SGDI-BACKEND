@@ -50,7 +50,7 @@ const board = (items = [item(1), item(2, { stage: 'review', stage_label: 'Examen
 
 test('recrute.html loads the processing workspace and exposes it in the navigation', () => {
   assert.match(page, /<script src="\/static\/recrute-emploi\.js/); assert.match(page, /recrute-emploi\.css/);
-  assert.match(page, /<section id="processingSection"/); assert.match(page, /"announcements","processing"\]\.includes\(section\)/);
+  assert.match(page, /<section id="processingSection"/); assert.match(page, /"announcements","processing","retention"\]\.includes\(section\)/);
 });
 
 test('dashboard: clickable counters, filters sent to the server, table and pipeline views', async () => {

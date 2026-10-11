@@ -40,3 +40,25 @@
 .emploi-viewer-body iframe{width:100%;height:100%;border:0;background:#fff}.emploi-viewer-body img{width:100%;max-width:100%;height:auto;display:block}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:640px){.emploi-compose{flex-direction:column;align-items:stretch}.emploi-bubble{max-width:92%}.emploi-column{flex-basis:78vw}}
+/* Conservation des données : écran consultatif, mêmes composants que le traitement IRON Emploi. */
+.retention-simulate{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.retention-simulate label{font-size:12px;color:var(--muted,#5e6e84)}
+.retention-simulate input[type=date]{width:auto;flex:0 1 170px;min-width:0}
+.retention-readonly{margin:0 0 10px}
+.retention-mode{padding:10px 14px;border-radius:12px;border:1px solid var(--line,#dfe5ee);background:#fff;font-size:13px;margin-bottom:12px}
+.retention-mode.simulated{background:#fef3c7;border-color:#f59e0b;color:#78350f}
+.retention-filters input[type=search]{grid-column:span 2;min-width:0}
+.retention-table td{vertical-align:top}.retention-action{text-align:right;white-space:nowrap}
+.retention-detail-row td{background:#f8fafc}
+.retention-detail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px}.retention-detail h4{margin:0 0 6px;font-size:12.5px}
+.retention-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}.retention-list li{display:flex;justify-content:space-between;gap:12px;font-size:12.5px}
+.retention-list span{color:var(--muted,#5e6e84)}.retention-list strong{text-align:right;overflow-wrap:anywhere}
+.retention-review{padding:16px;margin-top:14px}.retention-review h3{margin:0 0 6px;font-size:15px;display:flex;align-items:center;gap:8px}
+@media (max-width:720px){
+  .retention-filters input[type=search]{grid-column:auto}
+  .retention-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .retention-table,.retention-table tbody,.retention-table tr,.retention-table td{display:block;width:100%}
+  .retention-table tr{padding:10px 12px;border-bottom:1px solid var(--line,#dfe5ee)}
+  .retention-table td{padding:3px 0;border:0}.retention-table td[data-label]::before{content:attr(data-label);display:block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#5e6e84)}
+  .retention-action{text-align:left}.retention-table tr.retention-detail-row{display:block;background:#f8fafc}
+  .retention-table tr.retention-detail-row td{display:block;grid-column:1/-1;width:100%;max-width:none}
+}

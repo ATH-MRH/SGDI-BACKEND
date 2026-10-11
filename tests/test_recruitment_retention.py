@@ -99,10 +99,17 @@ def test_report_lists_only_what_is_due_and_deletes_nothing(db):
     assert report['declined_applications'][0]['would_delete'] == {
         'application': 1, 'documents': 0, 'messages': 1, 'interviews': 0, 'notes': 0, 'events': 0, 'document_requests': 0, 'contracts': 0}
     assert report['declined_applications'][0]['basis'] == 'refus communiqué'
+    application = report['declined_applications'][0]
+    assert (application['name'], application['society'], application['reference_on'], application['due_on']) == (
+        'Retention A Test', 'Iron Global Securite', '2028-03-15', '2030-03-15')
+    assert report['simulated'] is True and retention.retention_report(db)['simulated'] is False
+    # L'aperçu ne porte que des identités, des dates et des décomptes : ni téléphone, ni contenu de pièce ou de message.
+    assert 'Bonjour' not in str(report) and '+21355' not in str(report) and 'cv.pdf' not in str(report)
     assert [item['account_id'] for item in report['inactive_accounts']] == [idle.id]
     account = report['inactive_accounts'][0]
     assert account['would_delete'] == {'account': 1, 'cv': 1, 'photo': 0, 'alerts': 0, 'notifications': 1, 'push_devices': 0, 'sessions': 0}
     assert account['would_keep'] == {'applications_detached': 1} and account['basis'] == 'dernière activité'
+    assert (account['reference_on'], account['due_on']) == ('2028-03-15', '2030-03-15')
     assert [item['name'] for item in mine('declined_dossiers')] == ['Retention F Test']
     assert [(item['name'], item['employee_code']) for item in mine('departed_recruits')] == [('Retention RET-1 Test', 'RET-1')]
     assert sorted(item['reason'] for item in mine('undated')) == ['date de départ non enregistrée', 'date de l’avis défavorable non enregistrée']
@@ -116,10 +123,10 @@ def test_endpoint_is_read_only_and_reserved_to_global_recruiters(client, db):
     _account(db, '+213550000003', last_activity_at=datetime(2020, 1, 1))
     db.commit()
     url = '/api/drh/recruitment-retention'
-    assert client.get(url).status_code == 401
+    assert client.get(url).status_code == 401 and 'counts' not in client.get(url).text
     assert client.get(url, headers=_login(client, db, 'ret_ops', modules=('ops',))).status_code == 403
     local = client.get(url, headers=_login(client, db, 'ret_local'))
-    assert local.status_code == 403 and 'périmètre global' in local.json()['detail']
+    assert local.status_code == 403 and 'périmètre global' in local.json()['detail'] and set(local.json()) == {'detail'}
     headers = _login(client, db, 'ret_global', global_access=True)
     response = client.get(url, headers=headers, params={'as_of': '2030-03-15'})
     assert response.status_code == 200 and response.json()['counts']['inactive_accounts'] == 1 and response.json()['dry_run'] is True

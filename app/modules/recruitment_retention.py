@@ -56,10 +56,21 @@ def _day(value) -> date | None:
         return None
 
 
+def _deadline(reference: date) -> dict:
+    """Date qui fait courir le délai et jour où il est atteint, pour l'affichage."""
+    return {'reference_on': reference.isoformat(), 'due_on': months_before(reference, -RETENTION_MONTHS).isoformat()}
+
+
 def _counts(db: Session, model, column, ids: list[int]) -> dict[int, int]:
     if not ids:
         return {}
     return dict(db.execute(select(column, func.count()).where(column.in_(ids)).group_by(column)).all())
+
+
+def _identity(candidate: Candidate | None) -> dict:
+    if candidate is None:
+        return {'name': 'Dossier introuvable', 'reference': None, 'society': None}
+    return {'name': f'{candidate.last_name} {candidate.first_name}'.strip(), 'reference': candidate_reference(candidate), 'society': candidate.society}
 
 
 def _declined_applications(db: Session, cutoff: date) -> list[dict]:
@@ -69,10 +80,12 @@ def _declined_applications(db: Session, cutoff: date) -> list[dict]:
                       .order_by(refused_at, Application.id)).all()
     due = [row for row in rows if _day(row.outcome_communicated_at or row.status_updated_at) <= cutoff][:MAX_ITEMS]
     ids = [row.id for row in due]
+    candidates = {row.id: row for row in db.scalars(select(Candidate).where(Candidate.id.in_({row.candidate_id for row in due}))).all()} if due else {}
     linked = {name: _counts(db, model, model.application_id, ids) for name, model in (
         ('documents', Document), ('messages', Message), ('interviews', Interview), ('notes', Note), ('events', Event),
         ('document_requests', DocumentRequest), ('contracts', Contract))}
     return [{'application_id': row.id, 'candidate_id': row.candidate_id, 'position': row.position, 'offer_id': row.offer_id,
+             **_identity(candidates.get(row.candidate_id)), **_deadline(_day(row.outcome_communicated_at or row.status_updated_at)),
              'refused_on': _day(row.outcome_communicated_at or row.status_updated_at).isoformat(),
              'basis': 'refus communiqué' if row.outcome_communicated_at else 'dernier changement d’état',
              'would_delete': {'application': 1, **{name: values.get(row.id, 0) for name, values in linked.items()}}} for row in due]
@@ -88,7 +101,8 @@ def _inactive_accounts(db: Session, cutoff: date) -> list[dict]:
         _counts(db, model, column, ids) for model, column in ((Alert, Alert.account_id), (Notification, Notification.account_id),
                                                               (PushDevice, PushDevice.account_id), (CandidateSession, CandidateSession.account_id),
                                                               (Application, Application.account_id)))
-    return [{'account_id': account_id, 'name': f'{last_name} {first_name}'.strip(),
+    return [{'account_id': account_id, 'name': f'{last_name} {first_name}'.strip(), 'reference': None, 'society': None,
+             **_deadline(_day(last_activity or updated_at or created_at)),
              'last_activity_on': _day(last_activity or updated_at or created_at).isoformat(),
              'basis': 'dernière activité' if last_activity else 'dernière modification du profil',
              'would_delete': {'account': 1, 'cv': int(has_cv), 'photo': int(has_photo), 'alerts': alerts.get(account_id, 0),
@@ -104,7 +118,7 @@ def _dossiers(db: Session, cutoff: date) -> tuple[list[dict], list[dict], list[d
     tracked = set(db.scalars(select(Application.candidate_id).where(Application.outcome == 'unfavorable')).all())
     for row in db.execute(select(Candidate).order_by(Candidate.id).execution_options(yield_per=200)).scalars():
         data = row.data if isinstance(row.data, dict) else {}
-        entry = {'candidate_id': row.id, 'reference': candidate_reference(row), 'name': f'{row.last_name} {row.first_name}'.strip(), 'society': row.society}
+        entry = {'candidate_id': row.id, **_identity(row)}
         if _identity_key(row.status).lower() in HIRED_STATUSES:
             employee = db.get(Employee, int(data['convertedEmployeeId'])) if str(data.get('convertedEmployeeId') or '').isdigit() else None
             if employee is None or _identity_key(employee.status).lower() not in DEPARTED_STATUSES:
@@ -115,13 +129,15 @@ def _dossiers(db: Session, cutoff: date) -> tuple[list[dict], list[dict], list[d
             if left_on is None:
                 undated.append({**entry, 'reason': 'date de départ non enregistrée'})
             elif left_on <= cutoff:
-                departed.append({**entry, 'left_on': left_on.isoformat(), 'would_delete': {'candidate_dossier': 1}})
+                departed.append({**entry, **_deadline(left_on), 'left_on': left_on.isoformat(), 'basis': 'date de sortie de la fiche employé',
+                                 'would_delete': {'candidate_dossier': 1}})
         elif _identity_key(data.get('avisDecision')).lower() == 'defavorable' and row.id not in tracked:
             refused_on = _day(data.get('avisDate'))
             if refused_on is None:
                 undated.append({**entry, 'reason': 'date de l’avis défavorable non enregistrée'})
             elif refused_on <= cutoff:
-                declined.append({**entry, 'refused_on': refused_on.isoformat(), 'would_delete': {'candidate_dossier': 1}})
+                declined.append({**entry, **_deadline(refused_on), 'refused_on': refused_on.isoformat(), 'basis': 'date de l’avis défavorable',
+                                 'would_delete': {'candidate_dossier': 1}})
     return declined[:MAX_ITEMS], departed[:MAX_ITEMS], undated[:MAX_ITEMS]
 
 
@@ -132,7 +148,8 @@ def retention_report(db: Session, today: date | None = None) -> dict:
     declined, departed, undated = _dossiers(db, cutoff)
     sections = {'declined_applications': applications, 'declined_dossiers': declined, 'inactive_accounts': accounts,
                 'departed_recruits': departed, 'undated': undated}
-    return {'generated_on': today.isoformat(), 'retention_months': RETENTION_MONTHS, 'due_before': cutoff.isoformat(), 'dry_run': True,
+    return {'generated_on': today.isoformat(), 'simulated': today != date.today(), 'retention_months': RETENTION_MONTHS,
+            'due_before': cutoff.isoformat(), 'dry_run': True, 'limit': MAX_ITEMS,
             'counts': {name: len(items) for name, items in sections.items()}, **sections}
 
 

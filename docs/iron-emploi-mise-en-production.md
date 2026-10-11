@@ -3,8 +3,10 @@
 Procédure pour mettre en service le serveur (PR 12) puis l'application (PR 13). Elle ne contient
 aucun secret : les valeurs restent dans le panneau de l'hébergeur.
 
-État vérifié le 11 octobre 2026 : la production sert le commit `ad76687d` de `main`, dont la tête
-Alembic est `20261013_0002`.
+État vérifié le 11 octobre 2026 au soir : la production sert le commit `7bbb549e` de `main`, dont la
+tête Alembic est `20261014_0001` (rattachement d'un contrat DRH à un client / site, sans rapport avec
+IRON Emploi). Les révisions IRON Emploi ont été renumérotées à sa suite ; un identifiant en double
+aurait fait sauter la création des tables.
 
 ## 1. Ce que change la mise en production
 
@@ -19,13 +21,13 @@ Alembic est `20261013_0002`.
 
 ### Migrations attendues
 
-`start.sh` exécute `alembic upgrade head` à chaque démarrage. En partant de `20261013_0002`, la
+`start.sh` exécute `alembic upgrade head` à chaque démarrage. En partant de `20261014_0001`, la
 fusion de la PR 12 applique quatre révisions, dans cet ordre :
 
 | Révision | Effet |
 | --- | --- |
-| `20261014_0001` | Crée 5 tables : `recruitment_companies`, `recruitment_job_offers`, `recruitment_candidate_accounts`, `recruitment_candidate_sessions`, `recruitment_applications`. |
-| `20261014_0002` | Crée 11 tables (`recruitment_messages`, `recruitment_interviews`, `recruitment_job_alerts`, `recruitment_notifications`, `recruitment_push_devices`, `recruitment_application_documents`, `recruitment_document_requests`, `recruitment_application_notes`, `recruitment_application_events`, `recruitment_application_contracts`, `recruitment_tips`) et ajoute des colonnes aux tables créées par la révision précédente. |
+| `20261014_0002` | Crée 5 tables : `recruitment_companies`, `recruitment_job_offers`, `recruitment_candidate_accounts`, `recruitment_candidate_sessions`, `recruitment_applications`. |
+| `20261014_0003` | Crée 11 tables (`recruitment_messages`, `recruitment_interviews`, `recruitment_job_alerts`, `recruitment_notifications`, `recruitment_push_devices`, `recruitment_application_documents`, `recruitment_document_requests`, `recruitment_application_notes`, `recruitment_application_events`, `recruitment_application_contracts`, `recruitment_tips`) et ajoute des colonnes aux tables créées par la révision précédente. |
 | `20261015_0001` | Ajoute `salary_amount` et `salary_period` à `recruitment_job_offers`. |
 | `20261016_0001` | Ajoute `last_activity_at` et son index à `recruitment_candidate_accounts`, et y reporte la dernière date connue des espaces existants. |
 
@@ -66,7 +68,7 @@ volume `sgdi_uploads`) ne s'y applique pas ; utiliser `scripts/backup-coolify.sh
    `files.tar.gz`, `INVENTAIRE.txt` et `SHA256SUMS`. Il ne modifie ni la base ni les fichiers, et
    s'arrête en erreur si l'export ne contient pas toutes les tables de la base ou si l'archive ne
    contient pas tous les fichiers.
-3. **Contrôler l'inventaire** affiché : `alembic_version=20261013_0002`, nombre de tables et de
+3. **Contrôler l'inventaire** affiché : `alembic_version=20261014_0001`, nombre de tables et de
    fichiers cohérent.
 4. **Copier hors du serveur** puis recontrôler les empreintes sur la copie :
 
@@ -137,7 +139,7 @@ méthodes, essayées toutes deux sur une base PostgreSQL 17 locale.
 ### A. Retour arrière qui conserve les données (à préférer)
 
 1. Avec le code de la PR 12 encore en place, dans le conteneur applicatif :
-   `python3 -m alembic stamp 20261013_0002`. Seul le numéro de version change ; les tables IRON
+   `python3 -m alembic stamp 20261014_0001`. Seul le numéro de version change ; les tables IRON
    Emploi et leur contenu restent en place.
 2. Annuler le commit de fusion sur `main` (`git revert -m 1 <commit de fusion>`), ce qui redéploie
    le code précédent. Il démarre normalement et ignore les tables IRON Emploi.
@@ -149,7 +151,7 @@ Pendant l'intervalle, l'application mobile IRON Emploi reçoit des erreurs sur l
 
 ### B. Retour complet (uniquement avant toute saisie réelle)
 
-`python3 -m alembic downgrade 20261013_0002` avec le code de la PR 12, puis le `git revert`. Les
+`python3 -m alembic downgrade 20261014_0001` avec le code de la PR 12, puis le `git revert`. Les
 16 tables IRON Emploi sont **supprimées avec leur contenu** ; rien d'autre n'est touché.
 
 ### Sans retour arrière du code
@@ -277,6 +279,26 @@ automatiquement aucune candidature ni aucun espace candidat.
 | Session de l'espace candidat | — | Expire après 30 jours, puis supprimée |
 | Code SMS de vérification | — | Valable 5 minutes, ligne supprimée après 24 heures |
 | Suppression de l'espace par le candidat | Immédiate | Efface profil, CV, photo, alertes et notifications ; les candidatures transmises restent au service recrutement, sans lien avec l'espace |
+
+**Écran « Conservation des données ».** Dans recrute.irongs.com, entrée du même nom dans la barre
+latérale. Il affiche l'aperçu ci-dessous : compteurs par catégorie, tableau (candidat, catégorie,
+date de référence, échéance, données concernées), détail par dossier, rubrique « À vérifier »,
+recherche, filtres et pagination. Une simulation de date est signalée par un bandeau distinct.
+L'écran est **consultatif** : il n'envoie que des lectures, et ne propose ni suppression ni
+modification.
+
+Organisation retenue : la déléguée à la protection des données examine les dossiers arrivés à
+échéance ; la direction valide les éventuelles suppressions, qui restent à faire hors de cet écran.
+
+Droits nécessaires pour consulter l'écran, à accorder par l'administrateur du système dans le
+panneau d'administration (rien n'est accordé automatiquement) :
+
+1. un compte actif ayant accès au module Recrutement (`recrute`) ou DRH ;
+2. **et** le périmètre global sur les sociétés (« accès à toutes les sociétés »), ou un rôle
+   administrateur.
+
+Un compte recruteur limité à une société reçoit un refus (403) : l'aperçu couvre toutes les
+sociétés et n'est pas découpé par société. L'écran affiche alors le refus et n'essaie rien d'autre.
 
 **Aperçu des échéances.** `GET /api/drh/recruitment-retention` (administrateur ou recruteur à
 périmètre global ; `?as_of=AAAA-MM-JJ` pour simuler une date) liste, sans rien modifier : les
