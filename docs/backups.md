@@ -89,13 +89,20 @@ Les données ne quittent le serveur que chiffrées.
 
 ### Préparation côté OVHcloud (à faire par le titulaire du compte, rien n'est créé par le dépôt)
 
-1. **Région** : de préférence un autre centre de données que celui du serveur, à documenter.
+1. **Région** : une région OVHcloud située en France, de préférence un autre centre de données
+   que celui du serveur. À confirmer avant création : les exigences de localisation des données
+   applicables (données de paie, de pointage et biométriques d'employés) autorisent bien cet
+   hébergement.
 2. **Deux compartiments privés**, créés avec **Object Lock activé** — il ne peut pas l'être
-   après coup — et le versionnement :
+   après coup — et le versionnement, en mode **Compliance** :
    - quotidien : rétention par défaut de 30 jours ;
    - mensuel : rétention par défaut de 365 jours.
-   Le mode *Governance* laisse un administrateur autorisé lever le verrou ; le mode
-   *Compliance* l'interdit à tous, y compris en cas d'erreur : à choisir en connaissance de cause.
+   En mode Compliance, personne ne peut supprimer ni raccourcir la rétention d'un objet avant
+   son échéance, pas même le titulaire du compte. Conséquences à accepter avant de créer :
+   une archive déposée par erreur est conservée et facturée jusqu'au bout ; une demande
+   d'effacement de données ne peut pas être exécutée dans ces archives avant leur expiration
+   (12 mois au plus) ; une durée mal saisie ne se corrige pas sur les objets déjà déposés.
+   Commencer par un essai avec un fichier sans valeur et une rétention d'un jour.
 3. **Règles de cycle de vie** : expiration après 30 jours (quotidien) et 365 jours (mensuel),
    versions non courantes comprises. Vérifier dans la documentation OVHcloud la disponibilité
    d'Object Lock et du cycle de vie dans la région choisie, et leur comportement combiné.
@@ -162,6 +169,11 @@ Modèles dans `scripts/systemd/` (non installés, non activés) : sauvegarde cha
 - **Deux sauvegardes simultanées** : impossibles (verrou ; la seconde sort avec le code 75).
 - **Échec** : code de retour non nul, `status/last_run.status` à `FAILED` avec l'étape en cause,
   commande d'alerte (`BACKUP_ALERT_COMMAND`). Une archive incomplète n'est jamais laissée.
+- **Alerte par courriel** : `scripts/backup_alert_mail.sh` envoie le message à
+  `BACKUP_ALERT_EMAIL_TO` par le serveur d'envoi `BACKUP_ALERT_SMTP_URL` (connexion chiffrée
+  exigée). Les identifiants SMTP sont lus dans un fichier `600` (`BACKUP_ALERT_SMTP_NETRC`),
+  jamais passés en argument. Un courriel envoyé depuis le serveur ne prévient pas si le serveur
+  est arrêté : d'où le signal de vie ci-dessous.
 - **Sauvegarde manquante** : `backup_check.sh`, planifié à part, échoue si la dernière archive a
   plus de 26 heures, est altérée, ou si la dernière exécution a échoué.
 - **Serveur muet** : `BACKUP_HEARTBEAT_URL` est appelée après chaque succès ; un service de
@@ -223,7 +235,7 @@ Vérifié par `tests/test_backup_scripts.py` sur PostgreSQL jetable et données 
 complet en mode clé publique et en mode phrase secrète, refus sans chiffrement, droits des
 fichiers, absence de clair résiduel, échec du dump, interruption, verrou, reprise après arrêt
 brutal, archive altérée, clé absente, écart de nombre de lignes, rétention, copie externe
-quotidienne et mensuelle (avec un `rclone` simulé), mode conteneur (avec un `docker` simulé), surveillance. Le cycle a aussi été déroulé sur le schéma complet de
+quotidienne et mensuelle (avec un `rclone` simulé), alerte par courriel (avec un `curl` simulé), mode conteneur (avec un `docker` simulé), surveillance. Le cycle a aussi été déroulé sur le schéma complet de
 l'application (130 tables).
 
 Non vérifié : aucune sauvegarde de données réelles, aucune destination externe réelle, les

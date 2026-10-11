@@ -425,6 +425,36 @@ def test_offsite_required_without_destination_is_refused(env):
     assert result.returncode != 0 and "copie hors serveur exigée" in result.stderr
 
 
+def test_failure_alert_is_sent_by_mail_without_exposing_the_smtp_password(env, tmp_path):
+    """curl simulé : vérifie le message, le destinataire, et que le mot de passe n'est jamais en argument."""
+    sent, args = tmp_path / "mail.txt", tmp_path / "curl-args.txt"
+    stub_dir = tmp_path / "curl-bin"
+    stub_dir.mkdir()
+    (stub_dir / "curl").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{args}"\ncat > "{sent}"\n')
+    (stub_dir / "curl").chmod(0o755)
+    netrc = tmp_path / "smtp.netrc"
+    netrc.write_text("machine smtp.example.invalid login alerte password mot-de-passe-fictif\n")
+    netrc.chmod(0o600)
+    mail = {**env, "PATH": f"{stub_dir}:{env['PATH']}", "BACKUP_PG_DB": "atlas_base_inexistante_xyz",
+            "BACKUP_ALERT_COMMAND": f'bash "{REPO}/scripts/backup_alert_mail.sh"', "BACKUP_ALERT_EMAIL_TO": "alerte@example.invalid",
+            "BACKUP_ALERT_EMAIL_FROM": "atlas@example.invalid", "BACKUP_ALERT_SMTP_URL": "smtps://smtp.example.invalid:465",
+            "BACKUP_ALERT_SMTP_NETRC": str(netrc)}
+
+    failed = _run(BACKUP, mail)
+
+    assert failed.returncode != 0
+    message, arguments = sent.read_text(), args.read_text().splitlines()
+    assert "To: alerte@example.invalid" in message and "Subject: [ATLAS] Sauvegarde - alerte" in message
+    assert "en échec" in message and "atlas_base_inexistante_xyz" in message
+    assert "alerte@example.invalid" in arguments and "--ssl-reqd" in arguments and str(netrc) in arguments
+    assert "mot-de-passe-fictif" not in message + "\n".join(arguments) + failed.stdout + failed.stderr
+
+    netrc.chmod(0o644)                                            # identifiants lisibles par d'autres : refus
+    sent.unlink()
+    refused = _run(BACKUP, mail)
+    assert "alerte non envoyée" in refused.stderr and not sent.exists()
+
+
 def test_check_detects_missing_stale_and_failed_backups(env):
     Path(env["BACKUP_DIR"]).mkdir()
     missing = _run(CHECK, env)
