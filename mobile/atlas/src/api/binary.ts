@@ -1,5 +1,5 @@
 /**
- * Conversion d'une image reçue du backend en URI `data:` affichable par <Image>.
+ * Conversion des octets d'une image reçue du backend en URI `data:` affichable par <Image>.
  *
  * L'image n'est jamais écrite sur le disque : elle vit en mémoire, dans le cache de
  * données de la session, et disparaît avec lui.
@@ -22,43 +22,18 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return output;
 }
 
-type Reader = { result: unknown; onload: (() => void) | null; onerror: (() => void) | null; readAsDataURL(blob: Blob): void };
-
-function readerClass(): (new () => Reader) | null {
-  const candidate = (globalThis as { FileReader?: new () => Reader }).FileReader;
-  return typeof candidate === 'function' ? candidate : null;
-}
-
-/** Contenu d'un blob en base64. React Native lit un blob par FileReader ; ailleurs, par ses octets. */
-export async function blobToBase64(blob: Blob): Promise<string> {
-  const FileReaderClass = readerClass();
-  if (FileReaderClass) {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReaderClass();
-      reader.onload = () => (typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('lecture')));
-      reader.onerror = () => reject(new Error('lecture'));
-      reader.readAsDataURL(blob);
-    });
-    const comma = dataUrl.indexOf(',');
-    return comma >= 0 ? dataUrl.slice(comma + 1) : '';
-  }
-  return bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
-}
-
-/** Types d'image acceptés : ceux que le backend produit et que les deux plateformes affichent. */
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-
-/** Type d'image reconnu d'un en-tête Content-Type ("image/jpeg; charset=…" → "image/jpeg"), sinon null. */
-export function imageTypeOf(contentType: string | null | undefined): string | null {
-  const type = (contentType ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
-  return (IMAGE_TYPES as readonly string[]).includes(type) ? type : null;
+/**
+ * Type d'une image d'après ses premiers octets (JPEG, PNG ou WebP), sinon null.
+ * La signature fait foi, pas l'en-tête Content-Type : une page d'erreur servie en 200 est
+ * refusée, et une image reste acceptée si un intermédiaire a réécrit son type.
+ */
+export function imageTypeOfBytes(bytes: Uint8Array): string | null {
+  const starts = (signature: number[], offset = 0) => signature.every((byte, index) => bytes[offset + index] === byte);
+  if (starts([0xff, 0xd8, 0xff])) return 'image/jpeg';
+  if (starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  if (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)) return 'image/webp';
+  return null;
 }
 
 /** Taille maximale acceptée pour une image chargée en mémoire. */
 export const MAX_IMAGE_BYTES = 2_000_000;
-
-/** Taille en octets d'un contenu encodé en base64. */
-export function base64ByteLength(base64: string): number {
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
-}

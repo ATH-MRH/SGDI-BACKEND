@@ -1,4 +1,4 @@
-import { base64ByteLength, blobToBase64, imageTypeOf, MAX_IMAGE_BYTES } from './binary';
+import { bytesToBase64, imageTypeOfBytes, MAX_IMAGE_BYTES } from './binary';
 import { ApiError, errorFromResponse } from './errors';
 
 export type QueryValue = string | number | boolean | null | undefined;
@@ -138,17 +138,17 @@ export function createApiClient(deps: ApiClientDeps): ApiClient {
     if (!response.ok) {
       throw errorFromResponse(response.status, await readBody(response), response.headers, correlationId || undefined);
     }
-    const type = imageTypeOf(response.headers.get('content-type'));
-    if (!type) throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
-    let base64 = '';
+    // Octets lus directement : `blob()` passerait par le stockage natif des blobs puis par
+    // FileReader, un détour qui dépend du moteur `fetch` et du build natif installés.
+    let bytes: Uint8Array;
     try {
-      base64 = await blobToBase64(await response.blob());
+      bytes = new Uint8Array(await response.arrayBuffer());
     } catch {
       throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
     }
-    const size = base64ByteLength(base64);
-    if (size === 0 || size > MAX_IMAGE_BYTES) throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
-    return `data:${type};base64,${base64}`;
+    const type = bytes.length <= MAX_IMAGE_BYTES ? imageTypeOfBytes(bytes) : null;
+    if (!type) throw new ApiError({ kind: 'invalid_response', status: response.status, correlationId });
+    return `data:${type};base64,${bytesToBase64(bytes)}`;
   }
 
   async function send(

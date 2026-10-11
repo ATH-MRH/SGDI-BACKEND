@@ -463,6 +463,19 @@ describeIntegration('backend ATLAS réel', () => {
       expect([bytes[0], bytes[1], bytes[bytes.length - 2], bytes[bytes.length - 1]]).toEqual([0xff, 0xd8, 0xff, 0xd9]);
     });
 
+    itWithImaging('401 puis renouvellement puis 200 : un jeton refusé est remplacé et le portrait arrive au second essai', async () => {
+      const fresh = (await session().signIn('ATLAS_IT_ADMIN')).token;
+      let token = 'jeton.perime.refuse';
+      const refreshToken = jest.fn(async () => (token = fresh));
+      const onUnauthorized = jest.fn();
+      const client = createApiClient({ baseUrl: baseUrl ?? null, getToken: () => token, refreshToken, onUnauthorized, fetchImpl: nodeFetch });
+      const uri = await client.getImage(`/api/drh/employees/${photoId}/portrait`);
+      expect(uri.startsWith('data:image/jpeg;base64,/9j/')).toBe(true);
+      expect(refreshToken).toHaveBeenCalledTimes(1);
+      expect(refreshToken).toHaveBeenCalledWith('jeton.perime.refuse');
+      expect(onUnauthorized).not.toHaveBeenCalled();
+    });
+
     it('404 : une fiche qui référence une photo absente du serveur annonce une photo, mais n’a pas de portrait', async () => {
       const s = session();
       await s.signIn('ATLAS_IT_ADMIN');

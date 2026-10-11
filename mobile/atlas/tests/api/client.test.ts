@@ -251,12 +251,35 @@ describe('client API — image authentifiée', () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
-  it('accepte PNG et WebP, et ignore les paramètres du Content-Type', async () => {
+  it('reconnaît JPEG, PNG et WebP à leur signature, quel que soit le Content-Type annoncé', async () => {
     const { client, fetchImpl } = setup();
-    fetchImpl.mockResolvedValueOnce(image(200, 'image/png; charset=binary'));
-    expect(await client.getImage(PATH)).toBe(`data:image/png;base64,${BASE64}`);
-    fetchImpl.mockResolvedValueOnce(image(200, 'IMAGE/WEBP'));
-    expect(await client.getImage(PATH)).toBe(`data:image/webp;base64,${BASE64}`);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+    const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x04, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    fetchImpl.mockResolvedValueOnce(image(200, 'image/png; charset=binary', png));
+    expect(await client.getImage(PATH)).toBe(`data:image/png;base64,${Buffer.from(png).toString('base64')}`);
+    fetchImpl.mockResolvedValueOnce(image(200, 'application/octet-stream', webp));
+    expect(await client.getImage(PATH)).toBe(`data:image/webp;base64,${Buffer.from(webp).toString('base64')}`);
+    fetchImpl.mockResolvedValueOnce(new Response(PIXELS as unknown as BodyInit, { status: 200 }));
+    expect(await client.getImage(PATH)).toBe(`data:image/jpeg;base64,${BASE64}`);
+  });
+
+  it('lit les octets de la réponse sans passer par blob() ni FileReader', async () => {
+    const { client, fetchImpl } = setup();
+    const response = image();
+    const blob = jest.spyOn(response, 'blob');
+    fetchImpl.mockResolvedValue(response);
+    expect(await client.getImage(PATH)).toBe(`data:image/jpeg;base64,${BASE64}`);
+    expect(blob).not.toHaveBeenCalled();
+  });
+
+  it('une réponse dont le corps ne peut pas être lu est refusée', async () => {
+    const { client, fetchImpl } = setup();
+    const response = image();
+    jest.spyOn(response, 'arrayBuffer').mockRejectedValue(new Error('lecture'));
+    fetchImpl.mockResolvedValue(response);
+    const error = await captureError(client.getImage(PATH));
+    expect(error.kind).toBe('invalid_response');
+    expect(error.status).toBe(200);
   });
 
   it('401 puis renouvellement puis 200 : un seul nouvel essai, avec le nouveau jeton', async () => {
@@ -317,7 +340,8 @@ describe('client API — image authentifiée', () => {
     ['du HTML', new Response('<html>connexion</html>', { status: 200, headers: { 'Content-Type': 'text/html' } })],
     ['du JSON', new Response('{"ok":true}', { status: 200, headers: { 'Content-Type': 'application/json' } })],
     ['un SVG', new Response('<svg/>', { status: 200, headers: { 'Content-Type': 'image/svg+xml' } })],
-    ['aucun type', new Response(PIXELS as unknown as BodyInit, { status: 200 })],
+    ['du texte annoncé comme une image', new Response('Service indisponible', { status: 200, headers: { 'Content-Type': 'image/jpeg' } })],
+    ['une image tronquée', new Response(PIXELS.slice(0, 2) as unknown as BodyInit, { status: 200, headers: { 'Content-Type': 'image/jpeg' } })],
     ['une image vide', new Response(new Uint8Array(0) as unknown as BodyInit, { status: 200, headers: { 'Content-Type': 'image/jpeg' } })],
   ])('refuse %s à la place d’une image', async (_label, response) => {
     const { client, fetchImpl } = setup();
@@ -327,7 +351,9 @@ describe('client API — image authentifiée', () => {
 
   it('refuse une image trop lourde pour être gardée en mémoire', async () => {
     const { client, fetchImpl } = setup();
-    fetchImpl.mockResolvedValue(image(200, 'image/jpeg', new Uint8Array(2_000_001)));
+    const heavy = new Uint8Array(2_000_001);
+    heavy.set(PIXELS);
+    fetchImpl.mockResolvedValue(image(200, 'image/jpeg', heavy));
     expect((await captureError(client.getImage(PATH))).kind).toBe('invalid_response');
   });
 
