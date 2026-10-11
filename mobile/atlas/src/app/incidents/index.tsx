@@ -12,7 +12,7 @@ import { canAccessSociety } from '@/auth/permissions';
 import { sameSociety } from '@/api/domains/ops';
 import { Gate } from '@/components/Gate';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Loader, ScreenHeader } from '@/components/ui';
+import { AppText, AtlasHeader, Badge, Banner, Button, Card, ConfirmDialog, EmptyState, ErrorState, IncidentRow, Loader } from '@/components/ui';
 import { access } from '@/features/access';
 import { incidentSeverity } from '@/features/status';
 import { t, type TranslationKey } from '@/i18n';
@@ -49,7 +49,7 @@ export default function IncidentsScreen() {
   return (
     <Gate allowed={allowed}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']} testID="incidents-screen">
-        <ScreenHeader title={t('entry.incidents')} />
+        <AtlasHeader back title={t('entry.incidents')} subtitle={t('incidents.subtitle')} />
         {query.isPending ? (
           <Loader />
         ) : query.error ? (
@@ -64,23 +64,31 @@ export default function IncidentsScreen() {
             ListHeaderComponent={<PendingReports />}
             ListEmptyComponent={<EmptyState icon="warning-outline" title={t('incidents.empty.title')} body={t('incidents.empty.body')} testID="incidents-empty" />}
             renderItem={({ item }) => (
-              <Card testID={`incident-${item.id}`}>
-                <AppText variant="bodyStrong">{item.subject || incidentTypeLabel(item.type)}</AppText>
-                <AppText variant="caption" color={colors.textSecondary}>
-                  {[incidentTypeLabel(item.type), formatDate(item.date), item.time, siteName(item.siteId)].filter(Boolean).join(' · ')}
-                </AppText>
-                {item.description ? <AppText numberOfLines={4}>{item.description}</AppText> : null}
-                <View style={styles.badges}>
-                  {item.severity ? <StatusBadge status={incidentSeverity(item.severity)} fallback={item.severity} /> : null}
-                  <Badge label={item.status} />
-                </View>
-              </Card>
+              <IncidentRow
+                testID={`incident-${item.id}`}
+                tone={incidentSeverity(item.severity)?.tone ?? 'neutral'}
+                title={item.subject || incidentTypeLabel(item.type)}
+                detail={[incidentTypeLabel(item.type), formatDate(item.date), item.time, siteName(item.siteId)].filter(Boolean).join(' · ')}
+                footer={
+                  <>
+                    {item.description ? (
+                      <AppText variant="caption" color={colors.text} numberOfLines={4}>
+                        {item.description}
+                      </AppText>
+                    ) : null}
+                    <View style={styles.badges}>
+                      {item.severity ? <StatusBadge status={incidentSeverity(item.severity)} fallback={item.severity} /> : null}
+                      <Badge label={item.status} />
+                    </View>
+                  </>
+                }
+              />
             )}
           />
         )}
         {access.createIncident(user) ? (
           <View style={styles.footer}>
-            <Button testID="incident-new" label={t('incidents.new')} onPress={() => router.push('/incidents/new' as never)} />
+            <Button testID="incident-new" icon="add" label={t('incidents.new')} onPress={() => router.push('/incidents/new' as never)} />
           </View>
         ) : null}
       </SafeAreaView>
@@ -100,9 +108,7 @@ function PendingReports() {
       <AppText variant="label" accessibilityRole="header">
         {t('offline.title', { count: offline.items.length })}
       </AppText>
-      <AppText variant="caption" color={colors.textSecondary}>
-        {t('offline.notice')}
-      </AppText>
+      <Banner tone="warning" message={t('offline.notice')} />
       {offline.items.map((item) => (
         <Card key={item.id} testID={`offline-${item.id}`}>
           <AppText variant="bodyStrong">{item.payload.subject}</AppText>
@@ -144,6 +150,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, flexGrow: 1 },
   separator: { height: spacing.sm },
-  badges: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  footer: { padding: spacing.lg },
+  badges: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.xs },
+  footer: { padding: spacing.lg, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 });

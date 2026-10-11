@@ -59,3 +59,12 @@ const INCIDENT_SEVERITY: Record<string, Label> = {
 export function incidentSeverity(severity: string): Label | null {
   return INCIDENT_SEVERITY[severity] ?? null;
 }
+
+/** Couleur d'un statut RH connu ; un statut inconnu reste neutre et s'affiche tel quel. */
+export function employeeStatusTone(status: string): Tone {
+  if (status === 'actif') return 'success';
+  if (/suspen|blacklist|abandon/.test(status)) return 'danger';
+  if (/sort|demission|licen|fin/.test(status)) return 'warning';
+  if (/conge|maladie|mission/.test(status)) return 'info';
+  return 'neutral';
+}

@@ -85,5 +85,6 @@ Les dossiers `ios/` et `android/` ne sont pas versionnés : ils sont générés 
 - [Besoins backend](docs/BACKEND-NEEDS.md) — routes livrées sur la branche, endpoints manquants et écart RBAC assumé
 - [Préparation stores, signature, CI/CD, versions, OTA](docs/STORE-READINESS.md)
 - [Confidentialité : App Store Privacy et Google Play Data Safety](docs/PRIVACY-DATA-SAFETY.md)
+- [Android : de la validation à Google Play](docs/ANDROID-PRODUCTION.md) — profils de build, permissions finales, Firebase, Play Console
 - [Checklist de release](docs/RELEASE-CHECKLIST.md)
 - [Premier build sur appareil](docs/DEVICE-BUILD.md)

@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 
 import { colors, radius, spacing, touchTarget } from '@/theme/tokens';
@@ -10,6 +12,7 @@ type Props = {
   label: string;
   onPress: () => void;
   variant?: Variant;
+  icon?: ComponentProps<typeof Ionicons>['name'];
   loading?: boolean;
   disabled?: boolean;
   testID?: string;
@@ -17,12 +20,12 @@ type Props = {
 };
 
 const VARIANTS: Record<Variant, { bg: string; pressed: string; fg: string; border: string }> = {
-  primary: { bg: colors.primary, pressed: colors.primaryPressed, fg: colors.onPrimary, border: colors.primary },
-  secondary: { bg: colors.surface, pressed: colors.primarySoft, fg: colors.primary, border: colors.borderStrong },
+  primary: { bg: colors.navy, pressed: colors.navyDeep, fg: colors.onNavy, border: colors.navy },
+  secondary: { bg: colors.surface, pressed: colors.surfacePressed, fg: colors.navy, border: colors.borderStrong },
   danger: { bg: colors.surface, pressed: colors.dangerSoft, fg: colors.danger, border: colors.danger },
 };
 
-export function Button({ label, onPress, variant = 'primary', loading = false, disabled = false, testID, style }: Props) {
+export function Button({ label, onPress, variant = 'primary', icon, loading = false, disabled = false, testID, style }: Props) {
   const palette = VARIANTS[variant];
   const inactive = disabled || loading;
   return (
@@ -42,9 +45,12 @@ export function Button({ label, onPress, variant = 'primary', loading = false, d
       {loading ? (
         <ActivityIndicator color={palette.fg} />
       ) : (
-        <AppText variant="bodyStrong" color={palette.fg} numberOfLines={1}>
-          {label}
-        </AppText>
+        <>
+          {icon ? <Ionicons name={icon} size={18} color={palette.fg} /> : null}
+          <AppText variant="bodyStrong" color={palette.fg} numberOfLines={1} style={styles.label}>
+            {label}
+          </AppText>
+        </>
       )}
     </Pressable>
   );
@@ -52,12 +58,15 @@ export function Button({ label, onPress, variant = 'primary', loading = false, d
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: touchTarget,
+    minHeight: touchTarget + 2,
     paddingHorizontal: spacing.xl,
     borderRadius: radius.md,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  inactive: { opacity: 0.55 },
+  label: { flexShrink: 1 },
+  inactive: { opacity: 0.5 },
 });

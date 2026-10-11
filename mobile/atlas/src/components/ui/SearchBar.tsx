@@ -9,7 +9,7 @@ type Props = { value: string; onChangeText: (text: string) => void; placeholder:
 export function SearchBar({ value, onChangeText, placeholder, testID }: Props) {
   return (
     <View style={styles.bar}>
-      <Ionicons name="search" size={18} color={colors.textMuted} />
+      <Ionicons name="search" size={18} color={colors.steel} />
       <TextInput
         testID={testID}
         accessibilityLabel={placeholder}
@@ -38,14 +38,14 @@ export function SearchBar({ value, onChangeText, placeholder, testID }: Props) {
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: touchTarget,
+    minHeight: touchTarget - 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     borderRadius: radius.md,
   },
   input: { ...typography.body, flex: 1, color: colors.text, paddingVertical: spacing.sm },

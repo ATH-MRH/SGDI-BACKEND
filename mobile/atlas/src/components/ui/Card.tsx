@@ -1,18 +1,24 @@
 import { StyleSheet, View, type ViewProps } from 'react-native';
 
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, elevation, radius, spacing } from '@/theme/tokens';
 
-export function Card({ style, ...rest }: ViewProps) {
-  return <View {...rest} style={[styles.card, style]} />;
+type Props = ViewProps & {
+  /** `flat` : sans ombre, pour une carte posée dans une autre surface. */
+  flat?: boolean;
+  padded?: boolean;
+};
+
+export function Card({ style, flat = false, padded = true, ...rest }: Props) {
+  return <View {...rest} style={[styles.card, !flat && elevation.card, padded && styles.padded, style]} />;
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: spacing.lg,
     gap: spacing.sm,
   },
+  padded: { padding: spacing.lg },
 });

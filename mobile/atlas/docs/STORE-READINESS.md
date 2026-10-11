@@ -1,6 +1,6 @@
 # Préparation à la publication — App Store et Google Play
 
-Ce document décrit ce qui est en place et ce qui reste à fournir avant une première publication. **Rien n'a été publié, aucun compte n'a été créé, aucun identifiant de signature n'existe encore.**
+Ce document décrit ce qui est en place et ce qui reste à fournir avant une première publication. **Rien n'a été publié et aucun compte de store n'a été créé.** Côté Android, EAS détient les clés d'envoi de `com.irongs.atlas` et `com.irongs.atlas.dev`, créées au premier build de chaque identifiant ; le parcours jusqu'à Google Play est décrit dans ANDROID-PRODUCTION.
 
 ## 1. Identité
 
@@ -63,7 +63,7 @@ Ces points sont contrôlés automatiquement par `npm run check:native` sur les p
 
 ### Android
 
-- Clé d'envoi (upload key) générée et conservée par EAS.
+- Clé d'envoi (upload key) générée et conservée par EAS. Celle de `com.irongs.atlas` existe depuis le 11 octobre 2026.
 - **Google Play App Signing** activé à la création de l'application : Google détient la clé de signature finale. Une clé d'envoi perdue ou compromise peut alors être remplacée ; sans cela, la perte de la clé rend toute mise à jour impossible.
 - Une copie de secours de la clé d'envoi est à conserver dans le coffre de l'entreprise, jamais dans un dépôt.
 

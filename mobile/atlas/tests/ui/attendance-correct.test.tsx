@@ -21,7 +21,10 @@ let mockUser: ReturnType<typeof makeUser> | null = null;
 let mockSecure = false;
 
 jest.mock('@/api', () => ({ ...jest.requireActual('@/api/errors'), api: {} }));
-jest.mock('@/config/env', () => ({ isFeatureEnabled: (key: string) => key === 'secureScreen' && mockSecure }));
+jest.mock('@/config/env', () => ({
+  env: { apiUrl: null, variant: 'staging', features: {}, storeUrls: { ios: null, android: null } },
+  isFeatureEnabled: (key: string) => key === 'secureScreen' && mockSecure,
+}));
 jest.mock('@/api/domains/attendance', () => ({
   ...jest.requireActual('@/api/domains/attendance'),
   fetchBoard: (...a: unknown[]) => mockFetchBoard(...a),

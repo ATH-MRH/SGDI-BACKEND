@@ -62,8 +62,7 @@ export default function AttendanceCorrectScreen() {
 
   return (
     <Gate allowed={allowed}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID="attendance-correct-screen">
-        <ScreenHeader title={t('attendance.correct')} subtitle={typeof params.name === 'string' ? params.name.slice(0, 80) : undefined} />
+      <Screen edges={['top', 'bottom', 'left', 'right']} testID="attendance-correct-screen" header={<ScreenHeader title={t('attendance.correct')} subtitle={typeof params.name === 'string' ? params.name.slice(0, 80) : undefined} />}>
         <Card>
           <AppText variant="label" color={colors.textSecondary}>
             {t('attendance.correct.status')}

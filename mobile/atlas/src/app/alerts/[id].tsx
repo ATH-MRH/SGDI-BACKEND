@@ -40,8 +40,7 @@ export default function AlertDetailScreen() {
 
   return (
     <Gate allowed={allowed}>
-      <Screen edges={['top', 'bottom', 'left', 'right']} testID="alert-detail">
-        <ScreenHeader title={t('alerts.detail.title')} />
+      <Screen edges={['top', 'bottom', 'left', 'right']} testID="alert-detail" header={<ScreenHeader title={t('alerts.detail.title')} />}>
         {query.isPending ? (
           <Loader />
         ) : query.error || !alert ? (
