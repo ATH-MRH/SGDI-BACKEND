@@ -701,6 +701,7 @@ candidate). Aucun gabarit créé, remplacé ou désactivé (`app/modules/biometr
 
 | Réglage serveur | Défaut | Effet |
 |---|---|---|
+| `BIOMETRIC_ENROLLMENT_LOCKED` | `false` | `true` : ferme tout enrôlement (aperçu, confirmation, référence depuis la photo DRH, prise distante), même quand `BIOMETRIC_ENABLED=true` l'autoriserait. Le pointage facial des gabarits existants continue. |
 | `DRH_FACIAL_REFERENCE_AUTO_SYNC_ENABLED` | `false` | `true` : une photo ajoutée/actualisée depuis la Fiche de position prépare automatiquement la référence faciale. Exige aussi `BIOMETRIC_ENROLLMENT_ENABLED` (ou `BIOMETRIC_ENABLED`) et `BIOMETRIC_TEMPLATE_KEY`. |
 | `FACIAL_REFERENCE_CONSENT_MODE` | `explicit` | `explicit` : accord admissible exigé (règle historique). `no_objection` : aucun accord manuel exigé ; un **refus** ou un **retrait** enregistré bloque toujours. Aucun consentement n'est créé ni supprimé. |
 

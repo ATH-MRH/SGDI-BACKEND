@@ -76,36 +76,83 @@ status/history.log                             une ligne par exécution
 ## 4. Copie hors serveur
 
 Une sauvegarde qui reste sur le serveur qu'elle protège ne couvre ni sa perte ni sa
-compromission. `BACKUP_OFFSITE_RCLONE_DEST` désigne une destination `rclone` (stockage objet
-compatible S3 ; un stockage dans un autre centre de données que le serveur est préférable).
-La copie est faite avec `--immutable`, puis vérifiée (`rclone check`).
+compromission. Destination retenue : **OVHcloud Object Storage** (API compatible S3), via
+`rclone`. Deux destinations, parce que leurs durées de conservation diffèrent :
 
-Exigences pour la destination, à valider **avant** toute copie de données réelles :
+| Variable | Contenu | Conservation |
+|---|---|---|
+| `BACKUP_OFFSITE_RCLONE_DEST` | chaque sauvegarde quotidienne | 30 jours |
+| `BACKUP_OFFSITE_MONTHLY_RCLONE_DEST` | la première sauvegarde réussie de chaque mois | 12 mois |
 
-- un compartiment dédié, privé, dans une région choisie et documentée ;
-- une identité dédiée à la sauvegarde, limitée à ce compartiment, avec le droit d'**écrire**
-  mais ni de supprimer ni d'écraser ; une seconde identité, distincte, pour la restauration ;
-- versionnement et verrouillage d'objets (ou équivalent du fournisseur) pour résister à une
-  suppression accidentelle ou malveillante ;
-- une règle de cycle de vie côté stockage pour la rétention (le serveur n'a pas le droit de
-  supprimer) ;
-- les identifiants `rclone` dans un fichier `600`, hors dépôt.
+Chaque copie est faite avec `--immutable` (jamais d'écrasement), puis vérifiée (`rclone check`).
+Les données ne quittent le serveur que chiffrées.
 
-Les données quittent le serveur uniquement chiffrées. Tant que la destination n'est pas
-validée, laisser la variable vide : la sauvegarde signale alors « aucune copie hors serveur
-configurée » à chaque exécution.
+### Préparation côté OVHcloud (à faire par le titulaire du compte, rien n'est créé par le dépôt)
 
-## 5. Rétention (proposition initiale, à valider)
+1. **Région** : de préférence un autre centre de données que celui du serveur, à documenter.
+2. **Deux compartiments privés**, créés avec **Object Lock activé** — il ne peut pas l'être
+   après coup — et le versionnement :
+   - quotidien : rétention par défaut de 30 jours ;
+   - mensuel : rétention par défaut de 365 jours.
+   Le mode *Governance* laisse un administrateur autorisé lever le verrou ; le mode
+   *Compliance* l'interdit à tous, y compris en cas d'erreur : à choisir en connaissance de cause.
+3. **Règles de cycle de vie** : expiration après 30 jours (quotidien) et 365 jours (mensuel),
+   versions non courantes comprises. Vérifier dans la documentation OVHcloud la disponibilité
+   d'Object Lock et du cycle de vie dans la région choisie, et leur comportement combiné.
+4. **Deux utilisateurs S3 distincts** :
+   - *sauvegarde* (sur le serveur) : `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` sur ces deux
+     compartiments seulement ; ni `s3:DeleteObject`, ni `s3:BypassGovernanceRetention`, ni
+     gestion du cycle de vie. La lecture est nécessaire à la vérification après copie ; les
+     objets lus restent chiffrés avec une clé que le serveur ne détient pas ;
+   - *restauration* (hors serveur) : lecture seule.
+5. **Identifiants** : saisis directement sur la machine concernée, dans la configuration
+   `rclone` (fichier `600`). Jamais dans Git, un ticket, un message ou une conversation.
 
-| Emplacement | Règle |
-|---|---|
-| Serveur | 14 jours (`BACKUP_KEEP_DAYS`), jamais moins de 7 archives (`BACKUP_KEEP_MIN`) |
-| Hors serveur | 30 quotidiennes, 12 mensuelles, par règle de cycle de vie du stockage |
+Configuration `rclone` sur le serveur (`rclone config`, ou fichier équivalent) :
 
-Le minimum d'archives protège d'une purge totale si les sauvegardes cessent de tourner.
-La durée doit être confrontée aux obligations de conservation des données de paie et de
-pointage, et à la durée de conservation des données biométriques : une archive garde les
-gabarits d'un employé parti jusqu'à son expiration.
+```ini
+[atlas-backup]
+type = s3
+provider = Other
+endpoint = https://s3.<région>.io.cloud.ovh.net
+region = <région>
+access_key_id = <saisi sur le serveur>
+secret_access_key = <saisi sur le serveur>
+acl = private
+```
+
+```bash
+BACKUP_OFFSITE_RCLONE_DEST=atlas-backup:<compartiment quotidien>
+BACKUP_OFFSITE_MONTHLY_RCLONE_DEST=atlas-backup:<compartiment mensuel>
+BACKUP_OFFSITE_REQUIRED=1
+```
+
+Contrôles avant la première copie de données réelles :
+
+```bash
+rclone lsd atlas-backup:                                      # ne doit lister que les deux compartiments
+echo essai > /tmp/essai.txt
+rclone copyto /tmp/essai.txt atlas-backup:<quotidien>/essai.txt    # doit réussir
+rclone deletefile atlas-backup:<quotidien>/essai.txt               # doit ÉCHOUER (verrou ou droits)
+```
+
+Tant que la destination n'est pas validée, laisser les variables vides : la sauvegarde signale
+« aucune copie hors serveur configurée » à chaque exécution.
+
+## 5. Rétention
+
+| Emplacement | Règle | Appliquée par |
+|---|---|---|
+| Serveur | 14 jours (`BACKUP_KEEP_DAYS`), jamais moins de 7 archives (`BACKUP_KEEP_MIN`) | `backup.sh` |
+| Hors serveur, quotidien | 30 sauvegardes quotidiennes | cycle de vie et verrou du compartiment |
+| Hors serveur, mensuel | 12 sauvegardes mensuelles | cycle de vie et verrou du compartiment |
+
+Le serveur ne supprime jamais rien hors de lui-même : la rétention externe est tenue par le
+stockage, ce qui la met hors de portée d'un serveur compromis. Le minimum local protège d'une
+purge totale si les sauvegardes cessent de tourner.
+
+Une archive garde les gabarits biométriques et les données d'un employé parti jusqu'à son
+expiration (12 mois au plus) : à rapprocher des durées de conservation applicables.
 
 ## 6. Planification et surveillance
 
@@ -147,8 +194,8 @@ responsable ; la restauration d'essai en valide la faisabilité.
 
 Chaque étape a un critère. S'il n'est pas rempli : **STOP**.
 
-1. **Destination externe** : compartiment, identités et protections du § 4 créés et relus.
-   Critère : l'identité de sauvegarde ne peut ni lister les autres compartiments ni supprimer.
+1. **Destination externe** : compartiments, utilisateurs et protections du § 4 créés et relus.
+   Critère : les trois contrôles du § 4 donnent le résultat attendu, dont l'échec de la suppression.
 2. **Clé de sauvegarde** : paire générée hors serveur, clé privée en deux exemplaires, clé
    publique importée sur le serveur. Critère : `gpg --list-secret-keys` est **vide** sur le
    serveur.
@@ -176,7 +223,7 @@ Vérifié par `tests/test_backup_scripts.py` sur PostgreSQL jetable et données 
 complet en mode clé publique et en mode phrase secrète, refus sans chiffrement, droits des
 fichiers, absence de clair résiduel, échec du dump, interruption, verrou, reprise après arrêt
 brutal, archive altérée, clé absente, écart de nombre de lignes, rétention, copie externe
-(avec un `rclone` simulé), mode conteneur (avec un `docker` simulé), surveillance. Le cycle a aussi été déroulé sur le schéma complet de
+quotidienne et mensuelle (avec un `rclone` simulé), mode conteneur (avec un `docker` simulé), surveillance. Le cycle a aussi été déroulé sur le schéma complet de
 l'application (130 tables).
 
 Non vérifié : aucune sauvegarde de données réelles, aucune destination externe réelle, les
