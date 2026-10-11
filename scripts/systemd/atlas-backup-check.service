@@ -1,0 +1,9 @@
+# Surveillance de la dernière sauvegarde — modèle, NON installé par le dépôt.
+[Unit]
+Description=Contrôle de la dernière sauvegarde ATLAS
+
+[Service]
+Type=oneshot
+User=root
+Environment=BACKUP_ENV_FILE=/etc/atlas-backup.env
+ExecStart=/opt/atlas-backup/scripts/backup_check.sh

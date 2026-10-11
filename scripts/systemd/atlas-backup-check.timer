@@ -1,0 +1,10 @@
+# Contrôle quotidien, après l'heure de la sauvegarde — modèle, NON activé par le dépôt.
+[Unit]
+Description=Contrôle quotidien de la sauvegarde ATLAS
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
