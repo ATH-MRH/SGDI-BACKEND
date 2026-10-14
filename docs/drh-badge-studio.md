@@ -140,6 +140,12 @@ redirection, une fois les usages constatés dans l'historique.
   `badge_events`, `badge_settings`). Aucune table existante n'est modifiée.
 - `20261015_0002_badge_permissions` : ajoute la fonctionnalité « badges » aux contraintes de
   `user_feature_permissions`. Aucune permission n'est créée.
+- Les deux révisions viennent après la chaîne IRON Emploi : `20261014_0001` →
+  `20261014_0002` … `20261016_0001` → `20261015_0001` → `20261015_0002` (une seule tête). Les
+  identifiants ne suivent donc pas l'ordre des dates ; seule la parenté compte.
+  `20261016_0001` est la révision du code de `main` sans le studio : c'est la cible de tout
+  `stamp` de retour arrière. Ne jamais viser `20261014_0001`, qui ferait rejouer, ou retirer
+  avec `downgrade`, les migrations IRON Emploi (annonces, espaces candidats, candidatures).
 
 ## Retour arrière (non destructif)
 
@@ -149,7 +155,7 @@ Ne jamais lancer `alembic downgrade` en production comme procédure automatique.
    redémarrage. Toute l'API `/api/drh/badges` répond 503 ; aucune donnée n'est touchée. Remettre
    `true` pour rétablir.
 2. **Revenir au code précédent** si nécessaire : avec le code courant,
-   `alembic stamp 20261014_0001` (n'écrit que la révision, ne supprime rien), puis redéployer le
+   `alembic stamp 20261016_0001` (n'écrit que la révision, ne supprime rien), puis redéployer le
    commit précédent. Répété sur PostgreSQL local avec le code de `main` : il démarre et
    fonctionne sur la base contenant les nouvelles tables ; badges, modèles et historique sont
    intacts au retour (`alembic upgrade head`). Pendant ce retour arrière :

@@ -607,15 +607,15 @@ def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     badge_tables = {"badge_templates", "employee_badges", "badge_events", "badge_settings"}
     assert badge_tables <= tables() and version() == "20261015_0002"
 
-    _ok(_alembic(url, "downgrade", "20261014_0001"))                                  # studio jamais utilisé : tables retirées
-    assert not badge_tables & tables() and version() == "20261014_0001"
+    _ok(_alembic(url, "downgrade", "20261016_0001"))                                  # studio jamais utilisé : tables retirées
+    assert not badge_tables & tables() and version() == "20261016_0001"
     _ok(_alembic(url, "upgrade", "head"))
     con = sqlite3.connect(path)
     con.execute("INSERT INTO badge_events (created_at, action, label) VALUES ('2026-10-11 10:00:00', 'EMISSION', 'Badge BDG-1 émis')")
     con.commit()
     con.close()
-    _ok(_alembic(url, "downgrade", "20261014_0001"))                                  # données présentes : rien n'est supprimé
-    assert badge_tables <= tables() and version() == "20261014_0001"
+    _ok(_alembic(url, "downgrade", "20261016_0001"))                                  # données présentes : rien n'est supprimé
+    assert badge_tables <= tables() and version() == "20261016_0001"
     assert sqlite3.connect(path).execute("SELECT label FROM badge_events").fetchall() == [("Badge BDG-1 émis",)]
     _ok(_alembic(url, "upgrade", "head"))                                              # la remontée retrouve les tables telles quelles
     assert sqlite3.connect(path).execute("SELECT count(*) FROM badge_events").fetchone()[0] == 1 and version() == "20261015_0002"

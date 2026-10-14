@@ -4,13 +4,17 @@ Additive : quatre nouvelles tables, aucune table existante modifiée. Le retour 
 ces tables dès qu'elles contiennent des données (voir downgrade).
 
 Revision ID: 20261015_0001
-Revises: 20261014_0001
+Revises: 20261016_0001
+
+Rattachée après la chaîne IRON Emploi (20261014_0002 à 20261016_0001) lors de la synchronisation
+avec main : l'identifiant est inchangé, seule la révision parente a été déplacée (aucune des deux
+branches n'était appliquée en production, restée en 20261014_0001).
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "20261015_0001"
-down_revision = "20261014_0001"
+down_revision = "20261016_0001"
 branch_labels = None
 depends_on = None
 

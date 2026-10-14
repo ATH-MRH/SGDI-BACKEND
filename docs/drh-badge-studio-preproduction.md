@@ -68,7 +68,7 @@ l'aperçu et du PDF, pas relu par un lecteur arabophone.
 ## Retour à l'ancien code : essai réalisé
 
 Base contenant les quatre tables, des badges émis et des permissions badges, puis :
-`alembic stamp 20261014_0001`, démarrage du code de `main` (son `alembic upgrade head` ne
+`alembic stamp 20261016_0001`, démarrage du code de `main` (son `alembic upgrade head` ne
 rejoue rien), contrôles, retour au code du studio et `alembic upgrade head`.
 
 - L'ancien code démarre et répond normalement : accueil, employés, contrats, sites,
@@ -85,7 +85,7 @@ Deux effets pendant le retour arrière :
 ## Ordre des gestes en cas de problème
 
 1. `BADGE_STUDIO_ENABLED=false` et redémarrage.
-2. Si nécessaire : `alembic stamp 20261014_0001` avec le code courant, puis redéploiement du
+2. Si nécessaire : `alembic stamp 20261016_0001` avec le code courant, puis redéploiement du
    commit précédent.
 3. Dernier recours : restauration de la sauvegarde prise avant le déploiement.
 

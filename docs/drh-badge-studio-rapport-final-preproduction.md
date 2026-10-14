@@ -133,7 +133,7 @@
 
 **Procédure testée** :
 1. Base avec 4 tables badges, badges émis, permissions badges
-2. `alembic stamp 20261014_0001` (code courant)
+2. `alembic stamp 20261016_0001` (code courant)
 3. Redéploiement du code de `main`
 4. Vérification : ancien code démarre et fonctionne normalement
 5. Retour au code du studio + `alembic upgrade head`
@@ -179,7 +179,7 @@
 ## ORDRE DES GESTES EN CAS DE PROBLÈME
 
 1. **Première action** : `BADGE_STUDIO_ENABLED=false` + redémarrage
-2. **Si nécessaire** : `alembic stamp 20261014_0001` (code courant) puis redéploiement du commit précédent
+2. **Si nécessaire** : `alembic stamp 20261016_0001` (code courant) puis redéploiement du commit précédent
 3. **Dernier recours** : Restauration de la sauvegarde PostgreSQL prise **avant** le déploiement
 
 > ⚠️ **NE JAMAIS** utiliser `alembic downgrade` comme procédure automatique de retour arrière.

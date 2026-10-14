@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261015_0002"            # tête courante : Studio Badges DRH
+HEAD = "20261015_0002"            # tête courante de la chaîne (Studio Badges DRH, après la dernière activité des espaces candidats IRON Emploi)
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
