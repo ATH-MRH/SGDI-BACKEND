@@ -7,7 +7,7 @@
   const B = () => window.BadgeStudio;
   const GRID = 0.5;
   const TOOLS = [
-    ["text", "Texte"], ["field", "Champ"], ["photo", "Photo"], ["logo", "Logo"], ["image", "Image"], ["qr", "QR code"], ["rect", "Rectangle"],
+    ["text", "Texte"], ["field", "Champ"], ["photo", "Photo"], ["logo", "Logo"], ["image", "Image"], ["qr", "QR code"], ["blood", "Groupe sanguin"], ["rect", "Rectangle"],
     ["line", "Ligne"], ["ellipse", "Forme ronde"], ["triangle", "Triangle"], ["band", "Bandeau"], ["background", "Fond"], ["layers", "Calques"],
   ];
   // Icônes dessinées (aucune dépendance à une police de symboles ou d'émojis).
@@ -15,7 +15,7 @@
     text: "M5 6V4h14v2M12 4v16M9 20h6", field: "M8 4c-2 0-3 1-3 3v2c0 1.5-1 3-2 3 1 0 2 1.5 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1.5 1 3 2 3-1 0-2 1.5-2 3v2c0 2-1 3-3 3",
     photo: "M4 4h16v16H4zM12 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM7 20c0-3 2-5 5-5s5 2 5 5", logo: "M12 3l9 9-9 9-9-9z",
     image: "M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4", qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM16 16h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z",
-    rect: "M4 7h16v10H4z", line: "M4 12h16", ellipse: "M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", triangle: "M12 5l8 14H4z", band: "M3 5h18v6H3zM3 15h18",
+    rect: "M4 7h16v10H4z", blood: "M12 3c3 4.5 6 8 6 11a6 6 0 0 1-12 0c0-3 3-6.5 6-11z", line: "M4 12h16", ellipse: "M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", triangle: "M12 5l8 14H4z", band: "M3 5h18v6H3zM3 15h18",
     background: "M4 4h16v16H4zM4 14L14 4M9 20L20 9M4 9l5-5", layers: "M12 4l9 5-9 5-9-5zM3 14l9 5 9-5",
     "align-left": "M4 4v16M8 7h10v4H8zM8 14h6v4H8z", "align-hcenter": "M12 3v18M6 7h12v4H6zM8 14h8v4H8z", "align-right": "M20 4v16M6 7h10v4H6zM10 14h6v4h-6z",
     "align-top": "M4 4h16M7 8h4v10H7zM14 8h4v6h-4z", "align-vcenter": "M3 12h18M7 6h4v12H7zM14 8h4v8h-4z", "align-bottom": "M4 20h16M7 6h4v10H7zM14 10h4v6h-4z",
@@ -26,9 +26,12 @@
     eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z", "eye-off": "M3 3l18 18M2 12s4-7 10-7c2 0 3.8.7 5.3 1.7M22 12s-4 7-10 7c-2 0-3.8-.7-5.3-1.7",
   };
   const ico = name => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="${ICONS[name] || ""}"/></svg>`;
-  const TYPE_LABELS = { text: "Texte", photo: "Photo", qr: "QR code", image: "Image", shape: "Forme", line: "Ligne" };
+  const TYPE_LABELS = { text: "Texte", photo: "Photo", qr: "QR code", image: "Image", shape: "Forme", line: "Ligne", blood: "Groupe sanguin" };
   const ed = { view: null, id: null, system: false, name: "", society: "", design: null, page: 0, sel: [], zoom: 6, undo: [], redo: [], clip: [], dirty: false, drag: null, typing: false, fieldMenu: false,
-    grid: true, snap: true, guides: { v: [], h: [] } };
+    grid: true, snap: true, guides: { v: [], h: [] }, readonly: false, bloodAllowed: null };
+  // Sans le droit « gérer les modèles », le studio est en consultation : zoom, règles, guides,
+  // aperçu et épreuve restent disponibles ; aucune modification de la maquette.
+  const lockAttr = () => (ed.readonly ? "disabled" : "data-no-lock");
   const RULER = 22, SNAP_REACH = 0.8;
 
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -76,6 +79,13 @@
     ed.society = (source && source.society) || B().society() || "";
     ed.design = clone(base.design);
     ed.page = 0; ed.sel = []; ed.undo = []; ed.redo = []; ed.dirty = false; ed.drag = null; ed.guides = { v: [], h: [] };
+    ed.readonly = !B().can("admin");
+    ed.bloodAllowed = null;
+    B().api("/settings" + B().query({ society: ed.society || B().society() })).then(out => {
+      ed.bloodAllowed = !!(out && out.data && out.data.show_blood_group);
+      const side = ed.view && ed.view.querySelector("[data-st-warnings]");
+      if (side) side.innerHTML = warningsHTML();
+    }).catch(() => { /* paramètres illisibles : contrôle non affiché */ });
     let restored = false;
     try {
       const draft = JSON.parse(sessionStorage.getItem(draftKey()) || "null");
@@ -108,26 +118,27 @@
     const d = ed.design;
     B().shell(view, "studio", `<div class="bs-studio">
       <div class="bs-st-top card">
-        <label class="bs-st-name">Nom du modèle<input class="input" data-st="name" maxlength="150" value="${esc(ed.name)}"></label>
-        <label>Société<select class="select" data-st="society"><option value="">Toutes sociétés</option>${societies().map(s => `<option ${s === ed.society ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></label>
+        <label class="bs-st-name">Nom du modèle<input class="input" data-st="name" maxlength="150" value="${esc(ed.name)}" data-no-uppercase="1" ${lockAttr()}></label>
+        <label>Société<select class="select" data-st="society" ${lockAttr()}><option value="">Toutes sociétés</option>${societies().map(s => `<option ${s === ed.society ? "selected" : ""}>${esc(s)}</option>`).join("")}</select></label>
         <div class="bs-st-group" role="group" aria-label="Faces">${d.pages.map((p, i) => `<button class="${i === ed.page ? "is-active" : ""}" data-st="page" data-i="${i}">${esc(p.name)}</button>`).join("")}
           ${d.pages.length < 2 ? `<button data-st="add-back" title="Ajouter un verso">+ Verso</button>` : `<button data-st="remove-back" title="Supprimer le verso">− Verso</button>`}</div>
         <div class="bs-st-group" role="group" aria-label="Historique"><button data-st="undo" title="Annuler (Ctrl+Z)" aria-label="Annuler" ${ed.undo.length ? "" : "disabled"}>${ico("undo")}</button><button data-st="redo" title="Rétablir (Ctrl+Y)" aria-label="Rétablir" ${ed.redo.length ? "" : "disabled"}>${ico("redo")}</button></div>
         <div class="bs-st-group" role="group" aria-label="Zoom"><button data-st="zoom-out" title="Réduire">−</button><button data-st="zoom-fit" title="Ajuster">${Math.round(ed.zoom / 6 * 100)} %</button><button data-st="zoom-in" title="Agrandir">+</button></div>
         <div class="bs-st-group" role="group" aria-label="Repères"><button class="${ed.grid ? "is-active" : ""}" data-st="toggle-grid" aria-pressed="${ed.grid}" title="Afficher la grille (5 mm)">Grille</button><button class="${ed.snap ? "is-active" : ""}" data-st="toggle-snap" aria-pressed="${ed.snap}" title="Aimanter à la grille de ${GRID} mm, aux guides et aux bords">Aimant</button><button data-st="clear-guides" title="Supprimer tous les guides" ${ed.guides.v.length + ed.guides.h.length ? "" : "disabled"}>Guides ×</button></div>
         <span class="bs-pill is-warn" data-st-dirty ${ed.dirty ? "" : "hidden"}>Non enregistré</span>
+        ${ed.readonly ? `<span class="bs-pill is-muted" data-st-readonly title="${B().NO_RIGHT}">Consultation seule</span>` : ""}
       </div>
       <div class="bs-st-main">
-        <aside class="bs-st-left card"><h2>Outils</h2><div class="bs-st-tools">${TOOLS.map(([key, label]) => `<button data-st="tool" data-tool="${key}">${ico(key)}${label}</button>`).join("")}</div>
+        <aside class="bs-st-left card"><h2>Outils</h2><div class="bs-st-tools">${TOOLS.map(([key, label]) => `<button data-st="tool" data-tool="${key}" ${ed.readonly && key !== "layers" ? "disabled" : ""}>${ico(key)}${label}</button>`).join("")}</div>
           ${ed.fieldMenu ? `<div class="bs-st-fields">${Object.entries(B().state.fields).map(([key, label]) => `<button data-st="add-field" data-field="${esc(key)}">${esc(label)}</button>`).join("")}</div>` : ""}
-          <input type="file" accept="image/png,image/jpeg" data-st="file" hidden>
+          <input type="file" accept="image/png,image/jpeg" data-st="file" hidden ${lockAttr()}>
           <h2 data-st-layers>Calques</h2><ul class="bs-st-layers">${layersHTML()}</ul></aside>
         <section class="bs-st-stage" data-st-stage tabindex="0" aria-label="Surface de conception">
           <div class="bs-st-frame"><div class="bs-st-corner" title="Règles graduées en millimètres : cliquez ou tirez pour poser un guide">mm</div>${rulerSvg("h")}${rulerSvg("v")}
           <div class="bs-st-canvas" data-st-canvas style="width:${d.width * ed.zoom}px;height:${d.height * ed.zoom}px"><div data-st-art></div><svg class="bs-st-overlay" data-st-overlay viewBox="0 0 ${d.width} ${d.height}"></svg></div></div></section>
         <aside class="bs-st-right card">${arrangeHTML()}<div data-st-props>${propsHTML()}</div><div data-st-warnings>${warningsHTML()}</div></aside>
       </div></div>`,
-      `<button class="btn btn-ghost" data-st="preview">Aperçu réaliste</button><button class="btn btn-ghost" data-st="proof">Épreuve PDF</button>${!B().can("admin") ? `<span class="bs-pill is-warn" title="${B().NO_RIGHT}">Enregistrement : permission requise</span>` : `${ed.id ? `<button class="btn btn-secondary" data-st="save-copy" data-no-save-overlay="1">Enregistrer une copie</button>` : ""}<button class="btn btn-primary" data-st="save" data-no-save-overlay="1">${ed.id ? "Enregistrer" : "Enregistrer le modèle"}</button>`}`);
+      `<button class="btn btn-ghost" data-st="preview">Aperçu du badge</button><button class="btn btn-ghost" data-st="proof">Épreuve PDF</button>${!B().can("admin") ? `<span class="bs-pill is-warn" title="${B().NO_RIGHT}">Enregistrement : permission requise</span>` : `${ed.id ? `<button class="btn btn-secondary" data-st="save-copy" data-no-save-overlay="1">Enregistrer une copie</button>` : ""}<button class="btn btn-primary" data-st="save" data-no-save-overlay="1">${ed.id ? "Enregistrer" : "Enregistrer le modèle"}</button>`}`);
     bind(view);
     renderCanvas();
   }
@@ -163,11 +174,20 @@
       if (dark > light || (light + 0.05) / (dark + 0.05) < 4) out.push(`${name} : contraste insuffisant (QR sombre sur fond clair).`);
     }));
     if (!hasQr) out.push("Aucun QR code : le badge ne pourra pas être vérifié par scan.");
+    d.pages.forEach(pg => pg.elements.filter(el => el.type === "blood" && !el.hidden).forEach(el => {
+      const name = el.name || "Groupe sanguin";
+      const bg = luminance(el.background || pg.background), ink = luminance(el.color);
+      if ((Math.max(bg, ink) + 0.05) / (Math.min(bg, ink) + 0.05) < 4) out.push(`${name} : contraste insuffisant entre le texte et son fond.`);
+      if (el.x < 0 || el.y < 0 || el.x + el.w > d.width || el.y + el.h > d.height) out.push(`${name} : il dépasse de la carte.`);
+      if (ed.bloodAllowed === false) out.push(`${name} : affichage non autorisé (Paramètres) — l'élément sera masqué sur les badges.`);
+    }));
     return out;
   }
   function warningsHTML() {
     const list = warnings();
-    return list.length ? `<h2>Contrôles</h2><ul class="bs-warnings">${list.map(w => `<li>${B().esc(w)}</li>`).join("")}</ul>` : `<h2>Contrôles</h2><p class="bs-note is-ok">QR code conforme : taille, forme et contraste.</p>`;
+    const blood = ed.design.pages.some(pg => pg.elements.some(el => el.type === "blood" && !el.hidden));
+    const info = blood && ed.bloodAllowed !== false ? `<p class="bs-muted">Groupe sanguin : affiché seulement s'il est renseigné sur la fiche (information déclarative) et si son affichage est autorisé.</p>` : "";
+    return (list.length ? `<h2>Contrôles</h2><ul class="bs-warnings">${list.map(w => `<li>${B().esc(w)}</li>`).join("")}</ul>` : `<h2>Contrôles</h2><p class="bs-note is-ok">QR code conforme : taille, forme et contraste.</p>`) + info;
   }
   function renderCanvas() {
     const view = ed.view;
@@ -197,7 +217,7 @@
     items.forEach(el => {
       const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
       out += `<g transform="rotate(${el.rotation || 0} ${cx} ${cy})"><rect x="${el.x}" y="${el.y}" width="${el.w}" height="${el.h}" fill="none" stroke="${el.locked ? "#f59e0b" : "#0d6ecc"}" stroke-width="${stroke}"${el.locked ? ` stroke-dasharray="${stroke * 3}"` : ""}/>`;
-      if (items.length === 1 && !el.locked) {
+      if (items.length === 1 && !el.locked && !ed.readonly) {
         [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].forEach(([hx, hy]) => {
           out += `<rect class="bs-st-handle" data-hx="${hx}" data-hy="${hy}" x="${cx + hx * el.w / 2 - h / 2}" y="${cy + hy * el.h / 2 - h / 2}" width="${h}" height="${h}" fill="#fff" stroke="#0d6ecc" stroke-width="${stroke}"/>`;
         });
@@ -231,12 +251,12 @@
     if (!items.length) return `<li class="bs-muted">Aucun élément sur cette face.</li>`;
     return items.map(el => `<li class="${ed.sel.includes(el.id) ? "is-active" : ""}">
       <button class="bs-st-layer" data-st="layer" data-id="${esc(el.id)}">${esc(el.name || TYPE_LABELS[el.type] || el.type)}</button>
-      <button data-st="layer-hide" data-id="${esc(el.id)}" title="${el.hidden ? "Afficher" : "Masquer"}" aria-label="${el.hidden ? "Afficher" : "Masquer"}" aria-pressed="${!!el.hidden}">${ico(el.hidden ? "eye-off" : "eye")}</button>
-      <button data-st="layer-lock" data-id="${esc(el.id)}" title="${el.locked ? "Déverrouiller" : "Verrouiller"}" aria-label="${el.locked ? "Déverrouiller" : "Verrouiller"}" aria-pressed="${!!el.locked}">${ico(el.locked ? "lock" : "unlock")}</button></li>`).join("");
+      <button data-st="layer-hide" data-id="${esc(el.id)}" title="${el.hidden ? "Afficher" : "Masquer"}" aria-label="${el.hidden ? "Afficher" : "Masquer"}" aria-pressed="${!!el.hidden}" ${ed.readonly ? "disabled" : ""}>${ico(el.hidden ? "eye-off" : "eye")}</button>
+      <button data-st="layer-lock" data-id="${esc(el.id)}" title="${el.locked ? "Déverrouiller" : "Verrouiller"}" aria-label="${el.locked ? "Déverrouiller" : "Verrouiller"}" aria-pressed="${!!el.locked}" ${ed.readonly ? "disabled" : ""}>${ico(el.locked ? "lock" : "unlock")}</button></li>`).join("");
   }
   function arrangeHTML() {
-    const off = ed.sel.length ? "" : "disabled";
-    const b = (action, title) => `<button data-st="${action}" title="${title}" aria-label="${title}" ${action === "paste" ? (ed.clip.length ? "" : "disabled") : off}>${ico(action)}</button>`;
+    const off = ed.sel.length && !ed.readonly ? "" : "disabled";
+    const b = (action, title) => `<button data-st="${action}" title="${title}" aria-label="${title}" ${action === "paste" ? (ed.clip.length && !ed.readonly ? "" : "disabled") : action === "copy" && ed.sel.length ? "" : off}>${ico(action)}</button>`;
     return `<h2>Disposition</h2><div class="bs-st-arrange">
       ${b("align-left", "Aligner à gauche")}${b("align-hcenter", "Centrer horizontalement")}${b("align-right", "Aligner à droite")}
       ${b("align-top", "Aligner en haut")}${b("align-vcenter", "Centrer verticalement")}${b("align-bottom", "Aligner en bas")}
@@ -245,31 +265,34 @@
       ${b("lock", "Verrouiller / déverrouiller")}${b("delete", "Supprimer (Suppr)")}</div>`;
   }
   function field(label, prop, value, kind, extra) {
-    const esc = B().esc;
-    if (kind === "bool") return `<label class="bs-inline"><input type="checkbox" data-p="${prop}" data-kind="bool" ${value ? "checked" : ""}> ${label}</label>`;
-    if (kind === "color") return `<label>${label}<input type="color" data-p="${prop}" data-kind="color" value="${esc(value || "#000000")}"></label>`;
-    if (kind === "nullable") return `<label>${label}<span class="bs-st-nullable"><input type="color" data-p="${prop}" data-kind="color" value="${esc(value || "#FFFFFF")}" ${value ? "" : "disabled"}><label class="bs-inline"><input type="checkbox" data-p="${prop}" data-kind="none" ${value ? "" : "checked"}> Aucun</label></span></label>`;
-    if (kind === "select") return `<label>${label}<select class="select" data-p="${prop}" data-kind="text">${extra.map(([v, l]) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
-    if (kind === "area") return `<label>${label}<textarea class="input" rows="3" data-p="${prop}" data-kind="text" maxlength="500">${esc(value)}</textarea></label>`;
-    if (kind === "text") return `<label>${label}<input class="input" data-p="${prop}" data-kind="text" value="${esc(value)}" maxlength="80"></label>`;
-    return `<label>${label}<input class="input" type="number" data-p="${prop}" data-kind="num" value="${round(Number(value) || 0)}" step="${(extra && extra.step) || 0.5}" ${extra && extra.min !== undefined ? `min="${extra.min}"` : ""} ${extra && extra.max !== undefined ? `max="${extra.max}"` : ""}></label>`;
+    const esc = B().esc, lock = lockAttr();
+    if (kind === "bool") return `<label class="bs-inline"><input type="checkbox" data-p="${prop}" data-kind="bool" ${value ? "checked" : ""} ${lock}> ${label}</label>`;
+    if (kind === "color") return `<label>${label}<input type="color" data-p="${prop}" data-kind="color" value="${esc(value || "#000000")}" ${lock}></label>`;
+    if (kind === "nullable") return `<label>${label}<span class="bs-st-nullable"><input type="color" data-p="${prop}" data-kind="color" value="${esc(value || "#FFFFFF")}" ${value && !ed.readonly ? "data-no-lock" : "disabled"}><label class="bs-inline"><input type="checkbox" data-p="${prop}" data-kind="none" ${value ? "" : "checked"} ${lock}> Aucun</label></span></label>`;
+    if (kind === "select") return `<label>${label}<select class="select" data-p="${prop}" data-kind="text" ${lock}>${extra.map(([v, l]) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`;
+    // data-no-uppercase : l'application met les saisies en majuscules ; ici la casse est voulue
+    // (« {{nom}} » doit rester un champ, une légende ou un texte s'écrivent tels quels).
+    if (kind === "area") return `<label>${label}<textarea class="input" rows="3" data-p="${prop}" data-kind="text" maxlength="500" data-no-uppercase="1" ${lock}>${esc(value)}</textarea></label>`;
+    if (kind === "text") return `<label>${label}<input class="input" data-p="${prop}" data-kind="text" value="${esc(value)}" maxlength="${(extra && extra.max) || 80}" data-no-uppercase="1" ${lock}></label>`;
+    return `<label>${label}<input class="input" type="number" data-p="${prop}" data-kind="num" value="${round(Number(value) || 0)}" step="${(extra && extra.step) || 0.5}" ${extra && extra.min !== undefined ? `min="${extra.min}"` : ""} ${extra && extra.max !== undefined ? `max="${extra.max}"` : ""} ${lock}></label>`;
   }
   function propsHTML() {
     const items = selected();
     if (!items.length) {
       const d = ed.design;
       return `<h2>Face — ${B().esc(page().name)}</h2><div class="bs-st-form">
-        <label>Fond<input type="color" data-pp="background" value="${B().esc(page().background)}"></label>
-        <label>Largeur (mm)<input class="input" type="number" data-pp="width" min="20" max="300" step="0.5" value="${d.width}"></label>
-        <label>Hauteur (mm)<input class="input" type="number" data-pp="height" min="20" max="300" step="0.5" value="${d.height}"></label>
-        <button class="btn btn-ghost" data-st="swap-size">Inverser portrait / paysage</button>
+        <label>Fond<input type="color" data-pp="background" value="${B().esc(page().background)}" ${lockAttr()}></label>
+        <label>Largeur (mm)<input class="input" type="number" data-pp="width" min="20" max="300" step="0.5" value="${d.width}" ${lockAttr()}></label>
+        <label>Hauteur (mm)<input class="input" type="number" data-pp="height" min="20" max="300" step="0.5" value="${d.height}" ${lockAttr()}></label>
+        <button class="btn btn-ghost" data-st="swap-size" ${ed.readonly ? "disabled" : ""}>Inverser portrait / paysage</button>
+        ${ed.readonly ? "" : `<div class="bs-chips" role="group" aria-label="Formats courants"><button data-st="format" data-w="54" data-h="86">CR80 portrait 54 × 86</button><button data-st="format" data-w="85.6" data-h="54">CR80 paysage 85,6 × 54</button></div>`}
         <p class="bs-muted">Format CR80 : 54 × 86 mm. Sélectionnez un élément pour modifier ses propriétés ; Maj + clic pour en sélectionner plusieurs.</p></div>`;
     }
     if (items.length > 1) return `<h2>${items.length} éléments</h2><div class="bs-st-form">${field("Opacité", "opacity", items[0].opacity, "num", { step: 0.05, min: 0, max: 1 })}<p class="bs-muted">Utilisez la disposition pour aligner, centrer, dupliquer ou verrouiller la sélection.</p></div>`;
     const el = items[0];
     let specific = "";
     if (el.type === "text") specific = field("Texte (champs {{…}}, gras entre **)", "text", el.text, "area") +
-      `<label>Insérer un champ<select class="select" data-st="insert-field"><option value="">Choisir…</option>${Object.entries(B().state.fields).map(([key, label]) => `<option value="${B().esc(key)}">${B().esc(label)}</option>`).join("")}</select></label>` +
+      `<label>Insérer un champ<select class="select" data-st="insert-field" ${lockAttr()}><option value="">Choisir…</option>${Object.entries(B().state.fields).map(([key, label]) => `<option value="${B().esc(key)}">${B().esc(label)}</option>`).join("")}</select></label>` +
       field("Police", "font", el.font, "select", (B().state.fonts || ["Helvetica"]).map(f => [f, f])) + field("Taille (pt)", "size", el.size, "num", { step: 0.5, min: 3, max: 160 }) +
       field("Alignement", "align", el.align, "select", [["left", "Gauche"], ["center", "Centré"], ["right", "Droite"]]) + field("Couleur", "color", el.color, "color") +
       `<div class="bs-st-checks">${field("Gras", "bold", el.bold, "bool")}${field("Italique", "italic", el.italic, "bool")}${field("Majuscules", "uppercase", el.uppercase, "bool")}${field("Réduire si trop long", "autoFit", el.autoFit, "bool")}${field("Retour à la ligne", "wrap", el.wrap, "bool")}</div>`;
@@ -278,6 +301,12 @@
     else if (el.type === "photo") specific = field("Bordure", "stroke", el.stroke, "nullable") + field("Épaisseur de la bordure (mm)", "strokeWidth", el.strokeWidth, "num", { step: 0.05, min: 0, max: 10 }) + field("Arrondi (mm)", "radius", el.radius, "num", { step: 0.5, min: 0, max: 100 }) + `<p class="bs-muted">La photo vient de la fiche de l'employé.</p>`;
     else if (el.type === "image") specific = field("Ajustement", "fit", el.fit, "select", [["contain", "Entière"], ["cover", "Remplir le cadre"], ["stretch", "Étirer"]]) + field("Arrondi (mm)", "radius", el.radius, "num", { step: 0.5, min: 0, max: 100 }) + `<button class="btn btn-ghost" data-st="replace-image">Remplacer l'image</button>`;
     else if (el.type === "qr") specific = field("Couleur", "color", el.color, "color") + field("Fond", "background", el.background, "nullable") + `<p class="bs-muted">Le QR ouvre la page de vérification du badge. Gardez-le sombre sur fond clair, 12 mm au minimum.</p>`;
+    else if (el.type === "blood") specific = `<p class="bs-muted">Valeur lue sur la fiche de l'employé (information déclarative). Masquée sur le badge si elle n'est pas renseignée ou si son affichage n'est pas autorisé (Paramètres). Ici : exemple « O+ ».</p>` +
+      `<div class="bs-st-checks">${field("Afficher", "visible", !el.hidden, "bool")}${field("Verrouillé", "locked", el.locked, "bool")}</div>` +
+      field("Légende (vide : aucune)", "caption", el.caption, "text", { max: 30 }) + field("Taille de la légende (pt)", "captionSize", el.captionSize, "num", { step: 0.2, min: 2, max: 40 }) +
+      field("Taille du groupe (pt)", "size", el.size, "num", { step: 0.5, min: 4, max: 160 }) + field("Alignement", "align", el.align, "select", [["left", "Gauche"], ["center", "Centré"], ["right", "Droite"]]) +
+      field("Couleur du texte", "color", el.color, "color") + field("Fond", "background", el.background, "nullable") + field("Bordure", "stroke", el.stroke, "nullable") +
+      field("Épaisseur de la bordure (mm)", "strokeWidth", el.strokeWidth, "num", { step: 0.05, min: 0, max: 5 }) + field("Arrondi (mm)", "radius", el.radius, "num", { step: 0.2, min: 0, max: 100 });
     return `<h2>${B().esc(TYPE_LABELS[el.type] || "Élément")}</h2><div class="bs-st-form">${field("Nom du calque", "name", el.name, "text")}
       <div class="bs-st-grid">${field("X (mm)", "x", el.x, "num")}${field("Y (mm)", "y", el.y, "num")}${field("Largeur", "w", el.w, "num", { min: 0.2 })}${field("Hauteur", "h", el.h, "num", { min: 0.2 })}${field("Rotation (°)", "rotation", el.rotation, "num", { step: 1, min: -360, max: 360 })}${field("Opacité", "opacity", el.opacity, "num", { step: 0.05, min: 0, max: 1 })}</div>
       ${specific}</div>`;
@@ -319,6 +348,7 @@
     else if (key === "field") { ed.fieldMenu = !ed.fieldMenu; renderAll(); }
     else if (key === "photo") add({ type: "photo", name: "Photo", w: 21.3, h: 24.5, stroke: yellow, strokeWidth: 0.45, radius: 0.9 });
     else if (key === "qr") add({ type: "qr", name: "QR code", w: 15, h: 15, color: black, background: "" });
+    else if (key === "blood") add({ type: "blood", name: "Groupe sanguin", w: 13.6, h: 12.4, size: 22, color: black, background: yellow, stroke: black, strokeWidth: 0.3, radius: 1.2, align: "center", caption: "GROUPE SANGUIN", captionSize: 4.6 });
     else if (key === "rect") add({ type: "shape", name: "Rectangle", shape: "rect", w: 20, h: 12, fill: yellow, stroke: "", strokeWidth: 0, radius: 0 });
     else if (key === "ellipse") add({ type: "shape", name: "Forme ronde", shape: "ellipse", w: 16, h: 16, fill: yellow, stroke: "", strokeWidth: 0, radius: 0 });
     else if (key === "triangle") add({ type: "shape", name: "Triangle", shape: "triangle", w: 16, h: 14, fill: yellow, stroke: "", strokeWidth: 0, radius: 0 });
@@ -426,6 +456,11 @@
       return;
     }
     const single = selected().length === 1 ? selected()[0] : null;
+    if (ed.readonly) {                                                // consultation : sélection seule
+      const node = event.target.closest("[data-el]");
+      select(node && byId(node.dataset.el) ? [node.dataset.el] : []);
+      return;
+    }
     if (handle && single) {
       ed.drag = handle.dataset.rotate ? { mode: "rotate", el: single, start: clone(single) } : { mode: "resize", el: single, start: clone(single), hx: Number(handle.dataset.hx), hy: Number(handle.dataset.hy), p0: p };
     } else {
@@ -520,6 +555,7 @@
     const mod = event.ctrlKey || event.metaKey, key = event.key.toLowerCase();
     if (mod && key === "s") { event.preventDefault(); if (B().can("admin")) save(false); return; }
     if (typing) return;
+    if (ed.readonly) { if (key === "escape") select([]); else if (mod && key === "c" && ed.sel.length) copy(); return; }
     const step = event.shiftKey ? 5 : GRID;
     const arrows = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] };
     if (mod && key === "z") { event.preventDefault(); if (event.shiftKey) restore(null, ed.redo, ed.undo); else restore(null, ed.undo, ed.redo); }
@@ -548,6 +584,8 @@
       const target = event.target.closest("[data-st]");
       if (!target || ed.view !== view || !view.querySelector(".bs-studio")) return;
       const action = target.dataset.st;
+      const READONLY_OK = ["page", "zoom-in", "zoom-out", "zoom-fit", "toggle-grid", "toggle-snap", "clear-guides", "layer", "copy", "preview", "proof"];
+      if (ed.readonly && !READONLY_OK.includes(action) && !(action === "tool" && target.dataset.tool === "layers")) return;
       if (action === "tool") tool(target.dataset.tool);
       else if (action === "add-field") { const key = target.dataset.field; ed.fieldMenu = false; add({ type: "text", name: B().state.fields[key] || key, text: `{{${key}}}`, w: 40, h: 6, font: "Helvetica", size: 10, color: "#111111", align: "center", bold: true, italic: false, uppercase: true, autoFit: true, wrap: false }); }
       else if (action === "page") { ed.page = Number(target.dataset.i) || 0; ed.sel = []; renderAll(); }
@@ -571,15 +609,17 @@
       else if (action === "lock") mutate(items => { const lock = items.some(el => !el.locked); items.forEach(el => { el.locked = lock; }); });
       else if (action === "delete") remove();
       else if (action === "swap-size") { checkpoint(); [ed.design.width, ed.design.height] = [ed.design.height, ed.design.width]; changed(); fitZoom(); }
+      else if (action === "format") { checkpoint(); ed.design.width = Number(target.dataset.w); ed.design.height = Number(target.dataset.h); changed(); fitZoom(); }
       else if (action === "replace-image") pickImage("image", ed.sel[0]);
       else if (action === "save") save(false);
       else if (action === "save-copy") save(true);
-      else if (action === "preview") { if (typeof openModal === "function") { openModal(`<h2 class="text-xl font-bold mb-3">Aperçu réaliste</h2><div class="bs-modal-preview">${B().previewHTML(ed.design, { values: B().SAMPLE, qr: sampleQr() }, { realistic: true, width: 220 })}</div><p class="text-sm text-slate-500 mt-3">Le porte-badge et le cordon ne sont jamais imprimés.</p><div class="flex justify-end mt-3"><button class="btn btn-ghost" id="bs-st-close">Fermer</button></div>`); document.getElementById("bs-st-close").onclick = closeModal; } }
+      else if (action === "preview") B().openPreview({ title: `Aperçu du badge — ${B().esc(ed.name || "modèle")}`, items: [{ design: ed.design, ctx: { values: B().SAMPLE, qr: sampleQr() } }],
+        note: "Données d'exemple (dont le groupe sanguin « O+ »). La maquette en cours est prévisualisée sans être enregistrée." });
       else if (action === "proof") B().apiBlob("/preview/pdf", { design: ed.design }).then(file => B().saveBlob(file, true)).catch(error => B().notify(error.message || String(error), "error"));
     });
     const apply = (event, final) => {
       const t = event.target;
-      if (ed.view !== view || !t.closest || !t.closest(".bs-studio")) return;
+      if (ed.view !== view || !t.closest || !t.closest(".bs-studio") || ed.readonly) return;
       if (t.dataset.st === "name") { ed.name = t.value; changed(); return; }
       if (t.dataset.st === "society") { ed.society = t.value; changed(); return; }
       if (t.dataset.st === "insert-field") {
@@ -601,8 +641,9 @@
       if (!ed.typing) { checkpoint(); ed.typing = true; }
       const kind = t.dataset.kind;
       selected().forEach(el => {
-        if (!(prop in el) && !["opacity", "rotation", "name"].includes(prop)) return;
-        if (kind === "bool") el[prop] = t.checked;
+        if (!(prop in el) && !["opacity", "rotation", "name", "visible", "locked"].includes(prop)) return;
+        if (prop === "visible") el.hidden = !t.checked;
+        else if (kind === "bool") el[prop] = t.checked;
         else if (kind === "none") el[prop] = t.checked ? "" : (t.closest(".bs-st-nullable").querySelector('input[type="color"]').value || "#FFFFFF");
         else if (kind === "num") { const v = Number(t.value); if (Number.isFinite(v)) el[prop] = ["w", "h"].includes(prop) ? Math.max(0.2, v) : v; }
         else el[prop] = t.value;

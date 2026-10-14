@@ -158,6 +158,39 @@ def _draw_picture(c, content: bytes, w: float, h: float, radius: float, *, fit: 
     c.restoreState()
 
 
+def _fit(text: str, font: str, size: float, width: float) -> float:
+    natural = stringWidth(text, font, size)
+    return max(2.0, size * width / natural) if natural > width > 0 else size
+
+
+def _draw_blood(c, element: dict[str, Any], w: float, h: float, value: str) -> None:
+    """Groupe sanguin : cadre (fond, bordure), légende discrète en haut, valeur en grand. Le
+    même police embarquée dessine les huit groupes (et le signe moins typographique)."""
+    radius = float(element.get("radius") or 0) * mm
+    _paint(c, _rounded(c, -w / 2, -h / 2, w, h, radius), {**element, "fill": element.get("background") or ""})
+    if badge_text.font_for("\u2212", True):            # police embarquée disponible (cas normal)
+        bold = badge_text.UNICODE_FONT_BOLD
+    else:                                                # repli : polices standard, moins ASCII
+        bold, value = "Helvetica-Bold", value.replace("\u2212", "-")
+    pad = min(w, h) * 0.08
+    caption = str(element.get("caption") or "").strip()
+    c.setFillColor(HexColor(element["color"]))
+    top = h / 2 - pad
+    if caption:
+        caption_font = badge_text.font_for(caption, True) or "Helvetica-Bold"
+        shown = caption if caption_font == "Helvetica-Bold" else badge_text.visual(caption)
+        csize = _fit(shown, caption_font, float(element.get("captionSize") or 4.6), w - 2 * pad)
+        c.setFont(caption_font, csize)
+        c.drawCentredString(0, top - csize * 0.8, shown)
+        top -= csize * 1.15
+    size = float(element["size"])
+    size = min(_fit(value, bold, size, w - 2 * pad), (top + h / 2 - pad) / 0.75)
+    c.setFont(bold, size)
+    width = stringWidth(value, bold, size)
+    x = {"left": -w / 2 + pad, "right": w / 2 - pad - width}.get(element.get("align"), -width / 2)
+    c.drawString(x, (top + (-h / 2 + pad)) / 2 - size * 0.36, value)
+
+
 def _draw_element(c, element: dict[str, Any], item: BadgeItem) -> None:
     w, h = element["w"] * mm, element["h"] * mm
     kind = element["type"]
@@ -184,6 +217,10 @@ def _draw_element(c, element: dict[str, Any], item: BadgeItem) -> None:
         _paint(c, _rounded(c, -w / 2, -h / 2, w, h, radius), {**element, "fill": ""})
     elif kind == "image":
         _draw_picture(c, decode_image(element["src"]), w, h, float(element.get("radius") or 0) * mm, fit=element["fit"])
+    elif kind == "blood":
+        value = str(item.values.get("groupe_sanguin") or "")
+        if value:                                          # absent ou non autorisé : rien n'est dessiné
+            _draw_blood(c, element, w, h, value)
     elif kind == "qr":
         if element.get("background"):
             c.setFillColor(HexColor(element["background"]))
@@ -245,6 +282,7 @@ def render_cards(items: list[BadgeItem], *, title: str = "Badges") -> bytes:
     """Une page par face, au format exact de la carte."""
     buffer = io.BytesIO()
     c = pdf_canvas.Canvas(buffer, pageCompression=1)
+    c.setViewerPreference("PrintScaling", "None")      # taille réelle : jamais « ajuster à la page »
     c.setTitle(title)
     c.setAuthor("IRON GLOBAL — Studio Badges DRH")
     for item in items:
@@ -262,6 +300,7 @@ def render_sheets(items: list[BadgeItem], *, margin_mm: float = 10, gap_mm: floa
     impression recto verso retournée sur le bord long."""
     buffer = io.BytesIO()
     c = pdf_canvas.Canvas(buffer, pagesize=A4, pageCompression=1)
+    c.setViewerPreference("PrintScaling", "None")
     c.setTitle(title)
     c.setAuthor("IRON GLOBAL — Studio Badges DRH")
     page_w, page_h = A4

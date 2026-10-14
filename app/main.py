@@ -1139,7 +1139,7 @@ def _public_employee_badge_data(employee_ref: str) -> dict:
         "telephone": data.get("telephone") or row["phone"] or "",
         "fonction": data.get("fonction") or row["position"] or "",
         "photo": data.get("photo") or "",
-        "groupeSanguin": data.get("groupeSanguin") or data.get("groupe_sanguin") or "",
+        # Jamais de groupe sanguin ici : donnée médicale, absente de toute réponse publique.
         "badgeActif": data.get("badgeActif") is not False,
         "affectationCourante": data.get("affectationCourante") if isinstance(data.get("affectationCourante"), dict) else {},
     }
@@ -1251,7 +1251,6 @@ def public_employee_badge_page(employee_ref: str, request: Request, t: str | Non
     society = html.escape(str(data.get("societe") or ""))
     aff = data.get("affectationCourante") if isinstance(data.get("affectationCourante"), dict) else {}
     fonction = html.escape(str(aff.get("poste") or data.get("fonction") or "—"))
-    groupe_sanguin = html.escape(str(data.get("groupeSanguin") or "—"))
     badge_active = data.get("badgeActif") is not False
     badge_label = "Badge actif" if badge_active else "Badge désactivé"
     state_class = "active" if badge_active else "inactive"
@@ -1273,14 +1272,14 @@ body{{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;backgroun
 .photo img{{width:100%;height:100%;object-fit:cover;display:block}}
 .identity{{margin-top:0;color:#043970;font-weight:900;line-height:1.08;text-align:center}}
 .identity h1{{margin:0;font-size:30px;line-height:1.08;text-transform:capitalize}}
-	.identity .code{{margin-top:2px;font-size:30px;line-height:1.05}}.identity .function{{margin-top:6px;font-size:23px;line-height:1.05;color:#043970}}.identity .blood{{margin-top:5px;font-size:22px;line-height:1.05;color:#0f172a}}
+	.identity .code{{margin-top:2px;font-size:30px;line-height:1.05}}.identity .function{{margin-top:6px;font-size:23px;line-height:1.05;color:#043970}}
 .qr{{width:150px;height:150px;border:1px solid #dbe3ef;background:#fff;display:flex;align-items:center;justify-content:center;padding:4px;box-sizing:border-box}}
 .qr img{{width:100%;height:100%;display:block}}
 @media(max-width:380px){{.phone-badge{{padding:16px 16px 18px;gap:14px;border-radius:24px}}.photo{{height:min(43vh,288px)}}.identity h1,.identity .code{{font-size:25px}}.qr{{width:132px;height:132px}}}}
 </style></head>
 <body><main class="phone-badge"><div class="ok {state_class}">{badge_label}</div>
 <div class="photo">{photo_html}</div>
-	<section class="identity"><h1>{name or (nom + " " + prenom)}</h1><div class="code">Code : {matricule}</div><div class="function">Fonction : {fonction}</div><div class="blood">Groupe sanguin : {groupe_sanguin}</div></section>
+	<section class="identity"><h1>{name or (nom + " " + prenom)}</h1><div class="code">Code : {matricule}</div><div class="function">Fonction : {fonction}</div></section>
 <div class="qr">{qr_markup}</div></main></body></html>"""
     return HTMLResponse(content, headers={"Cache-Control": "no-cache, max-age=0"})
 
