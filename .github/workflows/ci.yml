@@ -52,3 +52,31 @@ jobs:
 
       - name: Lancer les tests frontend
         run: npm test
+
+  mobile:
+    name: Application mobile IRON Emploi (tests, typecheck, lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/recruitment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/recruitment/package-lock.json
+
+      - name: Installer les dependances
+        run: npm ci --no-audit --no-fund
+
+      - name: Tests (contrat d'API, profil, filtres)
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
