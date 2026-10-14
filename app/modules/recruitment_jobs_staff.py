@@ -192,9 +192,9 @@ def publish_job_offer(offer_id: int, request: Request, db: Session = Depends(get
     if offer.status != OFFER_PUBLISHED:
         offer.status, offer.published_at, offer.closed_at, offer.updated_by = OFFER_PUBLISHED, datetime.utcnow(), None, user.username
         _audit(db, request, user, 'publish', offer, company)
-        # Alertes des candidats : une notification par espace dont les critères correspondent.
+        # Nouvelle offre : candidats dont une alerte correspond, et tous les téléphones enregistrés.
         from app.modules import recruitment_engage_service as engage
-        alerts = engage.notify_matching_alerts(db, offer, company)
+        alerts = engage.notify_new_offer(db, offer, company)
         db.commit()
         engage.send_push(db, alerts)
     db.commit()
