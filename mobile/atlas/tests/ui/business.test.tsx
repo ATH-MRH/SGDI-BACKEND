@@ -318,6 +318,8 @@ describe('abandon de poste', () => {
     await waitFor(() => expect(screen.getByTestId('abandon-applicable')).toHaveTextContent('Abandon de poste déclarable'));
     expect(screen.getByTestId('abandon-context')).toHaveTextContent(/07:00 – 19:00/);
     expect(screen.getByTestId('abandon-context')).toHaveTextContent(/2 h 30/);
+    // Seuil atteint : l'alerte le dit en clair et le bouton est rouge.
+    expect(screen.getByTestId('abandon-alert')).toHaveTextContent(/au-delà du seuil de 60 min/);
 
     // Motif obligatoire.
     expect(screen.getByTestId('abandon-submit').props.accessibilityState.disabled).toBe(true);
@@ -339,6 +341,7 @@ describe('abandon de poste', () => {
     await fireEvent.press(screen.getByTestId('abandon-employee-5'));
     await waitFor(() => expect(screen.getByTestId('abandon-applicable')).toHaveTextContent(/Non déclarable : il reste moins de 60 min/));
     expect(screen.queryByTestId('abandon-observation')).toBeNull();
+    expect(screen.queryByTestId('abandon-alert')).toBeNull();
     expect(screen.getByTestId('abandon-submit').props.accessibilityState.disabled).toBe(true);
   });
 
