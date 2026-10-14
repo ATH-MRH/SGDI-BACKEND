@@ -83,7 +83,7 @@ function contractsToEstablishCandidates(){
 
 function renderContractsToEstablish(view){
   const candidates=contractsToEstablishCandidates();
-  view.innerHTML=`<div class="mb-4 flex items-center justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">Contrats à établir</h1><p class="text-sm text-slate-500">Dossiers transmis par Recrutement. Aucun employé n'est créé avant validation du premier contrat.</p></div><span class="pill pill-amber">${candidates.length} en attente</span></div>
+  view.innerHTML=`<div class="mb-4 flex items-center justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">Contrats à établir</h1><p class="text-sm text-slate-500">Dossiers transmis par Recrutement. Aucun employé n'est créé avant validation du premier contrat.</p></div><div class="flex gap-2 flex-wrap items-center"><button class="btn btn-primary" onclick="openContractExcelImport()">Importer contractualisation Excel</button><span class="pill pill-amber">${candidates.length} en attente</span></div></div>
   <div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${candidates.length?candidates.map(c=>`<tr><td><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b></td><td>${escapeHTML(c.posteSouhaite||c.posteContrat||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(c.telephone||"—")}</td><td>${escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today()))}</td><td><div class="flex gap-2 flex-wrap"><button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button><button class="btn btn-ghost text-red-600" onclick="openArchiveContractCandidateModal('${jsString(c.id)}')">Archiver</button></div></td></tr>`).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun contrat à établir.</td></tr>`}</tbody></table></div>`;
 }
 
@@ -1043,3 +1043,73 @@ async function embaucherCandidat(id){
 }
 
 SGDIModules.registerModule({key: "contracts", routes: ["contrats"], dependencies: [], init: function(){}, destroy: function(){}});
+
+// Assistant de contractualisation : le serveur conserve le plan et décide des lignes prêtes.
+let contractExcelImport=null;
+async function contractExcelApi(path,options={}){
+  return sgdiApi('/drh/contracts/import'+path,{...options,legacy:false});
+}
+async function openContractExcelImport(){
+  const society=currentStructureSocieteFilter();
+  if(!society){toast('Sélectionnez une société active avant l’import','error');return}
+  try{
+    const config=await contractExcelApi('/config');
+    const sites=await sgdiApi('/drh/contracts/dc-client-sites?society='+encodeURIComponent(society),{legacy:false});
+    const templates=await sgdiApi('/drh/contract-templates',{legacy:false});
+    contractExcelImport={step:1,society,config,sites:sites.items||[],templates:templates||[],mode:'dates',precedence:'common',common:{},mapping:{},busy:false,error:''};
+    renderContractExcelImport();
+  }catch(e){toast(e.message||String(e),'error')}
+}
+function renderContractExcelImport(){
+  const s=contractExcelImport;if(!s)return;
+  const esc=escapeHTML;
+  const field=(key,label,type='text')=>`<label>${esc(label)}<input class="input" type="${type}" value="${esc(String(s.common[key]??''))}" onchange="contractExcelImport.common['${key}']=this.value" ${type==='number'?'min="0"':''}></label>`;
+  let body='';
+  if(s.step===1){
+    body=`<label>Mode<select class="input" onchange="contractExcelImport.mode=this.value"><option value="dates" ${s.mode==='dates'?'selected':''}>A — Dates uniquement</option><option value="full" ${s.mode==='full'?'selected':''}>B — Import complet</option></select></label><p>Chaque candidat conserve sa date de début. Formats : ${esc(s.config.limits.extensions.join(', '))} · ${s.config.limits.max_file_mb} Mo · ${s.config.limits.max_rows} lignes maximum.</p><button class="btn btn-ghost" onclick="contractExcelDownload('/template?mode='+contractExcelImport.mode,'modele-contractualisation.xlsx')">Télécharger le modèle Excel</button><label id="contract-excel-drop" class="contract-excel-drop" tabindex="0">Glissez votre fichier ici ou sélectionnez-le<input type="file" accept="${esc(s.config.limits.extensions.join(','))}" onchange="uploadContractExcelFile(this.files[0])" ${s.busy?'disabled':''}></label>`;
+  }else if(s.step===2){
+    const sheet=s.sheets.find(x=>x.index===s.sheet);
+    body=`<label>Feuille<select class="input" onchange="selectContractExcelSheet(Number(this.value))">${s.sheets.filter(x=>x.importable).map(x=>`<option value="${x.index}" ${x.index===s.sheet?'selected':''}>${esc(x.name)} (${x.row_count} lignes)</option>`).join('')}</select></label><div class="contract-excel-grid">${(sheet?.columns||[]).map(c=>`<label>${esc(c.header||c.letter)}<small>${esc(c.samples.join(' · '))}</small><select class="input" onchange="contractExcelImport.mapping['${c.index}']=this.value||null"><option value="">Ignorer</option>${s.config.fields.map(f=>`<option value="${f.key}" ${s.mapping[String(c.index)]===f.key?'selected':''}>${esc(f.label)}</option>`).join('')}</select></label>`).join('')}</div><h3>Données communes</h3><p>Poste, type, modèle et client/site sont obligatoires. Durée : 12m, 6m, 30d. Période d’essai : jours (30) ou durée (1m). Une date de fin manuelle Excel est conservée.</p><div class="contract-excel-grid">${field('position','Poste / fonction')}<label>Client / site<select class="input" onchange="contractExcelImport.common.client_site=this.value"><option value="">Choisir</option>${s.sites.map(o=>`<option value="${o.dc_client_id}:${o.dc_site_id||''}" ${s.common.client_site===`${o.dc_client_id}:${o.dc_site_id||''}`?'selected':''}>${esc(o.label)}</option>`).join('')}</select></label><label>Type contrat<select class="input" onchange="contractExcelImport.common.contract_type=this.value"><option value="">Choisir</option>${['CDD','CDI','CIDD','CTA','APPRENTISSAGE'].map(v=>`<option ${s.common.contract_type===v?'selected':''}>${v}</option>`).join('')}</select></label>${field('duration','Durée')}${field('trial','Période d’essai')}<label>Modèle de contrat<select class="input" onchange="contractExcelImport.common.template_id=this.value"><option value="">Choisir</option>${s.templates.filter(t=>t.active===1).map(t=>`<option value="${t.id}" ${String(s.common.template_id)===String(t.id)?'selected':''}>${esc(t.title)}</option>`).join('')}</select></label>${field('salary','Salaire commun','number')}${field('payment','Mode de paiement commun')}</div><label>Priorité des valeurs<select class="input" onchange="contractExcelImport.precedence=this.value"><option value="common" ${s.precedence==='common'?'selected':''}>Les valeurs communes renseignées remplacent Excel</option><option value="excel" ${s.precedence==='excel'?'selected':''}>Les valeurs Excel renseignées remplacent les valeurs communes</option></select></label><p>Les cellules vides utilisent les valeurs communes. En mode dates uniquement, seules les colonnes d’identification et de dates sont utilisées.</p><button class="btn btn-primary" onclick="previewContractExcelImport()" ${s.busy?'disabled':''}>Vérifier les lignes</button>`;
+  }else{
+    const data=s.step===3?s.preview:s.result;
+    const rows=(data?.rows||[]).filter(r=>!s.errorsOnly||!['PRÊT','CRÉÉ'].includes(r.status));
+    body=`<p>${data?.total??data?.rows?.length??0} lignes · ${Object.entries(data?.counts||{}).map(([k,v])=>`${v} ${esc(k.toLowerCase())}`).join(' · ')}</p><p>${s.step===3?'Aucun contrat n’a encore été créé. Seules les lignes PRÊT seront créées, avec une transaction indépendante par candidat.':'Résultat enregistré par ligne. Chaque contrat créé possède son propre numéro.'}</p><label><input type="checkbox" onchange="contractExcelImport.errorsOnly=this.checked;renderContractExcelImport()" ${s.errorsOnly?'checked':''}> Afficher uniquement les erreurs</label><div class="contract-excel-table"><table class="table"><thead><tr><th>Ligne</th><th>Candidat</th><th>Date début</th><th>Date fin</th><th>Poste</th><th>Client / site</th><th>Statut</th><th>Motif / numéro</th></tr></thead><tbody>${rows.map(r=>{const v=r.values||s.preview?.rows.find(p=>p.row===r.row)?.values||{};return `<tr><td>${r.row}</td><td>${esc(r.candidate||'—')}</td><td>${esc(v.start_date||'—')}</td><td>${esc(v.end_date||'—')}</td><td>${esc(v.position||'—')}</td><td>${esc(v.client_site||'—')}</td><td>${esc(r.status)}</td><td>${esc([r.reason||r.reference,...(r.warnings||[])].filter(Boolean).join(' · ')||'—')}</td></tr>`}).join('')}</tbody></table></div><div class="flex gap-2 flex-wrap"><button class="btn btn-ghost" onclick="contractExcelDownload('/'+contractExcelImport.session_id+'/report','rapport-contractualisation.csv')">Télécharger le rapport CSV</button>${s.processing?'<button class="btn btn-primary" onclick="refreshContractExcelResult()">Recharger le résultat</button>':''}${s.step===3?`<button class="btn btn-ghost" onclick="contractExcelImport.step=2;renderContractExcelImport()" ${s.busy?'disabled':''}>Corriger la correspondance</button><button class="btn btn-primary" onclick="confirmContractExcelImport()" ${s.busy||s.processing||!data?.counts?.['PRÊT']?'disabled':''}>Créer ${data?.counts?.['PRÊT']||0} contrats prêts</button>`:''}</div>`;
+  }
+  openModal(`<style>.modal:has(.contract-excel-wizard){max-width:1150px}.contract-excel-wizard{box-sizing:border-box;width:100%;max-height:82vh;overflow:auto;padding:8px}.contract-excel-wizard label{display:grid;gap:5px;margin:10px 0}.contract-excel-wizard small{color:#64748b}.contract-excel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px}.contract-excel-drop{padding:30px;border:2px dashed #94a3b8;border-radius:12px;text-align:center}.contract-excel-table{overflow:auto;max-height:44vh}.contract-excel-steps{display:flex;flex-wrap:wrap;gap:12px}.contract-excel-wizard .input{width:100%;min-width:0}@media(max-width:600px){.contract-excel-wizard{width:100%}.contract-excel-grid{grid-template-columns:1fr}}</style><section class="contract-excel-wizard" aria-label="Importer contractualisation Excel"><h2>Importer contractualisation Excel</h2><p>Société : ${esc(s.society)}</p><nav class="contract-excel-steps" aria-label="Étapes">${['Fichier','Correspondance','Vérification','Résultat'].map((v,i)=>`<b ${s.step===i+1?'aria-current="step"':''}>${i+1}. ${v}</b>`).join('')}</nav>${s.error?`<p role="alert" style="color:#b91c1c">${esc(s.error)}</p>`:''}${s.busy?'<p role="status">Traitement en cours…</p>':''}${body}<div class="flex justify-end mt-4"><button class="btn btn-ghost" onclick="closeContractExcelImport()" ${s.busy?'disabled':''}>Fermer</button></div></section>`);
+  const backdrop=document.querySelector('#modal-host .modal-bg');
+  if(backdrop)backdrop.addEventListener('click',e=>{if(e.target===backdrop){e.stopImmediatePropagation();if(!s.busy)closeContractExcelImport()}},true);
+  const drop=document.getElementById('contract-excel-drop');
+  if(drop){drop.ondragover=e=>e.preventDefault();drop.ondrop=e=>{e.preventDefault();uploadContractExcelFile(e.dataTransfer.files[0])}}
+}
+function selectContractExcelSheet(index){
+  const s=contractExcelImport;s.sheet=index;s.mapping={};
+  (s.sheets.find(x=>x.index===index)?.columns||[]).forEach(c=>s.mapping[String(c.index)]=c.suggested||null);
+  renderContractExcelImport();
+}
+async function uploadContractExcelFile(file){
+  const s=contractExcelImport;if(!file||s.busy)return;
+  s.busy=true;s.error='';renderContractExcelImport();
+  try{const form=new FormData();form.append('file',file);const result=await contractExcelApi('?society='+encodeURIComponent(s.society),{method:'POST',body:form});Object.assign(s,result);const sheet=s.sheets.find(x=>x.index===s.default_sheet&&x.importable)||s.sheets.find(x=>x.importable);if(!sheet)throw new Error('Aucune feuille importable');s.step=2;s.sheet=sheet.index;s.mapping={};sheet.columns.forEach(c=>s.mapping[String(c.index)]=c.suggested||null)}catch(e){s.error=e.message||String(e)}finally{s.busy=false;renderContractExcelImport()}
+}
+async function previewContractExcelImport(){
+  const s=contractExcelImport;if(s.busy)return;s.busy=true;s.error='';renderContractExcelImport();
+  try{s.preview=await contractExcelApi('/'+s.session_id+'/preview',{method:'POST',body:{sheet:s.sheet,mapping:s.mapping,mode:s.mode,precedence:s.precedence,common:s.common}});s.step=3;s.errorsOnly=false}catch(e){s.error=e.message||String(e)}finally{s.busy=false;renderContractExcelImport()}
+}
+async function confirmContractExcelImport(){
+  const s=contractExcelImport;if(s.busy||s.processing||s.step!==3||!s.preview?.counts?.['PRÊT'])return;
+  s.busy=true;s.error='';renderContractExcelImport();
+  try{s.result=await contractExcelApi('/'+s.session_id+'/confirm',{method:'POST'});s.step=4;s.errorsOnly=false;try{await sgdiPullState({silent:true})}catch(e){s.error='Contrats créés ; actualisation des listes indisponible.'}}catch(e){s.error=e.message||String(e);try{const result=await contractExcelApi('/'+s.session_id+'/result');if(['completed','failed'].includes(result.status)){s.result=result;s.step=4}else{s.processing=true;s.error+=' Le serveur poursuit le traitement. Rechargez le résultat.'}}catch(ignore){}}finally{s.busy=false;renderContractExcelImport()}
+}
+async function contractExcelDownload(path,filename){
+  try{const response=await fetch(sgdiApiUrl('/drh/contracts/import'+path,false),{headers:sgdiAuthHeaders(),cache:'no-store'});if(!response.ok)throw new Error('Téléchargement refusé');const blob=await response.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message||String(e),'error')}
+}
+async function closeContractExcelImport(){
+  const s=contractExcelImport;if(s?.busy)return;
+  if(s?.session_id&&s.step<4){try{await contractExcelApi('/'+s.session_id+'/cancel',{method:'POST'})}catch(e){toast(e.message||String(e),'error')}}
+  contractExcelImport=null;closeModal();renderView();
+}
+
+async function refreshContractExcelResult(){
+  const s=contractExcelImport;if(!s||s.busy)return;s.busy=true;
+  try{const result=await contractExcelApi('/'+s.session_id+'/result');if(['completed','failed'].includes(result.status)){s.result=result;s.step=4;s.processing=false;s.error='';await sgdiPullState({silent:true})}else{s.error='Traitement en cours : '+(result.rows||[]).filter(r=>r.status==='CRÉÉ').length+' contrats créés.'}}catch(e){s.error=e.message||String(e)}finally{s.busy=false;renderContractExcelImport()}
+}
