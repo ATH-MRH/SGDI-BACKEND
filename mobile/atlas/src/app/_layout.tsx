@@ -74,18 +74,17 @@ function RootNavigator() {
             <Stack.Screen name="alerts/[id]" />
             <Stack.Screen name="ops/sites/index" />
             <Stack.Screen name="ops/sites/[id]" />
-            <Stack.Screen name="attendance" />
             <Stack.Screen name="attendance-correct" />
             <Stack.Screen name="abandons/index" />
             <Stack.Screen name="abandons/new" />
             <Stack.Screen name="incidents/index" />
             <Stack.Screen name="incidents/new" />
             <Stack.Screen name="brq" />
-            <Stack.Screen name="drh/employees/index" />
             <Stack.Screen name="drh/employees/[id]" />
             <Stack.Screen name="drh/leaves" />
             <Stack.Screen name="drh/leave-request" />
             <Stack.Screen name="recruitment" />
+            <Stack.Screen name="settings" />
           </Stack.Protected>
           <Stack.Protected guard={employeeIn}>
             <Stack.Screen name="employee" />

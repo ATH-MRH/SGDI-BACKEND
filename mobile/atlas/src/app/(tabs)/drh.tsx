@@ -17,24 +17,19 @@ import {
   ErrorState,
   HeaderAction,
   KpiCard,
+  KpiGrid,
   ListItem,
-  Loader,
   Screen,
   SectionHeader,
+  SkeletonDashboard,
 } from '@/components/ui';
 import { access } from '@/features/access';
-import { leaveStatus } from '@/features/status';
+import { leaveStatus, rawStatusLabel } from '@/features/status';
 import { t } from '@/i18n';
 import { societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
 import { colors, spacing } from '@/theme/tokens';
 import { formatDate } from '@/utils/format';
-
-/** Libellé d'un statut renvoyé tel quel par le backend : première lettre en capitale, rien d'interprété. */
-export function rawStatusLabel(status: string): string {
-  const text = status.replace(/_/g, ' ').trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : t('common.none');
-}
 
 const LEAVES_SHOWN = 4;
 const TRIALS_SHOWN = 4;
@@ -78,15 +73,16 @@ export default function DrhDashboardScreen() {
         }
         refreshControl={<RefreshControl refreshing={dashboard.isRefetching || leaves.isRefetching} onRefresh={refresh} tintColor={colors.navy} />}>
         {dashboard.isPending ? (
-          <Loader />
+          <SkeletonDashboard testID="drh-loading" />
         ) : dashboard.error || !data ? (
           <ErrorState error={dashboard.error} onRetry={refresh} testID="drh-error" />
         ) : (
           <>
             <SectionHeader title={t('drh.kpi.title')} hint={societyLabel(scope)} />
-            <View style={styles.grid}>
-              <KpiCard testID="drh-kpi-total" label={t('drh.kpi.total')} value={data.employeesTotal} icon="people-outline" onPress={() => go('/drh/employees')} />
+            <KpiGrid>
+              <KpiCard variant="compact" testID="drh-kpi-total" label={t('drh.kpi.total')} value={data.employeesTotal} icon="people-outline" onPress={() => go('/employees')} />
               <KpiCard
+                variant="compact"
                 testID="drh-kpi-active"
                 label={t('drh.kpi.active')}
                 value={active}
@@ -95,17 +91,17 @@ export default function DrhDashboardScreen() {
                 ratio={active !== null && data.employeesTotal > 0 ? active / data.employeesTotal : null}
                 state={active === null ? 'error' : 'ready'}
                 unavailableLabel={t('cockpit.unavailable')}
-                onPress={() => go('/drh/employees')}
+                onPress={() => go('/employees')}
               />
               {access.leaves(user) ? (
-                <KpiCard testID="drh-kpi-leaves" label={t('cockpit.leavesPending')} value={data.leavesPending} tone={data.leavesPending > 0 ? 'info' : 'neutral'} icon="calendar-outline" onPress={() => go('/drh/leaves')} />
+                <KpiCard variant="compact" testID="drh-kpi-leaves" label={t('cockpit.leavesPending')} value={data.leavesPending} tone={data.leavesPending > 0 ? 'info' : 'neutral'} icon="calendar-outline" onPress={() => go('/drh/leaves')} />
               ) : null}
               {access.candidates(user) ? (
-                <KpiCard testID="drh-kpi-candidates" label={t('drh.kpi.candidates')} value={data.candidatesTotal} icon="person-add-outline" onPress={() => go('/recruitment')} />
+                <KpiCard variant="compact" testID="drh-kpi-candidates" label={t('drh.kpi.candidates')} value={data.candidatesTotal} icon="person-add-outline" onPress={() => go('/recruitment')} />
               ) : null}
-              <KpiCard testID="drh-kpi-trials" label={t('drh.kpi.trials')} value={data.trialPeriods.length} tone={data.trialPeriods.length > 0 ? 'warning' : 'neutral'} icon="hourglass-outline" />
-              <KpiCard testID="drh-kpi-unassigned" label={t('drh.kpi.unassigned')} value={data.withoutSite} tone={data.withoutSite > 0 ? 'warning' : 'neutral'} icon="location-outline" />
-            </View>
+              <KpiCard variant="compact" testID="drh-kpi-trials" label={t('drh.kpi.trials')} value={data.trialPeriods.length} tone={data.trialPeriods.length > 0 ? 'warning' : 'neutral'} icon="hourglass-outline" />
+              <KpiCard variant="compact" testID="drh-kpi-unassigned" label={t('drh.kpi.unassigned')} value={data.withoutSite} tone={data.withoutSite > 0 ? 'warning' : 'neutral'} icon="location-outline" />
+            </KpiGrid>
 
             {data.byStatus.length > 0 ? (
               <ChartCard testID="drh-by-status" title={t('drh.byStatus.title')}>
@@ -167,7 +163,7 @@ export default function DrhDashboardScreen() {
             <View style={styles.section}>
               <SectionHeader title={t('home.shortcuts.title')} />
               <View style={styles.grid}>
-                <ActionTile testID="drh-action-employees" icon="people-outline" label={t('entry.employees')} onPress={() => go('/drh/employees')} />
+                <ActionTile testID="drh-action-employees" icon="people-outline" label={t('entry.employees')} onPress={() => go('/employees')} />
                 {access.leaves(user) ? <ActionTile testID="drh-action-leaves" icon="calendar-outline" label={t('entry.leaves')} onPress={() => go('/drh/leaves')} /> : null}
                 {access.candidates(user) ? <ActionTile testID="drh-action-candidates" icon="person-add-outline" label={t('entry.candidates')} onPress={() => go('/recruitment')} /> : null}
                 {access.attendance(user) ? <ActionTile testID="drh-action-attendance" icon="time-outline" label={t('entry.attendance')} onPress={() => go('/attendance')} /> : null}

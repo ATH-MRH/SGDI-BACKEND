@@ -19,7 +19,8 @@ import { useScope } from '@/scope/ScopeProvider';
 import { colors, spacing } from '@/theme/tokens';
 import { formatDateTime } from '@/utils/format';
 
-type Filter = 'open' | 'critical' | 'all';
+/** « Non lues » : alertes ouvertes que personne n'a encore prises en compte. */
+type Filter = 'all' | 'critical' | 'open' | 'treated';
 
 export default function AlertsScreen() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function AlertsScreen() {
     fetchPage: (page) =>
       fetchAlerts(api, {
         ...scopeParams(scope),
-        status: filter === 'open' ? 'open' : undefined,
+        status: filter === 'open' || filter === 'treated' ? filter : undefined,
         severity: filter === 'critical' ? 'critical' : undefined,
         page,
       }),
@@ -65,9 +66,10 @@ export default function AlertsScreen() {
               value={filter}
               onChange={setFilter}
               options={[
-                { value: 'open', label: t('alerts.filter.open') },
-                { value: 'critical', label: t('alerts.filter.critical') },
                 { value: 'all', label: t('alerts.filter.all') },
+                { value: 'critical', label: t('alerts.filter.critical') },
+                { value: 'open', label: t('alerts.filter.unread') },
+                { value: 'treated', label: t('alerts.filter.treated') },
               ]}
             />
           </View>

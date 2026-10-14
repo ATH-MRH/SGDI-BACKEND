@@ -21,7 +21,7 @@ const ENTRIES = {
   abandons: { key: 'abandons', title: 'entry.abandons', icon: 'exit-outline', route: '/abandons', access: 'abandons' },
   incidents: { key: 'incidents', title: 'entry.incidents', icon: 'warning-outline', route: '/incidents', access: 'incidents' },
   brq: { key: 'brq', title: 'entry.brq', icon: 'document-text-outline', route: '/brq', access: 'brq' },
-  employees: { key: 'employees', title: 'entry.employees', icon: 'people-outline', route: '/drh/employees', access: 'employees' },
+  employees: { key: 'employees', title: 'entry.employees', icon: 'people-outline', route: '/employees', access: 'employees' },
   leaves: { key: 'leaves', title: 'entry.leaves', icon: 'calendar-outline', route: '/drh/leaves', access: 'leaves' },
   candidates: { key: 'candidates', title: 'entry.candidates', icon: 'person-add-outline', route: '/recruitment', access: 'candidates' },
 } as const satisfies Record<string, ModuleEntry>;

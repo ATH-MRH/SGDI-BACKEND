@@ -27,6 +27,7 @@ import {
   StatLine,
 } from '@/components/ui';
 import { access } from '@/features/access';
+import { openRoute } from '@/features/navigation';
 import { t } from '@/i18n';
 import { colors, elevation, radius, spacing } from '@/theme/tokens';
 import { formatDate, localDate } from '@/utils/format';
@@ -40,7 +41,7 @@ export default function SiteDetailScreen() {
   const user = useCurrentUser();
   const allowed = access.sites(user) && Number.isInteger(siteId) && siteId > 0;
   const withAttendance = access.attendance(user);
-  const go = (route: string) => router.push(route as never);
+  const go = (route: string) => openRoute(router, route);
 
   const detail = useQuery({ queryKey: ['site', siteId], queryFn: () => fetchSiteDetail(api, siteId), enabled: allowed });
   const board = useQuery({

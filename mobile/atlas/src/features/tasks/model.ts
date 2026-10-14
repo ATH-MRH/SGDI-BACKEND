@@ -8,6 +8,8 @@ import type { Leave } from '@/api/domains/drh';
  */
 export type TaskType = 'alert' | 'leave';
 export type TaskPriority = 'critical' | 'high' | 'normal';
+/** À faire : personne ne s'en est saisi ; en cours : une alerte assignée. */
+export type TaskStatus = 'todo' | 'inProgress';
 
 export type Task = {
   id: string;
@@ -16,6 +18,7 @@ export type Task = {
   /** Pour un congé : type de congé, à traduire par l'écran. */
   detail: string | null;
   priority: TaskPriority;
+  status: TaskStatus;
   date: string;
   society: string | null;
   siteId: number | null;
@@ -38,6 +41,7 @@ export function buildTasks(input: { alerts?: readonly Alert[]; leaves?: readonly
       title: alert.title,
       detail: alert.summary,
       priority: alertPriority(alert.severity),
+      status: alert.status === 'assigned' ? 'inProgress' : 'todo',
       date: alert.lastDetectedAt,
       society: alert.society || null,
       siteId: alert.siteId,
@@ -52,6 +56,7 @@ export function buildTasks(input: { alerts?: readonly Alert[]; leaves?: readonly
       title: '',
       detail: leave.type,
       priority: 'normal',
+      status: 'todo',
       date: leave.startDate,
       society: null,
       siteId: null,

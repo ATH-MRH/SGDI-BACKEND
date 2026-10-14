@@ -6,7 +6,7 @@ import { Text } from 'react-native';
 
 import { ApiError } from '@/api/errors';
 import { validateCorrectionReason } from '@/api/domains/attendance';
-import AttendanceScreen from '@/app/attendance';
+import AttendanceScreen from '@/app/(tabs)/attendance';
 import AttendanceCorrectScreen from '@/app/attendance-correct';
 import { PrivacyShield } from '@/components/PrivacyShield';
 
@@ -41,7 +41,7 @@ jest.mock('@/hooks/useDebouncedValue', () => ({ useDebouncedValue: <T,>(value: T
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: mockBack }), useLocalSearchParams: () => mockParams }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View, SafeAreaProvider: View };
+  return { SafeAreaView: View, SafeAreaProvider: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
 });
 
 const row = (overrides = {}) => ({

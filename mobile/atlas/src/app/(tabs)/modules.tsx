@@ -1,120 +1,187 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import type { ApiUser } from '@/api/types';
 import { useCurrentUser } from '@/auth/AuthProvider';
-import { AppText, AtlasHeader, EmptyState, IconTile, Screen, SectionHeader, type IconName } from '@/components/ui';
+import { canAccessAnyModule, type ModuleKey } from '@/auth/permissions';
+import { AppText, AtlasHeader, EmptyState, KpiGrid, MetricStrip, ModuleTile, Screen, SectionHeader, type IconName } from '@/components/ui';
 import { access } from '@/features/access';
-import { moduleEntries } from '@/features/entries';
-import { visibleModules } from '@/features/modules';
+import { useCockpit } from '@/features/cockpit/useCockpit';
+import { useCockpitInsights } from '@/features/cockpit/useCockpitInsights';
+import { visibleModules, type MobileModule } from '@/features/modules';
 import { t, type TranslationKey } from '@/i18n';
 import { colors, elevation, radius, spacing } from '@/theme/tokens';
 
-type Tile = { key: string; label: string; icon: IconName; onPress?: () => void; testID?: string; caption?: string };
+type Tile = { key: string; label: string; caption?: string; icon: IconName; route?: string; count?: number | null; urgent?: boolean; testID?: string };
 
-function Launcher({ tiles }: { tiles: readonly Tile[] }) {
+/** Écran de chaque module mobile : le tableau de bord du module quand il existe, sinon son accueil. */
+const MODULE_ROUTES: Partial<Record<ModuleKey, string>> = {
+  ops: '/ops',
+  drh: '/drh',
+  pointage: '/attendance',
+  brq: '/brq',
+  conges: '/drh/leaves',
+  recrute: '/recruitment',
+};
+
+type Soon = { key: string; label: TranslationKey; caption: TranslationKey; icon: IconName; modules: readonly ModuleKey[] };
+
+/**
+ * Briques ATLAS sans écran mobile : montrées grisées, et seulement aux comptes qui ont le
+ * module correspondant sur le web. Jamais simulées.
+ */
+const NOT_ON_MOBILE: readonly Soon[] = [
+  { key: 'documents', label: 'modules.documents', caption: 'modules.inEmployeeSheet', icon: 'folder-open-outline', modules: ['drh'] },
+  { key: 'badges', label: 'modules.badges', caption: 'modules.unavailable.short', icon: 'id-card-outline', modules: ['drh', 'ops'] },
+  { key: 'blacklist', label: 'modules.blacklist', caption: 'modules.unavailable.short', icon: 'ban-outline', modules: ['drh'] },
+  { key: 'rounds', label: 'modules.rounds', caption: 'modules.unavailable.short', icon: 'walk-outline', modules: ['ops'] },
+  { key: 'equipment', label: 'modules.equipment', caption: 'modules.unavailable.short', icon: 'cube-outline', modules: ['materiel'] },
+  { key: 'finance', label: 'modules.finance', caption: 'modules.unavailable.short', icon: 'cash-outline', modules: ['finances', 'caisse'] },
+];
+
+function Grid({ tiles, go }: { tiles: readonly Tile[]; go: (route: string) => void }) {
   return (
-    <View style={styles.grid}>
-      {tiles.map((tile) =>
-        tile.onPress ? (
-          <Pressable
-            key={tile.key}
-            testID={tile.testID}
-            accessibilityRole="button"
-            accessibilityLabel={tile.label}
-            onPress={tile.onPress}
-            style={({ pressed }) => [styles.tile, elevation.card, pressed && styles.pressed]}>
-            <IconTile icon={tile.icon} size={44} />
-            <AppText variant="caption" color={colors.navy} numberOfLines={2} style={styles.tileLabel}>
-              {tile.label}
-            </AppText>
-          </Pressable>
-        ) : (
-          <View key={tile.key} testID={tile.testID} accessible accessibilityLabel={`${tile.label}, ${tile.caption ?? ''}`} style={[styles.tile, styles.tileOff]}>
-            <IconTile icon={tile.icon} tone="neutral" size={44} />
-            <AppText variant="caption" color={colors.textMuted} numberOfLines={2} style={styles.tileLabel}>
-              {tile.label}
-            </AppText>
-          </View>
-        ),
-      )}
-    </View>
+    <KpiGrid columns={3}>
+      {tiles.map((tile) => (
+        <ModuleTile
+          key={tile.key}
+          testID={tile.testID}
+          label={tile.label}
+          caption={tile.caption}
+          icon={tile.icon}
+          count={tile.count}
+          urgent={tile.urgent}
+          onPress={tile.route ? () => go(tile.route as string) : undefined}
+        />
+      ))}
+    </KpiGrid>
   );
 }
 
-/** Briques ATLAS qui n'ont pas encore d'écran mobile : affichées comme telles, jamais simulées. */
-const NOT_ON_MOBILE: readonly { key: string; label: TranslationKey; icon: IconName }[] = [
-  { key: 'documents', label: 'modules.documents', icon: 'folder-open-outline' },
-  { key: 'rounds', label: 'modules.rounds', icon: 'walk-outline' },
-  { key: 'equipment', label: 'modules.equipment', icon: 'cube-outline' },
-  { key: 'finance', label: 'modules.finance', icon: 'cash-outline' },
-  { key: 'reporting', label: 'modules.reporting', icon: 'bar-chart-outline' },
-];
+function moduleTile(module: MobileModule): Tile {
+  const route = MODULE_ROUTES[module.key];
+  return { key: module.key, testID: `module-${module.key}`, label: t(module.title), caption: t(module.body), icon: module.icon, route: route ?? `/module/${module.key}` };
+}
+
+function soonTiles(user: ApiUser | null): Tile[] {
+  return NOT_ON_MOBILE.filter((item) => canAccessAnyModule(user, item.modules)).map((item) => ({
+    key: item.key,
+    testID: `soon-${item.key}`,
+    label: t(item.label),
+    caption: t(item.caption),
+    icon: item.icon,
+  }));
+}
 
 /**
  * Lanceur de modules. Les modules et fonctions viennent des droits du compte : ce qui n'est pas
- * accordé n'y figure pas. Les briques sans écran mobile sont listées à part, grisées.
+ * accordé n'y figure pas. Les compteurs sont ceux du cockpit, calculés par le backend.
  */
 export default function ModulesScreen() {
   const router = useRouter();
   const user = useCurrentUser();
+  const cockpit = useCockpit();
+  const insights = useCockpitInsights();
   const modules = visibleModules(user);
   const go = (route: string) => router.push(route as never);
+  const header = <AtlasHeader title={t('tabs.modules')} subtitle={t('modules.subtitle')} />;
 
   if (modules.length === 0) {
     return (
-      <Screen scroll={false} testID="modules-screen" header={<AtlasHeader title={t('tabs.modules')} subtitle={t('modules.subtitle')} />}>
+      <Screen scroll={false} testID="modules-screen" header={header}>
         <EmptyState icon="grid-outline" title={t('modules.empty.title')} body={t('modules.empty.body')} testID="modules-empty" />
       </Screen>
     );
   }
 
-  const moduleTiles: Tile[] = modules.map((module) => ({
-    key: module.key,
-    testID: `module-${module.key}`,
-    label: t(module.title),
-    icon: module.icon,
-    onPress: () => router.push({ pathname: '/module/[key]', params: { key: module.key } }),
-  }));
-  const entries = [...new Map(modules.flatMap((module) => moduleEntries(user, module.key)).map((entry) => [entry.key, entry])).values()];
-  const functionTiles: Tile[] = [
-    { key: 'cockpit', label: t('modules.cockpit'), icon: 'speedometer-outline', onPress: () => go('/') },
-    ...entries.map((entry) => ({ key: entry.key, testID: `launcher-${entry.key}`, label: t(entry.title), icon: entry.icon, onPress: () => go(entry.route) })),
-    ...(access.alerts(user) ? [{ key: 'alerts', testID: 'launcher-alerts', label: t('tabs.alerts'), icon: 'notifications-outline' as IconName, onPress: () => go('/alerts') }] : []),
-    { key: 'tasks', testID: 'launcher-tasks', label: t('tabs.tasks'), icon: 'checkbox-outline', onPress: () => go('/tasks') },
-    { key: 'settings', testID: 'launcher-settings', label: t('modules.settings'), icon: 'settings-outline', onPress: () => go('/profile') },
+  const count = (key: string) => cockpit.cards.find((card) => card.key === key)?.value ?? null;
+  const critical = count('alertsCritical');
+  const moduleTiles = modules.map((module) => (module.key === 'conges' ? { ...moduleTile(module), count: count('leaves') } : moduleTile(module)));
+  const shown = new Set(modules.map((module) => MODULE_ROUTES[module.key]));
+  const functions: Tile[] = [
+    ...(access.employees(user) ? [{ key: 'employees', testID: 'launcher-employees', label: t('modules.employees'), caption: t('modules.employees.body'), icon: 'people-outline' as IconName, route: '/employees' }] : []),
+    ...(access.sites(user) ? [{ key: 'sites', testID: 'launcher-sites', label: t('entry.sites'), caption: t('modules.sites.body'), icon: 'business-outline' as IconName, route: '/ops/sites' }] : []),
+    ...(access.incidents(user)
+      ? [{ key: 'incidents', testID: 'launcher-incidents', label: t('entry.incidents'), caption: t('modules.incidents.body'), icon: 'warning-outline' as IconName, route: '/incidents', count: insights.incidentsOpen }]
+      : []),
+    ...(access.abandons(user) ? [{ key: 'abandons', testID: 'launcher-abandons', label: t('modules.abandons'), caption: t('modules.abandons.body'), icon: 'exit-outline' as IconName, route: '/abandons', count: count('abandons'), urgent: true }] : []),
+    ...(access.attendance(user) && !shown.has('/attendance') ? [{ key: 'attendance', testID: 'launcher-attendance', label: t('modules.pointage'), caption: t('modules.pointage.short'), icon: 'time-outline' as IconName, route: '/attendance' }] : []),
+    ...(access.leaves(user) && !shown.has('/drh/leaves') ? [{ key: 'leaves', testID: 'launcher-leaves', label: t('entry.leaves'), caption: t('modules.conges.short'), icon: 'calendar-outline' as IconName, route: '/drh/leaves', count: count('leaves') }] : []),
+    ...(access.candidates(user) && !shown.has('/recruitment') ? [{ key: 'candidates', testID: 'launcher-candidates', label: t('modules.recrute'), caption: t('entry.candidates'), icon: 'person-add-outline' as IconName, route: '/recruitment' }] : []),
+    ...(access.alerts(user)
+      ? [{ key: 'alerts', testID: 'launcher-alerts', label: t('tabs.alerts'), caption: t('modules.alerts.body'), icon: 'notifications-outline' as IconName, route: '/alerts', count: count('alertsOpen'), urgent: (critical ?? 0) > 0 }]
+      : []),
+    { key: 'tasks', testID: 'launcher-tasks', label: t('tabs.tasks'), caption: t('modules.tasks.body'), icon: 'checkbox-outline', route: '/tasks' },
+    { key: 'cockpit', testID: 'launcher-cockpit', label: t('modules.cockpit'), caption: t('modules.cockpit.body'), icon: 'speedometer-outline', route: '/' },
+    { key: 'profile', testID: 'launcher-profile', label: t('tabs.profile'), caption: t('modules.profile.body'), icon: 'person-circle-outline', route: '/profile' },
+    { key: 'settings', testID: 'launcher-settings', label: t('modules.settings'), caption: t('modules.settings.body'), icon: 'settings-outline', route: '/settings' },
   ];
-  const unavailable: Tile[] = NOT_ON_MOBILE.map((item) => ({ key: item.key, label: t(item.label), icon: item.icon, caption: t('modules.unavailable') }));
+  const soon = soonTiles(user);
+  const drh = insights.drh;
+  const active = drh?.byStatus.find((entry) => entry.status === 'actif')?.count ?? null;
 
   return (
-    <Screen testID="modules-screen" header={<AtlasHeader title={t('tabs.modules')} subtitle={t('modules.subtitle')} />}>
+    <Screen testID="modules-screen" header={header}>
       <SectionHeader title={t('modules.section.modules')} />
-      <Launcher tiles={moduleTiles} />
+      <Grid tiles={moduleTiles} go={go} />
+
       <SectionHeader title={t('modules.section.functions')} />
-      <Launcher tiles={functionTiles} />
-      <SectionHeader title={t('modules.section.unavailable')} hint={t('modules.section.unavailable.hint')} />
-      <Launcher tiles={unavailable} />
+      <Grid tiles={functions} go={go} />
+
+      <Pressable
+        testID="launcher-reports"
+        accessibilityRole="button"
+        accessibilityLabel={`${t('modules.reports')}, ${t('modules.reports.body')}`}
+        onPress={() => go('/stats')}
+        style={({ pressed }) => [styles.reports, elevation.card, pressed && styles.pressed]}>
+        <Ionicons name="trending-up-outline" size={28} color={colors.primary} />
+        <View style={styles.reportsTexts}>
+          <AppText variant="bodyStrong" color={colors.navy}>
+            {t('modules.reports')}
+          </AppText>
+          <AppText variant="caption" color={colors.textSecondary}>
+            {t('modules.reports.body')}
+          </AppText>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.navy} />
+      </Pressable>
+
+      {drh ? (
+        <>
+          <SectionHeader title={t('modules.drhSummary')} actionLabel={t('home.seeMore')} onAction={() => go('/drh')} />
+          <MetricStrip
+            testID="modules-drh-summary"
+            metrics={[
+              { key: 'total', label: t('drh.kpi.total'), value: String(drh.employeesTotal) },
+              ...(active !== null ? [{ key: 'active', label: t('drh.kpi.active'), value: String(active), tone: 'success' as const }] : []),
+              ...(access.leaves(user) ? [{ key: 'leaves', label: t('cockpit.leavesPending'), value: String(drh.leavesPending) }] : []),
+            ]}
+          />
+        </>
+      ) : null}
+
+      {soon.length > 0 ? (
+        <>
+          <SectionHeader title={t('modules.section.unavailable')} hint={t('modules.section.unavailable.hint')} />
+          <Grid tiles={soon} go={go} />
+        </>
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  tile: {
-    flexBasis: '22%',
-    flexGrow: 1,
-    maxWidth: '31.5%',
-    minHeight: 96,
+  reports: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xs,
+    gap: spacing.md,
+    padding: spacing.lg,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  tileOff: { backgroundColor: colors.surfaceSecondary, borderStyle: 'dashed', borderWidth: 1 },
-  tileLabel: { textAlign: 'center', fontWeight: '600' },
+  reportsTexts: { flex: 1, gap: 2 },
   pressed: { backgroundColor: colors.surfacePressed },
 });
