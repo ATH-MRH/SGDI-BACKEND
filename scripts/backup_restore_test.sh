@@ -62,7 +62,7 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-need gpg tar find sort
+need gpg tar find sort python3
 if [ -n "$PG_CONTAINER" ]; then need docker; else need pg_restore psql createdb dropdb; fi
 [ -f "$ARCHIVE" ] || die "archive introuvable : ${ARCHIVE}"
 [ -z "${RESTORE_PASSPHRASE_FILE:-}" ] || require_private "$RESTORE_PASSPHRASE_FILE"
@@ -76,21 +76,25 @@ report "Restauration d'essai de $(basename "$ARCHIVE")"
 if [ -f "${ARCHIVE}.sha256" ]; then
   expected="$(cut -d' ' -f1 "${ARCHIVE}.sha256")"
   if [ "$expected" = "$(sha256_of "$ARCHIVE")" ]; then ok "somme de contrôle de l'archive chiffrée"
-  else fail "somme de contrôle de l'archive chiffrée"; fi
+  else fail "somme de contrôle de l'archive chiffrée"; die "archive altérée : restauration refusée"; fi
 else
   report "  INFO    pas de fichier .sha256 à côté de l'archive"
 fi
 
 WORK="$(mktemp -d "${RESTORE_WORK_DIR:-${TMPDIR:-/tmp}}/atlas-restore.XXXXXX")"
 mkdir "${WORK}/bundle"
-if gpg_decrypt "$ARCHIVE" | tar -xf - -C "${WORK}/bundle"; then ok "déchiffrement et extraction"
-else die "déchiffrement impossible (clé ou archive incorrecte)"; fi
+# GPG peut produire du clair avant de signaler une erreur d’intégrité en fin de flux.
+# Ne jamais donner ce flux à tar : attendre son succès complet, puis valider toutes
+# les archives et leurs fichiers AVANT createdb / pg_restore.
+if gpg_decrypt "$ARCHIVE" > "${WORK}/bundle.tar"; then ok "déchiffrement"
+else die "déchiffrement impossible (clé ou intégrité GPG incorrecte)"; fi
+if python3 "${SCRIPT_DIR}/backup_archive_check.py" "${WORK}/bundle.tar" "$WORK"; then
+  ok "extraction et sommes de contrôle du contenu et des fichiers"
+else die "archive invalide : restauration refusée"; fi
 B="${WORK}/bundle"
-[ -f "${B}/manifest.txt" ] && [ -f "${B}/db.dump" ] && [ -f "${B}/SHA256SUMS" ] || die "archive incomplète"
-[ "$(manifest_get "${B}/manifest.txt" format)" = "atlas-backup-1" ] || die "format d'archive inconnu"
-
-if sha256_check "$B" SHA256SUMS; then ok "sommes de contrôle du contenu"
-else fail "sommes de contrôle du contenu"; fi
+if ! pg_run pg_restore --list < "${B}/db.dump" > "${WORK}/toc.list" 2> "${WORK}/toc.error"; then
+  die "dump PostgreSQL invalide : restauration refusée"
+fi
 
 # ── Base ─────────────────────────────────────────────────────────────────────────────────
 pg_run createdb "$TARGET"
@@ -136,9 +140,7 @@ fi
 # ── Fichiers ─────────────────────────────────────────────────────────────────────────────
 restored_files=0
 for label in $(manifest_get "${B}/manifest.txt" files_sets); do
-  mkdir -p "${WORK}/files/${label}"
-  if tar -xzf "${B}/files/${label}.tar.gz" -C "${WORK}/files/${label}" \
-     && sha256_check "${WORK}/files/${label}" "${B}/files/${label}.sha256"; then
+  if sha256_check "${WORK}/files/${label}" "${B}/files/${label}.sha256"; then
     n="$(find "${WORK}/files/${label}" -type f | wc -l | tr -d ' ')"
     restored_files=$((restored_files + n))
     if [ "$n" = "$(wc -l < "${B}/files/${label}.sha256" | tr -d ' ')" ]; then ok "fichiers « ${label} » : ${n}, tous vérifiés"

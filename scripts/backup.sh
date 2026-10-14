@@ -33,6 +33,8 @@
 #
 set -Eeuo pipefail
 umask 077
+# macOS tar must not inject AppleDouble files absent from the checksum inventory.
+export COPYFILE_DISABLE=1
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/backup_lib.sh

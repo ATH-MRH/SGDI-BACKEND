@@ -103,7 +103,7 @@ def files(tmp_path):
 def env(pg, gnupg, files, tmp_path):
     return {**os.environ, **pg["env"], "GNUPGHOME": gnupg["home"], "BACKUP_DIR": str(tmp_path / "backups"),
             "BACKUP_PG_DB": pg["name"], "BACKUP_FILES_DIRS": f"photos={files}", "BACKUP_GPG_RECIPIENT": gnupg["fingerprint"],
-            "BACKUP_MIN_FREE_MB": "1", "RESTORE_WORK_DIR": str(tmp_path)}
+            "BACKUP_MIN_FREE_MB": "1", "RESTORE_WORK_DIR": str(tmp_path), "COPYFILE_DISABLE": "1"}
 
 
 def _run(script, env, *args):
@@ -508,6 +508,64 @@ def test_check_detects_missing_stale_and_failed_backups(env):
     os.utime(archive, (age, age))
     stale = _run(CHECK, env)
     assert stale.returncode == 1 and "a plus de 26 h" in stale.stderr
+
+
+@pytest.mark.parametrize("defect", ["payload_checksum", "nested_checksum", "nested_archive", "nested_gzip_crc", "outer_archive", "late_gpg_error"])
+def test_restore_integrity_failure_never_creates_or_restores_a_database(env, tmp_path, defect):
+    import hashlib
+    import io
+    import tarfile
+
+    assert _run(BACKUP, env).returncode == 0
+    (archive,) = _archives(env)
+    clear = subprocess.run(["gpg", "--batch", "--decrypt", str(archive)], env=env,
+                           capture_output=True, check=True).stdout
+    bundle = tmp_path / "edited"
+    bundle.mkdir()
+    with tarfile.open(fileobj=io.BytesIO(clear)) as tar:
+        tar.extractall(bundle, filter="data")
+    if defect == "payload_checksum":
+        (bundle / "db.dump").write_bytes(b"invalid dump")
+    elif defect == "nested_checksum":
+        (bundle / "files/photos.sha256").write_text("0" * 64 + "  ./agent-0.jpg\n")
+    elif defect == "nested_archive":
+        (bundle / "files/photos.tar.gz").write_bytes(b"invalid nested tar")
+    elif defect == "nested_gzip_crc":
+        nested = bundle / "files/photos.tar.gz"
+        data = bytearray(nested.read_bytes())
+        data[-8] ^= 0xFF
+        nested.write_bytes(data)
+    if defect in {"nested_checksum", "nested_archive", "nested_gzip_crc"}:
+        sums = []
+        for file in sorted(bundle.rglob("*")):
+            if file.is_file() and file.name != "SHA256SUMS":
+                sums.append(hashlib.sha256(file.read_bytes()).hexdigest() + "  ./" + file.relative_to(bundle).as_posix())
+        (bundle / "SHA256SUMS").write_text("\n".join(sums) + "\n")
+    if defect != "late_gpg_error":
+        clear_tar = tmp_path / "edited.tar"
+        with tarfile.open(clear_tar, "w") as tar:
+            tar.add(bundle, arcname=".")
+        if defect == "outer_archive":
+            clear_tar.write_bytes(b"not a tar archive")
+        archive.unlink()
+        subprocess.run(["gpg", "--batch", "--yes", "--trust-model", "always", "--encrypt", "--recipient",
+                        env["BACKUP_GPG_RECIPIENT"], "--output", str(archive), str(clear_tar)], env=env, check=True,
+                       capture_output=True)
+        Path(f"{archive}.sha256").write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name + "\n")
+    spy = tmp_path / "spy-bin"
+    spy.mkdir()
+    calls = tmp_path / "restore-calls"
+    for tool in ("createdb", "pg_restore"):
+        (spy / tool).write_text(f'#!/bin/sh\necho {tool} >> "{calls}"\nexit 99\n')
+        (spy / tool).chmod(0o755)
+    if defect == "late_gpg_error":
+        real_gpg = shutil.which("gpg")
+        (spy / "gpg").write_text(f'#!/bin/sh\n"{real_gpg}" "$@"\nexit 1\n')
+        (spy / "gpg").chmod(0o755)
+    result = _run(RESTORE, {**env, "PATH": f"{spy}:{env['PATH']}"}, str(archive))
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert not calls.exists(), "integrity failure reached a PostgreSQL restore command"
+    assert not list(tmp_path.glob("atlas-restore.*"))
 
 
 def test_backups_starting_together_produce_exactly_one_dump(env, tmp_path):

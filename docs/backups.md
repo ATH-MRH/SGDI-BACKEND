@@ -1,7 +1,7 @@
 # Sauvegardes chiffrées, restauration d'essai et surveillance
 
-Trois scripts, sans dépendance à l'application (Python 3.11 ou plus requis pour le verrou,
-en plus de GnuPG et des outils PostgreSQL) :
+Trois scripts, sans dépendance à l'application (Python 3.11 ou plus requis pour le verrou et
+la validation des archives, en plus de GnuPG et des outils PostgreSQL) :
 
 | Script | Rôle |
 |---|---|
@@ -197,7 +197,13 @@ RESTORE_REPORT=restauration-<date>.txt bash scripts/backup_restore_test.sh <arch
 
 Le script crée une base neuve `atlas_restore_test_<date>_<pid>`, refuse de continuer si ce nom
 existe, ne restaure jamais dans une base existante et ne supprime que la base qu'il a créée.
-Il contrôle la somme de l'archive, celle de chaque élément, le nombre de tables, de contraintes
+Avant tout `createdb` ou `pg_restore`, le script attend la réussite complète de GPG, puis
+valide les chemins, le manifeste, les checksums de tous les fichiers et les archives imbriquées
+(y compris leur intégrité gzip). Tout échec arrête immédiatement le processus et efface le
+clair temporaire. Les liens et fichiers non couverts par les checksums sont refusés. Sur macOS,
+la sauvegarde désactive les métadonnées AppleDouble automatiques de tar (`COPYFILE_DISABLE=1`).
+
+Il contrôle ensuite le nombre de tables, de contraintes
 et d'index, la révision Alembic, le nombre de lignes de chaque table et chaque fichier.
 
 À exécuter **hors du serveur de production**, sur une machine qui détient la clé privée
