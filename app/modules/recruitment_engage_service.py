@@ -26,6 +26,9 @@ MAX_ALERTS = 10
 PUSH_KINDS = ('applications', 'messages', 'interviews', 'offers')
 KIND_PREFERENCE = {'application': 'applications', 'message': 'messages', 'interview': 'interviews', 'offer': 'offers'}
 EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
+EXPO_PUSH_BATCH = 100                     # messages au plus par requête au service Expo
+# Canal créé par l'application (son, bannière) ; sans lui, Android range la notification dans un canal muet.
+ANDROID_CHANNEL = 'iron-emploi'
 
 
 def now_local() -> datetime:
@@ -80,23 +83,32 @@ def send_push(db: Session, rows: list[Notification | None]) -> int:
     messages = []
     for row in rows:
         account = db.get(Account, row.account_id)
-        if account is None or not push_settings(account)[KIND_PREFERENCE.get(row.kind, 'applications')]:
+        # Les nouvelles offres partent vers tous les appareils, sans réglage ; les autres sujets suivent les préférences.
+        if account is None or (row.kind != 'offer' and not push_settings(account)[KIND_PREFERENCE.get(row.kind, 'applications')]):
             continue
         for token in db.scalars(select(PushDevice.token).where(PushDevice.account_id == row.account_id)).all():
-            messages.append({'to': token, 'title': row.title, 'body': row.body, 'sound': 'default',
+            messages.append({'to': token, 'title': row.title, 'body': row.body, 'sound': 'default', 'priority': 'high',
+                             'channelId': ANDROID_CHANNEL,
                              'data': {'notification_id': row.id, 'kind': row.kind, 'application_id': row.application_id,
                                       'interview_id': row.interview_id, 'offer_id': row.offer_id}})
-    if not messages:
-        return 0
-    try:
-        request = urllib.request.Request(EXPO_PUSH_URL, data=json.dumps(messages).encode(), method='POST',
-                                         headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
-        with urllib.request.urlopen(request, timeout=5):
-            pass
-    except Exception as exc:  # noqa: BLE001 — le push est un complément : jamais bloquant, jamais de contenu journalisé
-        logger.warning('Envoi push non abouti : %s', type(exc).__name__)
-        return 0
-    return len(messages)
+    sent = 0
+    for start in range(0, len(messages), EXPO_PUSH_BATCH):
+        batch = messages[start:start + EXPO_PUSH_BATCH]
+        try:
+            request = urllib.request.Request(EXPO_PUSH_URL, data=json.dumps(batch).encode(), method='POST',
+                                             headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+            with urllib.request.urlopen(request, timeout=5) as response:
+                tickets = (json.loads(response.read() or b'{}').get('data') or [])
+        except Exception as exc:  # noqa: BLE001 — le push est un complément : jamais bloquant, jamais de contenu journalisé
+            logger.warning('Envoi push non abouti : %s', type(exc).__name__)
+            continue
+        refused = [t for t in tickets if isinstance(t, dict) and t.get('status') == 'error']
+        if refused:
+            # Seuls les codes d'erreur sont journalisés : ni jeton, ni texte de la notification.
+            codes = sorted({str((t.get('details') or {}).get('error') or 'inconnu') for t in refused})
+            logger.warning('Push refusé par Expo pour %d appareil(s) : %s', len(refused), ', '.join(codes))
+        sent += len(batch) - len(refused)
+    return sent
 
 
 # ── Alertes ─────────────────────────────────────────────────────────────────
@@ -113,8 +125,9 @@ def alert_matches(alert: Alert, offer: Offer) -> bool:
             and (not alert.company_id or alert.company_id == offer.company_id))
 
 
-def notify_matching_alerts(db: Session, offer: Offer, company: Company) -> list[Notification]:
-    """À la publication d'une annonce : une notification par candidat dont une alerte active correspond."""
+def notify_new_offer(db: Session, offer: Offer, company: Company) -> list[Notification]:
+    """À la publication d'une annonce : une notification par candidat dont une alerte active correspond, et une
+    pour chaque espace qui a enregistré un téléphone (toute nouvelle offre lui est envoyée, sans réglage)."""
     created = []
     for alert in db.scalars(select(Alert).where(Alert.active.is_(True))).all():
         if alert_matches(alert, offer):
@@ -125,6 +138,11 @@ def notify_matching_alerts(db: Session, offer: Offer, company: Company) -> list[
                          f'« {offer.title} » chez {company.name} correspond à votre alerte.', offer_id=offer.id, dedup=f'offer:{offer.id}')
             if row is not None:
                 created.append(row)
+    for account_id in db.scalars(select(PushDevice.account_id).distinct()).all():
+        row = notify(db, account_id, 'offer', 'Nouvelle offre', f'« {offer.title} » chez {company.name}.',
+                     offer_id=offer.id, dedup=f'offer:{offer.id}')
+        if row is not None:
+            created.append(row)
     return created
 
 
