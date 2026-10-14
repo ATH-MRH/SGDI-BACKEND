@@ -67,6 +67,22 @@ jest.mock('@/features/cockpit/useCockpit', () => ({
 jest.mock('@/features/cockpit/useCockpitInsights', () => ({
   useCockpitInsights: () => ({ week: null, today: null, sitesTotal: null, drh: null, alerts: null, incidents: null, incidentsOpen: null, isRefreshing: false, refresh: jest.fn() }),
 }));
+jest.mock('@/features/commercial/hooks', () => {
+  const idle = { data: undefined, isPending: false, error: null, isRefetching: false, refetch: jest.fn() };
+  return {
+    useErpCounters: () => idle,
+    useQuotesSent: () => idle,
+    useRecentQuotes: () => idle,
+    useMonthSales: () => idle,
+    useMonthSalesByStatus: () => idle,
+    useMonthTopClients: () => idle,
+    useOpportunities: () => idle,
+    useProspects: () => idle,
+    useAllClients: () => idle,
+    useInvoices: () => idle,
+    usePayments: () => idle,
+  };
+});
 jest.mock('@/config/env', () => ({
   get env() {
     return { variant: mockVariant, apiUrl: 'https://atlas.example.test', features: {}, lockTimeoutMs: 120_000, storeUrls: mockStoreUrls };

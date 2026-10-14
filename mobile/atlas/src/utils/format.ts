@@ -48,3 +48,27 @@ export function localDate(days: number = 0, from: Date = new Date()): string {
   const date = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+/** Montant → "1 234 567,50 DA" (séparateurs français, sans dépendre de Intl) ; "—" s'il est inconnu. */
+export function formatMoney(value: number | null | undefined, currency: string = 'DA'): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const negative = value < 0;
+  const [whole = '0', cents = '00'] = Math.abs(value).toFixed(2).split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
+  return `${negative ? '-' : ''}${grouped},${cents} ${currency}`;
+}
+
+/** Montant compact pour une tuile : "1,2 M DA", "845 k DA". */
+export function formatMoneyShort(value: number | null | undefined, currency: string = 'DA'): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace('.', ',')} M ${currency}`;
+  if (abs >= 10_000) return `${sign}${Math.round(abs / 1000)} k ${currency}`;
+  return formatMoney(value, currency);
+}
+
+/** Premier jour du mois et aujourd'hui, au format "2026-10-01". */
+export function currentMonth(from: Date = new Date()): { from: string; to: string } {
+  return { from: `${from.getFullYear()}-${pad(from.getMonth() + 1)}-01`, to: localDate(0, from) };
+}

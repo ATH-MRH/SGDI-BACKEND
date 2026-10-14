@@ -85,6 +85,17 @@ function RootNavigator() {
             <Stack.Screen name="drh/leave-request" />
             <Stack.Screen name="recruitment" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="commercial/index" />
+            <Stack.Screen name="commercial/clients/index" />
+            <Stack.Screen name="commercial/clients/[id]" />
+            <Stack.Screen name="commercial/prospects" />
+            <Stack.Screen name="commercial/quotes/index" />
+            <Stack.Screen name="commercial/quotes/[id]" />
+            <Stack.Screen name="commercial/contracts" />
+            <Stack.Screen name="billing/index" />
+            <Stack.Screen name="billing/invoices/index" />
+            <Stack.Screen name="billing/invoices/[id]" />
+            <Stack.Screen name="billing/payments" />
           </Stack.Protected>
           <Stack.Protected guard={employeeIn}>
             <Stack.Screen name="employee" />

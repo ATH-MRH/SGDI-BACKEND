@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { Segmented } from '@/components/Segmented';
 import {
   AtlasHeader,
+  Banner,
   BarChart,
   ChartCard,
   Distribution,
@@ -23,15 +24,18 @@ import {
 import { access } from '@/features/access';
 import { percent, rateTone, share, shortDate, weekdayKey } from '@/features/cockpit/presentation';
 import { useCockpit } from '@/features/cockpit/useCockpit';
+import { useErpCounters, useMonthSales, useMonthSalesByStatus, useMonthTopClients, useOpportunities, useQuotesSent } from '@/features/commercial/hooks';
 import { isIncidentOpen, useCockpitInsights, type PresenceDay } from '@/features/cockpit/useCockpitInsights';
-import { incidentSeverity, rawStatusLabel } from '@/features/status';
+import { incidentSeverity, invoiceStatus, opportunityStage, quoteStatus, rawStatusLabel } from '@/features/status';
+import { OPPORTUNITY_STAGES } from '@/api/domains/commercial';
+import { sameSociety } from '@/api/domains/ops';
 import { t } from '@/i18n';
 import { currentSiteLabel, societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
 import { colors, spacing } from '@/theme/tokens';
-import { formatDate } from '@/utils/format';
+import { formatDate, formatMoney, formatMoneyShort } from '@/utils/format';
 
-type Section = 'global' | 'ops' | 'drh';
+type Section = 'global' | 'ops' | 'drh' | 'commercial' | 'billing';
 
 function weekBars(week: readonly PresenceDay[], value: (day: PresenceDay) => number | null) {
   return week.map((day) => ({ key: day.date, label: `${t(weekdayKey(day.date))}\n${shortDate(day.date)}`, value: value(day) }));
@@ -56,7 +60,18 @@ export default function StatsScreen() {
     { value: 'global', label: t('stats.section.global') },
     ...(canOps ? [{ value: 'ops' as const, label: t('stats.section.ops') }] : []),
     ...(canDrh ? [{ value: 'drh' as const, label: t('stats.section.drh') }] : []),
+    ...(access.commercial(user) ? [{ value: 'commercial' as const, label: t('stats.section.commercial') }] : []),
+    ...(access.billing(user) ? [{ value: 'billing' as const, label: t('stats.section.billing') }] : []),
   ];
+  const counters = useErpCounters();
+  const quotesSent = useQuotesSent();
+  const opportunities = useOpportunities();
+  const monthSales = useMonthSales();
+  const salesByStatus = useMonthSalesByStatus();
+  const topClients = useMonthTopClients();
+  const commercialCounters = counters.data?.commercial ?? null;
+  const billingCounters = counters.data?.billing ?? null;
+  const scopedOpportunities = (opportunities.data ?? []).filter((row) => !scope.society || sameSociety(row.society, scope.society));
   const [section, setSection] = useState<Section>('global');
 
   const today = insights.today;
@@ -69,13 +84,16 @@ export default function StatsScreen() {
   const abandons = card('abandons');
   const leaves = card('leaves');
   const todayKey = week?.[week.length - 1]?.date;
-  const nothing = !access.attendance(user) && !access.incidents(user) && !canDrh && !access.alerts(user);
-  const loading = !ready || (access.attendance(user) && today === null && card('expected')?.state === 'loading');
+  const nothing = !access.attendance(user) && !access.incidents(user) && !canDrh && !access.alerts(user) && !access.commercial(user) && !access.billing(user);
+  const loading = !ready || (section !== 'commercial' && section !== 'billing' && access.attendance(user) && today === null && card('expected')?.state === 'loading');
 
   const refresh = () => {
     cockpit.refresh();
     insights.refresh();
+    if (access.commercial(user) || access.billing(user)) void counters.refetch();
   };
+  const unavailable = t('cockpit.unavailable');
+  const counterState = counters.isPending ? 'loading' : counters.error ? 'error' : 'ready';
 
   const presenceCard = today ? (
     <ChartCard testID="stats-presence" title={t('home.presence.title')} actionLabel={access.attendance(user) ? t('common.seeAll') : undefined} onAction={() => go('/attendance')}>
@@ -241,6 +259,88 @@ export default function StatsScreen() {
         ) : (
           <SkeletonDashboard testID="stats-drh-loading" />
         )
+      ) : null}
+      {!nothing && !loading && section === 'commercial' ? (
+        <>
+          <KpiGrid testID="stats-commercial-kpis">
+            <KpiCard variant="compact" label={t('commercial.kpi.prospects')} value={commercialCounters?.prospects ?? null} state={counterState} unavailableLabel={unavailable} icon="person-add-outline" onPress={() => go('/commercial/prospects')} />
+            <KpiCard variant="compact" label={t('commercial.kpi.clients')} value={commercialCounters?.clientsActive ?? null} state={counterState} unavailableLabel={unavailable} icon="briefcase-outline" onPress={() => go('/commercial/clients')} />
+            <KpiCard variant="compact" label={t('commercial.kpi.opportunities')} value={commercialCounters?.opportunitiesOpen ?? null} state={counterState} unavailableLabel={unavailable} icon="trending-up-outline" />
+            <KpiCard variant="compact" label={t('commercial.kpi.quotesSent')} value={quotesSent.data?.total ?? null} state={quotesSent.isPending ? 'loading' : quotesSent.error ? 'error' : 'ready'} unavailableLabel={unavailable} icon="document-text-outline" />
+            <KpiCard variant="compact" label={t('commercial.kpi.contracts')} value={commercialCounters?.contractsActive ?? null} state={counterState} unavailableLabel={unavailable} icon="ribbon-outline" />
+            <KpiCard variant="compact" label={t('commercial.kpi.ending')} value={commercialCounters?.contractsEnding30d ?? null} state={counterState} unavailableLabel={unavailable} icon="hourglass-outline" tone={commercialCounters && commercialCounters.contractsEnding30d > 0 ? 'warning' : 'neutral'} />
+            {access.salesReports(user) ? (
+              <KpiCard variant="compact" label={t('commercial.kpi.revenue')} value={monthSales.data ? formatMoneyShort(monthSales.data.revenueHt) : null} state={monthSales.isPending ? 'loading' : monthSales.error ? 'error' : 'ready'} unavailableLabel={unavailable} icon="cash-outline" />
+            ) : null}
+          </KpiGrid>
+          {scopedOpportunities.length > 0 ? (
+            <ChartCard testID="stats-opportunity-stages" title={t('stats.opportunityStages')}>
+              <Distribution
+                segments={OPPORTUNITY_STAGES.map((stage) => ({
+                  key: stage,
+                  label: t(opportunityStage(stage)?.label ?? 'common.none'),
+                  value: scopedOpportunities.filter((row) => row.stage === stage).length,
+                  tone: stage === 'gagnee' ? 'success' : stage === 'perdue' ? 'steel' : undefined,
+                }))}
+              />
+            </ChartCard>
+          ) : null}
+          {salesByStatus.data && salesByStatus.data.quotes.byStatus.length > 0 ? (
+            <ChartCard testID="stats-quote-status" title={t('stats.quoteStatus')} hint={t('billing.chart.month')}>
+              <Distribution
+                segments={salesByStatus.data.quotes.byStatus.map((entry) => ({
+                  key: entry.status,
+                  label: quoteStatus(entry.status) ? t(quoteStatus(entry.status)?.label ?? 'common.none') : rawStatusLabel(entry.status),
+                  value: entry.count,
+                }))}
+              />
+            </ChartCard>
+          ) : null}
+          {topClients.data && topClients.data.length > 0 ? (
+            <ChartCard testID="stats-top-clients" title={t('stats.topClients')} hint={t('billing.chart.month')}>
+              {topClients.data.map((row) => (
+                <StatLine key={row.client} label={row.client} value={formatMoney(row.totalTtc)} ratio={row.totalTtc / Math.max(topClients.data[0]?.totalTtc ?? 1, 1)} />
+              ))}
+            </ChartCard>
+          ) : null}
+        </>
+      ) : null}
+
+      {!nothing && !loading && section === 'billing' ? (
+        <>
+          <KpiGrid testID="stats-billing-kpis">
+            <KpiCard variant="compact" label={t('billing.kpi.issued')} value={billingCounters?.invoicesIssued ?? null} state={counterState} unavailableLabel={unavailable} icon="receipt-outline" onPress={() => go('/billing/invoices')} />
+            <KpiCard variant="compact" label={t('billing.kpi.invoiced')} value={billingCounters ? formatMoneyShort(billingCounters.invoicedTtc) : null} state={counterState} unavailableLabel={unavailable} icon="trending-up-outline" />
+            <KpiCard variant="compact" label={t('billing.kpi.collected')} value={billingCounters ? formatMoneyShort(billingCounters.paymentsAmount) : null} state={counterState} unavailableLabel={unavailable} icon="cash-outline" tone="success" onPress={() => go('/billing/payments')} />
+            <KpiCard variant="compact" label={t('billing.kpi.creditNotes')} value={billingCounters?.creditNotesTotal ?? null} state={counterState} unavailableLabel={unavailable} icon="return-down-back-outline" />
+          </KpiGrid>
+          {billingCounters ? (
+            <ChartCard testID="stats-invoiced-collected" title={t('billing.chart.invoicedCollected')} hint={t('billing.chart.allTime')}>
+              <StatLine label={t('billing.kpi.invoiced')} value={formatMoney(billingCounters.invoicedTtc)} ratio={billingCounters.invoicedTtc / Math.max(billingCounters.invoicedTtc, billingCounters.paymentsAmount, 1)} />
+              <StatLine label={t('billing.kpi.collected')} value={formatMoney(billingCounters.paymentsAmount)} ratio={billingCounters.paymentsAmount / Math.max(billingCounters.invoicedTtc, billingCounters.paymentsAmount, 1)} tone="success" />
+            </ChartCard>
+          ) : null}
+          {monthSales.data ? (
+            <ChartCard testID="stats-month-sales" title={t('stats.monthSales')} hint={t('billing.chart.month')}>
+              <StatLine label={t('money.revenueHt')} value={formatMoney(monthSales.data.revenueHt)} />
+              <StatLine label={t('money.revenueTtc')} value={formatMoney(monthSales.data.revenueTtc)} />
+              <StatLine label={t('billing.kpi.monthCollected')} value={formatMoney(monthSales.data.collected)} />
+            </ChartCard>
+          ) : null}
+          {salesByStatus.data && salesByStatus.data.invoices.byStatus.length > 0 ? (
+            <ChartCard testID="stats-invoice-status" title={t('billing.chart.byStatus')} hint={t('billing.chart.month')}>
+              <Distribution
+                segments={salesByStatus.data.invoices.byStatus.map((entry) => ({
+                  key: entry.status,
+                  label: invoiceStatus(entry.status) ? t(invoiceStatus(entry.status)?.label ?? 'common.none') : rawStatusLabel(entry.status),
+                  value: entry.count,
+                  tone: invoiceStatus(entry.status)?.tone,
+                }))}
+              />
+            </ChartCard>
+          ) : null}
+          <Banner tone="info" title={t('billing.outstanding.title')} message={t('billing.outstanding.body')} />
+        </>
       ) : null}
     </Screen>
   );

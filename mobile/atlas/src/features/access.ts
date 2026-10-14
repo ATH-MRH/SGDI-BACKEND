@@ -35,6 +35,12 @@ export const access = {
   decideLeaves: (user: User) => canPerformOnAny(user, LEAVE_MODULES, 'validate'),
   requestLeave: (user: User) => canPerformOnAny(user, LEAVE_MODULES, 'create'),
   candidates: (user: User) => canAccessAnyModule(user, ['drh', 'recrute']),
+  /** Clients, devis, prospects et opportunités : module Commercial (`dc`), comme /api/commercial et /api/ventes. */
+  commercial: (user: User) => canAccessModule(user, 'dc'),
+  /** Factures et règlements de l'application Facturation : modules Finances ou Facturation. */
+  billing: (user: User) => canAccessAnyModule(user, ['finances', 'fac']),
+  /** Chiffre d'affaires et synthèses de ventes (/api/reporting) : module Finances uniquement. */
+  salesReports: (user: User) => canAccessModule(user, 'finances'),
 } as const;
 
 export type AccessKey = keyof typeof access;

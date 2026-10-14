@@ -199,3 +199,49 @@ const styles = StyleSheet.create({
   metaShrink: { flexShrink: 1 },
   severity: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
 });
+
+type RecordRowProps = {
+  title: string;
+  /** Ligne secondaire : client, date, référence. */
+  subtitle?: string | null;
+  detail?: string | null;
+  icon?: IconName;
+  /** Montant ou valeur clé, affiché à droite en chiffres alignés. */
+  amount?: string | null;
+  badge?: ReactNode;
+  onPress?: () => void;
+  testID?: string;
+};
+
+/** Ligne d'enregistrement métier (devis, facture, règlement, prospect) : identité à gauche, montant et statut à droite. */
+export function RecordRow({ title, subtitle, detail, icon, amount, badge, onPress, testID }: RecordRowProps) {
+  return (
+    <RowShell testID={testID} onPress={onPress} accessibilityLabel={[title, subtitle, detail, amount].filter(Boolean).join(', ')}>
+      {icon ? <IconTile icon={icon} size={40} /> : null}
+      <View style={styles.texts}>
+        <AppText variant="bodyStrong" color={colors.navy} numberOfLines={2}>
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
+            {subtitle}
+          </AppText>
+        ) : null}
+        {detail ? (
+          <AppText variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {detail}
+          </AppText>
+        ) : null}
+      </View>
+      <View style={styles.side}>
+        {amount ? (
+          <AppText variant="label" color={colors.text} style={styles.time} numberOfLines={1}>
+            {amount}
+          </AppText>
+        ) : null}
+        {badge}
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
+    </RowShell>
+  );
+}

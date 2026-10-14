@@ -24,13 +24,18 @@ export const MOBILE_MODULES: readonly MobileModule[] = [
   { key: 'drh', title: 'modules.drh', body: 'modules.drh.body', icon: 'people-outline' },
   { key: 'conges', title: 'modules.conges', body: 'modules.conges.body', icon: 'calendar-outline' },
   { key: 'recrute', title: 'modules.recrute', body: 'modules.recrute.body', icon: 'person-add-outline' },
+  { key: 'dc', title: 'modules.dc', body: 'modules.dc.body', icon: 'briefcase-outline' },
+  { key: 'finances', title: 'modules.billing', body: 'modules.billing.body', icon: 'receipt-outline' },
+  { key: 'fac', title: 'modules.billing', body: 'modules.billing.body', icon: 'receipt-outline' },
 ];
 
 /** Modules à afficher pour ce profil. Le backend revalide chaque appel. */
 export function visibleModules(user: ApiUser | null | undefined): MobileModule[] {
-  return MOBILE_MODULES.filter(
+  const shown = MOBILE_MODULES.filter(
     (module) => canAccessModule(user, module.key) && (!module.feature || isFeatureEnabled(module.feature)),
   );
+  // Finances et Facturation ouvrent le même module mobile : une seule entrée.
+  return shown.filter((module) => module.key !== 'fac' || !shown.some((other) => other.key === 'finances'));
 }
 
 /** Module affichable pour ce profil, ou null (clé inconnue, non accordée ou désactivée). */

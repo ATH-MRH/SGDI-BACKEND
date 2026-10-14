@@ -9,6 +9,7 @@ import { AppText, AtlasHeader, EmptyState, KpiGrid, MetricStrip, ModuleTile, Scr
 import { access } from '@/features/access';
 import { useCockpit } from '@/features/cockpit/useCockpit';
 import { useCockpitInsights } from '@/features/cockpit/useCockpitInsights';
+import { useErpCounters } from '@/features/commercial/hooks';
 import { visibleModules, type MobileModule } from '@/features/modules';
 import { t, type TranslationKey } from '@/i18n';
 import { colors, elevation, radius, spacing } from '@/theme/tokens';
@@ -23,6 +24,9 @@ const MODULE_ROUTES: Partial<Record<ModuleKey, string>> = {
   brq: '/brq',
   conges: '/drh/leaves',
   recrute: '/recruitment',
+  dc: '/commercial',
+  finances: '/billing',
+  fac: '/billing',
 };
 
 type Soon = { key: string; label: TranslationKey; caption: TranslationKey; icon: IconName; modules: readonly ModuleKey[] };
@@ -38,6 +42,7 @@ const NOT_ON_MOBILE: readonly Soon[] = [
   { key: 'rounds', label: 'modules.rounds', caption: 'modules.unavailable.short', icon: 'walk-outline', modules: ['ops'] },
   { key: 'equipment', label: 'modules.equipment', caption: 'modules.unavailable.short', icon: 'cube-outline', modules: ['materiel'] },
   { key: 'finance', label: 'modules.finance', caption: 'modules.unavailable.short', icon: 'cash-outline', modules: ['finances', 'caisse'] },
+  { key: 'accounting', label: 'modules.accounting', caption: 'modules.unavailable.short', icon: 'calculator-outline', modules: ['finances'] },
 ];
 
 function Grid({ tiles, go }: { tiles: readonly Tile[]; go: (route: string) => void }) {
@@ -83,6 +88,7 @@ export default function ModulesScreen() {
   const user = useCurrentUser();
   const cockpit = useCockpit();
   const insights = useCockpitInsights();
+  const counters = useErpCounters();
   const modules = visibleModules(user);
   const go = (route: string) => router.push(route as never);
   const header = <AtlasHeader title={t('tabs.modules')} subtitle={t('modules.subtitle')} />;
@@ -111,6 +117,19 @@ export default function ModulesScreen() {
     ...(access.candidates(user) && !shown.has('/recruitment') ? [{ key: 'candidates', testID: 'launcher-candidates', label: t('modules.recrute'), caption: t('entry.candidates'), icon: 'person-add-outline' as IconName, route: '/recruitment' }] : []),
     ...(access.alerts(user)
       ? [{ key: 'alerts', testID: 'launcher-alerts', label: t('tabs.alerts'), caption: t('modules.alerts.body'), icon: 'notifications-outline' as IconName, route: '/alerts', count: count('alertsOpen'), urgent: (critical ?? 0) > 0 }]
+      : []),
+    ...(access.commercial(user)
+      ? [
+          { key: 'clients', testID: 'launcher-clients', label: t('commercial.clients'), caption: t('commercial.clients.body'), icon: 'briefcase-outline' as IconName, route: '/commercial/clients', count: counters.data?.commercial?.clientsActive ?? null },
+          { key: 'prospects', testID: 'launcher-prospects', label: t('commercial.prospects'), caption: t('commercial.prospects.body'), icon: 'person-add-outline' as IconName, route: '/commercial/prospects', count: counters.data?.commercial?.prospects ?? null },
+          { key: 'contracts', testID: 'launcher-contracts', label: t('commercial.contracts'), caption: t('commercial.contracts.body'), icon: 'ribbon-outline' as IconName, route: '/commercial/contracts' },
+        ]
+      : []),
+    ...(access.billing(user)
+      ? [
+          { key: 'invoices', testID: 'launcher-invoices', label: t('billing.invoices'), caption: t('billing.invoices.body'), icon: 'receipt-outline' as IconName, route: '/billing/invoices' },
+          { key: 'payments', testID: 'launcher-payments', label: t('billing.payments'), caption: t('billing.payments.body'), icon: 'cash-outline' as IconName, route: '/billing/payments' },
+        ]
       : []),
     { key: 'tasks', testID: 'launcher-tasks', label: t('tabs.tasks'), caption: t('modules.tasks.body'), icon: 'checkbox-outline', route: '/tasks' },
     { key: 'cockpit', testID: 'launcher-cockpit', label: t('modules.cockpit'), caption: t('modules.cockpit.body'), icon: 'speedometer-outline', route: '/' },

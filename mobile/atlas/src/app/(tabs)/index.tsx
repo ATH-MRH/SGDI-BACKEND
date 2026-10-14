@@ -29,13 +29,14 @@ import { access } from '@/features/access';
 import { dayOverDay, kpiIcon, rateTone, shortDate, weekdayKey } from '@/features/cockpit/presentation';
 import { useCockpit, type CockpitCard } from '@/features/cockpit/useCockpit';
 import { useCockpitInsights } from '@/features/cockpit/useCockpitInsights';
+import { useErpCounters, useQuotesSent } from '@/features/commercial/hooks';
 import { visibleModules } from '@/features/modules';
 import { incidentSeverity, SEVERITY } from '@/features/status';
 import { t, type TranslationKey } from '@/i18n';
 import { currentSiteLabel, societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
 import { colors, elevation, spacing, typography } from '@/theme/tokens';
-import { formatDate, formatDateTime } from '@/utils/format';
+import { formatDate, formatDateTime, formatMoneyShort } from '@/utils/format';
 
 function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? '';
@@ -54,6 +55,8 @@ export default function HomeScreen() {
   const { scope, ready } = useScope();
   const cockpit = useCockpit();
   const insights = useCockpitInsights();
+  const counters = useErpCounters();
+  const quotesSent = useQuotesSent();
   const modules = visibleModules(user);
   const canChangeScope = scope.canChangeSociety || scope.canChangeSite;
   const displayName = user?.full_name || user?.username || '';
@@ -118,6 +121,26 @@ export default function HomeScreen() {
   }
   if (grid.length < KPI_MAX && insights.sitesTotal !== null) {
     grid.push(<KpiCard variant="compact" key="sites" testID="kpi-sites" label={t('cockpit.sites')} value={insights.sitesTotal} icon="business-outline" onPress={() => go('/ops/sites')} />);
+  }
+
+  // Commercial et Facturation : compteurs du serveur, seulement pour les comptes qui ont le module.
+  const commercial = access.commercial(user) ? (counters.data?.commercial ?? null) : null;
+  const billing = access.billing(user) ? (counters.data?.billing ?? null) : null;
+  const sales: ReactElement[] = [];
+  if (commercial) {
+    sales.push(
+      <KpiCard variant="compact" key="clients" testID="kpi-clients" label={t('commercial.kpi.clients')} value={commercial.clientsActive} icon="briefcase-outline" onPress={() => go('/commercial/clients')} />,
+      <KpiCard variant="compact" key="opportunities" testID="kpi-opportunities" label={t('commercial.kpi.opportunities')} value={commercial.opportunitiesOpen} icon="trending-up-outline" onPress={() => go('/commercial/prospects?tab=opportunities')} />,
+    );
+    if (quotesSent.data) {
+      sales.push(<KpiCard variant="compact" key="quotes" testID="kpi-quotes" label={t('commercial.kpi.quotesSent')} value={quotesSent.data.total} icon="document-text-outline" onPress={() => go('/commercial/quotes?status=envoyé')} />);
+    }
+  }
+  if (billing) {
+    sales.push(
+      <KpiCard variant="compact" key="invoiced" testID="kpi-invoiced" label={t('billing.kpi.invoiced')} value={formatMoneyShort(billing.invoicedTtc)} icon="receipt-outline" onPress={() => go('/billing')} />,
+      <KpiCard variant="compact" key="collected" testID="kpi-collected" label={t('billing.kpi.collected')} value={formatMoneyShort(billing.paymentsAmount)} tone="success" icon="cash-outline" onPress={() => go('/billing/payments')} />,
+    );
   }
 
   const quick: QuickAction[] = [
@@ -199,6 +222,17 @@ export default function HomeScreen() {
                 <AppText color={colors.textSecondary}>{t('cockpit.none')}</AppText>
               </Card>
             )}
+
+            {sales.length > 0 ? (
+              <View style={styles.section} testID="home-sales">
+                <SectionHeader
+                  title={t('home.sales.title')}
+                  actionLabel={t('home.seeMore')}
+                  onAction={() => go(commercial ? '/commercial' : '/billing')}
+                />
+                <KpiGrid>{sales}</KpiGrid>
+              </View>
+            ) : null}
 
             {today ? (
               <ChartCard testID="home-presence" title={t('cockpit.rate')} actionLabel={t('home.seeDetail')} onAction={() => go('/attendance')}>
