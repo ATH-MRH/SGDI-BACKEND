@@ -1,6 +1,7 @@
 """IRON Emploi : traitement complet d'une candidature — pièces, étapes, convocation, décision, contrat,
 passage à la DRH — et services de l'espace candidat (messages, entretiens, alertes, notifications)."""
 import base64
+import json
 from datetime import timedelta
 
 import pytest
@@ -390,6 +391,73 @@ def test_push_is_off_by_default_and_devices_follow_the_signed_in_space(client, d
     client.post(f'{API}/alerts', headers=headers, json={'wilaya': 'Oran'})
     assert client.delete(f'{API}/me', headers=headers).status_code == 204
     assert db.query(RecruitmentJobAlert).count() == 0 and db.query(RecruitmentNotification).count() == 0
+
+
+class _Expo:
+    """Service push d'Expo simulé : garde chaque lot reçu et refuse, si demandé, le premier message de chaque lot."""
+    def __init__(self, refuse_first=False):
+        self.batches, self.refuse_first = [], refuse_first
+
+    def __call__(self, request, timeout):
+        batch = json.loads(request.data)
+        self.batches.append(batch)
+        tickets = [{'status': 'ok'} for _ in batch]
+        if self.refuse_first:
+            tickets[0] = {'status': 'error', 'details': {'error': 'DeviceNotRegistered'}}
+        return _ExpoAnswer({'data': tickets})
+
+
+class _ExpoAnswer:
+    def __init__(self, body):
+        self.body = json.dumps(body).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def test_a_new_offer_is_pushed_to_every_registered_phone_without_settings(client, db, securite, monkeypatch):
+    """Toute nouvelle offre part vers chaque téléphone enregistré, sans alerte ni réglage, sur le canal Android de
+    l'application et en priorité haute (bannière et son) ; par lots de 100 au plus."""
+    nadia, _ = session(client)
+    karim, _ = session(client, phone='0661122334', first_name='Karim', last_name='Emploi-Deux')
+    sans_telephone, _ = session(client, phone='0771122334', first_name='Lina', last_name='Emploi-Trois')
+    client.put(f'{API}/me/push-device', headers=nadia, json={'token': 'ExponentPushToken[nadia-1]', 'platform': 'android'})
+    client.put(f'{API}/me/push-device', headers=karim, json={'token': 'ExponentPushToken[karim-1]', 'platform': 'ios'})
+    # Préférence « offres » coupée et alertes suspendues : sans effet sur les nouvelles offres.
+    client.put(f'{API}/me/settings', headers=karim, json={'push': {'offers': False}, 'alerts_enabled': False})
+    expo = _Expo()
+    monkeypatch.setenv('RECRUITMENT_PUSH_ENABLED', 'true')
+    monkeypatch.setattr(engage.urllib.request, 'urlopen', expo)
+    offer = publish(client, securite, title='Agent de nuit')
+    sent = [message for batch in expo.batches for message in batch]
+    assert sorted(m['to'] for m in sent) == ['ExponentPushToken[karim-1]', 'ExponentPushToken[nadia-1]']
+    assert {(m['channelId'], m['priority'], m['sound'], m['data']['kind'], m['data']['offer_id']) for m in sent} == {
+        ('iron-emploi', 'high', 'default', 'offer', offer['id'])}
+    assert all('Agent de nuit' in m['body'] for m in sent)
+    # Dans l'application aussi, une notification par espace ; rien pour l'espace sans téléphone ni alerte.
+    for headers in (nadia, karim):
+        items = client.get(f'{API}/notifications', headers=headers).json()['items']
+        assert [(n['kind'], n['offer_id']) for n in items] == [('offer', offer['id'])]
+    assert client.get(f'{API}/notifications', headers=sans_telephone).json()['items'] == []
+    # Clôturée puis republiée : pas de second envoi.
+    client.post(f"{STAFF}/{offer['id']}/close", headers=securite)
+    client.post(f"{STAFF}/{offer['id']}/publish", headers=securite)
+    assert len(expo.batches) == 1
+    # Plus de 100 appareils : plusieurs requêtes ; un refus d'Expo n'est pas compté comme un envoi.
+    account_id = db.query(RecruitmentPushDevice).filter(RecruitmentPushDevice.token == 'ExponentPushToken[nadia-1]').one().account_id
+    db.add_all([RecruitmentPushDevice(account_id=account_id, token=f'ExponentPushToken[lot-{i}]', platform='android') for i in range(150)])
+    row = engage.notify(db, account_id, 'offer', 'Nouvelle offre', 'Lot')
+    db.commit()
+    expo = _Expo(refuse_first=True)
+    monkeypatch.setattr(engage.urllib.request, 'urlopen', expo)
+    assert engage.send_push(db, [row]) == 149                                  # 151 appareils, un refus par lot
+    assert [len(batch) for batch in expo.batches] == [100, 51]
 
 
 def test_workspace_counters_and_filters(client, db, securite, solution):

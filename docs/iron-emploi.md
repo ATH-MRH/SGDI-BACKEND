@@ -152,6 +152,9 @@ sont renvoyés par aucune route publique.
   renvoi sans effet (pas de doublon).
 - Alertes d'offres (dix au plus par candidat) : une notification est créée à la publication d'une
   annonce correspondante.
+- Nouvelle offre publiée : chaque espace qui a enregistré un téléphone reçoit aussi une notification,
+  et le push correspondant, sans alerte ni réglage (ni préférence « offres », ni `alerts_enabled`).
+  Une annonce ne notifie qu'une fois, même republiée.
 - Conseils emploi : rédigés et publiés depuis recrute.irongs.com → Traitement IRON Emploi →
   Conseils emploi ; l'application garde un contenu embarqué si aucun n'est publié.
 
@@ -194,6 +197,10 @@ enregistrement de l'appareil, ouverture de l'écran concerné, désinscription �
 l'activation demande encore un identifiant de projet EAS, les accès FCM (Android) et APNs (iOS) et
 une version installable : le détail est dans `mobile/recruitment/README.md`.
 Les notifications dans l'application, elles, fonctionnent sans réglage.
+
+Envoi : par lots de 100 messages (limite du service Expo), sur le canal Android `iron-emploi` créé par
+l'application, en priorité haute (bannière et son). Seuls les codes d'erreur renvoyés par Expo sont
+journalisés, jamais un jeton ni le texte d'une notification.
 
 ## 7. Mise en service
 
