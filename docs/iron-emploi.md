@@ -183,7 +183,7 @@ sont renvoyés par aucune route publique.
   distinct de zéro.
 - `alerts_enabled` (réglages) suspend toutes les alertes de nouvelles offres sans les supprimer.
 - Une annonce peut porter un salaire (`salary_amount`) et, seulement si elle est connue, sa période
-  (`salary_period` : heure, jour, mois, an). Révision `20261015_0001`.
+  (`salary_period` : heure, jour, mois, an). Révision `20261014_0004`.
 
 ### Notifications push
 

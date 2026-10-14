@@ -3,13 +3,13 @@
 Révision additive et rejouable : deux colonnes ajoutées à `recruitment_job_offers` si elles manquent
 (une base neuve les reçoit déjà de 20261014_0002, qui crée ses tables depuis les modèles courants).
 
-Revision ID: 20261015_0001
+Revision ID: 20261014_0004
 Revises: 20261014_0003
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = '20261015_0001'
+revision = '20261014_0004'
 down_revision = '20261014_0003'
 branch_labels = None
 depends_on = None

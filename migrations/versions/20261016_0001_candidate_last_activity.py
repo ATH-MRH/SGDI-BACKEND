@@ -6,13 +6,13 @@ Les espaces existants reçoivent leur dernière date connue (modification du pro
 Aucune ligne n'est supprimée.
 
 Revision ID: 20261016_0001
-Revises: 20261015_0001
+Revises: 20261014_0004
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = '20261016_0001'
-down_revision = '20261015_0001'
+down_revision = '20261014_0004'
 branch_labels = None
 depends_on = None
 

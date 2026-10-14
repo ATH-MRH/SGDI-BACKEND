@@ -28,7 +28,7 @@ fusion de la PR 12 applique quatre révisions, dans cet ordre :
 | --- | --- |
 | `20261014_0002` | Crée 5 tables : `recruitment_companies`, `recruitment_job_offers`, `recruitment_candidate_accounts`, `recruitment_candidate_sessions`, `recruitment_applications`. |
 | `20261014_0003` | Crée 11 tables (`recruitment_messages`, `recruitment_interviews`, `recruitment_job_alerts`, `recruitment_notifications`, `recruitment_push_devices`, `recruitment_application_documents`, `recruitment_document_requests`, `recruitment_application_notes`, `recruitment_application_events`, `recruitment_application_contracts`, `recruitment_tips`) et ajoute des colonnes aux tables créées par la révision précédente. |
-| `20261015_0001` | Ajoute `salary_amount` et `salary_period` à `recruitment_job_offers`. |
+| `20261014_0004` | Ajoute `salary_amount` et `salary_period` à `recruitment_job_offers`. |
 | `20261016_0001` | Ajoute `last_activity_at` et son index à `recruitment_candidate_accounts`, et y reporte la dernière date connue des espaces existants. |
 
 Soit 16 tables nouvelles (129 → 145 sur une base à jour) et **aucune modification d'une table
