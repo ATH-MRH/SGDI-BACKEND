@@ -389,7 +389,7 @@ def _text_of(cell: Any) -> str:
     return " ".join(cell_display(cell).split())
 
 
-def _parse_date(cell: Any) -> tuple[str, str | None]:
+def _parse_date(cell: Any, *, birth_date: bool = True) -> tuple[str, str | None]:
     warning = None
     if isinstance(cell, dict) and "d" in cell:
         parsed = date.fromisoformat(cell["d"])
@@ -423,9 +423,9 @@ def _parse_date(cell: Any) -> tuple[str, str | None]:
                 raise _FieldError(f"Date invalide : « {raw} » (format attendu JJ/MM/AAAA)")
         except ValueError:
             raise _FieldError(f"Date invalide : « {raw} » n'existe pas dans le calendrier")
-    if parsed > date.today():
+    if birth_date and parsed > date.today():
         raise _FieldError(f"Date de naissance dans le futur ({parsed.strftime('%d/%m/%Y')})")
-    if parsed.year < 1930:
+    if birth_date and parsed.year < 1930:
         raise _FieldError(f"Date de naissance invraisemblable ({parsed.strftime('%d/%m/%Y')})")
     return parsed.isoformat(), warning
 
@@ -890,7 +890,8 @@ def purge_sessions(db: Session, *, now: datetime | None = None) -> None:
     db.execute(update(CandidateImportSession)
                .where(CandidateImportSession.status.in_(("uploaded", "previewed")), CandidateImportSession.expires_at < now)
                .values(status="expired", workbook=None, plan=None))
-    # Une confirmation interrompue (processus arrêté) n'a rien créé : la session est close.
+    # Une confirmation interrompue est close. Les imports candidats sont atomiques ;
+    # les imports contract-… gardent le résultat des transactions déjà validées.
     db.execute(update(CandidateImportSession)
                .where(CandidateImportSession.status == "processing", CandidateImportSession.updated_at < now - timedelta(minutes=SESSION_TTL_MINUTES))
                .values(status="failed", workbook=None, plan=None))
@@ -910,7 +911,8 @@ def create_session(db: Session, user: Any, *, file_name: str, content: bytes, re
     purge_sessions(db)
     # Une seule analyse en attente par utilisateur : la précédente est abandonnée et vidée.
     db.execute(update(CandidateImportSession)
-               .where(CandidateImportSession.user_id == user.id, CandidateImportSession.status.in_(("uploaded", "previewed")))
+               .where(CandidateImportSession.user_id == user.id, CandidateImportSession.status.in_(("uploaded", "previewed")),
+                      ~CandidateImportSession.public_id.startswith("contract-"))
                .values(status="cancelled", workbook=None, plan=None))
     session = CandidateImportSession(
         public_id=secrets.token_hex(24), user_id=user.id, username=user.username, scope_key=scope_key, scope_label=scope_label,
@@ -925,10 +927,10 @@ def create_session(db: Session, user: Any, *, file_name: str, content: bytes, re
     return session
 
 
-def get_session(db: Session, user: Any, public_id: str, *, statuses: tuple[str, ...] | None = None) -> CandidateImportSession:
+def get_session(db: Session, user: Any, public_id: str, *, statuses: tuple[str, ...] | None = None, purpose: str = "candidates") -> CandidateImportSession:
     """Session de l'utilisateur courant uniquement, dans le périmètre de son analyse."""
     session = db.execute(select(CandidateImportSession).where(CandidateImportSession.public_id == str(public_id))).scalar_one_or_none()
-    if session is None or session.user_id != user.id:
+    if session is None or session.user_id != user.id or (str(public_id).startswith("contract-") != (purpose == "contracts")):
         raise HTTPException(status_code=404, detail="Session d'import introuvable.")
     if session.scope_key != scope_fingerprint(user)[0]:
         raise HTTPException(status_code=409, detail="Votre périmètre a changé depuis l'analyse : relancez l'import.")
