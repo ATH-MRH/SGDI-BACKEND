@@ -79,7 +79,7 @@ export default function Settings() {
   );
 }
 
-const FAMILIES: [keyof PushSettings['push'], string][] = [['applications', 'Avancement de mes candidatures'], ['messages', 'Messages du recrutement'], ['interviews', 'Entretiens'], ['offers', 'Offres correspondant à mes alertes']];
+const FAMILIES: [keyof PushSettings['push'], string][] = [['applications', 'Avancement de mes candidatures'], ['messages', 'Messages du recrutement'], ['interviews', 'Entretiens']];
 
 function Notifications() {
   const { call } = useCandidateSession(), push = usePush();
@@ -105,6 +105,7 @@ function Notifications() {
               <Switch accessibilityLabel={`Notifications push : ${label}`} value={settings.data!.push[key]} onValueChange={value => toggle(key, value)} trackColor={{ true: colors.green, false: colors.border }} thumbColor={colors.white} />
             </View>
           ))}
+          <Text style={[styles.subtitle, { fontSize: 14 }]}>Chaque nouvelle offre publiée est envoyée à tous les téléphones enregistrés.</Text>
           <Text style={[styles.subtitle, { fontSize: 14 }]}>{PUSH_TEXT[push.status]}{push.status === 'registered' && !settings.data.push_available ? ' L’envoi n’est pas encore ouvert côté serveur : vos préférences s’appliqueront à sa mise en service.' : ''}</Text>
           {push.status === 'idle' && <Button title="Activer les notifications sur ce téléphone" icon="bell" secondary busy={push.busy} onPress={push.enable} />}
         </>

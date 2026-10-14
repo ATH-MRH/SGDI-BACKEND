@@ -9,6 +9,7 @@ import { Chip, colors, EmptyState, ErrorState, fonts, Heading, Loading, shadow, 
 import { useCandidateSession } from '../../../lib/candidate-session';
 import { fetchOffers, Offer } from '../../../lib/emploi';
 import { useFavorites } from '../../../lib/favorites';
+import { useLiveRefresh } from '../../../lib/live-refresh';
 import { useServer } from '../../../lib/server';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
@@ -19,6 +20,8 @@ export default function Home() {
   const { session } = useCandidateSession();
   const [query, setQuery] = useState(''), [wilaya, setWilaya] = useState('');
   const offers = useLoad(signal => fetchOffers({}, 1, signal, 4), 'home-offers', mode === 'emploi');
+  // Une offre publiée apparaît sans geste du candidat ; un échec réseau garde la liste affichée.
+  useLiveRefresh(() => { fetchOffers({}, 1, undefined, 4).then(offers.setData).catch(() => {}); }, mode === 'emploi' && !!offers.data);
   const open = (params: Record<string, string>) => router.push({ pathname: '/offers', params });
   const search = () => open({ ...(query.trim() ? { q: query.trim() } : {}), ...(wilaya ? { wilaya } : {}) });
   const facets = offers.data?.facets, items = offers.data?.items || [];

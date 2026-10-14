@@ -45,3 +45,6 @@ yarn-error.*
 
 # Environnement d'essai local (secrets tirés au hasard, journaux, pièces)
 .test-env/
+
+# Firebase (Android) : fourni par EAS au build, jamais versionné
+google-services.json

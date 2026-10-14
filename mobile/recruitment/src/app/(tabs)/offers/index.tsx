@@ -9,6 +9,7 @@ import { SearchPanel } from '../../../components/search-panel';
 import { Button, Chip, colors, EmptyState, ErrorState, fonts, Loading, styles } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { activeFilterCount, Facets, fetchOffers, Offer, OfferFilters } from '../../../lib/emploi';
+import { useLiveRefresh } from '../../../lib/live-refresh';
 import { useServer } from '../../../lib/server';
 
 type Params = { q?: string; wilaya?: string; profession?: string };
@@ -63,6 +64,20 @@ export default function Offers() {
     finally { setMore(false); }
   }
   const retryList = () => setRun(run => ({ reload: run.reload + 1, pulled: run.pulled }));
+
+  // Relecture discrète de la première page : une offre publiée apparaît en tête, une offre clôturée disparaît.
+  // Une liste déjà parcourue plus loin garde ses pages ; seules les nouvelles offres s'ajoutent en tête.
+  useLiveRefresh(() => {
+    if (loading || more || error) return;
+    const started = current.current;
+    fetchOffers({ ...filters, q: query }, 1)
+      .then(result => {
+        if (started !== current.current) return;
+        setItems(previous => page > 1 ? [...result.items.filter(offer => !previous.some(item => item.id === offer.id)), ...previous] : result.items);
+        setTotal(result.total); setPages(previous => page > 1 ? Math.max(previous, result.pages) : result.pages); setFacets(result.facets);
+      })
+      .catch(() => {});
+  }, mode === 'emploi');
 
   const count = activeFilterCount(filters), searching = !!query.trim() || count > 0;
   const reset = () => { setQuery(''); setFilters({}); };

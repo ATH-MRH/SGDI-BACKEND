@@ -42,7 +42,9 @@ Le style suit la maquette « IRON EMPLOI — Un espace emploi pensé pour vous �
 
 ## Notifications
 
-Les notifications dans l'application sont réelles : elles sont créées par le serveur (réception, changement d'état, message, entretien, offre correspondant à une alerte) et relues à l'ouverture et toutes les minutes.
+Les notifications dans l'application sont réelles : elles sont créées par le serveur (réception, changement d'état, message, entretien, nouvelle offre) et relues à l'ouverture et toutes les minutes. Chaque nouvelle offre publiée est envoyée à tous les téléphones enregistrés, sans alerte ni réglage ; les alertes ajoutent une notification dans l'application pour les offres qui leur correspondent.
+
+Les listes d'offres (accueil et « Offres ») se relisent d'elles-mêmes au retour sur l'écran, au retour dans l'application et toutes les minutes, sans attente affichée. Si l'application a démarré avant l'ouverture des annonces ou sans réseau, elle réessaie de la même façon et passe en mode annonces sans redémarrage.
 
 Dans « Votre espace emploi », chaque notification tient sur deux lignes ; la toucher ouvre son détail, avec un bouton vers l'écran concerné.
 
@@ -50,8 +52,8 @@ Dans « Votre espace emploi », chaque notification tient sur deux lignes ; la t
 
 Ce qui est en place :
 
-- le module `expo-notifications` et son réglage dans `app.json` ;
-- `src/lib/push.tsx` : demande d'autorisation (depuis Paramètres, jamais d'office), canal Android, enregistrement du jeton auprès du serveur, relecture des pastilles à la réception, ouverture de l'écran concerné quand la notification est touchée, désinscription de ce téléphone à la déconnexion ;
+- le module `expo-notifications` et son réglage dans `app.json` ; `app.config.js` y ajoute `android.googleServicesFile` quand EAS fournit la variable de type fichier `GOOGLE_SERVICES_JSON` ;
+- `src/lib/push.tsx` : demande d'autorisation (une seule fois, à la première ouverture de l'espace candidat, puis depuis Paramètres), canal Android `iron-emploi` en importance haute (bannière et son, aussi application ouverte), enregistrement du jeton auprès du serveur, relecture des pastilles à la réception, ouverture de l'écran concerné quand la notification est touchée, désinscription de ce téléphone à la déconnexion ;
 - côté serveur : appareils, préférences par famille, relais vers le service Expo, désactivé tant que `RECRUITMENT_PUSH_ENABLED` n'est pas à `true`.
 
 Ce qui manque pour les activer — **aucun envoi réel n'a encore été essayé** :
@@ -59,7 +61,7 @@ Ce qui manque pour les activer — **aucun envoi réel n'a encore été essayé*
 | Élément | Où le créer | Où le déposer |
 |---|---|---|
 | Projet EAS (`projectId`) | `npx eas-cli@latest init`, avec le compte Expo de l'éditeur | `app.json` → `extra.eas.projectId` (ce n'est pas un secret) |
-| Android — clé FCM V1 | Console Firebase : projet, application Android `com.irongs.recruitment`, puis compte de service | `google-services.json` référencé par `android.googleServicesFile` ; clé du compte de service envoyée à Expo par `eas credentials`, jamais dans Git |
+| Android — clé FCM V1 | Console Firebase : projet, application Android `com.irongs.recruitment`, puis compte de service | `google-services.json` en variable EAS de type fichier `GOOGLE_SERVICES_JSON` (`eas env:create`) ; clé du compte de service envoyée à Expo par `eas credentials` ; ni l'un ni l'autre dans Git |
 | iOS — clé APNs | Compte Apple Developer (payant), identifiant `com.irongs.recruitment` avec « Push Notifications » | Gérée par `eas credentials` ; rien dans Git |
 | Version installable | `eas build` (Expo Go ne reçoit pas de push distant) | Téléphones d'essai |
 | Ouverture côté serveur | `RECRUITMENT_PUSH_ENABLED=true` sur le serveur de recette d'abord | Variables du serveur |

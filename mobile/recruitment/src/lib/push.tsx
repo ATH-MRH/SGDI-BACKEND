@@ -2,6 +2,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Device from 'expo-device';
+import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { useCandidateSession } from './candidate-session';
 import { AppNotification, notificationTarget, pushProblem, PushStatus } from './emploi';
@@ -14,6 +15,11 @@ const Context = createContext<State>({ status: 'unsupported', busy: false, enabl
 
 // Identifiant du projet EAS : sans lui, aucun jeton de notification ne peut être demandé.
 const projectId: string | undefined = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+// Canal Android des notifications IRON Emploi, repris par le serveur (`channelId`). Importance haute : bannière et
+// son. Android ne laisse pas une application relever l'importance d'un canal existant : d'où un nouveau nom.
+export const ANDROID_CHANNEL = 'iron-emploi';
+// L'autorisation est demandée une seule fois, à la première ouverture de l'espace candidat.
+const ASKED_KEY = 'iron-emploi-push-asked';
 const blocker = pushProblem({ os: Platform.OS, expoGo: Constants.executionEnvironment === ExecutionEnvironment.StoreClient, physical: Device.isDevice, projectId });
 
 // Le module n'est chargé que là où il peut fonctionner (application installée, vrai téléphone).
@@ -23,7 +29,7 @@ function notifications(): Module | null {
   if (!loaded) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     loaded = require('expo-notifications') as Module;
-    loaded.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }) });
+    loaded.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
   }
   return loaded;
 }
@@ -39,22 +45,28 @@ export function PushProvider({ children }: { children: ReactNode }) {
   const active = !!session && mode === 'emploi';
 
   const register = useCallback(async (module: Module) => {
-    if (Platform.OS === 'android') await module.setNotificationChannelAsync('default', { name: 'IRON Emploi', importance: module.AndroidImportance.DEFAULT });
+    if (Platform.OS === 'android') await module.setNotificationChannelAsync(ANDROID_CHANNEL, { name: 'IRON Emploi', importance: module.AndroidImportance.HIGH, sound: 'default' });
     const value = (await module.getExpoPushTokenAsync({ projectId })).data;
     await call('/public/emploi/me/push-device', { method: 'PUT', body: { token: value, platform: Platform.OS } });
     token.current = value; setStatus('registered');
   }, [call]);
 
-  // À l'ouverture de l'espace : l'appareil est enregistré si l'autorisation a déjà été donnée. Elle
-  // n'est jamais demandée d'office ; le candidat la donne depuis les paramètres.
+  // À l'ouverture de l'espace : l'appareil est enregistré si l'autorisation est donnée. Elle est demandée une
+  // seule fois sur ce téléphone ; ensuite, le candidat l'active depuis les paramètres.
   useEffect(() => {
     const module = notifications();
     if (!module || !active) return;
     let alive = true;
-    module.getPermissionsAsync().then(async permission => {
+    (async () => {
+      let permission = await module.getPermissionsAsync();
+      if (!permission.granted && permission.canAskAgain && !(await SecureStore.getItemAsync(ASKED_KEY).catch(() => null))) {
+        await SecureStore.setItemAsync(ASKED_KEY, '1').catch(() => {});
+        if (!alive) return;
+        permission = await module.requestPermissionsAsync();
+      }
       if (!alive) return;
       if (permission.granted) await register(module); else setStatus(permission.canAskAgain ? 'idle' : 'denied');
-    }).catch(() => { if (alive) setStatus('error'); });
+    })().catch(() => { if (alive) setStatus('error'); });
     return () => { alive = false; };
   }, [active, register]);
 
