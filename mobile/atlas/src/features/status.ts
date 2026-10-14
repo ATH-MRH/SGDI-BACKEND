@@ -1,5 +1,5 @@
 import type { AlertSeverity, AlertStatus } from '@/api/domains/alerts';
-import type { TranslationKey } from '@/i18n';
+import { t, type TranslationKey } from '@/i18n';
 import type { Tone } from '@/theme/tokens';
 
 type Label = { label: TranslationKey; tone: Tone };
@@ -67,4 +67,10 @@ export function employeeStatusTone(status: string): Tone {
   if (/sort|demission|licen|fin/.test(status)) return 'warning';
   if (/conge|maladie|mission/.test(status)) return 'info';
   return 'neutral';
+}
+
+/** Libellé d'un statut renvoyé tel quel par le backend : première lettre en capitale, rien d'interprété. */
+export function rawStatusLabel(status: string): string {
+  const text = status.replace(/_/g, ' ').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : t('common.none');
 }

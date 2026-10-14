@@ -22,7 +22,7 @@ export function Segmented<T extends string>({ value, onChange, options, testID }
             accessibilityLabel={option.label}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.selected]}>
-            <AppText variant="label" color={selected ? colors.onNavy : colors.textSecondary} numberOfLines={1}>
+            <AppText variant="label" color={selected ? colors.onNavy : colors.textSecondary} numberOfLines={1} style={styles.label}>
               {option.label}
             </AppText>
           </Pressable>
@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   option: {
     minHeight: touchTarget - 10,
     paddingHorizontal: spacing.lg - 2,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -45,4 +45,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selected: { backgroundColor: colors.navy, borderColor: colors.navy },
+  label: { fontSize: 13 },
 });

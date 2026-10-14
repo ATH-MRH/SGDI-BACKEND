@@ -15,6 +15,8 @@ export const colors = {
   onNavy: '#FFFFFF',
   onNavyMuted: '#B8C7E0',
   navyTint: '#17407F',
+  /** Trait cyan du logo ATLAS : réservé à la marque, jamais à un statut. */
+  brandAccent: '#4FD8F4',
   // Action
   primary: '#165DDE',
   primaryPressed: '#114BB5',
@@ -42,6 +44,9 @@ export const colors = {
   dangerSoft: '#FFF0F1',
   info: '#126A9D',
   infoSoft: '#E9F6FD',
+  // Graphiques : bleu principal et sa version claire (barres secondaires, piste des anneaux).
+  chart: '#3B82F6',
+  chartSoft: '#BFD5FB',
   overlay: '#0A1B3A99',
 } as const;
 
@@ -52,6 +57,8 @@ export const radius = { sm: 8, md: 12, lg: 16, xl: 22, pill: 999 } as const;
 export const typography = {
   display: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.3 },
   title: { fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.2 },
+  /** Titre d'un écran principal (Accueil, OPS, Modules) : fort sans être envahissant. */
+  screenTitle: { fontSize: 24, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
   heading: { fontSize: 17, lineHeight: 23, fontWeight: '700' },
   body: { fontSize: 15, lineHeight: 21, fontWeight: '400' },
   bodyStrong: { fontSize: 15, lineHeight: 21, fontWeight: '600' },
@@ -61,11 +68,18 @@ export const typography = {
   overline: { fontSize: 11, lineHeight: 14, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase' },
   /** Chiffre d'indicateur : chiffres à chasse fixe pour que les colonnes restent alignées. */
   kpi: { fontSize: 26, lineHeight: 30, fontWeight: '700', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  /** Chiffre d'une tuile compacte (quatre par ligne). */
+  kpiCompact: { fontSize: 21, lineHeight: 25, fontWeight: '700', letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
+  /** Libellé de la barre de navigation et des tuiles compactes. */
+  micro: { fontSize: 11, lineHeight: 14, fontWeight: '500' },
   kpiLarge: { fontSize: 34, lineHeight: 38, fontWeight: '700', letterSpacing: -0.6, fontVariant: ['tabular-nums'] },
 } as const satisfies Record<string, TextStyle>;
 
 /** Cible tactile minimale (Apple HIG 44 pt, Material 48 dp). */
 export const touchTarget = 48;
+
+/** Hauteur de la barre de navigation basse, hors zone de sécurité. */
+export const bottomBarHeight = 60;
 
 /** Ombres : légères, pour détacher une carte du fond sans alourdir l'écran. */
 export const elevation = {
