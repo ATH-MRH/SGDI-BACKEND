@@ -53,15 +53,14 @@ def test_upgrade_is_additive_idempotent_and_denies_by_default(tmp_path):
 
 def test_revision_extends_the_single_head():
     module = _module()
-    revisions, parents = set(), set()
-    for file in VERSIONS.glob("*.py"):
-        text = file.read_text()
-        for line in text.splitlines():
-            if line.startswith("revision = "):
-                revisions.add(line.split("=", 1)[1].strip().strip("\"'"))
-            if line.startswith("down_revision = "):
-                parents.add(line.split("=", 1)[1].strip().strip("\"'"))
-    assert revisions - parents == {module.revision} and module.down_revision == "20261014_0001"
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    script = ScriptDirectory.from_config(Config(str(VERSIONS.parents[1] / "alembic.ini")))
+    assert script.get_heads() == ["20261018_0001"]
+    assert set(script.get_revision("20261018_0001").down_revision) == {"20261016_0001", module.revision}
+    assert module.down_revision == "20261014_0001"
+
 
 
 @pytest.mark.parametrize('defect', ['missing_column', 'wrong_type', 'missing_index', 'wrong_index', 'wrong_check', 'wrong_fk', 'missing_unique', 'missing_default'])

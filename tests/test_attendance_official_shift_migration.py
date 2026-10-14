@@ -10,10 +10,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-# Tête courante de la chaîne : autorisations des équipements faciaux, en aval du rattachement
-# contrat DRH ↔ client / site DC (20261014_0001, tête de main).
-HEAD = "20261017_0001"
-PREVIOUS_HEAD = "20261014_0001"
+# Jonction explicite des migrations IRON Emploi et des autorisations faciales.
+HEAD = "20261018_0001"
+
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 

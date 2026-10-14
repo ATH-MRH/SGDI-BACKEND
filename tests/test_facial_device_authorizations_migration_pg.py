@@ -42,7 +42,7 @@ def alembic(url, *args):
 
 def test_full_upgrade_valid_existing_table_and_nonempty_downgrade(pg_database):
     url, engine = pg_database
-    main = alembic(url, 'upgrade', '20261014_0001')
+    main = alembic(url, 'upgrade', '20261016_0001')
     assert main.returncode == 0, main.stdout + main.stderr
     with engine.connect() as db:
         before = set(sa.inspect(db).get_table_names())
@@ -52,7 +52,7 @@ def test_full_upgrade_valid_existing_table_and_nonempty_downgrade(pg_database):
         assert set(sa.inspect(db).get_table_names()) == before | {_module().TABLE}
         _module()._validate_existing(sa.inspect(db))
         # A complete preexisting table is accepted without changing data.
-        db.execute(sa.text("UPDATE alembic_version SET version_num='20261014_0001'"))
+        db.execute(sa.text("UPDATE alembic_version SET version_num='20261016_0001'"))
     again = alembic(url, 'upgrade', 'head')
     assert again.returncode == 0, again.stdout + again.stderr
     with engine.begin() as db:
@@ -65,13 +65,13 @@ def test_full_upgrade_valid_existing_table_and_nonempty_downgrade(pg_database):
                                                     host="camera.example.invalid", active=False, facial_attendance_enabled=False))
         camera = db.execute(sa.text("SELECT id FROM cameras WHERE name='Fictive'")).scalar_one()
         db.execute(sa.text('INSERT INTO facial_device_authorizations(user_id,camera_id) VALUES (:user,:camera)'), {'user': user, 'camera': camera})
-    denied = alembic(url, 'downgrade', '20261014_0001')
+    denied = alembic(url, 'downgrade', '20261017_0001@20261014_0001')
     assert denied.returncode != 0 and 'Downgrade refusé' in denied.stderr
     with engine.begin() as db:
         assert db.execute(sa.text('SELECT count(*) FROM facial_device_authorizations')).scalar_one() == 1
-        assert db.execute(sa.text('SELECT version_num FROM alembic_version')).scalar_one() == '20261017_0001'
+        assert db.execute(sa.text('SELECT version_num FROM alembic_version')).scalar_one() == '20261018_0001'
         db.execute(sa.text('DELETE FROM facial_device_authorizations'))
-    rollback = alembic(url, 'downgrade', '20261014_0001')
+    rollback = alembic(url, 'downgrade', '20261017_0001@20261014_0001')
     assert rollback.returncode == 0, rollback.stdout + rollback.stderr
     with engine.connect() as db:
         assert set(sa.inspect(db).get_table_names()) == before
@@ -101,7 +101,7 @@ def test_incomplete_table_cannot_advance_alembic_revision(pg_database, ddl):
             db.execute(sa.text(f'CREATE TABLE {name}(id integer PRIMARY KEY)'))
             db.execute(sa.text(f'INSERT INTO {name} VALUES(1)'))
         db.execute(sa.text("CREATE TABLE alembic_version(version_num varchar(32) PRIMARY KEY)"))
-        db.execute(sa.text("INSERT INTO alembic_version VALUES ('20261014_0001')"))
+        db.execute(sa.text("INSERT INTO alembic_version VALUES ('20261016_0001')"))
         with Operations.context(MigrationContext.configure(db)):
             _module().upgrade()
         db.execute(sa.text('INSERT INTO facial_device_authorizations(user_id,camera_id) VALUES(1,1)'))
@@ -109,5 +109,5 @@ def test_incomplete_table_cannot_advance_alembic_revision(pg_database, ddl):
     refused = alembic(url, 'upgrade', 'head')
     assert refused.returncode != 0 and 'préexistante incompatible' in refused.stderr
     with engine.connect() as db:
-        assert db.execute(sa.text('SELECT version_num FROM alembic_version')).scalar_one() == '20261014_0001'
+        assert db.execute(sa.text('SELECT version_num FROM alembic_version')).scalar_one() == '20261016_0001'
         assert db.execute(sa.text('SELECT count(*) FROM facial_device_authorizations')).scalar_one() == 1
