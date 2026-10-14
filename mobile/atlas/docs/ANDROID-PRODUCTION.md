@@ -166,4 +166,19 @@ Constaté dans les fichiers produits, et non dans le seul projet généré :
 - code JavaScript compilé (Hermes), sans adresse de backend codée en dur ni adresse locale d'API ;
 - application non débogable, trafic en clair interdit.
 
-Ces builds précèdent la fusion de la branche et la validation sur appareil : le bundle est un candidat pour le test interne, pas le build final. Le build final est à refaire depuis `main`, une fois la checklist de DEVICE-BUILD déroulée sur l'APK de validation.
+Ces deux builds précèdent la fusion de la branche. L'APK de validation a ensuite été validé sur appareil réel.
+
+### Bundle à envoyer à Google Play
+
+Construit depuis `main` après la fusion de la PR #17, commit `7ad2c2d1`.
+
+| | |
+|---|---|
+| Profil | `production` |
+| Build EAS | `358e22c8-2df5-4d05-8da5-90ed8920cf93` |
+| Version | 1.0.0, `versionCode` 3 |
+| Taille | 71 Mo |
+| SHA-256 | `f44c1f911a42e759cd5824a9214d47aa9ec3b98e8a53d64581fcaa0df24d4b2b` |
+| Certificat | Même clé d'envoi que ci-dessus |
+
+Mêmes constats que pour les builds précédents : les six permissions du § 2, aucun client de développement, variante `production`, API `https://atlas.irongs.com`. Son code JavaScript compilé est identique, octet pour octet, à celui de l'APK validé sur appareil.
