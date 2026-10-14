@@ -124,7 +124,8 @@ describe('navigation protégée', () => {
   it('la barre basse ouvre les rubriques principales et garde la rubrique Modules allumée sur OPS', async () => {
     store.set('atlas.session.v1', storedSession());
     mockFetchProfile.mockResolvedValue(makeUser());
-    await renderApp();
+    const view = renderApp();
+    await view;
     await settle();
     await fireEvent.press(screen.getByTestId('nav-stats'));
     await settle();
@@ -139,6 +140,16 @@ describe('navigation protégée', () => {
     await settle();
     expect(screen.getByTestId('ops-dashboard')).toBeTruthy();
     expect(screen.getByTestId('nav-modules').props.accessibilityState).toEqual({ selected: true });
+
+    // Un raccourci de l'accueil change d'onglet sans empiler une seconde copie des onglets.
+    await fireEvent.press(screen.getByTestId('nav-index'));
+    await settle();
+    await fireEvent.press(screen.getByTestId('quick-attendance'));
+    await settle();
+    expect(screen.getByTestId('attendance-screen')).toBeTruthy();
+    const root = view.getRouterState() as { routes: { name: string; state?: { routes: { name: string }[] } }[] } | undefined;
+    const stack = root?.routes.find((route) => route.name === '__root')?.state ?? root;
+    expect(stack?.routes.filter((route) => route.name === '(tabs)')).toHaveLength(1);
   });
 
   it("un lien d'un écran de détail vers un onglet revient aux onglets sans en empiler une seconde copie", async () => {
