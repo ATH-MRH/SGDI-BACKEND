@@ -66,6 +66,9 @@ FEATURE_CATALOG: dict[str, dict] = {
         "sanctions": ("Sanctions", "Sanctions disciplinaires", ("read", "create", "validate")),
         "documents": ("Documents RH", "Documents et attestations", ("read", "create", "delete", "export")),
         "contract_templates": ("Modèles contractuels", "Modèles, clauses et contrats générés", ("read", "create", "update", "delete", "export", "admin")),
+        # Studio Badges : create = émettre / renouveler / remplacer, validate = révoquer,
+        # export = imprimer, admin = modèles et paramètres. Contraintes CHECK : migration 20261015_0002.
+        "badges": ("Badges du personnel", "Émission, impression, révocation et modèles de badge", ("read", "create", "validate", "export", "admin")),
     }},
     "recruitment": {"label": "Recrutement", "domain": "recrute.irongs.com", "description": "Candidatures et contractualisation", "features": {
         "candidates": ("Candidats", "Dossiers de candidature", ("read", "create", "update", "validate", "delete", "recruit")),

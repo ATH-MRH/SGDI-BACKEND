@@ -17,3 +17,6 @@ openpyxl>=3.1.0
 xlrd==2.0.1
 python-docx==1.1.2
 reportlab==4.2.5
+# Badges : mise en forme de l'arabe (lettres liées) et ordre d'affichage bidirectionnel.
+arabic-reshaper==3.0.0
+python-bidi==0.6.11

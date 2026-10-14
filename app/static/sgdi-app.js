@@ -4483,6 +4483,10 @@ function opsSupervisorReadOnlyNoticeHTML(){
   return `<div class="card p-3 mb-4" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur terrain : consultation limitée aux sites autorisés. La saisie pointage reste autorisée.</div>`;
 }
 function mySoc(){return session?.societe||""}
+// Studio Badges DRH (#/drh/badges/…) : seul écran de badge du Portail DRH. Les autres portails
+// (OPS, Matériel, Administration) n'ont pas accès aux routes DRH et gardent l'écran historique.
+function badgeStudioAvailable(){return session?.transverse==="drh"}
+function badgeStudioRoute(a){return "drh/badges/creer"+(a&&a.backendId?"/"+encodeURIComponent(a.backendId):"")}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
 function globalSocieteBandHTML(){
   if(!session)return"";
@@ -7493,7 +7497,16 @@ function renderSidebar(){
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"SUIVI TERRAIN",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)})()},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length})()},
-        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length})()}
+        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length})()},
+        // Studio Badges DRH : une rubrique par écran, toutes sous #/drh/badges/…
+        {label:"TABLEAU DE BORD",route:"drh/badges/dashboard",group:"GESTION DES BADGES"},
+        {label:"CRÉER UN BADGE",route:"drh/badges/creer",group:"GESTION DES BADGES"},
+        {label:"BADGES DU PERSONNEL",route:"drh/badges/personnel",group:"GESTION DES BADGES"},
+        {label:"STUDIO DE CONCEPTION",route:"drh/badges/studio",group:"GESTION DES BADGES"},
+        {label:"MODÈLES",route:"drh/badges/modeles",group:"GESTION DES BADGES"},
+        {label:"IMPRESSION EN LOT",route:"drh/badges/lot",group:"GESTION DES BADGES"},
+        {label:"HISTORIQUE",route:"drh/badges/historique",group:"GESTION DES BADGES"},
+        {label:"PARAMÈTRES",route:"drh/badges/parametres",group:"GESTION DES BADGES"}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
@@ -13833,7 +13846,7 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}${badgeStudioAvailable()&&a.backendId?`<button class="btn text-xs" style="${ficheTopButtonStyle}" data-badge-studio-link onclick="navigate(badgeStudioRoute(db.agents.find(x=>x.id==='${a.id}')))">Créer / gérer le badge</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
@@ -16477,6 +16490,7 @@ function openAgentDocumentsModal(id){
 
 
 let badgePublicLinkCache={};
+let badgePublicQrCache={};
 let badgePublicLinkPending={};
 function badgePublicLinkRef(a){return String(a?.backendId||a?.id||a?.matricule||"")}
 // La page publique /public/badge/{ref} exige un jeton signé côté serveur (settings.
@@ -16491,7 +16505,7 @@ async function fetchBadgePublicLink(a){
   const p=(async()=>{
     try{
       const links=await sgdiApi("/public-links/employee/"+encodeURIComponent(ref),{legacy:false});
-      if(links&&links.badge_page){badgePublicLinkCache[ref]=links.badge_page;return links.badge_page}
+      if(links&&links.badge_page){badgePublicLinkCache[ref]=links.badge_page;if(/^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(links.badge_qr||""))badgePublicQrCache[ref]=links.badge_qr;return links.badge_page}
     }catch(e){console.warn("Lien public badge indisponible",e)}
     return null;
   })();
@@ -16513,9 +16527,22 @@ function badgeVerifyURL(a){
   const origin=location.origin&&location.origin!=="null"?location.origin:"";
   return `${origin}/public/badge/${encodeURIComponent(ref)}`;
 }
-function badgeQrSrc(a,size){
-  const data=encodeURIComponent(badgeVerifyURL(a));
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size||180}x${size||180}&margin=1&data=${data}`;
+// QR du badge : dessiné par le serveur avec le lien signé (/api/public-links/employee). Le lien
+// n'est jamais confié à un service externe ; tant qu'il n'est pas reçu, l'emplacement reste vide.
+const BADGE_QR_PENDING="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+function badgeQrSrc(a){
+  const ref=badgePublicLinkRef(a);
+  if(badgePublicQrCache[ref])return badgePublicQrCache[ref];
+  ensureBadgePublicLink(a);
+  return BADGE_QR_PENDING;
+}
+// Écran de badge historique (portails sans Studio Badges) : toute impression est tracée côté
+// serveur AVANT d'être lancée ; sans trace, pas d'impression.
+async function badgeLegacyPrintLog(agents){
+  const ids=(agents||[]).map(a=>Number(a&&a.backendId)).filter(n=>Number.isInteger(n)&&n>0);
+  if(!ids.length)return true;
+  try{await sgdiApi("/public-links/badge-print-log",{method:"POST",body:{employee_ids:ids},legacy:false});return true}
+  catch(e){toast("Impression non tracée, donc annulée : "+(e&&e.message||e),"error");return false}
 }
 
 function badgePhotoCrop(a){

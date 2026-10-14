@@ -253,6 +253,8 @@ function renderDRHPeriodeEssai(view){
 }
 
 function renderDRH(view,sub,arg){
+  // Studio Badges : ses écrans lisent leur propre API ; pas de rechargement complet des employés.
+  if(sub==="badges")return renderBadgeStudio(view,arg||"dashboard");
   sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="conges")return renderCongesModule(view,true);
@@ -722,4 +724,4 @@ function drhSocieteRows(){
   return rows;
 }
 
-SGDIModules.registerModule({key: "drh", routes: ["drh","conges"], dependencies: ["drh-dashboard", "leaves"], init: function(){}, destroy: function(){}});
+SGDIModules.registerModule({key: "drh", routes: ["drh","conges"], dependencies: ["drh-dashboard", "leaves", "badges"], init: function(){}, destroy: function(){if(typeof badgeStudioDestroy==="function")badgeStudioDestroy()}});

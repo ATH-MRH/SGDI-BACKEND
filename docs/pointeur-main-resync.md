@@ -1,5 +1,9 @@
 # Candidat Pointeur synchronisé avec IRON Emploi
 
+Cette fiche décrit le commit `8197c333` contre main `1df19832`. La validation plus récente
+avec Studio Badges et la jonction `20261019_0001` est dans
+[pointeur-main-resync-badges.md](pointeur-main-resync-badges.md) ; elle prévaut pour le candidat actuel.
+
 Branche locale : `integration/pointeur-main-resync`, créée depuis
 `fix/pointeur-final-stabilization` (`aa5ca535`). Main intégré : `1df19832`.
 L'intégration historique (`2abf0537`) et les branches existantes ne sont pas modifiées.

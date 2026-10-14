@@ -91,7 +91,8 @@ def seed_pointer(engine):
 
 def test_join_graph_has_one_head_and_preserves_both_parents():
     script = ScriptDirectory.from_config(Config(str(REPO / 'alembic.ini')))
-    assert script.get_heads() == [MERGE]
+    assert script.get_heads() == ['20261019_0001']
+    assert set(script.get_revision('20261019_0001').down_revision) == {MERGE, '20261015_0002'}
     assert set(script.get_revision(MERGE).down_revision) == {MAIN, POINTER}
     assert script.get_revision(POINTER).down_revision == '20261014_0001'
     assert script.get_revision(MAIN).down_revision == '20261014_0004'
@@ -103,16 +104,16 @@ def test_upgrade_from_populated_current_main_preserves_emploi_and_rollback(pg_da
     ok(alembic(url, 'upgrade', MAIN, repo=baseline))
     seed_emploi(engine)
     before = snapshot(engine)
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     after = snapshot(engine)
     assert set(after) == set(before) | {'facial_device_authorizations'}
     assert {name: after[name] for name in before} == before
     assert revisions(engine) == {MERGE}
-    ok(alembic(url, 'upgrade', 'head'))  # Already-applied parents do not replay.
+    ok(alembic(url, 'upgrade', MERGE))  # Already-applied parents do not replay.
     assert snapshot(engine) == after
     ok(alembic(url, 'downgrade', '20261017_0001@20261014_0001'))  # Facial branch only.
     assert revisions(engine) == {MAIN} and snapshot(engine) == before
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert snapshot(engine) == after
 
 
@@ -128,12 +129,12 @@ def test_upgrade_from_populated_pointer_and_both_heads_is_lossless(pg_database):
     assert {name: snapshot(engine)[name] for name in before} == before
     seed_emploi(engine)
     both = snapshot(engine)
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert revisions(engine) == {MERGE} and snapshot(engine) == both
     # Undo just the no-op join: both parent markers and every row remain intact.
     ok(alembic(url, 'downgrade', MAIN))
     assert revisions(engine) == {MAIN, POINTER} and snapshot(engine) == both
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert revisions(engine) == {MERGE} and snapshot(engine) == both
     # A full schema rollback to main must refuse to discard actual grants.
     denied = alembic(url, 'downgrade', '20261017_0001@20261014_0001')
