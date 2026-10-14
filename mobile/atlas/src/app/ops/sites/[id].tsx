@@ -7,26 +7,9 @@ import { fetchBoard, presenceRate } from '@/api/domains/attendance';
 import { fetchSiteDetail, fetchSitePlanning } from '@/api/domains/ops';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
-import {
-  ActionTile,
-  AppText,
-  AtlasHeader,
-  Card,
-  ChartCard,
-  Chip,
-  EmployeeRow,
-  ErrorState,
-  IconTile,
-  InfoRow,
-  KpiCard,
-  ListItem,
-  Loader,
-  RingGauge,
-  Screen,
-  SectionHeader,
-  StatLine,
-} from '@/components/ui';
+import { ActionTile, AppText, AtlasHeader, Card, ChartCard, Chip, EmployeeRow, ErrorState, IconTile, InfoRow, KpiCard, KpiGrid, ListItem, RingGauge, Screen, SectionHeader, SkeletonDashboard, SkeletonLines, StatLine } from '@/components/ui';
 import { access } from '@/features/access';
+import { percent, rateTone } from '@/features/cockpit/presentation';
 import { openRoute } from '@/features/navigation';
 import { t } from '@/i18n';
 import { colors, elevation, radius, spacing } from '@/theme/tokens';
@@ -63,7 +46,7 @@ export default function SiteDetailScreen() {
     <Gate allowed={allowed}>
       <Screen edges={['top', 'bottom', 'left', 'right']} testID="site-detail" header={<AtlasHeader back title={data?.site.name ?? t('entry.sites')} subtitle={data?.site.society ?? undefined} />}>
         {detail.isPending ? (
-          <Loader />
+          <SkeletonDashboard testID="site-loading" />
         ) : detail.error || !data ? (
           <ErrorState error={detail.error} onRetry={() => void detail.refetch()} onBack={() => router.back()} testID="site-error" />
         ) : (
@@ -85,16 +68,21 @@ export default function SiteDetailScreen() {
             </View>
 
             <SectionHeader title={t('sites.staffing.title')} />
-            <View style={styles.kpis}>
-              <KpiCard testID="site-contractual" label={t('sites.contractual')} value={data.contractualStaff} icon="document-text-outline" />
-              <KpiCard testID="site-realized" label={t('sites.realized')} value={data.realizedStaff} icon="people-outline" ratio={coverage} />
-              <KpiCard testID="site-missing" label={t('sites.missing')} value={data.missingStaff} tone={data.missingStaff > 0 ? 'danger' : 'neutral'} icon="remove-circle-outline" />
-            </View>
+            <KpiGrid>
+              <KpiCard variant="compact" testID="site-contractual" label={t('sites.contractual')} value={data.contractualStaff} icon="document-text-outline" />
+              <KpiCard variant="compact" testID="site-realized" label={t('sites.realized')} value={data.realizedStaff} icon="people-outline" ratio={coverage} />
+              <KpiCard variant="compact" testID="site-missing" label={t('sites.missing')} value={data.missingStaff} tone={data.missingStaff > 0 ? 'danger' : 'neutral'} icon="remove-circle-outline" />
+              {kpi ? <KpiCard variant="compact" testID="site-rate" label={t('cockpit.rate')} value={percent(rate)} tone={rateTone(rate)} icon="pulse-outline" /> : null}
+              {kpi ? <KpiCard variant="compact" testID="site-present" label={t('cockpit.present')} value={kpi.present} tone="success" icon="checkmark-circle-outline" /> : null}
+              {kpi ? <KpiCard variant="compact" testID="site-absent" label={t('cockpit.absent')} value={kpi.absent} tone="danger" icon="close-circle-outline" /> : null}
+              {kpi ? <KpiCard variant="compact" testID="site-not-pointed" label={t('cockpit.notPointed')} value={kpi.not_pointed} tone="warning" icon="help-circle-outline" /> : null}
+              {kpi ? <KpiCard variant="compact" testID="site-late" label={t('ops.late')} value={kpi.late} tone={kpi.late > 0 ? 'warning' : 'neutral'} icon="alarm-outline" /> : null}
+            </KpiGrid>
 
             {kpi ? (
               <ChartCard testID="site-today" title={t('home.presence.title')} hint={formatDate(board.data?.date)}>
                 <View style={styles.presence}>
-                  <RingGauge ratio={rate} tone={rate !== null && rate < 0.75 ? 'danger' : rate !== null && rate < 0.9 ? 'warning' : 'success'} caption={t('cockpit.rate.short')} />
+                  <RingGauge ratio={rate} tone={rateTone(rate)} caption={t('cockpit.rate.short')} />
                   <View style={styles.lines}>
                     <StatLine label={t('cockpit.present')} value={String(kpi.present)} ratio={rate} tone="success" />
                     <StatLine label={t('cockpit.absent')} value={String(kpi.absent)} ratio={kpi.expected ? kpi.absent / kpi.expected : null} tone="danger" />
@@ -146,7 +134,7 @@ export default function SiteDetailScreen() {
               <Card testID="site-planning">
                 <SectionHeader title={t('sites.planning')} />
                 {planning.isPending ? (
-                  <Loader />
+                  <SkeletonLines />
                 ) : planning.error ? (
                   <AppText color={colors.textSecondary}>{t('section.unavailable')}</AppText>
                 ) : planning.data.length === 0 ? (

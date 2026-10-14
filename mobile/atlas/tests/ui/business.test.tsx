@@ -379,6 +379,28 @@ describe('incidents', () => {
     expect(screen.queryByTestId('incident-new')).toBeNull();
   });
 
+  it('recherche et filtre les incidents du contexte sans nouvel appel au serveur', async () => {
+    signIn(['ops']);
+    mockSaved = { society: 'Societe A', siteId: null };
+    mock.fetchIncidents.mockResolvedValue([
+      { id: 1, date: '2026-10-07', time: '14:05', siteId: 1, type: 'vol', severity: 'elevee', subject: 'Vol de matériel', description: 'Constat', status: 'ouvert', society: 'Societe A' },
+      { id: 4, date: '2026-10-05', time: '', siteId: 1, type: 'incendie', severity: 'critique', subject: 'Départ de feu', description: '', status: 'clôturé', society: 'Societe A' },
+    ]);
+    await show(<IncidentsScreen />);
+    await waitFor(() => expect(screen.getByTestId('incident-4')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('incidents-filter-open'));
+    expect(screen.getByTestId('incident-1')).toBeTruthy();
+    expect(screen.queryByTestId('incident-4')).toBeNull();
+    await fireEvent.press(screen.getByTestId('incidents-filter-critique'));
+    expect(screen.getByTestId('incident-4')).toBeTruthy();
+    expect(screen.queryByTestId('incident-1')).toBeNull();
+    await fireEvent.press(screen.getByTestId('incidents-filter-all'));
+    await fireEvent.changeText(screen.getByTestId('incidents-search'), 'materiel');
+    expect(screen.getByTestId('incident-1')).toBeTruthy();
+    expect(screen.queryByTestId('incident-4')).toBeNull();
+    expect(mock.fetchIncidents).toHaveBeenCalledTimes(1);
+  });
+
   it('contrôle la saisie puis crée l\'incident avec la société du site choisi', async () => {
     signIn(['ops'], ['create']);
     mock.createIncident.mockResolvedValue({ id: 12 });

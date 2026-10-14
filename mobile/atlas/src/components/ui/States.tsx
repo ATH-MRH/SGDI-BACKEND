@@ -112,6 +112,17 @@ export function Skeleton({ height = 16, width = '100%', round = false }: { heigh
   );
 }
 
+/** Quelques lignes fantômes, pour une section qui charge à l'intérieur d'une carte. */
+export function SkeletonLines({ lines = 3, testID }: { lines?: number; testID?: string }) {
+  return (
+    <View style={styles.skeletonLines} testID={testID} accessibilityRole="progressbar" accessibilityLabel={t('common.loading')}>
+      {Array.from({ length: lines }, (_, index) => (
+        <Skeleton key={index} height={12} width={index === lines - 1 ? '55%' : '100%'} />
+      ))}
+    </View>
+  );
+}
+
 /** Carte fantôme : la forme d'une ligne de liste pendant le chargement. */
 export function SkeletonRow() {
   return (
@@ -165,6 +176,7 @@ const styles = StyleSheet.create({
   centered: { textAlign: 'center' },
   skeleton: { backgroundColor: colors.divider, borderRadius: radius.sm },
   skeletonList: { gap: spacing.sm, padding: spacing.lg },
+  skeletonLines: { gap: spacing.sm, paddingVertical: spacing.sm },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',

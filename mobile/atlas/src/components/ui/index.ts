@@ -39,7 +39,7 @@ export { ScreenHeader } from './ScreenHeader';
 export { SearchBar } from './SearchBar';
 export { SectionHeader } from './SectionHeader';
 export { ChartCard, StatLine } from './StatCard';
-export { EmptyState, ErrorState, Loader, Skeleton, SkeletonDashboard, SkeletonList, SkeletonRow } from './States';
+export { EmptyState, ErrorState, Loader, Skeleton, SkeletonDashboard, SkeletonLines, SkeletonList, SkeletonRow } from './States';
 export { TabStrip } from './TabStrip';
 
 // Noms du design system ATLAS : mêmes composants, sous leur nom de catalogue.

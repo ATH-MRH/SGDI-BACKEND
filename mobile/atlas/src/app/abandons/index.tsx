@@ -9,7 +9,7 @@ import { scopeParams } from '@/api/domains/shared';
 import { queryKeys } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
-import { AppText, Button, Card, EmptyState, ErrorState, Loader, ScreenHeader } from '@/components/ui';
+import { AppText, Button, Card, EmptyState, ErrorState, ScreenHeader, SkeletonList } from '@/components/ui';
 import { access } from '@/features/access';
 import { t } from '@/i18n';
 import { useScope } from '@/scope/ScopeProvider';
@@ -32,7 +32,7 @@ export default function AbandonsScreen() {
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']} testID="abandons-screen">
         <ScreenHeader title={t('entry.abandons')} />
         {query.isPending ? (
-          <Loader />
+          <SkeletonList />
         ) : query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : (
