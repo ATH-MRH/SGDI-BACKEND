@@ -125,7 +125,7 @@ def _mode(path):
 
 def _no_cleartext_left(env):
     leftovers = [p.name for p in Path(env["BACKUP_DIR"]).iterdir() if p.name.startswith(".work") or p.suffix in (".partial", ".dump")]
-    assert leftovers == [] and not (Path(env["BACKUP_DIR"]) / ".lock").exists()
+    assert leftovers == [] and (Path(env["BACKUP_DIR"]) / ".lock").is_file()
 
 
 # ── Cycle complet ────────────────────────────────────────────────────────────────────────
@@ -251,19 +251,54 @@ def test_interrupted_backup_cleans_up_and_the_next_one_succeeds(env, tmp_path):
     assert _run(BACKUP, env).returncode == 0 and len(_archives(env)) == 1
 
 
-def test_only_one_backup_at_a_time_and_stale_lock_is_recovered(env):
-    lock = Path(env["BACKUP_DIR"]) / ".lock"
-    lock.mkdir(parents=True)
-    (lock / "pid").write_text(str(os.getpid()))                   # processus vivant
-    busy = _run(BACKUP, env)
-    assert busy.returncode == 75 and "une autre sauvegarde est en cours" in busy.stderr
-    assert lock.exists() and not _archives(env)
+def test_only_one_backup_at_a_time_and_crash_releases_kernel_lock(env):
+    import fcntl
 
-    finished = subprocess.Popen(["true"]); finished.wait()
-    (lock / "pid").write_text(str(finished.pid))                  # processus disparu
+    lock = Path(env["BACKUP_DIR"]) / ".lock"
+    lock.parent.mkdir(parents=True)
+    with lock.open("w") as owner:
+        fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        busy = _run(BACKUP, env)
+        assert busy.returncode == 75 and "une autre sauvegarde est en cours" in busy.stderr
+        assert lock.is_file() and not _archives(env)
+        inode = lock.stat().st_ino
     recovered = _run(BACKUP, env)
-    assert recovered.returncode == 0 and "verrou orphelin repris" in recovered.stdout
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+    assert lock.stat().st_ino == inode and len(_archives(env)) == 1
+
+
+def test_simultaneous_backups_have_one_owner_and_children_keep_the_lock(env, tmp_path):
+    """The winner reaches pg_dump; every contender must refuse until ALL owners exit."""
+    stub = tmp_path / "slow-bin"
+    stub.mkdir()
+    entered = tmp_path / "entered"
+    real_dump = shutil.which("pg_dump")
+    (stub / "pg_dump").write_text(f'#!/bin/sh\ntouch "{entered}"\nsleep 60\nexec "{real_dump}" "$@"\n')
+    (stub / "pg_dump").chmod(0o755)
+    slow = {**env, "PATH": f"{stub}:{env['PATH']}"}
+    owner = subprocess.Popen(["bash", BACKUP], env=slow, start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            if entered.exists():
+                break
+            time.sleep(0.1)
+        assert entered.exists()
+        contenders = [subprocess.Popen(["bash", BACKUP], env=slow, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True) for _ in range(8)]
+        for contender in contenders:
+            _, stderr = contender.communicate(timeout=20)
+            assert contender.returncode == 75, stderr
+        # Killing just bash must not release the lock while pg_dump is still alive.
+        owner.kill()
+        owner.wait(timeout=10)
+        assert _run(BACKUP, env).returncode == 75
+    finally:
+        os.killpg(owner.pid, signal.SIGKILL)
+        owner.wait(timeout=10)
+    assert _run(BACKUP, env).returncode == 0
     assert len(_archives(env)) == 1
+    _no_cleartext_left(env)
 
 
 def test_leftovers_of_a_killed_run_are_removed(env):
@@ -473,3 +508,23 @@ def test_check_detects_missing_stale_and_failed_backups(env):
     os.utime(archive, (age, age))
     stale = _run(CHECK, env)
     assert stale.returncode == 1 and "a plus de 26 h" in stale.stderr
+
+
+def test_backups_starting_together_produce_exactly_one_dump(env, tmp_path):
+    gate, calls = tmp_path / 'start', tmp_path / 'dumps'
+    stub = tmp_path / 'simultaneous-bin'
+    stub.mkdir()
+    real_dump = shutil.which('pg_dump')
+    (stub / 'pg_dump').write_text(f'#!/bin/sh\necho dump >> "{calls}"\nsleep 2\nexec "{real_dump}" "$@"\n')
+    (stub / 'pg_dump').chmod(0o755)
+    command = 'while [ ! -f "$1" ]; do sleep 0.01; done; exec bash "$2"'
+    contenders = [subprocess.Popen(['bash', '-c', command, 'start', str(gate), BACKUP],
+                                  env={**env, 'PATH': f"{stub}:{env['PATH']}"},
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                  for _ in range(8)]
+    gate.touch()
+    for process in contenders:
+        process.communicate(timeout=30)
+    assert sorted(p.returncode for p in contenders) == [0] + [75] * 7
+    assert calls.read_text().splitlines() == ['dump']
+    assert len(_archives(env)) == 1

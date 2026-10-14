@@ -1,6 +1,7 @@
 # Sauvegardes chiffrées, restauration d'essai et surveillance
 
-Trois scripts, sans dépendance à l'application :
+Trois scripts, sans dépendance à l'application (Python 3.11 ou plus requis pour le verrou,
+en plus de GnuPG et des outils PostgreSQL) :
 
 | Script | Rôle |
 |---|---|
@@ -166,7 +167,13 @@ expiration (12 mois au plus) : à rapprocher des durées de conservation applica
 Modèles dans `scripts/systemd/` (non installés, non activés) : sauvegarde chaque nuit à
 01:30 UTC, contrôle à 06:00 UTC, rattrapage au démarrage si le serveur était éteint.
 
-- **Deux sauvegardes simultanées** : impossibles (verrou ; la seconde sort avec le code 75).
+- **Deux sauvegardes simultanées** : verrou noyau non bloquant (`fcntl.flock`, Linux/macOS) ;
+  la seconde sort avec le code 75. Le fichier `.lock` reste en place : **ne jamais le supprimer**
+  pendant une exécution. Le verrou est libéré par le noyau à la fin du dernier processus qui
+  hérite de son descripteur, même après un arrêt brutal. Aucun PID ne sert à reprendre le verrou.
+  Si une ancienne installation laisse un **dossier** `.lock`, le nouveau script refuse de
+  démarrer : vérifier qu'aucune sauvegarde ancienne ne tourne avant de retirer ce dossier vide.
+  Utiliser un stockage local supportant `flock` ; un partage réseau exige une validation dédiée.
 - **Échec** : code de retour non nul, `status/last_run.status` à `FAILED` avec l'étape en cause,
   commande d'alerte (`BACKUP_ALERT_COMMAND`). Une archive incomplète n'est jamais laissée.
 - **Alerte par courriel** : `scripts/backup_alert_mail.sh` envoie le message à

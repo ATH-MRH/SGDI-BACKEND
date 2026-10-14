@@ -58,7 +58,7 @@ STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 NAME="${BACKUP_PREFIX}${STAMP}${BACKUP_SUFFIX}"
 OUT="${BACKUP_DIR}/${NAME}"
 STATUS_DIR="${BACKUP_DIR}/status"
-LOCK_DIR="${BACKUP_DIR}/.lock"
+LOCK_FILE="${BACKUP_DIR}/.lock"
 WORK=""
 STEP="préparation"
 LOCKED=0
@@ -104,7 +104,6 @@ finish() {
           bash -c "$BACKUP_ALERT_COMMAND" || log "alerte non envoyée" >&2
       fi
     fi
-    rm -rf "$LOCK_DIR"
   fi
   exit "$rc"
 }
@@ -138,18 +137,15 @@ done
 mkdir -p "$BACKUP_DIR" "$STATUS_DIR"
 chmod 700 "$BACKUP_DIR" "$STATUS_DIR"
 
-# Une seule sauvegarde à la fois. Un verrou laissé par un processus disparu est repris.
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  other="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
-  if [ -n "$other" ] && kill -0 "$other" 2>/dev/null; then
-    log "une autre sauvegarde est en cours (processus ${other}) : abandon" >&2
-    exit 75
-  fi
-  log "verrou orphelin repris"
-  rm -rf "$LOCK_DIR"
-  mkdir "$LOCK_DIR"
+# Verrou noyau sur un inode permanent : jamais supprimé, jamais repris selon un PID.
+# Le descripteur est hérité par bash et ses enfants ; même un SIGKILL ne permet pas
+# une nouvelle sauvegarde tant qu'un enfant de l'ancienne travaille encore.
+if [ "${1:-}" != --atlas-backup-locked ]; then
+  need python3
+  exec python3 "${SCRIPT_DIR}/backup_lock.py" "$LOCK_FILE" "$0" "$@"
 fi
-echo $$ > "${LOCK_DIR}/pid"
+shift
+python3 "${SCRIPT_DIR}/backup_lock.py" --verify "$LOCK_FILE" || die "verrou de sauvegarde absent ou invalide"
 LOCKED=1
 [ ! -e "$OUT" ] || die "l'archive ${NAME} existe déjà : relancer dans une seconde"
 
