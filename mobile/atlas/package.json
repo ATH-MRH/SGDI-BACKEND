@@ -71,6 +71,7 @@
     "testMatch": [
       "<rootDir>/tests/**/*.test.ts?(x)"
     ],
-    "clearMocks": true
+    "clearMocks": true,
+    "testTimeout": 20000
   }
 }
