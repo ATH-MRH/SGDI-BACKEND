@@ -1259,7 +1259,11 @@ def _candidate_int(value: Any) -> int:
         return 0
 
 
-def recruit_candidate(db: Session, candidate_id: int, username: str | None = None):
+def recruit_candidate(
+    db: Session, candidate_id: int, username: str | None = None, *,
+    employee_values: dict[str, Any] | None = None, allow_idempotent: bool = True,
+    commit: bool = True, create_initial_contract: bool = True,
+):
     candidate = db.execute(
         select(Candidate).where(Candidate.id == candidate_id).with_for_update()
     ).scalar_one_or_none()
@@ -1267,6 +1271,8 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         raise HTTPException(status_code=404, detail="Candidate not found")
     data = candidate.data if isinstance(candidate.data, dict) else {}
     converted_id = data.get("convertedEmployeeId")
+    if not allow_idempotent and (converted_id or candidate.status == "embauche"):
+        raise HTTPException(status_code=409, detail="Ce candidat a déjà été converti en employé")
     if candidate.status == "embauche" and converted_id:
         employee = db.get(Employee, int(converted_id))
         if employee:
@@ -1282,20 +1288,21 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
     # création de l'employé. La décision favorable reste la seule règle métier.
     if not _candidate_decision_is_favorable(data):
         raise HTTPException(status_code=422, detail="Contrat refusé : la décision du recruteur doit être Favorable")
+    values = employee_values or {}
     next_code = next_employee_code(db, candidate.society)
-    recruit_date = _candidate_date(data.get("contractStartDate")) or date.today()
+    recruit_date = values.get("recruit_date") or _candidate_date(data.get("contractStartDate")) or date.today()
 
     # typeContrat stocké tel quel (CDD/CDI/CIDD…) — ne pas passer par _clean_contract_type
     # qui efface CDI. posteContrat est le poste de travail, pas le type de contrat.
-    raw_type = str(data.get("typeContrat") or "").strip().upper()
+    raw_type = str(values.get("contract_type") or data.get("typeContrat") or "").strip().upper()
     contract_type = raw_type if raw_type in {"CDD", "CDI", "CIDD", "CTA", "APPRENTISSAGE"} else "CDD"
 
     # Période d'essai selon le type (convention sécurité privée algérienne)
     trial_days = {"CDI": 90, "CDD": 30, "CIDD": 45}.get(contract_type, 30)
-    trial_end = date.fromordinal(recruit_date.toordinal() + trial_days)
+    trial_end = values.get("trial_end_date") or date.fromordinal(recruit_date.toordinal() + trial_days)
 
     # Date de fin de contrat (CDD uniquement, depuis les données candidat si dispo)
-    raw_end = str(data.get("dateFinContrat") or "").strip()
+    raw_end = str(values.get("contract_end_date") or data.get("dateFinContrat") or "").strip()
     contract_end: date | None = None
     if contract_type != "CDI":
         try:
@@ -1315,9 +1322,9 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         family_status=data.get("situation"), children_count=_candidate_int(data.get("nombreEnfants")),
         phone=candidate.phone or data.get("telephone"), email=candidate.email or data.get("email"),
         address=data.get("adresse"), commune=data.get("commune"), wilaya=data.get("wilaya"),
-        position=candidate.desired_position or data.get("posteContrat") or data.get("posteSouhaite"),
+        position=values.get("position") or candidate.desired_position or data.get("posteContrat") or data.get("posteSouhaite"),
         society=candidate.society or data.get("societe"),
-        salary_net=candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0,
+        salary_net=values["salary_net"] if values.get("salary_net") is not None else candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0,
         contract_type=contract_type,
         status="actif" if recruit_date <= date.today() else "a_venir",
         recruit_date=recruit_date,
@@ -1346,9 +1353,13 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         salary_net=employee.salary_net,
         status="actif" if recruit_date <= date.today() else "a_venir",
     )
-    db.add(contract)
+    if create_initial_contract:
+        db.add(contract)
     try:
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=f"Recrutement refusé : {_postgres_error_detail(exc)}") from exc
@@ -1947,7 +1958,7 @@ def convert_docx_to_pdf(docx_bytes: bytes) -> bytes:
         return pdf.read_bytes()
 
 
-def generate_contract(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
+def generate_contract(db: Session, request: Any, user: Any | None = None, *, commit: bool = True) -> GeneratedContract:
     employee = get_or_404(db, Employee, request.employee_id)
     template = find_contract_template(db, request, employee)
     values = contract_values(employee, request)
@@ -2010,7 +2021,10 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
         uploaded_by=getattr(user, "username", None),
     )
     db.add(document)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(row)
     return row
 

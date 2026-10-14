@@ -1,4 +1,4 @@
-"""Sessions d'import Excel de candidats — table créée par la migration additive 20261010_0001."""
+"""Sessions d'import Excel de candidats et de contractualisation — table créée par la migration additive 20261010_0001."""
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, JSON, String
@@ -13,7 +13,9 @@ class CandidateImportSession(Base, TimestampMixin):
     Liée à l'utilisateur et à son périmètre au moment de l'analyse. `workbook` (contenu des
     cellules) n'existe que le temps de la session : il est effacé à la confirmation, à
     l'annulation et à l'expiration. `result` ne conserve que des compteurs et, par ligne, le
-    numéro, le résultat et le motif — jamais le contenu personnel du fichier.
+    numéro, le résultat et le motif pour le recrutement. Les sessions de contractualisation
+    (`contract-…`) conservent aussi le nom du candidat et les références du contrat pour
+    leur rapport privé, jusqu’à la purge commune ; le classeur est toujours effacé.
     `none_as_null` : un contenu effacé est un vrai NULL SQL, pas la valeur JSON « null »."""
     __tablename__ = "candidate_import_sessions"
 
