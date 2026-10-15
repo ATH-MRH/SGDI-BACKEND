@@ -16577,12 +16577,12 @@ async function renderBadgeVerify(view,id){
   const photo=a.photo?`<img src="${escapeHTML(a.photo)}" alt="Photo" style="transform:${badgePhotoTransform(a)};transform-origin:center center">`:"PHOTO";
   const active=a.badgeActif!==false;
   const fonction=String(a.affectationCourante?.poste||a.fonction||"").trim();
-  const groupeSanguin=String(a.groupeSanguin||a.groupe_sanguin||"").trim();
+  // Page publique (QR) : jamais de groupe sanguin, donnée médicale.
   view.innerHTML=`<div class="public-badge-page">
     <div class="public-badge-shell ${active?"":"is-inactive"}">
       <div class="public-badge-status ${active?"active":"inactive"}">${active?"Badge actif":"Badge désactivé"}</div>
       <div class="public-badge-photo">${photo}</div>
-      <div class="public-badge-info"><h1>${escapeHTML(name)}</h1><div class="public-badge-code">Code : ${escapeHTML(a.matricule||"—")}</div><div class="public-badge-function">Fonction : ${escapeHTML(fonction||"—")}</div><div class="public-badge-blood">Groupe sanguin : ${escapeHTML(groupeSanguin||"—")}</div></div>
+      <div class="public-badge-info"><h1>${escapeHTML(name)}</h1><div class="public-badge-code">Code : ${escapeHTML(a.matricule||"—")}</div><div class="public-badge-function">Fonction : ${escapeHTML(fonction||"—")}</div></div>
       <div class="public-badge-qr"><img src="${badgeQrSrc(a,180)}" alt="QR pointage"></div>
     </div>
   </div>`;

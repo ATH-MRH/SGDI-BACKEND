@@ -58,12 +58,17 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "sheet_margin_mm": 10,
     "sheet_gap_mm": 4,
     "crop_marks": True,
+    # Groupe sanguin (donnée médicale déclarative) : jamais affiché par défaut. L'activation exige
+    # le droit « admin » des badges ET la référence de l'autorisation interne qui l'encadre.
+    "show_blood_group": False,
+    "blood_group_authorization": "",
 }
 REVOKE_REASONS = {"perdu": "Badge perdu", "vole": "Badge volé", "deteriore": "Badge détérioré",
                   "depart": "Départ de l'employé", "erreur": "Erreur d'émission", "autre": "Autre"}
 SAMPLE_VALUES = {"societe": "IRON GLOBAL", "nom": "ABDELKADER", "prenom": "MOHAMED", "nom_complet": "ABDELKADER MOHAMED",
                  "matricule": "K26", "fonction": "CARISTE", "site": "SITE EXEMPLE", "site_code": "ETP/DF/H01",
-                 "statut": "ACTIF", "numero": "BDG-0000-000000", "date_emission": "01/01/2026", "validite": "—"}
+                 "statut": "ACTIF", "numero": "BDG-0000-000000", "date_emission": "01/01/2026", "validite": "—",
+                 "groupe_sanguin": "O+"}
 PDF_HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"}
 
 
@@ -141,8 +146,27 @@ def _current_sites(db: Session, employee_ids: list[int]) -> dict[int, tuple[Assi
     return result
 
 
-def employee_values(employee: Employee, current: tuple[Assignment, Site] | None) -> dict[str, str]:
-    """Champs du badge lus dans la fiche employé et son affectation active."""
+def blood_group_of(employee: Employee) -> str:
+    """Groupe sanguin déclaré sur la fiche (groupeSanguin), normalisé ; "" s'il est absent ou
+    inexploitable. Jamais déduit d'une autre information."""
+    data = _employee_data(employee)
+    return badge_design.normalize_blood_group(data.get("groupeSanguin") or data.get("groupe_sanguin"))
+
+
+def blood_group_state(employee: Employee, options: dict[str, Any]) -> dict[str, Any]:
+    """État affichable dans l'interface DRH. La valeur n'est transmise que si l'affichage est autorisé."""
+    data = _employee_data(employee)
+    raw = str(data.get("groupeSanguin") or data.get("groupe_sanguin") or "").strip()
+    value = badge_design.normalize_blood_group(raw)
+    if not options.get("show_blood_group"):
+        return {"status": "non_autorise", "authorized": False}
+    status = "ok" if value else ("invalide" if raw else "absent")
+    return {"status": status, "authorized": True, **({"value": value} if value else {})}
+
+
+def employee_values(employee: Employee, current: tuple[Assignment, Site] | None, *, blood: bool = False) -> dict[str, str]:
+    """Champs du badge lus dans la fiche employé et son affectation active. Le groupe sanguin
+    n'y figure que si son affichage est autorisé (blood=True) et qu'il est renseigné."""
     data = _employee_data(employee)
     affectation = data.get("affectationCourante") if isinstance(data.get("affectationCourante"), dict) else {}
     assignment, site = current if current else (None, None)
@@ -157,6 +181,7 @@ def employee_values(employee: Employee, current: tuple[Assignment, Site] | None)
         "site": site_name,
         "site_code": str((site.indicatif if site else "") or site_name).strip(),
         "statut": str(data.get("statutProfessionnel") or data.get("categorie") or data.get("statut") or employee.status or "").strip(),
+        **({"groupe_sanguin": value} if blood and (value := blood_group_of(employee)) else {}),
     }
 
 
@@ -239,7 +264,14 @@ def _clean_settings(raw: dict[str, Any]) -> dict[str, Any]:
     data["sheet_margin_mm"] = badge_design._number(raw.get("sheet_margin_mm"), 5, 30, 10)
     data["sheet_gap_mm"] = badge_design._number(raw.get("sheet_gap_mm"), 0, 20, 4)
     data["crop_marks"] = bool(raw.get("crop_marks", True))
+    reference = " ".join(str(raw.get("blood_group_authorization") or "").split())[:200]
+    data["blood_group_authorization"] = reference
+    data["show_blood_group"] = bool(raw.get("show_blood_group")) and len(reference) >= 3
     return data
+
+
+def blood_allowed(db: Session, society: str | None) -> bool:
+    return bool(load_settings(db, society)["show_blood_group"])
 
 
 def load_settings(db: Session, society: str | None) -> dict[str, Any]:
@@ -278,7 +310,28 @@ def ensure_reference_template(db: Session) -> BadgeTemplate:
         except IntegrityError:
             db.rollback()
         template = db.execute(stmt).scalar_one()
+    if template.version < badge_design.REFERENCE_VERSION:
+        _upgrade_reference(db, template)
     return template
+
+
+def _upgrade_reference(db: Session, template: BadgeTemplate) -> None:
+    """Le modèle système n'est pas modifiable par les utilisateurs : sa maquette suit celle du
+    code. Les badges déjà émis gardent la leur (instantané) ; seuls les NOUVEAUX badges émis
+    avec ce modèle en profitent. Tracé dans l'historique."""
+    design = badge_design.reference_design()
+    previous = template.version
+    template.design, template.width_mm, template.height_mm = design, design["width"], design["height"]
+    template.version = badge_design.REFERENCE_VERSION
+    template.updated_by = "système"
+    db.add(BadgeEvent(action="MODELE_MODIFIE", template_id=template.id, society=None, username="système",
+                      label=f"Modèle « {template.name} » mis à jour (version {previous} → {template.version}) : élément « Groupe sanguin », masqué tant que son affichage n'est pas autorisé",
+                      details={"from": previous, "to": template.version}))
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _template_or_404(db: Session, user: User, template_id: int) -> BadgeTemplate:
@@ -442,11 +495,22 @@ def _expired(badge: EmployeeBadge) -> bool:
     return bool(badge.valid_until and badge.valid_until < date.today())
 
 
-def _badge_out(badge: EmployeeBadge, *, detail: bool = False) -> dict[str, Any]:
+def _snapshot_values(badge: EmployeeBadge, blood: bool) -> dict[str, Any]:
+    """Valeurs figées à l'émission. Le groupe sanguin éventuellement figé n'est restitué que si
+    son affichage est encore autorisé : un retrait d'autorisation le masque aussi en réimpression."""
+    snapshot = badge.snapshot if isinstance(badge.snapshot, dict) else {}
+    values = dict(snapshot.get("values") or {})
+    if not blood:
+        values.pop("groupe_sanguin", None)
+    return values
+
+
+def _badge_out(badge: EmployeeBadge, *, detail: bool = False, blood: bool = False) -> dict[str, Any]:
     snapshot = badge.snapshot if isinstance(badge.snapshot, dict) else {}
     out = {"id": badge.id, "number": badge.number, "employee_id": badge.employee_id, "status": badge.status,
            "expired": _expired(badge), "society": badge.society, "template_id": badge.template_id, "template_name": badge.template_name,
-           "values": snapshot.get("values") or {}, "has_photo": badge.photo is not None,
+           "values": _snapshot_values(badge, blood), "has_photo": badge.photo is not None, "page_count": len((badge.design or {}).get("pages") or []) or 1,
+           "width_mm": badge.width_mm, "height_mm": badge.height_mm,
            "issued_at": badge.issued_at, "issued_by": badge.issued_by, "valid_until": badge.valid_until,
            "revoked_at": badge.revoked_at, "revoked_by": badge.revoked_by, "revoke_reason": badge.revoke_reason,
            "print_count": badge.print_count, "last_printed_at": badge.last_printed_at}
@@ -455,9 +519,9 @@ def _badge_out(badge: EmployeeBadge, *, detail: bool = False) -> dict[str, Any]:
     return out
 
 
-def _item(badge: EmployeeBadge) -> badge_pdf.BadgeItem:
+def _item(badge: EmployeeBadge, blood: bool = False) -> badge_pdf.BadgeItem:
     snapshot = badge.snapshot if isinstance(badge.snapshot, dict) else {}
-    return badge_pdf.BadgeItem(design=badge.design, values=snapshot.get("values") or {}, photo=badge.photo,
+    return badge_pdf.BadgeItem(design=badge.design, values=_snapshot_values(badge, blood), photo=badge.photo,
                                crop=snapshot.get("crop"), qr=badge_design.qr_matrix(snapshot.get("qr_url") or ""))
 
 
@@ -487,7 +551,7 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
     # Verrou de la fiche (PostgreSQL) : deux émissions simultanées ne laissent pas deux badges actifs.
     db.execute(select(Employee.id).where(Employee.id == employee.id).with_for_update())
     current = _current_sites(db, [employee.id]).get(employee.id)
-    values = employee_values(employee, current)
+    values = employee_values(employee, current, blood=options["show_blood_group"])
     problems = unprintable_fields(values)
     if problems:
         raise HTTPException(status_code=409, detail="Caractères non imprimables sur le badge (alphabet non latin) : " + ", ".join(problems)
@@ -511,7 +575,8 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
     values.update(numero=badge.number, date_emission=today.strftime("%d/%m/%Y"),
                   validite=valid_until.strftime("%d/%m/%Y") if valid_until else "")
     badge.snapshot = {"values": values, "crop": badge_design.clean_crop(crop), "qr_url": _qr_url(request, employee, badge.id),
-                      "site_id": current[1].id if current else None, "template_version": template.version}
+                      "site_id": current[1].id if current else None, "template_version": template.version,
+                      "blood_group_shown": "groupe_sanguin" in values}
     _set_public_badge_state(employee, True)
     _log(db, user, request, "EMISSION", f"Badge {badge.number} émis pour {values['nom_complet']} ({values['matricule']})", badge=badge,
          details={"number": badge.number, "template": template.name, "replaced": [row.number for row in replaced]})
@@ -565,10 +630,23 @@ def _active_badges(db: Session, employee_ids: list[int]) -> dict[int, EmployeeBa
     return result
 
 
-def _employee_row(employee: Employee, current: tuple[Assignment, Site] | None, badge: EmployeeBadge | None) -> dict[str, Any]:
-    values = employee_values(employee, current)
+class _BloodPolicy:
+    """Autorisation d'affichage du groupe sanguin, lue une fois par société et par requête."""
+
+    def __init__(self, db: Session) -> None:
+        self.db, self.cache = db, {}
+
+    def __call__(self, society: str | None) -> bool:
+        key = _society_key(society)
+        if key not in self.cache:
+            self.cache[key] = blood_allowed(self.db, society)
+        return self.cache[key]
+
+
+def _employee_row(employee: Employee, current: tuple[Assignment, Site] | None, badge: EmployeeBadge | None, *, blood: bool = False) -> dict[str, Any]:
+    values = employee_values(employee, current, blood=blood)
     return {"id": employee.id, **values, "employee_status": employee.status, "unprintable": unprintable_fields(values),
-            "has_photo": bool(_photo_value(employee)), "badge": _badge_out(badge) if badge else None}
+            "has_photo": bool(_photo_value(employee)), "badge": _badge_out(badge, blood=blood) if badge else None}
 
 
 def _is_sortant(employee: Employee) -> bool:
@@ -606,9 +684,32 @@ def dashboard(society: str | None = Query(None, max_length=150), db: Session = D
     }
 
 
+@router.get("/employees/facets")
+def badge_employee_facets(society: str | None = Query(None, max_length=150), db: Session = Depends(get_db),
+                          user: User = Depends(current_user)) -> dict[str, Any]:
+    """Valeurs proposées par les filtres (sociétés, sites, fonctions) du périmètre de l'utilisateur."""
+    _access(user)
+    employees = [row for row in _scoped_employees(db, user, society) if not _is_sortant(row)]
+    sites = _current_sites(db, [row.id for row in employees])
+    societies, site_rows, functions = set(), {}, set()
+    for employee in employees:
+        current = sites.get(employee.id)
+        values = employee_values(employee, current)
+        if values["societe"]:
+            societies.add(values["societe"])
+        if current:
+            site_rows[current[1].id] = {"id": current[1].id, "name": current[1].name or "", "code": current[1].indicatif or ""}
+        if values["fonction"]:
+            functions.add(values["fonction"])
+    return {"societies": sorted(societies, key=str.upper),
+            "sites": sorted(site_rows.values(), key=lambda row: (row["code"] or row["name"]).upper()),
+            "functions": sorted(functions, key=str.upper)}
+
+
 @router.get("/employees")
 def badge_employees(society: str | None = Query(None, max_length=150), q: str | None = Query(None, max_length=120),
                     state: str = Query("all", max_length=20), site_id: int | None = Query(None, ge=1),
+                    fonction: str | None = Query(None, max_length=150),
                     page: int = 1, page_size: int = 50,
                     db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Employés (hors sortants) avec l'état de leur badge."""
@@ -616,13 +717,16 @@ def badge_employees(society: str | None = Query(None, max_length=150), q: str | 
     employees = [row for row in _scoped_employees(db, user, society) if not _is_sortant(row)]
     sites = _current_sites(db, [row.id for row in employees])
     badges = _active_badges(db, [row.id for row in employees])
-    needle = _society_key(q)
+    needle, wanted_function = _society_key(q), _society_key(fonction)
+    blood = _BloodPolicy(db)
     rows = []
     for employee in employees:
         current, badge = sites.get(employee.id), badges.get(employee.id)
         if site_id and (not current or current[1].id != site_id):
             continue
-        row = _employee_row(employee, current, badge)
+        row = _employee_row(employee, current, badge, blood=blood(employee.society))
+        if wanted_function and _society_key(row["fonction"]) != wanted_function:
+            continue
         if needle and needle not in _society_key(" ".join((row["nom"], row["prenom"], row["matricule"], row["fonction"], row["site"], row["site_code"]))):
             continue
         if ((state == "with" and not badge) or (state == "without" and badge) or (state == "no_photo" and row["has_photo"])
@@ -642,9 +746,11 @@ def badge_employee(employee_id: int, request: Request, db: Session = Depends(get
     history = db.execute(select(EmployeeBadge).where(EmployeeBadge.employee_id == employee.id).order_by(EmployeeBadge.id.desc())).scalars().all()
     active = next((row for row in history if row.status == STATUS_ACTIVE), None)
     badge_settings = load_settings(db, employee.society)
-    return {**_employee_row(employee, current, active), "qr": badge_design.qr_matrix(_qr_url(request, employee)),
-            "default_template_id": default_template(db, employee.society).id, "badges": [_badge_out(row) for row in history],
-            "settings": badge_settings, "can_issue": not _is_sortant(employee), "rights": badge_rights(db, user)}
+    blood = badge_settings["show_blood_group"]
+    return {**_employee_row(employee, current, active, blood=blood), "qr": badge_design.qr_matrix(_qr_url(request, employee)),
+            "default_template_id": default_template(db, employee.society).id, "badges": [_badge_out(row, blood=blood) for row in history],
+            "settings": badge_settings, "can_issue": not _is_sortant(employee), "rights": badge_rights(db, user),
+            "blood_group": blood_group_state(employee, badge_settings)}
 
 
 @router.get("/employees/{employee_id}/photo")
@@ -666,7 +772,7 @@ def issue(payload: IssueIn, request: Request, db: Session = Depends(get_db), use
         raise HTTPException(status_code=409, detail="Ce modèle est archivé.")
     badge = issue_badge(db, user, request, employee, template, crop=payload.crop, valid_until=payload.valid_until)
     db.commit()
-    return _badge_out(badge, detail=True)
+    return _badge_out(badge, detail=True, blood=blood_allowed(db, badge.society))
 
 
 @router.post("/issue-batch")
@@ -765,12 +871,17 @@ def put_settings(payload: SettingsIn, request: Request, db: Session = Depends(ge
     society = _template_society(user, payload.society)
     scope = society or "*"
     data = _clean_settings(payload.data)
+    before = load_settings(db, society)["show_blood_group"]
     row = db.execute(select(BadgeSettings).where(BadgeSettings.scope == scope)).scalar_one_or_none()
     if row is None:
         db.add(BadgeSettings(scope=scope, data=data, updated_by=user.username))
     else:
         row.data, row.updated_by = data, user.username
-    _log(db, user, request, "PARAMETRES", f"Paramètres des badges modifiés ({society or 'toutes sociétés'})", society=society, details=data)
+    label = f"Paramètres des badges modifiés ({society or 'toutes sociétés'})"
+    if data["show_blood_group"] != before:
+        label += (f" — affichage du groupe sanguin AUTORISÉ (référence : {data['blood_group_authorization']})" if data["show_blood_group"]
+                  else " — affichage du groupe sanguin désactivé")
+    _log(db, user, request, "PARAMETRES", label, society=society, details=data)
     db.commit()
     return {"society": society, "data": load_settings(db, society)}
 
@@ -815,7 +926,8 @@ def preview_pdf(payload: PreviewIn, request: Request, db: Session = Depends(get_
     values, photo, qr = dict(SAMPLE_VALUES), None, badge_design.qr_matrix("https://drh.irongs.com/public/badge/specimen")
     if payload.employee_id:
         employee = _ensure_employee_allowed(db, user, payload.employee_id)
-        values = {**SAMPLE_VALUES, **employee_values(employee, _current_sites(db, [employee.id]).get(employee.id))}
+        values = {key: value for key, value in SAMPLE_VALUES.items() if key != "groupe_sanguin"}
+        values.update(employee_values(employee, _current_sites(db, [employee.id]).get(employee.id), blood=blood_allowed(db, employee.society)))
         photo = employee_photo(db, employee, load_settings(db, employee.society)["photo_source"])
         qr = badge_design.qr_matrix(_qr_url(request, employee))
     content = _specimen([badge_pdf.BadgeItem(design=design, values=values, photo=photo, crop=badge_design.clean_crop(payload.crop), qr=qr)])
@@ -833,7 +945,8 @@ def print_pdf(payload: PrintIn, request: Request, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="Badges non imprimables (révoqués ou remplacés) : " + ", ".join(str(n) for n in blocked))
     options = load_settings(db, badges[0].society)
     layout = payload.layout if payload.layout in ("card", "a4") else options["print_layout"]
-    items = [_item(badge) for badge in badges]
+    blood = _BloodPolicy(db)
+    items = [_item(badge, blood(badge.society)) for badge in badges]
     title = f"Badge {badges[0].number}" if len(badges) == 1 else f"Badges ({len(badges)})"
     if layout == "a4":
         content = badge_pdf.render_sheets(items, margin_mm=options["sheet_margin_mm"], gap_mm=options["sheet_gap_mm"],
@@ -855,7 +968,8 @@ def print_pdf(payload: PrintIn, request: Request, db: Session = Depends(get_db),
 @router.get("/{badge_id}")
 def get_badge(badge_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     _access(user)
-    return _badge_out(_badge_or_404(db, user, badge_id), detail=True)
+    badge = _badge_or_404(db, user, badge_id)
+    return _badge_out(badge, detail=True, blood=blood_allowed(db, badge.society))
 
 
 @router.get("/{badge_id}/photo")

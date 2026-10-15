@@ -26,7 +26,14 @@ FIELDS = {
     "validite": "Fin de validité",
 }
 FONTS = ("Helvetica", "Times", "Courier")
-ELEMENT_TYPES = ("text", "photo", "qr", "image", "shape", "line")
+ELEMENT_TYPES = ("text", "photo", "qr", "image", "shape", "line", "blood")
+
+# Groupe sanguin : donnée médicale DÉCLARATIVE de la fiche employé (groupeSanguin). Jamais
+# déduite : une valeur hors de ces huit groupes est ignorée. Le moins est le signe typographique
+# U+2212, dessiné avec la police embarquée comme les autres groupes (même rendu pour les huit).
+BLOOD_GROUPS = ("O+", "O\u2212", "A+", "A\u2212", "B+", "B\u2212", "AB+", "AB\u2212")
+BLOOD_CAPTION = "GROUPE SANGUIN"
+_BLOOD_RE = re.compile(r"^(AB|A|B|O|0)\s*(\+|-|\u2212|\u2013|\u2014|POS(?:ITIF)?|NEG(?:ATIF)?)$")
 SHAPES = ("rect", "ellipse", "triangle", "polygon", "path")
 MAX_ELEMENTS = 150
 MAX_PAGES = 2
@@ -41,6 +48,19 @@ _FIELD_RE = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
 
 class DesignError(ValueError):
     pass
+
+
+def normalize_blood_group(raw: Any) -> str:
+    """« AB- », « ab − », « O pos », « 0+ » (zéro saisi pour O) → forme officielle, sinon ""."""
+    text = re.sub(r"\s+", " ", str(raw or "").strip().upper().replace("É", "E"))
+    match = _BLOOD_RE.match(text)
+    if not match:
+        return ""
+    group = "O" if match.group(1) == "0" else match.group(1)
+    return group + ("+" if match.group(2).startswith(("+", "POS")) else "\u2212")
+
+
+REFERENCE_VERSION = 2               # 2 : groupe sanguin (masqué tant que son affichage n'est pas autorisé)
 
 
 def reference_design() -> dict[str, Any]:
@@ -74,6 +94,11 @@ def reference_design() -> dict[str, Any]:
          "x": 3, "y": 53.2, "w": 48, "h": 4.2, "size": 9, "color": BLACK,
          "align": "center", "uppercase": True, "autoFit": True},
         {"id": "qr", "type": "qr", "name": "QR code", "x": 19.65, "y": 58.6, "w": 14.7, "h": 14.7, "color": BLACK},
+        # À gauche du QR, sur sa bande : au-dessus, l'espace entre matricule et QR (1,2 mm) ne le
+        # permet pas sans réduire le QR sous 12 mm. Masqué sur le badge si non autorisé ou absent.
+        {"id": "groupe_sanguin", "type": "blood", "name": "Groupe sanguin", "x": 4.2, "y": 59.4, "w": 13.6, "h": 12.4,
+         "size": 22, "color": BLACK, "background": YELLOW, "stroke": BLACK, "strokeWidth": 0.3, "radius": 1.2,
+         "align": "center", "caption": BLOOD_CAPTION, "captionSize": 4.6},
         {"id": "bandeau_bas", "type": "shape", "name": "Bandeau jaune", "shape": "path",
          "path": [["M", 0, 0.5], ["C", 0, 0.44, 0.03, 0.403, 0.07, 0.403], ["L", 0.66, 0.403],
                   ["C", 0.8, 0.403, 0.88, 0.1, 1, 0], ["L", 1, 1], ["L", 0, 1], ["Z"]],
@@ -210,6 +235,16 @@ def _element(raw: Any, index: int, used: set[str]) -> dict[str, Any] | None:
                        radius=_number(raw.get("radius"), 0, 100, 0))
     elif kind == "qr":
         element.update(color=_color(raw.get("color"), BLACK), background=_color(raw.get("background"), "", allow_none=True))
+    elif kind == "blood":
+        element.update(
+            size=_number(raw.get("size"), 4, 160, 22), color=_color(raw.get("color"), BLACK),
+            background=_color(raw.get("background"), YELLOW, allow_none="background" in raw),
+            stroke=_color(raw.get("stroke"), "", allow_none=True), strokeWidth=_number(raw.get("strokeWidth"), 0, 5, 0),
+            radius=_number(raw.get("radius"), 0, 100, 0),
+            align=raw.get("align") if raw.get("align") in ("left", "center", "right") else "center",
+            caption=str(raw.get("caption") if raw.get("caption") is not None else BLOOD_CAPTION)[:30],
+            captionSize=_number(raw.get("captionSize"), 2, 40, 4.6),
+        )
     return element
 
 
@@ -339,6 +374,14 @@ def design_warnings(design: dict[str, Any]) -> list[str]:
                 light, dark = _luminance(element.get("background") or page["background"]), _luminance(element["color"])
                 if dark > light or (light + 0.05) / (dark + 0.05) < QR_MIN_CONTRAST:
                     warnings.append(f"QR « {label} » : contraste insuffisant, utilisez un QR sombre sur fond clair.")
+            elif element["type"] == "blood":
+                light, dark = _luminance(element.get("background") or page["background"]), _luminance(element["color"])
+                if (max(light, dark) + 0.05) / (min(light, dark) + 0.05) < QR_MIN_CONTRAST:
+                    warnings.append(f"Groupe sanguin « {label} » : contraste insuffisant entre le texte et son fond.")
+                if element["x"] < 0 or element["y"] < 0 or element["x"] + element["w"] > width or element["y"] + element["h"] > height:
+                    warnings.append(f"Groupe sanguin « {label} » : il dépasse de la carte.")
+                if unprintable(element.get("caption") or ""):
+                    warnings.append(f"Groupe sanguin « {label} » : légende avec des caractères non imprimables.")
             elif element["type"] == "text":
                 bad = unprintable(_FIELD_RE.sub("", element["text"]))
                 if bad:
