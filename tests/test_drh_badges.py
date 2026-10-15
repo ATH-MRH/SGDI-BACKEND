@@ -597,7 +597,7 @@ def test_kill_switch_disables_the_whole_api_without_touching_data(client, db, dr
 def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     import sqlite3
 
-    from tests.test_attendance_official_shift_migration import _alembic, _ok
+    from tests.test_attendance_official_shift_migration import HEAD, _alembic, _ok
 
     path = tmp_path / "badges.db"
     url = f"sqlite:///{path}"
@@ -605,7 +605,7 @@ def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     tables = lambda: {row[0] for row in sqlite3.connect(path).execute("SELECT name FROM sqlite_master WHERE type='table'")}  # noqa: E731
     version = lambda: sqlite3.connect(path).execute("SELECT version_num FROM alembic_version").fetchone()[0]  # noqa: E731
     badge_tables = {"badge_templates", "employee_badges", "badge_events", "badge_settings"}
-    assert badge_tables <= tables() and version() == "20261015_0002"
+    assert badge_tables <= tables() and version() == HEAD
 
     _ok(_alembic(url, "downgrade", "20261016_0001"))                                  # studio jamais utilisé : tables retirées
     assert not badge_tables & tables() and version() == "20261016_0001"
@@ -618,4 +618,4 @@ def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     assert badge_tables <= tables() and version() == "20261016_0001"
     assert sqlite3.connect(path).execute("SELECT label FROM badge_events").fetchall() == [("Badge BDG-1 émis",)]
     _ok(_alembic(url, "upgrade", "head"))                                              # la remontée retrouve les tables telles quelles
-    assert sqlite3.connect(path).execute("SELECT count(*) FROM badge_events").fetchone()[0] == 1 and version() == "20261015_0002"
+    assert sqlite3.connect(path).execute("SELECT count(*) FROM badge_events").fetchone()[0] == 1 and version() == HEAD
