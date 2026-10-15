@@ -78,10 +78,22 @@ def confirm(session_id: str, request: Request, db: Session = Depends(get_db), us
     return importer.confirm(db, user, session_id, request)
 
 
+@router.post('/{session_id}/prepare')
+def prepare(session_id: str, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require(user)
+    session = importer.get_session(db, user, session_id, ('previewed','prepared'))
+    if session.status == 'prepared':
+        return session.result
+    _effective_society_filter(user, session.workbook['society'])
+    # Relire les valeurs et le statut des candidats avant l'enregistrement du snapshot.
+    importer.preview(db, user, session, session.plan['config'])
+    return importer.oneoff.save_preparation(db, user, session, request)
+
+
 @router.get('/{session_id}/result')
 def result(session_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require(user)
-    session = importer.get_session(db, user, session_id, ('processing','completed','failed'))
+    session = importer.get_session(db, user, session_id, ('processing','completed','failed','prepared'))
     return {'status': session.status, **(session.result or {'rows': [], 'counts': {}})}
 
 
@@ -96,13 +108,17 @@ def cancel(session_id: str, db: Session = Depends(get_db), user: User = Depends(
 @router.get('/{session_id}/report')
 def report(session_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require(user)
-    session = importer.get_session(db, user, session_id, ('previewed','processing','completed','failed'))
+    session = importer.get_session(db, user, session_id, ('previewed','processing','completed','failed','prepared'))
     rows = (session.result or (session.plan or {}).get('preview') or {}).get('rows', [])
     out = StringIO()
     writer = csv.writer(out, delimiter=';')
-    writer.writerow(['Ligne','Candidat','Statut','Motif','Contrat','Numéro'])
+    preparation_only = bool((session.result or (session.plan or {}).get('preview') or {}).get('preparation_only'))
+    writer.writerow(['Ligne','Candidat','Statut','Motif','Champs manquants'] + [importer.FIELDS[k] for k in importer.oneoff.VALUE_FIELDS] if preparation_only else ['Ligne','Candidat','Statut','Motif','Contrat','Numéro'])
     for row in rows:
         values = [str(row.get(key) or '') for key in ('row','candidate','status','reason','contract_id','reference')]
+        if preparation_only:
+            values = [str(row.get(k) or '') for k in ('row','candidate','status','reason')] + [', '.join(row.get('missing_fields', []))]
+            values += ['Non renseigné' if row['values'].get(k) is None else str(row['values'][k]) for k in importer.oneoff.VALUE_FIELDS]
         writer.writerow(["'" + v if v.lstrip().startswith(('=','+','-','@')) else v for v in values])
     return Response('\ufeff' + out.getvalue(), media_type='text/csv; charset=utf-8', headers={
         'Content-Disposition': 'attachment; filename="rapport-contractualisation.csv"', 'Cache-Control': 'no-store'})
