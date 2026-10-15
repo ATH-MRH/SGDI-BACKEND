@@ -1470,6 +1470,22 @@ table{{width:100%;border-collapse:collapse}}
     return HTMLResponse(content, headers={"Cache-Control": "no-cache, max-age=0"})
 
 
+_EVENTS_TABLES_CACHE: dict[str, list[str]] = {}
+
+
+def _events_tables_present(db, tables: list[str]) -> list[str]:
+    """Tables de la liste qui existent et portent updated_at et created_at, dans le même ordre."""
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(db.get_bind())
+    existing = set(inspector.get_table_names())
+    present = []
+    for table_name in tables:
+        if table_name in existing and {"updated_at", "created_at"} <= {c["name"] for c in inspector.get_columns(table_name)}:
+            present.append(table_name)
+    return present
+
+
 def _events_signature() -> str:
     watched_tables = [
         "sgdi_records",
@@ -1488,7 +1504,6 @@ def _events_signature() -> str:
         "employee_equipment",
         "material_assignments",
         "clients",
-        "prospects",
         "invoices",
         "payments",
         "cash_entries",
@@ -1514,16 +1529,26 @@ def _events_signature() -> str:
         return "|".join(parts)
 
     with SessionLocal() as db:
-        # Combine les 23 requêtes en un seul aller-retour réseau (UNION ALL) au lieu d'une
+        # Seules les tables présentes, avec updated_at et created_at, entrent dans la requête : une
+        # table absente faisait échouer la requête groupée à chaque appel (erreur PostgreSQL), puis
+        # chaque table était relue une à une. Liste établie une fois par processus.
+        present = _EVENTS_TABLES_CACHE.get("tables")
+        if present is None:
+            present = _events_tables_present(db, watched_tables)
+            _EVENTS_TABLES_CACHE["tables"] = present
+        # Combine les requêtes en un seul aller-retour réseau (UNION ALL) au lieu d'une
         # requête séquentielle par table — c'était la source dominante de latence de
         # /api/irongs/db, appelé à chaque connexion et très fréquemment pendant l'usage.
         union_sql = " UNION ALL ".join(
             f"SELECT '{t}' AS t, COUNT(*) AS c, MAX(updated_at) AS u, MAX(created_at) AS r FROM {t}"
-            for t in watched_tables
+            for t in present
         )
+        if not union_sql:
+            return ""
         try:
             rows = {row["t"]: row for row in db.execute(text(union_sql)).mappings().all()}
         except Exception:
+            _EVENTS_TABLES_CACHE.pop("tables", None)          # schéma changé : liste à refaire
             return _fallback_per_table(db)
         parts = [
             f"{table_name}:{row['c']}:{row['u'] or ''}:{row['r'] or ''}"

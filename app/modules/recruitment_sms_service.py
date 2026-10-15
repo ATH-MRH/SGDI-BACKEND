@@ -127,15 +127,24 @@ def identity(db: Session, secret: str, token: str, *, now: int | None = None, lo
     return row
 
 
-def gateway_poll(db: Session, secret: str, *, now: int | None = None) -> dict:
-    now = int(time.time()) if now is None else now
+def _touch_gateway(db: Session, now: int) -> None:
+    """Signal de vie de la passerelle (ligne unique id=1) : mise à jour d'abord, insertion la toute
+    première fois seulement. Insérer à chaque passage puis rattraper la violation de clé laissait
+    une erreur dans le journal PostgreSQL à chaque appel, sans rien dupliquer."""
+    if db.execute(update(Gateway).where(Gateway.id == 1).values(last_seen=now)).rowcount:
+        return
     try:
         with db.begin_nested():
             db.add(Gateway(id=1, last_seen=now))
             db.flush()
     except IntegrityError:
-        pass
-    db.execute(update(Gateway).where(Gateway.id == 1).values(last_seen=now))
+        # Premier passage simultané : l'autre appel vient de créer la ligne.
+        db.execute(update(Gateway).where(Gateway.id == 1).values(last_seen=now))
+
+
+def gateway_poll(db: Session, secret: str, *, now: int | None = None) -> dict:
+    now = int(time.time()) if now is None else now
+    _touch_gateway(db, now)
     row = db.scalar(select(Challenge).where(Challenge.expires_at > now, Challenge.send_attempts < 3,
                     ((Challenge.status == 'queued') | ((Challenge.status == 'leased') & (Challenge.lease_until < now))))
                     .order_by(Challenge.created_at).with_for_update(skip_locked=True).limit(1))
@@ -177,13 +186,7 @@ def delivery_state(db: Session, challenge_id: str) -> dict:
 
 def mark_gateway_healthy(db: Session, *, now: int | None = None):
     now = int(time.time()) if now is None else now
-    try:
-        with db.begin_nested():
-            db.add(Gateway(id=1, last_seen=now))
-            db.flush()
-    except IntegrityError:
-        pass
-    db.execute(update(Gateway).where(Gateway.id == 1).values(last_seen=now))
+    _touch_gateway(db, now)
     db.commit()
 
 
