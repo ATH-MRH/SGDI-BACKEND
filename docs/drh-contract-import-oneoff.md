@@ -1,26 +1,25 @@
-# Dérogation exceptionnelle : préparation du lot de 76 candidats
+# Dérogation exceptionnelle : préparation de 75 candidats confirmés
 
-Branche : `fix/drh-contract-import-oneoff-bypass`, basée sur le lot Excel de la PR #25.
+Périmètre : société **IRON GLOBAL SOLUTION**, 75 identités et dates de naissance rapprochées le 15/10/2026. `CANDIDATE_IDS` est une liste littérale immuable de 75 IDs (2309 à 2383 inclus, sans calcul d’intervalle). `CANDIDATE_ROWS` est une correspondance immuable entre les lignes originales du fichier filtré et ces IDs. Aucun code ni matricule n’est généré dans le classeur ou en préparation.
 
-Périmètre observé en lecture seule le 14/10/2026 dans DRH → Contrats à établir : les 76 identifiants explicites 2309 à 2384, société IRON GLOBAL SOLUTION, transmission affichée le 11/10/2026. La liste est écrite littéralement dans `contract_import_oneoff.py` : aucun ciblage dynamique par compteur, société seule, date seule ou intervalle.
+Exclusions : dossier **2384 / BELARBI BABOUA KARIM** (ligne 95, non confirmé), **DJOUHRI MOHAMED MILOUD** (ligne 7, identité insuffisante), les 25 lignes hors périmètre et tout autre candidat.
 
-Le premier aperçu qui contient exactement ces 76 dossiers lie définitivement la dérogation à son `session_id` et à l’empreinte SHA-256 du classeur. Une table dédiée, avec clé de lot primaire unique et session unique, conserve cette liaison et le rapport au-delà de la purge des sessions d’import. Aucun paramètre de bypass n’est accepté dans les requêtes. Une autre session, même avec les mêmes candidats, suit la validation normale et ne reçoit pas la dérogation. Les autres candidats suivent les règles habituelles.
+Fichier autorisé : `liste_A_matchs_certains_75_sur_76.xlsx`, SHA-256 :
+`e5c2847053c66c8fab3af154abde6aff259d1ce9b0c9609292e0bcc97fd41d62`.
+Le classeur personnel n’est pas versionné. Toute modification de ses octets, y compris une réécriture par Excel, produit un autre fichier qui ne reçoit pas la dérogation. Les numéros de lignes originaux ont été préservés dans le fichier filtré.
 
-Seules les cellules vides sont tolérées pour cette préparation. Les valeurs manquantes restent `null` : pas de salaire à zéro, type, période d’essai, date de fin calculée, modèle, banque ou client ajoutés par défaut. Les valeurs communes explicitement renseignées restent utilisables selon la priorité choisie. Les valeurs présentes restent validées, notamment dates, Client/Site DC, modèle actif compatible, salaire et durée. Les correspondances ambiguës, doublons et candidats déjà contractualisés restent bloqués.
+## Liaison de session
 
-Dans Vérification et Résultat :
+Aucune session de production n’est créée par cette PR. Lors du premier téléversement de ces octets dans cette société par un compte déjà autorisé, une ligne unique de `drh_contract_import_oneoff_grants` lie le lot `regularisation-exceptionnelle-igs-20261015-75` au `session_id` privé généré par l’import. La liaison est atomique, persistante, auditée et non réattribuable, même après expiration ou annulation. Aucun paramètre client ne permet d’activer la dérogation. Une autre session ou un autre fichier conserve les validations normales et ne peut enregistrer cette préparation exceptionnelle. Aucun renouvellement automatique n’est prévu.
 
-- « Dérogation exceptionnelle appliquée à ce lot uniquement. »
-- « Non renseigné » pour chaque valeur vide ; « Préparé exceptionnellement » pour les lignes préparables.
-- Compteurs : total, complètes selon les champs obligatoires habituels, préparées avec données obligatoires manquantes, lignes avec valeurs invalides.
-- « Enregistrer le lot préparé » remplace la création. `POST /api/drh/contracts/import/{session_id}/prepare` enregistre uniquement un snapshot et efface le classeur de session.
-- `POST …/confirm` refuse toute création pour une session dérogatoire ou contenant un des dossiers de cette liste, avant tout appel métier. Les futurs lots hors périmètre gardent le comportement normal.
-- Rapport CSV : champs manquants par ligne, valeurs présentes et « Non renseigné ». Aucun numéro de contrat fictif.
+Sur ce seul fichier et cette seule session, la correspondance des lignes déjà vérifiées utilise le manifeste figé ; les colonnes Nom et Prénom restent séparées et inchangées. Sélectionner la première feuille et mapper les données réellement souhaitées, notamment Date début vers la colonne I. Aucun besoin de créer ou renseigner des références dans la colonne MATRICULE vide. Toutes les 75 correspondances doivent être présentes et uniques. Les états actuels des candidats, décisions favorables, doublons et éventuels employés liés sont revérifiés avant sauvegarde.
 
-Audit : événement d’autorisation (compte, date UTC, session, liste des 76 candidats, motif « Régularisation exceptionnelle du lot importé »), puis une entrée par candidat avec ses champs manquants pour éviter la troncature du journal. Enregistrement final audité avec compteurs de créations tous égaux à zéro.
+## Préparation sans création
 
-Les modèles et formulaires manuels, les validateurs normaux, l’import candidats, la bibliothèque Client/Site DC, la sidebar et les permissions générales ne sont pas modifiés. Le corps de l’analyse normale `analyze()` reste identique ; la préparation exceptionnelle utilise un chemin séparé. La migration additive `20261014_0005` crée uniquement le journal de cette dérogation. Le test de tête Alembic est mis à jour pour cette seule migration ; les parcours SQLite upgrade/downgrade vérifient la préservation des affectations existantes. Aucun employé, contrat, document ou modification de dossier candidat n’est enregistré par le parcours exceptionnel.
+Seules les cellules vides sont tolérées : `null` dans la préparation, « Non renseigné » dans l’interface. Aucune valeur fictive, date de fin, salaire, modèle ou autre défaut n’est ajouté. Les données communes explicitement renseignées restent possibles. Toutes les valeurs présentes restent validées, en particulier les dates, Client/Site DC et modèles. Les erreurs de formules préexistantes ne sont pas des cellules vides et ne sont pas corrigées par ce lot.
 
-Tests : lot réel de 76 références avec toutes les valeurs contractuelles vides ; maintien de null ; invariance des dossiers et des compteurs Employee/Contract/GeneratedContract/Document ; audit des 76 candidats ; nouvelle session et nouveau lot normaux toujours bloqués si données obligatoires absentes ; valeurs invalides toujours bloquées ; refus de `/confirm` avant et après préparation ; rapport CSV ; interface ; suites normales d’import et de contractualisation.
+L’interface affiche « Dérogation exceptionnelle appliquée à ce lot uniquement. », « Préparé exceptionnellement », et les compteurs du lot. L’action « Enregistrer le lot préparé » conserve uniquement le snapshot et le rapport. `/confirm` refuse la création pour le fichier autorisé et la session dérogatoire, avant tout appel métier. Aucun Candidate, Contract, Employee, GeneratedContract ou Document n’est créé ou modifié par la préparation.
 
-La correction est préparée dans la branche locale. Elle n’est pas activée sur la base de production par ce travail : aucun merge ni déploiement. Le nombre réel de champs manquants du fichier sera mesuré et audité au premier aperçu autorisé ; la liste DRH seule ne contient pas les cellules de ce classeur.
+Audit : utilisateur, date/heure UTC, société, session, empreinte, liste exacte des IDs, motif « Régularisation exceptionnelle du lot importé », puis champs manquants et statut par candidat ; sauvegarde avec compteurs de créations à zéro. Le rapport CSV conserve les valeurs présentes et affiche les valeurs manquantes sans les inventer.
+
+Les formulaires manuels, validateurs normaux, import candidats, Client/Site DC, sidebar et permissions générales restent inchangés. La migration additive `20261014_0005` crée uniquement le journal de dérogation, sans données métier ni activation de session ; upgrade/downgrade testés. Le changement est livré par PR uniquement : aucun merge ni déploiement.

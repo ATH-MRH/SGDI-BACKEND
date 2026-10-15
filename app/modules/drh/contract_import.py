@@ -58,6 +58,7 @@ def upload(db, user, file_name, content, society):
         file_sha256=hashlib.sha256(content).hexdigest(), file_size=len(content), status='uploaded',
         workbook={**workbook, 'society': society}, expires_at=datetime.utcnow() + timedelta(minutes=excel.SESSION_TTL_MINUTES))
     db.add(session)
+    oneoff.bind_upload(db, user, session)
     db.commit()
     return {'session_id': session.public_id, **describe(workbook)}
 
@@ -134,7 +135,9 @@ def analyze(db, user, session, config):
         common = {k: v for k, v in config['common'].items() if k in FIELDS and k not in {'reference','code','phone','name','start_date','end_date'} and v is not None and str(v).strip()}
         merged = {**common, **{k: v for k, v in values.items() if v}} if config['precedence'] == 'excel' else {**values, **common}
         row = {'row': number, 'status': 'PRÊT', 'reason': '', 'candidate_id': None, 'candidate': '', 'values': merged}
-        matches = identify(candidates, values)
+        matches = oneoff.candidate_for_row(db, session, index, number, candidates)
+        if matches is None:
+            matches = identify(candidates, values)
         if len(matches) != 1:
             row.update(status='À VÉRIFIER' if matches else 'CANDIDAT INTROUVABLE', reason='Plusieurs candidats correspondent' if matches else 'Aucun candidat dans la société active')
         else:

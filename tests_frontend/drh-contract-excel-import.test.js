@@ -79,10 +79,10 @@ test('assistant responsive dans Chrome réel aux quatre étapes',{skip:!chrome||
 
 test('dérogation : préparation seulement, cellules null visibles et compteur du lot',async()=>{
   const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-oneoff';contractExcelImport.preview={total:76,complete:1,prepared_missing:75,blocked:0,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'Préparé exceptionnellement':76},rows:[{row:2,candidate:'CANDIDAT TEST',status:'Préparé exceptionnellement',values:{start_date:null,end_date:null,position:null,client_site:null,salary:null},missing_fields:['start_date','position'],required_missing_fields:['start_date','position']}]};renderContractExcelImport()`);
+  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-oneoff';contractExcelImport.preview={total:75,complete:1,prepared_missing:74,blocked:0,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'Préparé exceptionnellement':75},rows:[{row:2,candidate:'CANDIDAT TEST',status:'Préparé exceptionnellement',values:{start_date:null,end_date:null,position:null,client_site:null,salary:null},missing_fields:['start_date','position'],required_missing_fields:['start_date','position']}]};renderContractExcelImport()`);
   const text=h.dom.window.document.body.textContent;
   assert.match(text,/Dérogation exceptionnelle appliquée à ce lot uniquement/);
-  assert.match(text,/76 lignes.*1 complètes.*75 préparées avec données manquantes/s);
+  assert.match(text,/75 lignes.*1 complètes.*74 préparées avec données manquantes/s);
   assert.match(text,/Non renseigné/);
   assert.match(text,/Préparé exceptionnellement/);
   assert.match(text,/Enregistrer le lot préparé/);

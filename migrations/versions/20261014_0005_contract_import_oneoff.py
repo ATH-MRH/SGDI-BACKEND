@@ -1,4 +1,4 @@
-"""Journal persistant de la dérogation de préparation du lot Excel de 76 dossiers."""
+"""Journal persistant de la dérogation de préparation du lot Excel de 75 dossiers confirmés."""
 from alembic import op
 import sqlalchemy as sa
 
