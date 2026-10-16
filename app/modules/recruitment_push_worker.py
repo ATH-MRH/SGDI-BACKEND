@@ -100,9 +100,15 @@ def dispatch(db, *, now=None, notification_ids=None):
     if notification_ids is not None:
         query = query.where(Delivery.notification_id.in_(notification_ids))
     rows = db.scalars(query.limit(100).with_for_update(skip_locked=True)).all()
+    # Appareils relus et verrouillés en lecture jusqu'à la fin de l'envoi : un changement d'espace (qui ne touche
+    # que l'appareil) attend donc cet envoi, et un envoi suivant voit le nouvel espace. Plusieurs workers peuvent
+    # partager ce verrou ; la suppression et la désinscription attendent déjà sur les lignes de la file.
+    device_ids = {row.device_id for row in rows if row.device_id}
+    devices = {device.id: device for device in db.scalars(
+        select(Device).where(Device.id.in_(device_ids)).with_for_update(read=True).execution_options(populate_existing=True))} if device_ids else {}
     batch, selected = [], []
     for row in rows:
-        notification, device = db.get(Notification, row.notification_id), db.get(Device, row.device_id) if row.device_id else None
+        notification, device = db.get(Notification, row.notification_id), devices.get(row.device_id)
         if notification is None or not eligible(db, notification, device):
             row.state, row.error_code = 'skipped', 'unregistered_or_disabled'
             continue
