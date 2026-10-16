@@ -57,6 +57,19 @@ function fixtures(kind) {
   return { candidates, announcements };
 }
 
+// Données fictives du parcours par candidature, jamais envoyées à un serveur réel.
+function applicationFixtures(state){
+  const codes=['received','review','shortlisted','convocation','interview','decision','hiring_file','contract','signature','hired'];
+  const labels=['Réception','Examen du dossier','Présélection','Convocation','Entretien','Décision','Dossier d’embauche','Préparation du contrat','Signature','Recrutement effectif'];
+  const stages=codes.map((code,i)=>({code,label:labels[i]}));
+  const items=state.data.candidates.slice(0,10).map((candidate,i)=>({id:i+1,reference:`DEMO-${i+1}`,candidate,
+    kind:i%2?'spontaneous':'offer',title:candidate.desired_position||'Agent',society:candidate.society,received_at:candidate.created_at,
+    stage:codes[i],stage_label:labels[i],outcome:'pending',outcome_label:'En attente',outcome_communicated:false,
+    documents:1,missing_documents:0,unread_messages:0,assigned_to:'REC01',next_action:'Examiner le dossier',next_action_due:'2026-10-25',
+    visible_state:{code:'received',label:'Reçue'},contract_state:null}));
+  return {items,total:items.length,stages,outcomes:[{code:'pending',label:'En attente'}],
+    counters:[['new','Nouvelles candidatures'],['review','Dossiers à examiner'],['shortlisted','Présélections'],['interviews','Entretiens à venir'],['missing_documents','Pièces manquantes'],['decisions','Décisions en attente'],['contracts_prepare','Contrats à préparer'],['contracts_sign','Contrats à signer'],['hired','Recrutements finalisés']].map(([key,label],i)=>({key,label,count:i===4?0:1})),filters:{societies:[SECURITE,SOLUTION],offers:[],wilayas:['Alger'],recruiters:['REC01']}};
+}
 function startServer(state) {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
@@ -97,6 +110,17 @@ function startServer(state) {
         return json({ status: 'success', data: { candidate_id: item.id, society: item.society, already_transferred: false } });
       });
     }
+    if(url.pathname==='/api/drh/job-offers/workspace')return json(applicationFixtures(state));
+    if(/^\/api\/drh\/job-offers\/applications\/\d+$/.test(url.pathname)){
+      const item=applicationFixtures(state).items[0];
+      return json({...item,profile:item.candidate,dossier_state:{code:'review',label:'En cours d’étude'},documents:[{id:1,label:'CV',name:'cv-demo.pdf',mime_type:'application/pdf',size:1024,source:'candidature',received_at:item.received_at}],
+        document_requests:[],notes:[],history:[],interviews:[],other_applications:[],dossier_cv:null,contract:null,drh_transfer:null});
+    }
+    if(url.pathname.endsWith('/messages'))return json({items:[],can_reply:true});
+    if(['/api/drh/job-offers/contract-templates','/api/drh/job-offers/conversations','/api/drh/job-offers/tips','/api/drh/job-offers/companies'].includes(url.pathname))return json({items:[]});
+    if(url.pathname==='/api/drh/recruitment-retention')return json({generated_on:'2026-10-16',simulated:false,retention_months:24,dry_run:true,
+      counts:{declined_applications:0,declined_dossiers:0,inactive_accounts:0,departed_recruits:0,undated:0},
+      declined_applications:[],declined_dossiers:[],inactive_accounts:[],departed_recruits:[],undated:[]});
     if (url.pathname === '/api/irongs/positions') return json([]);
     // Annonces serveur (règles couvertes par tests/test_recruitment_jobs_api.py).
     if (url.pathname === '/api/drh/job-offers/meta') return json({ societies: [SECURITE, SOLUTION], contract_types: ['CDI', 'CDD', 'CTA', 'Stage', 'Apprentissage', 'Autre'], logos: [] });
@@ -126,7 +150,7 @@ function startServer(state) {
 function inspectLayout() {
   const width = document.documentElement.clientWidth;
   const visible = el => { const r = el.getBoundingClientRect(), s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
-  const scrollers = '.rec-tabs,.rec-chips,.recruit-nav,.dashboard-pipeline,.dashboard-table-wrap,.rec-table-sortable thead tr';
+  const scrollers = '.emploi-pipeline,.emploi-journey,.rec-tabs,.rec-chips,.recruit-nav,.dashboard-pipeline,.dashboard-table-wrap,.rec-table-sortable thead tr';
   const outside = [...document.querySelectorAll('#appView *')].filter(el => visible(el) && !el.closest(scrollers) && !el.closest('.hidden'))
     .filter(el => { const r = el.getBoundingClientRect(); return r.right > width + 1 || r.left < -1; })
     .map(el => `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]}`).slice(0, 5);
@@ -166,7 +190,7 @@ async function openApp(browser, base, announcements, width) {
   return { page, errors };
 }
 async function show(page, screen) {
-  await page.evaluate(section => document.querySelector(`.recruit-nav-btn[data-section="${section}"]`).click(), screen);
+  await page.evaluate(section => showRecruitSection(section), screen);
   await page.waitForFunction(() => !document.querySelector('.main>section:not(.hidden)[aria-busy="true"],.main>section:not(.hidden) [aria-busy="true"]') && !document.querySelector('.main>section:not(.hidden) .rec-skeleton-list'), { timeout: 10000 });
   await delay(60);
 }
@@ -204,7 +228,7 @@ for (const kind of ['many', 'empty']) {
           assert.equal(layout.tableScrolls, false, `${where} : tableau en défilement horizontal`);
           assert.ok(layout.primary.every(Boolean), `${where} : action principale hors écran`);
           assert.equal(layout.title, TITLES[screen], where);
-          assert.deepEqual(layout.activeNav, [screen], `${where} : une seule entrée de navigation active`);
+          assert.deepEqual(layout.activeNav, [screen === 'candidates' ? 'processing' : screen], `${where} : une seule entrée de navigation active`);
           if (layout.rowDisplay) assert.equal(layout.rowDisplay, width <= 600 ? 'grid' : 'table-row', `${where} : ${width <= 600 ? 'cards attendues' : 'tableau attendu'}`);
           if (kind === 'empty' && screen !== 'dashboard') {
             assert.ok(await page.$('.main>section:not(.hidden) .rec-empty-state'), `${where} : état vide attendu`);
@@ -454,3 +478,36 @@ test('Chrome réel — « Recruter » un dossier non ventilé : 1, 2, 4 ou 0 soc
 });
 function SECURITE_LABEL() { return SECURITE; }
 function SOLUTION_LABEL() { return SOLUTION; }
+
+
+test('Chrome réel — rubrique unifiée, pipeline, sept onglets du dossier et conservation', {skip:SKIP,timeout:120000},async()=>{
+  await withApp('many',['read','create','update'],async({browser,base,state})=>{
+    for(const width of [1440,1024,768,390]){
+      const {page,errors}=await openApp(browser,base,state.data.announcements,width);
+      await page.click('.recruit-nav-btn[data-section="processing"]');
+      await page.waitForSelector('.emploi-card');
+      assert.equal(await page.$$eval('.emploi-card',nodes=>nodes.length),10);
+      assert.equal(await page.$$eval('.emploi-column',nodes=>nodes.length),6);
+      const check=async name=>{
+        const layout=await page.evaluate(inspectLayout);
+        assert.ok(layout.scrollWidth<=width,`${name} ${width}: débordement global`);
+        assert.deepEqual(layout.outside,[],`${name} ${width}: contenu hors écran`);
+        assert.equal(layout.filterCollision,false,`${name} ${width}: collision de filtres`);
+        assert.equal(layout.headerCollision,false,`${name} ${width}: collision du bandeau`);
+      };
+      await check('pipeline');await shot(page,`pipeline-${width}`);
+      await page.evaluate(()=>{emploiState.mode='table';renderEmploi()});await check('tableau');
+      await page.evaluate(()=>openEmploiDossier(1));await page.waitForSelector('.emploi-journey');
+      for(const tab of ['summary','documents','processing','interviews','messages','notes','contract']){
+        await page.evaluate(tab=>emploiSetTab(tab),tab);await delay(80);await check(tab);
+        if(width===1440||width===390)await shot(page,`dossier-${tab}-${width}`);
+      }
+      for(const view of ['inbox','tips','companies']){
+        await page.evaluate(view=>emploiSetView(view),view);await delay(80);await check(view);
+      }
+      await page.evaluate(()=>showRecruitSection('retention'));await page.waitForSelector('.retention-mode');await check('conservation');
+      await shot(page,`conservation-${width}`);
+      assert.deepEqual(errors,[],`${width}: erreurs JS`);await page.close();
+    }
+  });
+});

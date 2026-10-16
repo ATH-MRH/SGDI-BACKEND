@@ -7,11 +7,11 @@ const source = fs.readFileSync(path.join(__dirname, "..", "app", "static", "recr
 
 test("module recrutement: navigation latérale complète", () => {
   assert.match(source, /data-section="dashboard"[^>]*>.*Tableau de bord/s);
-  assert.match(source, /data-section="candidates"[^>]*>.*Candidatures/s);
+  assert.match(source, /data-section="processing"[^>]*>.*Candidatures/s);
   assert.match(source, /data-section="interviews"[^>]*>.*Entretiens/s);
   assert.match(source, /data-section="announcements"[^>]*>.*Annonces recrutement/s);
-  assert.match(source, /data-section="processing"[^>]*>.*Traitement IRON Emploi/s);
-  assert.match(source, /data-section="reserve"[^>]*>.*Réserve/s);
+  assert.doesNotMatch(source, /Traitement IRON Emploi<\/span><\/button>/);
+  assert.match(source, /data-section="reserve"[^>]*>.*Vivier/s);
   assert.match(source, /data-section="archive"[^>]*>.*Archives/s);
 });
 
@@ -244,7 +244,7 @@ const texts=nodes=>[...nodes].map(node=>node.textContent.replace(/\s+/g,' ').tri
 test('V6 shell: one shared recruitment stylesheet, loaded before the shared theme',()=>{
   const {doc}=v6Context();
   const sheets=[...doc.head.querySelectorAll('link[rel="stylesheet"]')].map(link=>link.getAttribute('href').split('?')[0]);
-  assert.deepEqual(sheets.slice(-3),['/static/recruitment-dashboard-v5.css','/static/recruitment-v6.css','/static/design-system/atlas.css']);
+  assert.deepEqual(sheets.slice(-4),['/static/recruitment-dashboard-v5.css','/static/recruitment-v6.css','/static/recrute-workspace.css','/static/design-system/atlas.css']);
   assert.equal(doc.body.dataset.recruitmentUi,'v5');assert.equal(doc.body.dataset.recruitmentShell,'v6');
   const errors=[];require('css-tree').parse(v6Css,{onParseError:error=>errors.push(error.message)});assert.deepEqual(errors,[]);
   for(const component of ['.rec-page-header','.rec-filters','.rec-tabs','.rec-table','.rec-card-grid','.rec-empty-state','.rec-chips'])assert.ok(v6Css.includes(component),component);
@@ -538,4 +538,21 @@ test('V7 liste et fiche: destination company is shown, unventilated files are ex
   assert.deepEqual([...app.run('rowActionItems(tabState.new.items[1]).map(a=>a.label)')],['Ouvrir','Convoquer','Recruter','Ventiler']);
   app.run('openCandidateForm(null)');
   assert.ok(destination.classList.contains('hidden'),'a new candidate enters the group pool unventilated');
+});
+
+test('candidatures: une entrée, deux perspectives, réserve et archives restent accessibles',()=>{
+  const {doc,run}=v6Context();
+  assert.equal(doc.querySelectorAll('.recruit-nav [data-section="processing"]').length,1);
+  assert.equal(doc.querySelector('.recruit-nav [data-section="candidates"]'),null);
+  run('showRecruitSection("processing",false)');
+  assert.equal(doc.getElementById('recruitWorkspaceNav').classList.contains('hidden'),false);
+  assert.equal(doc.querySelector('[data-workspace="processing"]').getAttribute('aria-pressed'),'true');
+  run('showRecruitSection("candidates",false)');
+  assert.equal(doc.querySelectorAll('.recruit-nav-btn.active').length,1);
+  assert.equal(doc.querySelector('.recruit-nav-btn.active').dataset.section,'processing');
+  assert.equal(doc.querySelector('[data-workspace="candidates"]').getAttribute('aria-pressed'),'true');
+  run('showRecruitSection("dashboard",false)');
+  assert.equal(doc.getElementById('recruitWorkspaceNav').classList.contains('hidden'),true);
+  const css=fs.readFileSync(path.join(__dirname,'..','app/static/recrute-workspace.css'),'utf8');
+  const errors=[];require('css-tree').parse(css,{onParseError:e=>errors.push(e.message)});assert.deepEqual(errors,[]);
 });
