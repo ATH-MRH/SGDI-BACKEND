@@ -19,8 +19,16 @@ MARKER = '_session_reset'
 PREFIX = 'reset-'
 
 
+def is_rh01_exception(user):
+    # Identité serveur exacte : aucun héritage vers les autres comptes Cadre H5.
+    return (user.username == 'RH01'
+            and str(user.access_level or '').upper() == 'H5'
+            and society_key(oneoff.SOCIETY) in {
+                society_key(value) for value in (user.authorized_societies or [])})
+
+
 def can_reset(user):
-    return is_admin_role(user.role) and str(user.access_level or '').upper() == 'H5'
+    return (is_admin_role(user.role) and str(user.access_level or '').upper() == 'H5') or is_rh01_exception(user)
 
 
 def require_admin(user):
@@ -165,7 +173,11 @@ def reset(db, user, request, *, society, file_sha256, batch_key, old_session_id)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     marker = {'old_session_id':old_session_id, 'new_session_id':None, 'available':True,
               'requested_by_user_id':user.id, 'requested_by_username':user.username,
-              'requested_at':now.isoformat(), 'reason':REASON}
+              'requested_at':now.isoformat(),
+              'requested_by_role':user.role, 'requested_by_access_level':user.access_level,
+              'reset_access_path':'rh01_exception' if is_rh01_exception(user) and not is_admin_role(user.role) else 'admin_h5',
+              'batch_key':oneoff.BATCH_KEY,
+              'reason':'Réinitialisation exceptionnelle autorisée pour RH01' if is_rh01_exception(user) and not is_admin_role(user.role) else REASON}
     released_id = PREFIX + secrets.token_hex(24)
     previous = {'session_id':grant.session_id, 'authorized_by_user_id':grant.authorized_by_user_id}
     changed = db.execute(update(oneoff.ContractImportOneoffGrant).where(
