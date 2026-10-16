@@ -14,14 +14,15 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 const application = (id, extra = {}) => ({ application_id: id, candidate_id: 100 + id, position: 'Agent', offer_id: 3, name: `BENALI Amine${id}`, reference: `CAND-2026-00010${id}`, society: 'IRON GLOBAL SÉCURITÉ',
   reference_on: '2024-09-01', due_on: '2026-09-01', refused_on: '2024-09-01', basis: 'refus communiqué',
-  would_delete: { application: 1, documents: 2, messages: 3, interviews: 1, notes: 0, events: 4, document_requests: 0, contracts: 0 }, ...extra });
+  would_delete: { application: 1, profile_snapshot: 1, documents: 2, messages: 3, interviews: 1, notes: 0, events: 4, document_requests: 0, contracts: 0 }, ...extra });
 const report = (extra = {}) => ({ generated_on: '2026-10-11', simulated: false, retention_months: 24, due_before: '2024-10-11', dry_run: true, limit: 500,
   counts: { declined_applications: 1, declined_dossiers: 1, inactive_accounts: 1, departed_recruits: 1, undated: 2 },
   declined_applications: [application(1)],
   declined_dossiers: [{ candidate_id: 7, name: 'KACI Lina', reference: 'CAND-2023-000007', society: 'IRON GLOBAL SOLUTION', reference_on: '2023-05-02', due_on: '2025-05-02', refused_on: '2023-05-02',
     basis: 'date de l’avis défavorable', would_delete: { candidate_dossier: 1 } }],
   inactive_accounts: [{ account_id: 4, name: 'HADDAD Sara', reference: null, society: null, reference_on: '2024-01-15', due_on: '2026-01-15', last_activity_on: '2024-01-15', basis: 'dernière activité',
-    would_delete: { account: 1, cv: 1, photo: 0, alerts: 2, notifications: 5, push_devices: 0, sessions: 0, futur_element: 3 }, would_keep: { applications_detached: 2 } }],
+    would_delete: { account: 1, cv: 1, photo: 0, alerts: 2, notifications: 5, push_deliveries: 3, push_devices: 0, sessions: 0, futur_element: 3 },
+    would_keep: { applications_detached: 2, profile_snapshots: 2 }, would_keep_reason: 'Les candidatures déjà transmises restent au service recrutement.' }],
   departed_recruits: [{ candidate_id: 9, name: 'MEZIANE Karim', reference: 'CAND-2021-000009', society: 'IRON GLOBAL SÉCURITÉ', employee_id: 55, employee_code: 'IGS-0055', employee_status: 'demissionne',
     reference_on: '2022-03-10', due_on: '2024-03-10', left_on: '2022-03-10', basis: 'date de sortie de la fiche employé', would_delete: { candidate_dossier: 1 } }],
   undated: [{ candidate_id: 11, name: 'SAADI Nour', reference: 'CAND-2022-000011', society: 'IRON GLOBAL SOLUTION', reason: 'date de l’avis défavorable non enregistrée' },
@@ -66,7 +67,7 @@ test('chargement, puis compteurs, tableau trié par échéance et rubrique « À
   const rows = [...s.all('.retention-row')];
   assert.deepEqual(rows.map(row => row.querySelector('td strong').textContent), ['MEZIANE Karim', 'KACI Lina', 'HADDAD Sara', 'BENALI Amine1'], 'échéance la plus ancienne en premier');
   assert.match(rows[3].textContent, /Candidature refusée/); assert.match(rows[3].textContent, /01\/09\/2024/); assert.match(rows[3].textContent, /refus communiqué/); assert.match(rows[3].textContent, /01\/09\/2026/);
-  assert.match(rows[3].textContent, /Candidature · Pièces × 2 · Messages × 3 · Entretiens · Lignes d’historique × 4/); assert.doesNotMatch(rows[3].textContent, /Notes/, 'décompte nul non listé dans le résumé');
+  assert.match(rows[3].textContent, /Candidature · Copie du profil envoyée · Pièces × 2 · Messages × 3 · Entretiens · Lignes d’historique × 4/); assert.doesNotMatch(rows[3].textContent, /Notes/, 'décompte nul non listé dans le résumé');
   assert.match(s.q('.retention-review h3').textContent, /À vérifier\s*2/);
   assert.deepEqual(texts(s.all('.retention-review tbody tr')).map(text => /non enregistrée/.test(text)), [true, true]);
   assert.match(s.q('.retention-review').textContent, /Matricule IGS-0012/);
@@ -80,8 +81,10 @@ test('détail d’un dossier : tous les décomptes renvoyés par l’API, élém
   const detail = s.q('.retention-detail-row');
   assert.ok(detail); assert.equal(s.q('.retention-row.open button').getAttribute('aria-expanded'), 'true');
   const lines = texts(detail.querySelectorAll('.retention-list li'));
-  for (const expected of ['Espace candidat1', 'CV1', 'Photo0', 'Alertes d’offres2', 'Notifications5', 'futur_element3', 'Candidatures conservées, détachées de l’espace2', 'Base de la datedernière activité'])
+  for (const expected of ['Espace candidat1', 'CV1', 'Photo0', 'Alertes d’offres2', 'Notifications5', 'futur_element3', 'Candidatures conservées, détachées de l’espace2', 'Base de la datedernière activité',
+    'Envois push en file3', 'Copies du profil jointes aux candidatures conservées2'])
     assert.ok(lines.includes(expected), expected);
+  assert.match(detail.textContent, /Les candidatures déjà transmises restent au service recrutement\./, 'conservation expliquée');
   s.run("retentionToggle('inactive_accounts-0')"); assert.equal(s.q('.retention-detail-row'), null);
 });
 

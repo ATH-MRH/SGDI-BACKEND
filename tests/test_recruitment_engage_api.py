@@ -7,6 +7,7 @@ from datetime import timedelta
 import pytest
 
 from app.modules import recruitment_engage_service as engage
+from app.modules import recruitment_push_worker as push_worker
 from app.modules import recruitment_jobs_service as jobs
 from app.modules.drh.models import Candidate, ContractTemplate, Employee
 from app.modules.recruitment_engage_models import (
@@ -374,7 +375,7 @@ def test_push_is_off_by_default_and_devices_follow_the_signed_in_space(client, d
     assert client.put(f'{API}/me/push-device', headers=headers, json={'token': 'ExponentPushToken[test-device-1]', 'platform': 'ios'}).status_code == 200
     assert client.put(f'{API}/me/settings', headers=headers, json={'push': {'messages': False}}).json()['push']['messages'] is False
     calls = []
-    monkeypatch.setattr(engage.urllib.request, 'urlopen', lambda request, timeout: calls.append(request) or (_ for _ in ()).throw(AssertionError('appel réseau')))
+    monkeypatch.setattr(push_worker.urllib.request, 'urlopen', lambda request, timeout: calls.append(request) or (_ for _ in ()).throw(AssertionError('appel réseau')))
     row = db.query(RecruitmentNotification).first() or engage.notify(db, db.query(RecruitmentPushDevice).first().account_id, 'application', 'T', 'B')
     db.commit()
     assert engage.send_push(db, [row]) == 0 and calls == []                                               # désactivé : aucun appel sortant
@@ -401,7 +402,7 @@ class _Expo:
     def __call__(self, request, timeout):
         batch = json.loads(request.data)
         self.batches.append(batch)
-        tickets = [{'status': 'ok'} for _ in batch]
+        tickets = [{'status': 'ok', 'id': f'ticket-{len(self.batches)}-{i}'} for i, _ in enumerate(batch)]
         if self.refuse_first:
             tickets[0] = {'status': 'error', 'details': {'error': 'DeviceNotRegistered'}}
         return _ExpoAnswer({'data': tickets})
@@ -433,7 +434,7 @@ def test_a_new_offer_is_pushed_to_every_registered_phone_without_settings(client
     client.put(f'{API}/me/settings', headers=karim, json={'push': {'offers': False}, 'alerts_enabled': False})
     expo = _Expo()
     monkeypatch.setenv('RECRUITMENT_PUSH_ENABLED', 'true')
-    monkeypatch.setattr(engage.urllib.request, 'urlopen', expo)
+    monkeypatch.setattr(push_worker.urllib.request, 'urlopen', expo)
     offer = publish(client, securite, title='Agent de nuit')
     sent = [message for batch in expo.batches for message in batch]
     assert sorted(m['to'] for m in sent) == ['ExponentPushToken[karim-1]', 'ExponentPushToken[nadia-1]']
@@ -455,8 +456,9 @@ def test_a_new_offer_is_pushed_to_every_registered_phone_without_settings(client
     row = engage.notify(db, account_id, 'offer', 'Nouvelle offre', 'Lot')
     db.commit()
     expo = _Expo(refuse_first=True)
-    monkeypatch.setattr(engage.urllib.request, 'urlopen', expo)
-    assert engage.send_push(db, [row]) == 149                                  # 151 appareils, un refus par lot
+    monkeypatch.setattr(push_worker.urllib.request, 'urlopen', expo)
+    from app.modules.recruitment_push_worker import dispatch
+    assert engage.send_push(db, [row]) + dispatch(db) == 149                                  # 151 appareils, un refus par lot
     assert [len(batch) for batch in expo.batches] == [100, 51]
 
 

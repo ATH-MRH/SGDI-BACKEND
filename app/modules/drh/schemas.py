@@ -147,7 +147,14 @@ class CandidateUpdate(BaseModel):
 class CandidateOut(CandidateBase):
     @field_serializer('data')
     def hide_cv_content(self, value):
-        return {key: item for key, item in value.items() if key not in {'_cv_content', 'cvUpload'}} if isinstance(value, dict) else value
+        if not isinstance(value, dict):
+            return value
+        # Les candidatures par société sont accessibles uniquement par leurs routes filtrées.
+        result = {key: item for key, item in value.items() if key not in {'_cv_content', 'cvUpload', 'candidaturesEmploi'}}
+        if isinstance(result.get('auditTrail'), list):
+            result['auditTrail'] = [event for event in result['auditTrail']
+                                    if not isinstance(event, dict) or event.get('action') != 'candidature_emploi']
+        return result
 
     id: int
     created_at: datetime

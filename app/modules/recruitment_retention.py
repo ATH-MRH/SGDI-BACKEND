@@ -21,7 +21,8 @@ from app.modules.public_candidates import _identity_key, candidate_reference
 from app.modules.recruitment_engage_models import (
     RecruitmentApplicationContract as Contract, RecruitmentApplicationDocument as Document, RecruitmentApplicationEvent as Event,
     RecruitmentApplicationNote as Note, RecruitmentDocumentRequest as DocumentRequest, RecruitmentInterview as Interview,
-    RecruitmentJobAlert as Alert, RecruitmentMessage as Message, RecruitmentNotification as Notification, RecruitmentPushDevice as PushDevice,
+    RecruitmentJobAlert as Alert, RecruitmentMessage as Message, RecruitmentNotification as Notification, RecruitmentPushDelivery as PushDelivery,
+    RecruitmentPushDevice as PushDevice,
 )
 from app.modules.recruitment_jobs_models import (
     RecruitmentApplication as Application, RecruitmentCandidateAccount as Account, RecruitmentCandidateSession as CandidateSession,
@@ -32,6 +33,10 @@ HIRED_STATUSES = {'embauche', 'recrute', 'recrutee'}
 DEPARTED_STATUSES = {'sortant', 'demissionne', 'licencie'}
 DEPARTURE_KEYS = ('dateSortie', 'exitDate')
 MAX_ITEMS = 500
+# Ce que la suppression d'un espace laisse au service recrutement, et pourquoi : affiché tel quel.
+KEPT_WITH_APPLICATIONS = ('Les candidatures déjà transmises restent au service recrutement, détachées de l’espace, avec la copie '
+                          'du profil envoyée avec chacune d’elles. Supprimer l’espace ne les supprime pas : leur conservation '
+                          'suit celle de la candidature (24 mois après un refus communiqué) ou du dossier de la personne recrutée.')
 
 router = APIRouter(dependencies=[Depends(current_user)])
 
@@ -67,6 +72,17 @@ def _counts(db: Session, model, column, ids: list[int]) -> dict[int, int]:
     return dict(db.execute(select(column, func.count()).where(column.in_(ids)).group_by(column)).all())
 
 
+def _snapshot_counts(db: Session, account_ids: list[int]) -> dict[int, int]:
+    """Copies de profil des candidatures de ces espaces. Comptées en Python : un JSON `null` n'est pas une copie."""
+    counts: dict[int, int] = {}
+    if account_ids:
+        for account_id, snapshot in db.execute(select(Application.account_id, Application.profile_snapshot)
+                                               .where(Application.account_id.in_(account_ids))).all():
+            if snapshot:
+                counts[account_id] = counts.get(account_id, 0) + 1
+    return counts
+
+
 def _identity(candidate: Candidate | None) -> dict:
     if candidate is None:
         return {'name': 'Dossier introuvable', 'reference': None, 'society': None}
@@ -88,7 +104,9 @@ def _declined_applications(db: Session, cutoff: date) -> list[dict]:
              **_identity(candidates.get(row.candidate_id)), **_deadline(_day(row.outcome_communicated_at or row.status_updated_at)),
              'refused_on': _day(row.outcome_communicated_at or row.status_updated_at).isoformat(),
              'basis': 'refus communiqué' if row.outcome_communicated_at else 'dernier changement d’état',
-             'would_delete': {'application': 1, **{name: values.get(row.id, 0) for name, values in linked.items()}}} for row in due]
+             # La copie du profil fait partie de la candidature : elle partirait avec elle.
+             'would_delete': {'application': 1, 'profile_snapshot': int(bool(row.profile_snapshot)),
+                              **{name: values.get(row.id, 0) for name, values in linked.items()}}} for row in due]
 
 
 def _inactive_accounts(db: Session, cutoff: date) -> list[dict]:
@@ -97,6 +115,10 @@ def _inactive_accounts(db: Session, cutoff: date) -> list[dict]:
                              Account.cv_meta.is_not(None), Account.photo.is_not(None))
                       .where(activity < datetime.combine(cutoff, datetime.max.time())).order_by(activity, Account.id).limit(MAX_ITEMS)).all()
     ids = [row[0] for row in rows]
+    snapshots = _snapshot_counts(db, ids)
+    # Envois push encore en file : ils partent avec les notifications de l'espace.
+    deliveries = dict(db.execute(select(Notification.account_id, func.count()).join(PushDelivery, PushDelivery.notification_id == Notification.id)
+                                 .where(Notification.account_id.in_(ids)).group_by(Notification.account_id)).all()) if ids else {}
     alerts, notifications, devices, sessions, kept = (
         _counts(db, model, column, ids) for model, column in ((Alert, Alert.account_id), (Notification, Notification.account_id),
                                                               (PushDevice, PushDevice.account_id), (CandidateSession, CandidateSession.account_id),
@@ -106,9 +128,10 @@ def _inactive_accounts(db: Session, cutoff: date) -> list[dict]:
              'last_activity_on': _day(last_activity or updated_at or created_at).isoformat(),
              'basis': 'dernière activité' if last_activity else 'dernière modification du profil',
              'would_delete': {'account': 1, 'cv': int(has_cv), 'photo': int(has_photo), 'alerts': alerts.get(account_id, 0),
-                              'notifications': notifications.get(account_id, 0), 'push_devices': devices.get(account_id, 0),
-                              'sessions': sessions.get(account_id, 0)},
-             'would_keep': {'applications_detached': kept.get(account_id, 0)}}
+                              'notifications': notifications.get(account_id, 0), 'push_deliveries': deliveries.get(account_id, 0),
+                              'push_devices': devices.get(account_id, 0), 'sessions': sessions.get(account_id, 0)},
+             'would_keep': {'applications_detached': kept.get(account_id, 0), 'profile_snapshots': snapshots.get(account_id, 0)},
+             'would_keep_reason': KEPT_WITH_APPLICATIONS if kept.get(account_id, 0) else None}
             for account_id, first_name, last_name, last_activity, updated_at, created_at, has_cv, has_photo in rows]
 
 

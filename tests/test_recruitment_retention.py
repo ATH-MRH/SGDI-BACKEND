@@ -8,7 +8,7 @@ from app.modules import recruitment_jobs_service as jobs
 from app.modules import recruitment_retention as retention
 from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Employee
-from app.modules.recruitment_engage_models import RecruitmentMessage, RecruitmentNotification
+from app.modules.recruitment_engage_models import RecruitmentMessage, RecruitmentNotification, RecruitmentPushDelivery, RecruitmentPushDevice
 from app.modules.recruitment_jobs_models import RecruitmentApplication, RecruitmentCandidateAccount, RecruitmentCandidateSession
 
 TODAY = date(2030, 3, 15)
@@ -19,7 +19,7 @@ USERS = ['ret_global', 'ret_local', 'ret_ops']
 def clean(db):
     yield
     db.rollback()
-    for model in (RecruitmentNotification, RecruitmentMessage, RecruitmentApplication, RecruitmentCandidateSession, RecruitmentCandidateAccount):
+    for model in (RecruitmentPushDelivery, RecruitmentPushDevice, RecruitmentNotification, RecruitmentMessage, RecruitmentApplication, RecruitmentCandidateSession, RecruitmentCandidateAccount):
         db.query(model).delete()
     db.query(Employee).filter(Employee.code.like('RET-%')).delete(synchronize_session=False)
     db.query(Candidate).filter(Candidate.last_name.like('Retention%')).delete(synchronize_session=False)
@@ -67,15 +67,22 @@ def test_months_before_handles_month_ends():
 
 def test_report_lists_only_what_is_due_and_deletes_nothing(db):
     old, recent = datetime(2028, 3, 15, 9), datetime(2028, 3, 16, 9)
-    due = _application(db, _candidate(db, 'A'), 'ret-due', outcome='unfavorable', outcome_communicated_at=old)
+    due = _application(db, _candidate(db, 'A'), 'ret-due', outcome='unfavorable', outcome_communicated_at=old,
+                       profile_snapshot={'first_name': 'Test', 'data': {'adresse': 'Adresse figée A'}})
     db.add(RecruitmentMessage(application_id=due.id, sender='recruiter', body='Bonjour', client_id='ret-message-1', created_at=old))
     _application(db, _candidate(db, 'B'), 'ret-recent', outcome='unfavorable', outcome_communicated_at=recent)
     _application(db, _candidate(db, 'C'), 'ret-pending', outcome='pending', status_updated_at=old)
     _application(db, _candidate(db, 'D'), 'ret-favorable', outcome='favorable', outcome_communicated_at=old)
 
     idle = _account(db, '+213550000001', last_activity_at=old, cv_meta={'name': 'cv.pdf'})
-    db.add(RecruitmentNotification(account_id=idle.id, kind='offers', title='Offre', body='Nouvelle offre', dedup='ret-1', created_at=old))
-    _application(db, _candidate(db, 'E'), 'ret-kept', account_id=idle.id)
+    notification = RecruitmentNotification(account_id=idle.id, kind='offers', title='Offre', body='Nouvelle offre', dedup='ret-1', created_at=old)
+    device = RecruitmentPushDevice(account_id=idle.id, token='ExponentPushToken[retention]', platform='android')
+    db.add_all([notification, device])
+    db.flush()
+    db.add(RecruitmentPushDelivery(notification_id=notification.id, device_id=device.id))
+    # Une candidature transmise avec sa copie du profil, et une ancienne sans copie (JSON null) : seule la première compte.
+    _application(db, _candidate(db, 'E'), 'ret-kept', account_id=idle.id, profile_snapshot={'first_name': 'Test', 'data': {'adresse': 'Adresse figée E'}})
+    _application(db, _candidate(db, 'E2'), 'ret-kept-legacy', account_id=idle.id, profile_snapshot=None)
     _account(db, '+213550000002', last_activity_at=recent)
 
     _candidate(db, 'F', data={'avisDecision': 'Défavorable', 'avisDate': '2027-06-01'})
@@ -97,18 +104,21 @@ def test_report_lists_only_what_is_due_and_deletes_nothing(db):
     assert report['dry_run'] is True and report['due_before'] == '2028-03-15' and report['retention_months'] == 24
     assert [item['application_id'] for item in report['declined_applications']] == [due.id]
     assert report['declined_applications'][0]['would_delete'] == {
-        'application': 1, 'documents': 0, 'messages': 1, 'interviews': 0, 'notes': 0, 'events': 0, 'document_requests': 0, 'contracts': 0}
+        'application': 1, 'profile_snapshot': 1, 'documents': 0, 'messages': 1, 'interviews': 0, 'notes': 0, 'events': 0, 'document_requests': 0, 'contracts': 0}
     assert report['declined_applications'][0]['basis'] == 'refus communiqué'
     application = report['declined_applications'][0]
     assert (application['name'], application['society'], application['reference_on'], application['due_on']) == (
         'Retention A Test', 'Iron Global Securite', '2028-03-15', '2030-03-15')
     assert report['simulated'] is True and retention.retention_report(db)['simulated'] is False
     # L'aperçu ne porte que des identités, des dates et des décomptes : ni téléphone, ni contenu de pièce ou de message.
-    assert 'Bonjour' not in str(report) and '+21355' not in str(report) and 'cv.pdf' not in str(report)
+    assert 'Bonjour' not in str(report) and '+21355' not in str(report) and 'cv.pdf' not in str(report) and 'Adresse figée' not in str(report)
     assert [item['account_id'] for item in report['inactive_accounts']] == [idle.id]
     account = report['inactive_accounts'][0]
-    assert account['would_delete'] == {'account': 1, 'cv': 1, 'photo': 0, 'alerts': 0, 'notifications': 1, 'push_devices': 0, 'sessions': 0}
-    assert account['would_keep'] == {'applications_detached': 1} and account['basis'] == 'dernière activité'
+    assert account['would_delete'] == {'account': 1, 'cv': 1, 'photo': 0, 'alerts': 0, 'notifications': 1, 'push_deliveries': 1, 'push_devices': 1,
+                                       'sessions': 0}
+    # Les copies du profil restent avec les candidatures transmises, et la raison est donnée.
+    assert account['would_keep'] == {'applications_detached': 2, 'profile_snapshots': 1} and account['basis'] == 'dernière activité'
+    assert account['would_keep_reason'] == retention.KEPT_WITH_APPLICATIONS and '24 mois après un refus communiqué' in account['would_keep_reason']
     assert (account['reference_on'], account['due_on']) == ('2028-03-15', '2030-03-15')
     assert [item['name'] for item in mine('declined_dossiers')] == ['Retention F Test']
     assert [(item['name'], item['employee_code']) for item in mine('departed_recruits')] == [('Retention RET-1 Test', 'RET-1')]

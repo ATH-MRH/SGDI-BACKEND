@@ -16,7 +16,7 @@ from app.modules import recruitment_jobs_service as jobs
 from app.modules import recruitment_sms_service as sms
 from app.modules.public_candidates import (
     PublicCandidateIn, PublicCVIn, _gateway_connected, _mobile_token, _public_candidate_row, _public_candidate_state, _sms_call,
-    candidate_reference, check_birth_date,
+    candidate_reference, check_birth_date, _public_candidate_payload,
 )
 from app.modules.recruitment_jobs_models import (
     RecruitmentApplication as Application, RecruitmentCandidateAccount as Account, RecruitmentCompany as Company, RecruitmentJobOffer as Offer,
@@ -88,10 +88,11 @@ def _dossier_state(candidate) -> tuple[str, dict]:
 
 def _application_out(db: Session, application: Application, candidate, offer: Offer | None, company: Company | None) -> dict:
     reference, dossier_state = _dossier_state(candidate)
-    # Candidature à une annonce : son propre état. Spontanée ou historique : l'état du dossier.
+    # Une spontanée traitée ici a son état propre ; sinon conserver le suivi historique du dossier.
     result = {'id': application.id, 'kind': 'offer' if application.offer_id else 'spontaneous', 'position': application.position or '',
               'submitted_at': application.created_at.isoformat() if application.created_at else None, 'reference': reference,
-              'state': jobs.application_state(application) if application.offer_id else dossier_state, 'offer': None}
+              'state': jobs.application_state(application) if application.offer_id or application.status_updated_at else dossier_state,
+              'state_scope': 'application' if application.offer_id or application.status_updated_at else 'dossier', 'offer': None}
     from app.modules import recruitment_engage_service as engage
     result.update(engage.candidate_extras(db, application))
     if offer is not None and company is not None:
@@ -295,20 +296,26 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
 
     entry = {'offreId': offer.id if offer else None, 'poste': position, 'societe': company.society if company else '',
              'at': datetime.utcnow().isoformat()}
+    db.flush()  # conserver profil et consentement avant populate_existing
     full = db.execute(select(Account).options(undefer(Account.cv_content), undefer(Account.photo)).where(Account.id == account.id)
                       .execution_options(populate_existing=True)).scalar_one()
     try:
+        profile.pop('desired_position', None)
+        skills = profile.pop('skills', None) or []
+        written = profile.pop('written_languages', None) or []
+        children = profile.pop('children_count', None)
+        try:
+            form = PublicCandidateIn(**profile, children_count=children or 0, first_name=account.first_name, last_name=account.last_name, phone=account.phone,
+                                     desired_position=position, consent=True, photo_data=full.photo,
+                                     cv=({**full.cv_meta, 'data_base64': full.cv_content} if full.cv_meta and full.cv_content else None))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail='Votre profil est incomplet ou invalide : ' + exc.errors()[0]['msg']) from exc
+        snapshot = _public_candidate_payload(form, request, verified=True).model_dump(mode='json')
+        snapshot['data'].update(competences=skills, languesEcrites=written, nombreEnfants=children if children is not None else '')
+        # Ne copier ni documents volumineux, ni informations techniques ou historique du vivier.
+        for key in ('photo', 'cvUpload', 'remoteAddress'):
+            snapshot['data'].pop(key, None)
         if candidate is None:
-            profile.pop('desired_position', None)
-            skills = profile.pop('skills', None) or []
-            written = profile.pop('written_languages', None) or []
-            children = profile.pop('children_count', None)
-            try:
-                form = PublicCandidateIn(**profile, children_count=children or 0, first_name=account.first_name, last_name=account.last_name, phone=account.phone,
-                                         desired_position=position, consent=True, photo_data=full.photo,
-                                         cv=({**full.cv_meta, 'data_base64': full.cv_content} if full.cv_meta and full.cv_content else None))
-            except ValidationError as exc:
-                raise HTTPException(status_code=422, detail='Votre profil est incomplet ou invalide : ' + exc.errors()[0]['msg']) from exc
             try:
                 candidate = _public_candidate_row(form, request, db, commit=False, verified=True,
                                                   extra_data={'sourceExterne': 'iron_emploi', 'candidaturesEmploi': [entry], 'competences': skills, 'languesEcrites': written,
@@ -329,7 +336,7 @@ def emploi_apply(payload: EmploiApplicationIn, request: Request, response: Respo
             # Le CV du dossier n'est pas remplacé : chaque candidature garde ses propres pièces (ci-dessous).
             candidate.data = data
         application = Application(account_id=account.id, candidate_id=candidate.id, offer_id=offer.id if offer else None,
-                                  position=position, request_id=payload.request_id, source='mobile',
+                                  position=position, request_id=payload.request_id, source='mobile', profile_snapshot=snapshot,
                                   message=(payload.message or '').strip() or None)
         db.add(application)
         db.flush()

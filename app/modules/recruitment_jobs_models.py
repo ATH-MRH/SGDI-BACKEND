@@ -95,6 +95,8 @@ class RecruitmentApplication(Base):
     offer_id: Mapped[int | None] = mapped_column(ForeignKey('recruitment_job_offers.id'), index=True)
     position: Mapped[str | None] = mapped_column(String(150))
     message: Mapped[str | None] = mapped_column(Text)
+    # Profil figé à la réception, comme les pièces ; aucun état métier partagé du vivier.
+    profile_snapshot: Mapped[dict | None] = mapped_column(JSON)
     # Identifiant fourni par l'application : un double clic ou une relance réseau ne crée qu'une candidature.
     request_id: Mapped[str] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(20), default='mobile', server_default='mobile')

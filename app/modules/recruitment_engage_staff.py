@@ -233,12 +233,14 @@ def _dossier(db: Session, user: User, scope: Scope) -> dict:
                         .where(Application.candidate_id == candidate.id, Application.id != a.id).order_by(Application.id.desc())).all()
     scope_policy = society_scope(user)
     dossier_state = _public_candidate_state(candidate)
-    private = {key for key in data if key.startswith('_')} | {'photo', 'cvUpload', 'auditTrail', 'remoteAddress'}
+    private = {key for key in data if key.startswith('_')} | {'photo', 'cvUpload', 'auditTrail', 'remoteAddress', 'candidaturesEmploi'}
+    profile = a.profile_snapshot or {'first_name': candidate.first_name, 'last_name': candidate.last_name, 'phone': candidate.phone,
+                                     'email': candidate.email, 'desired_position': candidate.desired_position, 'data': data}
     return {
         **summary, 'message': a.message, 'source': a.source,
-        'profile': {'first_name': candidate.first_name, 'last_name': candidate.last_name, 'phone': candidate.phone, 'email': candidate.email,
-                    'desired_position': candidate.desired_position, 'society': candidate.society, 'status': candidate.status,
-                    'data': {key: value for key, value in data.items() if key not in private}},
+        'profile': {**{key: profile.get(key) for key in ('first_name', 'last_name', 'phone', 'email', 'desired_position')},
+                    'society': candidate.society, 'status': candidate.status,
+                    'data': {key: value for key, value in (profile.get('data') or {}).items() if key not in private}},
         'dossier_state': {'code': dossier_state['status'], 'label': dossier_state['label']},
         'documents': [_document_out(row) for row in documents],
         'dossier_cv': {**legacy_cv, 'candidate_id': candidate.id} if legacy_cv else None,
@@ -718,8 +720,36 @@ def transfer_to_drh(application_id: int, request: Request, db: Session = Depends
     contract = db.scalar(select(Contract).where(Contract.application_id == scope.application.id))
     if contract is None or contract.state != 'signed':
         raise HTTPException(status_code=409, detail='Enregistrez la signature du contrat avant de transmettre le dossier à la DRH.')
-    candidate, target = scope.candidate, contract.society
+    # Le vivier n'est actualisé qu'au choix du dossier retenu, jamais par une autre candidature.
+    candidate, target = drh_service._locked_candidate(db, scope.candidate.id), contract.society
     data = dict(candidate.data) if isinstance(candidate.data, dict) else {}
+    if scope.application.profile_snapshot and not drh_service._candidate_left_recruitment(candidate):
+        snapshot = scope.application.profile_snapshot
+        technical = {'moduleOrigine', 'telephoneVerifie', 'sourceExterne', 'societeAffectationAutomatique',
+                     'ficheCandidatTransmise', 'submittedAt', 'consentementCandidatAt'}
+        personal = {key: value for key, value in snapshot.get('data', {}).items() if key not in technical}
+        changed = any(data.get(key) != value for key, value in personal.items())
+        data.update(personal)
+        for key in ('first_name', 'last_name', 'phone', 'email', 'desired_position', 'expected_salary'):
+            if key in snapshot:
+                setattr(candidate, key, snapshot[key])
+        documents = db.scalars(select(Document).options(undefer(Document.content)).where(
+            Document.application_id == scope.application.id, Document.kind.in_(['cv', 'photo']))).all()
+        data.pop('cv', None)
+        data.pop('_cv_content', None)
+        data['photo'] = ''
+        for document in documents:
+            if document.kind == 'cv':
+                data['cv'] = {'name': document.name, 'mime_type': document.mime_type, 'size': document.size}
+                data['_cv_content'] = document.content
+            elif document.kind == 'photo':
+                data['photo'] = f'data:{document.mime_type};base64,{document.content}'
+        if changed:
+            data['fichePositionValidee'], data['sectionValidations'] = False, {}
+            data.pop('fichePositionValideeAt', None)
+            data.pop('fichePositionValideeBy', None)
+        candidate.data = data
+
     if not data.get('drhTransfer') or data['drhTransfer'].get('status') != 'done':
         if _society_key(candidate.society) != _society_key(target):
             if not _can_ventilate(db, user):

@@ -1,9 +1,6 @@
 """IRON Emploi : règles des messages, entretiens, alertes et notifications."""
 import base64
-import json
-import logging
 import os
-import urllib.request
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
@@ -20,13 +17,10 @@ from app.modules.recruitment_jobs_models import (
     RecruitmentApplication as Application, RecruitmentCandidateAccount as Account, RecruitmentCompany as Company, RecruitmentJobOffer as Offer,
 )
 
-logger = logging.getLogger('sgdi.recruitment.engage')
 TIMEZONE = 'Africa/Algiers'
 MAX_ALERTS = 10
 PUSH_KINDS = ('applications', 'messages', 'interviews', 'offers')
 KIND_PREFERENCE = {'application': 'applications', 'message': 'messages', 'interview': 'interviews', 'offer': 'offers'}
-EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send'
-EXPO_PUSH_BATCH = 100                     # messages au plus par requête au service Expo
 # Canal créé par l'application (son, bannière) ; sans lui, Android range la notification dans un canal muet.
 ANDROID_CHANNEL = 'iron-emploi'
 
@@ -62,6 +56,8 @@ def notify(db: Session, account_id: int | None, kind: str, title: str, body: str
                        interview_id=interview_id, offer_id=offer_id, dedup=dedup)
     db.add(row)
     db.flush()
+    from app.modules.recruitment_push_worker import enqueue
+    enqueue(db, [row])
     return row
 
 
@@ -75,40 +71,16 @@ def push_enabled() -> bool:
 
 
 def send_push(db: Session, rows: list[Notification | None]) -> int:
-    """Relaie des notifications déjà enregistrées vers le service push d'Expo. Désactivé par défaut
-    (RECRUITMENT_PUSH_ENABLED) ; un échec n'affecte jamais l'action qui a créé la notification."""
-    rows = [row for row in rows if row is not None]
-    if not rows or not push_enabled():
+    """La notification est déjà en file avant commit. Réveil immédiat, puis reprise par le worker.
+    La valeur de retour compte uniquement les tickets valides acceptés par Expo."""
+    from app.modules.recruitment_push_worker import enqueue, dispatch
+    ids = [row.id for row in rows if row is not None]
+    if not ids or not push_enabled():
         return 0
-    messages = []
-    for row in rows:
-        account = db.get(Account, row.account_id)
-        # Les nouvelles offres partent vers tous les appareils, sans réglage ; les autres sujets suivent les préférences.
-        if account is None or (row.kind != 'offer' and not push_settings(account)[KIND_PREFERENCE.get(row.kind, 'applications')]):
-            continue
-        for token in db.scalars(select(PushDevice.token).where(PushDevice.account_id == row.account_id)).all():
-            messages.append({'to': token, 'title': row.title, 'body': row.body, 'sound': 'default', 'priority': 'high',
-                             'channelId': ANDROID_CHANNEL,
-                             'data': {'notification_id': row.id, 'kind': row.kind, 'application_id': row.application_id,
-                                      'interview_id': row.interview_id, 'offer_id': row.offer_id}})
-    sent = 0
-    for start in range(0, len(messages), EXPO_PUSH_BATCH):
-        batch = messages[start:start + EXPO_PUSH_BATCH]
-        try:
-            request = urllib.request.Request(EXPO_PUSH_URL, data=json.dumps(batch).encode(), method='POST',
-                                             headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
-            with urllib.request.urlopen(request, timeout=5) as response:
-                tickets = (json.loads(response.read() or b'{}').get('data') or [])
-        except Exception as exc:  # noqa: BLE001 — le push est un complément : jamais bloquant, jamais de contenu journalisé
-            logger.warning('Envoi push non abouti : %s', type(exc).__name__)
-            continue
-        refused = [t for t in tickets if isinstance(t, dict) and t.get('status') == 'error']
-        if refused:
-            # Seuls les codes d'erreur sont journalisés : ni jeton, ni texte de la notification.
-            codes = sorted({str((t.get('details') or {}).get('error') or 'inconnu') for t in refused})
-            logger.warning('Push refusé par Expo pour %d appareil(s) : %s', len(refused), ', '.join(codes))
-        sent += len(batch) - len(refused)
-    return sent
+    enqueue(db, [row for row in rows if row is not None])
+    db.commit()
+    # Une seule requête réseau ici : le reste part en arrière-plan.
+    return dispatch(db, notification_ids=ids)
 
 
 # ── Alertes ─────────────────────────────────────────────────────────────────

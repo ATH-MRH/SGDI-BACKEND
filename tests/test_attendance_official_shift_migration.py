@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261014_0005"            # tête additive : journal du lot exceptionnel de préparation, après Studio Badges DRH
+HEAD = "20261016_0002"            # tête additive : profil figé par candidature et file des notifications push IRON Emploi
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
