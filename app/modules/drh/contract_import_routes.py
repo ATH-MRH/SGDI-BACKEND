@@ -12,7 +12,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.auth.routes import is_admin_role
-from app.modules.drh import candidate_import as excel, contract_import as importer
+from app.modules.drh import candidate_import as excel, contract_import as importer, contract_import_oneoff_reset as resetting
 from app.modules.drh.routes import _effective_society_filter, _ensure_recruitment_access
 
 router = APIRouter(prefix='/contracts/import')
@@ -41,7 +41,9 @@ class PreviewIn(BaseModel):
 @router.get('/config')
 def config(user: User = Depends(current_user)):
     require(user)
-    return {'fields': [{'key': key, 'label': label} for key, label in importer.FIELDS.items()], 'limits': excel.limits()}
+    return {'fields': [{'key': key, 'label': label} for key, label in importer.FIELDS.items()], 'limits': excel.limits(),
+            'oneoff_reset_allowed':resetting.can_reset(user),
+            'oneoff_batch_key':importer.oneoff.BATCH_KEY, 'oneoff_file_sha256':importer.oneoff.FILE_SHA256}
 
 
 @router.get('/template')
@@ -59,6 +61,31 @@ async def upload(request: Request, society: str, file: UploadFile = File(...), d
         raise HTTPException(422, 'Sélectionnez une société active')
     content = await file.read(excel.MAX_FILE_BYTES + 1)
     return importer.upload(db, user, file.filename or '', content, effective)
+
+
+class OneoffResetIn(BaseModel):
+    society: str = Field(min_length=1, max_length=150)
+    file_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    batch_key: str = Field(min_length=1, max_length=120)
+    old_session_id: str = Field(min_length=1, max_length=64)
+
+
+@router.get('/oneoff/reset-context')
+def oneoff_reset_context(society: str, file_sha256: str, batch_key: str,
+                         db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require(user)
+    resetting.require_admin(user)
+    effective = _effective_society_filter(user, society)
+    return resetting.context(db, user, effective, file_sha256, batch_key)
+
+
+@router.post('/oneoff/reset')
+def oneoff_reset(payload: OneoffResetIn, request: Request,
+                 db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require(user)
+    resetting.require_admin(user)
+    effective = _effective_society_filter(user, payload.society)
+    return resetting.reset(db, user, request, **{**payload.model_dump(), 'society':effective})
 
 
 @router.post('/{session_id}/preview')
