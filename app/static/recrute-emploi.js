@@ -6,8 +6,8 @@ const EMPLOI_API="/api/drh/job-offers";
 const EMPLOI_STAGE_PILL={received:"pill-blue",review:"pill-blue",shortlisted:"pill-indigo",convocation:"pill-amber",interview:"pill-amber",decision:"pill-amber",hiring_file:"pill-green",contract:"pill-green",signature:"pill-green",hired:"pill-green"};
 const EMPLOI_OUTCOME_PILL={pending:"pill-gray",favorable:"pill-green",unfavorable:"pill-red",withdrawn:"pill-gray"};
 const EMPLOI_INTERVIEW={proposed:["Proposé, à confirmer","pill-amber"],confirmed:["Confirmé par le candidat","pill-green"],cancelled:["Annulé","pill-gray"],done:["Réalisé","pill-blue"],no_show:["Candidat absent","pill-red"]};
-const EMPLOI_TABS=[["summary","Dossier"],["documents","Pièces"],["processing","Traitement"],["interviews","Entretiens"],["messages","Échanges"],["notes","Notes et historique"],["contract","Contrat"]];
-let emploiState={view:"board",mode:"table",bucket:"",filters:{},data:null,dossier:null,tab:"summary",thread:null,error:"",busy:false,request:0,tips:null,companies:null,inbox:null,templates:null,viewer:null};
+const EMPLOI_TABS=[["summary","Synthèse"],["documents","Pièces"],["processing","Traitement"],["interviews","Entretiens"],["messages","Échanges"],["notes","Notes et historique"],["contract","Contrat"]];
+let emploiState={view:"board",mode:"pipeline",bucket:"",filters:{},data:null,dossier:null,tab:"summary",thread:null,error:"",busy:false,request:0,tips:null,companies:null,inbox:null,templates:null,viewer:null};
 
 function emploiHost(){return document.getElementById("processingSection")}
 function emploiError(error){const m=error?.message;return Array.isArray(m)?m.map(i=>i?.msg||String(i)).join(" ; "):String(m||"Une erreur est survenue")}
@@ -39,6 +39,11 @@ async function loadEmploiBoard(){
   if(typeof recruitSection==="undefined"||recruitSection==="processing")renderEmploi();
 }
 function refreshEmploi(){
+  // Le portefeuille du bandeau reste cohérent avec les autres rubriques.
+  if(typeof portfolioSociety==="function"){
+    const portfolio=portfolioSociety();
+    if(emploiState.portfolio!==portfolio){emploiState.portfolio=portfolio;emploiState.filters.society=portfolio||"";emploiState.bucket="";emploiState.data=null;emploiState.dossier=null;emploiState.view="board"}
+  }
   const host=emploiHost();if(!host)return;
   if(!recruitmentCan("read")){host.innerHTML='<div class="empty" role="alert">Accès réservé au recrutement / DRH.</div>';return}
   if(emploiState.view==="dossier"&&emploiState.dossier){renderEmploi();return}
@@ -50,7 +55,7 @@ function refreshEmploi(){
 }
 function emploiHeader(){
   const views=[["board","Candidatures"],["inbox","Échanges"],["tips","Conseils emploi"],["companies","Sociétés"]];
-  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Traitement des candidatures</h2><p>Réception, pièces, entretiens, décision et contrat des candidatures IRON Emploi.</p></div></header>
+  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Candidatures</h2><p>Toutes les demandes de l’application, de la réception au recrutement.</p></div><div class="rec-page-actions">${emploiCan("create")?'<button type="button" class="primary" onclick="openRecruitCandidateForm()">+ Ajouter un candidat</button>':""}</div></header>
     <nav class="tabs rec-tabs emploi-views" aria-label="Rubriques">${views.map(([key,label])=>`<button type="button" class="tab-btn${emploiState.view===key?" active":""}" onclick="emploiSetView('${key}')">${label}</button>`).join("")}</nav>`;
 }
 function emploiSetView(view){emploiState.view=view;emploiState.dossier=null;emploiState.error="";return refreshEmploi()}
@@ -78,9 +83,36 @@ function emploiRowHTML(item){
     <td class="rec-col-secondary">${item.documents} pièce${item.documents>1?"s":""}${item.missing_documents?` · <span class="emploi-warn">${item.missing_documents} attendue${item.missing_documents>1?"s":""}</span>`:""}${item.unread_messages?` · <b>${item.unread_messages} message${item.unread_messages>1?"s":""} non lu${item.unread_messages>1?"s":""}</b>`:""}</td>
     <td class="rec-col-actions"><button type="button" class="dashboard-mini-action" onclick="openEmploiDossier(${Number(item.id)})">Ouvrir le dossier</button> <button type="button" class="dashboard-mini-action" onclick="openEmploiDossier(${Number(item.id)},'documents')">Pièces</button></td></tr>`;
 }
+// Regroupement visuel uniquement : les étapes précises restent enregistrées et visibles.
+const EMPLOI_PIPELINE_GROUPS=[
+  {label:"Réception",codes:["received"]},
+  {label:"Étude",codes:["review","shortlisted"]},
+  {label:"Entretien",codes:["convocation","interview"]},
+  {label:"Décision",codes:["decision"]},
+  {label:"Contrat",codes:["hiring_file","contract","signature"]},
+  {label:"Recrutement",codes:["hired"]}
+];
 function emploiPipelineHTML(data){
-  return `<div class="emploi-pipeline">${data.stages.map(stage=>{const items=data.items.filter(item=>item.stage===stage.code);
-    return `<section class="emploi-column" aria-label="${esc(stage.label)}"><header><span>${esc(stage.label)}</span><b>${items.length}</b></header>${items.map(item=>`<button type="button" class="emploi-card" onclick="openEmploiDossier(${Number(item.id)})"><strong>${esc(emploiName(item.candidate))}</strong><span>${esc(item.title)}</span><small>${esc(formatDateFr(item.received_at))}${item.outcome!=="pending"?` · ${esc(item.outcome_label)}`:""}</small></button>`).join("")||'<p class="emploi-empty">Aucune</p>'}</section>`}).join("")}</div>`;
+  const known=new Set(EMPLOI_PIPELINE_GROUPS.flatMap(group=>group.codes));
+  const groups=[...EMPLOI_PIPELINE_GROUPS,...data.stages.filter(stage=>!known.has(stage.code)).map(stage=>({label:stage.label,codes:[stage.code]}))];
+  return `<div class="emploi-pipeline" tabindex="0" aria-label="Pipeline des candidatures, défilement horizontal">${groups.map((group,index)=>{
+    const items=data.items.filter(item=>group.codes.includes(item.stage));
+    return `<section class="emploi-column" data-step="${index}" aria-label="${esc(group.label)}"><header><span>${esc(group.label)}</span><b>${items.length}</b></header>${items.map(item=>`<button type="button" class="emploi-card" onclick="openEmploiDossier(${Number(item.id)})">
+      <strong>${esc(emploiName(item.candidate))}</strong><span>${esc(item.title)}</span>
+      <small>${esc(item.society||"Non ventilée")}</small>
+      <span class="emploi-origin">${item.kind==="offer"?"Annonce":"Spontanée"}</span>
+      <small>${esc(formatDateFr(item.received_at))} · ${esc(item.stage_label)}</small>
+      ${item.outcome!=="pending"?`<span class="pill ${EMPLOI_OUTCOME_PILL[item.outcome]||"pill-gray"}">${esc(item.outcome_label)}${!item.outcome_communicated&&item.outcome!=="withdrawn"?" · non communiquée":""}</span>`:""}
+      ${item.next_action?`<span class="emploi-next"><small>Prochaine action</small>${esc(item.next_action)}${item.next_action_due?` · ${esc(formatDateFr(item.next_action_due))}`:""}</span>`:""}
+      ${item.unread_messages?`<small>${Number(item.unread_messages)} message(s) non lu(s)</small>`:""}
+      </button>`).join("")||'<p class="emploi-empty">Aucune candidature</p>'}</section>`
+  }).join("")}</div>`;
+}
+function emploiCountersHTML(data){
+  const primary=new Set(["new","review","interviews","hired"]);
+  const button=c=>`<button type="button" class="emploi-counter${emploiState.bucket===c.key?" active":""}" aria-pressed="${emploiState.bucket===c.key}" onclick="emploiSetBucket('${c.key}')"><strong>${c.count}</strong><span>${esc(c.label)}</span></button>`;
+  return `<div class="emploi-counters" role="group" aria-label="Indicateurs principaux">${data.counters.filter(c=>primary.has(c.key)).map(button).join("")}</div>
+    <div class="emploi-secondary-counters" role="group" aria-label="Autres échéances">${data.counters.filter(c=>!primary.has(c.key)).map(button).join("")}</div>`;
 }
 function renderEmploi(){
   const host=emploiHost();if(!host)return;
@@ -91,7 +123,7 @@ function renderEmploi(){
   if(emploiState.error){host.innerHTML=emploiHeader()+`<div class="table-card rec-table-card">${recruitmentErrorState(esc(emploiState.error),"loadEmploiBoard()")}</div>`;return}
   const data=emploiState.data;if(!data)return;
   const filtered=!!emploiState.bucket||Object.values(emploiState.filters).some(Boolean);
-  host.innerHTML=emploiHeader()+`<div class="emploi-counters" role="group" aria-label="Compteurs">${data.counters.map(c=>`<button type="button" class="emploi-counter${emploiState.bucket===c.key?" active":""}" aria-pressed="${emploiState.bucket===c.key}" onclick="emploiSetBucket('${c.key}')"><strong>${c.count}</strong><span>${esc(c.label)}</span></button>`).join("")}</div>
+  host.innerHTML=emploiHeader()+`${emploiCountersHTML(data)}
     ${emploiFiltersHTML(data)}
     <div class="emploi-toolbar"><span class="rec-count">${data.items.length} candidature${data.items.length>1?"s":""}${filtered?` sur ${data.total}`:""}</span><div class="emploi-toggle" role="group" aria-label="Affichage"><button type="button" class="tab-btn${emploiState.mode==="table"?" active":""}" onclick="emploiState.mode='table';renderEmploi()">Tableau</button><button type="button" class="tab-btn${emploiState.mode==="pipeline"?" active":""}" onclick="emploiState.mode='pipeline';renderEmploi()">Pipeline</button></div></div>
     ${!data.items.length?`<div class="table-card rec-table-card">${recruitmentEmptyState(filtered?{title:"Aucun résultat",text:"Aucune candidature ne correspond à ces filtres.",action:'<button type="button" class="secondary" onclick="emploiResetFilters()">Réinitialiser les filtres</button>'}:{title:"Aucune candidature",text:"Les candidatures envoyées depuis l’application IRON Emploi apparaîtront ici."})}</div>`
@@ -261,11 +293,14 @@ async function emploiOpenCandidate(id,phone){
     activeTab="new";showRecruitSection("candidates",false);openCandidateForm(Number(id));
   }catch(error){showBanner(emploiError(error),"error")}
 }
+function emploiJourneyHTML(d){
+  return `<nav class="emploi-journey" tabindex="0" aria-label="Étape actuelle de la candidature">${EMPLOI_PIPELINE_GROUPS.map(group=>`<span${group.codes.includes(d.stage)?' aria-current="step" class="current"':""}>${esc(group.label)}</span>`).join("")}</nav>`;
+}
 function emploiDossierHTML(d){
   const tabs={summary:emploiSummaryHTML,documents:emploiDocumentsHTML,processing:emploiProcessingHTML,interviews:emploiInterviewsHTML,messages:emploiMessagesHTML,notes:emploiNotesHTML,contract:emploiContractHTML};
   const badge={documents:d.documents.length+(d.missing_documents?` · ${d.missing_documents} attendue${d.missing_documents>1?"s":""}`:""),interviews:d.interviews.length||"",messages:d.unread_messages||"",notes:d.notes.length||""};
   return `<header class="rec-page-header"><div class="rec-page-heading"><h2>${esc(emploiName(d.candidate))}</h2><p>${esc(d.title)} · ${d.kind==="offer"?esc(d.society||""):"Candidature spontanée"} · ${esc(d.reference)} · reçue le ${esc(formatDateFr(d.received_at))}</p><p class="emploi-state">${emploiPills(d)}${d.assigned_to?` <span class="emploi-sub">Recruteur : ${esc(d.assigned_to)}</span>`:""}${d.next_action?` <span class="emploi-sub">Prochaine action : ${esc(d.next_action)}${d.next_action_due?` (${esc(formatDateFr(d.next_action_due))})`:""}</span>`:""}</p></div><div class="rec-page-actions"><button type="button" class="secondary" onclick="emploiSetView('board')">← Retour aux candidatures</button></div></header>
-    <nav class="tabs rec-tabs" aria-label="Rubriques du dossier">${EMPLOI_TABS.map(([key,label])=>`<button type="button" class="tab-btn${emploiState.tab===key?" active":""}" onclick="emploiSetTab('${key}')">${label}${badge[key]?` <span class="count">${badge[key]}</span>`:""}</button>`).join("")}</nav>
+    ${emploiJourneyHTML(d)}<nav class="tabs rec-tabs" aria-label="Rubriques du dossier">${EMPLOI_TABS.map(([key,label])=>`<button type="button" class="tab-btn${emploiState.tab===key?" active":""}" onclick="emploiSetTab('${key}')">${label}${badge[key]?` <span class="count">${badge[key]}</span>`:""}</button>`).join("")}</nav>
     ${(tabs[emploiState.tab]||emploiSummaryHTML)(d)}`;
 }
 function emploiAfterDossier(){const thread=document.querySelector(".emploi-thread");if(thread)thread.scrollTop=thread.scrollHeight}

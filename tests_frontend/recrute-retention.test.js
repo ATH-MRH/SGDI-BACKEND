@@ -50,7 +50,7 @@ test('recrute.html : entrée de barre latérale, section et script de l’écran
   assert.match(page, /<script src="\/static\/recrute-retention\.js/);
   assert.match(page, /"processing","retention"\]\.includes\(section\)/);
   assert.match(page, /recruitSection==="retention"\)\{if\(typeof refreshRetention==="function"\)refreshRetention\(\)\}/);
-  for (const section of ['dashboard', 'candidates', 'interviews', 'announcements', 'processing', 'reserve', 'archive']) assert.match(page, new RegExp(`data-section="${section}"`), 'barre latérale conservée');
+  for (const section of ['dashboard', 'interviews', 'announcements', 'processing', 'reserve', 'archive']) assert.match(page, new RegExp(`data-section="${section}"`), 'barre latérale conservée');
   assert.doesNotMatch(script, /method\s*:|DELETE|POST|PUT|PATCH|localStorage|sessionStorage/, 'le module ne fait que lire');
 });
 
