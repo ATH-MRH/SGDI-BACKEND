@@ -753,7 +753,7 @@ function badgeHTML(a,opts){
   const prenom=String(a.prenom||"").trim();
   const code=String(a.matricule||"—").trim();
   const fonction=String(aff.poste||a.fonction||"Employé").trim();
-  const groupeSanguin=String(a.groupeSanguin||a.groupe_sanguin||"").trim();
+  // Pas de groupe sanguin sur cet écran historique : il n'est affiché que par le Studio Badges DRH, sur autorisation explicite.
   const recto=`<section class="badge-card ${vertical?"vertical":"horizontal"}" style="${size}">
     <div class="badge-top" style="background:${color}"><div class="badge-brand">${escapeHTML(a.societe||"SGDI")}</div><div class="badge-type">BADGE PERSONNEL</div></div>
     <div class="badge-body">
@@ -764,7 +764,6 @@ function badgeHTML(a,opts){
           <div class="badge-prenom">${escapeHTML(prenom||"")}</div>
           <div class="badge-code">${escapeHTML(code||"—")}</div>
           <div class="badge-job">${escapeHTML(fonction||"—")}</div>
-          ${groupeSanguin?`<div class="badge-blood">Groupe sanguin : <b>${escapeHTML(groupeSanguin)}</b></div>`:""}
         </div>
       </div>
       <img class="badge-seal" src="/static/iron-service-badge-seal.png" alt=""/>

@@ -1,4 +1,5 @@
-import type { IconName } from '@/components/ui';
+import type { IconName, KpiDelta } from '@/components/ui';
+import type { Tone } from '@/theme/tokens';
 import type { TranslationKey } from '@/i18n';
 import { formatDate } from '@/utils/format';
 
@@ -35,4 +36,24 @@ export function shortDate(date: string): string {
 /** Taux 0–1 → "96 %" ; "—" quand il est inconnu. */
 export function percent(ratio: number | null | undefined): string {
   return typeof ratio === 'number' && Number.isFinite(ratio) ? `${Math.round(ratio * 100)} %` : '—';
+}
+
+/** Couleur d'un taux de présence : vert à partir de 90 %, orange à partir de 75 %, rouge en dessous. */
+export function rateTone(ratio: number | null | undefined): Tone {
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return 'neutral';
+  return ratio >= 0.9 ? 'success' : ratio >= 0.75 ? 'warning' : 'danger';
+}
+
+/** Part d'un total, ou null quand le total est nul ou inconnu. */
+export function share(part: number | null | undefined, total: number | null | undefined): number | null {
+  return typeof part === 'number' && typeof total === 'number' && total > 0 ? part / total : null;
+}
+
+/**
+ * Évolution d'un compteur entre hier et aujourd'hui, à partir des deux journées renvoyées
+ * par le backend. null si l'une des deux est inconnue : aucune tendance n'est supposée.
+ */
+export function dayOverDay(yesterday: number | null | undefined, today: number | null | undefined, label: string, upIsGood: boolean): KpiDelta | null {
+  if (typeof yesterday !== 'number' || typeof today !== 'number') return null;
+  return { value: today - yesterday, label, upIsGood };
 }

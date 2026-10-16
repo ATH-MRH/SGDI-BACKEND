@@ -51,6 +51,78 @@ Le navigateur la dessine en SVG (`app/static/js/modules/badges.js`), le serveur 
 - Le modèle « IRON GLOBAL — Référence » est créé au premier accès et n'est pas modifiable : on le
   duplique pour le personnaliser, par société si besoin.
 
+## Verrou de consultation de l'application
+
+À chaque navigation, l'application repasse en mode consultation (`sgdi-view-mode`) : les champs
+de la page sont désactivés jusqu'à **Outils › Déverrouiller**, et une règle CSS les rend
+insensibles à la souris. Ce verrou protège les formulaires enregistrables ; il ne s'applique pas
+aux champs du studio, selon la convention `data-no-lock` déjà employée ailleurs :
+
+- recherches et filtres (sociétés, sites, fonctions, historique) : toujours utilisables
+  (`data-no-lock`, conteneur `data-nav-filter`) ;
+- cases et options de l'impression en lot, champs d'émission : utilisables avec le droit
+  correspondant (`export` ou `create`), sinon désactivés explicitement ;
+- éditeur de modèles et paramètres : modifiables avec le droit `admin`, sinon en consultation
+  seule (champs désactivés, outils inactifs, aucun déplacement, aucun enregistrement).
+
+Le serveur contrôle toujours chaque action : une manipulation du navigateur reste refusée (403).
+Les champs dont la casse compte (texte des modèles et ses champs `{{nom}}`, légendes, nom du
+modèle, référence d'autorisation) portent `data-no-uppercase="1"` : sans cela, l'application les
+mettrait en majuscules et `{{nom}}` deviendrait `{{NOM}}`, qui n'est plus un champ.
+
+Après un enregistrement réussi des paramètres, le formulaire n'est plus « modifié » pour
+l'application : sa garde de navigation ne bloque plus la sortie de l'écran.
+
+## Groupe sanguin
+
+Donnée médicale sensible, lue dans la fiche employé (`groupeSanguin`), sans nouvelle colonne ni
+migration.
+
+- **Valeurs** : O+, O−, A+, A−, B+, B−, AB+, AB−. Les saisies courantes sont normalisées (`AB-`,
+  `ab −`, `O pos`, `0+` saisi pour O+). Toute autre valeur est ignorée : rien n'est jamais déduit.
+- **Autorisation explicite** : Paramètres › Groupe sanguin sur les badges. L'activation exige le
+  droit `admin` des badges et la référence de l'autorisation interne qui encadre ce traitement ;
+  sans référence, l'option reste désactivée. Chaque changement est tracé dans l'historique.
+- **Masqué** si l'affichage n'est pas autorisé, si la fiche n'en porte pas ou si la valeur n'est
+  pas reconnue. L'écran « Créer un badge » indique lequel de ces cas s'applique.
+- **Jamais public** : absent de l'API publique du badge, de la page ouverte par le QR (serveur et
+  application), du QR lui-même, des journaux et de l'écran historique des autres portails.
+- **Côté serveur** : la valeur n'est transmise aux écrans DRH que si son affichage est autorisé
+  pour la société de l'employé.
+- Information **déclarative**, reprise de la fiche : le badge ne la présente pas comme une
+  preuve médicale vérifiée.
+
+Élément de maquette `blood` (« Groupe sanguin ») : position, largeur, hauteur, taille du groupe
+et de la légende, couleur, fond, bordure, arrondi, alignement, affichage, verrouillage. Les huit
+groupes sont dessinés avec la même police embarquée (signe moins typographique). Sur le modèle
+de référence (version 2), il est placé à gauche du QR, sur sa bande : l'espace entre le matricule
+et le QR (1,2 mm) ne permet pas de l'y insérer sans réduire le QR sous 12 mm.
+
+### Badges déjà émis
+
+- Le modèle de référence est mis à jour (version 1 → 2) au premier accès, avec une entrée
+  dans l'historique. Les badges déjà émis gardent leur maquette (instantané).
+- Le groupe sanguin n'est figé dans l'instantané que si son affichage est autorisé au moment
+  de l'émission. Il n'est jamais ajouté après coup : il faut émettre un nouveau badge.
+- En réimpression, il n'apparaît que s'il figure dans l'instantané **et** que l'affichage est
+  toujours autorisé : un retrait d'autorisation le masque aussi sur les anciens badges.
+
+## Aperçu et impression
+
+- **Aperçu du badge** (création, studio, modèles, badge émis, lot) : badge seul ou réaliste
+  (porte-badge et cordon, jamais imprimés), recto, verso ou les deux, zoom et **taille réelle**
+  (100 % = dimensions physiques à 96 px par pouce, selon l'écran). L'aperçu n'émet rien.
+- **Imprimer le badge** : vérification des informations, aperçu de l'instantané, format (carte au
+  format exact ou planche A4 avec marges et traits de coupe), PDF. Une réimpression est
+  identique au badge remis, comptée et tracée, sans nouvelle émission. Pour un autre modèle,
+  on émet un nouveau badge (renouvellement ou remplacement). « Émettre puis imprimer » enchaîne
+  les deux pour un employé sans badge.
+- **Impression en lot** : recherche, filtres par société, site et fonction, sélection multiple
+  (y compris tous les résultats), modèle des badges à émettre, sortie, aperçu collectif (24
+  badges au plus), PDF A4 multipage. Chaque badge garde les données de son employé.
+- Les PDF demandent une impression **à 100 %** (`/PrintScaling /None`) : désactivez aussi
+  « Ajuster à la page » dans la fenêtre d'impression.
+
 ## API (`/api/drh/badges`)
 
 Sous `/api/drh` : module « drh » requis, périmètre société appliqué, actions journalisées dans
@@ -63,6 +135,7 @@ Sous `/api/drh` : module « drh » requis, périmètre société appliqué, acti
 | GET | `/employees`, `/employees/{id}`, `/employees/{id}/photo` | Employés et état de leur badge |
 | GET, POST, PUT, DELETE | `/templates…` | Modèles (dupliquer, par défaut, archiver) |
 | POST | `/issue`, `/issue-batch` | Émission unitaire ou en lot |
+| GET | `/employees/facets` | Sociétés, sites et fonctions proposés par les filtres |
 | GET | `/`, `/{id}`, `/{id}/photo` | Badges émis |
 | POST | `/{id}/revoke` | Révocation motivée |
 | POST | `/print/pdf` | PDF d'impression (compté et tracé) |
@@ -168,6 +241,14 @@ Ne jamais lancer `alembic downgrade` en production comme procédure automatique.
    que si le studio n'a jamais servi.
 4. **Dernier recours** : restauration de la sauvegarde PostgreSQL prise avant le déploiement.
 
+### Groupe sanguin, aperçu et impression (sans migration)
+
+Cette évolution n'ajoute ni colonne ni migration : le retour au commit précédent est un simple
+redéploiement, sans `stamp`. L'ancien code ignore l'élément « Groupe sanguin » des maquettes et
+les nouveaux paramètres : rien ne s'affiche, aucune donnée n'est perdue. En revanche, il
+exposerait de nouveau le groupe sanguin sur la page publique du QR : un retour arrière doit
+rester bref, et ne pas être fait sans en mesurer cet effet.
+
 ## Tests
 
 - `tests/test_drh_badges.py` : maquette, émission et instantané, remplacement, révocation,
@@ -175,3 +256,9 @@ Ne jamais lancer `alembic downgrade` en production comme procédure automatique.
   interrupteur, retour arrière.
 - `tests_frontend/drh-badges.test.js` : rendu SVG et échappement, aperçus, écrans, émission,
   éditeur (ajout, alignement, verrouillage, annulation, enregistrement).
+- `tests/test_drh_badges_blood_print.py` : groupe sanguin (normalisation, autorisation,
+  instantané, réimpression, confidentialité de l'API et de la page publiques, journaux), modèle
+  de référence version 2, PDF aux formats 54 × 86 et 85,6 × 54 mm, filtres et PDF A4 du lot.
+- `tests_frontend/drh-badges-blood-print.test.js` : verrou de consultation (code réel de
+  l'application), droits, groupe sanguin, aperçu, impression individuelle, lot, paramètres,
+  éditeur et consultation seule, casse des champs.

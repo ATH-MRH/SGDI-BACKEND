@@ -172,7 +172,8 @@ test("the studio edits a copy of the reference: add, move, undo, arrange, save",
   w.renderBadgeStudio(view, "studio"); await settle();
   const ed = w.BadgeStudioEditor.state;
   assert.equal(ed.id, null);                                             // le modèle de référence s'ouvre en copie
-  assert.equal(view.querySelectorAll('[data-st="tool"]').length, 13);
+  assert.equal(view.querySelectorAll('[data-st="tool"]').length, 14);
+  assert.ok(view.querySelector('[data-st="tool"][data-tool="blood"]'), "outil Groupe sanguin");
   assert.equal(view.querySelector('[data-st="save"]').dataset.noSaveOverlay, "1");   // pas d'indicateur global « Enregistrement en cours »
 
   // Règles graduées en millimètres, grille, aimant et guides.

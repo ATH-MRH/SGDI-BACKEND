@@ -8,28 +8,42 @@ import { AppText } from './AppText';
 
 export type BarDatum = { key: string; label: string; value: number | null; tone?: Tone | 'brand' };
 
-type BarChartProps = { data: readonly BarDatum[]; max?: number; height?: number; unit?: string; testID?: string };
+type BarChartProps = {
+  data: readonly BarDatum[];
+  max?: number;
+  height?: number;
+  unit?: string;
+  /** Barre mise en avant (le jour courant) : les autres passent en bleu clair. */
+  highlight?: string;
+  testID?: string;
+};
 
 /** Barres verticales. Une valeur inconnue (null) est affichée comme un trait, jamais comme un zéro. */
-export function BarChart({ data, max, height = 96, unit = '', testID }: BarChartProps) {
+export function BarChart({ data, max, height = 96, unit = '', highlight, testID }: BarChartProps) {
   const known = data.map((datum) => datum.value).filter((value): value is number => typeof value === 'number');
   const top = Math.max(max ?? 0, ...known, 1);
   return (
     <View testID={testID} style={styles.bars} accessible accessibilityLabel={data.map((d) => `${d.label} ${d.value ?? '—'}${unit}`).join(', ')}>
       {data.map((datum) => {
-        const color = !datum.tone || datum.tone === 'brand' ? colors.primary : toneColors[datum.tone].fg;
+        const toned = !datum.tone || datum.tone === 'brand' ? colors.primary : toneColors[datum.tone].fg;
+        const focused = highlight !== undefined && datum.key === highlight;
+        const color = highlight === undefined ? toned : focused ? colors.primary : colors.chartSoft;
         const amount = datum.value;
         const filled = amount === null ? 0 : Math.max(2, Math.round((amount / top) * height));
         const barColor = amount === null ? colors.border : color;
         return (
           <View key={datum.key} style={styles.barColumn}>
-            <AppText variant="caption" color={colors.textSecondary} style={styles.barValue} numberOfLines={1}>
+            <AppText
+              variant="caption"
+              color={focused ? colors.onPrimary : colors.textSecondary}
+              style={[styles.barValue, focused && styles.barValueFocused]}
+              numberOfLines={1}>
               {datum.value === null ? '—' : `${datum.value}${unit}`}
             </AppText>
             <View style={[styles.barTrack, { height }]}>
               <View style={[styles.bar, { height: filled, backgroundColor: barColor }]} />
             </View>
-            <AppText variant="caption" color={colors.textMuted} numberOfLines={1}>
+            <AppText variant="caption" color={focused ? colors.navy : colors.textMuted} numberOfLines={2} style={styles.barLabel}>
               {datum.label}
             </AppText>
           </View>
@@ -143,7 +157,9 @@ export function Distribution({ segments, showBar = true, testID }: DistributionP
 const styles = StyleSheet.create({
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   barColumn: { flex: 1, alignItems: 'center', gap: 4 },
-  barValue: { fontWeight: '600', fontSize: 11, lineHeight: 14 },
+  barValue: { fontWeight: '600', fontSize: 11, lineHeight: 14, paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden' },
+  barValueFocused: { backgroundColor: colors.navy },
+  barLabel: { fontSize: 11, lineHeight: 13, textAlign: 'center' },
   barTrack: { width: '100%', maxWidth: 28, justifyContent: 'flex-end', backgroundColor: colors.surfaceSecondary, borderRadius: radius.sm, overflow: 'hidden' },
   bar: { width: '100%', borderRadius: radius.sm },
   ringBase: { position: 'absolute', top: 0 },

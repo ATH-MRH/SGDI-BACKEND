@@ -7,6 +7,7 @@ import ModulesScreen from '@/app/(tabs)/modules';
 import ProfileScreen from '@/app/(tabs)/profile';
 import ModuleScreen from '@/app/module/[key]';
 import ScopeScreen from '@/app/scope';
+import SettingsScreen from '@/app/settings';
 import type { AuthState } from '@/auth/AuthProvider';
 import { BootstrapScreen } from '@/components/BootstrapScreen';
 import { LockScreen } from '@/components/LockScreen';
@@ -66,6 +67,22 @@ jest.mock('@/features/cockpit/useCockpit', () => ({
 jest.mock('@/features/cockpit/useCockpitInsights', () => ({
   useCockpitInsights: () => ({ week: null, today: null, sitesTotal: null, drh: null, alerts: null, incidents: null, incidentsOpen: null, isRefreshing: false, refresh: jest.fn() }),
 }));
+jest.mock('@/features/commercial/hooks', () => {
+  const idle = { data: undefined, isPending: false, error: null, isRefetching: false, refetch: jest.fn() };
+  return {
+    useErpCounters: () => idle,
+    useQuotesSent: () => idle,
+    useRecentQuotes: () => idle,
+    useMonthSales: () => idle,
+    useMonthSalesByStatus: () => idle,
+    useMonthTopClients: () => idle,
+    useOpportunities: () => idle,
+    useProspects: () => idle,
+    useAllClients: () => idle,
+    useInvoices: () => idle,
+    usePayments: () => idle,
+  };
+});
 jest.mock('@/config/env', () => ({
   get env() {
     return { variant: mockVariant, apiUrl: 'https://atlas.example.test', features: {}, lockTimeoutMs: 120_000, storeUrls: mockStoreUrls };
@@ -79,7 +96,7 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-linking', () => ({ openURL: jest.fn(async () => true) }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View, SafeAreaProvider: View };
+  return { SafeAreaView: View, SafeAreaProvider: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
 });
 
 const signIn = (overrides = {}) => {
@@ -197,10 +214,9 @@ describe('accueil et modules dynamiques', () => {
   it("l'accueil affiche le contexte de travail et permet de le changer s'il y a un choix", async () => {
     signIn({ authorized_societies: ['Societe A', 'Societe B'], authorized_sites: [], effective_modules: ['ops'] });
     await render(<HomeScreen />);
-    // Le prénom est affiché sous « Bonjour, » ; le nom complet reste annoncé aux lecteurs d'écran.
-    expect(screen.getByText('Bonjour,')).toBeTruthy();
-    expect(screen.getByLabelText('Bonjour Agent Ops')).toHaveTextContent('Agent');
-    expect(screen.getByText('Toutes mes sociétés')).toBeTruthy();
+    // Le prénom est affiché (« Bonjour Agent ») ; le nom complet reste annoncé aux lecteurs d'écran.
+    expect(screen.getByLabelText('Bonjour Agent Ops')).toHaveTextContent('Bonjour Agent');
+    expect(screen.getByTestId('home-scope')).toHaveTextContent(/Toutes mes sociétés/);
     await fireEvent.press(screen.getByTestId('home-scope'));
     expect(mockPush).toHaveBeenCalledWith('/scope');
   });
@@ -208,8 +224,7 @@ describe('accueil et modules dynamiques', () => {
   it("l'accueil ne propose aucun choix quand le périmètre est unique", async () => {
     signIn({ authorized_societies: ['Societe A'], authorized_sites: [1] });
     await render(<HomeScreen />);
-    expect(screen.getByText('Societe A')).toBeTruthy();
-    expect(screen.getByText('Site 1')).toBeTruthy();
+    expect(screen.getByText('Site 1 – Societe A')).toBeTruthy();
     expect(screen.queryByText('Modifier le contexte de travail')).toBeNull();
   });
 
@@ -227,7 +242,8 @@ describe('accueil et modules dynamiques', () => {
     expect(screen.queryByTestId('module-drh')).toBeNull();
     expect(screen.queryByTestId('module-recrute')).toBeNull();
     await fireEvent.press(screen.getByTestId('module-brq'));
-    expect(mockPush).toHaveBeenCalledWith({ pathname: '/module/[key]', params: { key: 'brq' } });
+    // Un module qui a son écran mobile l'ouvre directement.
+    expect(mockPush).toHaveBeenCalledWith('/brq');
   });
 
   it('un compte DRH seul ne voit pas OPS, et inversement', async () => {
@@ -373,25 +389,38 @@ describe('profil', () => {
     signIn({ authorized_societies: ['Societe A', 'Societe B'], authorized_sites: [], effective_modules: ['ops', 'brq'] });
     await render(<ProfileScreen />);
     expect(screen.getAllByText('Agent Ops').length).toBeGreaterThan(0);
-    expect(screen.getByText('OPS1')).toBeTruthy();
+    expect(screen.getByText('@OPS1')).toBeTruthy();
     expect(screen.getByTestId('profile-societies')).toHaveTextContent(/Societe A, Societe B/);
     expect(screen.getByTestId('profile-sites')).toHaveTextContent(/Site 1, Site 2, Site 5/);
     expect(screen.getByTestId('profile-modules')).toHaveTextContent(/OPS, BRQ/);
     expect(screen.getByTestId('version-label')).toHaveTextContent(/Build 14/);
-    expect(screen.getByTestId('profile-environment')).toHaveTextContent('Test');
     expect(screen.queryByText('Lecture seule')).toBeNull();
+    await fireEvent.press(screen.getByTestId('more-settings'));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+  });
+
+  it("les paramètres affichent le compte, l'environnement, la langue et l'apparence réelles", async () => {
+    signIn();
+    await render(<SettingsScreen />);
+    expect(screen.getByTestId('settings-account')).toHaveTextContent(/OPS1/);
+    expect(screen.getByTestId('profile-environment')).toHaveTextContent('Test');
+    expect(screen.getByTestId('settings-language')).toHaveTextContent(/Français/);
+    expect(screen.getByTestId('settings-appearance')).toHaveTextContent(/Clair/);
+    // Notifications indisponibles hors build natif : l'état est dit, aucun bouton factice.
+    expect(screen.getByTestId('profile-push-status')).toHaveTextContent(/pas disponibles/);
+    expect(screen.queryByTestId('profile-push-enable')).toBeNull();
   });
 
   it("n'affiche le diagnostic technique qu'en développement", async () => {
     signIn({ effective_modules: ['ops'], authorized_actions: ['read'] });
-    const view = await render(<ProfileScreen />);
+    const view = await render(<SettingsScreen />);
     expect(screen.queryByTestId('profile-diagnostics')).toBeNull();
     mockVariant = 'production';
-    await view.rerender(<ProfileScreen />);
+    await view.rerender(<SettingsScreen />);
     expect(screen.queryByTestId('profile-diagnostics')).toBeNull();
     expect(screen.getByTestId('profile-environment')).toHaveTextContent('Production');
     mockVariant = 'development';
-    await view.rerender(<ProfileScreen />);
+    await view.rerender(<SettingsScreen />);
     expect(screen.getByTestId('profile-diagnostics')).toHaveTextContent(/atlas\.example\.test/);
   });
 
@@ -404,7 +433,7 @@ describe('profil', () => {
 
   it('active le verrouillage biométrique sur demande explicite', async () => {
     signIn();
-    await render(<ProfileScreen />);
+    await render(<SettingsScreen />);
     expect(screen.getByTestId('profile-lock-switch').props.value).toBe(false);
     expect(screen.queryByTestId('profile-lock-now')).toBeNull();
     await fireEvent(screen.getByTestId('profile-lock-switch'), 'valueChange', true);
@@ -415,7 +444,7 @@ describe('profil', () => {
   it("explique pourquoi l'activation est impossible sans biométrie configurée", async () => {
     signIn();
     mockLock.capability = 'notEnrolled';
-    await render(<ProfileScreen />);
+    await render(<SettingsScreen />);
     await fireEvent(screen.getByTestId('profile-lock-switch'), 'valueChange', true);
     await waitFor(() => expect(screen.getByTestId('profile-lock-notice')).toHaveTextContent(/Aucune empreinte ni aucun visage/));
     expect(mockLock.enable).not.toHaveBeenCalled();
@@ -425,7 +454,7 @@ describe('profil', () => {
     signIn();
     mockLock.enabled = true;
     mockLock.disable.mockResolvedValue('failed');
-    await render(<ProfileScreen />);
+    await render(<SettingsScreen />);
     await fireEvent(screen.getByTestId('profile-lock-switch'), 'valueChange', false);
     await waitFor(() => expect(screen.getByTestId('profile-lock-notice')).toHaveTextContent(/n’a pas abouti/));
     await fireEvent.press(screen.getByTestId('profile-lock-now'));
@@ -435,7 +464,7 @@ describe('profil', () => {
   it('masque la section sécurité quand la biométrie est absente du build', async () => {
     signIn();
     mockLock.supported = false;
-    await render(<ProfileScreen />);
+    await render(<SettingsScreen />);
     expect(screen.queryByTestId('profile-security')).toBeNull();
   });
 });

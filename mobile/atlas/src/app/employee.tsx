@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useRef, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   employeeApi,
@@ -13,21 +14,30 @@ import {
 } from '@/employee/api';
 import { useEmployee } from '@/employee/EmployeeProvider';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Avatar, Button, Card, ListItem, Loader, Screen } from '@/components/ui';
+import { AppText, AtlasLogo, Avatar, Button, Card, KpiGrid, ListItem, ModuleTile, SkeletonLines, type IconName } from '@/components/ui';
 import { leaveStatus, presenceStatus } from '@/features/status';
 import { t, type TranslationKey } from '@/i18n';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, elevation, radius, spacing } from '@/theme/tokens';
 import { formatDate, formatTime, fullName } from '@/utils/format';
 
 /** Une section qui échoue ou reste vide n'empêche jamais les autres de s'afficher. */
-function Section<T>({ title, query, testID, render }: { title: TranslationKey; query: UseQueryResult<T[]>; testID: string; render: (item: T) => ReactNode }) {
+type SectionProps<T> = {
+  title: TranslationKey;
+  query: UseQueryResult<T[]>;
+  testID: string;
+  render: (item: T) => ReactNode;
+  /** Position de la section, pour que les tuiles du haut y fassent défiler. */
+  onPlace: (testID: string, y: number) => void;
+};
+
+function Section<T>({ title, query, testID, render, onPlace }: SectionProps<T>) {
   return (
-    <Card testID={testID}>
-      <AppText variant="label" color={colors.textSecondary} accessibilityRole="header">
+    <Card testID={testID} onLayout={(event) => onPlace(testID, event.nativeEvent.layout.y)}>
+      <AppText style={styles.sectionTitle} color={colors.navy} accessibilityRole="header">
         {t(title)}
       </AppText>
       {query.isPending ? (
-        <Loader />
+        <SkeletonLines />
       ) : query.error ? (
         <View style={styles.retry}>
           <AppText color={colors.textSecondary}>{t('section.unavailable')}</AppText>
@@ -56,8 +66,23 @@ export default function EmployeeHomeScreen() {
   const documents = useQuery({ queryKey: key('documents'), queryFn: () => fetchSelfDocuments(employeeApi), enabled });
   const payslips = useQuery({ queryKey: key('payslips'), queryFn: () => fetchSelfPayslips(employeeApi), enabled });
 
+  const scroll = useRef<ScrollView>(null);
+  const offsets = useRef<Record<string, number>>({});
   if (!employee) return null;
   const name = fullName(employee.lastName, employee.firstName);
+  const place = (testID: string, y: number) => {
+    offsets.current[testID] = y;
+  };
+  const jump = (id: string) => scroll.current?.scrollTo({ y: Math.max(0, (offsets.current[`self-${id}`] ?? 0) - spacing.md), animated: true });
+  const count = (query: UseQueryResult<unknown[]>) => (query.data ? query.data.length : null);
+  const tiles: { id: string; label: TranslationKey; icon: IconName; count: number | null }[] = [
+    { id: 'planning', label: 'employee.planning', icon: 'calendar-outline', count: count(planning) },
+    { id: 'attendance', label: 'employee.attendance', icon: 'time-outline', count: count(attendance) },
+    { id: 'absences', label: 'employee.absences', icon: 'person-remove-outline', count: count(absences) },
+    { id: 'leaves', label: 'employee.leaves', icon: 'airplane-outline', count: count(leaves) },
+    { id: 'documents', label: 'employee.documents', icon: 'folder-open-outline', count: count(documents) },
+    { id: 'payslips', label: 'employee.payslips', icon: 'receipt-outline', count: count(payslips) },
+  ];
   const day = (item: { date: string; status: string; site: string; arrival: string; departure: string }) => (
     <ListItem
       key={`${item.date}-${item.status}`}
@@ -76,33 +101,50 @@ export default function EmployeeHomeScreen() {
   );
 
   return (
-    <Screen edges={['top', 'bottom', 'left', 'right']} testID="employee-home">
-      <View style={styles.identity}>
-        <Avatar name={name} size={56} />
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']} testID="employee-home">
+      <View style={styles.header}>
+        <AtlasLogo />
+      </View>
+      <ScrollView ref={scroll} contentContainerStyle={styles.content}>
+      <View style={[styles.identity, elevation.card]} testID="self-profile">
+        <Avatar name={name} size={64} />
         <View style={styles.fill}>
-          <AppText variant="heading" accessibilityRole="header" testID="employee-name">
+          <AppText variant="caption" color={colors.textSecondary}>
+            {t('employee.profile')}
+          </AppText>
+          <AppText variant="heading" color={colors.navy} accessibilityRole="header" testID="employee-name" numberOfLines={2}>
             {name}
           </AppText>
-          <AppText color={colors.textSecondary}>{[employee.matricule, employee.position].filter(Boolean).join(' · ')}</AppText>
+          <AppText variant="label" color={colors.textSecondary}>{[employee.matricule, employee.position].filter(Boolean).join(' · ')}</AppText>
           <AppText variant="caption" color={colors.textSecondary}>
             {[employee.society, employee.siteName, employee.group ? t('sites.group', { group: employee.group }) : null].filter(Boolean).join(' · ')}
           </AppText>
         </View>
       </View>
 
+      <KpiGrid columns={3} testID="self-tiles">
+        {tiles.map((tile) => (
+          <ModuleTile key={tile.id} testID={`self-tile-${tile.id}`} label={t(tile.label)} icon={tile.icon} count={tile.count} onPress={() => jump(tile.id)} />
+        ))}
+      </KpiGrid>
+
       <Section
         title="employee.planning"
         testID="self-planning"
+        onPlace={place}
         query={planning}
         render={(shift) => (
           <ListItem key={shift.key} title={formatDate(shift.date)} subtitle={shift.rest ? t('sites.planning.rest') : `${shift.start} – ${shift.end}`} />
         )}
       />
-      <Section title="employee.attendance" testID="self-attendance" query={attendance} render={day} />
-      <Section title="employee.absences" testID="self-absences" query={absences} render={day} />
+      <Section title="employee.attendance" testID="self-attendance"
+        onPlace={place} query={attendance} render={day} />
+      <Section title="employee.absences" testID="self-absences"
+        onPlace={place} query={absences} render={day} />
       <Section
         title="employee.leaves"
         testID="self-leaves"
+        onPlace={place}
         query={leaves}
         render={(leave) => (
           <ListItem
@@ -116,23 +158,39 @@ export default function EmployeeHomeScreen() {
       <Section
         title="employee.documents"
         testID="self-documents"
+        onPlace={place}
         query={documents}
         render={(document) => <ListItem key={document.id} icon="document-outline" title={document.label} subtitle={formatDate(document.createdAt) || undefined} />}
       />
       <Section
         title="employee.payslips"
         testID="self-payslips"
+        onPlace={place}
         query={payslips}
         render={(slip) => <ListItem key={slip.id} icon="receipt-outline" title={slip.period} subtitle={t('employee.netToPay', { amount: slip.netToPay })} />}
       />
 
-      <Button testID="employee-sign-out" variant="danger" label={t('profile.signOut')} onPress={() => void signOut()} />
-    </Screen>
+      <Button testID="employee-sign-out" variant="danger" icon="log-out-outline" label={t('profile.signOut')} onPress={() => void signOut()} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
-  fill: { flex: 1, gap: spacing.xs },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.xs },
+  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  fill: { flex: 1, gap: 2 },
+  sectionTitle: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   retry: { gap: spacing.sm },
 });

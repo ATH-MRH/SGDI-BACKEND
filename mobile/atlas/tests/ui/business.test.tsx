@@ -10,10 +10,10 @@ import TasksScreen from '@/app/(tabs)/tasks';
 import NewAbandonScreen from '@/app/abandons/new';
 import AbandonsScreen from '@/app/abandons/index';
 import AlertDetailScreen from '@/app/alerts/[id]';
-import AttendanceScreen from '@/app/attendance';
+import AttendanceScreen from '@/app/(tabs)/attendance';
 import BrqScreen from '@/app/brq';
 import EmployeeDetailScreen from '@/app/drh/employees/[id]';
-import EmployeesScreen from '@/app/drh/employees/index';
+import EmployeesScreen from '@/app/(tabs)/employees';
 import LeavesScreen from '@/app/drh/leaves';
 import IncidentsScreen from '@/app/incidents/index';
 import NewIncidentScreen from '@/app/incidents/new';
@@ -109,7 +109,7 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View, SafeAreaProvider: View };
+  return { SafeAreaView: View, SafeAreaProvider: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
 });
 
 const page = <T,>(items: T[]) => ({ items, total: items.length, page: 1, page_size: 25, pages: 1 });
@@ -161,7 +161,8 @@ describe('cockpit', () => {
     expect(screen.getByTestId('kpi-expected')).toHaveTextContent(/12/);
     expect(screen.getByTestId('kpi-notPointed')).toHaveTextContent(/1/);
     expect(screen.getByTestId('kpi-abandons')).toHaveTextContent(/1/);
-    expect(screen.getByTestId('kpi-alertsCritical')).toHaveTextContent(/1/);
+    // Les alertes critiques sont signalées par la pastille chiffrée de la cloche.
+    expect(screen.getByTestId('home-alerts-count')).toHaveTextContent('1');
     expect(mock.fetchBoard).toHaveBeenCalledWith({}, { society: 'Societe A', site_id: 1, page_size: 1 });
     // Aucun indicateur d'un domaine non autorisé, et aucun appel pour lui.
     expect(screen.queryByTestId('kpi-leaves')).toBeNull();
@@ -317,6 +318,8 @@ describe('abandon de poste', () => {
     await waitFor(() => expect(screen.getByTestId('abandon-applicable')).toHaveTextContent('Abandon de poste déclarable'));
     expect(screen.getByTestId('abandon-context')).toHaveTextContent(/07:00 – 19:00/);
     expect(screen.getByTestId('abandon-context')).toHaveTextContent(/2 h 30/);
+    // Seuil atteint : l'alerte le dit en clair et le bouton est rouge.
+    expect(screen.getByTestId('abandon-alert')).toHaveTextContent(/au-delà du seuil de 60 min/);
 
     // Motif obligatoire.
     expect(screen.getByTestId('abandon-submit').props.accessibilityState.disabled).toBe(true);
@@ -338,6 +341,7 @@ describe('abandon de poste', () => {
     await fireEvent.press(screen.getByTestId('abandon-employee-5'));
     await waitFor(() => expect(screen.getByTestId('abandon-applicable')).toHaveTextContent(/Non déclarable : il reste moins de 60 min/));
     expect(screen.queryByTestId('abandon-observation')).toBeNull();
+    expect(screen.queryByTestId('abandon-alert')).toBeNull();
     expect(screen.getByTestId('abandon-submit').props.accessibilityState.disabled).toBe(true);
   });
 
@@ -376,6 +380,28 @@ describe('incidents', () => {
     expect(screen.queryByTestId('incident-2')).toBeNull();
     expect(screen.queryByTestId('incident-3')).toBeNull();
     expect(screen.queryByTestId('incident-new')).toBeNull();
+  });
+
+  it('recherche et filtre les incidents du contexte sans nouvel appel au serveur', async () => {
+    signIn(['ops']);
+    mockSaved = { society: 'Societe A', siteId: null };
+    mock.fetchIncidents.mockResolvedValue([
+      { id: 1, date: '2026-10-07', time: '14:05', siteId: 1, type: 'vol', severity: 'elevee', subject: 'Vol de matériel', description: 'Constat', status: 'ouvert', society: 'Societe A' },
+      { id: 4, date: '2026-10-05', time: '', siteId: 1, type: 'incendie', severity: 'critique', subject: 'Départ de feu', description: '', status: 'clôturé', society: 'Societe A' },
+    ]);
+    await show(<IncidentsScreen />);
+    await waitFor(() => expect(screen.getByTestId('incident-4')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('incidents-filter-open'));
+    expect(screen.getByTestId('incident-1')).toBeTruthy();
+    expect(screen.queryByTestId('incident-4')).toBeNull();
+    await fireEvent.press(screen.getByTestId('incidents-filter-critique'));
+    expect(screen.getByTestId('incident-4')).toBeTruthy();
+    expect(screen.queryByTestId('incident-1')).toBeNull();
+    await fireEvent.press(screen.getByTestId('incidents-filter-all'));
+    await fireEvent.changeText(screen.getByTestId('incidents-search'), 'materiel');
+    expect(screen.getByTestId('incident-1')).toBeTruthy();
+    expect(screen.queryByTestId('incident-4')).toBeNull();
+    expect(mock.fetchIncidents).toHaveBeenCalledTimes(1);
   });
 
   it('contrôle la saisie puis crée l\'incident avec la société du site choisi', async () => {

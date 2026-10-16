@@ -21,9 +21,17 @@ const ENTRIES = {
   abandons: { key: 'abandons', title: 'entry.abandons', icon: 'exit-outline', route: '/abandons', access: 'abandons' },
   incidents: { key: 'incidents', title: 'entry.incidents', icon: 'warning-outline', route: '/incidents', access: 'incidents' },
   brq: { key: 'brq', title: 'entry.brq', icon: 'document-text-outline', route: '/brq', access: 'brq' },
-  employees: { key: 'employees', title: 'entry.employees', icon: 'people-outline', route: '/drh/employees', access: 'employees' },
+  employees: { key: 'employees', title: 'entry.employees', icon: 'people-outline', route: '/employees', access: 'employees' },
   leaves: { key: 'leaves', title: 'entry.leaves', icon: 'calendar-outline', route: '/drh/leaves', access: 'leaves' },
   candidates: { key: 'candidates', title: 'entry.candidates', icon: 'person-add-outline', route: '/recruitment', access: 'candidates' },
+  commercial: { key: 'commercial', title: 'commercial.title', icon: 'speedometer-outline', route: '/commercial', access: 'commercial' },
+  clients: { key: 'clients', title: 'commercial.clients', icon: 'briefcase-outline', route: '/commercial/clients', access: 'commercial' },
+  prospects: { key: 'prospects', title: 'commercial.prospects', icon: 'person-add-outline', route: '/commercial/prospects', access: 'commercial' },
+  quotes: { key: 'quotes', title: 'commercial.quotes', icon: 'document-text-outline', route: '/commercial/quotes', access: 'commercial' },
+  contracts: { key: 'contracts', title: 'commercial.contracts', icon: 'ribbon-outline', route: '/commercial/contracts', access: 'commercial' },
+  billing: { key: 'billing', title: 'billing.title', icon: 'speedometer-outline', route: '/billing', access: 'billing' },
+  invoices: { key: 'invoices', title: 'billing.invoices', icon: 'receipt-outline', route: '/billing/invoices', access: 'billing' },
+  payments: { key: 'payments', title: 'billing.payments', icon: 'cash-outline', route: '/billing/payments', access: 'billing' },
 } as const satisfies Record<string, ModuleEntry>;
 
 /** Fonctions proposées dans chaque module mobile. Un module sans entrée affiche « bientôt ». */
@@ -34,6 +42,9 @@ const MODULE_ENTRIES: Partial<Record<ModuleKey, readonly ModuleEntry[]>> = {
   drh: [ENTRIES.employees, ENTRIES.leaves, ENTRIES.attendance, ENTRIES.candidates],
   conges: [ENTRIES.leaves],
   recrute: [ENTRIES.candidates],
+  dc: [ENTRIES.commercial, ENTRIES.clients, ENTRIES.prospects, ENTRIES.quotes, ENTRIES.contracts],
+  finances: [ENTRIES.billing, ENTRIES.invoices, ENTRIES.payments],
+  fac: [ENTRIES.billing, ENTRIES.invoices, ENTRIES.payments],
 };
 
 /** Entrées d'un module que CE profil peut ouvrir. */

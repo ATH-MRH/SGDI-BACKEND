@@ -7,6 +7,7 @@ import { StyleSheet, View } from 'react-native';
 import { ActionTile, AtlasHeader, Banner, Screen } from '@/components/ui';
 import { moduleEntries } from '@/features/entries';
 import { findVisibleModule } from '@/features/modules';
+import { openRoute } from '@/features/navigation';
 import { t } from '@/i18n';
 import { currentSiteLabel, societyLabel } from '@/scope/labels';
 import { useScope } from '@/scope/ScopeProvider';
@@ -33,7 +34,7 @@ export default function ModuleScreen() {
         {entries.length > 0 ? (
           <View style={styles.grid}>
             {entries.map((entry) => (
-              <ActionTile key={entry.key} testID={`entry-${entry.key}`} icon={entry.icon} label={t(entry.title)} onPress={() => router.push(entry.route as never)} />
+              <ActionTile key={entry.key} testID={`entry-${entry.key}`} icon={entry.icon} label={t(entry.title)} onPress={() => openRoute(router, entry.route)} />
             ))}
           </View>
         ) : (

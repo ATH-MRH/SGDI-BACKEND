@@ -9,8 +9,14 @@ describe('modules mobiles', () => {
   });
 
   it("n'affiche que les modules accordés par le backend", () => {
-    const keys = visibleModules(makeUser({ effective_modules: ['brq', 'drh', 'finances'] })).map((m) => m.key);
+    const keys = visibleModules(makeUser({ effective_modules: ['brq', 'drh', 'materiel'] })).map((m) => m.key);
     expect(keys).toEqual(['brq', 'drh']);
+  });
+
+  it('ouvre Commercial avec le module dc et une seule entrée Facturation pour Finances ou Facturation', () => {
+    expect(visibleModules(makeUser({ effective_modules: ['dc'] })).map((m) => m.key)).toEqual(['dc']);
+    expect(visibleModules(makeUser({ effective_modules: ['fac'] })).map((m) => m.key)).toEqual(['fac']);
+    expect(visibleModules(makeUser({ effective_modules: ['finances', 'fac'] })).map((m) => m.key)).toEqual(['finances']);
   });
 
   it("n'affiche aucun module à un compte sans module", () => {

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { colors, spacing } from '@/theme/tokens';
@@ -11,7 +12,7 @@ export function SectionHeader({ title, hint, actionLabel, onAction, testID }: Pr
   return (
     <View style={styles.row}>
       <View style={styles.titles}>
-        <AppText variant="overline" color={colors.textSecondary} accessibilityRole="header">
+        <AppText style={styles.title} color={colors.navy} accessibilityRole="header" numberOfLines={2}>
           {title}
         </AppText>
         {hint ? (
@@ -21,10 +22,11 @@ export function SectionHeader({ title, hint, actionLabel, onAction, testID }: Pr
         ) : null}
       </View>
       {actionLabel && onAction ? (
-        <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={actionLabel} hitSlop={12} onPress={onAction}>
-          <AppText variant="label" color={colors.primary}>
+        <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={actionLabel} hitSlop={12} onPress={onAction} style={styles.action}>
+          <AppText variant="caption" color={colors.primary} style={styles.actionText}>
             {actionLabel}
           </AppText>
+          <Ionicons name="chevron-forward" size={13} color={colors.primary} />
         </Pressable>
       ) : null}
     </View>
@@ -33,5 +35,8 @@ export function SectionHeader({ title, hint, actionLabel, onAction, testID }: Pr
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: spacing.xs },
-  titles: { flex: 1, gap: 2 },
+  titles: { flex: 1, gap: 1 },
+  title: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingBottom: 2 },
+  actionText: { fontWeight: '600' },
 });

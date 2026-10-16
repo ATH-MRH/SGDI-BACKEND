@@ -11,7 +11,7 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, AtlasHeader, Banner, Button, Card, Chip, ConfirmDialog, EmployeePhoto, EmptyState, ErrorState, Loader } from '@/components/ui';
+import { AppText, AtlasHeader, Banner, Button, Card, Chip, ConfirmDialog, EmployeePhoto, EmptyState, ErrorState, SkeletonList } from '@/components/ui';
 import { access } from '@/features/access';
 import { leaveStatus } from '@/features/status';
 import { t } from '@/i18n';
@@ -71,7 +71,7 @@ export default function LeavesScreen() {
           {failure ? <Banner tone="danger" message={failure} testID="leaves-error" /> : null}
         </View>
         {query.isPending ? (
-          <Loader />
+          <SkeletonList />
         ) : query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : (

@@ -6,7 +6,7 @@ import { t } from '@/i18n';
 import { colors, spacing } from '@/theme/tokens';
 
 import { AppText } from './AppText';
-import { EmptyState, ErrorState, Loader } from './States';
+import { EmptyState, ErrorState, SkeletonList } from './States';
 
 type Props<T> = {
   list: PagedListState<T>;
@@ -20,9 +20,18 @@ type Props<T> = {
 
 /** Liste virtualisée et paginée, avec ses états : chargement, erreur, vide, page suivante. */
 export function PagedList<T>({ list, keyOf, renderItem, emptyTitle, emptyBody, header, testID }: Props<T>) {
-  if (list.isLoading) return <Loader />;
-  if (list.error && list.items.length === 0) {
-    return <ErrorState error={list.error} onRetry={list.refresh} testID={testID ? `${testID}-error` : undefined} />;
+  // L'en-tête (recherche, filtres, synthèse) reste visible pendant le chargement et en cas d'erreur.
+  if (list.isLoading || (list.error && list.items.length === 0)) {
+    return (
+      <View style={styles.fill}>
+        {header ? <View style={styles.headerOnly}>{header}</View> : null}
+        {list.isLoading ? (
+          <SkeletonList rows={5} testID={testID ? `${testID}-loading` : undefined} />
+        ) : (
+          <ErrorState error={list.error} onRetry={list.refresh} testID={testID ? `${testID}-error` : undefined} />
+        )}
+      </View>
+    );
   }
   return (
     <FlatList
@@ -57,6 +66,8 @@ function Separator() {
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: 0, flexGrow: 1 },
+  fill: { flex: 1 },
+  headerOnly: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, marginBottom: -spacing.lg },
   separator: { height: spacing.sm },
   footer: { padding: spacing.lg },
   count: { textAlign: 'center', padding: spacing.md },

@@ -40,32 +40,41 @@ type EmployeeRowProps = {
   /** Ligne d'information : site, horaires, heure d'arrivée. */
   detail?: string | null;
   badge?: ReactNode;
+  /** Heure ou valeur courte affichée avant le statut (heure d'arrivée). */
+  time?: string | null;
   /** false : la fiche n'a pas de photo, rien n'est demandé au serveur. */
   hasPhoto?: boolean;
   onPress?: () => void;
   testID?: string;
 };
 
-/** Ligne d'employé : photo, nom, matricule, fonction, et un statut à droite. */
-export function EmployeeRow({ employeeId, name, code, position, detail, badge, hasPhoto, onPress, testID }: EmployeeRowProps) {
+/** Ligne d'employé : photo, nom (deux lignes au plus), matricule, fonction, et un statut à droite. */
+export function EmployeeRow({ employeeId, name, code, position, detail, badge, time, hasPhoto, onPress, testID }: EmployeeRowProps) {
   return (
     <RowShell testID={testID} onPress={onPress} accessibilityLabel={[name, code, position, detail].filter(Boolean).join(', ')}>
-      <EmployeePhoto employeeId={employeeId} name={name} size={46} hasPhoto={hasPhoto} />
+      <EmployeePhoto employeeId={employeeId} name={name} size={44} hasPhoto={hasPhoto} />
       <View style={styles.texts}>
-        <AppText variant="bodyStrong" color={colors.navy} numberOfLines={1}>
+        <AppText variant="bodyStrong" color={colors.navy} numberOfLines={2} style={styles.name}>
           {name}
         </AppText>
-        {code ? (
-          <AppText variant="caption" color={colors.textMuted} numberOfLines={1} style={styles.code}>
-            {code}
+        {code || position ? (
+          <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
+            {code ? <AppText variant="caption" color={colors.textMuted} style={styles.code}>{code}</AppText> : null}
+            {code && position ? ' · ' : ''}
+            {position}
           </AppText>
         ) : null}
-        {position || detail ? (
-          <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
-            {[position, detail].filter(Boolean).join(' · ')}
+        {detail ? (
+          <AppText variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {detail}
           </AppText>
         ) : null}
       </View>
+      {time ? (
+        <AppText variant="label" color={colors.text} style={styles.time}>
+          {time}
+        </AppText>
+      ) : null}
       <View style={styles.side}>
         {badge}
         {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
@@ -174,17 +183,65 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
-    minHeight: 68,
+    minHeight: 64,
     overflow: 'hidden',
   },
   pressed: { backgroundColor: colors.surfacePressed },
   texts: { flex: 1, gap: 2 },
-  code: { fontVariant: ['tabular-nums'], letterSpacing: 0.3 },
+  code: { fontVariant: ['tabular-nums'], letterSpacing: 0.3, fontWeight: '600' },
+  name: { fontSize: 15, lineHeight: 19 },
+  time: { fontVariant: ['tabular-nums'] },
   side: { alignItems: 'flex-end', gap: spacing.xs, maxWidth: '42%' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 2 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaShrink: { flexShrink: 1 },
   severity: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
 });
+
+type RecordRowProps = {
+  title: string;
+  /** Ligne secondaire : client, date, référence. */
+  subtitle?: string | null;
+  detail?: string | null;
+  icon?: IconName;
+  /** Montant ou valeur clé, affiché à droite en chiffres alignés. */
+  amount?: string | null;
+  badge?: ReactNode;
+  onPress?: () => void;
+  testID?: string;
+};
+
+/** Ligne d'enregistrement métier (devis, facture, règlement, prospect) : identité à gauche, montant et statut à droite. */
+export function RecordRow({ title, subtitle, detail, icon, amount, badge, onPress, testID }: RecordRowProps) {
+  return (
+    <RowShell testID={testID} onPress={onPress} accessibilityLabel={[title, subtitle, detail, amount].filter(Boolean).join(', ')}>
+      {icon ? <IconTile icon={icon} size={40} /> : null}
+      <View style={styles.texts}>
+        <AppText variant="bodyStrong" color={colors.navy} numberOfLines={2}>
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText variant="caption" color={colors.textSecondary} numberOfLines={1}>
+            {subtitle}
+          </AppText>
+        ) : null}
+        {detail ? (
+          <AppText variant="caption" color={colors.textMuted} numberOfLines={1}>
+            {detail}
+          </AppText>
+        ) : null}
+      </View>
+      <View style={styles.side}>
+        {amount ? (
+          <AppText variant="label" color={colors.text} style={styles.time} numberOfLines={1}>
+            {amount}
+          </AppText>
+        ) : null}
+        {badge}
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
+    </RowShell>
+  );
+}

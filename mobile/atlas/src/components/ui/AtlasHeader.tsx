@@ -42,7 +42,7 @@ export function AtlasHeader({ title, subtitle, eyebrow, back = false, trailing, 
             {eyebrow}
           </AppText>
         ) : null}
-        <AppText variant={back ? 'heading' : 'title'} color={colors.navy} accessibilityRole="header" numberOfLines={2}>
+        <AppText variant={back ? 'heading' : 'screenTitle'} color={colors.navy} accessibilityRole="header" numberOfLines={2}>
           {title}
         </AppText>
         {subtitle ? (
@@ -56,20 +56,36 @@ export function AtlasHeader({ title, subtitle, eyebrow, back = false, trailing, 
   );
 }
 
-type ActionProps = { icon: IconName; label: string; onPress: () => void; badge?: boolean; testID?: string };
+type ActionProps = {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  /** Pastille rouge : `true` sans chiffre, ou le nombre d'éléments critiques (0 la masque). */
+  badge?: boolean | number;
+  testID?: string;
+};
 
 /** Bouton d'action rond de l'en-tête (notifications, filtre, actualiser). */
 export function HeaderAction({ icon, label, onPress, badge = false, testID }: ActionProps) {
+  const count = typeof badge === 'number' ? badge : null;
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={count ? `${label} (${count})` : label}
       hitSlop={6}
       onPress={onPress}
       style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
       <Ionicons name={icon} size={20} color={colors.navy} />
-      {badge ? <View style={styles.badge} /> : null}
+      {count ? (
+        <View style={styles.counter} testID={testID ? `${testID}-count` : undefined}>
+          <AppText style={styles.counterText} color={colors.onPrimary}>
+            {count > 99 ? '99+' : String(count)}
+          </AppText>
+        </View>
+      ) : badge === true ? (
+        <View style={styles.badge} />
+      ) : null}
     </Pressable>
   );
 }
@@ -98,5 +114,20 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   badge: { position: 'absolute', top: 8, right: 9, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: colors.surface },
+  counter: {
+    position: 'absolute',
+    top: -3,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
+  counterText: { fontSize: 10, lineHeight: 12, fontWeight: '700' },
   pressed: { backgroundColor: colors.surfacePressed },
 });

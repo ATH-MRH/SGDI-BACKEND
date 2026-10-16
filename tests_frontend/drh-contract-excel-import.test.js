@@ -76,3 +76,33 @@ test('assistant responsive dans Chrome réel aux quatre étapes',{skip:!chrome||
     }
   }finally{await browser.close()}
 });
+
+test('dérogation : préparation seulement, cellules null visibles et compteur du lot',async()=>{
+  const h=harness();await h.run('openContractExcelImport()');
+  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-oneoff';contractExcelImport.preview={total:75,complete:1,prepared_missing:74,blocked:0,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'Préparé exceptionnellement':75},rows:[{row:2,candidate:'CANDIDAT TEST',status:'Préparé exceptionnellement',values:{start_date:null,end_date:null,position:null,client_site:null,salary:null},missing_fields:['start_date','position'],required_missing_fields:['start_date','position']}]};renderContractExcelImport()`);
+  const text=h.dom.window.document.body.textContent;
+  assert.match(text,/Dérogation exceptionnelle appliquée à ce lot uniquement/);
+  assert.match(text,/75 lignes.*1 complètes.*74 préparées avec données manquantes/s);
+  assert.match(text,/Non renseigné/);
+  assert.match(text,/Préparé exceptionnellement/);
+  assert.match(text,/Enregistrer le lot préparé/);
+  assert.doesNotMatch(text,/Créer \d+ contrats/);
+  await h.run('confirmContractExcelImport()');
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirm')).length,0);
+  h.run(`sgdiApi=async(path,opts)=>{if(path.endsWith('/prepare'))return {...contractExcelImport.preview,created_contracts:0,created_employees:0,created_documents:0};throw new Error('Création interdite')}`);
+  await h.run('prepareExceptionalContractExcelImport()');
+  assert.equal(h.run('contractExcelImport.step'),4);
+  assert.equal(h.run('contractExcelImport.result.created_contracts'),0);
+  assert.equal(h.run('contractExcelImport.result.rows[0].values.salary'),null);
+  assert.match(h.dom.window.document.body.textContent,/aucun contrat, employé ou document contractuel/);
+});
+
+test('dérogation : valeur présente et zéro conservés, valeurs invalides bloquent l’enregistrement',async()=>{
+  const h=harness();await h.run('openContractExcelImport()');
+  h.run(`contractExcelImport.step=3;contractExcelImport.preview={total:1,complete:0,prepared_missing:0,blocked:1,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'À CORRIGER':1},rows:[{row:2,status:'À CORRIGER',reason:'Client invalide',values:{start_date:'2026-10-15',position:'MAGASINIER'},missing_fields:['client_site'],required_missing_fields:['client_site']}]};renderContractExcelImport()`);
+  assert.match(h.dom.window.document.body.textContent,/MAGASINIER/);
+  const save=h.dom.window.document.querySelector('[onclick="prepareExceptionalContractExcelImport()"]');
+  assert.ok(save.disabled);
+  await h.run('prepareExceptionalContractExcelImport()');
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/prepare')).length,0);
+});

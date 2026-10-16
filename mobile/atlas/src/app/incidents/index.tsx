@@ -11,9 +11,11 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { canAccessSociety } from '@/auth/permissions';
 import { sameSociety } from '@/api/domains/ops';
 import { Gate } from '@/components/Gate';
+import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, AtlasHeader, Badge, Banner, Button, Card, ConfirmDialog, EmptyState, ErrorState, IncidentRow, Loader } from '@/components/ui';
+import { AppText, AtlasHeader, Badge, Banner, Button, Card, ConfirmDialog, EmptyState, ErrorState, IncidentRow, SearchBar, SkeletonList } from '@/components/ui';
 import { access } from '@/features/access';
+import { isIncidentOpen } from '@/features/cockpit/useCockpitInsights';
 import { incidentSeverity } from '@/features/status';
 import { t, type TranslationKey } from '@/i18n';
 import { useOffline } from '@/offline/OfflineProvider';
@@ -26,10 +28,18 @@ export function incidentTypeLabel(type: string): string {
   return (INCIDENT_TYPES as readonly string[]).includes(type) ? t(`incidents.type.${type}` as TranslationKey) : type;
 }
 
+type Filter = 'all' | 'open' | 'critique' | 'elevee';
+
+function normalize(text: string): string {
+  return text.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase();
+}
+
 export default function IncidentsScreen() {
   const router = useRouter();
   const user = useCurrentUser();
   const { scope, ready } = useScope();
+  const [filter, setFilter] = useState<Filter>('all');
+  const [search, setSearch] = useState('');
   const allowed = access.incidents(user);
   const query = useQuery({
     queryKey: queryKeys.scoped(null, null, 'incidents'),
@@ -45,24 +55,55 @@ export default function IncidentsScreen() {
       (!scope.site || incident.siteId === scope.site.id),
   );
   const siteName = (id: number | null) => scope.sites.find((site) => site.id === id)?.name ?? null;
+  // Toute la liste du périmètre est déjà chargée : recherche et filtres s'appliquent sur l'appareil.
+  const needle = normalize(search.trim());
+  const shown = incidents.filter(
+    (incident) =>
+      (filter === 'all' || (filter === 'open' ? isIncidentOpen(incident) : incident.severity === filter)) &&
+      (!needle || normalize([incident.subject, incident.description, incidentTypeLabel(incident.type), siteName(incident.siteId) ?? ''].join(' ')).includes(needle)),
+  );
 
   return (
     <Gate allowed={allowed}>
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']} testID="incidents-screen">
         <AtlasHeader back title={t('entry.incidents')} subtitle={t('incidents.subtitle')} />
         {query.isPending ? (
-          <Loader />
+          <SkeletonList />
         ) : query.error ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : (
           <FlatList
-            data={incidents}
+            data={shown}
             keyExtractor={(incident) => String(incident.id)}
             contentContainerStyle={styles.content}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.primary} />}
-            ListHeaderComponent={<PendingReports />}
-            ListEmptyComponent={<EmptyState icon="warning-outline" title={t('incidents.empty.title')} body={t('incidents.empty.body')} testID="incidents-empty" />}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={
+              <View style={styles.header}>
+                <PendingReports />
+                <SearchBar testID="incidents-search" value={search} onChangeText={setSearch} placeholder={t('incidents.search')} />
+                <Segmented
+                  testID="incidents-filter"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: 'all', label: t('alerts.filter.all') },
+                    { value: 'open', label: t('incidents.filter.open') },
+                    { value: 'critique', label: t('incidents.severity.critique') },
+                    { value: 'elevee', label: t('incidents.severity.elevee') },
+                  ]}
+                />
+              </View>
+            }
+            ListEmptyComponent={
+              <EmptyState
+                icon="warning-outline"
+                title={t('incidents.empty.title')}
+                body={needle ? t('search.noResult', { q: search.trim() }) : t('incidents.empty.body')}
+                testID="incidents-empty"
+              />
+            }
             renderItem={({ item }) => (
               <IncidentRow
                 testID={`incident-${item.id}`}
@@ -146,7 +187,8 @@ function PendingReports() {
 }
 
 const styles = StyleSheet.create({
-  pending: { gap: spacing.sm, marginBottom: spacing.lg },
+  header: { gap: spacing.md, marginBottom: spacing.md },
+  pending: { gap: spacing.sm },
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, flexGrow: 1 },
   separator: { height: spacing.sm },

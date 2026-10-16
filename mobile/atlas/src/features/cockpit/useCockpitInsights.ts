@@ -21,9 +21,13 @@ export type CockpitInsights = {
   week: PresenceDay[] | null;
   /** Indicateurs de pointage du jour ; null tant qu'ils ne sont pas connus. */
   today: BoardKpi | null;
+  /** Indicateurs de la veille, pour mesurer l'évolution du jour ; null s'ils ne sont pas connus. */
+  yesterday?: BoardKpi | null;
   /** Nombre de sites actifs du périmètre ; null sans droit ou tant qu'il n'est pas connu. */
   sitesTotal: number | null;
   drh: DrhDashboard | null;
+  /** État de la synthèse RH, pour distinguer « en cours » d'« indisponible ». */
+  drhStatus?: 'loading' | 'error' | 'ready';
   /** Alertes ouvertes les plus récentes ; null sans droit. */
   alerts: Alert[] | null;
   /** Incidents du périmètre, du plus récent au plus ancien ; null sans droit. */
@@ -103,8 +107,10 @@ export function useCockpitInsights(): CockpitInsights {
         })
       : null,
     today: todayBoard?.kpi ?? null,
+    yesterday: week[WEEK_DAYS - 2]?.data?.kpi ?? null,
     sitesTotal: showSites && sites.data ? sites.data.total : null,
     drh: showDrh ? (drh.data ?? null) : null,
+    drhStatus: drh.isPending ? 'loading' : drh.error ? 'error' : 'ready',
     alerts: showAlerts ? (alerts.data?.items ?? null) : null,
     incidents: showIncidents ? sortedIncidents : null,
     incidentsOpen: sortedIncidents ? sortedIncidents.filter(isIncidentOpen).length : null,
