@@ -62,6 +62,9 @@ def bind_upload(db, user, session):
         return
     bound = db.get(ContractImportOneoffGrant, BATCH_KEY)
     if bound:
+        from app.modules.drh.contract_import_oneoff_reset import consume
+        if consume(db, user, session, bound):
+            return
         raise HTTPException(409, 'Dérogation déjà liée à une session ; réattribution interdite')
     db.add(ContractImportOneoffGrant(batch_key=BATCH_KEY, session_id=session.public_id,
         file_sha256=FILE_SHA256, authorized_by_user_id=user.id, authorized_by_username=user.username,

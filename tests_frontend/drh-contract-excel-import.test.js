@@ -128,3 +128,41 @@ test('fichier exceptionnel 96 lignes : D et E, valeurs originales et compteurs d
   assert.equal(h.run('contractExcelImport.result.created_contracts'),0);
   assert.equal(h.run('contractExcelImport.result.rows[0].values.salary'),55000);
 });
+
+test('reset one-off : bouton uniquement pour l’erreur de réservation et un admin autorisé',async()=>{
+  const h=harness();await h.run('openContractExcelImport()');
+  h.run(`contractExcelImport.config.oneoff_reset_allowed=true;renderContractExcelImport()`);
+  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
+  h.run(`contractExcelImport.error='Erreur de date';renderContractExcelImport()`);
+  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
+  h.run(`contractExcelImport.error='Dérogation déjà liée à une session ; réattribution interdite';contractExcelImport.config.oneoff_reset_allowed=false;renderContractExcelImport()`);
+  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
+  h.run(`contractExcelImport.config.oneoff_reset_allowed=true;renderContractExcelImport()`);
+  assert.match(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
+});
+
+test('reset one-off : contexte, confirmation exacte et un seul POST administratif sans création',async()=>{
+  const h=harness();await h.run('openContractExcelImport()');
+  h.run(`contractExcelImport.error='Dérogation déjà liée à une session ; réattribution interdite';Object.assign(contractExcelImport.config,{oneoff_reset_allowed:true,oneoff_file_sha256:'a'.repeat(64),oneoff_batch_key:'lot-test'});var resetCalls=[];var confirmation='';confirm=message=>{confirmation=message;return true};sgdiApi=async(path,options={})=>{resetCalls.push({path,options});if(path.includes('/oneoff/reset-context?'))return {old_session_id:'contract-old-test',can_reset:true};if(path.endsWith('/oneoff/reset'))return {old_session_id:'contract-old-test',status:'reset'};throw new Error('Action non autorisée')}`);
+  await h.run('resetExceptionalContractImportSession()');
+  assert.equal(h.run('confirmation'),'Cette action libère uniquement la session exceptionnelle actuelle. Aucun contrat ni employé ne sera créé. Continuer ?');
+  const calls=h.run('resetCalls');assert.equal(calls.length,2);
+  assert.match(calls[0].path,/society=SOCIETE/);
+  assert.equal(calls[1].options.method,'POST');
+  assert.equal(calls[1].options.body.old_session_id,'contract-old-test');
+  assert.equal(calls[1].options.body.file_sha256,'a'.repeat(64));
+  assert.equal(h.run('contractExcelImport.step'),1);
+  assert.equal(h.run('contractExcelImport.session_id'),null);
+  assert.match(h.dom.window.document.body.textContent,/contract-old-test libérée/);
+  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
+  await h.run('resetExceptionalContractImportSession()');assert.equal(h.run('resetCalls.length'),2);
+});
+
+test('reset one-off : annulation utilisateur ou session encore utilisable ne déclenche aucun POST',async()=>{
+  for(const allowed of [true,false]){
+    const h=harness();await h.run('openContractExcelImport()');
+    h.run(`contractExcelImport.error='Dérogation déjà liée à une session';Object.assign(contractExcelImport.config,{oneoff_reset_allowed:true,oneoff_file_sha256:'a'.repeat(64),oneoff_batch_key:'lot-test'});var resetPosts=0;confirm=()=>false;sgdiApi=async(path,options={})=>{if(options.method==='POST')resetPosts++;return {can_reset:${allowed},old_session_id:'contract-old-test',reason:'Ancienne session encore utilisable'}}`);
+    await h.run('resetExceptionalContractImportSession()');
+    assert.equal(h.run('resetPosts'),0);assert.equal(h.run('contractExcelImport.busy'),false);
+  }
+});

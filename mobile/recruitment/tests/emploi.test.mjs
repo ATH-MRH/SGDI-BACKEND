@@ -107,8 +107,9 @@ test('suivi : chaque candidature à une annonce a son état, une candidature spo
   assert.deepEqual(['review', 'invited', 'interviewed', 'reserve', 'transmitted_drh', 'recruited'].map(stateTone), ['blue', 'gold', 'gold', 'neutral', 'green', 'green']);
   assert.equal(stateTone('etat-ajoute-plus-tard'), 'neutral', 'un état inconnu reste affichable');
   assert.equal(stateScope({kind: 'offer'}).heading, 'État de votre candidature');
-  assert.match(stateScope({kind: 'offer'}).note, /que cette annonce/);
+  assert.match(stateScope({kind: 'offer'}).note, /cette candidature/);
   assert.equal(stateScope({kind: 'spontaneous'}).heading, 'État de votre dossier');
+  assert.equal(stateScope({kind: 'spontaneous', state_scope: 'application'}).heading, 'État de votre candidature');
 });
 
 test('suivi : la liste donne une candidature par annonce et, à part, le dossier', async () => {
