@@ -14,7 +14,7 @@ import { errorMessageKey } from '@/api/errors';
 import { invalidateScopedQueries } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
-import { AppText, Badge, Button, Card, ConfirmDialog, FormField, ListItem, Loader, Screen, ScreenHeader, SearchBar } from '@/components/ui';
+import { AppText, Badge, Banner, Button, Card, ConfirmDialog, EmployeeHeader, FormField, InfoGrid, ListItem, Loader, Screen, ScreenHeader, SearchBar, SkeletonLines } from '@/components/ui';
 import { access } from '@/features/access';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { t } from '@/i18n';
@@ -104,25 +104,32 @@ export default function NewAbandonScreen() {
           </>
         ) : (
           <>
-            <Card>
-              <AppText variant="bodyStrong">{employee.name}</AppText>
-              <AppText variant="caption" color={colors.textSecondary}>
-                {[employee.matricule, employee.position].filter(Boolean).join(' · ')}
-              </AppText>
-              <Button
-                testID="abandon-change-employee"
-                variant="secondary"
-                label={t('abandons.changeEmployee')}
-                onPress={() => {
-                  setEmployee(null);
-                  setObservation('');
-                  mutation.reset();
-                }}
-              />
-            </Card>
+            <EmployeeHeader
+              testID="abandon-employee"
+              employeeId={access.employees(user) ? employee.id : null}
+              name={employee.name}
+              code={employee.matricule}
+              position={employee.position}
+              society={employee.society}
+              site={employee.site}
+              actions={
+                <Button
+                  testID="abandon-change-employee"
+                  variant="secondary"
+                  label={t('abandons.changeEmployee')}
+                  onPress={() => {
+                    setEmployee(null);
+                    setObservation('');
+                    mutation.reset();
+                  }}
+                />
+              }
+            />
 
             {context.isPending ? (
-              <Loader />
+              <Card>
+                <SkeletonLines lines={4} />
+              </Card>
             ) : context.error ? (
               <Card testID="abandon-context-refused">
                 <AppText variant="label" color={colors.danger} accessibilityRole="alert">
@@ -131,14 +138,25 @@ export default function NewAbandonScreen() {
               </Card>
             ) : (
               <>
-                <Card testID="abandon-context">
-                  <ListItem title={t('scope.site')} subtitle={context.data.siteName} />
-                  <ListItem
-                    title={t('abandons.shift')}
-                    subtitle={`${formatTime(context.data.scheduledStartAt)} – ${formatTime(context.data.scheduledEndAt)}`}
+                {context.data.applicable ? (
+                  <Banner
+                    testID="abandon-alert"
+                    tone="danger"
+                    icon="alert-circle-outline"
+                    title={t('abandons.alert.title')}
+                    message={t('abandons.alert.body', { minutes: context.data.thresholdMinutes, remaining: formatMinutes(context.data.remainingMinutes) })}
                   />
-                  <ListItem title={t('abandons.departure')} subtitle={formatDateTime(context.data.departureAt)} />
-                  <ListItem title={t('abandons.remaining')} subtitle={formatMinutes(context.data.remainingMinutes)} />
+                ) : null}
+                <Card testID="abandon-context">
+                  <InfoGrid
+                    cells={[
+                      { key: 'site', label: t('scope.site'), value: context.data.siteName, wide: true },
+                      { key: 'shift', label: t('abandons.shift'), value: `${formatTime(context.data.scheduledStartAt)} – ${formatTime(context.data.scheduledEndAt)}` },
+                      { key: 'end', label: t('abandons.plannedEnd'), value: formatTime(context.data.scheduledEndAt) },
+                      { key: 'departure', label: t('abandons.departure'), value: formatDateTime(context.data.departureAt) },
+                      { key: 'remaining', label: t('abandons.remaining'), value: formatMinutes(context.data.remainingMinutes) },
+                    ]}
+                  />
                   <Badge
                     testID="abandon-applicable"
                     tone={context.data.applicable ? 'warning' : 'neutral'}
@@ -162,7 +180,14 @@ export default function NewAbandonScreen() {
                     error={mutation.error ? refusal(mutation.error) : undefined}
                   />
                 ) : null}
-                <Button testID="abandon-submit" label={t('abandons.submit')} disabled={!canSubmit} onPress={() => setConfirming(true)} />
+                <Button
+                  testID="abandon-submit"
+                  variant={context.data.applicable ? 'danger' : 'primary'}
+                  icon="exit-outline"
+                  label={t('abandons.submit')}
+                  disabled={!canSubmit}
+                  onPress={() => setConfirming(true)}
+                />
               </>
             )}
           </>

@@ -10,23 +10,7 @@ import { fetchSitePlanning } from '@/api/domains/ops';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { StatusBadge } from '@/components/StatusBadge';
-import {
-  AppText,
-  AtlasHeader,
-  Badge,
-  Button,
-  Card,
-  EmployeeHeader,
-  ErrorState,
-  InfoGrid,
-  ListItem,
-  Loader,
-  MetricStrip,
-  PillButton,
-  Screen,
-  SectionHeader,
-  TabStrip,
-} from '@/components/ui';
+import { AppText, AtlasHeader, Badge, Button, Card, EmployeeHeader, ErrorState, InfoGrid, KpiCard, KpiGrid, ListItem, PillButton, Screen, SectionHeader, SkeletonDashboard, SkeletonLines, TabStrip } from '@/components/ui';
 import { env } from '@/config/env';
 import { access } from '@/features/access';
 import type { PortraitIssue } from '@/features/employees/usePortrait';
@@ -102,15 +86,16 @@ export default function EmployeeDetailScreen() {
   const todayBadge = today ? <StatusBadge status={presenceStatus(today.status)} fallback={today.status} /> : <Badge label={t('employees.today.none')} />;
 
   const metrics = stats ? (
-    <MetricStrip
-      testID="employee-stats"
-      caption={t('employees.stats.period', { days: stats.total })}
-      metrics={[
-        { key: 'present', label: t('employees.stats.presence'), value: `${stats.present}/${stats.total}`, tone: 'success' },
-        { key: 'absent', label: t('employees.stats.absences'), value: String(stats.absent), tone: stats.absent > 0 ? 'danger' : 'neutral' },
-        { key: 'notPointed', label: t('cockpit.notPointed'), value: String(stats.notPointed), tone: stats.notPointed > 0 ? 'warning' : 'neutral' },
-      ]}
-    />
+    <View testID="employee-stats" style={styles.stats}>
+      <KpiGrid columns={3}>
+        <KpiCard variant="compact" icon="checkmark-circle-outline" label={t('employees.stats.presence')} value={`${stats.present}/${stats.total}`} tone="success" />
+        <KpiCard variant="compact" icon="close-circle-outline" label={t('employees.stats.absences')} value={stats.absent} tone={stats.absent > 0 ? 'danger' : 'neutral'} />
+        <KpiCard variant="compact" icon="help-circle-outline" label={t('cockpit.notPointed')} value={stats.notPointed} tone={stats.notPointed > 0 ? 'warning' : 'neutral'} />
+      </KpiGrid>
+      <AppText variant="caption" color={colors.textMuted} style={styles.period}>
+        {t('employees.stats.period', { days: stats.total })}
+      </AppText>
+    </View>
   ) : null;
 
   return (
@@ -139,7 +124,7 @@ export default function EmployeeDetailScreen() {
           </>
         }>
         {employee.isPending ? (
-          <Loader />
+          <SkeletonDashboard testID="employee-loading" />
         ) : employee.error || !data ? (
           <ErrorState error={employee.error} onRetry={() => void employee.refetch()} onBack={() => router.back()} testID="employee-error" />
         ) : (
@@ -225,7 +210,7 @@ export default function EmployeeDetailScreen() {
                   <Card testID="employee-schedule">
                     <SectionHeader title={t('employees.schedule.block')} hint={t('employees.planning.hint')} />
                     {planning.isPending ? (
-                      <Loader />
+                      <SkeletonLines />
                     ) : planning.error ? (
                       <Unavailable />
                     ) : (
@@ -245,7 +230,7 @@ export default function EmployeeDetailScreen() {
                   <Card testID="employee-today">
                     <SectionHeader title={t('employees.today.block')} hint={formatDate(localDate(0))} />
                     {attendance.isPending ? (
-                      <Loader />
+                      <SkeletonLines />
                     ) : attendance.error ? (
                       <Unavailable />
                     ) : (
@@ -283,7 +268,7 @@ export default function EmployeeDetailScreen() {
                 <Card testID="employee-attendance">
                   <SectionHeader title={t('employees.attendance')} />
                   {attendance.isPending ? (
-                    <Loader />
+                    <SkeletonLines />
                   ) : attendance.error ? (
                     <Unavailable />
                   ) : attendance.data.length === 0 ? (
@@ -316,7 +301,7 @@ export default function EmployeeDetailScreen() {
                   <Card testID="employee-planning">
                     <SectionHeader title={t('employees.planning.title')} hint={t('employees.planning.hint')} />
                     {planning.isPending ? (
-                      <Loader />
+                      <SkeletonLines />
                     ) : planning.error ? (
                       <Unavailable />
                     ) : shifts.length === 0 ? (
@@ -337,7 +322,7 @@ export default function EmployeeDetailScreen() {
                 <Card testID="employee-leaves">
                   <SectionHeader title={t('entry.leaves')} />
                   {leaves.isPending ? (
-                    <Loader />
+                    <SkeletonLines />
                   ) : leaves.error ? (
                     <Unavailable />
                   ) : leaves.data.length === 0 ? (
@@ -370,7 +355,7 @@ export default function EmployeeDetailScreen() {
               <Card testID="employee-documents">
                 <SectionHeader title={t('employees.documents')} hint={t('employees.documents.hint')} />
                 {documents.isPending ? (
-                  <Loader />
+                  <SkeletonLines />
                 ) : documents.error ? (
                   <Unavailable />
                 ) : documents.data.length === 0 ? (
@@ -392,4 +377,6 @@ export default function EmployeeDetailScreen() {
 const styles = StyleSheet.create({
   todayLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   italic: { fontStyle: 'italic' },
+  stats: { gap: spacing.xs },
+  period: { textAlign: 'center' },
 });

@@ -42,7 +42,7 @@ jest.mock('@/auth/AuthProvider', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: mockBack }), useLocalSearchParams: () => mockParams }));
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View, SafeAreaProvider: View };
+  return { SafeAreaView: View, SafeAreaProvider: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
 });
 
 const employee = {
@@ -126,7 +126,7 @@ describe('fiche employé — pointage et demande de congé', () => {
       { id: 7, date: '2026-10-05', status: 'non_pointe', site: 'Site Nord', arrival: '', departure: '' },
     ]);
     await show(<EmployeeDetailScreen />);
-    await waitFor(() => expect(screen.getByTestId('employee-stats')).toHaveTextContent(/1\/3Présence1Absences1Non pointés/));
+    await waitFor(() => expect(screen.getByTestId('employee-stats')).toHaveTextContent(/1\/3\W*Présence\W*1\W*Absences\W*1\W*Non pointés/));
     expect(screen.getByTestId('employee-info')).toHaveTextContent(/Essentiel/);
     expect(screen.getByTestId('employee-today-status')).toBeTruthy();
     for (const hidden of ['employee-attendance', 'employee-leaves', 'employee-documents', 'employee-position']) {

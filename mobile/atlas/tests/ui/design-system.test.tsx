@@ -114,9 +114,13 @@ describe('graphiques simples', () => {
 
 describe('photo employé', () => {
   it('200 : la photo est chargée par une requête authentifiée, puis affichée depuis la mémoire', async () => {
+    // La réponse est retenue : sans cela, sur une machine lente, l'image arrive avant le contrôle des initiales.
+    let deliver: (uri: string) => void = () => undefined;
+    mockGetImage.mockReturnValue(new Promise<string>((resolve) => (deliver = resolve)));
     await show(<EmployeePhoto testID="photo" employeeId={5} name="BENALI Karim" hasPhoto />);
     // Pendant le chargement : les initiales.
     expect(screen.getByText('BK', hidden)).toBeTruthy();
+    await act(async () => deliver(JPEG));
     const photo = await screen.findByTestId('photo', hidden);
     expect(mockGetImage).toHaveBeenCalledWith('/api/drh/employees/5/portrait');
     // <Image> ne reçoit ni l'adresse du backend ni le jeton.
@@ -226,7 +230,7 @@ describe('photo employé', () => {
 describe('lignes de liste', () => {
   it('une ligne employé montre nom, matricule, fonction et statut ; elle n’est un bouton que si elle ouvre quelque chose', async () => {
     const view = await show(<EmployeeRow testID="row" employeeId={null} name="BENALI Karim" code="AGT005" position="Agent" detail="Site Nord" />);
-    expect(screen.getByTestId('row')).toHaveTextContent(/BENALI Karim.*AGT005.*Agent · Site Nord/);
+    expect(screen.getByTestId('row')).toHaveTextContent(/BENALI Karim.*AGT005 · Agent.*Site Nord/);
     expect(screen.getByTestId('row').props.accessibilityRole).not.toBe('button');
     await view.rerender(
       <QueryClientProvider client={client}>

@@ -10,6 +10,7 @@ import { scopeParams } from '@/api/domains/shared';
 import { queryKeys } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
+import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   ActionTile,
@@ -18,6 +19,7 @@ import {
   HeaderAction,
   IncidentRow,
   KpiCard,
+  KpiGrid,
   RingGauge,
   Screen,
   SectionHeader,
@@ -25,6 +27,7 @@ import {
   StatLine,
 } from '@/components/ui';
 import { access } from '@/features/access';
+import { rateTone, share } from '@/features/cockpit/presentation';
 import { isIncidentOpen } from '@/features/cockpit/useCockpitInsights';
 import { incidentSeverity } from '@/features/status';
 import { t } from '@/i18n';
@@ -73,18 +76,36 @@ export default function OpsDashboardScreen() {
       <Screen
         testID="ops-dashboard"
         header={
-          <AtlasHeader
-            title={t('ops.title')}
-            subtitle={t('ops.subtitle')}
-            trailing={<HeaderAction testID="ops-refresh" icon="refresh-outline" label={t('common.refresh')} onPress={() => queries.forEach((query) => void query.refetch())} />}
-          />
+          <>
+            <AtlasHeader
+              title={t('ops.title')}
+              subtitle={t('ops.subtitle')}
+              trailing={<HeaderAction testID="ops-refresh" icon="refresh-outline" label={t('common.refresh')} onPress={() => queries.forEach((query) => void query.refetch())} />}
+            />
+            <View style={styles.nav}>
+              <Segmented
+                testID="ops-nav"
+                value="field"
+                onChange={(value) => {
+                  if (value !== 'field') go(value);
+                }}
+                options={[
+                  { value: 'field', label: t('ops.nav.field') },
+                  ...(access.attendance(user) ? [{ value: '/attendance', label: t('tabs.attendance') }] : []),
+                  ...(access.incidents(user) ? [{ value: '/incidents', label: t('entry.incidents') }] : []),
+                  { value: '/ops/sites', label: t('entry.sites') },
+                ]}
+              />
+            </View>
+          </>
         }
         refreshControl={
           <RefreshControl refreshing={queries.some((query) => query.isRefetching)} onRefresh={() => queries.forEach((query) => void query.refetch())} tintColor={colors.navy} />
         }>
         <SectionHeader title={t('ops.kpi.title')} hint={`${societyLabel(scope)} · ${currentSiteLabel(scope)}`} />
-        <View style={styles.grid}>
+        <KpiGrid>
           <KpiCard
+            variant="compact"
             testID="ops-kpi-sites"
             label={t('cockpit.sites')}
             value={sites.data?.total ?? null}
@@ -93,30 +114,27 @@ export default function OpsDashboardScreen() {
             unavailableLabel={unavailable}
             onPress={() => go('/ops/sites')}
           />
-          {withAttendance ? (
-            <>
-              <KpiCard testID="ops-kpi-expected" label={t('cockpit.expected')} value={kpi?.expected ?? null} icon="people-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance')} />
-              <KpiCard testID="ops-kpi-present" label={t('cockpit.present')} value={kpi?.present ?? null} tone="success" icon="checkmark-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=present')} />
-              <KpiCard testID="ops-kpi-absent" label={t('cockpit.absent')} value={kpi?.absent ?? null} tone="danger" icon="close-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=absent')} />
-              <KpiCard testID="ops-kpi-not-pointed" label={t('cockpit.notPointed')} value={kpi?.not_pointed ?? null} tone="warning" icon="help-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=non_pointe')} />
-            </>
-          ) : null}
+          {withAttendance ? <KpiCard variant="compact" testID="ops-kpi-expected" label={t('cockpit.expected')} value={kpi?.expected ?? null} icon="people-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance')} /> : null}
+          {withAttendance ? <KpiCard variant="compact" testID="ops-kpi-present" label={t('cockpit.present')} value={kpi?.present ?? null} tone="success" icon="checkmark-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=present')} /> : null}
+          {withAttendance ? <KpiCard variant="compact" testID="ops-kpi-absent" label={t('cockpit.absent')} value={kpi?.absent ?? null} tone="danger" icon="close-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=absent')} /> : null}
+          {withAttendance ? <KpiCard variant="compact" testID="ops-kpi-not-pointed" label={t('cockpit.notPointed')} value={kpi?.not_pointed ?? null} tone="warning" icon="help-circle-outline" state={state(board)} unavailableLabel={unavailable} onPress={() => go('/attendance?status=non_pointe')} /> : null}
+          {withAttendance && kpi ? <KpiCard variant="compact" testID="ops-kpi-late" label={t('ops.late')} value={kpi.late} tone={kpi.late > 0 ? 'warning' : 'neutral'} icon="alarm-outline" /> : null}
           {access.incidents(user) ? (
-            <KpiCard testID="ops-kpi-incidents" label={t('cockpit.incidentsOpen')} value={open?.length ?? null} tone={open && open.length > 0 ? 'warning' : 'neutral'} icon="warning-outline" state={state(incidents)} unavailableLabel={unavailable} onPress={() => go('/incidents')} />
+            <KpiCard variant="compact" testID="ops-kpi-incidents" label={t('cockpit.incidentsOpen')} value={open?.length ?? null} tone={open && open.length > 0 ? 'warning' : 'neutral'} icon="warning-outline" state={state(incidents)} unavailableLabel={unavailable} onPress={() => go('/incidents')} />
           ) : null}
           {access.abandons(user) ? (
-            <KpiCard testID="ops-kpi-abandons" label={t('cockpit.abandons')} value={abandons.data?.total ?? null} tone="danger" icon="exit-outline" state={state(abandons)} unavailableLabel={unavailable} onPress={() => go('/abandons')} />
+            <KpiCard variant="compact" testID="ops-kpi-abandons" label={t('cockpit.abandons')} value={abandons.data?.total ?? null} tone="danger" icon="exit-outline" state={state(abandons)} unavailableLabel={unavailable} onPress={() => go('/abandons')} />
           ) : null}
-        </View>
+        </KpiGrid>
 
         {kpi ? (
           <ChartCard testID="ops-presence" title={t('home.presence.title')} hint={formatDate(board.data?.date)} actionLabel={t('common.seeAll')} onAction={() => go('/attendance')}>
             <View style={styles.presence}>
-              <RingGauge ratio={rate} tone={rate !== null && rate < 0.75 ? 'danger' : rate !== null && rate < 0.9 ? 'warning' : 'success'} caption={t('cockpit.rate.short')} />
+              <RingGauge ratio={rate} tone={rateTone(rate)} caption={t('cockpit.rate.short')} />
               <View style={styles.lines}>
                 <StatLine label={t('cockpit.present')} value={`${kpi.present} / ${kpi.expected}`} ratio={rate} tone="success" />
-                <StatLine label={t('ops.late')} value={String(kpi.late)} ratio={kpi.expected ? kpi.late / kpi.expected : null} tone="warning" />
-                <StatLine label={t('ops.onLeave')} value={String(kpi.conge + kpi.maladie)} ratio={kpi.expected ? (kpi.conge + kpi.maladie) / kpi.expected : null} tone="info" />
+                <StatLine label={t('ops.late')} value={String(kpi.late)} ratio={share(kpi.late, kpi.expected)} tone="warning" />
+                <StatLine label={t('ops.onLeave')} value={String(kpi.conge + kpi.maladie)} ratio={share(kpi.conge + kpi.maladie, kpi.expected)} tone="info" />
               </View>
             </View>
           </ChartCard>
@@ -143,11 +161,11 @@ export default function OpsDashboardScreen() {
         {open ? (
           <View style={styles.section}>
             <SectionHeader title={t('ops.incidents.title')} actionLabel={t('common.seeAll')} onAction={() => go('/incidents')} />
-            <View style={styles.grid}>
-              <KpiCard label={t('incidents.severity.critique')} value={bySeverity('critique')} tone="danger" />
-              <KpiCard label={t('incidents.severity.elevee')} value={bySeverity('elevee')} tone="warning" />
-              <KpiCard label={t('ops.incidents.other')} value={open.length - bySeverity('critique') - bySeverity('elevee')} />
-            </View>
+            <KpiGrid columns={3}>
+              <KpiCard variant="compact" icon="alert-circle-outline" label={t('incidents.severity.critique')} value={bySeverity('critique')} tone="danger" />
+              <KpiCard variant="compact" icon="warning-outline" label={t('incidents.severity.elevee')} value={bySeverity('elevee')} tone="warning" />
+              <KpiCard variant="compact" icon="information-circle-outline" label={t('ops.incidents.other')} value={open.length - bySeverity('critique') - bySeverity('elevee')} />
+            </KpiGrid>
             {recent.map((incident) => {
               const severity = incidentSeverity(incident.severity);
               return (
@@ -181,6 +199,7 @@ export default function OpsDashboardScreen() {
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  nav: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   section: { gap: spacing.md },
   presence: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   lines: { flex: 1, gap: spacing.md },

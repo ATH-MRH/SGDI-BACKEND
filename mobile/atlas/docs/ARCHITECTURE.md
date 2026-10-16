@@ -227,27 +227,28 @@ Thème clair uniquement : fond gris très clair, cartes blanches, bleu marine AT
 
 | Famille | Composants (`src/components/ui`) |
 |---|---|
-| Structure | `Screen` (en-tête fixe, défilement, zones sûres), `AtlasHeader` et `HeaderAction`, `ScreenHeader`, `SectionHeader`, `TabStrip`, `Card` |
-| Indicateurs | `KpiCard`, `Kpi`, `MetricStrip`, `ChartCard`, `StatLine`, `ProgressBar` |
+| Structure | `Screen` (en-tête fixe, défilement, zones sûres), `AtlasHeader` et `HeaderAction` (pastille chiffrée), `AtlasLogo`, `ScreenHeader`, `SectionHeader`, `TabStrip`, `Card`, `BottomNavigation` (barre basse) |
+| Indicateurs | `KpiCard` (variante `compact` avec évolution mesurée), `KpiGrid` (colonnes fixes, quatre au plus), `Kpi`, `MetricStrip`, `ChartCard`, `StatLine`, `ProgressBar`, `ModuleTile` |
 | Graphiques | `BarChart`, `RingGauge`, `Distribution` — dessinés avec des vues, sans dépendance native |
 | Listes | `EmployeeRow`, `SiteRow`, `IncidentRow`, `ListItem`, `InfoRow`, `InfoGrid`, `PagedList` |
 | Identité | `EmployeeHeader`, `EmployeePhoto`, `Avatar` |
 | Statut et information | `Badge` (statut), `Chip` (information), `Banner` (alerte dans le flux), `IconTile` |
-| Actions | `Button`, `PillButton`, `ActionTile`, `FilterButton`, `Segmented`, `OptionRow`, `ConfirmDialog` |
+| Actions | `Button`, `PillButton`, `ActionTile`, `FilterButton`, `Segmented`, `OptionRow`, `ConfirmDialog`, `BottomSheet` et `ChoiceGroup` (filtres) |
 | Saisie | `FormField`, `SearchBar` |
-| États | `Loader`, `Skeleton`, `EmptyState`, `ErrorState` |
+| États | `Skeleton`, `SkeletonRow`, `SkeletonList`, `SkeletonLines`, `SkeletonDashboard`, `Loader` (démarrage seulement), `EmptyState`, `ErrorState` (titre et icône propres au réseau, à la session, au serveur, aux droits) |
 
 Les mêmes composants sont exportés sous leur nom de catalogue (`AtlasKpiCard`, `AtlasEmployeeRow`, `AtlasChartCard`…).
 
 Règles :
 
-- **Aucune valeur inventée.** Un indicateur inconnu affiche « — » ou « Indisponible », un graphique sans donnée laisse sa barre ou son anneau vide, et un bloc sans source backend est masqué.
+- **Aucune valeur inventée.** Un indicateur inconnu affiche « — » ou « Indisponible », un graphique sans donnée laisse sa barre ou son anneau vide, et un bloc sans source backend est masqué. Une évolution (« +5 vs hier ») n'est affichée que si les deux journées ont été renvoyées par le backend.
+- **Jamais de page blanche** : listes et tableaux de bord affichent des squelettes pendant le chargement ; l'en-tête d'une liste (recherche, filtres) reste visible pendant le chargement et en cas d'erreur.
 - **Photo employé** : la photo d'une fiche est rangée côté backend dans `extra.photo` ; le mobile n'en garde que l'existence (`hasPhoto`), jamais l'adresse. Le portrait 3:4 est servi par la route authentifiée `GET /api/drh/employees/{id}/portrait`. Il est chargé par le client HTTP (`api.getImage` : même jeton, même renouvellement sur 401, type et taille contrôlés), puis gardé en mémoire sous forme d'URI `data:` dans le cache de données (`usePortrait`). `<Image>` ne reçoit donc ni l'adresse du backend ni le jeton, rien n'est écrit sur le disque, et le cache est vidé à chaque fermeture de session. 404 (aucune photo exploitable) et 403 (hors périmètre) affichent les initiales ; en build de développement, la fiche employé indique le code HTTP et la cause quand une photo annoncée ne se charge pas.
 - **Statut toujours écrit** : la couleur et la pastille ne font que renforcer le libellé.
 - **Cible tactile** de 48 points minimum ; chaque élément interactif a un libellé d'accessibilité.
 - **Styles en ligne** : ne jamais lire une propriété nommée `value` dans un objet de style en ligne. Le plugin Babel de Reanimated la traite comme une valeur animée ; la lire dans une constante avant.
 
-À créer avec les écrans qui en auront besoin : `BottomSheet`, `DatePicker` (les dates sont saisies au clavier), `FileUploader`, `PhotoUploader`. Le mode sombre n'est pas livré.
+À créer avec les écrans qui en auront besoin : `DatePicker` (les dates sont saisies au clavier), `FileUploader`, `PhotoUploader`. Le mode sombre n'est pas livré.
 
 ## Internationalisation
 
@@ -255,25 +256,30 @@ Français (référence) et arabe. Un test vérifie que chaque langue couvre tout
 
 ## Navigation
 
-Barre du bas : **Accueil**, **OPS**, **DRH**, **Modules**, **Plus**. Les onglets OPS et DRH n'existent que pour les comptes qui ont le module.
+Barre du bas fixe (`BottomNavigation`) : **Accueil**, **Statistiques**, **Pointage**, **Employés**, **Modules**. Pointage et Employés n'apparaissent qu'aux comptes qui ont le droit correspondant. OPS, DRH, Alertes, Tâches et Profil vivent dans le même groupe d'onglets pour garder la barre ; ils allument « Modules ».
+
+Un lien vers une rubrique de la barre depuis un écran de détail ou une notification passe par `openRoute` : il revient aux onglets déjà ouverts au lieu d'en empiler une seconde copie, en transmettant les paramètres (`/attendance?site_id=3`).
 
 ```
 /login                   hors session
-/(tabs)/                 Accueil : cockpit — indicateurs, présence du jour et des 7 derniers jours, alertes et incidents récents, accès rapides
+/(tabs)/                 Accueil : cockpit — huit indicateurs, évolution vs hier, taux de présence, 7 derniers jours, actions rapides, alertes et incidents récents
+/(tabs)/stats            Statistiques : vues Global, OPS, DRH, uniquement à partir des données backend
+/(tabs)/attendance       Pointage : anneau de présence, recherche, filtres (jour, site, statut) ; /attendance-correct correction motivée
+/(tabs)/employees        Employés : recherche, filtres (statut, société) ; fiche sous /drh/employees/[id]
+/(tabs)/modules          Lanceur : modules et fonctions accordés avec compteurs réels, rapports, synthèse DRH ; briques sans écran mobile grisées
 /(tabs)/ops              Tableau de bord OPS : situation du jour, sites, incidents ouverts, actions
 /(tabs)/drh              Tableau de bord RH : effectifs, répartitions, congés à valider, périodes d'essai
-/(tabs)/modules          Lanceur : modules et fonctions accordés ; briques sans écran mobile grisées
-/(tabs)/profile          Plus : compte, périmètre, sécurité, notifications, version, déconnexion
-/(tabs)/tasks            Tâches à traiter (ouvert depuis l'accueil, le lanceur et Plus)
-/(tabs)/alerts           Alertes ; /alerts/[id] détail et actions
+/(tabs)/profile          Profil : identité, périmètre, modules, raccourcis, déconnexion
+/(tabs)/tasks            Tâches à traiter, filtres À faire / En cours
+/(tabs)/alerts           Alertes, filtres Toutes / Critiques / Non lues / Traitées ; /alerts/[id] détail et actions
+/settings                Paramètres : compte, biométrie, notifications, langue, apparence, données locales, à propos
 /scope                   Contexte de travail (société, site)
 /module/[key]            Entrée d'un module, avec garde d'accès
 /ops/sites               Sites ; /ops/sites/[id] fiche site : effectifs, présence du jour, agents, planning
-/attendance              Pointage du jour : anneau de présence, recherche, filtres ; /attendance-correct correction motivée
 /abandons                Abandons de poste ; /abandons/new déclaration
-/incidents               Incidents et saisies en attente ; /incidents/new déclaration
+/incidents               Incidents (recherche, filtres) et saisies en attente ; /incidents/new déclaration
 /brq                     Bulletin de renseignement quotidien
-/drh/employees           Collaborateurs ; /drh/employees/[id] fiche : aperçu, position, pointage, planning et congés, documents
+/drh/employees/[id]      Fiche employé : aperçu, position, pointage, planning et congés, documents
 /drh/leaves              Congés à valider ; /drh/leave-request dépôt d'une demande
 /recruitment             Candidats
 /employee                Espace employé (session employé uniquement)

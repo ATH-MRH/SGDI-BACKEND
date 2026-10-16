@@ -20,6 +20,7 @@ export type ModuleKey =
   | 'recrute'
   | 'conges'
   | 'finances'
+  | 'fac'
   | 'dc'
   | 'materiel'
   | 'pret'

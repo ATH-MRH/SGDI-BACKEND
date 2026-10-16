@@ -11,7 +11,7 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { Segmented } from '@/components/Segmented';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Card, EmptyState, ErrorState, Kpi, ListItem, Loader, ScreenHeader } from '@/components/ui';
+import { AppText, Card, EmptyState, ErrorState, KpiCard, KpiGrid, ListItem, ScreenHeader, SkeletonDashboard } from '@/components/ui';
 import { access } from '@/features/access';
 import { presenceStatus } from '@/features/status';
 import { t } from '@/i18n';
@@ -40,24 +40,28 @@ export default function BrqScreen() {
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']} testID="brq-screen">
         <ScreenHeader title={t('entry.brq')} subtitle={data ? formatDate(data.date) : undefined} />
         {query.isPending ? (
-          <Loader />
+          <SkeletonDashboard />
         ) : query.error || !data ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} testID="brq-error" />
         ) : (
           <ScrollView
             contentContainerStyle={styles.content}
             refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={colors.primary} />}>
-            <View style={styles.kpis} testID="brq-kpis">
-              <Kpi testID="brq-expected" label={t('cockpit.expected')} value={data.kpis.expected} />
-              <Kpi testID="brq-present" label={t('cockpit.present')} value={data.kpis.present} tone="success" />
-              <Kpi testID="brq-absent" label={t('cockpit.absent')} value={data.kpis.absent} tone="danger" />
-              <Kpi label={t('cockpit.notPointed')} value={data.kpis.notPointed} tone="warning" />
-              <Kpi label={t('cockpit.abandons')} value={data.kpis.abandons} tone="danger" />
-              <Kpi
-                testID="brq-coverage"
-                label={t('brq.coverage')}
-                value={data.kpis.coveragePct === null ? '—' : `${data.kpis.coveragePct} %`}
-              />
+            <View testID="brq-kpis">
+              <KpiGrid columns={3}>
+                <KpiCard variant="compact" testID="brq-expected" icon="people-outline" label={t('cockpit.expected')} value={data.kpis.expected} />
+                <KpiCard variant="compact" testID="brq-present" icon="checkmark-circle-outline" label={t('cockpit.present')} value={data.kpis.present} tone="success" />
+                <KpiCard variant="compact" testID="brq-absent" icon="close-circle-outline" label={t('cockpit.absent')} value={data.kpis.absent} tone="danger" />
+                <KpiCard variant="compact" icon="help-circle-outline" label={t('cockpit.notPointed')} value={data.kpis.notPointed} tone="warning" />
+                <KpiCard variant="compact" icon="exit-outline" label={t('cockpit.abandons')} value={data.kpis.abandons} tone="danger" />
+                <KpiCard
+                  variant="compact"
+                  testID="brq-coverage"
+                  icon="shield-checkmark-outline"
+                  label={t('brq.coverage')}
+                  value={data.kpis.coveragePct === null ? '—' : `${data.kpis.coveragePct} %`}
+                />
+              </KpiGrid>
             </View>
 
             {data.notes.map((note) => (
@@ -102,5 +106,4 @@ export default function BrqScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, gap: spacing.lg },
-  kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
 });

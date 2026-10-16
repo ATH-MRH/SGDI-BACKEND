@@ -1,8 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import { ApiError } from '@/api/errors';
 import { notifySessionRejected } from '@/auth/session';
+import { openRoute } from '@/features/navigation';
 
 import { makeSite, makeUser, storedSession } from '../helpers';
 
@@ -49,6 +51,9 @@ function renderApp() {
     login: require('@/app/login').default,
     '(tabs)/_layout': require('@/app/(tabs)/_layout').default,
     '(tabs)/index': require('@/app/(tabs)/index').default,
+    '(tabs)/stats': require('@/app/(tabs)/stats').default,
+    '(tabs)/attendance': require('@/app/(tabs)/attendance').default,
+    '(tabs)/employees': require('@/app/(tabs)/employees').default,
     '(tabs)/ops': require('@/app/(tabs)/ops').default,
     '(tabs)/drh': require('@/app/(tabs)/drh').default,
     '(tabs)/tasks': require('@/app/(tabs)/tasks').default,
@@ -60,16 +65,15 @@ function renderApp() {
     'alerts/[id]': require('@/app/alerts/[id]').default,
     'ops/sites/index': require('@/app/ops/sites/index').default,
     'ops/sites/[id]': require('@/app/ops/sites/[id]').default,
-    attendance: require('@/app/attendance').default,
     'abandons/index': require('@/app/abandons/index').default,
     'abandons/new': require('@/app/abandons/new').default,
     'incidents/index': require('@/app/incidents/index').default,
     'incidents/new': require('@/app/incidents/new').default,
     brq: require('@/app/brq').default,
-    'drh/employees/index': require('@/app/drh/employees/index').default,
     'drh/employees/[id]': require('@/app/drh/employees/[id]').default,
     'drh/leaves': require('@/app/drh/leaves').default,
     recruitment: require('@/app/recruitment').default,
+    settings: require('@/app/settings').default,
   });
 }
 
@@ -109,11 +113,70 @@ describe('navigation protégée', () => {
     await settle();
     expect(screen.getByTestId('home-screen')).toBeTruthy();
     expect(screen.queryByTestId('login-screen')).toBeNull();
-    // Compte OPS : Accueil, OPS, Modules, Plus. L'onglet DRH n'existe que pour un compte qui a le module.
-    for (const label of ['Accueil', 'OPS', 'Modules', 'Plus']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    // Compte OPS : Accueil, Statistiques, Pointage, Modules. « Employés » n'existe que pour un compte DRH.
+    for (const name of ['index', 'stats', 'attendance', 'modules']) {
+      expect(screen.getByTestId(`nav-${name}`)).toBeTruthy();
     }
-    expect(screen.queryByText('DRH')).toBeNull();
+    expect(screen.queryByTestId('nav-employees')).toBeNull();
+    expect(screen.getByTestId('nav-index').props.accessibilityState).toEqual({ selected: true });
+  });
+
+  it('la barre basse ouvre les rubriques principales et garde la rubrique Modules allumée sur OPS', async () => {
+    store.set('atlas.session.v1', storedSession());
+    mockFetchProfile.mockResolvedValue(makeUser());
+    const view = renderApp();
+    await view;
+    await settle();
+    await fireEvent.press(screen.getByTestId('nav-stats'));
+    await settle();
+    expect(screen.getByTestId('stats-screen')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('nav-attendance'));
+    await settle();
+    expect(screen.getByTestId('attendance-screen')).toBeTruthy();
+    expect(screen.getByTestId('nav-attendance').props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(screen.getByTestId('nav-modules'));
+    await settle();
+    await fireEvent.press(screen.getByTestId('module-ops'));
+    await settle();
+    expect(screen.getByTestId('ops-dashboard')).toBeTruthy();
+    expect(screen.getByTestId('nav-modules').props.accessibilityState).toEqual({ selected: true });
+
+    // Un raccourci de l'accueil change d'onglet sans empiler une seconde copie des onglets.
+    await fireEvent.press(screen.getByTestId('nav-index'));
+    await settle();
+    await fireEvent.press(screen.getByTestId('quick-attendance'));
+    await settle();
+    expect(screen.getByTestId('attendance-screen')).toBeTruthy();
+    const root = view.getRouterState() as { routes: { name: string; state?: { routes: { name: string }[] } }[] } | undefined;
+    const stack = root?.routes.find((route) => route.name === '__root')?.state ?? root;
+    expect(stack?.routes.filter((route) => route.name === '(tabs)')).toHaveLength(1);
+  });
+
+  it("un lien d'un écran de détail vers un onglet revient aux onglets sans en empiler une seconde copie", async () => {
+    store.set('atlas.session.v1', storedSession());
+    mockFetchProfile.mockResolvedValue(makeUser());
+    // Les méthodes du routeur sont portées par l'objet renvoyé, pas par sa résolution.
+    const view = renderApp();
+    await view;
+    await settle();
+    await act(async () => router.push('/module/ops'));
+    await settle();
+    await fireEvent.press(screen.getByTestId('entry-attendance'));
+    await settle();
+    expect(screen.getByTestId('attendance-screen')).toBeTruthy();
+    const root = view.getRouterState() as { routes: { name: string; state?: { routes: { name: string }[] } }[] } | undefined;
+    const stack = root?.routes.find((route) => route.name === '__root')?.state ?? root;
+    expect(stack?.routes.filter((route) => route.name === '(tabs)')).toHaveLength(1);
+    expect(stack?.routes.some((route) => route.name === 'module/[key]')).toBe(false);
+
+    // Le filtre d'un lien (fiche site, notification) est transmis à l'onglet.
+    await act(async () => router.push('/module/ops'));
+    await settle();
+    await act(async () => openRoute(router, '/attendance?status=absent'));
+    await settle();
+    expect(view.getPathname()).toBe('/attendance');
+    expect(view.getSearchParams()).toEqual({ status: 'absent' });
+    expect(screen.getByTestId('attendance-filter-absent').props.accessibilityState).toEqual({ selected: true });
   });
 
   it('renvoie à la connexion dès que le backend refuse le jeton', async () => {

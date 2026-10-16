@@ -9,7 +9,7 @@ import { invalidateScopedQueries } from '@/api/queryKeys';
 import { useCurrentUser } from '@/auth/AuthProvider';
 import { Gate } from '@/components/Gate';
 import { StatusBadge } from '@/components/StatusBadge';
-import { AppText, Button, Card, ConfirmDialog, ErrorState, ListItem, Loader, Screen, ScreenHeader } from '@/components/ui';
+import { AppText, Button, Card, ConfirmDialog, ErrorState, ListItem, Screen, ScreenHeader, SkeletonDashboard } from '@/components/ui';
 import { access } from '@/features/access';
 import { ALERT_STATUS, SEVERITY } from '@/features/status';
 import { t } from '@/i18n';
@@ -42,7 +42,7 @@ export default function AlertDetailScreen() {
     <Gate allowed={allowed}>
       <Screen edges={['top', 'bottom', 'left', 'right']} testID="alert-detail" header={<ScreenHeader title={t('alerts.detail.title')} />}>
         {query.isPending ? (
-          <Loader />
+          <SkeletonDashboard />
         ) : query.error || !alert ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : (

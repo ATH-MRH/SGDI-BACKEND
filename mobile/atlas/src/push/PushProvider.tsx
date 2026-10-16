@@ -8,6 +8,8 @@ import { useCurrentUser } from '@/auth/AuthProvider';
 import { env, isFeatureEnabled } from '@/config/env';
 import { getAppVersion } from '@/config/version';
 
+import { openRoute } from '@/features/navigation';
+
 import { pushTarget } from './links';
 import { devicePushToken, pushStatus, registerDevice, requestPush, type PushStatus } from './registration';
 
@@ -77,7 +79,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
     });
     const open = (response: Notifications.NotificationResponse | null) => {
       const target = pushTarget(response?.notification.request.content.data);
-      if (target) router.push(target as never);
+      if (target) openRoute(router, target);
     };
     // Application lancée par le toucher d'une notification.
     void Notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);
