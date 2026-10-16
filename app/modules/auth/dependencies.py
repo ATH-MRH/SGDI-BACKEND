@@ -182,6 +182,12 @@ def request_action(request: Request) -> str:
     """Traduit une opération HTTP en action métier administrable par utilisateur."""
     method = request.method.upper()
     path = request.url.path.lower()
+    if path.rstrip("/") == "/api/drh/badges/preview/pdf":
+        # Épreuve « SPÉCIMEN » du Studio Badges : POST (la maquette en cours voyage dans le corps)
+        # mais aucune écriture, aucune émission ni impression comptée. C'est une consultation ;
+        # sans cette exception, le mot-clé « /pdf » ci-dessous la classerait « export ». Chemin
+        # exact : l'impression officielle /api/drh/badges/print/pdf reste « export ».
+        return "read"
     if any(part in path for part in ("/export", "/download", "/pdf")):
         return "export"
     if any(part in path for part in ("/validate", "/valider", "/approve", "/refuse", "/close", "/payer", "/recruit", "/convertir", "/annuler")):

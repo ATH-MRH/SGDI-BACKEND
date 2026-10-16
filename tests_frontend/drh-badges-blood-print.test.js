@@ -327,3 +327,21 @@ test("studio text fields keep their case: {{nom}} must stay a field once typed",
   assert.equal(shouldUpper(env.view.querySelector('[data-st-props] [data-p="caption"]')), false);
   env.dom.window.close();
 });
+
+test("read-only profile: the specimen PDF is offered and downloaded, no write action is available", async () => {
+  const env = setup({ "/employees/7": { value: { ...EMPLOYEE, badge: BADGE, badges: [BADGE] } } }, NONE);
+  await show(env, "creer", "#/drh/badges/creer/7");
+  const proof = env.view.querySelector('[data-bs="proof"]');
+  assert.ok(proof && !proof.disabled, "bouton « Épreuve PDF » visible");
+  for (const action of ["issue", "issue-print", "print-dialog", "revoke"]) assert.equal(env.view.querySelector(`[data-bs="${action}"]`), null, action);
+  proof.click(); await settle();
+  const sent = env.calls.find(c => c[0] === "fetch");
+  assert.equal(sent[1], "/api/drh/badges/preview/pdf");
+  assert.equal(sent[2].method, "POST");
+  assert.deepEqual(JSON.parse(sent[2].body), { employee_id: 7, template_id: 1, crop: { zoom: 1, dx: 0, dy: 0 } });
+  assert.ok(env.calls.some(c => c[0] === "download" && c[2] === "onglet"), "épreuve ouverte (aucun enregistrement)");
+  assert.ok(!env.calls.some(c => c[0] === "toast" && c[2] === "error"), "aucune erreur affichée");
+  assert.ok(!env.calls.some(c => /\/issue|\/print\/pdf|\/revoke|\/settings|\/templates/.test(String(c[1] || "")) && c[0] === "fetch"));
+  assert.ok(!env.calls.some(c => c[1] && c[1].method && c[1].method !== "GET" && c[0] !== "fetch"), "aucune écriture via l'API");
+  env.dom.window.close();
+});
