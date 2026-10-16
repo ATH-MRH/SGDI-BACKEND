@@ -177,3 +177,78 @@ def test_converted_candidate_refuses_reset_even_if_the_employee_was_removed(clie
     response=client.post(RESET,headers=auth_headers,json=payload(sid))
     assert response.status_code==409 and 'converti' in response.json()['detail']
     assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
+
+
+@pytest.fixture
+def rh01_headers(client,db):
+    user=User(username='RH01',full_name='RH01',password_hash=hash_password('testpass123'),
+        role='cadre',access_level='H5',authorized_modules=['drh'],
+        authorized_actions=['read','create'],authorized_societies=[oneoff.SOCIETY],is_active=True)
+    db.add(user);db.commit()
+    token=client.post('/api/auth/login',json={'username':'RH01','password':'testpass123'}).json()['access_token']
+    yield {'Authorization':'Bearer '+token},user
+    db.rollback()
+    user.username='used-RH01-'+uuid.uuid4().hex[:10]
+    db.commit()
+
+
+def test_rh01_reset_is_narrow_audited_and_single_use(client,auth_headers,db,batch96,rh01_headers):
+    headers,user=rh01_headers
+    sid,content=blocked_session(client,auth_headers,db,batch96)
+    before=counts(db)
+    identity=(user.role,user.access_level,list(user.authorized_actions),list(user.authorized_modules))
+    assert client.get(BASE+'/config',headers=headers).json()['oneoff_reset_allowed'] is True
+    context=client.get(RESET+'-context',headers=headers,params={k:v for k,v in payload(sid).items() if k!='old_session_id'})
+    assert context.status_code==200 and context.json()['can_reset']
+    assert client.post(RESET,headers=headers,json=payload(sid)).status_code==200
+    event=db.scalars(select(AuditEvent).where(AuditEvent.action=='drh.contract.excel.oneoff.reset')).all()[-1]
+    details=json.loads(event.new_state)
+    assert details['requested_by_user_id']==user.id and details['requested_by_username']=='RH01'
+    assert details['requested_by_role']=='cadre' and details['requested_by_access_level']=='H5'
+    assert details['reset_access_path']=='rh01_exception'
+    assert details['reason']=='Réinitialisation exceptionnelle autorisée pour RH01'
+    assert details['old_session_id']==sid and details['batch_key']==oneoff.BATCH_KEY
+    assert details['file_sha256']==oneoff.FILE_SHA256 and details['society']==oneoff.SOCIETY
+    assert details['requested_at']
+    new=client.post(BASE,headers=headers,params={'society':oneoff.SOCIETY},files={'file':('same.xlsx',content)})
+    assert new.status_code==200,new.text
+    assert client.post(BASE,headers=headers,params={'society':oneoff.SOCIETY},files={'file':('same.xlsx',content)}).status_code==409
+    assert counts(db)==before
+    db.refresh(user)
+    assert (user.role,user.access_level,user.authorized_actions,user.authorized_modules)==identity
+    # L'exception locale ne donne aucun accès à l'administration des utilisateurs.
+    assert client.get('/api/auth/users',headers=headers).status_code==403
+
+
+@pytest.mark.parametrize('change', ['other_user','non_h5','other_society'])
+def test_rh01_account_constraints_are_fail_closed(client,auth_headers,db,batch96,rh01_headers,change):
+    headers,user=rh01_headers
+    sid,_=blocked_session(client,auth_headers,db,batch96)
+    if change=='other_user':user.username='OTHER-CADRE-H5'
+    elif change=='non_h5':user.access_level='H4'
+    else:user.authorized_societies=['SWORD CONSTRUCTION']
+    db.commit()
+    # Reconnexion après changement de username pour tester l'identité serveur actuelle.
+    token=client.post('/api/auth/login',json={'username':user.username,'password':'testpass123'}).json()['access_token']
+    headers={'Authorization':'Bearer '+token}
+    assert client.get(BASE+'/config',headers=headers).json()['oneoff_reset_allowed'] is False
+    assert client.post(RESET,headers=headers,json=payload(sid)).status_code==403
+
+
+@pytest.mark.parametrize('changes', [
+    {'society':'SWORD CONSTRUCTION'}, {'file_sha256':'f'*64}, {'batch_key':'other-batch'}])
+def test_rh01_cannot_reset_other_scope(client,auth_headers,db,batch96,rh01_headers,changes):
+    headers,_=rh01_headers
+    sid,_=blocked_session(client,auth_headers,db,batch96)
+    assert client.post(RESET,headers=headers,json=payload(sid,**changes)).status_code in {403,409}
+    assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
+
+
+@pytest.mark.parametrize('key', ['created_contracts','created_employees','created_documents'])
+def test_rh01_cannot_reset_after_business_creation(client,auth_headers,db,batch96,rh01_headers,key):
+    headers,_=rh01_headers
+    sid,_=blocked_session(client,auth_headers,db,batch96)
+    old=db.scalar(select(CandidateImportSession).where(CandidateImportSession.public_id==sid))
+    old.result={key:1};db.commit()
+    assert client.post(RESET,headers=headers,json=payload(sid)).status_code==409
+    assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
