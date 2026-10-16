@@ -148,8 +148,11 @@ def test_pairing_is_reserved_to_system_administration(client, auth_headers, db):
         assert client.get(f"{API}/facial-devices", headers=headers).status_code == 403
         assert client.post(f"{API}/facial-devices/authorizations", headers=headers,
                            json={"key": f"trm:{tid}", "user_ids": [user.id]}).status_code == 403
-    # Le Pointeur ne modifie aucun réglage administratif (ni activation, ni suppression).
-    assert client.patch(f"{API}/terminals/{tid}", headers=pointer, json={"facial_attendance_enabled": False}).status_code == 403
+    # Le Pointeur ne modifie aucun réglage administratif (ni activation, ni suppression), pas plus
+    # qu'un exploitant biométrique qui n'est pas Administration Système.
+    for headers in (pointer, manager_h):
+        for change in ({"facial_attendance_enabled": False}, {"enabled": False}, {"enabled": True}, {"name": "Renommé"}):
+            assert client.patch(f"{API}/terminals/{tid}", headers=headers, json=change).status_code == 403
     assert client.delete(f"{API}/terminals/{tid}", headers=pointer).status_code == 403
     db.expire_all()
     term = db.get(BiometricTerminal, tid)

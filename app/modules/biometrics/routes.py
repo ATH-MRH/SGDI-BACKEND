@@ -941,7 +941,10 @@ def add_terminal(payload: TerminalIn, db: Session = Depends(get_db), user: User 
 
 @router.patch("/terminals/{terminal_id}")
 def update_terminal(terminal_id: int, payload: TerminalPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
-    require_feature(db, user, "biometric_admin", "admin")
+    # Activer, désactiver ou ouvrir le pointage facial d'un terminal relève de sa gestion :
+    # Administration Système, comme l'enregistrement et l'appairage. Un exploitant garde l'arrêt
+    # d'urgence par site (/sites/{id}/facial-disable).
+    pointer_devices.require_system_admin(db, user)
     term = _terminal_in_scope(db, user, terminal_id, lock=True)
     if term.revoked_at:
         raise HTTPException(409, detail="Terminal révoqué")
