@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     portal_hostnames: str = "portail-rh.irongs.com"
     startup_maintenance_enabled: bool = False
     public_employee_pages_require_token: bool = True
+    # Studio Badges DRH : false coupe toute l'API /api/drh/badges (503) sans toucher aux données.
+    badge_studio_enabled: bool = True
     max_photo_upload_bytes: int = 5_000_000
     # Attendance Core — anti-rebond : un nouvel événement du même employé moins de N secondes
     # après le précédent (double scan, visage resté devant la caméra, retry réseau) est rendu

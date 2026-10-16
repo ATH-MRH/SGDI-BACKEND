@@ -2,7 +2,9 @@ from fastapi import APIRouter
 
 from app.modules.auth.routes import router as auth_router
 from app.modules.drh.routes import router as drh_router
+from app.modules.drh.contract_import_routes import router as contract_import_router
 from app.modules.drh.candidate_import_routes import router as candidate_import_router
+from app.modules.drh.badge_routes import router as badge_router
 from app.modules.ops.routes import router as ops_router
 from app.modules.materiel.routes import router as materiel_router
 from app.modules.commercial.routes import router as commercial_router
@@ -50,6 +52,7 @@ api_router.include_router(mobile_router, prefix="/mobile", tags=["ATLAS MOBILE"]
 api_router.include_router(employee_mobile_router, prefix="/employee-mobile", tags=["ATLAS MOBILE — employé"])
 api_router.include_router(drh_router, prefix="/drh", tags=["DRH"])
 api_router.include_router(candidate_import_router, prefix="/drh", tags=["Recrutement — import Excel"])
+api_router.include_router(badge_router, prefix="/drh", tags=["DRH — badges"])
 api_router.include_router(ops_router, prefix="/ops", tags=["OPS"])
 api_router.include_router(materiel_router, prefix="/materiel", tags=["Matériel & équipement"])
 api_router.include_router(commercial_router, prefix="/commercial", tags=["Commercial"])
@@ -88,3 +91,5 @@ api_router.include_router(site_workforce_router, prefix="/site-workforce", tags=
 api_router.include_router(attendance_router, prefix="/attendance", tags=["Attendance"])
 api_router.include_router(biometrics_router, prefix="/biometrics", tags=["Biométrie"])
 api_router.include_router(brq_router, prefix="/brq", tags=["BRQ"])
+
+api_router.include_router(contract_import_router, prefix="/drh", tags=["DRH — contractualisation Excel"])
