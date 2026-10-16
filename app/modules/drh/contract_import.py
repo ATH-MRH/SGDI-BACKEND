@@ -60,7 +60,8 @@ def upload(db, user, file_name, content, society):
     db.add(session)
     oneoff.bind_upload(db, user, session)
     db.commit()
-    return {'session_id': session.public_id, **describe(workbook)}
+    return {'session_id': session.public_id, **describe(workbook),
+            'preparation_only_file':bool(oneoff.grant_for(db, session))}
 
 
 def get_session(db, user, public_id, statuses=None):
@@ -125,6 +126,7 @@ def analyze(db, user, session, config):
     candidates = [c for c in db.scalars(select(Candidate)).all() if society_key(c.society) == society_key(society)]
     options = dc_client_sites.list_client_site_options(db, society)
     linked = {str(value) for value in db.scalars(select(Employee.extra['sourceCandidateId'].as_string())).all() if value is not None}
+    exceptional = oneoff.grant_for(db, session)
     rows = []
     for number, cells in layout['data_rows']:
         raw = {key: cells[int(col)] if int(col) < len(cells) else '' for col, key in mapping.items() if key}
@@ -135,8 +137,13 @@ def analyze(db, user, session, config):
         common = {k: v for k, v in config['common'].items() if k in FIELDS and k not in {'reference','code','phone','name','start_date','end_date'} and v is not None and str(v).strip()}
         merged = {**common, **{k: v for k, v in values.items() if v}} if config['precedence'] == 'excel' else {**values, **common}
         row = {'row': number, 'status': 'PRÊT', 'reason': '', 'candidate_id': None, 'candidate': '', 'values': merged}
-        matches = oneoff.candidate_for_row(db, session, index, number, candidates)
-        if matches is None:
+        if exceptional:
+            row.update(oneoff.match_row(cells, candidates, layout['columns']))
+            matches = [c for c in candidates if c.id == row['candidate_id']]
+            if not matches:
+                rows.append(row)
+                continue
+        else:
             matches = identify(candidates, values)
         if len(matches) != 1:
             row.update(status='À VÉRIFIER' if matches else 'CANDIDAT INTROUVABLE', reason='Plusieurs candidats correspondent' if matches else 'Aucun candidat dans la société active')
@@ -194,6 +201,7 @@ def analyze(db, user, session, config):
 
 
 def preview(db, user, session, config):
+    config = oneoff.preview_config(db, session, config)
     result = analyze(db, user, session, config)
     result = oneoff.prepare_preview(db, user, session, config, result)
     session.plan = {'config': config, 'preview': result}

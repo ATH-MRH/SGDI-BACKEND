@@ -113,11 +113,11 @@ def report(session_id: str, db: Session = Depends(get_db), user: User = Depends(
     out = StringIO()
     writer = csv.writer(out, delimiter=';')
     preparation_only = bool((session.result or (session.plan or {}).get('preview') or {}).get('preparation_only'))
-    writer.writerow(['Ligne','Candidat','Statut','Motif','Champs manquants'] + [importer.FIELDS[k] for k in importer.oneoff.VALUE_FIELDS] if preparation_only else ['Ligne','Candidat','Statut','Motif','Contrat','Numéro'])
+    writer.writerow(['Ligne','Candidat','Statut','Motif','Correspondance','Champs manquants'] + [importer.FIELDS[k] for k in importer.oneoff.VALUE_FIELDS] if preparation_only else ['Ligne','Candidat','Statut','Motif','Contrat','Numéro'])
     for row in rows:
         values = [str(row.get(key) or '') for key in ('row','candidate','status','reason','contract_id','reference')]
         if preparation_only:
-            values = [str(row.get(k) or '') for k in ('row','candidate','status','reason')] + [', '.join(row.get('missing_fields', []))]
+            values = [str(row.get(k) or '') for k in ('row','candidate','status','reason')] + [row.get('match_status',''), ', '.join(row.get('missing_fields', []))]
             values += ['Non renseigné' if row['values'].get(k) is None else str(row['values'][k]) for k in importer.oneoff.VALUE_FIELDS]
         writer.writerow(["'" + v if v.lstrip().startswith(('=','+','-','@')) else v for v in values])
     return Response('\ufeff' + out.getvalue(), media_type='text/csv; charset=utf-8', headers={
