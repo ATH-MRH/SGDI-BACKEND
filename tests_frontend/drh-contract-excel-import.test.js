@@ -7,7 +7,7 @@ const source=fs.readFileSync('app/static/js/modules/contracts.js','utf8');
 function harness(){
   const dom=new JSDOM('<body><div id="modal"></div></body>');
   const calls=[];
-  const context=vm.createContext({SGDIModules:{registerModule:()=>{}},document:dom.window.document,FormData:dom.window.FormData,URL:dom.window.URL,setTimeout,
+  const context=vm.createContext({SGDIModules:{registerModule:()=>{}},document:dom.window.document,FormData:dom.window.FormData,URL:dom.window.URL,setTimeout,clearTimeout,
     currentStructureSocieteFilter:()=> 'SOCIETE',escapeHTML:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
     openModal:html=>dom.window.document.getElementById('modal').innerHTML=html,closeModal:()=>{},renderView:()=>{},toast:()=>{},
     sgdiPullState:async()=>{},sgdiApi:async(path,opts)=>{calls.push({path,opts});if(path.endsWith('/config'))return {fields:[{key:'reference',label:'Référence candidat'},{key:'start_date',label:'Date début'}],limits:{extensions:['.xlsx','.xls'],max_file_mb:5,max_rows:1000}};if(path.includes('dc-client-sites'))return {items:[]};if(path.endsWith('contract-templates'))return [];if(path.endsWith('/preview'))return {total:2,counts:{'PRÊT':1,'À CORRIGER':1},rows:[{row:2,candidate:'<script>alert(1)</script>',status:'PRÊT',values:{start_date:'2026-10-15'}},{row:3,status:'À CORRIGER',reason:'Date invalide'}]};if(path.endsWith('/confirm'))return {total:2,counts:{'CRÉÉ':1,'À CORRIGER':1},rows:[{row:2,status:'CRÉÉ',reference:'CTR-1'},{row:3,status:'À CORRIGER'}]};return {session_id:'contract-test',default_sheet:0,sheets:[{index:0,name:'Feuille',importable:true,row_count:2,columns:[{index:0,header:'Référence candidat',samples:['1'],suggested:'reference'},{index:1,header:'Date début',samples:['2026-10-15'],suggested:'start_date'}]}]}}});
@@ -165,4 +165,33 @@ test('reset one-off : annulation utilisateur ou session encore utilisable ne dé
     await h.run('resetExceptionalContractImportSession()');
     assert.equal(h.run('resetPosts'),0);assert.equal(h.run('contractExcelImport.busy'),false);
   }
+});
+
+
+test('échec HTTP 409 après téléversement : config H5 et erreur conservées, bouton visible à l’étape 1',async()=>{
+  const h=harness();
+  // Utiliser le vrai transport de production, avec uniquement HTTP simulé.
+  const app=fs.readFileSync('app/static/sgdi-app.js','utf8');
+  const transport=app.slice(app.indexOf('function sgdiApiErrorMessage('),app.indexOf('async function sgdiActionApi('));
+  h.run(`
+    var AbortController=document.defaultView.AbortController;
+    var console={error:()=>{}}, sgdiApiUrl=path=>path, sgdiAuthHeaders=()=>({}), sgdiAuthToken=()=>null;
+    var sgdiIsAuthFailure=()=>false, sgdiIsMutatingMethod=()=>false;
+    var fetch=async(url,opts)=>{
+      const uploading=opts.method==='POST';
+      if(uploading&&!(opts.body instanceof FormData))throw new Error('Fichier non téléversé');
+      const out=uploading?{detail:'Dérogation déjà liée à une session ; réattribution interdite'}:
+        url.endsWith('/config')?{oneoff_reset_allowed:true,fields:[],limits:{extensions:['.xlsx'],max_file_mb:5,max_rows:1000}}:
+        url.includes('dc-client-sites')?{items:[]}:[];
+      return {ok:!uploading,status:uploading?409:200,text:async()=>JSON.stringify(out)};
+    };
+  `);
+  h.run(transport);
+  await h.run('openContractExcelImport()');
+  await h.run("uploadContractExcelFile(new document.defaultView.File(['workbook'],'modele-contractualisation (1).xlsx'))");
+  assert.equal(h.run('contractExcelImport.step'),1);
+  assert.equal(h.run('contractExcelImport.config.oneoff_reset_allowed'),true);
+  assert.match(h.run('contractExcelImport.error'),/Dérogation déjà liée/);
+  assert.ok(h.dom.window.document.querySelector('[onclick="resetExceptionalContractImportSession()"]'));
+  assert.match(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
 });

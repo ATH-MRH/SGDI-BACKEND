@@ -146,7 +146,7 @@ def test_another_explicit_admin_reset_is_required_for_a_second_rebinding(client,
     assert client.post(RESET,headers=auth_headers,json=payload(new)).status_code==200
 
 
-@pytest.mark.parametrize('role,level', [('rh','H5'),('admin','H3')])
+@pytest.mark.parametrize('role,level', [('rh','H5'),('cadre','H5'),('cadre','H4'),('admin','H3')])
 def test_permission_is_admin_H5_not_ordinary_DRH(client,auth_headers,db,batch96,role,level):
     sid,_=blocked_session(client,auth_headers,db,batch96)
     name='reset-'+uuid.uuid4().hex[:10]
@@ -177,3 +177,22 @@ def test_converted_candidate_refuses_reset_even_if_the_employee_was_removed(clie
     response=client.post(RESET,headers=auth_headers,json=payload(sid))
     assert response.status_code==409 and 'converti' in response.json()['detail']
     assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
+
+
+@pytest.mark.parametrize('role', ['admin', 'ADM'])
+def test_admin_H5_exposes_reset_and_authorizes_context(client,auth_headers,db,batch96,role):
+    sid,_=blocked_session(client,auth_headers,db,batch96)
+    name='h5-reset-'+uuid.uuid4().hex[:10]
+    user=User(username=name,full_name='H5 reset',password_hash=hash_password('testpass123'),
+        role=role,access_level='H5',authorized_modules=['drh'],
+        authorized_actions=['read','create','admin'],authorized_societies=[oneoff.SOCIETY],is_active=True)
+    db.add(user);db.commit()
+    token=client.post('/api/auth/login',json={'username':name,'password':'testpass123'}).json()['access_token']
+    headers={'Authorization':'Bearer '+token}
+    config=client.get(BASE+'/config',headers=headers)
+    assert config.status_code==200 and config.json()['oneoff_reset_allowed'] is True
+    context=client.get(RESET+'-context',headers=headers,params={k:v for k,v in payload(sid).items() if k!='old_session_id'})
+    assert context.status_code==200 and context.json()['old_session_id']==sid
+    before=counts(db)
+    assert client.post(RESET,headers=headers,json=payload(sid)).status_code==200
+    assert counts(db)==before
