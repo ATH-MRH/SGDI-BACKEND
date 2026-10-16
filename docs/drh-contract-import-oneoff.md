@@ -27,3 +27,17 @@ Seuls import, correspondance, vérification, snapshot de préparation et rapport
 Audit : compte, date UTC, société, empreinte, session, liens et champs manquants par ligne (y compris lignes exclues), motif « Régularisation exceptionnelle du lot importé », puis sauvegarde avec zéro création. Les formulaires manuels, l'import candidats, les permissions, la sidebar et les règles générales ne changent pas.
 
 Tests : structure à 17 colonnes, E sans en-tête, 96 lignes et IDs de base actuels ; noms normalisés et E vide ; homonymes et conflits téléphone/référence/naissance ; doublons ; exclusions ; session/empreinte/société ; conservation des dates, salaires, autres valeurs et blancs ; absence de créations et de mutation des candidats ; audit/CSV ; interface et parcours normaux. Livraison par PR uniquement, sans merge ni déploiement.
+
+## Reset administratif exceptionnel de la liaison
+
+`GET /api/drh/contracts/import/oneoff/reset-context` lit l'identifiant exact de l'ancienne session et l'éligibilité au reset. `POST /api/drh/contracts/import/oneoff/reset` exige société, empreinte, clé de lot et cet `old_session_id` attendu : une liaison modifiée entre lecture et confirmation est refusée.
+
+Les deux routes exigent un rôle administrateur existant (ADMIN / ADM / ADM1 / ADM2), le niveau H5 et l'accès au périmètre IRON GLOBAL SOLUTION. Elles ne modifient aucune permission générale. Le fichier, les 75 candidats et leurs règles de rapprochement restent inchangés.
+
+Le reset refuse une session encore utilisable ou en traitement. Il ne libère qu'une ancienne session annulée, expirée, échouée ou inutilisable ; une session purgée exige une preuve durable de préparation seule. Les snapshots, liens de candidats, employés, contrats et documents et les traces d'audit sont relus. Une création détectée ou une preuve insuffisante bloque l'opération. Un document récent lié au candidat est traité comme potentiellement contractuel en cas de doute.
+
+La transaction conserve le journal et les IDs autorisés, neutralise l'ancienne session et remplace sa liaison par une autorisation consommable. Un compare-and-swap garantit qu'un reset concurrent ou une deuxième consommation ne peut libérer une réservation supplémentaire. Le prochain téléversement du même fichier exact dans la même société consomme cette autorisation et réserve une seule nouvelle session. Toute nouvelle réattribution exige une nouvelle action admin explicite et les mêmes contrôles ; aucun renouvellement automatique n'est introduit. Aucun nouveau schéma ni aucune migration ne sont nécessaires.
+
+Audit : `drh.contract.excel.oneoff.reset`, puis `drh.contract.excel.oneoff.reset.rebound` lors de la nouvelle réservation, avec utilisateur, date UTC, anciennes/nouvelles sessions, société, empreinte et motif « Réinitialisation exceptionnelle du lot contractualisation Excel ». Le reset et son audit sont atomiques ; l'échec d'audit annule la transaction.
+
+Dans l'assistant, le petit bouton « Réinitialiser la session exceptionnelle » apparaît seulement pour l'erreur de réservation et un administrateur habilité. La confirmation est : « Cette action libère uniquement la session exceptionnelle actuelle. Aucun contrat ni employé ne sera créé. Continuer ? ». Après succès, l'utilisateur sélectionne à nouveau le même fichier exact. Aucun contrat, employé ou document n'est créé par cette action.
