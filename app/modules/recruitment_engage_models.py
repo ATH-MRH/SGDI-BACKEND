@@ -173,3 +173,18 @@ class RecruitmentPushDevice(Base, TimestampMixin):
     account_id: Mapped[int] = mapped_column(ForeignKey('recruitment_candidate_accounts.id', ondelete='CASCADE'), index=True)
     token: Mapped[str] = mapped_column(String(200), unique=True)
     platform: Mapped[str] = mapped_column(String(12))
+
+
+class RecruitmentPushDelivery(Base):
+    """File persistante par notification/appareil ; aucun contenu ni jeton dupliqué."""
+    __tablename__ = 'recruitment_push_deliveries'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey('recruitment_notifications.id', ondelete='CASCADE'), index=True)
+    device_id: Mapped[int | None] = mapped_column(ForeignKey('recruitment_push_devices.id', ondelete='SET NULL'), index=True)
+    state: Mapped[str] = mapped_column(String(24), default='pending', index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    ticket_id: Mapped[str | None] = mapped_column(String(100))
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    __table_args__ = (UniqueConstraint('notification_id', 'device_id', name='uq_recruitment_push_delivery'),)

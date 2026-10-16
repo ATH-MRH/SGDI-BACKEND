@@ -196,8 +196,8 @@ def candidate_reference(row: Candidate) -> str:
     return f"CAND-{row.created_at.year if row.created_at else datetime.utcnow().year}-{row.id:06d}"
 
 
-def _public_candidate_row(payload: PublicCandidateIn, request: Request, db: Session, *, commit: bool = True, verified: bool = False,
-                          extra_data: dict | None = None) -> Candidate:
+def _public_candidate_payload(payload: PublicCandidateIn, request: Request, *, verified: bool = False,
+                              extra_data: dict | None = None) -> CandidateCreate:
     # Champ invisible anti-robot : une vraie personne ne le remplit jamais.
     if payload.company:
         raise HTTPException(status_code=400, detail="Candidature invalide")
@@ -270,6 +270,12 @@ def _public_candidate_row(payload: PublicCandidateIn, request: Request, db: Sess
             **(extra_data or {}),
         },
     )
+    return candidate
+
+
+def _public_candidate_row(payload: PublicCandidateIn, request: Request, db: Session, *, commit: bool = True, verified: bool = False,
+                          extra_data: dict | None = None) -> Candidate:
+    candidate = _public_candidate_payload(payload, request, verified=verified, extra_data=extra_data)
     return service.create_candidate(db, candidate, username="portail-candidat", commit=commit)
 
 
