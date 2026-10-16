@@ -36,10 +36,10 @@ def test_current_main_contract_import_and_existing_rows_survive_join(pg_database
             completed_at=datetime(2026, 10, 14), workbook=None, plan=None,
             result={'rows': [{'employee_id': employee, 'contract_id': contract}]}))
     before = snapshot(engine)
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', '20261019_0001'))
     after = snapshot(engine)
     assert revisions(engine) == {'20261019_0001'}
     assert set(after) == set(before) | {'facial_device_authorizations'}
     assert {table: after[table] for table in before} == before
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', '20261019_0001'))
     assert snapshot(engine) == after

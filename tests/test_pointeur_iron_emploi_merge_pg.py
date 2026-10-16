@@ -91,7 +91,8 @@ def seed_pointer(engine):
 
 def test_join_graph_has_one_head_and_preserves_both_parents():
     script = ScriptDirectory.from_config(Config(str(REPO / 'alembic.ini')))
-    assert script.get_heads() == ['20261019_0001']
+    assert script.get_heads() == ['20261020_0001']
+    assert set(script.get_revision('20261020_0001').down_revision) == {'20261019_0001', '20261014_0005'}
     assert set(script.get_revision('20261019_0001').down_revision) == {MERGE, '20261015_0002'}
     assert set(script.get_revision(MERGE).down_revision) == {MAIN, POINTER}
     assert script.get_revision(POINTER).down_revision == '20261014_0001'

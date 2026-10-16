@@ -38,7 +38,8 @@ def seed_badges(engine):
 
 def test_graph_preserves_every_parent_and_qualifies_facial_rollback():
     script = ScriptDirectory.from_config(Config(str(REPO / 'alembic.ini')))
-    assert script.get_heads() == [MERGE]
+    assert script.get_heads() == ['20261020_0001']
+    assert set(script.get_revision('20261020_0001').down_revision) == {MERGE, '20261014_0005'}
     assert set(script.get_revision(MERGE).down_revision) == {MAIN, POINTER}
     assert set(script.get_revision(POINTER).down_revision) == {'20261016_0001', '20261017_0001'}
     assert script.get_revision(MAIN).down_revision == '20261015_0001'
@@ -53,17 +54,17 @@ def test_upgrade_from_badges_main_preserves_issued_badges_permissions_and_emploi
     seed_emploi(engine)
     seed_badges(engine)
     before = snapshot(engine)
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     after = snapshot(engine)
     assert set(after) == set(before) | {'facial_device_authorizations'}
     assert {name: after[name] for name in before} == before
     assert revisions(engine) == {MERGE}
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert snapshot(engine) == after
     # Drop the EMPTY facial table only; issued badges and grants must remain.
     ok(alembic(url, 'downgrade', '20261017_0001@20261014_0001'))
     assert revisions(engine) == {MAIN} and snapshot(engine) == before
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert revisions(engine) == {MERGE} and snapshot(engine) == after
 
 
@@ -81,11 +82,11 @@ def test_upgrade_from_pointer_and_both_heads_preserves_facial_grants_and_badges(
     assert set(after) - set(before) == {'badge_templates', 'employee_badges', 'badge_events', 'badge_settings'}
     seed_badges(engine)
     populated = snapshot(engine)
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     assert revisions(engine) == {MERGE} and snapshot(engine) == populated
     ok(alembic(url, 'downgrade', POINTER))
     assert revisions(engine) == {MAIN, POINTER} and snapshot(engine) == populated
-    ok(alembic(url, 'upgrade', 'head'))
+    ok(alembic(url, 'upgrade', MERGE))
     denied = alembic(url, 'downgrade', '20261017_0001@20261014_0001')
     assert denied.returncode != 0 and 'Downgrade refusé' in denied.stderr
     assert revisions(engine) == {MERGE} and snapshot(engine) == populated

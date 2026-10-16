@@ -46,14 +46,14 @@ def test_full_upgrade_valid_existing_table_and_nonempty_downgrade(pg_database):
     assert main.returncode == 0, main.stdout + main.stderr
     with engine.connect() as db:
         before = set(sa.inspect(db).get_table_names())
-    upgrade = alembic(url, 'upgrade', 'head')
+    upgrade = alembic(url, 'upgrade', '20261019_0001')
     assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
     with engine.begin() as db:
         assert set(sa.inspect(db).get_table_names()) == before | {_module().TABLE}
         _module()._validate_existing(sa.inspect(db))
         # A complete preexisting table is accepted without changing data.
         db.execute(sa.text("UPDATE alembic_version SET version_num='20261015_0002'"))
-    again = alembic(url, 'upgrade', 'head')
+    again = alembic(url, 'upgrade', '20261019_0001')
     assert again.returncode == 0, again.stdout + again.stderr
     with engine.begin() as db:
         db.execute(sa.text("INSERT INTO users (username,full_name,role,password_hash,is_active,supervisor_read_only,global_society_access,created_at,updated_at) VALUES ('fictive','Fictive','pointeur','fictive',true,true,false,now(),now())"))
