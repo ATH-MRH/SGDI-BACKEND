@@ -277,3 +277,45 @@ def test_oneoff_migration_roundtrip_affects_only_its_table():
             migration.downgrade()
             assert inspect(conn).get_table_names()==['untouched']
     engine.dispose()
+
+
+@pytest.mark.parametrize('valid_target', [True, False])
+def test_confirmed_dhl_mapping_keeps_original_and_validates_dc(client,auth_headers,db,batch96,monkeypatch,valid_target):
+    from app.modules.commercial.models import Client
+    from app.modules.drh import dc_client_sites
+    dc=Client(name='DHL FORWARDING ALGERIE',society=oneoff.SOCIETY,status='actif')
+    db.add(dc);db.commit()
+    # Le client réel est ID 11 ; ne pas imposer cet ID dans la base partagée des tests.
+    original_options=dc_client_sites.list_client_site_options
+    original_resolve=dc_client_sites.resolve_contract_selection
+    def options(db,society):
+        return [{**o,'dc_client_id':11 if o['dc_client_id']==dc.id else o['dc_client_id']} for o in original_options(db,society)] if valid_target else []
+    def resolve(db,**kwargs):
+        assert kwargs['dc_client_id']==11 and kwargs['dc_site_id'] is None
+        return {**original_resolve(db,**{**kwargs,'dc_client_id':dc.id}),'dc_client_id':11}
+    monkeypatch.setattr(dc_client_sites,'list_client_site_options',options)
+    monkeypatch.setattr(dc_client_sites,'resolve_contract_selection',resolve)
+    batch96[1][0][8]='DHL ORAN  SOLUTION'
+    before=counts(db)
+    sid,_=authorized(client,auth_headers,batch96)
+    result=preview(client,auth_headers,sid,{})
+    row=result['rows'][0]
+    assert row['values']['client_site']=='DHL ORAN  SOLUTION'
+    assert result['blocked']==(0 if valid_target else 1)
+    if valid_target:
+        assert row['resolved_client_site']=={'dc_client_id':11,'dc_site_id':None,'dc_client_site_label':'DHL FORWARDING ALGERIE'}
+        assert client.post(f'{BASE}/{sid}/confirm',headers=auth_headers).status_code==409
+        events=db.scalars(select(AuditEvent).where(AuditEvent.action=='drh.contract.excel.oneoff.prepared')).all()
+        assert any('DHL ORAN  SOLUTION' in e.new_state and 'resolved_client_site' in e.new_state for e in events)
+    assert counts(db)==before
+
+
+def test_confirmed_dhl_alias_is_not_available_to_normal_import(client,auth_headers,db,setup_import):
+    society,candidates,common=setup_import
+    initial=counts(db)
+    sid=upload(client,auth_headers,society,[[candidates[0].id,'2026-10-17']])
+    result=preview(client,auth_headers,sid,{**common,'client_site':'DHL ORAN  SOLUTION'})
+    assert not result.get('preparation_only')
+    assert result['rows'][0]['status']=='À CORRIGER'
+    assert 'Client / site DC' in result['rows'][0]['reason']
+    assert counts(db)==initial

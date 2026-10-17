@@ -239,10 +239,16 @@ def prepare_preview(db, user, session, config, normal):
                     raise ValueError('Salaire invalide')
             if values['client_site'] is not None:
                 selection = [o for o in options if excel.norm_key(o['label']) == excel.norm_key(values['client_site']) or str(values['client_site']) == f"{o['dc_client_id']}:{o['dc_site_id'] or ''}"]
+                # Correspondance métier confirmée pour ce fichier lié uniquement.
+                # Le libellé source reste intact ; DC est toujours revalidé.
+                if excel.norm_key(values['client_site']) == 'dhl oran solution':
+                    selection = [o for o in options if o['dc_client_id'] == 11
+                                 and o['dc_site_id'] is None
+                                 and excel.norm_key(o['label']) == 'dhl forwarding algerie']
                 if len(selection) != 1:
                     raise ValueError('Client / site DC invalide ou ambigu')
                 option = selection[0]
-                dc_client_sites.resolve_contract_selection(db, dc_client_id=option['dc_client_id'], dc_site_id=option['dc_site_id'], society=session.workbook['society'])
+                row['resolved_client_site'] = dc_client_sites.resolve_contract_selection(db, dc_client_id=option['dc_client_id'], dc_site_id=option['dc_site_id'], society=session.workbook['society'])
             if values['template_id'] is not None:
                 values['template_id'] = int(values['template_id'])
                 template = service.find_contract_template(db, SimpleNamespace(template_id=values['template_id']), None)
@@ -281,6 +287,8 @@ def prepare_preview(db, user, session, config, normal):
                 user=user, society=SOCIETY, result='success' if row['status'] == STATUS else 'refused', new_state={
                     'session_id': session.public_id, 'batch_key': BATCH_KEY, 'candidate_id': row['candidate_id'],
                     'excluded_candidate_id': row.get('excluded_candidate_id'),
+                    'source_client_site': row['values']['client_site'],
+                    'resolved_client_site': row.get('resolved_client_site'),
                     'missing_fields': row['missing_fields'], 'status': row['status'], 'match_status':row.get('match_status'), 'reason': REASON,
                     'authorized_by_user_id': bound.authorized_by_user_id, 'authorized_at': bound.authorized_at.isoformat()})
     except IntegrityError as exc:
