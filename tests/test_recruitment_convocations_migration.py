@@ -65,8 +65,8 @@ def test_postgresql_upgrade_from_production_schema_keeps_existing_interviews():
             application = con.execute(text('SELECT max(id) FROM recruitment_applications')).scalar()
             con.execute(text("INSERT INTO recruitment_interviews (application_id, starts_at, location, status, confirmed_at, created_at, updated_at) "
                              f"VALUES ({application}, '2026-11-02 10:00', 'Siège', 'confirmed', now(), now(), now())"))
-        _alembic(url, 'upgrade', 'head')
-        _alembic(url, 'upgrade', 'head')
+        _alembic(url, 'upgrade', REVISION)
+        _alembic(url, 'upgrade', REVISION)
         with engine.connect() as con:
             assert con.execute(text("SELECT status, version, confirmed_at IS NOT NULL FROM recruitment_interviews")).fetchall() == [('confirmed', 0, True)]
             assert con.execute(text("SELECT to_regclass('recruitment_convocation_versions') IS NOT NULL")).scalar() is True
@@ -79,7 +79,7 @@ def test_postgresql_upgrade_from_production_schema_keeps_existing_interviews():
             assert con.execute(text('SELECT status FROM recruitment_interviews')).scalars().all() == ['confirmed']
             assert con.execute(text("SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'recruitment_interviews' "
                                     "AND column_name = 'arrived_at'")).scalar() == 1                       # colonnes conservées
-        _alembic(url, 'upgrade', 'head')
+        _alembic(url, 'upgrade', REVISION)
         assert _alembic(url, 'current').split()[:1] == [REVISION]
         _alembic(url, 'downgrade', '20261008_0001')                                                         # descente complète possible
     finally:
