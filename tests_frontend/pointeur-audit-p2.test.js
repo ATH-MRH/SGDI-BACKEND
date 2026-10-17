@@ -85,7 +85,7 @@ test('doublon renvoyé par le serveur : affiché « déjà enregistré », pas c
   app.w.showResult({ action: 'arrivee', duplicate: true, name: 'ADDA IBRAHIM', matricule: 'M1' }, 'success');
   assert.match(app.d.getElementById('result').textContent, /PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT/);
   app.w.showResult({ action: 'arrivee', name: 'ADDA IBRAHIM', matricule: 'M1' }, 'success');
-  assert.match(app.d.getElementById('result').textContent, /ARRIVÉE ENREGISTRÉE/);
+  assert.match(app.d.getElementById('result').textContent, /PRÉSENCE ENREGISTRÉE · ARRIVÉE/);
   await teardown(app);
 });
 
@@ -177,6 +177,6 @@ test('scan badge : succès en vert', async () => {
   await app.t.onQr('https://drh.example.invalid/public/badge/1?t=x&b=2');
   const result = app.d.getElementById('result');
   assert.ok(result.classList.contains('success'), result.className);
-  assert.match(result.textContent, /ARRIVÉE ENREGISTRÉE/);
+  assert.match(result.textContent, /PRÉSENCE ENREGISTRÉE · ARRIVÉE/);
   await teardown(app);
 });
