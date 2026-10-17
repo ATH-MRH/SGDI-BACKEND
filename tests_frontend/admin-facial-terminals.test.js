@@ -90,7 +90,7 @@ test('liste : identifiant, nom, matériel, société, site, équipement, état, 
   assert.match(row('trm:7'), /Hors ligne Connexion perdue Appairé/); assert.match(row('trm:8'), /Sans signal Sans signal — borne à recharger pour le suivi de connexion/);
   const actions = (key) => [...c.view.querySelectorAll(`[data-facial-row="${key}"] button`)].map((b) => b.textContent.replace(/^[^\wÀ-ÿ]+/, ''));
   assert.deepEqual(actions('trm:4'), ['Fiche', 'Utilisateurs autorisés', 'Modifier', 'Remplacer le matériel', 'Couper le pointage facial', 'Révoquer', 'Supprimer']);
-  assert.deepEqual(actions('trm:5'), ['Fiche', 'Utilisateurs autorisés', 'Modifier', 'Appairer', 'Révoquer', 'Supprimer']);
+  assert.deepEqual(actions('trm:5'), ['Fiche', 'Associer un appareil', 'Utilisateurs autorisés', 'Modifier', 'Révoquer', 'Supprimer']);
   assert.deepEqual(actions('cam:9'), ['Fiche', 'Utilisateurs autorisés']);
   assert.deepEqual(actions('trm:6'), ['Fiche', 'Supprimer'], 'révoqué : fiche et suppression seulement');
   assert.equal(c.view.querySelector('[data-facial-row="trm:6"] .admin-equip-pick').disabled, true, 'un révoqué ne s\'affecte pas');
@@ -112,7 +112,8 @@ test('enregistrer puis appairer : création, code à usage unique affiché une f
   assert.deepEqual(c.writes()[0], { method: 'POST', url: '/biometrics/terminals', body: { name: 'TAB DEPOT 02', terminal_type: 'SMARTPHONE_ANDROID', site_id: 13, location: 'Poste de garde' } });
   assert.deepEqual(c.writes()[1], { method: 'POST', url: '/biometrics/terminals/31/pairing-code', body: undefined });
   assert.equal(c.d.getElementById('admin-facial-code').textContent, 'ABCDE-FGHJK');
-  assert.match(c.text(c.modal()), /une seule fois sur l'appareil.*aucun nouvel appairage n'est demandé — ni à la connexion du Pointeur, ni à l'activation/);
+  assert.match(c.text(c.modal()), /Associer un appareil.*QR d'association prêt.*Scanner le QR d'association.*Code manuel.*ABCDE-FGHJK.*Valide encore 10 min 00 s.*Usage unique.*la reconnaissance faciale n'est jamais activée/);
+  c.w.adminPairStop();
   assert.equal(c.w.localStorage.length + c.w.sessionStorage.length, 0, 'le code n\'est conservé nulle part');
 });
 
@@ -259,4 +260,75 @@ test('modifier un terminal : nom et emplacement par la route existante', async (
   c.d.getElementById('ae-name').value = ' TAB HAMOUL 02 '; c.d.getElementById('ae-loc').value = 'Guérite nord';
   await c.w.adminEquipSave('trm:4'); await wait();
   assert.deepEqual(c.writes().at(-1), { method: 'PATCH', url: '/biometrics/terminals/4', body: { name: 'TAB HAMOUL 02', location: 'Guérite nord' } });
+});
+
+// ── Association par QR (Associer un appareil) ────────────────────────────────────────────
+function qrStub(w, drawn) {
+  w.sgdiLoadQRLib = async () => {};
+  w.QRCode = function (el, opts) { drawn.push(opts); el.innerHTML = '<canvas></canvas>'; };
+  w.QRCode.CorrectLevel = { M: 'M' };
+}
+
+test('associer un appareil : grand QR de l\'adresse /borne, code manuel identique, durée restante', async () => {
+  const drawn = [];
+  const c = boot({ items: [KIOSK({ key: 'trm:5', id: 5, name: 'TAB NEUVE', paired: false, paired_at: null, status: 'INACTIVE', status_label: 'Inactif', users: [] })],
+    routes: { 'POST /biometrics/terminals/5/pairing-code': { ok: true, status: 200, data: { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHJK' } } } });
+  qrStub(c.w, drawn);
+  await c.open();
+  c.view.querySelector('[data-facial-pair="trm:5"]').click(); await wait(30);
+  assert.equal(drawn.length, 1);
+  assert.equal(drawn[0].text, 'https://pointeur.irongs.com/borne#pair=ABCDEFGHJK', 'depuis ATLAS, le QR vise la borne de pointeur.irongs.com');
+  assert.ok(drawn[0].width >= 176, 'QR assez grand pour être lu depuis une tablette');
+  assert.equal(c.d.getElementById('admin-facial-code').textContent, 'ABCDE-FGHJK');
+  assert.equal(c.d.getElementById('admin-pair-state').textContent, "QR d'association prêt");
+  assert.match(c.d.getElementById('admin-pair-ttl').textContent, /^Valide encore (10 min 00|9 min 59) s$/);
+  assert.equal(c.w.localStorage.length + c.w.sessionStorage.length, 0, 'ni le code ni le QR ne sont conservés');
+  c.w.adminPairStop();
+});
+
+test('associer un appareil : expiré → message, nouveau QR → nouvelle opération ; fermeture arrête tout suivi', async () => {
+  const drawn = []; let codes = 0;
+  const c = boot({ items: [KIOSK({ key: 'trm:5', id: 5, name: 'TAB NEUVE', paired: false, paired_at: null, users: [] })],
+    routes: { 'POST /biometrics/terminals/5/pairing-code': () => { codes += 1; return { ok: true, status: 200, data: { code: codes === 1 ? 'AAAAA-BBBBB' : 'CCCCC-DDDDD', expires_in: codes === 1 ? 1 : 600, pair_path: codes === 1 ? '/borne#pair=AAAAABBBBB' : '/borne#pair=CCCCCDDDDD' } }; } } });
+  qrStub(c.w, drawn);
+  await c.open();
+  c.view.querySelector('[data-facial-pair="trm:5"]').click(); await wait(30);
+  await wait(1300);
+  assert.equal(c.d.getElementById('admin-pair-state').textContent, 'QR expiré — générez un nouveau code');
+  assert.ok(c.d.getElementById('admin-facial-qr').classList.contains('is-expired'));
+  c.d.getElementById('admin-pair-new').click(); await wait(30);
+  assert.equal(codes, 2);
+  assert.equal(c.d.getElementById('admin-facial-code').textContent, 'CCCCC-DDDDD');
+  assert.equal(drawn.at(-1).text.endsWith('#pair=CCCCCDDDDD'), true);
+  assert.equal(c.d.getElementById('admin-pair-state').textContent, "QR d'association prêt");
+  c.d.getElementById('admin-pair-close').click(); await wait(10);
+  assert.equal(c.modal().innerHTML, '');
+  const before = c.calls.length; await wait(3200);
+  assert.equal(c.calls.filter((x, i) => i >= before && x.url.startsWith('/biometrics/equipment/')).length, 0, 'aucun suivi après fermeture');
+});
+
+test('associer un appareil : l\'association faite sur la borne est annoncée « Association réussie »', async () => {
+  const drawn = []; let paired = false;
+  const c = boot({ items: [KIOSK({ key: 'trm:5', id: 5, name: 'TAB NEUVE', paired: false, paired_at: null, users: [] })],
+    routes: { 'POST /biometrics/terminals/5/pairing-code': { ok: true, status: 200, data: { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHJK' } },
+      'GET /biometrics/equipment/trm%3A5': () => ({ ok: true, status: 200, data: { key: 'trm:5', paired_at: paired ? '2026-10-18T08:00:00Z' : null, equipment: 'Galaxy Tab A9' } }) } });
+  qrStub(c.w, drawn);
+  await c.open();
+  c.view.querySelector('[data-facial-pair="trm:5"]').click(); await wait(30);
+  paired = true; await wait(3200);
+  assert.equal(c.d.getElementById('admin-pair-state').textContent, 'Association réussie');
+  assert.equal(c.d.getElementById('admin-pair-new').hidden, true);
+  assert.match(c.d.getElementById('admin-pair-ttl').textContent, /Galaxy Tab A9/);
+  c.w.adminPairStop();
+});
+
+test('associer un appareil : sans bibliothèque QR, le code manuel reste utilisable', async () => {
+  const c = boot({ items: [KIOSK({ key: 'trm:5', id: 5, name: 'TAB NEUVE', paired: false, paired_at: null, users: [] })],
+    routes: { 'POST /biometrics/terminals/5/pairing-code': { ok: true, status: 200, data: { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHJK' } } } });
+  c.w.sgdiLoadQRLib = async () => { throw new Error('hors ligne'); };
+  await c.open();
+  c.view.querySelector('[data-facial-pair="trm:5"]').click(); await wait(30);
+  assert.match(c.text(c.d.getElementById('admin-facial-qr')), /QR indisponible.*code manuel/);
+  assert.equal(c.d.getElementById('admin-facial-code').textContent, 'ABCDE-FGHJK');
+  c.w.adminPairStop();
 });

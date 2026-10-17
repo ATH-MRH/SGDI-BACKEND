@@ -82,11 +82,12 @@ function adminFacialHTML(){
     const avail=ADMIN_EQUIP_AVAIL[item.availability]||["—","pill-gray"];
     const main=[
       `<button class="btn btn-ghost text-xs" data-equip-sheet="${escapeHTML(item.key)}" onclick="openAdminEquipSheet('${escapeHTML(item.key)}')">📄 Fiche</button>`,
+      terminal&&!revoked&&!item.paired?`<button class="btn btn-primary text-xs" data-facial-pair="${escapeHTML(item.key)}" onclick="adminFacialPair('${escapeHTML(item.key)}')">🔗 Associer un appareil</button>`:"",
       revoked?"":`<button class="btn btn-ghost text-xs" data-facial-users="${escapeHTML(item.key)}" onclick="openAdminFacialUsers('${escapeHTML(item.key)}')">👥 Utilisateurs autorisés</button>`,
     ].join("");
     const more=[
       terminal&&!revoked?`<button class="btn btn-ghost text-xs" data-equip-edit="${escapeHTML(item.key)}" onclick="openAdminEquipEdit('${escapeHTML(item.key)}')">✏ Modifier</button>`:"",
-      terminal&&!revoked?`<button class="btn btn-ghost text-xs" data-facial-pair="${escapeHTML(item.key)}" onclick="adminFacialPair('${escapeHTML(item.key)}')">${item.paired?"🔁 Remplacer le matériel":"🔗 Appairer"}</button>`:"",
+      terminal&&!revoked&&item.paired?`<button class="btn btn-ghost text-xs" data-facial-pair="${escapeHTML(item.key)}" onclick="adminFacialPair('${escapeHTML(item.key)}')">🔁 Remplacer le matériel</button>`:"",
       terminal&&!revoked&&item.paired?`<button class="btn btn-ghost text-xs" data-facial-toggle="${escapeHTML(item.key)}" onclick="adminFacialToggle('${escapeHTML(item.key)}')">${item.facial_attendance_enabled?"Couper le pointage facial":"Autoriser le pointage facial"}</button>`:"",
       terminal&&!revoked?`<button class="btn btn-ghost text-xs text-red-600" data-facial-revoke="${escapeHTML(item.key)}" onclick="adminFacialRevoke('${escapeHTML(item.key)}')">⛔ Révoquer</button>`:"",
       terminal?`<button class="btn btn-ghost text-xs text-red-600" data-facial-delete="${escapeHTML(item.key)}" onclick="adminFacialDelete('${escapeHTML(item.key)}')">🗑 Supprimer</button>`:"",
@@ -158,7 +159,7 @@ async function adminFacialCreate(){
   if(!value("af-name")||!siteId){toast("Nom et site obligatoires","error");return}
   try{
     const term=await adminFacialCall("POST","/terminals",{name:value("af-name"),terminal_type:value("af-type"),site_id:siteId,location:value("af-loc")||null});
-    closeModal();toast("Terminal enregistré — générez le code d'association","success");
+    closeModal();
     await renderView();adminFacialPair("trm:"+term.id,true);
   }catch(e){toast(e.message,"error")}
 }
@@ -166,24 +167,61 @@ async function adminFacialCreate(){
 // Appairage : code à usage unique saisi UNE fois sur l'appareil (page /borne). La clé privée est
 // créée sur l'appareil et n'en sort jamais. Sur un terminal déjà appairé : remplacement du
 // matériel (l'ancienne clé reste valable jusqu'à l'association du nouvel appareil).
+// « Associer un appareil » : un grand QR (l'adresse /borne portant le code à usage unique) et le
+// même code en clair pour une saisie manuelle. Une seule opération, validée par le serveur seul
+// (10 minutes, usage unique). La fenêtre suit l'association et l'annonce dès qu'elle a eu lieu.
+let adminPairTimers=[];
+function adminPairStop(){adminPairTimers.forEach(clearInterval);adminPairTimers=[]}
+function adminPairClose(){adminPairStop();closeModal();renderView()}
+function adminPairState(text,tone){const el=document.getElementById("admin-pair-state");if(!el)return;el.textContent=text;el.dataset.tone=tone||"ok"}
 async function adminFacialPair(key,fresh){
   const item=adminFacialDevice(key);
   if(item&&item.paired&&!fresh&&!confirm("Remplacer le matériel de « "+item.name+" » ?\nLa clé actuelle restera valable jusqu'à l'association du nouvel appareil. Les utilisateurs autorisés sont conservés."))return;
-  try{
-    const out=await adminFacialCall("POST","/terminals/"+encodeURIComponent(key.split(":")[1])+"/pairing-code");
-    openModal(`<h3 class="text-lg font-black mb-2">Code d'association</h3>
-      <p class="text-sm text-slate-600 mb-3">À saisir une seule fois sur l'appareil, page <b>/borne</b> de pointeur.irongs.com. Valable ${Math.round((out.expires_in||600)/60)} minutes, utilisable une fois.</p>
-      <div class="text-3xl font-black tracking-widest text-center my-4" id="admin-facial-code">${escapeHTML(out.code||"")}</div>
-      <div id="admin-facial-qr" class="flex justify-center mb-3"></div>
-      <p class="text-xs text-slate-500 mb-4">Une fois l'appareil associé, aucun nouvel appairage n'est demandé — ni à la connexion du Pointeur, ni à l'activation.</p>
-      <div class="flex justify-end"><button class="btn btn-primary" onclick="closeModal();renderView()">Fermer</button></div>`);
-    // QR facultatif (même lien que le code) si la bibliothèque est chargée ; jamais conservé.
-    const qr=document.getElementById("admin-facial-qr");
-    if(qr&&window.QRCode&&out.pair_path){
-      const origin=/\.irongs\.com$/.test(location.hostname)?"https://pointeur.irongs.com":location.origin;
-      new window.QRCode(qr,{text:origin+out.pair_path,width:180,height:180,correctLevel:window.QRCode.CorrectLevel.M});
-    }
-  }catch(e){toast(e.message,"error")}
+  adminPairStop();
+  let out;
+  try{out=await adminFacialCall("POST","/terminals/"+encodeURIComponent(key.split(":")[1])+"/pairing-code")}
+  catch(e){toast(e.message,"error");return}
+  const pairedAt=item?item.paired_at||null:null;
+  const deviceName=(item&&item.name)||(out.terminal&&out.terminal.name)||"";
+  const origin=/\.irongs\.com$/.test(location.hostname)?"https://pointeur.irongs.com":location.origin;
+  const size=Math.max(200,Math.min(340,Math.floor((window.innerWidth||400)*0.72)));
+  openModal(ADMIN_EQUIP_MODAL_STYLE+`<div id="admin-pair-modal" class="admin-equip-modal" data-key="${escapeHTML(key)}">
+    <style>#admin-pair-state{font-weight:900;text-align:center;border-radius:10px;padding:8px 12px;margin:0 0 10px}#admin-pair-state[data-tone="ok"]{background:#dcfce7;color:#14532d}#admin-pair-state[data-tone="warn"]{background:#fef3c7;color:#78350f}#admin-pair-state[data-tone="error"]{background:#fee2e2;color:#7f1d1d}#admin-facial-qr.is-expired{opacity:.15;filter:grayscale(1)}#admin-facial-qr canvas,#admin-facial-qr img{width:100%!important;height:auto!important;image-rendering:pixelated}</style>
+    <h3 class="text-lg font-black mb-1">Associer un appareil${deviceName?" — "+escapeHTML(deviceName):""}</h3>
+    <div id="admin-pair-state" role="status" data-tone="ok">QR d'association prêt</div>
+    <p class="text-sm text-slate-600 mb-2" style="text-align:center">Sur la tablette ou le smartphone : ouvrez <b>pointeur.irongs.com/borne</b>, touchez « Scanner le QR d'association » et visez ce code.</p>
+    <div id="admin-facial-qr" style="width:${size}px;max-width:100%;margin:8px auto;background:#fff;padding:12px;border-radius:12px;box-sizing:border-box" aria-label="QR d'association"></div>
+    <div class="text-xs text-slate-500" style="text-align:center">Code manuel (si la caméra est indisponible)</div>
+    <div class="text-3xl font-black tracking-widest text-center" style="margin:4px 0" id="admin-facial-code">${escapeHTML(out.code||"")}</div>
+    <div class="text-sm" style="text-align:center" id="admin-pair-ttl"></div>
+    <p class="text-xs text-slate-500" style="text-align:center;margin:8px 0 12px">Usage unique. Une fois l'appareil associé, aucun nouvel appairage n'est demandé ; la reconnaissance faciale n'est jamais activée par l'association.</p>
+    <div class="flex flex-wrap justify-end gap-2"><button class="btn btn-secondary" id="admin-pair-new" onclick="adminFacialPair('${escapeHTML(key)}',true)">Générer un nouveau QR</button><button class="btn btn-primary" id="admin-pair-close" onclick="adminPairClose()">Fermer</button></div></div>`);
+  const box=document.getElementById("admin-facial-qr");
+  try{if(typeof window.sgdiLoadQRLib==="function")await window.sgdiLoadQRLib()}catch(e){/* code manuel ci-dessous */}
+  if(box&&window.QRCode&&out.pair_path)new window.QRCode(box,{text:origin+out.pair_path,width:size-24,height:size-24,correctLevel:window.QRCode.CorrectLevel.M});
+  else if(box)box.innerHTML=`<p class="text-sm" style="text-align:center">QR indisponible sur cet écran — utilisez le code manuel.</p>`;
+  const expiresAt=Date.now()+Number(out.expires_in||600)*1000;
+  const tick=()=>{
+    const left=Math.max(0,Math.round((expiresAt-Date.now())/1000)),ttl=document.getElementById("admin-pair-ttl");
+    if(!document.getElementById("admin-pair-modal")){adminPairStop();return}
+    if(ttl)ttl.textContent=left?`Valide encore ${Math.floor(left/60)} min ${String(left%60).padStart(2,"0")} s`:"";
+    if(!left){adminPairStop();document.getElementById("admin-facial-qr")?.classList.add("is-expired");adminPairState("QR expiré — générez un nouveau code","warn")}
+  };
+  // Suivi : l'appareil associé apparaît « Appairé » côté serveur (nouvelle date d'appairage).
+  const watch=async()=>{
+    if(!document.getElementById("admin-pair-modal")){adminPairStop();return}
+    try{
+      const row=await adminFacialCall("GET","/equipment/"+encodeURIComponent(key));
+      if(row&&row.paired_at&&row.paired_at!==pairedAt&&document.getElementById("admin-pair-modal")){
+        adminPairStop();adminPairState("Association réussie","ok");
+        document.getElementById("admin-facial-qr")?.classList.add("is-expired");
+        const ttl=document.getElementById("admin-pair-ttl");if(ttl)ttl.textContent=row.equipment?"Appareil : "+row.equipment:"";
+        const again=document.getElementById("admin-pair-new");if(again)again.hidden=true;
+      }
+    }catch(e){/* suivi facultatif : l'association reste valable */}
+  };
+  tick();
+  adminPairTimers.push(setInterval(tick,1000),setInterval(watch,3000));
 }
 async function adminFacialToggle(key){
   const item=adminFacialDevice(key);if(!item)return;
