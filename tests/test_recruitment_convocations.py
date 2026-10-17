@@ -353,3 +353,48 @@ def test_legacy_interview_without_version_can_receive_its_document_once(client, 
     sent = client.post(f'{STAFF}/interviews/{legacy.id}/send', headers=securite)
     assert sent.status_code == 200 and sent.json()['interviews'][0]['version'] == 1
     assert client.get(f'{API}/interviews/{legacy.id}/convocation', headers=headers).status_code == 200
+
+
+def test_sending_a_convocation_notifies_once(client, db, securite):
+    """Une convocation = une notification ; l'état « Entretien » de la candidature change sans message en double."""
+    headers, application_id, _ = setup_application(client, securite)
+    before = {n['id'] for n in client.get(f'{API}/notifications', headers=headers).json()['items']}
+    convoke(client, securite, application_id)
+    new = [n for n in client.get(f'{API}/notifications', headers=headers).json()['items'] if n['id'] not in before]
+    assert [(n['kind'], n['title']) for n in new] == [('interview', 'Convocation à un entretien')]
+    assert client.get(f'{API}/applications/{application_id}', headers=headers).json()['state']['status'] == 'interview'
+
+
+def test_an_update_that_omits_convocation_fields_keeps_them(client, db, securite):
+    """Un client qui n'envoie pas les champs de la convocation (ancien écran, appel direct) ne les efface pas."""
+    headers, application_id, _ = setup_application(client, securite)
+    spontaneous = apply(client, headers).json()['application_id']
+    interview_id = convoke(client, securite, spontaneous, society=SECURITE).json()['interview_id']
+    moved = client.put(f'{STAFF}/interviews/{interview_id}', headers=securite, json={'starts_at': when(4).isoformat(), 'location': 'Annexe'})
+    assert moved.status_code == 200, moved.text
+    staff = next(i for i in moved.json()['interviews'] if i['id'] == interview_id)
+    assert (staff['society'], staff['address'], staff['documents_to_bring']) == (SECURITE, FORM['address'], FORM['documents_to_bring'])
+    assert staff['version'] == 2 and staff['location'] == 'Annexe'
+
+
+def test_a_document_made_inexact_outside_versions_is_never_valid_and_can_be_reissued(client, db, securite):
+    """Après un retour arrière, le code précédent peut reporter sans créer de version : le document en vigueur ne
+    correspond plus. Il n'est alors ni présenté (QR, PDF), ni validable au scan, jusqu'à sa réémission."""
+    headers, application_id, _ = setup_application(client, securite)
+    interview_id = convoke(client, securite, application_id).json()['interview_id']
+    first = db.query(Version).filter(Version.interview_id == interview_id).one().token
+    row = db.get(Interview, interview_id)
+    row.starts_at = when(5)                                                     # modification hors versions
+    db.commit()
+    scanned = client.post(f'{STAFF}/convocations/resolve', headers=securite, json={'code': conv.qr_url(first)}).json()
+    assert scanned['state'] == 'outdated' and 'Réémettez' in scanned['warning'] and scanned['can_confirm_arrival'] is False
+    assert client.post(f'{STAFF}/interviews/{interview_id}/arrival', headers=securite, json={'version': 1}).status_code == 409
+    staff = client.get(f'{STAFF}/applications/{application_id}', headers=securite).json()['interviews'][0]
+    assert staff['needs_reissue'] is True and staff['can_confirm_arrival'] is False and staff['versions'][0]['state'] == 'outdated'
+    detail = client.get(f'{API}/interviews/{interview_id}', headers=headers).json()
+    assert 'qr' not in detail['convocation'] and client.get(f'{API}/interviews/{interview_id}/convocation', headers=headers).status_code == 409
+    reissued = client.post(f'{STAFF}/interviews/{interview_id}/send', headers=securite)
+    assert reissued.status_code == 200 and reissued.json()['interviews'][0]['version'] == 2
+    assert client.post(f'{STAFF}/convocations/resolve', headers=securite, json={'code': conv.qr_url(first)}).json()['state'] == 'superseded'
+    assert 'Convocation mise à jour' in [n['title'] for n in candidate_notifications(client, headers)]
+    assert client.get(f'{API}/interviews/{interview_id}/convocation', headers=headers).status_code == 200

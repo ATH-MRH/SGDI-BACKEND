@@ -162,6 +162,12 @@ test('convocations: draft, sent with its versions, cancelled; historical convoca
   assert.deepEqual(texts(sent.querySelectorAll('.emploi-actions button')), ['Reporter ou modifier', 'Annuler', 'Confirmer l’arrivée du candidat', 'Compte rendu de l’entretien']);
   assert.match(sent.querySelector('dl').textContent, /12 rue des Tests/); assert.match(sent.innerHTML, /12 rue des Tests<br>Hydra/);
   assert.match(cancelled.textContent, /Annulée/); assert.equal(cancelled.querySelectorAll('.emploi-actions button').length, 0);
+  // Document devenu inexact (modifié hors versions) : réémission proposée, aucune arrivée possible.
+  const stale = workspace({ responses: { '/applications/1': dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(4, { needs_reissue: true,
+    versions: [{ version: 1, issued_at: '2026-10-17T08:00:00', issued_by: 'REC01', starts_at: '2026-10-18T10:00', state: 'outdated' }] })] }) } });
+  await stale.run("openEmploiDossier(1,'interviews')");
+  assert.match(stale.host.textContent, /ne correspond plus à cet entretien/); assert.match(stale.host.textContent, /À réémettre/);
+  assert.ok(texts(stale.host.querySelectorAll('.conv-card .emploi-actions button')).includes('Réémettre la convocation'));
   assert.match(app.host.textContent, /Elle concerne le dossier, pas cette candidature en particulier/);
   // PDF lu avec la session du recruteur (ancienne version comprise).
   const fetched = []; app.ctx.emploiFetchBlob = async path => { fetched.push(path); return 'blob'; }; app.ctx.emploiSaveBlob = () => {};

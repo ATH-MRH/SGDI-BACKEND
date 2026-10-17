@@ -204,6 +204,8 @@ def _request_out(row: DocumentRequest) -> dict:
 
 def _interview_staff(row: Interview, versions: list[ConvocationVersion] | None = None) -> dict:
     versions = versions or []
+    current = next((item for item in versions if item.version == row.version), None)
+    stale = current is not None and conv.outdated(row, current)
     return {'id': row.id, 'starts_at': engage.iso(row.starts_at), 'timezone': engage.TIMEZONE, 'location': row.location, 'contact': row.contact,
             'note': row.note, 'status': row.status, 'confirmed_at': engage.iso(row.confirmed_at), 'cancelled_at': engage.iso(row.cancelled_at),
             'previous_starts_at': engage.iso(row.previous_starts_at), 'report': row.report, 'appreciation': row.appreciation,
@@ -216,8 +218,9 @@ def _interview_staff(row: Interview, versions: list[ConvocationVersion] | None =
             'candidate_state': None if row.status == INTERVIEW_DRAFT or not row.version else conv.candidate_state(row),
             'candidate_state_label': None if row.status == INTERVIEW_DRAFT or not row.version else conv.STATES[conv.candidate_state(row)],
             'arrived_at': engage.iso(row.arrived_at), 'arrived_by': row.arrived_by, 'assessment': row.assessment,
-            'can_confirm_arrival': row.status in conv.SENT_STATUSES and bool(row.version) and row.arrived_at is None
+            'can_confirm_arrival': row.status in conv.SENT_STATUSES and bool(row.version) and row.arrived_at is None and not stale
                                    and row.starts_at.date() == engage.now_local().date(),
+            'needs_reissue': stale,
             'versions': [{'version': item.version, 'issued_at': engage.iso(item.issued_at), 'issued_by': item.issued_by,
                           'starts_at': item.snapshot.get('starts_at'), 'state': conv.version_state(row, item)} for item in versions]}
 
@@ -561,16 +564,25 @@ def _content(db: Session, scope: Scope, row: Interview) -> dict:
                          dossier_reference=candidate_reference(scope.candidate))
 
 
+CONVOCATION_FIELDS = ('address', 'map_url', 'contact_details', 'purpose', 'documents_to_bring')
+
+
 def _apply_fields(row: Interview, payload: InterviewIn, scope: Scope, user: User) -> None:
     clean = lambda value: (value or '').strip() or None  # noqa: E731
     row.location, row.contact, row.note = payload.location.strip(), clean(payload.contact), clean(payload.note)
-    row.address, row.map_url, row.contact_details = clean(payload.address), clean(payload.map_url), clean(payload.contact_details)
-    row.purpose, row.documents_to_bring = clean(payload.purpose), clean(payload.documents_to_bring)
+    # Champs de la convocation : un appel qui ne les transmet pas (client antérieur) les laisse tels quels.
+    for field in CONVOCATION_FIELDS:
+        if field in payload.model_fields_set:
+            setattr(row, field, clean(getattr(payload, field)))
     # Candidature d'une annonce : la société est celle de l'annonce. Spontanée : société choisie, dans le périmètre.
-    society = None if scope.company else clean(payload.society)
-    if society and not society_scope(user).allows(society):
-        raise HTTPException(status_code=422, detail='Société hors de votre périmètre.')
-    row.society, row.updated_by = society, user.username
+    if scope.company:
+        row.society = None
+    elif 'society' in payload.model_fields_set:
+        society = clean(payload.society)
+        if society and not society_scope(user).allows(society):
+            raise HTTPException(status_code=422, detail='Société hors de votre périmètre.')
+        row.society = society
+    row.updated_by = user.username
 
 
 def _guarded(db: Session, action):
@@ -602,7 +614,10 @@ def _send(db: Session, request: Request, user: User, scope: Scope, row: Intervie
         a.stage = 'convocation'
     engage.log_event(db, a, 'interview', f'Convocation {conv.reference(row)} envoyée (version {version.version}) pour le {engage.describe(row.starts_at)}', user.username)
     _audit(db, request, user, 'convocation_send', scope, interview_id=row.id, version=version.version, starts_at=row.starts_at.isoformat())
-    return [engage.set_visible_status(db, a, 'interview', user.username) if not a.outcome_communicated_at else None, _notice(db, scope, row, title)]
+    # Une seule notification : la convocation. L'état « Entretien » de la candidature change sans message en double.
+    if not a.outcome_communicated_at:
+        engage.set_visible_status(db, a, 'interview', user.username, inform=False)
+    return [_notice(db, scope, row, title)]
 
 
 def _channels(scope: Scope, row: Interview, notifications: list, db: Session, send_email: bool) -> list[str]:
@@ -662,12 +677,14 @@ def send_convocation(interview_id: int, request: Request, db: Session = Depends(
     row, scope = _interview_scope(db, user, interview_id)
     if row.status not in (INTERVIEW_DRAFT, *conv.SENT_STATUSES):
         raise HTTPException(status_code=409, detail='Cet entretien est clos : aucune convocation ne peut être envoyée.')
-    if row.version:
+    current = conv.current_version(db, row) if row.version else None
+    if current is not None and conv.version_state(row, current) != 'outdated':
         return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': ['Convocation déjà envoyée.']}
     if _closed(scope.application):
         raise HTTPException(status_code=409, detail='Cette candidature est close : aucune convocation ne peut être envoyée.')
     engage.check_interview_time(row.starts_at)
-    notifications = _guarded(db, lambda: _send(db, request, user, scope, row))
+    # Version en vigueur devenue inexacte (entretien modifié sans nouvelle version, après un retour arrière) : réémise.
+    notifications = _guarded(db, lambda: _send(db, request, user, scope, row, title='Convocation mise à jour' if current else 'Convocation à un entretien'))
     db.commit()
     return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': _channels(scope, row, notifications, db, False)}
 
@@ -764,6 +781,8 @@ def _resolution(db: Session, scope: Scope, row: Interview, item: ConvocationVers
         'cancelled': 'Cette convocation a été annulée : aucune présence ne peut être enregistrée.',
         'closed': 'Cet entretien est déjà clos (compte rendu enregistré).',
         'past': 'La date de cet entretien est passée.',
+        'outdated': f'Ce document ne correspond plus à l’entretien en vigueur ({engage.describe(row.starts_at)}, {row.location}). '
+                    'Réémettez la convocation avant de confirmer une arrivée.',
     }
     return {
         'state': state, 'warning': warnings.get(state), 'application_id': scope.application.id, 'interview_id': row.id,
@@ -817,6 +836,9 @@ def confirm_arrival(interview_id: int, payload: ArrivalIn, request: Request, db:
         raise HTTPException(status_code=409, detail='Cette convocation n’est pas en vigueur : aucune arrivée ne peut être enregistrée.')
     if payload.version != row.version:
         raise HTTPException(status_code=409, detail=f'Version {payload.version} remplacée par la version {row.version} : vérifiez la nouvelle date.')
+    current = conv.current_version(db, row)
+    if current is None or conv.outdated(row, current):
+        raise HTTPException(status_code=409, detail='Ce document ne correspond plus à l’entretien en vigueur : réémettez la convocation avant de confirmer l’arrivée.')
     if row.starts_at.date() != engage.now_local().date():
         raise HTTPException(status_code=409, detail=f'Cet entretien est prévu le {engage.describe(row.starts_at)} : l’arrivée se confirme le jour même.')
     if row.arrived_at is None:                                # rejouer : sans effet
