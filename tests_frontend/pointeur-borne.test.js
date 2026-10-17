@@ -51,6 +51,7 @@ async function boot({ routes = {}, identity = true, hash = '', media, barcode = 
       return { ok: status < 400, status, json: async () => data };
     },
   };
+  B.TIMING.PAIR_SUCCESS_MS = 0;
   B.sample = () => new Uint8Array(768).fill(scene);
   B.capture = () => `data:image/jpeg;base64,${Buffer.from(`frame-${Math.random()}`).toString('base64')}`;
   const ctx = {
@@ -264,7 +265,7 @@ test('battement de cœur : au repos (aucun passage) la borne relit son état tou
   assert.equal(ctx.count('/terminal/recognize'), 0, 'un battement ne déclenche aucune reconnaissance');
   assert.equal(ctx.count('/terminal/challenge'), 0);
   assert.match(JS, /call\("GET", "\/terminal\/session\?hb=1"\)/, 'le battement se déclare au serveur');
-  assert.match(fs.readFileSync(path.join(ROOT, 'pointeur-borne.html'), 'utf8'), /pointeur-borne\.js\?v=20261010-integration-v1/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'pointeur-borne.html'), 'utf8'), /pointeur-borne\.js\?v=20261018-association-qr-v1/);
 });
 
 test('battement de cœur : coupure réseau silencieuse puis reprise ; facial coupé par l\'administration appris sans passage ; révocation apprise au repos', async () => {
@@ -286,4 +287,118 @@ test('battement de cœur : coupure réseau silencieuse puis reprise ; facial cou
   session = [401, { detail: { code: 'TERMINAL_REVOKED', message: 'Terminal révoqué' } }];
   ctx.advance(40000); await ctx.B.tick(); await tick();
   assert.equal(await ctx.store.get('identity'), undefined, 'révocation apprise au repos : identité effacée');
+});
+
+// ── QR d'association : caméra de l'appareil, validation serveur, retour automatique ──────────
+const PAIRED = [200, { terminal_id: 'trm_new', name: 'TAB-01', site: 'HAMOUL 01' }];
+const scanMedia = (log, fail) => ({
+  getUserMedia: async (constraints) => {
+    log.push(constraints);
+    if (fail) throw Object.assign(new Error('refus'), { name: fail });
+    const track = { stopped: false, stop() { this.stopped = true; }, addEventListener() {} };
+    log.tracks = (log.tracks || []).concat(track);
+    return { getVideoTracks: () => [track], getTracks: () => [track] };
+  },
+  enumerateDevices: async () => [],
+});
+const detectorSeeing = (values) => ({ detect: async () => { const v = values.shift(); return v ? [{ rawValue: v }] : []; } });
+
+test('QR d\'association : la caméra arrière lit le QR, le serveur associe, « Association réussie » puis retour à la borne', async () => {
+  const log = [];
+  const ctx = await boot({ identity: false, media: scanMedia(log), barcode: detectorSeeing([null, 'https://pointeur.irongs.com/borne#pair=ABCDEFGHJK']),
+    routes: { 'POST /api/biometrics/terminal/pair': PAIRED, 'GET /api/biometrics/terminal/session': [200, SESSION] } });
+  ctx.B.TIMING.PAIR_SCAN_MS = 5; ctx.B.TIMING.PAIR_SUCCESS_MS = 60;
+  await ctx.B.boot();
+  assert.equal(ctx.d.getElementById('pairScan').textContent, "Scanner le QR d'association");
+  ctx.d.getElementById('pairScan').click();
+  await tick(40);
+  assert.equal(JSON.stringify(log[0].video.facingMode), '{"ideal":"environment"}', 'caméra arrière, vers l\'écran de l\'administrateur');
+  const pair = ctx.calls.find((c) => c.path.endsWith('/terminal/pair'));
+  assert.equal(pair.body.code, 'ABCDE-FGHJK');
+  assert.equal(log.tracks[0].stopped, true, 'la caméra de lecture est coupée dès la lecture');
+  assert.match(ctx.text(), /✓ ASSOCIATION RÉUSSIE TAB-01 · HAMOUL 01/);
+  assert.equal(ctx.d.getElementById('kioskPairing').hidden, true);
+  await tick(150);
+  assert.ok(ctx.calls.some((c) => c.path.endsWith('/terminal/session')), 'retour automatique à l\'écran de la borne');
+  assert.ok(ctx.store.data.identity && ctx.store.data.identity.terminal_id === 'trm_new');
+  ctx.dom.window.close();
+});
+
+test('QR d\'association : un QR étranger est ignoré, la lecture continue ; « Annuler » coupe la caméra', async () => {
+  const log = [];
+  const ctx = await boot({ identity: false, media: scanMedia(log), barcode: detectorSeeing(['https://exemple.invalid/', 'WIFI:S:x;;', null, null, null]),
+    routes: { 'POST /api/biometrics/terminal/pair': PAIRED } });
+  ctx.B.TIMING.PAIR_SCAN_MS = 5;
+  await ctx.B.boot();
+  ctx.d.getElementById('pairScan').click();
+  await tick(40);
+  assert.equal(ctx.calls.filter((c) => c.path.endsWith('/terminal/pair')).length, 0, 'aucun envoi pour un QR étranger');
+  assert.match(ctx.d.getElementById('pairMessage').textContent, /QR non reconnu/);
+  assert.equal(ctx.d.getElementById('pairScanner').hidden, false);
+  ctx.d.getElementById('pairScanCancel').click();
+  assert.equal(log.tracks[0].stopped, true);
+  assert.equal(ctx.d.getElementById('pairScanner').hidden, true);
+  assert.equal(ctx.d.getElementById('pairForm').hidden, false, 'la saisie manuelle reste disponible');
+  ctx.dom.window.close();
+});
+
+test('QR d\'association : caméra refusée → message clair et saisie manuelle', async () => {
+  for (const failure of ['NotAllowedError', 'NotFoundError']) {
+    const ctx = await boot({ identity: false, media: scanMedia([], failure), barcode: detectorSeeing([]) });
+    await ctx.B.boot();
+    ctx.d.getElementById('pairScan').click();
+    await tick(20);
+    assert.equal(ctx.d.getElementById('pairMessage').textContent, 'Caméra indisponible — saisissez le code manuellement');
+    assert.equal(ctx.d.getElementById('pairForm').hidden, false);
+    assert.equal(ctx.d.activeElement, ctx.d.getElementById('pairCode'));
+    assert.equal(ctx.calls.filter((c) => c.path.endsWith('/terminal/pair')).length, 0);
+    ctx.dom.window.close();
+  }
+});
+
+test('QR d\'association : refus du serveur affichés clairement, la borne reste non associée', async () => {
+  const cases = [[410, 'PAIRING_CODE_EXPIRED', 'QR expiré — générez un nouveau code'], [409, 'PAIRING_CODE_USED', 'QR déjà utilisé'],
+    [403, 'PAIRING_REFUSED', 'Association refusée — appareil ou site non autorisé'], [401, 'PAIRING_CODE_INVALID', /QR ou code non reconnu/]];
+  for (const [status, code, message] of cases) {
+    const ctx = await boot({ identity: false, media: scanMedia([]), barcode: detectorSeeing(['https://pointeur.irongs.com/borne#pair=ABCDEFGHJK']),
+      routes: { 'POST /api/biometrics/terminal/pair': [status, { detail: { code, message: 'texte serveur' } }] } });
+    ctx.B.TIMING.PAIR_SCAN_MS = 5;
+    await ctx.B.boot();
+    ctx.d.getElementById('pairScan').click();
+    await tick(40);
+    const shown = ctx.d.getElementById('pairMessage').textContent;
+    if (message instanceof RegExp) assert.match(shown, message); else assert.equal(shown, message);
+    assert.equal(ctx.d.getElementById('kioskPairing').hidden, false);
+    assert.equal(ctx.store.data.identity, undefined, 'aucune identité conservée après un refus');
+    assert.equal(ctx.d.getElementById('pairCode').value, code === 'PAIRING_CODE_INVALID' ? 'ABCDE-FGHJK' : '', 'code inutilisable retiré du champ');
+    ctx.dom.window.close();
+  }
+});
+
+test('QR d\'association : navigateur sans lecteur intégré (Safari) → bibliothèque locale d\'ATLAS', async () => {
+  const ctx = await boot({ identity: false, media: scanMedia([]), barcode: null,
+    routes: { 'POST /api/biometrics/terminal/pair': PAIRED, 'GET /api/biometrics/terminal/session': [200, SESSION] } });
+  const started = [];
+  ctx.w.Html5Qrcode = function (id) { this.id = id; };
+  ctx.w.Html5Qrcode.prototype.start = async function (camera, config, onScan) { started.push([this.id, camera]); setTimeout(() => onScan('https://pointeur.irongs.com/borne#pair=ABCDE-FGHJK'), 5); };
+  ctx.w.Html5Qrcode.prototype.stop = async function () { started.push('stop'); };
+  await ctx.B.boot();
+  ctx.d.getElementById('pairScan').click();
+  await tick(60);
+  assert.equal(JSON.stringify(started[0]), '["pairScanReader",{"facingMode":"environment"}]');
+  assert.equal(ctx.calls.find((c) => c.path.endsWith('/terminal/pair')).body.code, 'ABCDE-FGHJK');
+  assert.ok(started.includes('stop'));
+  ctx.dom.window.close();
+});
+
+test('QR d\'association : seul un code d\'association bien formé est extrait', async () => {
+  const ctx = await boot({ identity: false });
+  const read = ctx.B.codeFromScan;
+  assert.equal(read('https://pointeur.irongs.com/borne#pair=ABCDEFGHJK'), 'ABCDEFGHJK');
+  assert.equal(read('https://pointeur.irongs.com/borne#pair=abcde-fghjk'), 'ABCDEFGHJK');
+  assert.equal(read('ABCDE-FGHJK'), 'ABCDEFGHJK');
+  for (const bad of ['', 'https://pointeur.irongs.com/borne', 'https://x.invalid/#pair=ABC', 'javascript:alert(1)//#pair=ABCDEFGHJK<', 'ABCDEFGHJKLMN', '<img src=x>']) {
+    assert.equal(read(bad), '', bad);
+  }
+  ctx.dom.window.close();
 });
