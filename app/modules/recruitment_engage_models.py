@@ -3,7 +3,7 @@ from datetime import datetime
 
 from datetime import date
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, deferred, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -11,6 +11,8 @@ from app.db.base import Base, TimestampMixin
 CANDIDATE, RECRUITER = 'candidate', 'recruiter'
 INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED, INTERVIEW_CANCELLED = 'proposed', 'confirmed', 'cancelled'
 INTERVIEW_DONE, INTERVIEW_NO_SHOW = 'done', 'no_show'
+# Convocation préparée par le recruteur et pas encore envoyée : jamais visible du candidat, jamais notifiée.
+INTERVIEW_DRAFT = 'draft'
 
 
 class RecruitmentMessage(Base):
@@ -47,6 +49,45 @@ class RecruitmentInterview(Base, TimestampMixin):
     appreciation: Mapped[str | None] = mapped_column(String(40))
     created_by: Mapped[str | None] = mapped_column(String(100))
     updated_by: Mapped[str | None] = mapped_column(String(100))
+    # ── Convocation (document envoyé au candidat, avec QR) ──
+    # Identifiant fourni par l'écran du recruteur : un double clic ou une relance réseau ne crée qu'une convocation.
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    # Société qui convoque, quand la candidature n'est pas rattachée à une annonce (spontanée).
+    society: Mapped[str | None] = mapped_column(String(150))
+    address: Mapped[str | None] = mapped_column(String(400))
+    map_url: Mapped[str | None] = mapped_column(String(400))
+    contact_details: Mapped[str | None] = mapped_column(String(200))     # coordonnées professionnelles de l'interlocuteur
+    purpose: Mapped[str | None] = mapped_column(String(200))
+    documents_to_bring: Mapped[str | None] = mapped_column(Text)
+    # Version envoyée en cours (0 : brouillon, ou entretien antérieur aux convocations avec QR).
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    sent_by: Mapped[str | None] = mapped_column(String(100))
+    # Trois notions distinctes : lecture par le candidat (version lue), sa réponse (`confirmed_at`), l'arrivée
+    # constatée par le recruteur, et le résultat de l'entretien (`status` réalisé / absent, compte rendu).
+    viewed_version: Mapped[int | None] = mapped_column(Integer)
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    arrived_by: Mapped[str | None] = mapped_column(String(100))
+    # Grille d'entretien (mêmes critères que la fiche du vivier), interne.
+    assessment: Mapped[dict | None] = mapped_column(JSON)
+    __table_args__ = (UniqueConstraint('application_id', 'request_id', name='uq_recruitment_interviews_request'),)
+
+
+class RecruitmentConvocationVersion(Base):
+    """Version envoyée d'une convocation : contenu figé et identifiant opaque du QR. Un report crée une
+    nouvelle version ; l'ancienne reste identifiable (remplacée), jamais validable."""
+    __tablename__ = 'recruitment_convocation_versions'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    interview_id: Mapped[int] = mapped_column(ForeignKey('recruitment_interviews.id', ondelete='CASCADE'), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    # Identifiant aléatoire du QR (jamais un identifiant interne) ; il ne donne accès à rien sans session recruteur.
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    issued_by: Mapped[str | None] = mapped_column(String(100))
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime)
+    __table_args__ = (UniqueConstraint('interview_id', 'version', name='uq_recruitment_convocation_version'),)
 
 
 class RecruitmentApplicationDocument(Base):

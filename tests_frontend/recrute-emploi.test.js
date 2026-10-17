@@ -9,6 +9,7 @@ const { JSDOM } = require('jsdom');
 const STATIC = path.join(__dirname, '..', 'app', 'static');
 const page = fs.readFileSync(path.join(STATIC, 'recrute.html'), 'utf8');
 const script = fs.readFileSync(path.join(STATIC, 'recrute-emploi.js'), 'utf8');
+const convocations = fs.readFileSync(path.join(STATIC, 'recrute-convocations.js'), 'utf8');
 const texts = nodes => [...nodes].map(node => node.textContent.replace(/\s+/g, ' ').trim());
 const STAGES = [['received', 'Réception'], ['review', 'Examen du dossier'], ['shortlisted', 'Présélection'], ['convocation', 'Convocation'], ['interview', 'Entretien'],
   ['decision', 'Décision'], ['hiring_file', 'Dossier d’embauche'], ['contract', 'Préparation du contrat'], ['signature', 'Signature'], ['hired', 'Recrutement effectif']].map(([code, label]) => ({ code, label }));
@@ -29,7 +30,7 @@ const dossier = (extra = {}) => ({ ...item(1), message: 'Disponible immédiateme
   history: [{ kind: 'reception', summary: 'Candidature reçue depuis IRON Emploi (2 pièce(s) jointe(s))', actor: 'candidat', at: '2026-10-09T08:30:00' }],
   interviews: [], dossier_convocation: null, contract: null, employee_id: null, drh_transfer: null, other_applications: [], ...extra });
 
-function workspace({ actions = ['read', 'create', 'update'], responses = {} } = {}) {
+function workspace({ actions = ['read', 'create', 'update'], responses = {}, extra = {} } = {}) {
   const dom = new JSDOM('<main><section id="processingSection"></section></main>', { url: 'http://localhost/' });
   const calls = [], banners = [];
   const ctx = { document: dom.window.document, URLSearchParams, FormData: dom.window.FormData, Date, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, setTimeout, confirm: () => true,
@@ -40,8 +41,8 @@ function workspace({ actions = ['read', 'create', 'update'], responses = {} } = 
     recruitmentErrorState: message => `<div class="rec-error-state">${message}</div>`,
     apiFetch: async (url, options = {}) => { calls.push([options.method || 'GET', url, options.body ? JSON.parse(options.body) : null]);
       const key = Object.keys(responses).find(part => url.includes(part)); const value = key ? responses[key] : null;
-      if (value instanceof Error) throw value; return typeof value === 'function' ? value(url, options) : value; } };
-  vm.createContext(ctx); vm.runInContext(script, ctx);
+      if (value instanceof Error) throw value; return typeof value === 'function' ? value(url, options) : value; }, ...extra };
+  vm.createContext(ctx); vm.runInContext(script, ctx); vm.runInContext(convocations, ctx);
   return { ctx, doc: ctx.document, host: ctx.document.getElementById('processingSection'), calls, banners, run: code => vm.runInContext(code, ctx) };
 }
 const board = (items = [item(1), item(2, { stage: 'review', stage_label: 'Examen du dossier', assigned_to: 'REC01', missing_documents: 1, unread_messages: 2 }),
@@ -81,7 +82,7 @@ test('application file: profile, received documents with name, type, size, date 
   await app.run('openEmploiDossier(1)');
   assert.equal(app.host.querySelector('h2').textContent, 'TEST1 Nadia');
   assert.deepEqual(texts(app.host.querySelectorAll('nav[aria-label="Rubriques du dossier"] .tab-btn')).map(t => t.replace(/ \d.*$/, '')),
-    ['Synthèse', 'Pièces', 'Traitement', 'Entretiens', 'Échanges', 'Notes et historique', 'Contrat']);
+    ['Synthèse', 'Pièces', 'Traitement', 'Convocations et entretiens', 'Échanges', 'Notes et historique', 'Contrat']);
   assert.match(app.host.textContent, /Disponible immédiatement\./); assert.match(app.host.textContent, /1 rue du Test/); assert.match(app.host.textContent, /CAND-2026-000001/);
   app.run("emploiSetTab('documents')");
   assert.deepEqual(texts(app.host.querySelectorAll('thead th')), ['Pièce', 'Fichier', 'Type', 'Taille', 'Reçue le', 'Provenance', 'Actions']);
@@ -132,21 +133,149 @@ test('processing: stage, internal decision and its communication are separate ac
   assert.equal(readOnly.host.querySelector('#emploiStage'), null); assert.deepEqual(texts(readOnly.host.querySelectorAll('.emploi-actions button')), []);
 });
 
-test('interviews: tied to the application; reschedule, cancel and internal report; historical convocation kept apart', async () => {
-  const withInterview = dossier({ interviews: [{ id: 7, starts_at: '2026-10-20T10:00:00', location: 'Siège, Hydra', contact: 'Mme Test', note: null, status: 'confirmed', previous_starts_at: '2026-10-18T10:00:00', report: null, appreciation: null }],
-    dossier_convocation: { date: '2026-09-01', heure: '09:00', lieu: 'Ancien site' } });
-  const app = workspace({ responses: { '/interviews': () => ({ ...withInterview, channels: ['Notification dans l’application IRON Emploi.', 'E-mail non envoyé : le candidat n’a pas d’adresse e-mail.'] }), '/applications/1': withInterview } });
+// ── Convocations et entretiens ──────────────────────────────────────────────
+const DEFAULTS = { candidate: 'TEST1 NADIA', dossier_reference: 'CAND-2026-000001', application_reference: 'CDT-2026-000001', offer: { title: 'Agent de sécurité', reference: 'IGS-14' },
+  position: 'Agent de sécurité', society: 'IRON GLOBAL SÉCURITÉ', society_name: 'IRON Global Sécurité', society_fixed: true, societies: [], logo_available: true, location: 'Alger',
+  contact: 'Recruteur Un', contact_details: 'rec01@exemple.dz', purpose: 'Entretien — Agent de sécurité', has_account: true, has_email: false, timezone: 'Africa/Algiers' };
+const convocation = (id, extra = {}) => ({ id, reference: `CONV-2026-00000${id}`, starts_at: '2026-10-20T10:00:00', timezone: 'Africa/Algiers', location: 'Siège, Hydra', contact: 'Mme Test',
+  note: null, status: 'proposed', confirmed_at: null, cancelled_at: null, previous_starts_at: null, report: null, appreciation: null, created_by: 'REC01', past: false, society: null,
+  address: '12 rue des Tests\nHydra', map_url: null, contact_details: null, purpose: 'Entretien', documents_to_bring: 'Pièce d’identité', version: 1, sent_at: '2026-10-17T08:00:00', sent_by: 'REC01',
+  viewed_by_candidate: false, candidate_state: 'new', candidate_state_label: 'Nouvelle', arrived_at: null, arrived_by: null, assessment: null, can_confirm_arrival: false,
+  versions: [{ version: 1, issued_at: '2026-10-17T08:00:00', issued_by: 'REC01', starts_at: '2026-10-20T10:00', state: 'active' }], ...extra });
+
+test('convocations: draft, sent with its versions, cancelled; historical convocation kept apart', async () => {
+  const d = dossier({ convocation_defaults: DEFAULTS, dossier_convocation: { date: '2026-09-01', heure: '09:00', lieu: 'Ancien site' }, interviews: [
+    convocation(3, { status: 'draft', version: 0, versions: [], candidate_state: null, candidate_state_label: null }),
+    convocation(2, { version: 2, previous_starts_at: '2026-10-18T10:00:00', candidate_state: 'rescheduled', candidate_state_label: 'Reportée', can_confirm_arrival: true,
+      versions: [{ version: 2, issued_at: '2026-10-17T09:00:00', issued_by: 'REC01', starts_at: '2026-10-20T10:00', state: 'active' },
+                 { version: 1, issued_at: '2026-10-16T09:00:00', issued_by: 'REC01', starts_at: '2026-10-18T10:00', state: 'superseded' }] }),
+    convocation(1, { status: 'cancelled', candidate_state: 'cancelled', candidate_state_label: 'Annulée', versions: [{ version: 1, issued_at: '2026-10-15T09:00:00', issued_by: 'REC01', starts_at: '2026-10-19T10:00', state: 'cancelled' }] })] });
+  const app = workspace({ responses: { '/applications/1': d } });
   await app.run("openEmploiDossier(1,'interviews')");
-  assert.match(app.host.querySelector('.emploi-interview').textContent, /Confirmé par le candidat/); assert.match(app.host.textContent, /reporté, initialement/);
-  assert.match(app.host.textContent, /Elle concerne le dossier, pas cette annonce en particulier/);
-  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-interview .emploi-actions button')), ['Reporter ou modifier', 'Annuler', 'Enregistrer présence et compte rendu']);
-  const form = [...app.host.querySelectorAll('form')].at(-1);
-  form.elements.date.value = '2026-10-25'; form.elements.time.value = '14:30'; form.elements.location.value = 'Siège'; form.elements.send_email.checked = true;
-  app.ctx.form = form; await app.run('emploiSaveInterview(form,null)');
-  assert.deepEqual(app.calls.at(-1), ['POST', '/api/drh/job-offers/applications/1/interviews', { starts_at: '2026-10-25T14:30:00', location: 'Siège', contact: null, note: null, send_email: true }]);
-  assert.match(app.banners.at(-1)[1], /E-mail non envoyé/, 'the channels really used are reported');
-  app.run('emploiOutcomeForm(7)');
-  assert.match(app.doc.getElementById('emploiInterviewForm7').textContent, /interne, jamais transmis au candidat/);
+  assert.match(texts(app.host.querySelectorAll('nav[aria-label="Rubriques du dossier"] .tab-btn'))[3], /^Convocations et entretiens/);
+  assert.deepEqual(texts(app.host.querySelectorAll('.conv-head button')), ['Convoquer le candidat', 'Scanner une convocation']);
+  const [draft, sent, cancelled] = app.host.querySelectorAll('.conv-card');
+  assert.match(draft.textContent, /Brouillon, non envoyée/); assert.doesNotMatch(draft.textContent, /Candidat :/, 'a draft has no candidate state');
+  assert.deepEqual(texts(draft.querySelectorAll('.emploi-actions button')), ['Envoyer la convocation', 'Modifier le brouillon', 'Supprimer le brouillon', 'Aperçu PDF']);
+  assert.match(sent.textContent, /CONV-2026-000002 · version 2/); assert.match(sent.textContent, /Candidat : Reportée/); assert.match(sent.textContent, /reportée, initialement/);
+  assert.deepEqual(texts(sent.querySelectorAll('.conv-versions li .pill')), ['En vigueur', 'Remplacée'], 'old versions stay identifiable');
+  assert.deepEqual(texts(sent.querySelectorAll('.emploi-actions button')), ['Reporter ou modifier', 'Annuler', 'Confirmer l’arrivée du candidat', 'Compte rendu de l’entretien']);
+  assert.match(sent.querySelector('dl').textContent, /12 rue des Tests/); assert.match(sent.innerHTML, /12 rue des Tests<br>Hydra/);
+  assert.match(cancelled.textContent, /Annulée/); assert.equal(cancelled.querySelectorAll('.emploi-actions button').length, 0);
+  assert.match(app.host.textContent, /Elle concerne le dossier, pas cette candidature en particulier/);
+  // PDF lu avec la session du recruteur (ancienne version comprise).
+  const fetched = []; app.ctx.emploiFetchBlob = async path => { fetched.push(path); return 'blob'; }; app.ctx.emploiSaveBlob = () => {};
+  await app.run('convOpenPdf(2,1)'); assert.deepEqual(fetched, ['/interviews/2/convocation?version=1']);
+});
+
+test('convocation form: prefilled, preview before sending, draft or send, one request id for every retry', async () => {
+  let attempts = 0;
+  const d = dossier({ convocation_defaults: { ...DEFAULTS, has_email: true } });
+  const app = workspace({ responses: { '/applications/1/interviews': () => { attempts += 1; if (attempts === 1) throw new Error('Réseau indisponible'); return { ...d, channels: ['Brouillon enregistré : le candidat n’a pas été prévenu.'] }; }, '/applications/1': d } });
+  await app.run("openEmploiDossier(1,'interviews')"); app.run('convOpenForm(null)');
+  const form = app.doc.getElementById('convForm');
+  assert.match(form.textContent, /TEST1 NADIA · dossier CAND-2026-000001 · candidature CDT-2026-000001/); assert.match(form.textContent, /Annonce : Agent de sécurité \(réf. IGS-14\)/);
+  assert.equal(form.elements.contact.value, 'Recruteur Un'); assert.equal(form.elements.contact_details.value, 'rec01@exemple.dz'); assert.equal(form.elements.location.value, 'Alger');
+  assert.equal(form.elements.society, undefined, 'offer application: the society is the one of the offer'); assert.match(form.textContent, /Société qui convoque\s*IRON Global Sécurité/);
+  form.elements.date.value = '2026-10-25'; form.elements.time.value = '14:30'; form.elements.documents_to_bring.value = 'CV\nDiplômes';
+  app.ctx.form = form; app.run('convState.preview=true;convRenderPreview(form)');
+  const preview = app.doc.getElementById('convPreview');
+  assert.match(preview.textContent, /Convocation à un entretien/); assert.match(preview.textContent, /2026-10-25 à 14:30 \(heure d’Alger\)/); assert.match(preview.innerHTML, /CV<br>Diplômes/);
+  assert.match(preview.textContent, /Présentez cette convocation à votre arrivée/);
+  form.reportValidity = () => true;
+  await app.run("convSubmit(form,'draft')");                                                            // échec réseau
+  assert.match(app.banners.at(-1)[1], /Réseau indisponible/);
+  const first = app.calls.filter(call => call[1].endsWith('/applications/1/interviews')).at(-1)[2];
+  await app.run("convSubmit(form,'draft')");                                                            // relance
+  const second = app.calls.filter(call => call[1].endsWith('/applications/1/interviews')).at(-1)[2];
+  assert.equal(first.request_id, second.request_id); assert.match(first.request_id, /^conv-[0-9a-f]{24}$/);
+  assert.deepEqual({ ...second, request_id: 'x' }, { starts_at: '2026-10-25T14:30:00', location: 'Alger', contact: 'Recruteur Un', contact_details: 'rec01@exemple.dz', address: null, map_url: null,
+    purpose: 'Entretien — Agent de sécurité', documents_to_bring: 'CV\nDiplômes', note: null, send_email: false, mode: 'draft', request_id: 'x' });
+  assert.equal(app.doc.getElementById('convForm'), null, 'form closed once saved');
+  // Candidature spontanée : choix de la société dans le périmètre.
+  const spontaneous = workspace({ responses: { '/applications/1': dossier({ kind: 'spontaneous', convocation_defaults: { ...DEFAULTS, society_fixed: false, society: null, society_name: null,
+    societies: [{ society: 'IRON GLOBAL SÉCURITÉ', name: 'IRON Global Sécurité', logo: true }] } }) } });
+  await spontaneous.run("openEmploiDossier(1,'interviews')"); spontaneous.run('convOpenForm(null)');
+  assert.deepEqual(texts(spontaneous.doc.getElementById('convForm').elements.society.options), ['— Choisir —', 'IRON Global Sécurité']);
+});
+
+test('convocations: read-only recruiter can consult and scan, never send or record anything', async () => {
+  const d = dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(2, { can_confirm_arrival: true, past: true })] });
+  const app = workspace({ actions: ['read'], responses: { '/applications/1': d } });
+  await app.run("openEmploiDossier(1,'interviews')");
+  assert.deepEqual(texts(app.host.querySelectorAll('.conv-head button')), ['Scanner une convocation']);
+  assert.equal(app.host.querySelectorAll('.conv-card .emploi-actions button').length, 0);
+  // Dossier sans espace candidat : expliqué, sans création de compte.
+  const legacy = workspace({ responses: { '/applications/1': dossier({ convocation_defaults: { ...DEFAULTS, has_account: false, has_email: true } }) } });
+  await legacy.run("openEmploiDossier(1,'interviews')");
+  assert.match(legacy.host.textContent, /n’a pas d’espace IRON Emploi.*Téléchargez son PDF.*Aucun compte n’est créé automatiquement/);
+});
+
+test('scanner: camera refused then manual reference; the right file opens with the reception summary and an explicit arrival', async () => {
+  const resolved = { state: 'superseded', warning: 'Version 1 remplacée : la convocation en vigueur est la version 2. Ne validez pas l’ancienne date.', application_id: 1, interview_id: 2,
+    reference: 'CONV-2026-000002', version: 1, current_version: 2, can_confirm_arrival: false,
+    summary: { candidate: 'TEST1 NADIA', position: 'Agent de sécurité', society: 'IRON Global Sécurité', starts_at: '2026-10-18T10:00', current_starts_at: '2026-10-20T10:00:00',
+      timezone: 'Africa/Algiers', status: 'proposed', candidate_state: 'rescheduled', candidate_state_label: 'Reportée', confirmed_by_candidate: false, arrived_at: null, arrived_by: null } };
+  const d = dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(2, { version: 2, can_confirm_arrival: true })] });
+  class Html5Qrcode { constructor() {} async start() { const error = new Error('Permission denied'); error.name = 'NotAllowedError'; throw error; } }
+  const app = workspace({ extra: { Html5Qrcode }, responses: { '/convocations/resolve': (url, options) => {
+    const code = JSON.parse(options.body).code; if (code === 'CONV-2026-999999') { const error = new Error('Accès refusé'); error.status = 403; throw error; } return resolved; },
+    '/interviews/2/arrival': () => ({ ...d, interviews: [convocation(2, { version: 2, arrived_at: '2026-10-20T09:05:00', arrived_by: 'REC01' })] }), '/applications/1': d } });
+  app.run('convOpenScanner()');
+  const modal = app.doc.getElementById('convScanModal');
+  assert.match(modal.textContent, /Rien n’est enregistré par le scan/); assert.ok(modal.querySelector('input[type=file][accept="image/*"]'), 'image import offered');
+  await app.run('convStartCamera()');
+  assert.match(app.doc.getElementById('convScanError').textContent, /Accès à la caméra refusé.*saisissez la référence/);
+  await app.run("convResolve('CONV-2026-999999')");
+  assert.match(app.doc.getElementById('convScanError').textContent, /Accès refusé : cette convocation ne relève pas de votre périmètre/);
+  assert.doesNotMatch(app.doc.body.textContent, /TEST1/, 'nothing about the candidate is shown when access is refused');
+  await app.run("convResolve('CONV-2026-000002-V1')");
+  assert.equal(app.doc.getElementById('convScanModal'), null);
+  assert.deepEqual(app.calls.find(call => call[1].endsWith('/convocations/resolve') && call[2].code === 'CONV-2026-000002-V1').slice(0, 2), ['POST', '/api/drh/job-offers/convocations/resolve']);
+  const banner = app.host.querySelector('.conv-scan');
+  assert.match(banner.textContent, /Ancienne version/); assert.match(banner.textContent, /Ne validez pas l’ancienne date/); assert.match(banner.textContent, /Horaire en vigueur/);
+  assert.equal([...banner.querySelectorAll('button')].some(button => /Confirmer l’arrivée/.test(button.textContent)), false, 'never on an old version');
+  // La version en vigueur : arrivée confirmée explicitement, après confirmation.
+  app.ctx.next = { ...resolved, state: 'active', warning: null, version: 2, can_confirm_arrival: true }; app.run('convState.scan=next;renderEmploi()');
+  let asked = ''; app.ctx.confirm = message => { asked = message; return true; };
+  await app.run('convConfirmArrival(2,2)');
+  assert.match(asked, /Confirmer l’arrivée de TEST1 NADIA.*Aucune décision n’est prise/);
+  assert.deepEqual(app.calls.at(-1), ['POST', '/api/drh/job-offers/interviews/2/arrival', { version: 2 }]);
+  assert.match(app.host.querySelector('.conv-card').textContent, /Arrivée confirmée le/);
+});
+
+test('report after arrival reuses the interview grid; absence impossible once arrived; no automatic decision', async () => {
+  const criteria = [['profil', 'Profil et adéquation au poste'], ['motivation', 'Motivation et projet professionnel']];
+  const options = value => ['<option value="">— /10</option>', ...Array.from({ length: 11 }, (_, n) => `<option value="${n}"${Number(value) === n ? ' selected' : ''}>${n} / 10</option>`)].join('');
+  const d = dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(2, { past: true, arrived_at: '2026-10-20T09:05:00', arrived_by: 'REC01' })] });
+  const app = workspace({ extra: { INTERVIEW_CRITERIA: criteria, interviewOptions: options }, responses: { '/outcome': d, '/applications/1': d } });
+  await app.run("openEmploiDossier(1,'interviews')"); app.run('convOutcomeForm(2)');
+  const form = app.doc.querySelector('#convOutcome2 form');
+  assert.deepEqual(texts(form.elements.attendance.options), ['Présent']); assert.deepEqual(texts(form.querySelectorAll('.interview-grid label')), criteria.map(([, label]) => label));
+  assert.match(form.textContent, /n’entraîne aucune décision/);
+  form.elements.score_profil.value = '8'; form.elements.appreciation.value = 'Favorable'; form.elements.report.value = 'Bon échange';
+  app.ctx.form = form; await app.run('convSaveOutcome(form,2)');
+  assert.deepEqual(app.calls.at(-1), ['POST', '/api/drh/job-offers/interviews/2/outcome', { attendance: 'present', report: 'Bon échange', appreciation: 'Favorable', scores: { profil: 8 } }]);
+  // Avant l'heure : le formulaire n'est pas proposé.
+  const early = workspace({ responses: { '/applications/1': dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(2)] }) } });
+  await early.run("openEmploiDossier(1,'interviews')"); early.run('convOutcomeForm(2)');
+  assert.match(early.doc.getElementById('convOutcome2').textContent, /à l’heure de l’entretien ou après/);
+});
+
+test('link opened from a QR before signing in: kept for this tab only, removed from the address, resolved after login', async () => {
+  const token = 'Abcdefghijklmnopqrstuvwxyz012345', stored = {}, replaced = [];
+  const sessionStorage = { setItem: (key, value) => { stored[key] = value; }, getItem: key => stored[key] ?? null, removeItem: key => { delete stored[key]; } };
+  const app = workspace({ extra: { sessionStorage, location: { hash: `#convocation=${token}`, pathname: '/', search: '' }, history: { replaceState: (...args) => replaced.push(args) } },
+    responses: { '/convocations/resolve': { state: 'active', application_id: 1, interview_id: 2, version: 1, current_version: 1, reference: 'CONV-2026-000002', summary: {}, can_confirm_arrival: false },
+      '/applications/1': dossier({ convocation_defaults: DEFAULTS, interviews: [convocation(2)] }) } });
+  assert.equal(app.run('convCapturePendingScan()'), token);
+  assert.deepEqual(Object.values(stored), [token]); assert.deepEqual(replaced, [[null, '', '/']], 'the token leaves the address bar');
+  await app.run('convResumePendingScan()');
+  assert.deepEqual(stored, {}, 'used once'); assert.deepEqual(app.calls.find(call => call[1].endsWith('/convocations/resolve'))[2], { code: token });
+  // Toute autre forme est ignorée : jamais de redirection, jamais d'appel.
+  for (const hash of ['#convocation=../../evil', '#convocation=https://evil.example', '#next=https://evil.example', '#convocation=short']) {
+    app.ctx.location.hash = hash; assert.equal(app.run('convCapturePendingScan()'), null, hash);
+  }
 });
 
 test('contract: prepared from a validated template, signature recorded with its date, then hand-over to DRH', async () => {

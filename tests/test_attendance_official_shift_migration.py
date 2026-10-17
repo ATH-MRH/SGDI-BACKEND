@@ -10,7 +10,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261016_0002"            # tête additive : profil figé par candidature et file des notifications push IRON Emploi
+HEAD = "20261017_0002"            # tête additive : convocations IRON Emploi (versions, QR, arrivée, grille)
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
