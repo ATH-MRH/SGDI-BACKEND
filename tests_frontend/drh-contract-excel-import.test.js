@@ -195,3 +195,15 @@ for(const [profile,allowed] of [['RH01 H5',true],['autre Cadre H5',false],['ADMI
   assert.equal(Boolean(h.dom.window.document.querySelector('[onclick="resetExceptionalContractImportSession()"]')),allowed);
   if(allowed)assert.match(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
 });
+
+
+test('exclusions provisoires : seules les 71 lignes éligibles peuvent être préparées',async()=>{
+  const h=harness();await h.run('openContractExcelImport()');
+  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-exclusions';contractExcelImport.preview={message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',total:96,recognized:71,to_review:5,not_found:20,preparable:71,blocked:0,complete:0,prepared_missing:71,preparation_only:true,counts:{'Préparé exceptionnellement':71,'À VÉRIFIER':5,'CANDIDAT INTROUVABLE':20},rows:[{row:9,candidate:'IDENTITÉ À VÉRIFIER',candidate_id:null,excluded_candidate_id:2312,match_status:'À VÉRIFIER',status:'À VÉRIFIER',reason:'Exclusion provisoire décidée : identité à vérifier avec un employé préexistant',values:{start_date:null}}]};renderContractExcelImport()`);
+  assert.match(h.dom.window.document.body.textContent,/71 MATCH CERTAIN.*5 À VÉRIFIER.*20 CANDIDAT INTROUVABLE/s);
+  assert.match(h.dom.window.document.body.textContent,/Enregistrer le lot préparé \(71 lignes\)/);
+  assert.match(h.dom.window.document.body.textContent,/Exclusion provisoire décidée/);
+  assert.doesNotMatch(h.dom.window.document.body.textContent,/Créer \d+ contrats/);
+  await h.run('confirmContractExcelImport()');
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirm')).length,0);
+});
