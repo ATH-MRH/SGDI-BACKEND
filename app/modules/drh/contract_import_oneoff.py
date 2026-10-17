@@ -6,7 +6,7 @@ Les champs fournis restent validés ; aucun service de création n'est appelé i
 """
 from collections import Counter
 from datetime import date, datetime, timezone
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 import re
 import unicodedata
 
@@ -26,6 +26,9 @@ SOCIETY = 'IRON GLOBAL SOLUTION'
 # Les identités sont résolues dans les dossiers actuels, jamais sur des IDs historiques.
 FILE_SHA256 = 'd93cdd49848390596b405bfa39efe7335d8af5deee352286966dae5280fb63d0'
 EXPECTED_ROWS = 96
+# Décision utilisateur du 17/10 : identité à vérifier, aucune préparation automatique.
+# Dossier candidat -> employé homonyme préexistant, sans affirmer leur identité commune.
+MANUAL_REVIEW_EXCLUSIONS = MappingProxyType({2312: 2244, 2313: 2248, 2317: 2252, 2324: 2249})
 # D = nom, E = prénom sans en-tête ; les autres colonnes restent à leur place.
 FILE_MAPPING = {'0':'reference', '1':'code', '2':'phone', '3':'name',
                 '5':'start_date', '6':'end_date', '7':'position', '8':'client_site',
@@ -160,6 +163,10 @@ def match_row(cells, candidates, columns=()):
     if len(matches) != 1:
         return {**result, 'status':REVIEW, 'match_status':REVIEW, 'reason':'Plusieurs dossiers correspondent à cette identité'}
     candidate = matches[0]
+    if candidate.id in MANUAL_REVIEW_EXCLUSIONS:
+        return {**result, 'excluded_candidate_id': candidate.id,
+                'status': REVIEW, 'match_status': REVIEW,
+                'reason': 'Exclusion provisoire décidée : identité à vérifier avec un employé préexistant'}
     if not str(candidate.last_name or '').strip() or not str(candidate.first_name or '').strip():
         return {**result, 'status':REVIEW, 'match_status':REVIEW, 'reason':'Identité du dossier incomplète'}
     return {**result, 'candidate_id':candidate.id, 'candidate':f'{candidate.last_name} {candidate.first_name}',
@@ -270,6 +277,7 @@ def prepare_preview(db, user, session, config, normal):
             append_audit(db, action='drh.contract.excel.oneoff.prepared', resource='candidate' if row['candidate_id'] else 'contract_import_row', resource_id=row['candidate_id'] or f"{session.public_id}:{row['row']}",
                 user=user, society=SOCIETY, result='success' if row['status'] == STATUS else 'refused', new_state={
                     'session_id': session.public_id, 'batch_key': BATCH_KEY, 'candidate_id': row['candidate_id'],
+                    'excluded_candidate_id': row.get('excluded_candidate_id'),
                     'missing_fields': row['missing_fields'], 'status': row['status'], 'match_status':row.get('match_status'), 'reason': REASON,
                     'authorized_by_user_id': bound.authorized_by_user_id, 'authorized_at': bound.authorized_at.isoformat()})
     except IntegrityError as exc:

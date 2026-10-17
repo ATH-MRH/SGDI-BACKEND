@@ -252,3 +252,53 @@ def test_rh01_cannot_reset_after_business_creation(client,auth_headers,db,batch9
     old.result={key:1};db.commit()
     assert client.post(RESET,headers=headers,json=payload(sid)).status_code==409
     assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
+
+
+@pytest.mark.parametrize('block', [None,'recent','source','session','contract','document','generated','equal_timestamp'])
+def test_explicit_exclusions_only_ignore_old_unlinked_homonyms(client,auth_headers,db,batch96,monkeypatch,block):
+    sid,content=blocked_session(client,auth_headers,db,batch96)
+    grant=db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY)
+    employees=[];other=[]
+    try:
+        for c in batch96[0][:4]:
+            e=Employee(code='EXCLUDE-'+uuid.uuid4().hex[:10],first_name=c.first_name,last_name=c.last_name,
+                society=oneoff.SOCIETY,extra={},created_at=grant.authorized_at-timedelta(days=30))
+            db.add(e);employees.append(e)
+        db.commit()
+        exclusions={c.id:e.id for c,e in zip(batch96[0],employees)}
+        monkeypatch.setattr(oneoff,'MANUAL_REVIEW_EXCLUSIONS',exclusions)
+        e=employees[0]
+        if block=='recent':e.created_at=grant.authorized_at+timedelta(seconds=1)
+        elif block=='equal_timestamp':e.created_at=grant.authorized_at
+        elif block=='source':e.extra={'sourceCandidateId':batch96[0][0].id}
+        elif block=='session':e.extra={'contractImportSession':sid}
+        elif block=='contract':other.append(Contract(employee_id=e.id,contract_type='CDD',start_date=date(2026,1,1)))
+        elif block=='document':other.append(Document(owner_type='employee',owner_id=e.id,label='Contrat',file_name='contrat.pdf'))
+        elif block=='generated':other.append(GeneratedContract(employee_id=e.id,reference=uuid.uuid4().hex,title='Test',contract_type='CDD',file_name='test.docx',mime_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',file_content=b'test',values={}))
+        db.add_all(other);db.commit()
+        before=counts(db)
+        response=client.post(RESET,headers=auth_headers,json=payload(sid))
+        assert response.status_code==(409 if block else 200),response.text
+        if block:
+            assert db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY).session_id==sid
+        else:
+            uploaded=client.post(BASE,headers=auth_headers,params={'society':oneoff.SOCIETY},files={'file':('same.xlsx',content)})
+            assert uploaded.status_code==200,uploaded.text
+            new_sid=uploaded.json()['session_id']
+            result=preview(client,auth_headers,new_sid,{})
+            assert (result['recognized'],result['to_review'],result['not_found'],result['preparable'])==(71,5,20,71)
+            assert all(r['status']==oneoff.REVIEW and r['candidate_id'] is None for r in result['rows'][:4])
+            saved=client.post(f'{BASE}/{new_sid}/prepare',headers=auth_headers)
+            assert saved.status_code==200,saved.text
+            assert {r['candidate_id'] for r in saved.json()['rows'] if r['status']==oneoff.STATUS}.isdisjoint(exclusions)
+            assert client.post(f'{BASE}/{new_sid}/confirm',headers=auth_headers).status_code==409
+            assert client.post(BASE,headers=auth_headers,params={'society':oneoff.SOCIETY},files={'file':('same.xlsx',content)}).status_code==409
+            events=db.scalars(select(AuditEvent).where(AuditEvent.action=='drh.contract.excel.oneoff.reset')).all()
+            details=json.loads(events[-1].new_state)
+            assert details['manual_review_candidate_ids']==sorted(exclusions)
+        assert counts(db)==before
+    finally:
+        db.rollback()
+        for obj in list(reversed(other))+list(reversed(employees)):
+            db.delete(obj);db.flush()
+        db.commit()
