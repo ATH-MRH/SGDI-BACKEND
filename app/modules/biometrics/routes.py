@@ -28,7 +28,7 @@ from app.core.granular_permissions import is_global_administrator, load_feature_
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
-from app.modules.biometrics import crypto, pointer_devices, remote_capture, service, terminals, test_mode
+from app.modules.biometrics import crypto, equipment, pointer_devices, remote_capture, service, terminals, test_mode
 from app.modules.biometrics.cameras import PROFILES, CameraError, adapter_for
 from app.modules.biometrics.engine import EngineUnavailable, get_engine
 from app.modules.biometrics.models import (
@@ -55,6 +55,8 @@ router.include_router(terminals.router)
 router.include_router(remote_capture.router)
 # Équipements faciaux : autorisations (Administration Système) et usage multi-équipements (Pointeur).
 router.include_router(pointer_devices.router)
+# Gestion des équipements (Administration Système) : vue unifiée et affectations des mêmes registres.
+router.include_router(equipment.router)
 MAX_FRAMES = 6
 MAX_FRAME_BYTES = 3_000_000
 

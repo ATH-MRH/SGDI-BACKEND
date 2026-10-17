@@ -49,6 +49,16 @@ EVENT_WINDOW = timedelta(hours=24)
 MAX_SELECTION = 50
 TERMINAL_HARDWARE = {"TABLET_ANDROID": "Tablette Android", "SMARTPHONE_ANDROID": "Smartphone Android",
                      "IPHONE": "iPhone", "IPAD": "iPad"}
+CATEGORIES = [
+    {"key": "MOBILE_KIOSK", "label": "Terminal mobile autonome (tablette / smartphone, page /borne)", "supported": True,
+     "remote_activation": False},
+    {"key": "IP_CAMERA", "label": "Caméra IP lue par le serveur (Dahua, RTSP générique)", "supported": True,
+     "remote_activation": True},
+    {"key": "NETWORK_STANDALONE", "label": "Terminal réseau autonome à reconnaissance embarquée", "supported": False,
+     "remote_activation": False},
+    {"key": "LOCAL_CAMERA", "label": "Caméra USB ou intégrée du poste Pointeur", "supported": False,
+     "remote_activation": False},
+]
 STATUS_LABELS = {"ACTIVE": "Actif", "INACTIVE": "Inactif", "OFFLINE": "Hors ligne", "UNKNOWN": "Sans signal", "REVOKED": "Révoqué"}
 
 
@@ -240,9 +250,20 @@ def pointer_terminals(site_id: int | None = None, society: str | None = None,
     rows.sort(key=lambda r: ((r["site"] or "").lower(), r["name"].lower()))
     latest = max(last.values(), key=lambda e: e.id) if last else None
     engine_error = _engine_block()
+    # « Mes équipements » : les équipements affectés mais inutilisables restent visibles, avec leur
+    # motif, sans jamais pouvoir être sélectionnés (révoqué, désactivé, non appairé, facial coupé).
+    blocked = [(d, camera_block(d) if isinstance(d, Camera) else terminal_block(d)) for d in [*terminals, *cameras]]
+    blocked = [(d, b) for d, b in blocked if b is not None]
+    blocked_sites = _site_names(db, [d for d, _ in blocked])
+    unavailable = sorted(({"key": f"cam:{d.id}" if isinstance(d, Camera) else f"trm:{d.id}", "name": d.name, "location": d.location,
+                           "kind": "CAMERA" if isinstance(d, Camera) else "TERMINAL", "site_id": d.site_id, "site": blocked_sites.get(d.site_id),
+                           "hardware": (" ".join(v for v in (d.manufacturer, d.model) if v) or "Caméra IP") if isinstance(d, Camera)
+                           else TERMINAL_HARDWARE.get(d.terminal_type, d.terminal_type),
+                           "code": code, "message": message} for d, (code, message) in blocked),
+                         key=lambda r: ((r["site"] or "").lower(), r["name"].lower()))
     return {"server_time": attendance_core._now_local().isoformat(timespec="seconds"),
             "engine": {"ready": engine_error is None, "message": engine_error},
-            "authorized_total": len(cameras) + len(terminals), "terminals": rows,
+            "authorized_total": len(cameras) + len(terminals), "terminals": rows, "unavailable": unavailable,
             "last_event": _event_out(latest) if latest else None}
 
 
@@ -398,16 +419,7 @@ def facial_devices(db: Session = Depends(get_db), user: User = Depends(current_u
         + [_admin_row(d, sites, users.get(f"cam:{d.id}", []), now) for d in cameras]
     return {"items": rows, "kpi": {status.lower(): sum(r["status"] == status for r in rows) for status in STATUS_LABELS},
             # Catégories de matériel réellement prises en charge pour le pointage facial.
-            "categories": [
-                {"key": "MOBILE_KIOSK", "label": "Terminal mobile autonome (tablette / smartphone, page /borne)", "supported": True,
-                 "remote_activation": False},
-                {"key": "IP_CAMERA", "label": "Caméra IP lue par le serveur (Dahua, RTSP générique)", "supported": True,
-                 "remote_activation": True},
-                {"key": "NETWORK_STANDALONE", "label": "Terminal réseau autonome à reconnaissance embarquée", "supported": False,
-                 "remote_activation": False},
-                {"key": "LOCAL_CAMERA", "label": "Caméra USB ou intégrée du poste Pointeur", "supported": False,
-                 "remote_activation": False},
-            ]}
+            "categories": CATEGORIES}
 
 
 def _device_by_key(db: Session, user: User, key: str) -> Camera | BiometricTerminal:
