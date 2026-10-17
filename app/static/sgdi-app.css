@@ -3631,6 +3631,39 @@ table{width:100%;max-width:100%}
 #view .employee-status-sortant{background:#f1f5f9!important;color:#475569!important}
 #view .employee-status-suspendu{background:#fff7ed!important;color:#c2410c!important}
 #view .employee-status-blacklist{background:#fef2f2!important;color:#b91c1c!important}
+/* Alerte d'échéance DRH : état ACTIF conservé, seul son point pulse. */
+#view .effectif-table .employee-contract-indicator{background:#15803d!important;color:#fff!important}
+#view .effectif-table .employee-contract-indicator::before{background:#fff}
+#view .effectif-table .employee-contract-expired{position:relative;pointer-events:auto;cursor:help!important}
+#view .effectif-table .employee-contract-expired::before{
+  background:#dc2626;
+  box-shadow:0 0 0 2px rgba(220,38,38,.2);
+  animation:contract-expired-pulse 1.8s ease-in-out infinite;
+}
+@keyframes contract-expired-pulse{
+  0%,100%{opacity:1;box-shadow:0 0 0 2px rgba(220,38,38,.2)}
+  50%{opacity:.65;box-shadow:0 0 0 5px rgba(220,38,38,0)}
+}
+#view .effectif-table tbody tr.effectif-contract-expired:not(:hover):not(.selected):not(.is-selected):not([aria-selected="true"]):not(:has(.effectif-row-select:checked))>td{background:rgba(254,226,226,.35)}
+#view .effectif-table .employee-contract-expired::after{
+  content:attr(data-contract-tooltip);
+  position:absolute;bottom:calc(100% + 8px);right:0;z-index:20;
+  width:max-content;max-width:min(240px,calc(100vw - 32px));
+  padding:6px 8px;border-radius:5px;background:#334155;color:#fff;
+  font-size:11px;font-weight:500;line-height:1.4;letter-spacing:normal;text-transform:none;
+  white-space:normal;pointer-events:none;opacity:0;visibility:hidden;
+}
+#view .effectif-table .employee-contract-expired:hover::after,
+#view .effectif-table .employee-contract-expired:focus-visible::after{opacity:1;visibility:visible}
+#view .effectif-table .employee-contract-expired:focus-visible{outline:2px solid #94a3b8;outline-offset:3px}
+@media(max-width:767px){
+  #view .effectif-table tbody tr.effectif-contract-expired:not(:hover):not(.selected):not(.is-selected):not([aria-selected="true"]):not(:has(.effectif-row-select:checked)){background:rgba(254,226,226,.35)!important}
+  #view .effectif-table tbody tr.effectif-contract-expired:not(:hover):not(.selected):not(.is-selected):not([aria-selected="true"]):not(:has(.effectif-row-select:checked))>td{background:transparent}
+  #view .effectif-table .employee-contract-expired::after{left:0;right:auto}
+}
+@media(prefers-reduced-motion:reduce){
+  #view .effectif-table .employee-contract-expired::before{animation:none;opacity:1}
+}
 #view .effectif-table .effectif-open-cell{
   text-align:center;
   white-space:nowrap;

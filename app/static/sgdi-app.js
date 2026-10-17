@@ -12627,14 +12627,18 @@ function rhEffectifActionStyle(action){
 // (module employees, module contracts), qui ouvre le même menu
 // openEmployeeStatusActions — aucune fonctionnalité supprimée, seulement
 // déplacée hors du badge.
-function employeeStatusPillHTML(a){
+function employeeStatusPillHTML(a,options){
   const blacklisted=!!(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked);
   const st=employeeStatusKey(a?.statut||a?.status);
   const key=blacklisted?"blacklist":st;
   const label=key==="blacklist"?"BLACKLIST":key==="sortant"?"SORTANT":String(key||"—").toUpperCase();
   const variant=erpStatusBadgeVariant(key);
   const cls=["actif","sortant","suspendu","blacklist"].includes(key)?`employee-status-pill employee-status-${key}`:key==="absent"||key==="abandon"?"pill-red":"pill-gray";
-  return `<span class="erp-status-badge ${variant} ${cls}">${escapeHTML(label)}</span>`;
+  const opt=options||{};
+  const alert=key==="actif"&&opt.contractIndicator?opt.contractAlert:null;
+  const indicator=key==="actif"&&opt.contractIndicator?" employee-contract-indicator":"";
+  const attrs=alert?` tabindex="0" aria-label="${escapeHTML("Actif — "+alert.message)}" data-contract-tooltip="${escapeHTML(alert.message)}"`:"";
+  return `<span class="erp-status-badge ${variant} ${cls}${indicator}${alert?" employee-contract-expired":""}"${attrs}>${escapeHTML(label)}</span>`;
 }
 // Association statut -> variante du composant .erp-status-badge (item 6 : success/
 // warning/danger/info/neutral). La couleur ne représente que l'état, jamais une
