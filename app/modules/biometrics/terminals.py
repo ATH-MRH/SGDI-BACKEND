@@ -140,31 +140,59 @@ def _validated_public_key(jwk: Any) -> tuple[dict[str, str], str]:
     return clean, _sha256(f"{clean['x']}.{clean['y']}")
 
 
+# Refus d'association distincts (écran de la borne) : le code reste un secret aléatoire à usage
+# unique ; seul son empreinte est conservée. Après usage, l'empreinte reste sur le terminal sans
+# date de validité : un second essai du même code (QR rescanné, deux appareils simultanés) est
+# reconnu « déjà utilisé » au lieu d'être confondu avec un code inventé.
+PAIRING_REFUSALS = {
+    "PAIRING_CODE_INVALID": (401, "Code d'association invalide"),
+    "PAIRING_CODE_EXPIRED": (410, "QR expiré — générez un nouveau code"),
+    "PAIRING_CODE_USED": (409, "QR déjà utilisé"),
+    "PAIRING_REFUSED": (403, "Association refusée — appareil ou site non autorisé"),
+}
+
+
+def _pairing_refusal(db: Session, limiter: str, code: str, terminal: BiometricTerminal | None, ip: str) -> HTTPException:
+    rate_limit.record_failure(limiter, PAIRING_TTL_SECONDS)
+    status, message = PAIRING_REFUSALS[code]
+    append_audit(db, action="biometrics.terminal.pair", resource="biometric_terminal",
+                 resource_id=terminal.id if terminal else None, result="refused",
+                 society=terminal.society if terminal else None, new_state={"ip": ip, "reason": code})
+    db.commit()
+    return _error(status, code, message)
+
+
 def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, ip: str) -> BiometricTerminal:
     limiter = f"terminal-pair:{ip}"
     if rate_limit.failure_count(limiter, PAIRING_TTL_SECONDS) >= PAIRING_MAX_FAILURES_PER_IP:
         raise _error(429, "RATE_LIMITED", "Trop d'essais d'association — patientez 10 minutes")
     normalized = normalize_pairing_code(code)
+    digest = _sha256(normalized) if len(normalized) == PAIRING_CODE_LENGTH else None
     terminal = None
-    if len(normalized) == PAIRING_CODE_LENGTH:
+    if digest:
+        # Verrou de ligne : deux appareils présentant le même code au même instant sont
+        # sérialisés ; le second relit l'état validé par le premier (« déjà utilisé »).
         terminal = db.execute(select(BiometricTerminal).where(
-            BiometricTerminal.pairing_code_hash == _sha256(normalized)).with_for_update()
+            BiometricTerminal.pairing_code_hash == digest).with_for_update()
             .execution_options(populate_existing=True)).scalar_one_or_none()
-    if terminal is None or terminal.deleted_at or terminal.revoked_at or not terminal.enabled or not terminal.pairing_expires_at \
-            or terminal.pairing_expires_at < _now():
-        rate_limit.record_failure(limiter, PAIRING_TTL_SECONDS)
-        append_audit(db, action="biometrics.terminal.pair", resource="biometric_terminal",
-                     resource_id=terminal.id if terminal else None, result="refused",
-                     new_state={"ip": ip, "reason": "code inconnu, expiré ou terminal indisponible"})
-        db.commit()
-        raise _error(401, "PAIRING_CODE_INVALID", "Code d'association invalide ou expiré")
+    if terminal is None:
+        raise _pairing_refusal(db, limiter, "PAIRING_CODE_INVALID", None, ip)
+    site = db.get(Site, terminal.site_id)
+    if terminal.deleted_at or terminal.revoked_at or not terminal.enabled or site is None or not site.active:
+        raise _pairing_refusal(db, limiter, "PAIRING_REFUSED", terminal, ip)
+    if terminal.pairing_expires_at is None:
+        raise _pairing_refusal(db, limiter, "PAIRING_CODE_USED", terminal, ip)
+    if terminal.pairing_expires_at < _now():
+        raise _pairing_refusal(db, limiter, "PAIRING_CODE_EXPIRED", terminal, ip)
     key, fingerprint = _validated_public_key(public_key)
     rotation = bool(terminal.public_key)
+    # Consommation atomique : seule une écriture trouvant le code encore valable réussit.
     changed = db.execute(update(BiometricTerminal).where(
         BiometricTerminal.id == terminal.id, BiometricTerminal.deleted_at.is_(None),
         BiometricTerminal.revoked_at.is_(None), BiometricTerminal.enabled.is_(True),
-        BiometricTerminal.pairing_code_hash == _sha256(normalized)).values(
-        public_key=key, key_fingerprint=fingerprint, pairing_code_hash=None,
+        BiometricTerminal.pairing_code_hash == digest, BiometricTerminal.pairing_expires_at.is_not(None),
+        BiometricTerminal.pairing_expires_at >= _now()).values(
+        public_key=key, key_fingerprint=fingerprint,
         pairing_expires_at=None, paired_at=_now(), config_version=BiometricTerminal.config_version + 1,
         # Nouvel appareil : il devra déclarer lui-même son battement de cœur.
         meta={**{k: v for k, v in (terminal.meta or {}).items() if k != "heartbeat_s"},
@@ -172,7 +200,7 @@ def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, i
         execution_options={"synchronize_session": False})
     if not changed.rowcount:
         db.rollback()
-        raise _error(401, "PAIRING_CODE_INVALID", "Code d'association invalide ou expiré")
+        raise _pairing_refusal(db, limiter, "PAIRING_CODE_USED", None, ip)
     db.refresh(terminal)
     rate_limit.clear(limiter)
     append_audit(db, action="biometrics.terminal.pair", resource="biometric_terminal", resource_id=terminal.id,

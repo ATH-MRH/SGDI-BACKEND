@@ -242,7 +242,9 @@ test('Multi-terminaux faciaux — Administration Système puis Pointeur, Chrome 
     const paired = await api('/biometrics/terminal/pair', { method: 'POST', body: { code, public_key: device.jwk, device_label: 'Galaxy Tab A9 (essai)' } });
     assert.equal(paired.status, 200, JSON.stringify(paired));
     device.terminalId = paired.data.terminal_id;
-    assert.equal((await api('/biometrics/terminal/pair', { method: 'POST', body: { code, public_key: makeDevice().jwk } })).status, 401, 'code à usage unique');
+    const reused = await api('/biometrics/terminal/pair', { method: 'POST', body: { code, public_key: makeDevice().jwk } });
+    assert.equal(reused.status, 409, 'code à usage unique');
+    assert.equal(reused.data.detail.code, 'PAIRING_CODE_USED');
     await clickText(admin, '#modal-host button', 'Fermer');
     await admin.waitForFunction(() => [...document.querySelectorAll('[data-facial-row]')].some((row) => /TABLETTE POSTE DE GARDE/i.test(row.textContent) && /Appairé le/i.test(row.textContent)));
     terminalId = Number((await admin.$$eval('[data-facial-row]', (rows) => rows.find((row) => /TABLETTE POSTE DE GARDE/i.test(row.textContent)).dataset.facialRow)).split(':')[1]);

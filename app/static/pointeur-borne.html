@@ -37,7 +37,16 @@
   .kiosk-pairing input, .kiosk-pairing select, .kiosk-pairing button { font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 12px; border: 1px solid #36506f; background: #0f2744; color: var(--ink); width: 100%; }
   .kiosk-pairing input { letter-spacing: .18em; text-transform: uppercase; text-align: center; }
   .kiosk-pairing button { background: var(--work); border: 0; font-weight: 700; }
-  #pairMessage { color: #ffb3b3; min-height: 1.2em; }
+  #pairMessage { color: #ffb3b3; min-height: 1.2em; font-weight: 700; }
+  #pairMessage[data-tone="warn"] { color: #ffd479; } #pairMessage[data-tone="work"] { color: var(--muted); font-weight: 400; }
+  .kiosk-pairing .pair-scan { background: var(--ok); font-size: 22px; padding: 16px; }
+  .kiosk-pairing .pair-or { text-align: center; color: var(--muted); font-size: 14px; }
+  .pair-scanner { width: min(520px, 100%); display: grid; gap: 14px; background: var(--panel); padding: 18px; border-radius: 18px; }
+  .pair-scanner[hidden], .kiosk-pairing form[hidden] { display: none; }
+  .pair-scanner h2 { margin: 0; font-size: clamp(20px, 3.6vw, 26px); text-align: center; }
+  #pairScanVideo, #pairScanReader { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; background: #000; }
+  #pairScanReader:empty { display: none; }
+  .pair-scanner button { font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 12px; border: 1px solid #36506f; background: #0f2744; color: var(--ink); width: 100%; }
   /* Prise de photo distante supervisée : le terminal indique clairement qu'il n'est pas en pointage. */
   .kiosk-mode { background: var(--warn); color: #1b1300; border-radius: 999px; padding: 3px 12px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
   .kiosk-mode[hidden] { display: none; }
@@ -64,13 +73,21 @@
 <div id="kioskPairing" class="kiosk-pairing" hidden>
   <form id="pairForm" autocomplete="off">
     <h1>Association de la borne</h1>
-    <p>Réservé à l'administrateur : saisissez le code à usage unique affiché dans ATLAS (Gestion du pointage → Terminaux). Une clé propre à cet appareil est créée ; elle ne quitte jamais la tablette.</p>
+    <p>Réservé à l'administrateur : scannez le QR d'association affiché dans ATLAS (Gestion des équipements → Associer un appareil), ou saisissez son code. Une clé propre à cet appareil est créée ; elle ne quitte jamais la tablette.</p>
+    <button id="pairScan" class="pair-scan" type="button">Scanner le QR d'association</button>
+    <div class="pair-or">ou saisissez le code manuellement</div>
     <input id="pairCode" inputmode="text" maxlength="11" placeholder="XXXXX-XXXXX" aria-label="Code d'association" required>
     <select id="pairCamera" aria-label="Caméra"><option value="">Caméra frontale (par défaut)</option></select>
     <button id="pairSubmit" type="submit">Associer cette borne</button>
     <div id="pairMessage" role="alert"></div>
   </form>
+  <div id="pairScanner" class="pair-scanner" hidden>
+    <h2>Visez le QR affiché dans ATLAS</h2>
+    <video id="pairScanVideo" autoplay playsinline muted></video>
+    <div id="pairScanReader"></div>
+    <button id="pairScanCancel" type="button">Annuler — saisir le code</button>
+  </div>
 </div>
-<script src="/static/pointeur-borne.js?v=20261010-integration-v1"></script>
+<script src="/static/pointeur-borne.js?v=20261018-association-qr-v1"></script>
 </body>
 </html>

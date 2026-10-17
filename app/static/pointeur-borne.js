@@ -28,6 +28,8 @@
     STATUS_POLL_MS: 30000,   // terminal désactivé / facial coupé : relecture de l'état
     HEARTBEAT_MS: 30000,     // battement de cœur au repos (cadence réelle donnée par le serveur)
     COMMAND_POLL_MS: 2000,   // « ai-je une commande ? » (prise de photo distante) — au repos
+    PAIR_SCAN_MS: 250,       // lecture du QR d'association (caméra arrière)
+    PAIR_SUCCESS_MS: 2500,   // « Association réussie » affiché avant le retour à la borne
     CAPTURE_POLL_MS: 1000,   // pendant une prise de photo
     CAPTURE_RETRY_MS: 1500,  // délai minimal entre deux photos candidates
     CHECK_MS: 400,           // contrôle de cadrage (image réduite du cercle) — par défaut
@@ -37,6 +39,15 @@
   const GUIDE_RATIO = 0.84;
   const DOMAIN = "ATLAS-TERMINAL-1";
   const UNAVAILABLE = "SERVICE TEMPORAIREMENT INDISPONIBLE";
+  // Refus d'association renvoyés par le serveur (seul juge) : message clair pour la personne qui installe.
+  const PAIR_MESSAGES = {
+    PAIRING_CODE_EXPIRED: "QR expiré — générez un nouveau code",
+    PAIRING_CODE_USED: "QR déjà utilisé",
+    PAIRING_REFUSED: "Association refusée — appareil ou site non autorisé",
+    PAIRING_CODE_INVALID: "QR ou code non reconnu — vérifiez le code affiché dans ATLAS",
+    RATE_LIMITED: "Trop d'essais d'association — patientez 10 minutes",
+  };
+  const CAMERA_OFF = "Caméra indisponible — saisissez le code manuellement";
   const FALLBACK = "UTILISEZ LE QR OU LA MÉTHODE DE SECOURS";
 
   // ── Dépendances (remplaçables par les tests) ────────────────────────────────────────────
@@ -408,19 +419,116 @@
     } catch (e) { /* liste facultative */ }
   }
 
+  function pairMessage(text, tone) {
+    const box = $("pairMessage");
+    if (!box) return;
+    box.textContent = text || "";
+    box.dataset.tone = tone || "error";
+  }
+
   async function submitPairing(event) {
     if (event) event.preventDefault();
     const code = ($("pairCode").value || "").trim();
     if (!code) return;
     $("pairSubmit").disabled = true;
+    pairMessage("Association en cours…", "work");
     try {
-      await pair(code, ($("pairCamera") && $("pairCamera").value) || null);
+      const out = await pair(code, ($("pairCamera") && $("pairCamera").value) || null);
+      $("pairCode").value = "";
       $("kioskPairing").hidden = true;
+      // Confirmation visuelle, puis retour automatique à l'écran de la borne.
+      show("PAIRED", "✓ ASSOCIATION RÉUSSIE", [out.name, out.site].filter(Boolean).map(esc).join(" · "), "ok");
+      if ($("kioskSite")) $("kioskSite").textContent = [out.name, out.site].filter(Boolean).join(" · ");
+      await new Promise((resolve) => setTimeout(resolve, TIMING.PAIR_SUCCESS_MS));
       await boot();
     } catch (e) {
-      $("pairMessage").textContent = e.status === 0 ? UNAVAILABLE : (e.message || "Association impossible");
+      pairMessage(e.status === 0 ? UNAVAILABLE : (PAIR_MESSAGES[e.code] || e.message || "Association impossible"));
+      // Code consommé, expiré ou refusé : inutile de le garder dans le champ.
+      if (["PAIRING_CODE_USED", "PAIRING_CODE_EXPIRED", "PAIRING_REFUSED"].includes(e.code)) $("pairCode").value = "";
     } finally {
       $("pairSubmit").disabled = false;
+    }
+  }
+
+  // ── QR d'association : lu par la caméra de l'appareil ───────────────────────────────────
+  // Le QR affiché dans ATLAS porte l'adresse /borne#pair=CODE : seul le code en est extrait,
+  // jamais une autre adresse n'est ouverte. Le serveur reste seul juge du code.
+  function codeFromScan(text) {
+    const raw = String(text || "").trim();
+    const found = raw.match(/[#?&]pair=([A-Za-z0-9-]{10,11})(?:$|[&#])/) || raw.match(/^([A-Za-z0-9]{5}-?[A-Za-z0-9]{5})$/);
+    const code = found ? found[1].replace(/-/g, "").toUpperCase() : "";
+    return /^[A-Z0-9]{10}$/.test(code) ? code : "";
+  }
+
+  function stopPairScan() {
+    const scan = B.pairScan;
+    B.pairScan = null;
+    if (!scan) return;
+    clearTimeout(scan.timer);
+    if (scan.stream) scan.stream.getTracks().forEach((t) => t.stop());
+    if (scan.reader) scan.reader.stop().catch(() => {});
+    const video = $("pairScanVideo");
+    if (video) video.srcObject = null;
+    if ($("pairScanner")) $("pairScanner").hidden = true;
+    if ($("pairForm")) $("pairForm").hidden = false;
+  }
+
+  async function onPairScan(text) {
+    if (!B.pairScan) return;
+    const code = codeFromScan(text);
+    if (!code) { pairMessage("QR non reconnu — visez le QR d'association affiché dans ATLAS"); return; }
+    stopPairScan();
+    $("pairCode").value = code.slice(0, 5) + "-" + code.slice(5);
+    await submitPairing();
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const tag = document.createElement("script");
+      tag.src = src; tag.onload = resolve; tag.onerror = reject;
+      document.head.appendChild(tag);
+    });
+  }
+
+  async function startPairScan() {
+    stopPairScan();
+    pairMessage("");
+    const media = B.deps.media();
+    const detector = B.deps.barcode();
+    if (!media || !media.getUserMedia) { pairMessage(CAMERA_OFF, "warn"); $("pairCode").focus(); return; }
+    $("pairForm").hidden = true;
+    $("pairScanner").hidden = false;
+    const scan = B.pairScan = { timer: null, stream: null, reader: null };
+    try {
+      if (detector) {
+        // Lecteur intégré au navigateur (Chrome Android, tablettes Samsung).
+        scan.stream = await media.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" } } });
+        if (B.pairScan !== scan) { scan.stream.getTracks().forEach((t) => t.stop()); return; }
+        const video = $("pairScanVideo");
+        video.hidden = false;
+        video.srcObject = scan.stream;
+        if (video.play) await Promise.resolve(video.play()).catch(() => {});
+        const look = async () => {
+          if (B.pairScan !== scan) return;
+          try {
+            const found = await detector.detect(video);
+            if (found && found.length) { await onPairScan(found[0].rawValue); return; }
+          } catch (e) { /* image pas encore prête */ }
+          if (B.pairScan === scan) scan.timer = setTimeout(look, TIMING.PAIR_SCAN_MS);
+        };
+        look();
+      } else {
+        // Navigateur sans lecteur intégré (Safari iPhone / iPad) : bibliothèque locale d'ATLAS.
+        if (!window.Html5Qrcode) await loadScript("/static/html5-qrcode.min.js?v=1");
+        if (B.pairScan !== scan) return;
+        $("pairScanVideo").hidden = true;
+        scan.reader = new window.Html5Qrcode("pairScanReader");
+        await scan.reader.start({ facingMode: "environment" }, { fps: 8, qrbox: { width: 240, height: 240 } }, (text) => onPairScan(text), () => {});
+      }
+    } catch (e) {
+      stopPairScan();
+      pairMessage(CAMERA_OFF, "warn");
+      if ($("pairCode")) $("pairCode").focus();
     }
   }
 
@@ -694,6 +802,9 @@
 
   B.boot = boot;
   B.pair = pair;
+  B.codeFromScan = codeFromScan;
+  B.startPairScan = startPairScan;
+  B.stopPairScan = stopPairScan;
   B.handleResult = handleResult;
   B.handleError = handleError;
   B.pollCommand = pollCommand;
@@ -702,6 +813,8 @@
   document.addEventListener("DOMContentLoaded", () => {
     const form = $("pairForm");
     if (form) form.addEventListener("submit", submitPairing);
+    if ($("pairScan")) $("pairScan").addEventListener("click", startPairScan);
+    if ($("pairScanCancel")) $("pairScanCancel").addEventListener("click", stopPairScan);
     if (window.__ATLAS_BORNE_NO_AUTOSTART__) return;
     boot();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/pointeur-sw.js", { scope: "/" }).catch(() => {});
