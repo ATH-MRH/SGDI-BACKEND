@@ -164,7 +164,7 @@ tr:last-child td{border-bottom:0}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
-<link rel="stylesheet" href="/static/recrute-emploi.css?v=20261011-retention" media="screen">
+<link rel="stylesheet" href="/static/recrute-emploi.css?v=20261017-convocations" media="screen">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
 <link rel="stylesheet" href="/static/recruitment-v6.css?v=20261011-recruit-flow" media="screen">
 <link rel="stylesheet" href="/static/recrute-workspace.css?v=20261016-workspace" media="screen">
@@ -188,6 +188,7 @@ tr:last-child td{border-bottom:0}
     </div>
     <button id="loginBtn" class="primary">SE CONNECTER</button>
     <div id="loginError" class="error"></div>
+    <p id="loginPendingConvocation" class="login-pending hidden" role="status">Connectez-vous pour ouvrir la convocation scannée. Elle s’ouvrira si elle relève de votre périmètre.</p>
   </form>
   </div>
 </section>
@@ -489,6 +490,8 @@ async function enterApp(){
   updateCandidatePageHeader();
   showRecruitSection(recruitSection);
   loadRecruitmentPortfolios();
+  // Convocation scannée avant la connexion : ouverte maintenant, après contrôle des droits par le serveur.
+  if(typeof convResumePendingScan==="function")convResumePendingScan();
 }
 function renderPortfolioSelect(societies){
   const select=document.getElementById("societySelect");
@@ -786,7 +789,7 @@ const INTERVIEW_STATES=[["planned","Planifiés","pill-indigo","Planifié"],["dra
 function interviewState(item){const interview=candidateInterview(item);return interview?.valide?"validated":interview?"draft":"planned"}
 function setInterviewFilter(value){recruitInterviewFilter=value;renderRecruitInterviews(false)}
 function interviewPageHeader(total=null){
-  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><div class="rec-page-actions">${total===null?"":`<span class="rec-count">${total} entretien${total>1?"s":""}</span>`}<button type="button" class="rec-icon-btn" aria-label="Actualiser les entretiens" title="Actualiser" onclick="renderRecruitInterviews(true)">${recruitmentIcon("refresh")}</button></div></header>`;
+  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><div class="rec-page-actions">${total===null?"":`<span class="rec-count">${total} entretien${total>1?"s":""}</span>`}<button type="button" class="secondary" onclick="convOpenScanner()">Scanner une convocation</button><button type="button" class="rec-icon-btn" aria-label="Actualiser les entretiens" title="Actualiser" onclick="renderRecruitInterviews(true)">${recruitmentIcon("refresh")}</button></div></header>`;
 }
 // ── Composants communs Recrutement V6 (présentation uniquement) ──────────────────────────
 function recruitmentIcon(name){
@@ -1824,7 +1827,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(recruteSession?.token)enterApp();
 });
 </script>
-<script src="/static/recrute-emploi.js?v=20261016-workspace"></script>
+<script src="/static/recrute-emploi.js?v=20261017-convocations"></script>
+<script src="/static/recrute-convocations.js?v=20261017-convocations"></script>
 <script src="/static/recrute-retention.js?v=20261011-retention"></script>
 <script src="/static/recrute-import.js?v=20261007-import-excel"></script>
 </body>
