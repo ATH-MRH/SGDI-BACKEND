@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Noms d'hôte qui servent le Portail RH mobile (séparés par des virgules).
     # Permet d'ajouter un domaine de test (ex. portail-rh-test.irongs.com) sans toucher au code.
     portal_hostnames: str = "portail-rh.irongs.com"
+    # Origine publique HTTPS de l'espace Recrutement, seule utilisée dans le QR des convocations (jamais
+    # l'en-tête Host d'une requête). Le QR y ajoute « /#convocation=… » : le fragment ne part pas au serveur.
+    recruitment_public_origin: str = "https://recrute.irongs.com"
     startup_maintenance_enabled: bool = False
     public_employee_pages_require_token: bool = True
     # Studio Badges DRH : false coupe toute l'API /api/drh/badges (503) sans toucher aux données.
@@ -191,6 +194,16 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def require_https_recruitment_origin(self) -> "Settings":
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(self.recruitment_public_origin.strip())
+        if parts.scheme != "https" or not parts.hostname or parts.path not in ("", "/") or parts.query or parts.fragment or parts.username:
+            raise ValueError("RECRUITMENT_PUBLIC_ORIGIN doit être une origine https:// sans chemin, par exemple https://recrute.irongs.com")
+        self.recruitment_public_origin = f"https://{parts.netloc}"
+        return self
 
     @model_validator(mode="after")
     def require_postgresql_in_production(self) -> "Settings":

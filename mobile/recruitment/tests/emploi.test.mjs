@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {API, ApiError, ORIGIN, request} from '../src/lib/api.ts';
-import {activeFilterCount, logoUri, nextInterview, profileHint, salaryLabel, shortDateTime, sinceLabel, CHILDREN_OPTIONS, digitsOnly, displayDate, formatMoney, HEIGHT_OPTIONS, isoDate, LANGUAGE_OPTIONS, latestBirthDate, moneyInput, parseIsoDate, parseMoney, SHIRT_OPTIONS, SHOE_OPTIONS, withCurrent, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
+import {activeFilterCount, logoUri, nextInterview, profileHint, salaryLabel, shortDateTime, sinceLabel, CHILDREN_OPTIONS, digitsOnly, displayDate, formatMoney, HEIGHT_OPTIONS, isoDate, LANGUAGE_OPTIONS, latestBirthDate, moneyInput, parseIsoDate, parseMoney, SHIRT_OPTIONS, SHOE_OPTIONS, withCurrent, alertLabel, applicationSteps, calendarMonth, fetchOffer, fetchOffers, fileSize, formatDate, formatDateTime, formToProfile, initials, interviewDays, isClosed, jobIcon, lines, notificationLabel, pushProblem, PUSH_TEXT, messageTime, newRequestId, notificationTarget, offersPath, CONVOCATION_TONES, convocationFileName, convocationOpen, offlineNotice, parseTipBody, profileCompleteness, profileToForm, splitInterviews, stateScope, stateTone, validateForm} from '../src/lib/emploi.ts';
 
 const response = (data, status = 200) => new Response(status === 204 ? null : JSON.stringify(data), {status});
 const identity = {first_name: 'Nadia', last_name: 'Test', phone: '+213551122334'};
@@ -291,4 +291,28 @@ test('notice de protection des données : informations confirmées présentes, s
   assert.deepEqual(pendingItems(), ['Référence et date de la formalité accomplie auprès de l’ANPDP', 'Fondement du transfert de données hors d’Algérie']);
   assert.ok(!/délai de réponse|jours ouvr/i.test(text), 'aucun délai de réponse n’a été confirmé');
   assert.ok(CONSENT_TEXT.includes('IRON GLOBAL SOLUTION'));
+});
+
+test('convocations : la notification ouvre la bonne convocation, une ancienne notification la liste', () => {
+  assert.deepEqual(notificationTarget({kind: 'interview', application_id: 3, offer_id: null, interview_id: 12}), {pathname: '/applications/convocation/[id]', params: {id: '12'}});
+  assert.deepEqual(notificationTarget({kind: 'interview', application_id: 3, offer_id: null, interview_id: null}), {pathname: '/applications/interviews'});
+});
+
+test('convocations : chaque état a son affichage ; seules les convocations en cours se confirment', () => {
+  assert.deepEqual(Object.keys(CONVOCATION_TONES).sort(), ['cancelled', 'confirmed', 'done', 'new', 'no_show', 'rescheduled', 'viewed']);
+  assert.equal(convocationOpen({status: 'proposed', past: false}), true);
+  assert.equal(convocationOpen({status: 'confirmed', past: false}), true);
+  for (const status of ['cancelled', 'done', 'no_show', 'dossier']) assert.equal(convocationOpen({status, past: false}), false, status);
+  assert.equal(convocationOpen({status: 'proposed', past: true}), false, 'date passée');
+});
+
+test('convocations hors connexion : l’actualité non vérifiée est toujours signalée', () => {
+  assert.equal(offlineNotice('2026-10-19T08:30', true), null);
+  assert.match(offlineNotice('2026-10-19T08:30', false), /Hors connexion : convocation enregistrée le .*19 octobre 2026.*n’a pas pu être vérifiée/);
+  assert.match(offlineNotice(null, false), /aucune convocation enregistrée/);
+});
+
+test('convocations : le PDF enregistré porte la référence et la version, rien de personnel', () => {
+  assert.equal(convocationFileName({reference: 'CONV-2026-000042', version: 2}), 'CONV-2026-000042-V2.pdf');
+  assert.equal(convocationFileName({reference: 'CONV-2026-../x', version: 1}), 'CONV-2026-..x-V1.pdf', 'aucun séparateur de chemin');
 });

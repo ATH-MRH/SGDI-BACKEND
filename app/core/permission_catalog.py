@@ -57,7 +57,17 @@ FEATURE_CATALOG: dict[str, dict] = {
         "access_rules": ("Droits d’accès", "Règles d’accès legacy", ("read", "update", "admin")),
         "security": ("Sécurité des accès", "Contrôles et maintenance de sécurité ; Administrer : enregistrement, appairage, révocation et comptes autorisés des terminaux faciaux", ("read", "update", "unlock", "admin")),
     }},
-    "drh": {"label": "DRH", "domain": "drh.irongs.com", "description": "Gestion des ressources humaines", "features": {
+    # Présentation : deux modules dans l'administration, comme « attendance » ci-dessous —
+    # « DRH » (drh.irongs.com) et « Studio Badges » (badge.irongs.com, clé d'accès « badge »).
+    # Stockage inchangé : les droits badges restent drh/badges (aucune migration).
+    "drh": {"label": "DRH", "domain": "drh.irongs.com", "description": "Gestion des ressources humaines",
+            "entries": (
+        {"entry_key": "drh", "label": "DRH", "domain": "drh.irongs.com", "description": "Gestion des ressources humaines",
+         "features": ("dashboard", "employees", "positions", "position_files", "contracts", "sanctions", "documents", "contract_templates")},
+        {"entry_key": "badge", "label": "Studio Badges", "domain": "badge.irongs.com",
+         "description": "Création, émission, impression, révocation et modèles des badges du personnel",
+         "features": ("badges",)},
+            ), "features": {
         "dashboard": ("Tableau de bord", "Indicateurs RH", ("read", "export")),
         "employees": ("Employés", "Gestion des fiches employés", ("read", "create", "update", "delete", "export")),
         "positions": ("Postes", "Référentiel des fonctions et postes", ("read", "create", "update", "delete", "admin")),

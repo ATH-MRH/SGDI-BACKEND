@@ -388,30 +388,38 @@
   }
 
   // ── Tableau de bord ───────────────────────────────────────────────────────
+  const dashState = { site: "" };
   async function renderDashboard(view, alive) {
     loading(view, "dashboard");
-    const data = await api("/dashboard" + query({ society: society() }));
+    const [data, facets] = await Promise.all([api("/dashboard" + query({ society: listSociety(), site_id: dashState.site })), loadFacets()]);
     if (!alive()) return;
     const tiles = [
-      ["Employés", data.employees, "personnel", "Hors sortants"],
-      ["Avec badge actif", data.with_badge, "personnel/with", "Badge émis et valide"],
-      ["Sans badge", data.without_badge, "personnel/without", "Badge à créer"],
+      ["Badges émis", data.total_badges, "historique", "Depuis l'ouverture du studio"],
+      ["Badges actifs", data.active, "personnel/with", "En cours de validité"],
+      ["Expirés", data.expired, "personnel/with", "Fin de validité dépassée"],
+      ["À renouveler", data.to_renew, "personnel/with", "Expirés ou sous 30 jours"],
+      ["Révoqués", data.revoked, "historique", "Perdus, volés, départs"],
+      ["Perdus", data.lost, "historique", "Révoqués pour perte"],
+      ["Employés sans badge", data.without_badge, "personnel/without", `Sur ${data.employees} employé(s)`],
       ["Sans photo", data.without_photo, "personnel/no_photo", "Photo à ajouter"],
       ["À imprimer", data.to_print, "personnel/to_print", "Émis, jamais imprimés"],
-      ["Expirent sous 30 jours", data.expiring, "personnel/with", "Fin de validité proche"],
-      ["Émis ce mois", data.issued_this_month, "historique", "Émissions du mois"],
-      ["Révoqués", data.revoked, "historique", "Perdus, volés, départs"],
     ];
-    shell(view, "dashboard", `
-      <section class="bs-kpis">${tiles.map(([label, value, route, hint]) => `<a class="bs-kpi" href="#/drh/badges/${route}"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(hint)}</small></a>`).join("")}</section>
+    const option = (value, label, selected) => `<option value="${esc(value)}" ${String(value) === String(selected) ? "selected" : ""}>${esc(label)}</option>`;
+    const filters = `<div class="bs-filters" data-nav-filter="1">
+        <input class="input bs-search" type="search" placeholder="Recherche rapide : nom, matricule, site…" data-bs-field="dash-q" data-no-lock aria-label="Recherche rapide d'un employé">
+        ${(facets.societies || []).length > 1 ? `<select class="select" data-bs-field="f-society" data-no-lock aria-label="Société">${option("", "Toutes les sociétés", listState.society)}${facets.societies.map(v => option(v, v, listState.society)).join("")}</select>` : ""}
+        <select class="select" data-bs-field="dash-site" data-no-lock aria-label="Site">${option("", "Tous les sites", dashState.site)}${(facets.sites || []).map(v => option(v.id, (v.code || v.name) + (v.code && v.name && v.name !== v.code ? " — " + v.name : ""), dashState.site)).join("")}</select></div>`;
+    const activity = list => (list || []).length ? `<ul class="bs-activity">${list.map(e => `<li><span class="bs-pill is-muted">${esc(ACTION_LABELS[e.action] || e.action)}</span><div><strong>${esc(e.label)}</strong><small>${esc(dateFr(e.created_at, true))} · ${esc(e.username || "—")}</small></div></li>`).join("")}</ul>` : `<p class="bs-muted">Aucune activité pour l'instant.</p>`;
+    shell(view, "dashboard", `${filters}
+      <section class="bs-kpis">${tiles.map(([label, value, route, hint]) => `<a class="bs-kpi" href="#/drh/badges/${route}"><span>${esc(label)}</span><strong>${esc(value ?? 0)}</strong><small>${esc(hint)}</small></a>`).join("")}</section>
       <section class="bs-grid-2">
         <div class="card bs-panel"><h2>Actions rapides</h2><div class="bs-quick">
           <a class="btn btn-primary" href="#/drh/badges/creer">Créer un badge</a>
           <a class="btn btn-secondary" href="#/drh/badges/lot">Impression en lot</a>
           <a class="btn btn-secondary" href="#/drh/badges/studio">Ouvrir le studio</a>
           <a class="btn btn-ghost" href="#/drh/badges/modeles">Modèles (${esc(data.templates)})</a>
-        </div></div>
-        <div class="card bs-panel"><h2>Activité récente</h2>${(data.recent || []).length ? `<ul class="bs-activity">${data.recent.map(e => `<li><span class="bs-pill is-muted">${esc(ACTION_LABELS[e.action] || e.action)}</span><div><strong>${esc(e.label)}</strong><small>${esc(dateFr(e.created_at, true))} · ${esc(e.username || "—")}</small></div></li>`).join("")}</ul>` : `<p class="bs-muted">Aucune activité pour l'instant.</p>`}</div>
+        </div><h2>Dernières émissions</h2>${activity(data.recent_issues)}</div>
+        <div class="card bs-panel"><h2>Activité récente</h2>${activity(data.recent)}</div>
       </section>`, `<a class="btn btn-primary" href="#/drh/badges/creer">Créer un badge</a>`);
   }
 
@@ -902,10 +910,27 @@
       else if (field === "photo-file") addPhoto(view, event.target.files[0]);
       else if (field === "lot-template") listState.template = event.target.value;
       else if (field === "f-society") { listState.society = event.target.value; listState.site = ""; listState.page = 1; rerender(); }
+      else if (field === "dash-site") { dashState.site = event.target.value; rerender(); }
+      else if (field === "dash-q") quickSearch(event.target.value);
       else if (field === "f-site") { listState.site = event.target.value; listState.page = 1; rerender(); }
       else if (field === "f-fonction") { listState.fonction = event.target.value; listState.page = 1; rerender(); }
       else if (field === "lot-layout") listState.layout = event.target.value;
       else if (field === "history-action") { historyState.action = event.target.value; historyState.page = 1; rerender(); }
+    });
+    // Recherche rapide du tableau de bord : Entrée (ou validation du champ) ouvre la liste filtrée.
+    const quickSearch = value => {
+      if (!String(value || "").trim() || current.screen !== "dashboard") return;
+      listState.q = String(value).trim(); listState.page = 1; listState.state = "all";
+      // Le garde-fou de navigation de l'application annule un changement d'adresse tant qu'un
+      // champ a le focus : on quitte d'abord le champ de recherche.
+      if (document.activeElement && typeof document.activeElement.blur === "function") document.activeElement.blur();
+      location.hash = "#/drh/badges/personnel";
+    };
+    view.addEventListener("keydown", event => {
+      const t = event.target;
+      if (event.key !== "Enter" || !t.dataset || t.dataset.bsField !== "dash-q") return;
+      event.preventDefault();
+      quickSearch(t.value);
     });
     view.addEventListener("submit", event => {
       const form = event.target.closest('[data-bs-form="settings"]');

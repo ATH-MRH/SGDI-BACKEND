@@ -57,7 +57,8 @@ def test_revision_extends_the_single_head():
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(Config(str(VERSIONS.parents[1] / "alembic.ini")))
-    assert script.get_heads() == ["20261021_0001"]
+    assert script.get_heads() == ["20261022_0001"]
+    assert set(script.get_revision("20261022_0001").down_revision) == {"20261021_0001", "20261017_0002"}
     assert set(script.get_revision("20261021_0001").down_revision) == {"20261020_0001", "20261016_0002"}
     assert set(script.get_revision("20261020_0001").down_revision) == {"20261019_0001", "20261014_0005"}
     assert set(script.get_revision("20261019_0001").down_revision) == {"20261015_0002", "20261018_0001"}

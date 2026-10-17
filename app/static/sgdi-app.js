@@ -16,6 +16,12 @@ function sgdiBrowserModuleLabel(){
 function sgdiApplyBrowserTitle(){
   const label=sgdiBrowserModuleLabel();
   if(label==="DHL FORWARDING")return;
+  if(window.__BADGE_AUTONOMOUS_APP__){
+    try{document.title="STUDIO BADGES — IRON GLOBAL"}catch(_e){}
+    // Écran demandé (ex. bouton de la fiche employé) : retrouvé après la connexion et le choix de société.
+    try{if(/^#\/drh\/badges\/[a-z]/.test(location.hash||""))sessionStorage.setItem("badgePortalTarget",location.hash)}catch(_e){}
+    return;
+  }
   try{document.title=label+" — Suite de gestion intégrée"}catch(_e){}
 }
 sgdiApplyBrowserTitle();
@@ -4485,8 +4491,23 @@ function opsSupervisorReadOnlyNoticeHTML(){
 function mySoc(){return session?.societe||""}
 // Studio Badges DRH (#/drh/badges/…) : seul écran de badge du Portail DRH. Les autres portails
 // (OPS, Matériel, Administration) n'ont pas accès aux routes DRH et gardent l'écran historique.
-function badgeStudioAvailable(){return session?.transverse==="drh"}
+// Studio Badges : module dédié « badge » — le bouton de la fiche n'apparaît qu'avec cet accès.
+function badgeStudioAvailable(){return session?.transverse==="drh"&&canAccessModuleHostKey("badge")}
 function badgeStudioRoute(a){return "drh/badges/creer"+(a&&a.backendId?"/"+encodeURIComponent(a.backendId):"")}
+/* Gestion des badges : portail dédié https://badge.irongs.com sur les domaines de production
+   (*.irongs.com). Ailleurs (poste de développement), l'écran reste servi sur place. Seule une
+   route est transmise (identifiant interne de l'employé) : ni jeton ni donnée personnelle. */
+function badgePortalUrl(route){
+  const host=String(location.hostname||"").toLowerCase();
+  if(!host.endsWith(".irongs.com")||host==="badge.irongs.com")return null;
+  return "https://badge.irongs.com/#/"+String(route||"drh/badges/dashboard").replace(/^#?\/?/,"");
+}
+function openBadgeStudio(route){
+  const url=badgePortalUrl(route);
+  if(!url){navigate(route);return}
+  const win=window.open(url,"_blank","noopener");
+  if(!win)location.assign(url);
+}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
 function globalSocieteBandHTML(){
   if(!session)return"";
@@ -4955,6 +4976,23 @@ function sgdiModuleHostConfigs(){
         {label:"SORTANTS",route:"brq/sortants"}
       ]
     },
+    badge:{
+      key:"badge",
+      title:"Studio Badges — IRON GLOBAL",
+      context:"Gestion des badges du personnel",
+      homeRoute:"drh/badges/dashboard",
+      skipPortal:true,
+      sections:[
+        {label:"TABLEAU DE BORD",route:"drh/badges/dashboard"},
+        {label:"CRÉER UN BADGE",route:"drh/badges/creer"},
+        {label:"BADGES DU PERSONNEL",route:"drh/badges/personnel"},
+        {label:"STUDIO DE CONCEPTION",route:"drh/badges/studio"},
+        {label:"MODÈLES",route:"drh/badges/modeles"},
+        {label:"IMPRESSION EN LOT",route:"drh/badges/lot"},
+        {label:"HISTORIQUE",route:"drh/badges/historique"},
+        {label:"PARAMÈTRES",route:"drh/badges/parametres"}
+      ]
+    },
     conges:{
       key:"conges",
       title:"Portail CONGÉS",
@@ -5105,6 +5143,64 @@ function renderCongesStandaloneShell(){
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
   renderView();renderOverlayHost();sgdiSyncOverlayState();
+}
+/* Portail autonome badge.irongs.com : même application, mêmes API et mêmes droits que le
+   Studio Badges de la DRH, dans une interface dédiée (en-tête, menu des huit rubriques). */
+function badgeStandaloneNavItems(){return[
+  ["dashboard","Tableau de bord"],["creer","Créer un badge"],["personnel","Badges du personnel"],["studio","Studio de conception"],
+  ["modeles","Modèles"],["lot","Impression en lot"],["historique","Historique"],["parametres","Paramètres"]]}
+function renderBadgeStandaloneShell(){
+  const app=document.getElementById("app");
+  const soc=session?.societe||"Société non sélectionnée";
+  const user=session?.nom||session?.username||"Utilisateur";
+  const current=((location.hash||"").slice(2).split("/")[2])||"dashboard";
+  document.body.dataset.soc="";
+  app.innerHTML=`<div class="badge-portal-shell">
+    <aside class="badge-portal-side no-print" aria-label="Navigation du Studio Badges">
+      <div class="badge-portal-brand"><span class="badge-portal-mark" aria-hidden="true">ID</span><div><strong>STUDIO BADGES</strong><small>IRON GLOBAL</small></div></div>
+      <nav class="badge-portal-nav">${badgeStandaloneNavItems().map(([key,label])=>`<a href="#/drh/badges/${key}" class="${key===current?"is-active":""}"${key===current?' aria-current="page"':""}>${escapeHTML(label)}</a>`).join("")}</nav>
+      <div class="badge-portal-side-foot"><a href="https://drh.irongs.com/" class="badge-portal-back">← Portail DRH</a></div>
+    </aside>
+    <div class="badge-portal-body">
+      <header class="badge-portal-header no-print">
+        <div class="badge-portal-context"><strong>${escapeHTML(soc)}</strong><span>${escapeHTML(user)}</span></div>
+        <div class="badge-portal-actions"><button type="button" onclick="changeSociete()">Changer de société</button><button type="button" onclick="logout()">Déconnexion</button></div>
+      </header>
+      <main class="badge-portal-main"><div id="view"></div></main>
+    </div>
+  </div>`;
+  ensureBadgePortalStyles();
+  // Les écrans du studio gèrent eux-mêmes droits et saisies : pas de verrou de consultation.
+  sgdiViewModeActive=false;
+  document.body.classList.remove("sgdi-view-mode");
+  renderView();renderOverlayHost();sgdiSyncOverlayState();
+}
+function ensureBadgePortalStyles(){
+  if(document.getElementById("badge-portal-styles"))return;
+  const style=document.createElement("style");
+  style.id="badge-portal-styles";
+  style.textContent=`
+.badge-portal-shell{--bp-navy:#043970;--bp-navy-deep:#01224a;--bp-yellow:#FFCB05;--bp-bg:#f2f5f9;--bp-line:#dbe5f0;--bp-ink:#10243e;display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;min-height:100dvh;background:var(--bp-bg);color:var(--bp-ink)}
+.badge-portal-side{background:linear-gradient(180deg,var(--bp-navy),var(--bp-navy-deep));color:#fff;display:flex;flex-direction:column;gap:18px;padding:18px 14px;position:sticky;top:0;height:100vh;height:100dvh}
+.badge-portal-brand{display:flex;align-items:center;gap:10px;padding:4px 6px 14px;border-bottom:1px solid rgba(255,255,255,.14)}
+.badge-portal-brand strong{display:block;font-size:15px;letter-spacing:.06em}.badge-portal-brand small{color:var(--bp-yellow);font-weight:800;letter-spacing:.12em;font-size:11px}
+.badge-portal-mark{width:38px;height:38px;border-radius:10px;background:var(--bp-yellow);color:var(--bp-navy-deep);display:grid;place-items:center;font-weight:900}
+.badge-portal-nav{display:flex;flex-direction:column;gap:3px}
+.badge-portal-nav a{color:#dbe7f7;text-decoration:none;font-weight:700;font-size:13.5px;padding:10px 12px;border-radius:10px;border-left:3px solid transparent}
+.badge-portal-nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+.badge-portal-nav a.is-active{background:rgba(255,203,5,.14);color:#fff;border-left-color:var(--bp-yellow)}
+.badge-portal-nav a:focus-visible,.badge-portal-back:focus-visible,.badge-portal-actions button:focus-visible{outline:2px solid var(--bp-yellow);outline-offset:2px}
+.badge-portal-side-foot{margin-top:auto}.badge-portal-back{color:#b9cbe4;font-size:12.5px;font-weight:700;text-decoration:none}
+.badge-portal-body{min-width:0;display:flex;flex-direction:column}
+.badge-portal-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px max(16px,env(safe-area-inset-right,0px)) 12px 20px;background:#fff;border-bottom:1px solid var(--bp-line)}
+.badge-portal-context strong{display:block;font-size:14px}.badge-portal-context span{font-size:12px;color:#5b6b80}
+.badge-portal-actions{display:flex;gap:8px;flex-wrap:wrap}.badge-portal-actions button{border:1px solid var(--bp-line);background:#fff;color:var(--bp-navy);border-radius:999px;padding:7px 13px;font-weight:800;font-size:12.5px;cursor:pointer}
+.badge-portal-main{padding:16px max(16px,env(safe-area-inset-right,0px)) 32px 20px;min-width:0}
+.badge-portal-main .bs-tabs{display:none}
+@media(max-width:900px){.badge-portal-shell{grid-template-columns:1fr}.badge-portal-side{position:static;height:auto;padding:10px 12px;gap:8px}.badge-portal-brand{padding:0 0 8px}
+.badge-portal-nav{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}.badge-portal-nav a{white-space:nowrap;border-left:0;border-bottom:3px solid transparent;padding:8px 10px}.badge-portal-nav a.is-active{border-bottom-color:var(--bp-yellow)}
+.badge-portal-side-foot{display:none}.badge-portal-main{padding-left:max(16px,env(safe-area-inset-left,0px))}}`;
+  document.head.appendChild(style);
 }
 function sgdiApplyModuleHostSession(redirect){
   const cfg=sgdiModuleHostConfig();
@@ -6760,6 +6856,7 @@ function renderInternal(options={}){
       paie:["paie","effectif","agents","demandes_structure","documents","agenda"],
       brq:["brq"],
       conges:["drh","conges","effectif","agents","documents","agenda"],
+      badge:["drh"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents","agenda"],
       superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents","agenda"],
       drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents","pointage","agenda"],
@@ -6776,6 +6873,13 @@ function renderInternal(options={}){
   }
   if(window.__CONGES_AUTONOMOUS_APP__&&session.transverse==="conges"){
     renderCongesStandaloneShell();return;
+  }
+  if(window.__BADGE_AUTONOMOUS_APP__&&session.transverse==="badge"){
+    // badge.irongs.com : uniquement les écrans du Studio Badges (#/drh/badges/…).
+    let target="";try{target=sessionStorage.getItem("badgePortalTarget")||"";sessionStorage.removeItem("badgePortalTarget")}catch(_e){}
+    if(target&&/^#\/drh\/badges\/[a-z]/.test(target)&&location.hash!==target){location.hash=target;return}
+    if(!/^drh\/badges(\/|$)/.test((location.hash||"").slice(2))){location.hash="#/drh/badges/dashboard";return}
+    renderBadgeStandaloneShell();return;
   }
   const app=document.getElementById("app");
   const isTrans=!!session.transverse;
@@ -7498,15 +7602,7 @@ function renderSidebar(){
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)})()},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length})()},
         {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length})()},
-        // Studio Badges DRH : une rubrique par écran, toutes sous #/drh/badges/…
-        {label:"TABLEAU DE BORD",route:"drh/badges/dashboard",group:"GESTION DES BADGES"},
-        {label:"CRÉER UN BADGE",route:"drh/badges/creer",group:"GESTION DES BADGES"},
-        {label:"BADGES DU PERSONNEL",route:"drh/badges/personnel",group:"GESTION DES BADGES"},
-        {label:"STUDIO DE CONCEPTION",route:"drh/badges/studio",group:"GESTION DES BADGES"},
-        {label:"MODÈLES",route:"drh/badges/modeles",group:"GESTION DES BADGES"},
-        {label:"IMPRESSION EN LOT",route:"drh/badges/lot",group:"GESTION DES BADGES"},
-        {label:"HISTORIQUE",route:"drh/badges/historique",group:"GESTION DES BADGES"},
-        {label:"PARAMÈTRES",route:"drh/badges/parametres",group:"GESTION DES BADGES"}
+        // Gestion des badges : portail dédié badge.irongs.com (bouton de la fiche employé).
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
@@ -13846,7 +13942,7 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}${badgeStudioAvailable()&&a.backendId?`<button class="btn text-xs" style="${ficheTopButtonStyle}" data-badge-studio-link onclick="navigate(badgeStudioRoute(db.agents.find(x=>x.id==='${a.id}')))">Créer / gérer le badge</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}${badgeStudioAvailable()&&a.backendId?`<button class="btn text-xs" style="${ficheTopButtonStyle}" data-badge-studio-link onclick="openBadgeStudio(badgeStudioRoute(db.agents.find(x=>x.id==='${a.id}')))">Créer / gérer le badge</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
@@ -19424,7 +19520,7 @@ const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_LOGIN_MODULES=[
-  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"brq",label:"Rapports quotidiens (BRQ)",host:"brq.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
+  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"badge",label:"Studio Badges",host:"badge.irongs.com",description:"Création, impression et suivi des badges du personnel"},{key:"brq",label:"Rapports quotidiens (BRQ)",host:"brq.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
   {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
   {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Gestion du pointage",host:"pointage.irongs.com",description:"Gestion des présences, contrôle, statistiques et administration du pointage"},
   {key:"pointeur",label:"Pointage",host:"pointeur.irongs.com",description:"Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
@@ -19487,7 +19583,7 @@ function adminAccessIncludes(allowed,key){
 function serverAllowsStructure(key){
   if(!session?.permissionsFromServer)return null;
   if(session.moduleAccessGlobal)return true;
-  const aliases={commercial:["dc"],facturation:["finances","fac"],facmod:["fac"],superviseur:["ops","pointeur"],recrutement:["drh","recrute"],recruteur:["drh","recrute"],gestionnaire_rh:["drh"],contrats:["drh"],paie:["paie","drh"],conges:["conges","drh"],pointage:["pointage","pointeur","ops"]};
+  const aliases={commercial:["dc"],facturation:["finances","fac"],facmod:["fac"],superviseur:["ops","pointeur"],recrutement:["drh","recrute"],recruteur:["drh","recrute"],gestionnaire_rh:["drh"],contrats:["drh"],paie:["paie","drh"],conges:["conges","drh"],badge:["badge"],pointage:["pointage","pointeur","ops"]};
   return (aliases[key]||[key]).some(k=>(session.effectiveModules||[]).includes(k));
 }
 function canAccessModuleHostKey(key){const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh")))}

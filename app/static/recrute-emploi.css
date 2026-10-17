@@ -62,3 +62,30 @@
   .retention-action{text-align:left}.retention-table tr.retention-detail-row{display:block;background:#f8fafc}
   .retention-table tr.retention-detail-row td{display:block;grid-column:1/-1;width:100%;max-width:none}
 }
+
+/* Convocations et entretiens (recrute-convocations.js) */
+.conv-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.conv-head h3{margin:0}.conv-head .emploi-actions{margin:0}
+.conv-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}.conv-card-head .emploi-state{margin:0}
+.conv-facts{display:grid;grid-template-columns:minmax(110px,max-content) minmax(0,1fr);gap:4px 14px;margin:10px 0 0;font-size:13px}
+.conv-facts dt{color:var(--muted,#5e6e84);font-weight:600}.conv-facts dd{margin:0;overflow-wrap:anywhere}
+.conv-arrival{color:#17613b;font-weight:600}.conv-warning{border-left:3px solid #d99a06;padding-left:10px}
+.conv-versions{margin-top:10px;font-size:13px}.conv-versions summary{cursor:pointer;font-weight:600}.conv-versions ul{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px}
+.conv-versions li{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.conv-versions li span:first-child{flex:1 1 220px}
+.conv-context{display:flex;flex-direction:column;gap:2px;font-size:13px;background:#f4f6fa;border-radius:10px;padding:10px 12px}
+.conv-fixed{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;font-size:13px}.conv-label{font-size:12px;font-weight:600;color:var(--muted,#5e6e84)}
+.conv-form-actions{justify-content:flex-end}.conv-form-actions .primary{width:auto;margin-top:0}
+.conv-preview{border:1px solid var(--line,#dfe5ee);border-radius:12px;padding:16px;background:#fff;font-family:Arial,sans-serif}
+.conv-preview-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px}.conv-preview-head span{color:var(--muted,#5e6e84)}
+.conv-preview h4{font-size:18px;margin:12px 0 6px}.conv-preview-note{font-weight:700;margin:12px 0 0}
+.conv-scan{border:2px solid #0064f5;border-radius:12px;padding:12px 14px;margin-bottom:14px;background:#f5f9ff}
+.conv-scan header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.conv-scan header b{font-size:15px}
+.conv-scan-warning{background:#fff1f0;border-left:3px solid #c0392b;padding:8px 10px;margin:10px 0 0;font-weight:600;color:#8a1f15}
+.conv-close{margin-left:auto;border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;min-width:40px;min-height:40px}
+.conv-highlight{border-color:#0064f5;box-shadow:0 0 0 2px #bad6ff}
+.conv-scanner{max-width:560px}.conv-reader{min-height:0;border-radius:12px;overflow:hidden;background:#0b1626;margin:12px 0}.conv-reader:empty{display:none}
+.conv-file{position:relative;display:inline-flex;align-items:center;cursor:pointer}.conv-file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.conv-manual{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:14px}.conv-manual label{flex:1 1 220px;display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
+.conv-scan-error{min-height:20px;color:#8a1f15;font-weight:600;font-size:13px;margin:10px 0 0}
+.login-pending{margin:12px 0 0;font-size:13px;color:#14243b;background:#eef4ff;border-radius:8px;padding:10px 12px}
+.conv-grid{grid-template-columns:minmax(0,1fr) 120px}
+@media(max-width:600px){.conv-facts{grid-template-columns:minmax(0,1fr)}.conv-facts dt{margin-top:6px}.conv-grid{grid-template-columns:minmax(0,1fr)}.conv-form-actions{justify-content:stretch}.conv-form-actions button{flex:1 1 100%}}

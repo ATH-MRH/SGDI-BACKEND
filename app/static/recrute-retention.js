@@ -11,7 +11,8 @@ const RETENTION_CATEGORIES=[["declined_applications","Candidatures refusées","C
 const RETENTION_ITEMS={application:"Candidature",documents:"Pièces",messages:"Messages",interviews:"Entretiens",notes:"Notes",events:"Lignes d’historique",document_requests:"Demandes de pièces",
   contracts:"Contrat préparé",account:"Espace candidat",cv:"CV",photo:"Photo",alerts:"Alertes d’offres",notifications:"Notifications",push_deliveries:"Envois push en file",push_devices:"Appareils de notification",sessions:"Sessions ouvertes",
   candidate_dossier:"Dossier de candidature",applications_detached:"Candidatures conservées, détachées de l’espace",
-  profile_snapshot:"Copie du profil envoyée",profile_snapshots:"Copies du profil jointes aux candidatures conservées"};
+  profile_snapshot:"Copie du profil envoyée",profile_snapshots:"Copies du profil jointes aux candidatures conservées",
+  convocation_versions:"Versions de convocation (avec QR)",convocations:"Convocations des candidatures conservées"};
 let retentionState={data:null,error:"",forbidden:false,loading:false,request:0,asOf:"",category:"",query:"",society:"",page:1,open:""};
 
 function retentionHost(){return document.getElementById("retentionSection")}

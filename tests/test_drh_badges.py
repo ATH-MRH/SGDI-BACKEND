@@ -54,7 +54,7 @@ def _employee(db, *, society=SOC, photo=True, status="actif", indicatif="ETP/DF/
 ALL_RIGHTS = ("create", "validate", "export", "admin")
 
 
-def _login(client, db, *, role, societies, modules=("drh",), rights=ALL_RIGHTS):
+def _login(client, db, *, role, societies, modules=("drh", "badge"), rights=ALL_RIGHTS):
     name = f"BG{uuid.uuid4().int % 10**6:06d}"
     user = User(username=name, full_name=name, role=role, access_level="H2", password_hash=hash_password("badge-pass-1"),
                 is_active=True, authorized_modules=list(modules), authorized_societies=list(societies))

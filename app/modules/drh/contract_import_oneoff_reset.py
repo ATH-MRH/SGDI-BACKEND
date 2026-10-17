@@ -59,6 +59,32 @@ def _has_creation(value):
     return False
 
 
+def _excluded_preexisting_homonym(db, grant, employee, candidates, ids):
+    """Seuls les quatre employés anciens explicitement écartés, jamais une création du lot."""
+    candidate = next((c for c in candidates if c.id in ids
+        and oneoff.MANUAL_REVIEW_EXCLUSIONS.get(c.id) == employee.id), None)
+    if candidate is None:
+        return False
+    db.refresh(employee, with_for_update=True)
+    if (employee.created_at is None or employee.created_at >= grant.authorized_at
+            or society_key(candidate.society) != society_key(oneoff.SOCIETY)
+            or society_key(employee.society) != society_key(oneoff.SOCIETY)
+            or oneoff.comparison_key(f'{candidate.last_name} {candidate.first_name}')
+                != oneoff.comparison_key(f'{employee.last_name} {employee.first_name}')
+            or (employee.extra or {}).get('sourceCandidateId') is not None
+            or (employee.extra or {}).get('contractImportSession') is not None):
+        return False
+    # Même pour une identité exclue, tout contrat/document interdit la libération.
+    if db.scalar(select(Contract.id).where(Contract.employee_id == employee.id).limit(1)):
+        return False
+    if db.scalar(select(GeneratedContract.id).where(GeneratedContract.employee_id == employee.id).limit(1)):
+        return False
+    if db.scalar(select(Document.id).where(Document.owner_type.in_(['employee','employe']),
+                                          Document.owner_id == employee.id).limit(1)):
+        return False
+    return True
+
+
 def _check_business(db, grant, session):
     """Ne pas se fier aux seuls compteurs : relire snapshots, liens métier et audit."""
     snapshots = [grant.preparation, session.result if session else None, session.plan if session else None]
@@ -94,6 +120,8 @@ def _check_business(db, grant, session):
         same_society = society_key(employee.society) == society_key(oneoff.SOCIETY)
         recent_file_identity = (same_society and name in file_names
                                 and (employee.created_at is None or employee.created_at >= grant.authorized_at))
+        if _excluded_preexisting_homonym(db, grant, employee, candidates, ids):
+            continue
         if (str(data.get('sourceCandidateId')) in keys or data.get('contractImportSession') == grant.session_id
                 or (same_society and name in names) or recent_file_identity):
             linked_employee_ids.add(employee.id)
@@ -177,6 +205,7 @@ def reset(db, user, request, *, society, file_sha256, batch_key, old_session_id)
               'requested_by_role':user.role, 'requested_by_access_level':user.access_level,
               'reset_access_path':'rh01_exception' if is_rh01_exception(user) and not is_admin_role(user.role) else 'admin_h5',
               'batch_key':oneoff.BATCH_KEY,
+              'manual_review_candidate_ids':sorted(oneoff.MANUAL_REVIEW_EXCLUSIONS),
               'reason':'Réinitialisation exceptionnelle autorisée pour RH01' if is_rh01_exception(user) and not is_admin_role(user.role) else REASON}
     released_id = PREFIX + secrets.token_hex(24)
     previous = {'session_id':grant.session_id, 'authorized_by_user_id':grant.authorized_by_user_id}

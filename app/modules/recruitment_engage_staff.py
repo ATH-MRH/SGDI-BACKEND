@@ -9,11 +9,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, undefer
 
 from app.core.audit import append_audit
-from app.core.scope_policy import society_scope
+from app.core.scope_policy import society_key, society_scope
 from app.db.session import get_db
+from app.modules import recruitment_convocation_pdf as pdf
+from app.modules import recruitment_convocations as conv
 from app.modules import recruitment_engage_service as engage
 from app.modules import recruitment_jobs_service as jobs
 from app.modules.auth.dependencies import current_user
@@ -24,7 +27,8 @@ from app.modules.drh.routes import _can_ventilate, _ensure_recruitment_access, _
 from app.modules.drh.schemas import DirectContractRequest
 from app.modules.public_candidates import _public_candidate_state, candidate_reference
 from app.modules.recruitment_engage_models import (
-    CANDIDATE, INTERVIEW_CANCELLED, INTERVIEW_CONFIRMED, INTERVIEW_DONE, INTERVIEW_NO_SHOW, INTERVIEW_PROPOSED, RECRUITER,
+    CANDIDATE, INTERVIEW_CANCELLED, INTERVIEW_CONFIRMED, INTERVIEW_DONE, INTERVIEW_DRAFT, INTERVIEW_NO_SHOW, INTERVIEW_PROPOSED, RECRUITER,
+    RecruitmentConvocationVersion as ConvocationVersion,
     RecruitmentApplicationContract as Contract, RecruitmentApplicationDocument as Document, RecruitmentApplicationEvent as Event,
     RecruitmentApplicationNote as Note, RecruitmentDocumentRequest as DocumentRequest, RecruitmentInterview as Interview,
     RecruitmentMessage as Message, RecruitmentTip as Tip,
@@ -198,11 +202,27 @@ def _request_out(row: DocumentRequest) -> dict:
             'created_by': row.created_by, 'created_at': engage.iso(row.created_at), 'received_at': engage.iso(row.received_at)}
 
 
-def _interview_staff(row: Interview) -> dict:
+def _interview_staff(row: Interview, versions: list[ConvocationVersion] | None = None) -> dict:
+    versions = versions or []
+    current = next((item for item in versions if item.version == row.version), None)
+    stale = current is not None and conv.outdated(row, current)
     return {'id': row.id, 'starts_at': engage.iso(row.starts_at), 'timezone': engage.TIMEZONE, 'location': row.location, 'contact': row.contact,
             'note': row.note, 'status': row.status, 'confirmed_at': engage.iso(row.confirmed_at), 'cancelled_at': engage.iso(row.cancelled_at),
             'previous_starts_at': engage.iso(row.previous_starts_at), 'report': row.report, 'appreciation': row.appreciation,
-            'created_by': row.created_by, 'past': row.starts_at < engage.now_local()}
+            'created_by': row.created_by, 'past': row.starts_at < engage.now_local(),
+            # Convocation : contenu, versions envoyées et trois suivis distincts (lecture, réponse, arrivée).
+            'reference': conv.reference(row), 'society': row.society, 'address': row.address, 'map_url': row.map_url,
+            'contact_details': row.contact_details, 'purpose': row.purpose, 'documents_to_bring': row.documents_to_bring,
+            'version': row.version, 'sent_at': engage.iso(row.sent_at), 'sent_by': row.sent_by,
+            'viewed_by_candidate': bool(row.version) and (row.viewed_version or 0) >= row.version,
+            'candidate_state': None if row.status == INTERVIEW_DRAFT or not row.version else conv.candidate_state(row),
+            'candidate_state_label': None if row.status == INTERVIEW_DRAFT or not row.version else conv.STATES[conv.candidate_state(row)],
+            'arrived_at': engage.iso(row.arrived_at), 'arrived_by': row.arrived_by, 'assessment': row.assessment,
+            'can_confirm_arrival': row.status in conv.SENT_STATUSES and bool(row.version) and row.arrived_at is None and not stale
+                                   and row.starts_at.date() == engage.now_local().date(),
+            'needs_reissue': stale,
+            'versions': [{'version': item.version, 'issued_at': engage.iso(item.issued_at), 'issued_by': item.issued_by,
+                          'starts_at': item.snapshot.get('starts_at'), 'state': conv.version_state(row, item)} for item in versions]}
 
 
 def _contract_out(row: Contract | None) -> dict | None:
@@ -216,12 +236,35 @@ def _contract_out(row: Contract | None) -> dict | None:
             'shared_with_candidate': row.shared_with_candidate}
 
 
+def _convocation_defaults(db: Session, user: User, scope: Scope) -> dict:
+    """Ce que le formulaire de convocation préremplit : uniquement des données existantes, jamais inventées."""
+    policy = society_scope(user)
+    companies = db.scalars(select(Company).where(Company.is_active.is_(True)).order_by(Company.name)).all()
+    choices = [{'society': row.society, 'name': row.name, 'logo': row.logo_path in jobs.COMPANY_LOGOS} for row in companies if policy.allows(row.society)]
+    fixed = scope.company
+    return {
+        'candidate': f'{(scope.candidate.last_name or "").upper()} {scope.candidate.first_name or ""}'.strip(),
+        'dossier_reference': candidate_reference(scope.candidate), 'application_reference': conv.application_reference(scope.application),
+        'offer': {'title': scope.offer.title, 'reference': scope.offer.reference} if scope.offer else None, 'position': scope.title,
+        'society': fixed.society if fixed else (scope.candidate.society if scope.candidate.society and policy.allows(scope.candidate.society) else None),
+        'society_name': fixed.name if fixed else None, 'society_fixed': fixed is not None, 'societies': [] if fixed else choices,
+        'logo_available': bool(fixed and fixed.logo_path in jobs.COMPANY_LOGOS),
+        'location': scope.offer.location if scope.offer and scope.offer.location else None,
+        'contact': user.full_name or None, 'contact_details': user.email or None, 'purpose': f'Entretien — {scope.title}',
+        'has_account': scope.application.account_id is not None, 'has_email': bool(scope.candidate.email), 'timezone': engage.TIMEZONE,
+    }
+
+
 def _dossier(db: Session, user: User, scope: Scope) -> dict:
     a, candidate = scope.application, scope.candidate
     data = candidate.data if isinstance(candidate.data, dict) else {}
     documents = db.scalars(select(Document).where(Document.application_id == a.id).order_by(Document.id)).all()
     requests = db.scalars(select(DocumentRequest).where(DocumentRequest.application_id == a.id).order_by(DocumentRequest.id.desc())).all()
     interviews = db.scalars(select(Interview).where(Interview.application_id == a.id).order_by(Interview.starts_at.desc())).all()
+    versions: dict[int, list[ConvocationVersion]] = {}
+    for item in db.scalars(select(ConvocationVersion).where(ConvocationVersion.interview_id.in_([row.id for row in interviews]))
+                           .order_by(ConvocationVersion.version.desc())).all() if interviews else []:
+        versions.setdefault(item.interview_id, []).append(item)
     contract = db.scalar(select(Contract).where(Contract.application_id == a.id))
     upcoming = next((row for row in reversed(interviews) if row.status in (INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED) and row.starts_at >= engage.now_local()), None)
     summary = _summary(scope, contract=contract, unread=engage.unread_counts(db, [a.id], RECRUITER).get(a.id, 0), next_interview=upcoming,
@@ -249,7 +292,8 @@ def _dossier(db: Session, user: User, scope: Scope) -> dict:
                   for row in db.scalars(select(Note).where(Note.application_id == a.id).order_by(Note.id.desc())).all()],
         'history': [{'kind': row.kind, 'summary': row.summary, 'actor': row.actor, 'at': engage.iso(row.at)}
                     for row in db.scalars(select(Event).where(Event.application_id == a.id).order_by(Event.id.desc()).limit(200)).all()],
-        'interviews': [_interview_staff(row) for row in interviews],
+        'interviews': [_interview_staff(row, versions.get(row.id)) for row in interviews],
+        'convocation_defaults': _convocation_defaults(db, user, scope),
         'dossier_convocation': (data.get('derniereConvocation') if isinstance(data.get('derniereConvocation'), dict) else None),
         'contract': _contract_out(contract),
         'employee_id': data.get('convertedEmployeeId'), 'drh_transfer': data.get('drhTransfer'),
@@ -443,6 +487,11 @@ def send_message(application_id: int, payload: MessageIn, request: Request, db: 
 
 
 # ── Convocations et entretiens ──────────────────────────────────────────────
+# Une convocation est l'entretien de la candidature, envoyé au candidat sous forme de document avec QR.
+# Brouillon : rien n'est envoyé ni visible du candidat. Chaque envoi crée une version (conv.issue).
+
+MapUrl = Annotated[str | None, Field(default=None, max_length=400, pattern=r'^https://[^\s]+$')]
+
 
 class InterviewIn(BaseModel):
     starts_at: datetime
@@ -450,12 +499,31 @@ class InterviewIn(BaseModel):
     contact: Annotated[str | None, Field(default=None, max_length=150)]
     note: Annotated[str | None, Field(default=None, max_length=1000)]
     send_email: bool = False
+    # Convocation : tout est facultatif, pour garder compatibles les appels existants.
+    request_id: ClientId | None = None
+    mode: Annotated[str, Field(pattern=r'^(send|draft)$')] = 'send'
+    society: Annotated[str | None, Field(default=None, max_length=150)]
+    address: Annotated[str | None, Field(default=None, max_length=400)]
+    map_url: MapUrl
+    contact_details: Annotated[str | None, Field(default=None, max_length=200)]
+    purpose: Annotated[str | None, Field(default=None, max_length=200)]
+    documents_to_bring: Annotated[str | None, Field(default=None, max_length=1000)]
 
 
 class InterviewOutcomeIn(BaseModel):
     attendance: Annotated[str, Field(pattern=r'^(present|absent)$')]
     report: Annotated[str | None, Field(default=None, max_length=6000)]
     appreciation: Annotated[str | None, Field(default=None, max_length=40)]
+    # Grille d'entretien du vivier : mêmes critères, notes entières sur 10, toutes facultatives.
+    scores: dict[str, int | None] | None = None
+
+
+class ArrivalIn(BaseModel):
+    version: Annotated[int, Field(ge=1)]
+
+
+class ResolveIn(BaseModel):
+    code: Annotated[str, Field(min_length=1, max_length=400)]
 
 
 def _convocation_email(scope: Scope, row: Interview) -> str:
@@ -478,35 +546,147 @@ def _interview_scope(db: Session, user: User, interview_id: int) -> tuple[Interv
     return row, scope
 
 
+def _company_of(db: Session, society: str | None) -> Company | None:
+    return db.scalar(select(Company).where(Company.society_key == society_key(society))) if society else None
+
+
+def _convoking(db: Session, scope: Scope, row: Interview) -> tuple[str | None, str | None]:
+    """Société qui convoque (dénomination) et son logo réel s'il existe ; jamais de logo de substitution."""
+    company = scope.company or _company_of(db, row.society or scope.candidate.society)
+    name = company.name if company else (row.society or scope.candidate.society)
+    logo = company.logo_path if company is not None and company.logo_path in jobs.COMPANY_LOGOS else None
+    return name, logo
+
+
+def _content(db: Session, scope: Scope, row: Interview) -> dict:
+    name, logo = _convoking(db, scope, row)
+    return conv.snapshot(row, scope.application, scope.offer, scope.candidate, society_name=name, logo_path=logo,
+                         dossier_reference=candidate_reference(scope.candidate))
+
+
+CONVOCATION_FIELDS = ('address', 'map_url', 'contact_details', 'purpose', 'documents_to_bring')
+
+
+def _apply_fields(row: Interview, payload: InterviewIn, scope: Scope, user: User) -> None:
+    clean = lambda value: (value or '').strip() or None  # noqa: E731
+    row.location, row.contact, row.note = payload.location.strip(), clean(payload.contact), clean(payload.note)
+    # Champs de la convocation : un appel qui ne les transmet pas (client antérieur) les laisse tels quels.
+    for field in CONVOCATION_FIELDS:
+        if field in payload.model_fields_set:
+            setattr(row, field, clean(getattr(payload, field)))
+    # Candidature d'une annonce : la société est celle de l'annonce. Spontanée : société choisie, dans le périmètre.
+    if scope.company:
+        row.society = None
+    elif 'society' in payload.model_fields_set:
+        society = clean(payload.society)
+        if society and not society_scope(user).allows(society):
+            raise HTTPException(status_code=422, detail='Société hors de votre périmètre.')
+        row.society = society
+    row.updated_by = user.username
+
+
+def _guarded(db: Session, action):
+    """Émission refusée (caractère non imprimable…) : rien de la requête n'est gardé, pas même le brouillon créé."""
+    try:
+        return action()
+    except HTTPException:
+        db.rollback()
+        raise
+
+
+def _closed(a: Application) -> bool:
+    return bool(a.withdrawn_at) or (a.outcome == 'unfavorable' and a.outcome_communicated_at is not None)
+
+
+def _notice(db: Session, scope: Scope, row: Interview, title: str) -> object:
+    # Texte court, visible sur l'écran verrouillé : ni lieu, ni heure, ni société ; le détail est dans l'application.
+    return engage.notify(db, scope.application.account_id, 'interview', title, 'Ouvrez IRON Emploi pour consulter votre convocation.',
+                         application_id=scope.application.id, interview_id=row.id)
+
+
+def _send(db: Session, request: Request, user: User, scope: Scope, row: Interview, *, title: str = 'Convocation à un entretien') -> list:
+    """Premier envoi d'une convocation : version 1, étape, état visible, notification. Le verrou est tenu."""
+    a = scope.application
+    if row.status == INTERVIEW_DRAFT:
+        row.status = INTERVIEW_PROPOSED
+    version = conv.issue(db, row, _content(db, scope, row), user.username)
+    if engage.STAGE_ORDER.index(a.stage) < engage.STAGE_ORDER.index('convocation'):
+        a.stage = 'convocation'
+    engage.log_event(db, a, 'interview', f'Convocation {conv.reference(row)} envoyée (version {version.version}) pour le {engage.describe(row.starts_at)}', user.username)
+    _audit(db, request, user, 'convocation_send', scope, interview_id=row.id, version=version.version, starts_at=row.starts_at.isoformat())
+    # Une seule notification : la convocation. L'état « Entretien » de la candidature change sans message en double.
+    if not a.outcome_communicated_at:
+        engage.set_visible_status(db, a, 'interview', user.username, inform=False)
+    return [_notice(db, scope, row, title)]
+
+
+def _channels(scope: Scope, row: Interview, notifications: list, db: Session, send_email: bool) -> list[str]:
+    if scope.application.account_id:
+        channels = ['Convocation enregistrée dans l’espace IRON Emploi du candidat.']
+    else:
+        channels = ['Ce dossier n’a pas d’espace IRON Emploi : la convocation n’y est pas reçue. Téléchargez le PDF pour la remettre au candidat'
+                    + (', ou envoyez-la par e-mail.' if scope.candidate.email else '.')]
+    if engage.send_push(db, notifications):
+        channels.append('Notification push acceptée par le service d’envoi (la réception sur le téléphone n’est pas garantie).')
+    if send_email:
+        channels.append(_convocation_email(scope, row))
+    return channels
+
+
 @router.post('/applications/{application_id}/interviews', status_code=201)
 def propose_interview(application_id: int, payload: InterviewIn, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
     scope = _scope(db, user, application_id, lock=True)
     a = scope.application
-    if a.withdrawn_at or (a.outcome == 'unfavorable' and a.outcome_communicated_at):
+    if _closed(a):
         raise HTTPException(status_code=409, detail='Cette candidature est close : aucune convocation ne peut être envoyée.')
     starts_at = engage.check_interview_time(payload.starts_at)
-    # Même date et même heure déjà proposées pour cette candidature : pas de doublon (double clic, relance).
-    existing = db.scalar(select(Interview).where(Interview.application_id == a.id, Interview.starts_at == starts_at, Interview.status != INTERVIEW_CANCELLED))
-    if existing is not None:
-        return {**_dossier(db, user, scope), 'channels': ['Invitation déjà enregistrée pour cette date.']}
-    row = Interview(application_id=a.id, starts_at=starts_at, location=payload.location.strip(), contact=(payload.contact or '').strip() or None,
-                    note=(payload.note or '').strip() or None, created_by=user.username, updated_by=user.username)
+    # Même requête rejouée (double clic, relance réseau) : la convocation déjà créée, sans nouvel envoi.
+    if payload.request_id:
+        existing = db.scalar(select(Interview).where(Interview.application_id == a.id, Interview.request_id == payload.request_id))
+        if existing is not None:
+            return {**_dossier(db, user, scope), 'interview_id': existing.id, 'channels': ['Convocation déjà enregistrée.']}
+    # Même date et même heure déjà envoyées pour cette candidature : pas de doublon.
+    existing = db.scalar(select(Interview).where(Interview.application_id == a.id, Interview.starts_at == starts_at,
+                                                 Interview.status.notin_([INTERVIEW_CANCELLED, INTERVIEW_DRAFT])))
+    if existing is not None and payload.mode == 'send':
+        return {**_dossier(db, user, scope), 'interview_id': existing.id, 'channels': ['Invitation déjà enregistrée pour cette date.']}
+    row = Interview(application_id=a.id, starts_at=starts_at, status=INTERVIEW_DRAFT, request_id=payload.request_id,
+                    location=payload.location.strip(), created_by=user.username)
+    _apply_fields(row, payload, scope, user)
     db.add(row)
-    db.flush()
-    if engage.STAGE_ORDER.index(a.stage) < engage.STAGE_ORDER.index('convocation'):
-        a.stage = 'convocation'
-    engage.log_event(db, a, 'interview', f'Convocation proposée pour le {engage.describe(starts_at)}', user.username)
-    notifications = [engage.set_visible_status(db, a, 'interview', user.username) if not a.outcome_communicated_at else None,
-                     engage.notify(db, a.account_id, 'interview', 'Entretien proposé', f'{scope.title} — le {engage.describe(starts_at)}, {row.location}. '
-                                   'Confirmez votre présence dans l’application.', application_id=a.id, interview_id=row.id)]
-    _audit(db, request, user, 'interview_propose', scope, interview_id=row.id, starts_at=starts_at.isoformat())
+    try:
+        db.flush()
+    except IntegrityError:                                    # même requête arrivée en parallèle
+        db.rollback()
+        scope = _scope(db, user, application_id)
+        existing = db.scalar(select(Interview).where(Interview.application_id == a.id, Interview.request_id == payload.request_id))
+        return {**_dossier(db, user, scope), 'interview_id': existing.id if existing else None, 'channels': ['Convocation déjà enregistrée.']}
+    if payload.mode == 'draft':
+        engage.log_event(db, a, 'interview', f'Convocation {conv.reference(row)} préparée en brouillon (non envoyée)', user.username)
+        _audit(db, request, user, 'convocation_draft', scope, interview_id=row.id)
+        db.commit()
+        return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': ['Brouillon enregistré : le candidat n’a pas été prévenu.']}
+    notifications = _guarded(db, lambda: _send(db, request, user, scope, row))
     db.commit()
-    channels = ['Notification dans l’application IRON Emploi.' if a.account_id else 'Aucun espace IRON Emploi : pas de notification dans l’application.']
-    if engage.send_push(db, notifications):
-        channels.append('Notification push envoyée.')
-    if payload.send_email:
-        channels.append(_convocation_email(scope, row))
-    return {**_dossier(db, user, scope), 'channels': channels}
+    return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': _channels(scope, row, notifications, db, payload.send_email)}
+
+
+@router.post('/interviews/{interview_id}/send')
+def send_convocation(interview_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
+    """Envoie un brouillon, ou émet le document d'un entretien antérieur aux convocations. Rejouer : sans effet."""
+    row, scope = _interview_scope(db, user, interview_id)
+    if row.status not in (INTERVIEW_DRAFT, *conv.SENT_STATUSES):
+        raise HTTPException(status_code=409, detail='Cet entretien est clos : aucune convocation ne peut être envoyée.')
+    current = conv.current_version(db, row) if row.version else None
+    if current is not None and conv.version_state(row, current) != 'outdated':
+        return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': ['Convocation déjà envoyée.']}
+    if _closed(scope.application):
+        raise HTTPException(status_code=409, detail='Cette candidature est close : aucune convocation ne peut être envoyée.')
+    engage.check_interview_time(row.starts_at)
+    # Version en vigueur devenue inexacte (entretien modifié sans nouvelle version, après un retour arrière) : réémise.
+    notifications = _guarded(db, lambda: _send(db, request, user, scope, row, title='Convocation mise à jour' if current else 'Convocation à un entretien'))
+    db.commit()
+    return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': _channels(scope, row, notifications, db, False)}
 
 
 @router.put('/interviews/{interview_id}')
@@ -515,59 +695,179 @@ def update_interview(interview_id: int, payload: InterviewIn, request: Request, 
     if row.status in (INTERVIEW_CANCELLED, INTERVIEW_DONE, INTERVIEW_NO_SHOW):
         raise HTTPException(status_code=409, detail='Cet entretien est clos : proposez-en un nouveau.')
     starts_at = engage.check_interview_time(payload.starts_at)
+    if row.status == INTERVIEW_DRAFT:                        # brouillon : modification silencieuse
+        row.starts_at = starts_at
+        _apply_fields(row, payload, scope, user)
+        db.commit()
+        return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': ['Brouillon modifié : le candidat n’a pas été prévenu.']}
+    before = {field: getattr(row, field) for field in conv.PRINTED_FIELDS}
     moved = starts_at != row.starts_at
-    changed = moved or payload.location.strip() != row.location
     if moved:
         # Report : l'ancienne date est conservée et le candidat doit confirmer à nouveau.
         row.previous_starts_at, row.starts_at, row.status, row.confirmed_at = row.starts_at, starts_at, INTERVIEW_PROPOSED, None
-    row.location, row.contact, row.note, row.updated_by = payload.location.strip(), (payload.contact or '').strip() or None, (payload.note or '').strip() or None, user.username
+        row.arrived_at = row.arrived_by = None
+    _apply_fields(row, payload, scope, user)
+    changed = any(getattr(row, field) != value for field, value in before.items())
     notification = None
     if changed:
-        engage.log_event(db, scope.application, 'interview', f'Entretien {"reporté au" if moved else "modifié :"} {engage.describe(starts_at)}', user.username)
-        notification = engage.notify(db, scope.application.account_id, 'interview', 'Entretien reporté' if moved else 'Entretien modifié',
-                                     f'{scope.title} — désormais le {engage.describe(starts_at)}, {row.location}.'
-                                     + (' Merci de confirmer à nouveau votre présence.' if moved else ''),
-                                     application_id=scope.application.id, interview_id=row.id)
-        _audit(db, request, user, 'interview_update', scope, interview_id=row.id, starts_at=starts_at.isoformat())
+        label = 'reportée' if moved else 'modifiée'
+        if row.version:
+            version = _guarded(db, lambda: conv.issue(db, row, _content(db, scope, row), user.username))
+            engage.log_event(db, scope.application, 'interview', f'Convocation {conv.reference(row)} {label} : version {version.version}, '
+                             f'{engage.describe(starts_at)}', user.username)
+        else:
+            engage.log_event(db, scope.application, 'interview', f'Entretien {"reporté au" if moved else "modifié :"} {engage.describe(starts_at)}', user.username)
+        notification = _notice(db, scope, row, f'Convocation {label}')
+        _audit(db, request, user, 'interview_update', scope, interview_id=row.id, starts_at=starts_at.isoformat(), version=row.version, moved=moved)
     db.commit()
-    engage.send_push(db, [notification])
-    channels = ['Notification dans l’application IRON Emploi.'] if changed and scope.application.account_id else []
-    if changed and payload.send_email:
-        channels.append(_convocation_email(scope, row))
-    return {**_dossier(db, user, scope), 'channels': channels}
+    channels = _channels(scope, row, [notification], db, payload.send_email) if changed else ['Aucun changement à communiquer.']
+    return {**_dossier(db, user, scope), 'interview_id': row.id, 'channels': channels}
 
 
 @router.post('/interviews/{interview_id}/cancel')
 def cancel_interview(interview_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
     row, scope = _interview_scope(db, user, interview_id)
     notification = None
-    if row.status in (INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED):
+    if row.status == INTERVIEW_DRAFT:                        # brouillon abandonné : personne à prévenir
         row.status, row.cancelled_at, row.updated_by = INTERVIEW_CANCELLED, datetime.utcnow(), user.username
-        engage.log_event(db, scope.application, 'interview', f'Entretien du {engage.describe(row.starts_at)} annulé', user.username)
+        _audit(db, request, user, 'convocation_draft_cancel', scope, interview_id=row.id)
+    elif row.status in (INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED):
+        row.status, row.cancelled_at, row.updated_by = INTERVIEW_CANCELLED, datetime.utcnow(), user.username
+        conv.cancel_versions(db, row)
+        engage.log_event(db, scope.application, 'interview', f'Entretien du {engage.describe(row.starts_at)} annulé'
+                         + (f' (convocation {conv.reference(row)})' if row.version else ''), user.username)
         notification = engage.notify(db, scope.application.account_id, 'interview', 'Entretien annulé',
-                                     f'{scope.title} — l’entretien du {engage.describe(row.starts_at)} est annulé.',
+                                     'Une convocation a été annulée. Ouvrez IRON Emploi pour le détail.',
                                      application_id=scope.application.id, interview_id=row.id)
-        _audit(db, request, user, 'interview_cancel', scope, interview_id=row.id)
+        _audit(db, request, user, 'interview_cancel', scope, interview_id=row.id, version=row.version)
     db.commit()
     engage.send_push(db, [notification])
     return _dossier(db, user, scope)
 
 
+@router.get('/interviews/{interview_id}/convocation')
+def convocation_document(interview_id: int, version: int | None = None, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
+    """PDF de la convocation pour le recruteur : version demandée (anciennes comprises), ou aperçu du brouillon."""
+    row = db.get(Interview, interview_id)
+    scope = _scope(db, user, row.application_id if row else 0)
+    if row.status == INTERVIEW_DRAFT or not row.version:
+        if version:
+            raise HTTPException(status_code=404, detail='Version introuvable.')
+        content = _content(db, scope, row)
+        problems = conv.printable_problems(content)
+        if problems:
+            raise HTTPException(status_code=422, detail=f'Caractères impossibles à imprimer dans la convocation : {problems}. Corrigez la saisie.')
+        data = pdf.render(content, version=0, issued_at=None, qr=None, draft=True)
+        name = f'{conv.reference(row)}-apercu.pdf'
+    else:
+        item = db.scalar(select(ConvocationVersion).where(ConvocationVersion.interview_id == row.id,
+                                                          ConvocationVersion.version == (version or row.version)))
+        if item is None:
+            raise HTTPException(status_code=404, detail='Version introuvable.')
+        data = pdf.render(item.snapshot, version=item.version, issued_at=item.issued_at, qr=conv.qr_matrix(item.token))
+        name = f'{conv.reference(row)}-V{item.version}.pdf'
+    return Response(content=data, media_type='application/pdf', headers={
+        'Content-Disposition': f'inline; filename="{name}"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+def _resolution(db: Session, scope: Scope, row: Interview, item: ConvocationVersion) -> dict:
+    state = conv.version_state(row, item)
+    shown = datetime.fromisoformat(item.snapshot['starts_at'])
+    if state == 'active' and row.starts_at.date() < engage.now_local().date():
+        state = 'past'
+    warnings = {
+        'superseded': f'Version {item.version} remplacée : la convocation en vigueur est la version {row.version}, '
+                      f'pour le {engage.describe(row.starts_at)}. Ne validez pas l’ancienne date.',
+        'cancelled': 'Cette convocation a été annulée : aucune présence ne peut être enregistrée.',
+        'closed': 'Cet entretien est déjà clos (compte rendu enregistré).',
+        'past': 'La date de cet entretien est passée.',
+        'outdated': f'Ce document ne correspond plus à l’entretien en vigueur ({engage.describe(row.starts_at)}, {row.location}). '
+                    'Réémettez la convocation avant de confirmer une arrivée.',
+    }
+    return {
+        'state': state, 'warning': warnings.get(state), 'application_id': scope.application.id, 'interview_id': row.id,
+        'reference': conv.reference(row), 'version': item.version, 'current_version': row.version,
+        'summary': {'candidate': f'{(scope.candidate.last_name or "").upper()} {scope.candidate.first_name or ""}'.strip(), 'position': scope.title,
+                    'society': item.snapshot.get('society'), 'starts_at': shown.isoformat(timespec='minutes'),
+                    'current_starts_at': engage.iso(row.starts_at), 'timezone': engage.TIMEZONE, 'status': row.status,
+                    'candidate_state': conv.candidate_state(row), 'candidate_state_label': conv.STATES[conv.candidate_state(row)],
+                    'confirmed_by_candidate': row.confirmed_at is not None, 'arrived_at': engage.iso(row.arrived_at), 'arrived_by': row.arrived_by},
+        'can_confirm_arrival': state == 'active' and row.arrived_at is None and row.starts_at.date() == engage.now_local().date(),
+    }
+
+
+@router.post('/convocations/resolve')
+def resolve_convocation(payload: ResolveIn, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
+    """Ouvre la convocation désignée par un QR lu ou une référence saisie. Rien n'est enregistré, sinon la consultation."""
+    parsed = conv.scanned_code(payload.code)
+    if parsed is None:
+        raise HTTPException(status_code=422, detail='QR code ou référence invalide : ce n’est pas une convocation de cet espace recrutement.')
+    kind, value = parsed
+    if kind == 'token':
+        item = db.scalar(select(ConvocationVersion).where(ConvocationVersion.token == value))
+        row = db.get(Interview, item.interview_id) if item else None
+    else:
+        year, number, version = conv.REFERENCE_RE.match(value).groups()
+        row = db.get(Interview, int(number))
+        if row is not None and (not row.created_at or row.created_at.year != int(year)):
+            row = None
+        item = db.scalar(select(ConvocationVersion).where(ConvocationVersion.interview_id == row.id,
+                                                          ConvocationVersion.version == int(version or row.version or 0))) if row else None
+    if row is None or item is None:
+        raise HTTPException(status_code=404, detail='Convocation inconnue : aucun envoi ne correspond à ce code.')
+    try:
+        scope = _scope(db, user, row.application_id)
+    except HTTPException:
+        append_audit(db, action='recruitment.job_application.convocation_scan', resource='job_application', resource_id=row.application_id,
+                     result='refused', user=user, request=request, new_state={'version_id': item.id, 'method': kind})
+        db.commit()
+        raise HTTPException(status_code=403, detail='Accès refusé : cette convocation ne relève pas de votre périmètre.')
+    result = _resolution(db, scope, row, item)
+    _audit(db, request, user, 'convocation_scan', scope, interview_id=row.id, version=item.version, state=result['state'], method=kind)
+    db.commit()
+    return result
+
+
+@router.post('/interviews/{interview_id}/arrival')
+def confirm_arrival(interview_id: int, payload: ArrivalIn, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
+    """Arrivée du candidat, constatée et confirmée explicitement par le recruteur. Ni résultat d'entretien, ni décision."""
+    row, scope = _interview_scope(db, user, interview_id)
+    if row.status not in conv.SENT_STATUSES:
+        raise HTTPException(status_code=409, detail='Cette convocation n’est pas en vigueur : aucune arrivée ne peut être enregistrée.')
+    if payload.version != row.version:
+        raise HTTPException(status_code=409, detail=f'Version {payload.version} remplacée par la version {row.version} : vérifiez la nouvelle date.')
+    current = conv.current_version(db, row)
+    if current is None or conv.outdated(row, current):
+        raise HTTPException(status_code=409, detail='Ce document ne correspond plus à l’entretien en vigueur : réémettez la convocation avant de confirmer l’arrivée.')
+    if row.starts_at.date() != engage.now_local().date():
+        raise HTTPException(status_code=409, detail=f'Cet entretien est prévu le {engage.describe(row.starts_at)} : l’arrivée se confirme le jour même.')
+    if row.arrived_at is None:                                # rejouer : sans effet
+        row.arrived_at, row.arrived_by = datetime.utcnow(), user.username
+        engage.log_event(db, scope.application, 'interview', f'Arrivée du candidat confirmée (convocation {conv.reference(row)}, version {row.version})', user.username)
+        _audit(db, request, user, 'convocation_arrival', scope, interview_id=row.id, version=row.version)
+        db.commit()
+    return {**_dossier(db, user, scope), 'interview_id': row.id}
+
+
 @router.post('/interviews/{interview_id}/outcome')
 def record_interview_outcome(interview_id: int, payload: InterviewOutcomeIn, request: Request, db: Session = Depends(get_db), user: User = Depends(_recruiter)):
-    """Présence ou absence, compte rendu et appréciation : informations internes, jamais transmises au candidat."""
+    """Présence ou absence, compte rendu, grille et appréciation : informations internes, jamais transmises au candidat."""
     row, scope = _interview_scope(db, user, interview_id)
-    if row.status == INTERVIEW_CANCELLED:
-        raise HTTPException(status_code=409, detail='Cet entretien a été annulé.')
+    if row.status in (INTERVIEW_CANCELLED, INTERVIEW_DRAFT):
+        raise HTTPException(status_code=409, detail='Cet entretien a été annulé.' if row.status == INTERVIEW_CANCELLED else 'Cette convocation n’a pas été envoyée.')
     if row.starts_at > engage.now_local():
         raise HTTPException(status_code=409, detail='Cet entretien n’a pas encore eu lieu : la présence s’enregistre après sa tenue.')
+    if payload.attendance == 'absent' and row.arrived_at is not None:
+        raise HTTPException(status_code=409, detail='L’arrivée du candidat a été confirmée : il ne peut pas être déclaré absent.')
+    assessment = conv.clean_scores(payload.scores) if payload.attendance == 'present' else None
     row.status = INTERVIEW_DONE if payload.attendance == 'present' else INTERVIEW_NO_SHOW
     row.report, row.appreciation, row.updated_by = (payload.report or '').strip() or None, (payload.appreciation or '').strip() or None, user.username
+    row.assessment = assessment
     if payload.attendance == 'present' and engage.STAGE_ORDER.index(scope.application.stage) < engage.STAGE_ORDER.index('interview'):
         scope.application.stage = 'interview'
     engage.log_event(db, scope.application, 'interview', 'Entretien réalisé : compte rendu enregistré' if payload.attendance == 'present'
                      else 'Candidat absent à l’entretien', user.username)
-    _audit(db, request, user, 'interview_outcome', scope, interview_id=row.id, attendance=payload.attendance)
+    _audit(db, request, user, 'interview_outcome', scope, interview_id=row.id, attendance=payload.attendance, graded=bool(assessment))
     db.commit()
     return _dossier(db, user, scope)
 

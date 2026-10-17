@@ -855,6 +855,19 @@ def _is_paie_host(host: str) -> bool:
     return host.split(":")[0].lower() == "paie.irongs.com"
 
 
+def _is_badge_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "badge.irongs.com"
+
+
+def _badge_portal_html(content: str) -> str:
+    """badge.irongs.com : la même application ATLAS (mêmes scripts, mêmes versions), marquée
+    comme portail Studio Badges ; le front affiche alors son interface dédiée."""
+    content = content.replace("<title>ATLAS — Suite de gestion intégrée</title>", "<title>STUDIO BADGES — IRON GLOBAL</title>", 1)
+    content = content.replace("</head>", "<script>window.__BADGE_AUTONOMOUS_APP__=true;</script>\n</head>", 1)
+    return content.replace('<body class="atlas-ui" data-atlas-surface="legacy">',
+                           '<body class="atlas-ui" data-atlas-surface="badge" data-standalone-module="badge">', 1)
+
+
 def _is_conges_host(host: str) -> bool:
     return host.split(":")[0].lower() == "conges.irongs.com"
 
@@ -1783,6 +1796,8 @@ def frontend(request: Request) -> HTMLResponse:
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
     content = _build_index_html()
+    if _is_badge_host(host):
+        content = _badge_portal_html(content)
     return HTMLResponse(content, headers={"Cache-Control": "no-cache, max-age=0"})
 
 

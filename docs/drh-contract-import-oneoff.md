@@ -41,3 +41,10 @@ La transaction conserve le journal et les IDs autorisés, neutralise l'ancienne 
 Audit : `drh.contract.excel.oneoff.reset`, puis `drh.contract.excel.oneoff.reset.rebound` lors de la nouvelle réservation, avec utilisateur, date UTC, anciennes/nouvelles sessions, société, empreinte et motif « Réinitialisation exceptionnelle du lot contractualisation Excel ». Le reset et son audit sont atomiques ; l'échec d'audit annule la transaction.
 
 Dans l'assistant, le petit bouton « Réinitialiser la session exceptionnelle » apparaît seulement pour l'erreur de réservation et un administrateur habilité. La confirmation est : « Cette action libère uniquement la session exceptionnelle actuelle. Aucun contrat ni employé ne sera créé. Continuer ? ». Après succès, l'utilisateur sélectionne à nouveau le même fichier exact. Aucun contrat, employé ou document n'est créé par cette action.
+
+
+## Décision du 17 octobre 2026 : exclusions provisoires
+
+Quatre dossiers sont exclus de la préparation et classés « À VÉRIFIER » par identifiants explicites. Aucun dossier candidat ni salarié n’est modifié. Le résultat attendu devient 71 préparables, 5 à vérifier et 20 hors périmètre ; le dossier déjà embauché reste exclu par les règles normales.
+
+Le reset conserve tous ses contrôles. Seuls les quatre employés homonymes explicitement identifiés, créés avant l’autorisation du lot, sans lien source candidat/session et sans contrat ni document, ne sont pas traités comme des créations du lot. Un employé récent, un lien explicite ou une trace de création reste bloquant. L’audit du reset contient les identifiants exclus. Cette mesure reste liée au fichier, à la société et au lot existants et sera retirée avec le one-off après préparation réussie.

@@ -67,8 +67,10 @@ def upgrade():
 def downgrade():
     # La file push de 20261016_0002, conservée par sa propre descente, dépend des notifications et des
     # appareils retirés ici : elle part avec eux (PostgreSQL refuserait sinon de les supprimer).
-    if 'recruitment_push_deliveries' in sa.inspect(op.get_bind()).get_table_names():
-        op.drop_table('recruitment_push_deliveries')
+    # Même chose pour les versions de convocation (20261017_0002), qui dépendent des entretiens retirés ici.
+    for dependent in ('recruitment_push_deliveries', 'recruitment_convocation_versions'):
+        if dependent in sa.inspect(op.get_bind()).get_table_names():
+            op.drop_table(dependent)
     for model in reversed(MODELS):
         model.__table__.drop(bind=op.get_bind(), checkfirst=True)
     for table, columns in COLUMNS.items():
