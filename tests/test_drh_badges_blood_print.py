@@ -154,7 +154,7 @@ def test_display_requires_an_explicit_authorization_reference_and_the_admin_righ
 def test_employee_blood_group_state_follows_the_authorization(client, db, drh):
     with_o, with_ab, empty, wrong = (_with_blood(db, value) for value in ("O+", "AB-", "", "Z+"))
     hidden = client.get(f"{API}/employees/{with_o.id}", headers=drh).json()
-    assert hidden["blood_group"] == {"status": "non_autorise", "authorized": False} and "groupe_sanguin" not in hidden
+    assert hidden["blood_group"] == {"status": "ok", "authorized": False} and "groupe_sanguin" not in hidden   # état seul, jamais la valeur
     rows = client.get(f"{API}/employees", params={"q": with_o.code}, headers=drh).json()["items"]
     assert rows and "groupe_sanguin" not in rows[0]
 
@@ -265,7 +265,7 @@ def test_reference_template_is_upgraded_but_issued_badges_keep_their_design(clie
 # ── Impression en lot : filtres ──────────────────────────────────────────────
 
 def test_batch_filters_by_site_and_function(client, db, drh):
-    first, second = _employee(db, indicatif="ETP/LOT/A1"), _employee(db, indicatif="ETP/LOT/B2")
+    first, second = _employee(db, official_code="ETP/LOT/A1"), _employee(db, official_code="ETP/LOT/B2")
     facets = client.get(f"{API}/employees/facets", headers=drh).json()
     codes = {site["code"]: site["id"] for site in facets["sites"]}
     assert {"ETP/LOT/A1", "ETP/LOT/B2"} <= set(codes) and "Cariste" in facets["functions"]

@@ -57,13 +57,16 @@ def test_badge_api_requires_the_badge_module_on_every_host(client, db, drh):
     emp = _employee(db)
     for host in (BADGE, DRH):
         headers = {**drh, **host}
-        assert client.get(f"{API}/permissions", headers=headers).json() == {"create": True, "validate": True, "export": True, "admin": True}
+        rights = client.get(f"{API}/permissions", headers=headers).json()
+        assert all(rights[key] for key in ("create", "validate", "export", "admin")) and rights["reasons"] == {}
         assert client.get(f"{API}/employees/{emp.id}", headers=headers).status_code == 200
     badge_only = _token(client, _user(db, modules=["badge"]))
     assert client.get(f"{API}/dashboard", headers={**badge_only, **BADGE}).status_code == 200            # sans module DRH
     assert client.get(f"{API}/employees/{emp.id}", headers=badge_only).status_code == 200
     assert client.post(f"{API}/preview/pdf", json={"employee_id": emp.id}, headers=badge_only).status_code == 200
-    assert client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=badge_only).status_code == 403   # droits badges requis
+    issued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=badge_only)         # droit opérationnel du module
+    assert issued.status_code == 200, issued.text
+    assert client.post(f"{API}/{issued.json()['id']}/revoke", json={"reason": "perdu"}, headers=badge_only).status_code == 403
     drh_only = _token(client, _user(db, modules=["drh"]))
     assert client.get(f"{API}/dashboard", headers={**drh_only, **DRH}).status_code == 403              # DRH seul : plus d'accès
     assert client.get("/api/drh/employees", headers=drh_only).status_code != 403                       # le reste de la DRH inchangé

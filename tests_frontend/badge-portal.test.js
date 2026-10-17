@@ -111,3 +111,18 @@ test('the portal opens the requested screen after login and society selection', 
   assert.equal(app.window.sessionStorage.getItem('badgePortalTarget'), null);          // utilisé une seule fois
   app.window.close();
 });
+
+test('sites carry their official code (badges) separately from the radio call sign', () => {
+  const app = loadSgdiApp(['siteApiPayload', 'siteFromApi'], { url: 'https://ops.irongs.com/' });
+  assert.equal(app.loadError, null);
+  const t = app.T();
+  const site = t.siteFromApi({ id: 4, name: 'HANGAR NORD', indicatif: 'RACHID (HAROUN-HICHEM)', official_code: 'ETP/DF/H01', equipment_plan: { codeOfficiel: 'ANCIEN' } });
+  assert.equal(site.codeOfficiel, 'ETP/DF/H01');                                    // la colonne fait foi
+  assert.equal(site.indicatif, 'RACHID (HAROUN-HICHEM)');
+  const payload = t.siteApiPayload({ ...site, codeOfficiel: ' ETP/DF/H02 ' });
+  assert.equal(payload.official_code, 'ETP/DF/H02');
+  assert.equal(payload.indicatif, 'RACHID (HAROUN-HICHEM)');
+  assert.equal(payload.equipment_plan.codeOfficiel, undefined);                     // aucune copie concurrente
+  assert.equal(t.siteApiPayload({ ...site, codeOfficiel: '' }).official_code, null);
+  app.window.close();
+});

@@ -341,7 +341,14 @@ def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db)
         _ensure_society_allowed(user, plan.get("societe") or plan.get("society"))
     if plan is not None:
         payload = payload.model_copy(update={"equipment_plan": {**current_plan, **plan}})
-    return service.update_row(db, Site, site_id, payload)
+    previous_code = existing.official_code if existing else None
+    row = service.update_row(db, Site, site_id, payload)
+    if "official_code" in payload.model_fields_set and row.official_code != previous_code:
+        # Le code officiel est imprimé sur les badges : chaque changement est tracé.
+        append_audit(db, action="ops.site.official_code", resource="site", resource_id=row.id, result="success", user=user,
+                     society=_site_society(row), old_state={"official_code": previous_code}, new_state={"official_code": row.official_code})
+        db.commit()
+    return row
 
 
 @router.delete("/sites/{site_id}")

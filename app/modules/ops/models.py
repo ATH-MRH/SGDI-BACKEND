@@ -12,6 +12,8 @@ class Site(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(180), index=True)
     indicatif: Mapped[str | None] = mapped_column(String(50), index=True)
+    # Code officiel du site (ex. ETP/DF/H01), imprimé sur les badges. Distinct de l'indicatif radio.
+    official_code: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
     client_name: Mapped[str | None] = mapped_column(String(180))
     # Lien fiable vers commercial.Client (client_name ci-dessus reste un texte libre non
     # fiabilisé, jamais recoupé — ne pas s'y fier pour dériver la visibilité du portail
