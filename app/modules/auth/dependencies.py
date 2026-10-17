@@ -188,6 +188,10 @@ def request_action(request: Request) -> str:
         # sans cette exception, le mot-clé « /pdf » ci-dessous la classerait « export ». Chemin
         # exact : l'impression officielle /api/drh/badges/print/pdf reste « export ».
         return "read"
+    if path.rstrip("/") == "/api/drh/job-offers/convocations/resolve":
+        # Lecture d'un QR de convocation : POST pour que l'identifiant du QR voyage dans le corps (jamais dans
+        # l'adresse, donc jamais dans les journaux d'accès), mais aucune écriture hors audit. C'est une consultation.
+        return "read"
     if any(part in path for part in ("/export", "/download", "/pdf")):
         return "export"
     if any(part in path for part in ("/validate", "/valider", "/approve", "/refuse", "/close", "/payer", "/recruit", "/convertir", "/annuler")):

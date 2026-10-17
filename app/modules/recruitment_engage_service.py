@@ -169,10 +169,21 @@ def last_messages(db: Session, application_ids: list[int]) -> dict[int, Message]
 # ── Entretiens ──────────────────────────────────────────────────────────────
 
 def interview_out(row: Interview, application: Application, offer: Offer | None, company: Company | None) -> dict:
+    """Ce que voit le candidat d'un entretien envoyé. Jamais : compte rendu, grille, appréciation, notes internes."""
+    from app.modules import recruitment_convocations as conv
+
+    sent = bool(row.version)
+    state = conv.candidate_state(row)
     return {'id': row.id, 'source': 'interview', 'application_id': application.id, 'position': (offer.title if offer else application.position) or '',
-            'company': company.name if company else None, 'starts_at': iso(row.starts_at), 'timezone': TIMEZONE, 'location': row.location,
+            'company': company.name if company else row.society, 'starts_at': iso(row.starts_at), 'timezone': TIMEZONE, 'location': row.location,
             'contact': row.contact, 'note': row.note, 'status': row.status, 'confirmed_at': iso(row.confirmed_at),
-            'cancelled_at': iso(row.cancelled_at), 'updated_at': iso(row.updated_at or row.created_at), 'past': row.starts_at < now_local()}
+            'cancelled_at': iso(row.cancelled_at), 'updated_at': iso(row.updated_at or row.created_at), 'past': row.starts_at < now_local(),
+            # Convocation avec document et QR : seulement pour un entretien émis depuis leur mise en service.
+            'convocation': {'reference': conv.reference(row), 'version': row.version, 'state': state, 'state_label': conv.STATES[state],
+                            'viewed': (row.viewed_version or 0) >= row.version, 'previous_starts_at': iso(row.previous_starts_at),
+                            'address': row.address, 'map_url': row.map_url, 'contact_details': row.contact_details, 'purpose': row.purpose,
+                            'documents_to_bring': row.documents_to_bring, 'issued_at': iso(row.sent_at),
+                            'can_confirm': row.status == INTERVIEW_PROPOSED and row.starts_at >= now_local()} if sent else None}
 
 
 def legacy_convocation(candidate, interviews: list[Interview]) -> dict | None:
@@ -186,7 +197,7 @@ def legacy_convocation(candidate, interviews: list[Interview]) -> dict | None:
         starts_at = datetime.fromisoformat(f"{str(convocation['date'])[:10]}T{str(convocation.get('heure') or '00:00')[:5]}")
     except ValueError:
         return None
-    if any(row.status != INTERVIEW_CANCELLED and row.starts_at == starts_at for row in interviews):
+    if any(row.status not in (INTERVIEW_CANCELLED, 'draft') and row.starts_at == starts_at for row in interviews):
         return None
     return {'id': None, 'source': 'dossier', 'application_id': None, 'position': candidate.desired_position or '', 'company': None,
             'starts_at': starts_at.isoformat(), 'timezone': TIMEZONE, 'location': str(convocation.get('lieu') or ''), 'contact': None, 'note': None,
