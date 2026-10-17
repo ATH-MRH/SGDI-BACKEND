@@ -22,13 +22,19 @@ Aucun second service, aucune seconde instance FastAPI, aucun second processus de
 - Les comptes ATLAS existants, sans second compte. La session est propre à chaque domaine (jeton
   dans le stockage du navigateur de ce domaine) : on se connecte sur `badge.irongs.com` avec ses
   identifiants ATLAS. Aucun jeton n'est jamais transmis dans une adresse.
-- Connexion sur ce sous-domaine (`app/modules/auth/routes.py`) : module **`drh`** exigé
-  (`SUBDOMAIN_MODULE_ALIASES["badge"] = "drh"`, sous-domaine strict : aucune clé « badge » propre).
-  Comptes historiques sans liste de modules : préfixe `DRH` exigé, comme sur `drh.irongs.com`.
-- Chaque appel d'API reste contrôlé côté serveur : module DRH (chemin `/api/drh`), périmètre
-  société, actions autorisées du compte et droits **Administration › Matrice des droits › DRH ›
-  Badges du personnel** (consultation, émission, révocation, impression, gestion des modèles et
-  paramètres). Changer de domaine ne donne aucun droit.
+- **Module dédié « Studio Badges »** (clé `badge`) : carte « Studio Badges — badge.irongs.com » à
+  l'étape Modules de l'assistant utilisateur. Elle seule ouvre le portail : cocher DRH ne donne
+  plus accès aux badges.
+- Connexion sur ce sous-domaine (`app/modules/auth/routes.py`) : module `badge` exigé. Comptes
+  historiques sans liste de modules : préfixe `DRH` exigé (`DEDICATED_LOGIN_RULES`).
+- API `/api/drh/badges/…` (`API_MODULE_PREFIXES`, `auth/dependencies.py`) : module `badge` exigé,
+  sur tous les domaines ; un compte « Studio Badges » sans module DRH y accède, un compte DRH seul
+  reçoit 403. Le reste de `/api/drh` est inchangé.
+- Droits fins : **Administration › Permissions › Studio Badges** (consultation, émission,
+  révocation, impression, modèles et paramètres). Stockage inchangé (`drh` / `badges`) : aucune
+  migration, les droits déjà attribués restent valables. Le périmètre société et les actions
+  autorisées du compte s'appliquent toujours. Changer de domaine ne donne aucun droit.
+- Après déploiement, cocher « Studio Badges » pour chaque compte qui gère les badges.
 
 ## Tableau de bord
 
@@ -59,16 +65,17 @@ défaut. Aucune autre configuration (pas de variable, pas de service supplément
 
 ## Déploiement en deux phases
 
-1. **Phase A** (cette version) : le portail fonctionne sur `badge.irongs.com` ; la DRH garde sa
+1. **Phase A** (déployée) : le portail fonctionne sur `badge.irongs.com` ; la DRH garde sa
    rubrique Gestion des badges, ce qui laisse un retour immédiat.
-2. **Phase B** (après validation en production) : la rubrique est retirée du menu DRH, le bouton
+2. **Phase B** (avec le module dédié) : la rubrique est retirée du menu DRH, le bouton
    « Créer / gérer le badge » de la fiche employé ouvre le portail, les anciennes routes
    `#/drh/badges/…` de la DRH y redirigent. Les API, données et QR ne bougent pas.
 
 ## Retour arrière
 
-Aucune migration : redéployer l'image précédente suffit. Pour couper seulement le portail, retirer
-le domaine `badge.irongs.com` de Coolify ; la DRH garde le Studio Badges (phase A). Ne jamais
+Aucune migration : redéployer l'image précédente suffit (phase A : la DRH retrouve sa rubrique
+badges et l'accès par le module DRH). Pour couper seulement le portail, retirer le domaine
+`badge.irongs.com` de Coolify. Ne jamais
 utiliser une image antérieure à la révision Alembic en production.
 
 ## Maintenance
@@ -79,7 +86,7 @@ utiliser une image antérieure à la révision Alembic en production.
 
 ## Guide utilisateur
 
-1. Ouvrir `https://badge.irongs.com`, se connecter avec son compte ATLAS, choisir la société.
+1. Ouvrir `https://badge.irongs.com` (module « Studio Badges » requis), se connecter avec son compte ATLAS, choisir la société.
 2. **Créer un badge** : rechercher l'employé (nom, matricule), vérifier les données de sa fiche
    et sa photo, choisir le modèle, ouvrir **Aperçu du badge** (badge seul ou réaliste, taille
    réelle), télécharger une **Épreuve PDF** (SPÉCIMEN, rien n'est émis).

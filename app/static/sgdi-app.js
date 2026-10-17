@@ -4491,7 +4491,8 @@ function opsSupervisorReadOnlyNoticeHTML(){
 function mySoc(){return session?.societe||""}
 // Studio Badges DRH (#/drh/badges/…) : seul écran de badge du Portail DRH. Les autres portails
 // (OPS, Matériel, Administration) n'ont pas accès aux routes DRH et gardent l'écran historique.
-function badgeStudioAvailable(){return session?.transverse==="drh"}
+// Studio Badges : module dédié « badge » — le bouton de la fiche n'apparaît qu'avec cet accès.
+function badgeStudioAvailable(){return session?.transverse==="drh"&&canAccessModuleHostKey("badge")}
 function badgeStudioRoute(a){return "drh/badges/creer"+(a&&a.backendId?"/"+encodeURIComponent(a.backendId):"")}
 /* Gestion des badges : portail dédié https://badge.irongs.com sur les domaines de production
    (*.irongs.com). Ailleurs (poste de développement), l'écran reste servi sur place. Seule une
@@ -19518,7 +19519,7 @@ const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_LOGIN_MODULES=[
-  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"brq",label:"Rapports quotidiens (BRQ)",host:"brq.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
+  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"badge",label:"Studio Badges",host:"badge.irongs.com",description:"Création, impression et suivi des badges du personnel"},{key:"brq",label:"Rapports quotidiens (BRQ)",host:"brq.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
   {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
   {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Gestion du pointage",host:"pointage.irongs.com",description:"Gestion des présences, contrôle, statistiques et administration du pointage"},
   {key:"pointeur",label:"Pointage",host:"pointeur.irongs.com",description:"Pointage terrain : QR, tablette, smartphone, pointage facial et borne"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
@@ -19581,10 +19582,10 @@ function adminAccessIncludes(allowed,key){
 function serverAllowsStructure(key){
   if(!session?.permissionsFromServer)return null;
   if(session.moduleAccessGlobal)return true;
-  const aliases={commercial:["dc"],facturation:["finances","fac"],facmod:["fac"],superviseur:["ops","pointeur"],recrutement:["drh","recrute"],recruteur:["drh","recrute"],gestionnaire_rh:["drh"],contrats:["drh"],paie:["paie","drh"],conges:["conges","drh"],badge:["drh"],pointage:["pointage","pointeur","ops"]};
+  const aliases={commercial:["dc"],facturation:["finances","fac"],facmod:["fac"],superviseur:["ops","pointeur"],recrutement:["drh","recrute"],recruteur:["drh","recrute"],gestionnaire_rh:["drh"],contrats:["drh"],paie:["paie","drh"],conges:["conges","drh"],badge:["badge"],pointage:["pointage","pointeur","ops"]};
   return (aliases[key]||[key]).some(k=>(session.effectiveModules||[]).includes(k));
 }
-function canAccessModuleHostKey(key){if(key==="badge")return canAccessModuleHostKey("drh");const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh")))}
+function canAccessModuleHostKey(key){const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh")))}
 function canAccessStructureKey(key){const serverAllowed=serverAllowsStructure(key);if(serverAllowed!==null)return serverAllowed;if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||adminAccessIncludes(allowed,normalized)||(["paie","conges"].includes(normalized)&&allowed.includes("drh"))}
 function adminAccessBaseRole(role){const r=String(role||"").trim();const u=r.toUpperCase();if(u.startsWith("AG"))return"agent";if(u.startsWith("CAD")||u==="RH")return"ops";if(u.startsWith("SUP"))return"dispatch";if(u.startsWith("ADM")||u==="ADMIN")return"admin";return r.toLowerCase()}
 

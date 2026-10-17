@@ -15,7 +15,7 @@ from tests.test_drh_badges import API, SOC, _employee, clean_badges, drh, fast_p
 ALL_BADGE_RIGHTS = ("read", "create", "validate", "export", "admin")
 
 
-def _account(client, db, *, actions, modules=("drh",), badge_rights=()):
+def _account(client, db, *, actions, modules=("drh", "badge"), badge_rights=()):
     """Compte de recette : actions autorisées restreintes (contrôle générique de l'application)."""
     name = f"RO{uuid.uuid4().int % 10**6:06d}"
     user = User(username=name, full_name=name, role="drh" if "drh" in modules else "commercial", access_level="H2",

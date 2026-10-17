@@ -81,6 +81,15 @@ RIGHTS = {"create": "émettre, renouveler ou remplacer un badge", "validate": "r
 
 
 def _access(user: User) -> None:
+    """Module dédié « badge » (Studio Badges, badge.irongs.com). Le contrôle d'API par module
+    (API_MODULE_PREFIXES) a déjà exigé cette clé ; les comptes historiques sans liste de modules
+    gardent le contrôle des profils RH."""
+    if is_global_administrator(user):
+        return
+    if user.authorized_modules is not None:
+        modules = {str(value or "").strip().lower() for value in user.authorized_modules}
+        if "badge" in modules:
+            return
     _ensure_recruitment_access(user)
 
 
