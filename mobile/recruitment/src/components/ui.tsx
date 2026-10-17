@@ -10,12 +10,12 @@ import { initials } from '../lib/emploi';
 // Palette de la maquette : bleu nuit et doré (accents seulement) sur fond gris très clair, cartes blanches.
 // Les états utilisent des teintes discrètes, toujours accompagnées d'un libellé.
 export const colors = {
-  ink: '#14243B', navy: '#14243B', navyDeep: '#0D1929', muted: '#667085', soft: '#98A2B3', background: '#F5F6F8', surface: '#F2F4F7',
+  ink: '#14243B', navy: Platform.OS === 'web' ? '#235CCC' : '#14243B', navyDeep: Platform.OS === 'web' ? '#194BA9' : '#0D1929', muted: '#667085', soft: '#98A2B3', background: Platform.OS === 'web' ? '#FFFFFF' : '#F5F6F8', surface: '#F2F4F7',
   gold: '#B48C42', goldDeep: '#8C6A2C', goldSoft: '#F7F1E3', white: '#FFFFFF', border: '#E4E7EC', red: '#B42318', redSoft: '#FEF3F2',
   green: '#1B7F4B', greenSoft: '#EAF6EF', blue: '#2F5FB3', blueSoft: '#EAF1FB', field: '#FFFFFF',
 };
 /** Rayons, espacements (grille de 4/8) et tailles de texte communs à tous les écrans. */
-export const radius = { card: 16, control: 12, pill: 999 };
+export const radius = { card: Platform.OS === 'web' ? 12 : 16, control: Platform.OS === 'web' ? 8 : 12, pill: 999 };
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 };
 export const type = { title: 28, heading: 19, body: 15.5, small: 13.5, tiny: 12 };
 // Police de toute l'application : Arial.

@@ -16,7 +16,8 @@ def test_host_and_landing_are_separate_from_staff():
     assert not web.is_employment_host('emploi.irongs.com.attacker.test')
     response = public_client().get('/emploi')
     assert response.status_code == 200
-    assert 'Consulter les offres et postuler' in response.text
+    assert 'Trouver un emploi' in response.text
+    assert 'id="offer-detail"' in response.text
     assert 'offer-search' in response.text and '/espace/identify' in response.text
 
 
