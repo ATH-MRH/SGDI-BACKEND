@@ -1,7 +1,5 @@
 # Importer contractualisation Excel
 
-Branche : `feat/drh-contract-excel-import`.
-
 Le bouton de l’écran « Contrats à établir » ouvre Fichier → Correspondance → Vérification → Résultat. La barre latérale n’est pas modifiée. Le lecteur sécurisé, les limites, les sessions privées et le parseur de dates sont partagés avec l’import candidats ; les sessions `contract-…` sont isolées des sessions de recrutement. Aucune nouvelle table ni dépendance Excel n’est introduite. Les migrations existantes des sessions d’import et du rattachement DC doivent être présentes.
 
 ## Règles
@@ -36,4 +34,4 @@ Backend : `tests/test_drh_contract_excel_import.py`, plus les suites existantes 
 
 Frontend : `tests_frontend/drh-contract-excel-import.test.js` (parcours, échappement, filtre, double clic, Chrome aux quatre étapes à 390/768/1440 px), plus `drh.test.js` et `recrute-import.test.js`.
 
-Aucun merge ni déploiement.
+La dérogation temporaire de préparation a été retirée après traitement du lot autorisé. Aucun reset, accès exceptionnel RH01, alias Client/Site ou assouplissement de champs obligatoires n’est disponible dans le parcours normal. Les snapshots et audits historiques restent conservés. Les sessions et empreintes archivées de préparation sont interdites de création et de nouveau téléversement ; leur rapport reste consultable pendant la rétention normale des sessions.

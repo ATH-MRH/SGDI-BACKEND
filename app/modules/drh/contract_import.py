@@ -18,7 +18,7 @@ from sqlalchemy import select, update
 
 from app.core.audit import append_audit
 from app.core.scope_policy import society_key
-from app.modules.drh import candidate_import as excel, contract_import_oneoff as oneoff, dc_client_sites, service
+from app.modules.drh import candidate_import as excel, contract_import_history as history, dc_client_sites, service
 from app.modules.drh.candidate_import_models import CandidateImportSession
 from app.modules.drh.models import Candidate, Employee
 
@@ -57,11 +57,10 @@ def upload(db, user, file_name, content, society):
         username=user.username, scope_key=scope, scope_label=label, file_name=file_name[:255],
         file_sha256=hashlib.sha256(content).hexdigest(), file_size=len(content), status='uploaded',
         workbook={**workbook, 'society': society}, expires_at=datetime.utcnow() + timedelta(minutes=excel.SESSION_TTL_MINUTES))
+    history.reject_archived_file(db, session.file_sha256)
     db.add(session)
-    oneoff.bind_upload(db, user, session)
     db.commit()
-    return {'session_id': session.public_id, **describe(workbook),
-            'preparation_only_file':bool(oneoff.grant_for(db, session))}
+    return {'session_id': session.public_id, **describe(workbook)}
 
 
 def get_session(db, user, public_id, statuses=None):
@@ -126,7 +125,6 @@ def analyze(db, user, session, config):
     candidates = [c for c in db.scalars(select(Candidate)).all() if society_key(c.society) == society_key(society)]
     options = dc_client_sites.list_client_site_options(db, society)
     linked = {str(value) for value in db.scalars(select(Employee.extra['sourceCandidateId'].as_string())).all() if value is not None}
-    exceptional = oneoff.grant_for(db, session)
     rows = []
     for number, cells in layout['data_rows']:
         raw = {key: cells[int(col)] if int(col) < len(cells) else '' for col, key in mapping.items() if key}
@@ -137,14 +135,7 @@ def analyze(db, user, session, config):
         common = {k: v for k, v in config['common'].items() if k in FIELDS and k not in {'reference','code','phone','name','start_date','end_date'} and v is not None and str(v).strip()}
         merged = {**common, **{k: v for k, v in values.items() if v}} if config['precedence'] == 'excel' else {**values, **common}
         row = {'row': number, 'status': 'PRÊT', 'reason': '', 'candidate_id': None, 'candidate': '', 'values': merged}
-        if exceptional:
-            row.update(oneoff.match_row(cells, candidates, layout['columns']))
-            matches = [c for c in candidates if c.id == row['candidate_id']]
-            if not matches:
-                rows.append(row)
-                continue
-        else:
-            matches = identify(candidates, values)
+        matches = identify(candidates, values)
         if len(matches) != 1:
             row.update(status='À VÉRIFIER' if matches else 'CANDIDAT INTROUVABLE', reason='Plusieurs candidats correspondent' if matches else 'Aucun candidat dans la société active')
         else:
@@ -201,9 +192,7 @@ def analyze(db, user, session, config):
 
 
 def preview(db, user, session, config):
-    config = oneoff.preview_config(db, session, config)
     result = analyze(db, user, session, config)
-    result = oneoff.prepare_preview(db, user, session, config, result)
     session.plan = {'config': config, 'preview': result}
     session.status = 'previewed'
     db.commit()
@@ -212,7 +201,7 @@ def preview(db, user, session, config):
 
 def confirm(db, user, session_id, request):
     session = get_session(db, user, session_id, ('previewed', 'completed', 'prepared'))
-    oneoff.deny_creation(db, session)
+    history.deny_creation(db, session)
     if session.status == 'completed':
         return session.result
     # CAS empêche deux confirmations simultanées, avant la première écriture métier.
