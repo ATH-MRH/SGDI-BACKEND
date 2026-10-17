@@ -34,6 +34,7 @@ def counts(db):
 
 @pytest.fixture
 def batch96(db,monkeypatch):
+    monkeypatch.setattr(oneoff,'MANUAL_REVIEW_EXCLUSIONS',{})
     # IDs courants de test, volontairement sans lien avec 2309–2383.
     candidates=[Candidate(first_name=f'PRENOM{i}',last_name=f'NOM{i}',society=oneoff.SOCIETY,
         status='a_contractualiser',data={'avisDecision':'Favorable'}) for i in range(75)]

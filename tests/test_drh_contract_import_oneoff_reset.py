@@ -287,6 +287,8 @@ def test_explicit_exclusions_only_ignore_old_unlinked_homonyms(client,auth_heade
             new_sid=uploaded.json()['session_id']
             result=preview(client,auth_headers,new_sid,{})
             assert (result['recognized'],result['to_review'],result['not_found'],result['preparable'])==(71,5,20,71)
+            bound=db.get(oneoff.ContractImportOneoffGrant,oneoff.BATCH_KEY);db.refresh(bound)
+            assert len(bound.candidate_ids)==71 and set(bound.candidate_ids).isdisjoint(exclusions)
             assert all(r['status']==oneoff.REVIEW and r['candidate_id'] is None for r in result['rows'][:4])
             saved=client.post(f'{BASE}/{new_sid}/prepare',headers=auth_headers)
             assert saved.status_code==200,saved.text

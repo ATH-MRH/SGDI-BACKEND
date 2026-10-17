@@ -63,7 +63,10 @@ def _excluded_preexisting_homonym(db, grant, employee, candidates, ids):
     """Seuls les quatre employés anciens explicitement écartés, jamais une création du lot."""
     candidate = next((c for c in candidates if c.id in ids
         and oneoff.MANUAL_REVIEW_EXCLUSIONS.get(c.id) == employee.id), None)
-    if (candidate is None or employee.created_at is None or employee.created_at >= grant.authorized_at
+    if candidate is None:
+        return False
+    db.refresh(employee, with_for_update=True)
+    if (employee.created_at is None or employee.created_at >= grant.authorized_at
             or society_key(candidate.society) != society_key(oneoff.SOCIETY)
             or society_key(employee.society) != society_key(oneoff.SOCIETY)
             or oneoff.comparison_key(f'{candidate.last_name} {candidate.first_name}')

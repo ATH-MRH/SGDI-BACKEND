@@ -271,6 +271,9 @@ def prepare_preview(db, user, session, config, normal):
     try:
         if not previous:
             bound.candidate_ids = sorted({r['candidate_id'] for r in rows if r.get('match_status') == MATCH})
+        else:
+            # Réduction explicite du périmètre, jamais de nouveau candidat autorisé.
+            bound.candidate_ids = sorted(set(bound.candidate_ids) - set(MANUAL_REVIEW_EXCLUSIONS))
         bound.preparation = result
         # Une entrée par candidat évite la troncature du journal d'audit à 4 000 caractères.
         for row in rows:
