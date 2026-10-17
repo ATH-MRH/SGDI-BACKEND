@@ -93,7 +93,7 @@ def _row(device: Any, sites: dict[int, str], users: list[dict[str, Any]], now: d
         availability = {"ONLINE": "ONLINE", "SILENT": "UNKNOWN"}.get(connection, "OFFLINE")
         device_type = device.terminal_type
         extra = {}
-    return {**row, **extra, "type": device_type, "type_label": TYPE_LABELS.get(device_type, device_type),
+    return {**row, **extra, "location": device.location, "type": device_type, "type_label": TYPE_LABELS.get(device_type, device_type),
             "admin_state": admin, "admin_state_label": ADMIN_STATES[admin],
             "pairing_state": pairing, "pairing_label": PAIRING[pairing],
             "availability": availability, "availability_label": AVAILABILITY[availability],

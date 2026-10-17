@@ -16,6 +16,7 @@ let adminEquipFilter={tab:"",society:"",site:"",type:"",state:"",user:""};
 const adminEquipSelected=new Set();
 const ADMIN_FACIAL_TYPES=[["TABLET_ANDROID","Tablette Android"],["SMARTPHONE_ANDROID","Smartphone Android"],["IPAD","iPad"],["IPHONE","iPhone"]];
 const ADMIN_FACIAL_PILLS={ACTIVE:"pill-green",INACTIVE:"pill-gray",OFFLINE:"pill-amber",UNKNOWN:"pill-gray",REVOKED:"pill-red"};
+const ADMIN_EQUIP_MODAL_STYLE=`<style>#modal-host .modal:has(.admin-equip-modal){max-width:min(760px,calc(100vw - 16px))!important}#modal-host #admin-equip-confirm:disabled{background:#e2e8f0!important;border-color:#cbd5e1!important;color:#64748b!important;opacity:1!important;cursor:not-allowed!important;box-shadow:none!important}</style>`;
 const ADMIN_EQUIP_AVAIL={ONLINE:["En ligne","pill-green"],OFFLINE:["Hors ligne","pill-amber"],UNKNOWN:["Inconnue","pill-gray"]};
 
 function adminFacialWhen(value){
@@ -68,7 +69,7 @@ function adminEquipBulkHTML(){
     <button class="btn btn-secondary text-xs" id="admin-equip-unassign" ${n?"":"disabled"} onclick="openAdminEquipAssign('revoke')">Retirer des utilisateurs</button></div>`;
 }
 function adminEquipSelect(id,label,field,options){
-  return `<label class="text-xs font-bold flex flex-col gap-1 min-w-[150px]">${label}<select class="select" id="${id}" onchange="adminEquipSetFilter('${field}',this.value)"><option value="">Tous</option>${options.map(([v,l])=>`<option value="${escapeHTML(v)}" ${String(adminEquipFilter[field])===String(v)?"selected":""}>${escapeHTML(l)}</option>`).join("")}</select></label>`;
+  return `<label class="text-xs font-bold flex flex-col gap-1" style="min-width:150px">${label}<select class="select" id="${id}" onchange="adminEquipSetFilter('${field}',this.value)"><option value="">Tous</option>${options.map(([v,l])=>`<option value="${escapeHTML(v)}" ${String(adminEquipFilter[field])===String(v)?"selected":""}>${escapeHTML(l)}</option>`).join("")}</select></label>`;
 }
 
 function adminFacialHTML(){
@@ -79,32 +80,37 @@ function adminFacialHTML(){
     const terminal=item.kind==="TERMINAL",revoked=item.status==="REVOKED";
     const pairing=terminal?(item.paired?`Appairé le ${escapeHTML(adminFacialWhen(item.paired_at))}`:(item.pairing_pending?"Code d'association en attente":"Non appairé")):`Enregistrée le ${escapeHTML(adminFacialWhen(item.paired_at))}`;
     const avail=ADMIN_EQUIP_AVAIL[item.availability]||["—","pill-gray"];
-    const actions=[
+    const main=[
       `<button class="btn btn-ghost text-xs" data-equip-sheet="${escapeHTML(item.key)}" onclick="openAdminEquipSheet('${escapeHTML(item.key)}')">📄 Fiche</button>`,
       revoked?"":`<button class="btn btn-ghost text-xs" data-facial-users="${escapeHTML(item.key)}" onclick="openAdminFacialUsers('${escapeHTML(item.key)}')">👥 Utilisateurs autorisés</button>`,
+    ].join("");
+    const more=[
       terminal&&!revoked?`<button class="btn btn-ghost text-xs" data-equip-edit="${escapeHTML(item.key)}" onclick="openAdminEquipEdit('${escapeHTML(item.key)}')">✏ Modifier</button>`:"",
       terminal&&!revoked?`<button class="btn btn-ghost text-xs" data-facial-pair="${escapeHTML(item.key)}" onclick="adminFacialPair('${escapeHTML(item.key)}')">${item.paired?"🔁 Remplacer le matériel":"🔗 Appairer"}</button>`:"",
       terminal&&!revoked&&item.paired?`<button class="btn btn-ghost text-xs" data-facial-toggle="${escapeHTML(item.key)}" onclick="adminFacialToggle('${escapeHTML(item.key)}')">${item.facial_attendance_enabled?"Couper le pointage facial":"Autoriser le pointage facial"}</button>`:"",
       terminal&&!revoked?`<button class="btn btn-ghost text-xs text-red-600" data-facial-revoke="${escapeHTML(item.key)}" onclick="adminFacialRevoke('${escapeHTML(item.key)}')">⛔ Révoquer</button>`:"",
       terminal?`<button class="btn btn-ghost text-xs text-red-600" data-facial-delete="${escapeHTML(item.key)}" onclick="adminFacialDelete('${escapeHTML(item.key)}')">🗑 Supprimer</button>`:"",
     ].join("");
+    const actions=main+(more?`<details class="admin-equip-more"><summary class="btn btn-ghost text-xs" style="list-style:none">⋯ Plus</summary><div class="flex flex-col gap-1" style="margin-top:4px">${more}</div></details>`:"");
     return `<tr class="border-t" data-facial-row="${escapeHTML(item.key)}">
       <td class="p-3"><input type="checkbox" class="admin-equip-pick" value="${escapeHTML(item.key)}" aria-label="Sélectionner ${escapeHTML(item.name||"")}" ${adminEquipSelected.has(item.key)?"checked":""} ${revoked?"disabled":""} onchange="adminEquipToggle(this.value,this.checked)"></td>
-      <td class="p-3"><div class="font-black">${escapeHTML(item.name||"")}</div><div class="text-xs text-slate-500">${escapeHTML(item.key)} · ${escapeHTML(item.type_label||item.hardware||"")}</div><div class="text-xs text-slate-500">${escapeHTML(item.equipment||"")}</div></td>
-      <td class="p-3">${escapeHTML(item.society||"")}</td>
-      <td class="p-3">${escapeHTML(item.site||"")}</td>
-      <td class="p-3"><span class="pill ${ADMIN_FACIAL_PILLS[item.status]||"pill-gray"}">${escapeHTML(item.status_label||item.status||"")}</span>${revoked&&item.revoked_reason?`<div class="text-xs text-slate-500">${escapeHTML(item.revoked_reason)}</div>`:""}${terminal&&!revoked&&item.paired&&item.connection&&item.connection!=="ONLINE"?`<div class="text-xs text-slate-500">${escapeHTML(item.connection_label||"")}${item.connection==="SILENT"?" — borne à recharger pour le suivi de connexion":""}</div>`:""}</td>
-      <td class="p-3 text-xs">${pairing}</td>
-      <td class="p-3 text-xs"><span class="pill ${avail[1]}">${escapeHTML(avail[0])}</span><div class="text-slate-500">${escapeHTML(adminFacialWhen(item.last_communication))}</div></td>
-      <td class="p-3 text-xs"><span class="pill ${item.facial_attendance_enabled?"pill-green":"pill-gray"}">${item.facial_attendance_enabled?"Facial autorisé":"Facial coupé"}</span><div class="text-slate-500">${item.remote_activation?"Activée depuis le poste Pointeur":"Autonome — surveillance seulement"}</div></td>
-      <td class="p-3 text-xs"><span class="pill pill-blue">${users.length} compte${users.length>1?"s":""}</span><div class="text-slate-500">${users.map(u=>escapeHTML(u.username)).join(", ")}</div></td>
-      <td class="p-3"><div class="flex flex-wrap gap-1">${actions}</div></td></tr>`;
+      <td class="p-3" data-label="Équipement"><div class="font-black">${escapeHTML(item.name||"")}</div><div class="text-xs text-slate-500">${escapeHTML(item.key)} · ${escapeHTML(item.type_label||item.hardware||"")}</div><div class="text-xs text-slate-500">${escapeHTML(item.equipment||"")}</div></td>
+      <td class="p-3" data-label="Société">${escapeHTML(item.society||"")}</td>
+      <td class="p-3" data-label="Site">${escapeHTML(item.site||"")}</td>
+      <td class="p-3" data-label="État"><span class="pill ${ADMIN_FACIAL_PILLS[item.status]||"pill-gray"}">${escapeHTML(item.status_label||item.status||"")}</span>${revoked&&item.revoked_reason?`<div class="text-xs text-slate-500">${escapeHTML(item.revoked_reason)}</div>`:""}${terminal&&!revoked&&item.paired&&item.connection&&item.connection!=="ONLINE"?`<div class="text-xs text-slate-500">${escapeHTML(item.connection_label||"")}${item.connection==="SILENT"?" — borne à recharger pour le suivi de connexion":""}</div>`:""}</td>
+      <td class="p-3 text-xs" data-label="Appairage">${pairing}</td>
+      <td class="p-3 text-xs" data-label="Disponibilité"><span class="pill ${avail[1]}">${escapeHTML(avail[0])}</span><div class="text-slate-500">${escapeHTML(adminFacialWhen(item.last_communication))}</div></td>
+      <td class="p-3 text-xs" data-label="Reconnaissance faciale"><span class="pill ${item.facial_attendance_enabled?"pill-green":"pill-gray"}">${item.facial_attendance_enabled?"Facial autorisé":"Facial coupé"}</span><div class="text-slate-500">${item.remote_activation?"Activée depuis le poste Pointeur":"Autonome — surveillance seulement"}</div></td>
+      <td class="p-3 text-xs" data-label="Utilisateurs affectés"><span class="pill pill-blue">${users.length} compte${users.length>1?"s":""}</span><div class="text-slate-500">${users.map(u=>escapeHTML(u.username)).join(", ")}</div></td>
+      <td class="p-3" data-label="Actions"><div class="flex flex-col gap-1" style="min-width:170px">${actions}</div></td></tr>`;
   }).join("");
   const categories=(s.categories||[]).map(c=>`<li><span class="pill ${c.supported?"pill-green":"pill-gray"}">${c.supported?"Pris en charge":"Non pris en charge"}</span> ${escapeHTML(c.label)}${c.supported?(c.remote_activation?" — activée depuis le poste Pointeur":" — fonctionne seule, le Pointeur la surveille"):""}</li>`).join("");
   const card=(label,value,tone)=>`<div class="rounded-xl border p-3 min-w-[120px] ${tone||""}"><div class="text-xs text-slate-500 font-bold">${label}</div><div class="text-2xl font-black">${Number(value||0)}</div></div>`;
   const tab=(key,label,count)=>`<button class="btn ${adminEquipFilter.tab===key?"btn-primary":"btn-secondary"} text-xs" data-equip-tab="${key}" onclick="adminEquipSetFilter('tab','${key}')">${label} (${Number(count||0)})</button>`;
   const camerasHref=/\.irongs\.com$/.test(location.hostname)?"https://pointage.irongs.com/#/cameras":"/static/pointage/index.html#/cameras";
-  return `<div class="card p-5" id="admin-facial-terminals">
+  // Téléphone : une carte par équipement (libellé avant chaque valeur), jamais de défilement horizontal.
+  const responsive=`<style>@media(max-width:760px){#admin-facial-terminals table thead{display:none}#admin-facial-terminals table,#admin-facial-terminals tbody,#admin-facial-terminals tr[data-facial-row],#admin-facial-terminals tr[data-facial-row] td{display:block;width:100%}#admin-facial-terminals tr[data-facial-row]{border:1px solid #e2e8f0;border-radius:12px;margin:0 0 12px;padding:6px 0}#admin-facial-terminals tr[data-facial-row] td{padding:4px 12px!important;font-size:13px!important;box-sizing:border-box}#admin-facial-terminals td[data-label]::before{content:attr(data-label);display:block;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}#admin-facial-terminals td[data-label="Actions"] > div{flex-direction:row;flex-wrap:wrap;min-width:0!important}}</style>`;
+  return `<div class="card p-5" id="admin-facial-terminals">${responsive}
     <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
       <div><h2 class="text-xl font-black">Gestion des équipements</h2>
         <p class="text-sm text-slate-600">Terminaux de pointage, tablettes, smartphones et caméras IP : enregistrement, appairage (une seule fois, à l'installation), affectation aux comptes Pointeur, révocation. Une affectation n'active jamais la reconnaissance faciale et n'accorde aucun droit supplémentaire.</p></div>
@@ -113,10 +119,6 @@ function adminFacialHTML(){
     <div class="flex flex-wrap gap-2 mb-3" id="admin-equip-dashboard">
       ${card("Équipements",b.total)}${card("Terminaux",b.terminals)}${card("Caméras",b.cameras)}${card("Actifs",b.admin_active)}${card("Inactifs",b.admin_inactive)}${card("Révoqués",b.admin_revoked)}
       ${card("En ligne",b.availability_online)}${card("Hors ligne",b.availability_offline)}${card("Non affectés",b.unassigned)}${card("Facial autorisé",b.facial_enabled)}
-    </div>
-    <div class="flex flex-wrap gap-2 mb-3" id="admin-facial-kpi">
-      <span class="pill pill-green">${Number(b.admin_active||0)} actif(s)</span><span class="pill pill-gray">${Number(b.admin_inactive||0)} inactif(s)</span>
-      <span class="pill pill-amber">${Number(b.availability_offline||0)} hors ligne</span><span class="pill pill-gray">${Number(b.availability_unknown||0)} sans signal</span><span class="pill pill-red">${Number(b.admin_revoked||0)} révoqué(s)</span>
     </div>
     <div class="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Type d'équipement">${tab("","Tous",b.total)}${tab("TERMINAL","Terminaux",b.terminals)}${tab("CAMERA","Caméras",b.cameras)}</div>
     <div class="flex flex-wrap gap-3 mb-3" id="admin-equip-filters">
@@ -218,7 +220,7 @@ async function openAdminFacialUsers(key){
   const boxes=eligible.map(u=>`<label class="flex items-center gap-2 py-1"><input type="checkbox" class="admin-facial-user" value="${Number(u.id)}" ${granted.has(u.id)?"checked":""}><span><b>${escapeHTML(u.username)}</b> <span class="text-slate-500">${escapeHTML(u.full_name||"")}</span></span></label>`).join("");
   openModal(`<h3 class="text-lg font-black mb-1">Utilisateurs autorisés — ${escapeHTML(item.name)}</h3>
     <p class="text-sm text-slate-600 mb-3">${escapeHTML(item.site||"")} · ${escapeHTML(item.society||"")}. Seuls les comptes Pointage dont le périmètre couvre ce site sont proposés.</p>
-    <div class="max-h-72 overflow-y-auto mb-4" id="admin-facial-users">${boxes||`<p class="text-slate-500">Aucun compte Pointage n'a ce site dans son périmètre.</p>`}</div>
+    <div class="overflow-y-auto mb-4" style="max-height:18rem" id="admin-facial-users">${boxes||`<p class="text-slate-500">Aucun compte Pointage n'a ce site dans son périmètre.</p>`}</div>
     <div class="flex justify-end gap-2"><button class="btn btn-secondary" onclick="closeModal()">Annuler</button><button class="btn btn-primary" id="admin-facial-users-save" onclick="adminFacialSaveUsers('${escapeHTML(key)}')">Enregistrer</button></div>`);
 }
 async function adminFacialSaveUsers(key){
@@ -235,14 +237,14 @@ async function openAdminEquipSheet(key){
   try{d=await adminFacialCall("GET","/equipment/"+encodeURIComponent(key))}catch(e){toast(e.message,"error");return}
   const line=(label,value)=>`<div class="flex justify-between gap-3 py-1 border-b"><span class="text-slate-500">${label}</span><b class="text-right">${value}</b></div>`;
   const history=(d.history||[]).map(h=>`<li class="py-1 border-b"><b>${escapeHTML(adminFacialWhen(h.at))}</b> · ${escapeHTML(h.label||h.action)}${h.by?" · par "+escapeHTML(h.by):""}${h.result&&h.result!=="success"?` · <span class="text-red-600">${escapeHTML(h.result)}</span>`:""}${(h.added||[]).length?`<div class="text-xs text-green-700">+ ${h.added.map(escapeHTML).join(", ")}</div>`:""}${(h.removed||[]).length?`<div class="text-xs text-red-700">− ${h.removed.map(escapeHTML).join(", ")}</div>`:""}${h.reason?`<div class="text-xs text-slate-500">${escapeHTML(h.reason)}</div>`:""}${(h.changes||[]).length?`<div class="text-xs text-slate-500">Champs : ${h.changes.map(escapeHTML).join(", ")}</div>`:""}</li>`).join("");
-  openModal(`<div id="admin-equip-sheet"><h3 class="text-lg font-black mb-1">${escapeHTML(d.name||"")}</h3>
+  openModal(ADMIN_EQUIP_MODAL_STYLE+`<div id="admin-equip-sheet" class="admin-equip-modal"><h3 class="text-lg font-black mb-1">${escapeHTML(d.name||"")}</h3>
     <p class="text-sm text-slate-600 mb-3">${escapeHTML(d.key)} · ${escapeHTML(d.type_label||"")}</p>
-    <div class="text-sm mb-3">${line("Société",escapeHTML(d.society||"—"))}${line("Site",escapeHTML(d.site||"—"))}${line("Emplacement",escapeHTML(d.equipment||"—"))}
+    <div class="text-sm mb-3">${line("Société",escapeHTML(d.society||"—"))}${line("Site",escapeHTML(d.site||"—"))}${line("Emplacement",escapeHTML(d.location||"—"))}${d.kind==="TERMINAL"&&d.equipment&&d.equipment!==d.location?line("Appareil associé",escapeHTML(d.equipment)):""}
       ${line("État administratif",escapeHTML(d.admin_state_label||""))}${line("Appairage",escapeHTML(d.pairing_label||""))}${line("Disponibilité",escapeHTML(d.availability_label||""))}
       ${line("Dernière communication",escapeHTML(adminFacialWhen(d.last_communication)))}${line("Reconnaissance faciale",d.facial_authorization?"Autorisée sur cet équipement":"Non autorisée")}
       ${line("Capacités",escapeHTML((d.capabilities||[]).map(c=>ADMIN_EQUIP_CAPS[c]||c).join(", ")||"—"))}
       ${line("Utilisateurs affectés",escapeHTML((d.users||[]).map(u=>u.username).join(", ")||"Aucun"))}</div>
-    <div class="font-black mb-1">Historique</div><ul class="text-sm max-h-64 overflow-y-auto mb-4" id="admin-equip-history">${history||'<li class="text-slate-500">Aucun événement enregistré.</li>'}</ul>
+    <div class="font-black mb-1">Historique</div><ul class="text-sm overflow-y-auto mb-4" style="max-height:16rem" id="admin-equip-history">${history||'<li class="text-slate-500">Aucun événement enregistré.</li>'}</ul>
     <div class="flex justify-end"><button class="btn btn-primary" onclick="closeModal()">Fermer</button></div></div>`);
 }
 
@@ -271,11 +273,11 @@ async function openAdminEquipAssign(action){
   if(action==="revoke"){const assigned=new Set(keys.flatMap(k=>(adminFacialDevice(k)?.users||[]).map(u=>u.id)));accounts=accounts.filter(a=>assigned.has(a.id))}
   const names=keys.map(k=>adminFacialDevice(k)?.name||k);
   const boxes=accounts.map(a=>`<label class="flex items-center gap-2 py-1 admin-equip-account" data-search="${escapeHTML((a.username+" "+(a.full_name||"")).toLowerCase())}"><input type="checkbox" class="admin-equip-user" value="${Number(a.id)}"><span><b>${escapeHTML(a.username)}</b> <span class="text-slate-500">${escapeHTML(a.full_name||"")}</span>${(a.societies||[]).length?` <span class="text-xs text-slate-500">· ${a.societies.map(escapeHTML).join(", ")}</span>`:""}</span></label>`).join("");
-  openModal(`<div id="admin-equip-assign-modal" data-action="${action}"><h3 class="text-lg font-black mb-1">${action==="grant"?"Affecter":"Retirer"} ${keys.length} équipement${keys.length>1?"s":""}</h3>
+  openModal(ADMIN_EQUIP_MODAL_STYLE+`<div id="admin-equip-assign-modal" class="admin-equip-modal" data-action="${action}"><h3 class="text-lg font-black mb-1">${action==="grant"?"Affecter":"Retirer"} ${keys.length} équipement${keys.length>1?"s":""}</h3>
     <p class="text-sm text-slate-600 mb-2">${names.map(escapeHTML).join(", ")}</p>
     <p class="text-xs text-slate-500 mb-2">${action==="grant"?"Seuls les comptes actifs du module Pointeur sont proposés. Le serveur vérifie société et site de chaque compte pour chaque équipement ; l'affectation n'ajoute aucun droit et n'active pas la reconnaissance faciale.":"Comptes actuellement affectés à au moins un des équipements choisis."}</p>
     <input class="input mb-2" id="admin-equip-search" placeholder="Rechercher un compte" oninput="adminEquipFilterAccounts(this.value)">
-    <div class="max-h-60 overflow-y-auto mb-3" id="admin-equip-accounts">${boxes||'<p class="text-slate-500">Aucun compte disponible.</p>'}</div>
+    <div class="overflow-y-auto mb-3" style="max-height:15rem" id="admin-equip-accounts">${boxes||'<p class="text-slate-500">Aucun compte disponible.</p>'}</div>
     <div id="admin-equip-check" class="text-sm mb-3"></div>
     <div class="flex justify-end gap-2"><button class="btn btn-secondary" onclick="closeModal()">Annuler</button><button class="btn btn-secondary" id="admin-equip-verify" onclick="adminEquipCheck('${action}')">Vérifier</button><button class="btn btn-primary" id="admin-equip-confirm" disabled onclick="adminEquipConfirm('${action}')">Confirmer</button></div></div>`);
 }
@@ -287,7 +289,7 @@ async function adminEquipCheck(action){
   let out;
   try{out=await adminFacialCall("POST","/equipment/assignments/check",{keys:[...adminEquipSelected],user_ids,action})}catch(e){toast(e.message,"error");return}
   const lines=(out.pairs||[]).map(p=>`<li class="${p.allowed?(p.change?"text-green-700":"text-slate-500"):"text-red-700"}">${p.allowed?(p.change?"✓":"="):"✗"} ${escapeHTML(p.device)} → ${escapeHTML(p.username)} : ${escapeHTML(p.message)}</li>`).join("");
-  if(box)box.innerHTML=`<div class="font-black">${out.allowed?`${Number(out.changes||0)} modification(s) prête(s)`:"Affectation impossible : corrigez les refus"}</div><ul class="max-h-40 overflow-y-auto">${lines}</ul>`;
+  if(box)box.innerHTML=`<div class="font-black">${out.allowed?`${Number(out.changes||0)} modification(s) prête(s)`:"Affectation impossible : corrigez les refus"}</div><ul class="overflow-y-auto" style="max-height:10rem">${lines}</ul>`;
   if(confirmBtn)confirmBtn.disabled=!out.allowed||!out.changes;
 }
 async function adminEquipConfirm(action){
@@ -298,7 +300,7 @@ async function adminEquipConfirm(action){
   }catch(e){
     const box=document.getElementById("admin-equip-check");
     if(box&&e.refused&&e.refused.length)box.innerHTML=`<div class="font-black text-red-700">${escapeHTML(e.message)}</div><ul>${e.refused.map(r=>`<li class="text-red-700">✗ ${escapeHTML(r.device)} → ${escapeHTML(r.username)} : ${escapeHTML(r.message)}</li>`).join("")}</ul>`;
-    document.getElementById("admin-equip-confirm")?.setAttribute("disabled","");
+    const confirmBtn=document.getElementById("admin-equip-confirm");if(confirmBtn)confirmBtn.disabled=true;
     toast(e.message,"error");
   }
 }

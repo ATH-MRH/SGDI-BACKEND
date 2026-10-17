@@ -94,7 +94,7 @@ test('liste : identifiant, nom, matériel, société, site, équipement, état, 
   assert.deepEqual(actions('cam:9'), ['Fiche', 'Utilisateurs autorisés']);
   assert.deepEqual(actions('trm:6'), ['Fiche', 'Supprimer'], 'révoqué : fiche et suppression seulement');
   assert.equal(c.view.querySelector('[data-facial-row="trm:6"] .admin-equip-pick').disabled, true, 'un révoqué ne s\'affecte pas');
-  assert.match(c.text(c.view.querySelector('#admin-facial-kpi')), /2 actif\(s\).*1 révoqué\(s\)/);
+  assert.match(c.text(c.view.querySelector('#admin-equip-dashboard')), /Équipements 6 .*Actifs 2 .*Révoqués 1/);
   assert.match(c.text(c.view), /Non pris en charge Terminal réseau autonome.*Non pris en charge Caméra USB ou intégrée du poste Pointeur/);
   // Jamais de secret ni d'adresse d'équipement à l'écran.
   assert.doesNotMatch(c.view.innerHTML, /public_key|fingerprint|password|rtsp|10\.0\.0/i);
