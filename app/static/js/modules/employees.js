@@ -386,13 +386,28 @@ function effectifTableHeadersHTML(options){
   return `${effectifSortHeaderHTML("employe","Employé")}${effectifSortHeaderHTML("code","Code")}${effectifSortHeaderHTML("societe","Société")}${effectifSortHeaderHTML("poste","Poste")}${effectifSortHeaderHTML("site","Site")}${effectifSortHeaderHTML("recrut","Recrut.")}${opsHeaders}${effectifSortHeaderHTML("statut","Statut")}<th>Action</th>${opt.actionHeader||""}`;
 }
 
+// Alerte de présentation uniquement : même échéance que la fiche et le tableau Contrats.
+function employeeExpiredContractAlert(a,baseDate){
+  const asOf=baseDate||today();
+  if(!a||employeeStatusKey(a.statut||a.status)!=="actif"||employeeIsFormer(a,asOf)||a.blacklist||a.blacklistContractBlocked||a.contractBlocked)return null;
+  // Une date de recrutement seule ne prouve pas un contrat : ne pas utiliser les
+  // 12 mois par défaut du formulaire pour fabriquer une échéance absente.
+  if(!a.dateFinContrat&&!a.dureeContrat&&!employeeLatestContractEndDate(a))return null;
+  const remaining=employeePositionContractDaysLeft(a,asOf);
+  if(!Number.isFinite(remaining)||remaining>=0)return null;
+  const days=-remaining;
+  return {days,message:`Contrat expiré depuis ${days} ${days===1?"jour":"jours"}`};
+}
+
 function employeeListRowHTML(a,filter){
+  const contractIndicator=isDrhModuleContext()&&filter==="actifs";
+  const contractAlert=contractIndicator?employeeExpiredContractAlert(a):null;
   const aff=agentLiveAffectation(a);
   const deleteId=String(a.backendId||a.id||"");
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdminFichePositionContext()?`<td class="text-center effectif-select-cell"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   const opsCells=isOpsEffectifContext()?`<td data-label="Naissance" class="text-xs">${formatDate(a.dateNaissance)}</td><td data-label="Age" class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td data-label="Situation" class="text-xs">${safe(a.situation)}</td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td data-label="Employé" class="effectif-agent-cell"><div class="flex items-center gap-2"><div class="avatar">${employeeAvatarHTML(a)}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td data-label="Code" class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td data-label="Société" class="text-xs">${safe(a.societe)}</td><td data-label="Poste" class="text-xs">${safe(aff?.poste||a.affectationCourante?.poste||a.fonction||a.position)}</td><td data-label="Site" class="text-xs">${safe(aff?.siteName)}</td><td data-label="Recrutement" class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td data-label="Statut" class="effectif-status-cell">${employeeStatusPillHTML(a)}</td><td data-label="Action" class="effectif-open-cell"><div class="effectif-row-actions"><a class="effectif-open-btn" href="#/agents/${employeeRouteId(a)}">Ouvrir <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?(isOpsEffectifContext()?`<td data-label="Affectation" class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="sessionStorage.setItem('opsMovementAgentId','${escapeHTML(a.id)}');navigate('ops/mouvements')">Affecter</button></td>`:`<td data-label="Affectation" class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`):""}</tr>`;
+  return `<tr${contractAlert?' class="effectif-contract-expired"':""} data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td data-label="Employé" class="effectif-agent-cell"><div class="flex items-center gap-2"><div class="avatar">${employeeAvatarHTML(a)}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td data-label="Code" class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td data-label="Société" class="text-xs">${safe(a.societe)}</td><td data-label="Poste" class="text-xs">${safe(aff?.poste||a.affectationCourante?.poste||a.fonction||a.position)}</td><td data-label="Site" class="text-xs">${safe(aff?.siteName)}</td><td data-label="Recrutement" class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td data-label="Statut" class="effectif-status-cell">${employeeStatusPillHTML(a,{contractIndicator,contractAlert})}</td><td data-label="Action" class="effectif-open-cell"><div class="effectif-row-actions"><a class="effectif-open-btn" href="#/agents/${employeeRouteId(a)}">Ouvrir <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?(isOpsEffectifContext()?`<td data-label="Affectation" class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="sessionStorage.setItem('opsMovementAgentId','${escapeHTML(a.id)}');navigate('ops/mouvements')">Affecter</button></td>`:`<td data-label="Affectation" class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`):""}</tr>`;
 }
 
 let opsEffectifPageRequest=0;
