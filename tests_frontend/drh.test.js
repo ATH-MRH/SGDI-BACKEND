@@ -593,6 +593,93 @@ test('contract client / site field loads from DC, handles empty and error states
   app.dom.window.close();
 });
 
+test('candidate contract form: six blocks shown together, required fields, summary and draft', async () => {
+  const app=loadSgdiApp(['renderContractualisation','goToNewContractStep','submitCandidateContractWizard','saveCandidateContractDraft','updateNewContractSummary','updateNewContractClientFromSelect']);
+  const t=app.T(),doc=app.window.document,view=doc.getElementById('view');
+  t.setSession({username:'RH01',transverse:'drh',societe:'A'});
+  const candidate={id:'c1',backendId:147,nom:'ZOUAOUI',prenom:'CHAKIR',avisDecision:'Favorable',posteSouhaite:'MAGASINIER',societe:'A',statut:'a_contractualiser',numeroCnas:'CNAS-1'};
+  t.setDb({candidats:[candidate],agents:[],sites:[],clients:[]});
+  app.window.eval('window.draftSaves=[];persistCandidateToPostgres=async function(c,options){window.draftSaves.push(JSON.parse(JSON.stringify(c)));return c};');
+  const updates=app.window.draftSaves;
+  app.window.SGDI={rh:{
+    contractDcClientSites:async()=>({items:[{dc_client_id:7,dc_site_id:21,client_name:'DHL',site_name:'HUB',label:'DHL — HUB',address:'Zone A',wilaya:'Alger',commune:'Rouiba'}]}),
+    contractTemplates:async()=>[],
+  }};
+  // Attend la fin des chargements du formulaire (clients / sites DC, modèles), quelle que soit la charge.
+  const open=async()=>{
+    t.renderContractualisation(view,'c1');
+    for(let i=0;i<200;i++){
+      await new Promise(r=>setTimeout(r,10));
+      const form=doc.getElementById('employee-new-contract-form');
+      if(form&&form.querySelector('[name="dcClientSite"]')?.dataset.state==='ready'&&form.querySelector('[name="contratPersonnelId"]')?.dataset.loaded==='1')return form;
+    }
+    throw new Error('Formulaire de contrat non chargé');
+  };
+  const field=(form,name)=>form.querySelector(`[name="${name}"]`);
+  const visible=form=>Array.from(form.querySelectorAll('[data-nc-step]')).filter(x=>!x.hidden).map(x=>x.dataset.ncStep);
+  let form=await open();
+  // Formulaire verrouillé (mode consultation) : aucun brouillon vide n'écrase l'existant.
+  assert.equal(form.querySelector('[name="iban"]').disabled,true);
+  await t.saveCandidateContractDraft(form,'c1');
+  assert.equal(updates.length,0);
+  t.setViewMode(false);
+  form=await open();
+  assert.equal(form.querySelector('[name="iban"]').disabled,false);
+
+  // Structure : six blocs affichés ensemble, fil d'Ariane et titre ; rien hors de la zone de contenu.
+  assert.equal(view.querySelector('h1').textContent,'Nouveau contrat — ZOUAOUI CHAKIR');
+  assert.equal(view.querySelector('.nc2-crumbs a').getAttribute('href'),'#/contrats/a_contractualiser');
+  assert.deepEqual(Array.from(form.querySelectorAll('[data-nc-step] h2'),h=>h.textContent),['Candidat & poste','Type & durée','Lieu d\'affectation','Rémunération & paiement','Modèle de contrat','Informations complémentaires']);
+  assert.deepEqual(visible(form),['1','2','3','4','5','6']);
+  // Le dernier bloc, facultatif, est replié tant qu'il est vide.
+  assert.deepEqual([form.querySelector('[data-nc-step="6"]').tagName,form.querySelector('[data-nc-step="6"]').open],['DETAILS',false]);
+  assert.equal(view.querySelector('.sidebar,#sidebar-nav'),null);
+  // Mêmes champs qu'avant ; N° CNAS et salaire en lettres restent transmis sans être affichés.
+  for(const name of ['agentId','poste','dcClientSite','client','dcClientId','dcSiteId','numeroPieceIdentite','nin','candidateWilaya','contactUrgenceLien','contactUrgenceNom','contactUrgenceTel','typeContrat','dateDecision','dateDebut','dureeContrat','dateFin','periodeEssai','wilaya','commune','adresseSite','salaireNet','modePaiement','banque','iban','contratPersonnelId','missions','observation','reference','numeroCnas','salaireLettres'])assert.ok(field(form,name),name);
+  assert.equal(field(form,'numeroCnas').type,'hidden');assert.equal(field(form,'numeroCnas').value,'CNAS-1');
+  assert.deepEqual(Array.from(form.querySelectorAll('[required]'),x=>x.name),['poste','dateDecision','dateDebut','dureeContrat']);
+  assert.deepEqual(Array.from(form.querySelectorAll('.nc2-actions button'),b=>[b.textContent,b.type,b.hidden,b.disabled]),[['Précédent','button',false,false],['Enregistrer brouillon','button',false,false],['Valider et créer l\'employé','submit',false,false]]);
+  assert.equal(form.querySelector('[data-nc-prev]').getAttribute('onclick'),"navigate('contrats/a_contractualiser')");
+
+  // La barre de blocs amène à un bloc sans en masquer aucun, et déplie le dernier.
+  t.goToNewContractStep(form,6);
+  assert.equal(form.querySelector('[data-nc-step="6"]').open,true);assert.equal(visible(form).length,6);
+  // Validation : poste, dates et durée restent obligatoires ; rien n'est créé tant qu'il en manque un.
+  field(form,'poste').value='';
+  t.submitCandidateContractWizard(form,'c1');
+  assert.ok(field(form,'poste').classList.contains('nc-required-missing'));assert.equal(t.getDb().agents.length,0);
+  field(form,'poste').value='MAGASINIER';
+  field(form,'dureeContrat').value='';
+  t.submitCandidateContractWizard(form,'c1');
+  assert.ok(field(form,'dureeContrat').classList.contains('nc-required-missing'));
+  assert.equal(field(form,'poste').classList.contains('nc-required-missing'),false);
+  assert.equal(t.getDb().agents.length,0);assert.equal(updates.length,0);
+
+  // Résumé et points « Avant validation ».
+  const client=field(form,'dcClientSite');client.value='7:21';client.dataset.touched='1';t.updateNewContractClientFromSelect(client);
+  field(form,'salaireNet').value='45 000,00';field(form,'iban').value='00799999';
+  t.updateNewContractSummary();
+  assert.equal(doc.getElementById('nc-sum-poste').textContent,'MAGASINIER');
+  assert.equal(doc.getElementById('nc-sum-client').textContent,'DHL — HUB');
+  assert.equal(doc.getElementById('nc-sum-salaire').textContent,'45 000,00 DA');
+  assert.deepEqual(Object.fromEntries(Array.from(form.querySelectorAll('[data-nc-check]'),li=>[li.dataset.ncCheck,li.dataset.done])),{poste:'1',client:'1',dates:'0',salaire:'1',modele:'1'});
+
+  // Brouillon : saisie conservée à part, sans écrire les champs réservés à la validation.
+  field(form,'observation').value='À revoir';
+  await t.saveCandidateContractDraft(form,'c1');
+  assert.equal(updates.length,1);assert.equal(updates[0].backendId,147);
+  const saved=updates[0].contractDraft;
+  assert.deepEqual([saved.poste,saved.dcClientId,saved.dcSiteId,saved.client,saved.iban,saved.observation,saved.dureeContrat,saved.savedBy],['MAGASINIER',7,21,'DHL','00799999','À revoir','','RH01']);
+  assert.equal(Number(saved.salaireNet),45000);
+  for(const key of ['posteContrat','dateRecrutement','dateEntree','typeContrat'])assert.equal(updates[0][key],undefined,key);
+  assert.equal(t.getDb().agents.length,0);
+  // Réouverture : le brouillon préremplit le formulaire.
+  form=await open();
+  assert.equal(form.querySelector('[data-nc-step="6"]').open,true);
+  assert.deepEqual([field(form,'iban').value,field(form,'observation').value,field(form,'dcClientSite').value,field(form,'salaireNet').value!==''],['00799999','À revoir','7:21',true]);
+  app.dom.window.close();
+});
+
 test('DRH society switch rejects the old response and keeps pagination scoped', async () => {
   const app=loadSgdiApp(['renderDrhRecruitmentReadOnly']);
   const t=app.T(),view=app.window.document.getElementById('view');
