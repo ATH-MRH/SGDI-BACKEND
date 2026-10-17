@@ -53,7 +53,7 @@ export type ConvocationDetail = Interview & { checked_at: string };
 export type InterviewList = { items: Interview[]; timezone: string; now: string };
 export type JobAlert = { id: number; wilaya: string | null; profession: string | null; contract_type: string | null; company_id: number | null; company: string | null; active: boolean };
 export type AppNotification = { id: number; kind: 'application' | 'message' | 'interview' | 'offer'; title: string; body: string; application_id: number | null; interview_id: number | null; offer_id: number | null; created_at: string | null; read: boolean };
-export type Summary = { unread_messages: number; unread_notifications: number; upcoming_interviews: number };
+export type Summary = { unread_messages: number; unread_notifications: number; unread_convocations?: number; upcoming_interviews: number };
 export type PushSettings = { push: Record<'applications' | 'messages' | 'interviews' | 'offers', boolean>; push_available: boolean; devices: number; alerts_enabled?: boolean };
 /** Dossier du candidat : ce qui vaut pour la personne, quelle que soit l'annonce (une convocation, par exemple). */
 export type Dossier = { reference: string; state: ApplicationState };

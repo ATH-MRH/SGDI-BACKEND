@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Arimo_400Regular, Arimo_700Bold } from '@expo-google-fonts/arimo';
-import { Platform, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CandidateSessionProvider } from '../lib/candidate-session';
 import { FavoritesProvider } from '../lib/favorites';
@@ -34,11 +34,14 @@ export default function Layout() {
               <SummaryProvider>
                 <PushProvider>
                   <StatusBar style="dark" />
+                  <View style={Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: 1200, alignSelf: 'center' } : { flex: 1 }}>
+                  {Platform.OS === 'web' && <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', backgroundColor: '#fff' }}><Text accessibilityRole="link" onPress={() => window.location.assign('/')} style={{ color: colors.navy, fontFamily: 'Arial', fontSize: 14 }}>← IRON Emploi · Retour au site et aux offres</Text></View>}
                   <Stack screenOptions={stackOptions}>
                     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                     <Stack.Screen name="login" options={{ title: 'Accès administration' }} />
                     <Stack.Screen name="staff" options={{ title: 'Espace RH' }} />
                   </Stack>
+                  </View>
                 </PushProvider>
               </SummaryProvider>
             </FavoritesProvider>

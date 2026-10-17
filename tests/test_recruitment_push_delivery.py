@@ -36,6 +36,7 @@ def test_committed_notification_survives_missing_immediate_send(client,db,monkey
     assert worker.dispatch(db)==0 and len(seen)==1
     assert row.state=='accepted' and row.ticket_id=='ticket-one'
     assert seen[0][0]['data']['notification_id']==notification.id
+    assert seen[0][0]['badge']==1
     monkeypatch.setattr(worker,'post',lambda url,body: {'data':{'ticket-one':{'status':'ok'}}})
     worker.receipts(db,now=datetime.utcnow()+timedelta(minutes=16))
     assert row.state=='provider_accepted'  # pas une preuve de livraison au téléphone

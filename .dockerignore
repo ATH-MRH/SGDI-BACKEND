@@ -13,3 +13,11 @@ tests
 docs
 uploads
 requirements-dev.txt
+mobile/recruitment/.expo
+mobile/recruitment/.test-env
+mobile/recruitment/dist
+mobile/recruitment/dist-web
+mobile/recruitment/credentials.json
+mobile/recruitment/google-services.json
+
+app/static/emploi-app

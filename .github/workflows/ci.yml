@@ -80,3 +80,14 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  docker:
+    name: Construction de l'image Docker (comme Coolify, sans publication)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Meme Dockerfile que le deploiement : export web IRON Emploi, controle JS,
+      # modeles biometriques verifies, compileall. Aucune image n'est poussee.
+      - name: Construire l'image
+        run: docker build --pull -t atlas-ci:${{ github.sha }} .

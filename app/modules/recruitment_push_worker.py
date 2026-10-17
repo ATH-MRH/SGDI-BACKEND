@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.modules.recruitment_engage_models import RecruitmentNotification as Notification, RecruitmentPushDevice as Device, RecruitmentPushDelivery as Delivery
@@ -106,6 +106,9 @@ def dispatch(db, *, now=None, notification_ids=None):
     device_ids = {row.device_id for row in rows if row.device_id}
     devices = {device.id: device for device in db.scalars(
         select(Device).where(Device.id.in_(device_ids)).with_for_update(read=True).execution_options(populate_existing=True))} if device_ids else {}
+    accounts = {device.account_id for device in devices.values()}
+    unread = dict(db.execute(select(Notification.account_id, func.count()).where(
+        Notification.account_id.in_(accounts), Notification.read_at.is_(None)).group_by(Notification.account_id)).all()) if accounts else {}
     batch, selected = [], []
     for row in rows:
         notification, device = db.get(Notification, row.notification_id), devices.get(row.device_id)
@@ -118,7 +121,7 @@ def dispatch(db, *, now=None, notification_ids=None):
         row.attempts += 1
         selected.append(row)
         batch.append({'to': device.token, 'title': notification.title, 'body': notification.body, 'sound': 'default',
-                      'priority': 'high', 'channelId': ANDROID_CHANNEL, 'ttl': max(1, int((row.created_at + timedelta(hours=24) - now).total_seconds())),
+                      'priority': 'high', 'channelId': ANDROID_CHANNEL, 'badge': unread.get(notification.account_id, 0), 'ttl': max(1, int((row.created_at + timedelta(hours=24) - now).total_seconds())),
                       'data': {'notification_id': notification.id, 'kind': notification.kind, 'application_id': notification.application_id,
                                'interview_id': notification.interview_id, 'offer_id': notification.offer_id}})
     accepted = 0

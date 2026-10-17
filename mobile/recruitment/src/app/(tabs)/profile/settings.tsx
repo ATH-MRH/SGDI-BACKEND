@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, Switch, Text, View } from 'react-native';
+import { Platform, ScrollView, Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { router, Stack } from 'expo-router';
 import { Button, Card, colors, ErrorText, Loading, Row, styles } from '../../../components/ui';
@@ -35,7 +35,7 @@ export default function Settings() {
         {session ? (
           <>
             <Row icon="phone" title={`${session.identity.first_name} ${session.identity.last_name}`} subtitle={`${session.identity.phone} · session valable jusqu’au ${formatDate(new Date(session.expiresAt).toISOString())}`} />
-            <Text style={styles.subtitle}>Votre session est conservée dans le stockage sécurisé de ce téléphone. Déconnectez-vous si vous le prêtez ou le changez.</Text>
+            <Text style={styles.subtitle}>{Platform.OS === 'web' ? 'Votre session reste dans cet onglet. Déconnectez-vous sur un appareil partagé.' : 'Votre session est conservée dans le stockage sécurisé de ce téléphone. Déconnectez-vous si vous le prêtez ou le changez.'}</Text>
             <Button title="Me déconnecter" icon="logout" secondary busy={busy} onPress={() => confirm('Se déconnecter ?', 'Vous devrez vous identifier à nouveau par SMS pour retrouver votre espace.', 'Me déconnecter', logout)} />
           </>
         ) : (

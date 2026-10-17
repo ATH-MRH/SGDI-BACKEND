@@ -88,7 +88,7 @@ export default function ConvocationScreen() {
   async function saveDocument() {
     if (!detail || !session) return;
     setBusy('save'); setNotice(''); setError('');
-    try { const result = await savePdf(detail, session.token); setSaved(result); setNotice('Convocation enregistrée sur ce téléphone : vous pourrez la présenter sans connexion.'); }
+    try { const result = await savePdf(detail, session.token); setSaved(result); setNotice(Platform.OS === 'web' ? 'PDF téléchargé. Conservez ce fichier pour le présenter à votre arrivée.' : 'Convocation enregistrée sur ce téléphone : vous pourrez la présenter sans connexion.'); }
     catch (e) { setError(errorMessage(e)); } finally { setBusy(''); }
   }
   async function share() {
@@ -134,8 +134,8 @@ export default function ConvocationScreen() {
       <ErrorText message={error} />
       {!!notice && <Text accessibilityRole="alert" style={view.success}>{notice}</Text>}
       {online && c?.can_confirm && live && <Button title="Confirmer ma présence" icon="check" busy={busy === 'confirm'} onPress={confirmPresence} />}
-      {online && c && c.state !== 'cancelled' && <Button title={savedCurrent ? 'Enregistrer à nouveau la convocation' : 'Enregistrer la convocation'} icon="cloudUp" secondary busy={busy === 'save'} onPress={saveDocument} />}
-      {savedCurrent && <Button title="Ouvrir ou partager le PDF" icon="file" secondary busy={busy === 'share'} onPress={share} />}
+      {online && c && c.state !== 'cancelled' && <Button title={Platform.OS === 'web' ? 'Télécharger la convocation PDF' : savedCurrent ? 'Enregistrer à nouveau la convocation' : 'Enregistrer la convocation'} icon="cloudUp" secondary busy={busy === 'save'} onPress={saveDocument} />}
+      {savedCurrent && <Button title={Platform.OS === 'web' ? 'Télécharger à nouveau le PDF' : 'Ouvrir ou partager le PDF'} icon="file" secondary busy={busy === 'share'} onPress={share} />}
       {!!(c?.address || detail.location) && <Button title="Itinéraire" icon="pin" secondary onPress={() => openPlace(c?.address || detail.location, c?.map_url ?? null)} />}
       {detail.application_id !== null && <Button title="Échanger avec le recrutement" icon="chat" secondary onPress={() => router.push({ pathname: '/messages/[id]', params: { id: String(detail.application_id) } })} />}
       {online && <Text style={view.checked}>Vérifiée auprès du service recrutement le {formatDateTime(detail.checked_at)}.</Text>}

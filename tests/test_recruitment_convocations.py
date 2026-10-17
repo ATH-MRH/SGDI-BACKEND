@@ -123,7 +123,10 @@ def test_candidate_reads_confirms_and_downloads_a_pdf_whose_qr_opens_the_right_i
     assert detail['convocation']['state'] == 'new' and detail['convocation']['reference'].startswith('CONV-') and detail['checked_at']
     assert detail['convocation']['address'].startswith('Zone industrielle') and detail['convocation']['qr']        # QR dessinable hors ligne
     assert 'report' not in detail and 'appreciation' not in detail and 'assessment' not in json.dumps(detail)
+    assert client.get(f'{API}/summary', headers=headers).json()['unread_convocations'] == 1
     viewed = client.post(f'{API}/interviews/{interview_id}/viewed', headers=headers).json()
+    assert client.get(f'{API}/summary', headers=headers).json()['unread_convocations'] == 0
+    assert all(note['read'] for note in candidate_notifications(client, headers))
     assert viewed['convocation']['state'] == 'viewed' and viewed['convocation']['viewed'] is True
     assert client.get(f'{STAFF}/applications/{application_id}', headers=securite).json()['interviews'][0]['viewed_by_candidate'] is True
     confirmed = client.post(f'{API}/interviews/{interview_id}/confirm', headers=headers).json()

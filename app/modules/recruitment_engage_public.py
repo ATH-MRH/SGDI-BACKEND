@@ -93,6 +93,8 @@ def emploi_conversations(account: Account = Depends(_account), db: Session = Dep
 def emploi_messages(application_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
     application, offer, company = _own_application(db, account, application_id)
     engage.read_messages(db, application.id, CANDIDATE)
+    db.execute(update(Notification).where(Notification.account_id == account.id,
+        Notification.application_id == application.id, Notification.kind == 'message', Notification.read_at.is_(None)).values(read_at=datetime.utcnow()))
     db.commit()
     rows = db.scalars(select(Message).where(Message.application_id == application.id).order_by(Message.id)).all()
     return {'application_id': application.id, 'title': _title(application, offer), 'company': jobs.company_public(company) if company else None,
@@ -154,7 +156,9 @@ def emploi_convocation_viewed(interview_id: int, account: Account = Depends(_acc
     row, application, offer, company = _own_interview(db, account, interview_id, lock=True)
     if row.version and (row.viewed_version or 0) < row.version:
         row.viewed_version = row.version
-        db.commit()
+    db.execute(update(Notification).where(Notification.account_id == account.id,
+        Notification.interview_id == row.id, Notification.kind == 'interview', Notification.read_at.is_(None)).values(read_at=datetime.utcnow()))
+    db.commit()
     return engage.interview_out(row, application, offer, company)
 
 
@@ -283,6 +287,10 @@ def emploi_summary(account: Account = Depends(_account), db: Session = Depends(g
     return {'unread_messages': sum(engage.unread_counts(db, ids, CANDIDATE).values()),
             'unread_notifications': db.scalar(select(func.count()).select_from(Notification).where(
                 Notification.account_id == account.id, Notification.read_at.is_(None))),
+            'unread_convocations': db.scalar(select(func.count()).select_from(Interview).where(
+                Interview.application_id.in_(ids), Interview.status.in_([INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED]),
+                Interview.version > 0, func.coalesce(Interview.viewed_version, 0) < Interview.version,
+                Interview.starts_at >= engage.now_local())) if ids else 0,
             'upcoming_interviews': upcoming}
 
 

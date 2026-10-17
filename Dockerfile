@@ -1,3 +1,11 @@
+# Candidate web build: same source and API contracts as the Android/iOS application.
+FROM node:24-alpine AS emploiweb
+WORKDIR /web
+COPY mobile/recruitment/package.json mobile/recruitment/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY mobile/recruitment ./
+RUN IRON_EMPLOI_WEB=1 EXPO_PUBLIC_EMPLOI_WEB=1 CI=1 npx expo export --platform web --output-dir /emploi-web
+
 # --- Étape de contrôle : valide la syntaxe JavaScript AVANT de construire l'image. ---
 # Si un fichier JS est cassé (parenthèse/accolade en trop, etc.), le build échoue ici
 # et Coolify garde l'ancien conteneur en marche -> jamais de page blanche en production.
@@ -43,6 +51,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-biometric.txt
 COPY --from=biomodels /models /app/models/biometrics
 
 COPY app ./app
+COPY --from=emploiweb /emploi-web ./app/static/emploi-app
 # Contrôle syntaxe Python au build : échoue si un fichier .py est cassé.
 RUN python -m compileall -q app
 # Contrôle du moteur au build : OpenCV, YuNet, SFace et MiniFASNetV2 se chargent avec leurs
