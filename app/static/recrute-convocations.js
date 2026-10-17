@@ -29,15 +29,28 @@ function convCan(action="create"){return typeof emploiCan==="function"?emploiCan
 // ── Onglet « Convocations et entretiens » du dossier ─────────────────────────
 function convocationsTabHTML(d){
   const open=d.outcome!=="withdrawn"&&!(d.outcome==="unfavorable"&&d.outcome_communicated);
-  const defaults=d.convocation_defaults||{};
+  const defaults=d.convocation_defaults||{},hasLive=d.interviews.some(i=>["proposed","confirmed"].includes(i.status));
   const header=`<header class="conv-head"><h3>Convocations et entretiens</h3><div class="emploi-actions">
-      ${convCan("create")&&open?`<button type="button" class="primary" onclick="convOpenForm(null)">Convoquer le candidat</button>`:""}
+      ${convCan("create")&&open?`<button type="button" class="${hasLive?"secondary":"primary"}" onclick="convOpenForm(null)">${hasLive?"Planifier un autre entretien":"Convoquer le candidat"}</button>`:""}
       <button type="button" class="secondary" onclick="convOpenScanner()">Scanner une convocation</button></div></header>`;
   const account=defaults.has_account===false?`<p class="rec-note conv-warning">Ce dossier n’a pas d’espace IRON Emploi : une convocation ne sera pas reçue dans l’application. Téléchargez son PDF pour la remettre au candidat${defaults.has_email?", ou cochez l’envoi par e-mail":""}. Aucun compte n’est créé automatiquement.</p>`:"";
   return `<section class="table-card emploi-panel conv-panel">${convScanBannerHTML(d)}${header}${account}
     ${convState.form?convFormHTML(d):""}
     ${d.interviews.length?d.interviews.map(i=>convCardHTML(d,i,open)).join(""):'<p class="emploi-empty">Aucune convocation pour cette candidature.</p>'}
     ${d.dossier_convocation?`<p class="rec-note">Convocation historique saisie sur le dossier du candidat : ${esc(formatDateFr(d.dossier_convocation.date))}${d.dossier_convocation.heure?` à ${esc(d.dossier_convocation.heure)}`:""}${d.dossier_convocation.lieu?`, ${esc(d.dossier_convocation.lieu)}`:""}. Elle concerne le dossier, pas cette candidature en particulier.</p>`:""}</section>`;
+}
+function convNextStep(i,d){
+  if(i.status==="draft")return "Complétez et envoyez le brouillon : le candidat n’a pas encore été prévenu.";
+  if(i.status==="cancelled")return "Convocation annulée. Ne pas utiliser ce document pour accueillir le candidat.";
+  if(i.status==="done")return "Entretien réalisé. Poursuivez dans l’onglet Traitement pour enregistrer la décision.";
+  if(i.status==="no_show")return "Absence constatée. Décidez d’un nouvel entretien ou de la suite dans Traitement.";
+  if(i.needs_reissue)return "Réémettez le document avant l’accueil : le PDF envoyé ne correspond plus à cet entretien.";
+  if(!i.version)return "Émettez la convocation avec QR pour permettre sa présentation à l’accueil.";
+  if(i.arrived_at)return i.past?"Le candidat est arrivé. Vous pouvez remplir le compte rendu ; aucune décision n’est automatique.":"Arrivée enregistrée. Le compte rendu sera disponible à l’heure prévue de l’entretien.";
+  if(i.can_confirm_arrival)return "À l’arrivée du candidat, scannez son QR ou confirmez explicitement son arrivée. Le scan seul n’enregistre rien.";
+  if(i.past)return "L’horaire est dépassé. Renseignez le compte rendu ou constatez explicitement l’absence ; aucune absence n’est automatique.";
+  if(d?.convocation_defaults?.has_account===false)return "Remettez le PDF au candidat : ce dossier n’a pas d’espace dans l’application. Confirmez son arrivée lorsqu’il se présente.";
+  return i.confirmed_at?"Présence confirmée par le candidat. Accueillez-le le jour de l’entretien et confirmez son arrivée.":"En attente de confirmation du candidat. L’arrivée pourra être enregistrée le jour de l’entretien.";
 }
 function convCardHTML(d,i,open){
   const [label,pill]=CONV_STATUS[i.status]||[i.status,"pill-gray"],sent=i.status!=="draft"&&i.version>0,live=["proposed","confirmed"].includes(i.status);
@@ -50,11 +63,14 @@ function convCardHTML(d,i,open){
     if(live&&i.needs_reissue)actions.push(`<button type="button" class="primary" onclick="convSend(${Number(i.id)})">Réémettre la convocation</button>`);
     if(i.status==="draft"||live)actions.push(`<button type="button" class="secondary" onclick="convCancel(${Number(i.id)},${i.status==="draft"})">${i.status==="draft"?"Supprimer le brouillon":"Annuler"}</button>`);
     if(i.can_confirm_arrival)actions.push(`<button type="button" class="primary" onclick="convConfirmArrival(${Number(i.id)},${Number(i.version)})">Confirmer l’arrivée du candidat</button>`);
-    if(live)actions.push(`<button type="button" class="secondary" onclick="convOutcomeForm(${Number(i.id)})"${i.past?"":` title="Disponible à l’heure de l’entretien"`}>Compte rendu de l’entretien</button>`);
+    if(live)actions.push(`<button type="button" class="secondary" onclick="convOutcomeForm(${Number(i.id)})"${i.past?"":` disabled aria-describedby="conv-next-${Number(i.id)}" title="Disponible à l’heure prévue de l’entretien"`}>${i.past?"Remplir le compte rendu":"Compte rendu disponible à l’heure prévue"}</button>`);
   }
   if(i.status==="draft"||!i.version)actions.push(`<button type="button" class="secondary" onclick="convOpenPdf(${Number(i.id)},null)">${i.status==="draft"?"Aperçu PDF":"PDF (sans QR)"}</button>`);
   return `<article class="emploi-interview conv-card" id="conv-${Number(i.id)}"><header class="conv-card-head"><div><b>${esc(i.reference)}${sent?` · version ${Number(i.version)}`:""}</b><div class="emploi-sub">${esc(convDateTime(i.starts_at))} · heure d’Alger${i.previous_starts_at?` · reportée, initialement ${esc(convDateTime(i.previous_starts_at))}`:""}</div></div>
       <div class="emploi-state"><span class="pill ${pill}">${esc(label)}</span>${i.candidate_state_label?`<span class="pill ${CONV_CANDIDATE_PILL[i.candidate_state]||"pill-gray"}">Candidat : ${esc(i.candidate_state_label)}</span>`:""}</div></header>
+    <div class="conv-next" id="conv-next-${Number(i.id)}" role="status"><b>Prochaine étape</b><p>${esc(convNextStep(i,d))}</p></div>
+    ${sent?`<ul class="conv-reception" aria-label="Suivi de la convocation"><li><b>Document</b><span>${i.needs_reissue?"À réémettre":i.status==="cancelled"?"Annulée — ne pas présenter":["done","no_show"].includes(i.status)?"Entretien clos":"Version "+Number(i.version)+" émise"}</span></li><li><b>Consultation dans l’application</b><span>${i.viewed_by_candidate?"Consultée par le candidat":d.convocation_defaults?.has_account===false?"Aucun espace candidat":"Pas encore consultée"}</span></li><li><b>Réponse du candidat</b><span>${i.confirmed_at?"Présence confirmée":"Présence non confirmée"}</span></li></ul><p class="emploi-sub">L’envoi ne prouve pas la réception sur le téléphone. La consultation et la confirmation sont suivies séparément.</p>`:""}
+    ${sent&&!i.needs_reissue?`<div class="conv-document-actions"><button type="button" class="secondary" onclick="convViewPdf(${Number(i.id)},${Number(i.version)})">Voir la convocation et son QR</button><button type="button" class="secondary" onclick="convOpenPdf(${Number(i.id)},${Number(i.version)})">Télécharger le PDF</button></div>`:""}
     <dl class="conv-facts">${facts.map(([key,value])=>`<dt>${esc(key)}</dt><dd>${esc(value).replace(/\n/g,"<br>")}</dd>`).join("")}</dl>
     ${i.needs_reissue?'<p class="rec-note conv-warning">Le document envoyé ne correspond plus à cet entretien (modifié sans nouvelle version). Réémettez la convocation : le candidat sera prévenu.</p>':""}
     ${i.arrived_at?`<p class="conv-arrival">Arrivée confirmée le ${esc(convUtc(i.arrived_at))} (heure d’Alger) par ${esc(i.arrived_by||"")}</p>`:""}
@@ -144,6 +160,20 @@ async function convOpenPdf(id,version){
   }catch(error){showBanner(esc(emploiError(error)),"error")}
 }
 
+// Aperçu privé du PDF existant : même session et mêmes droits que le téléchargement.
+async function convViewPdf(id,version){
+  try{
+    const blob=await emploiFetchBlob(`/interviews/${Number(id)}/convocation${version?`?version=${Number(version)}`:""}`);
+    closeEmploiViewer();emploiState.viewer={url:URL.createObjectURL(blob),zoom:1};
+    const backdrop=document.createElement("div");backdrop.id="emploiViewer";backdrop.className="modal-backdrop emploi-viewer";
+    backdrop.setAttribute("role","dialog");backdrop.setAttribute("aria-modal","true");backdrop.setAttribute("aria-label","Convocation et QR");
+    backdrop.innerHTML=`<div class="emploi-viewer-box"><header><b>Convocation et QR · version ${Number(version)}</b><div class="emploi-actions"><button type="button" class="secondary" onclick="convOpenPdf(${Number(id)},${Number(version)})">Télécharger le PDF</button><button type="button" class="secondary" onclick="closeEmploiViewer()">Fermer</button></div></header><p class="rec-note">Si votre navigateur n’affiche pas le PDF, téléchargez-le pour voir le document et son QR.</p><div class="emploi-viewer-body"><iframe title="Convocation et son QR" src="${emploiState.viewer.url}"></iframe></div></div>`;
+    backdrop.addEventListener("click",event=>{if(event.target===backdrop)closeEmploiViewer()});
+    document.body.appendChild(backdrop);backdrop.querySelector('button:last-child')?.focus();
+    backdrop.addEventListener("keydown",event=>{if(event.key==="Escape")closeEmploiViewer()});
+  }catch(error){showBanner(esc(emploiError(error)),"error")}
+}
+
 // ── Arrivée et compte rendu ─────────────────────────────────────────────────
 async function convConfirmArrival(id,version){
   const d=emploiState.dossier;
@@ -154,7 +184,7 @@ async function convConfirmArrival(id,version){
 }
 function convOutcomeForm(id){
   const i=emploiState.dossier.interviews.find(row=>row.id===id),host=document.getElementById(`convOutcome${id}`);if(!host||!i)return;
-  if(!i.past){host.innerHTML='<p class="rec-note">Le compte rendu se remplit à l’heure de l’entretien ou après : l’arrivée du candidat se confirme d’abord.</p>';return}
+  if(!i.past){host.innerHTML='<p class="rec-note conv-warning" role="alert" tabindex="-1">Le compte rendu se remplit à l’heure de l’entretien ou après : l’arrivée du candidat se confirme d’abord.</p>';host.firstElementChild.focus({preventScroll:true});host.scrollIntoView?.({block:"center",behavior:"smooth"});return}
   const criteria=typeof INTERVIEW_CRITERIA!=="undefined"?INTERVIEW_CRITERIA:[],scores=i.assessment?.scores||{};
   const options=value=>typeof interviewOptions==="function"?interviewOptions(value):"";
   host.innerHTML=`<form class="emploi-form" onsubmit="event.preventDefault();convSaveOutcome(this,${Number(id)})">

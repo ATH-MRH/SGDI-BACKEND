@@ -556,3 +556,34 @@ test('candidatures: une entrée, deux perspectives, réserve et archives restent
   const css=fs.readFileSync(path.join(__dirname,'..','app/static/recrute-workspace.css'),'utf8');
   const errors=[];require('css-tree').parse(css,{onParseError:e=>errors.push(e.message)});assert.deepEqual(errors,[]);
 });
+
+
+test('annonces: publication refusal reveals the precise reason, focuses the alert and marks missing fields',async()=>{
+  const app=v6Announcements([v6Offer(1,{status:'draft',effective_status:'draft',missions:'',profile:''})]);
+  app.ctx.confirm=()=>true;
+  app.ctx.apiFetch=async()=>{throw new Error('Avant publication, renseignez : Missions, Profil recherché.')};
+  await app.run('setAnnouncementStatus(1,"publish")');
+  const alert=app.doc.getElementById('announcementFormError');
+  assert.match(alert.textContent,/Publication impossible : Avant publication, renseignez : Missions, Profil recherché/);
+  assert.equal(alert.getAttribute('role'),'alert');
+  assert.equal(app.doc.activeElement,alert);
+  assert.equal(app.doc.getElementById('annMissions').getAttribute('aria-invalid'),'true');
+  assert.equal(app.doc.getElementById('annProfile').getAttribute('aria-invalid'),'true');
+  assert.equal(app.doc.getElementById('annTitle').hasAttribute('aria-invalid'),false);
+  assert.equal(app.run('recruitAnnouncementBusy'),false);
+});
+
+test('annonces: un GET ancien ne masque pas SUPERVISEUR après sa création dans une autre société',async()=>{
+  const app=v6Announcements([v6Offer(1,{title:'CHEF DE SITE'})]);app.run('renderRecruitAnnouncements()');
+  const pending=[];app.ctx.showBanner=()=>{};
+  app.ctx.apiFetch=(url,options={})=>options.method==='POST'?Promise.resolve(v6Offer(22,{title:'SUPERVISEUR',society:'IRON GLOBAL SOLUTION',status:'draft',effective_status:'draft'})):new Promise(resolve=>pending.push([url,resolve]));
+  const loading=app.run('loadRecruitAnnouncements()');
+  app.run('openAnnouncementForm()');
+  const form=app.doc.querySelector('#announcementForm');form.querySelector('[name=title]').value='SUPERVISEUR';form.querySelector('[name=society]').value='IRON GLOBAL SOLUTION';
+  app.ctx.form=form;await app.run('saveRecruitAnnouncement(form)');
+  for(const [url,resolve]of pending)resolve(url.endsWith('/meta')?{societies:['IRON GLOBAL SOLUTION']}:{items:[v6Offer(1)]});
+  await loading;
+  assert.equal(app.run('activeSociety'),'');
+  assert.deepEqual(texts(app.doc.querySelectorAll('#announcementList article h3')),['SUPERVISEUR','CHEF DE SITE']);
+  assert.match(app.doc.querySelector('#announcementList article').textContent,/Brouillon/);
+});

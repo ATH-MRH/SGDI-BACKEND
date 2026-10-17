@@ -89,3 +89,12 @@
 .login-pending{margin:12px 0 0;font-size:13px;color:#14243b;background:#eef4ff;border-radius:8px;padding:10px 12px}
 .conv-grid{grid-template-columns:minmax(0,1fr) 120px}
 @media(max-width:600px){.conv-facts{grid-template-columns:minmax(0,1fr)}.conv-facts dt{margin-top:6px}.conv-grid{grid-template-columns:minmax(0,1fr)}.conv-form-actions{justify-content:stretch}.conv-form-actions button{flex:1 1 100%}}
+
+/* Étape suivante, état candidat et accès direct au document. */
+.conv-next{margin:14px 0;padding:12px 14px;border-left:4px solid #1a55c2;border-radius:8px;background:#edf4ff;font-size:13px}
+.conv-next p{margin:4px 0 0;line-height:1.5}
+.conv-reception{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;list-style:none;margin:12px 0;padding:0;font-size:12px}
+.conv-reception li{border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:5px;overflow-wrap:anywhere}
+.conv-document-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.conv-card button:disabled{opacity:.65;cursor:not-allowed}
+@media(max-width:600px){.conv-reception{grid-template-columns:minmax(0,1fr)}.conv-document-actions button{flex:1 1 100%}}
