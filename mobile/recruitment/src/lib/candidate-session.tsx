@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { ApiError, request } from './api';
 import { Account } from './emploi';
+import { clearSaved } from './convocation-store';
 
 export type CandidateIdentity = {first_name: string; last_name: string; phone: string};
 export type PendingCode = {identity: CandidateIdentity; challengeId: string; expiresAt: number; resendAt: number};
@@ -61,6 +62,9 @@ export function CandidateSessionProvider({ children }: {children: ReactNode}) {
   const signOut = useCallback(async () => {
     const token = current.current?.token;
     await forget();
+    // Déconnexion volontaire (ou suppression de l'espace) : les convocations enregistrées pour le jour J partent aussi.
+    // Une session simplement expirée les garde : le candidat doit pouvoir présenter sa convocation hors connexion.
+    clearSaved();
     // La fermeture côté serveur est tentée sans bloquer : le téléphone a déjà oublié la session.
     if (token) request('/public/emploi/session', { token, method: 'DELETE' }).catch(() => {});
   }, [forget]);

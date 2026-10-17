@@ -34,7 +34,7 @@ function notifications(): Module | null {
   return loaded;
 }
 
-type Payload = Partial<Pick<AppNotification, 'kind' | 'application_id' | 'offer_id'>> & { notification_id?: number };
+type Payload = Partial<Pick<AppNotification, 'kind' | 'application_id' | 'offer_id' | 'interview_id'>> & { notification_id?: number };
 
 export function PushProvider({ children }: { children: ReactNode }) {
   const { session, call } = useCandidateSession();
@@ -80,7 +80,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
       handled.current = identifier;
       const data = (content.data || {}) as Payload;
       if (data.notification_id) call(`/public/emploi/notifications/${data.notification_id}/read`, { method: 'POST' }).then(refresh).catch(() => {});
-      router.push(notificationTarget({ kind: data.kind || 'application', application_id: data.application_id ?? null, offer_id: data.offer_id ?? null }) as never);
+      router.push(notificationTarget({ kind: data.kind || 'application', application_id: data.application_id ?? null, offer_id: data.offer_id ?? null, interview_id: data.interview_id ?? null }) as never);
     };
     const received = module.addNotificationReceivedListener(refresh), touched = module.addNotificationResponseReceivedListener(open);
     // Application lancée en touchant une notification.

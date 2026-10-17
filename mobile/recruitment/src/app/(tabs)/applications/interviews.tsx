@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
+import { Redirect, router, Stack } from 'expo-router';
 import { Icon } from '../../../components/icon';
 import { Badge, Button, Card, colors, EmptyState, ErrorState, ErrorText, fonts, Loading, Segmented, shadow, styles, Tone } from '../../../components/ui';
 import { errorMessage } from '../../../lib/api';
 import { useCandidateSession } from '../../../lib/candidate-session';
-import { calendarMonth, formatDateTime, Interview, interviewDays, InterviewList, MONTHS, splitInterviews } from '../../../lib/emploi';
+import { listSaved } from '../../../lib/convocation-store';
+import { calendarMonth, CONVOCATION_TONES, formatDateTime, Interview, interviewDays, InterviewList, MONTHS, offlineNotice, splitInterviews } from '../../../lib/emploi';
 import { useSummary } from '../../../lib/summary';
 import { useLoad } from '../../../lib/use-load';
 
@@ -28,8 +29,13 @@ export default function Interviews() {
   const [busy, setBusy] = useState<number | null>(null), [error, setError] = useState('');
   if (!ready) return <Loading />;
   if (ready && !session) return <Redirect href={{ pathname: '/identify', params: { next: 'interviews' } }} />;
-  if (!interviews.data) return interviews.loading ? <Loading /> : <ErrorState message={interviews.error} onRetry={interviews.reload} />;
-  const data = interviews.data, { upcoming, past } = splitInterviews(data.items);
+  // Sans réseau : les convocations enregistrées sur ce téléphone restent présentables, avec un avertissement.
+  const saved = !interviews.data && !interviews.loading ? listSaved() : [];
+  if (!interviews.data && !saved.length) return interviews.loading ? <Loading /> : <ErrorState message={interviews.error} onRetry={interviews.reload} />;
+  const offline = interviews.data ? null : offlineNotice(saved.map(item => item.saved_at).sort().at(0) ?? null, false);
+  // Hors connexion, « maintenant » est la dernière vérification connue : l'état passé ou à venir vient de cette copie.
+  const data = interviews.data || { items: saved.map(item => item.detail), timezone: 'Africa/Algiers', now: saved.map(item => item.saved_at).sort().at(-1) || '1970-01-01T00:00' };
+  const { upcoming, past } = splitInterviews(data.items);
   const shown = tab === 'upcoming' ? upcoming : past;
   // Mois affiché : celui du prochain entretien, sinon le mois courant du serveur (heure d'Alger).
   const anchor = upcoming[0]?.starts_at || data.now;
@@ -46,18 +52,22 @@ export default function Interviews() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: 'Mes entretiens' }} />
+      <Stack.Screen options={{ title: 'Mes convocations' }} />
+      {!!offline && <Card style={{ backgroundColor: '#FFF4D6' }}><Text style={row.lineText}>{offline}</Text></Card>}
       <Segmented value={tab} onChange={setTab} options={[{ value: 'upcoming', label: `À venir (${upcoming.length})` }, { value: 'past', label: `Passés (${past.length})` }]} />
       <ErrorText message={error} />
-      {!shown.length ? <Card><EmptyState icon="calendar" title={tab === 'upcoming' ? 'Aucun entretien à venir' : 'Aucun entretien passé'} text={tab === 'upcoming' ? 'Lorsqu’un recruteur vous propose un entretien, il apparaît ici et vous recevez une notification.' : undefined} /></Card>
+      {!shown.length ? <Card><EmptyState icon="calendar" title={tab === 'upcoming' ? 'Aucune convocation à venir' : 'Aucune convocation passée'} text={tab === 'upcoming' ? 'Lorsqu’un recruteur vous convoque, la convocation apparaît ici, même si les notifications sont désactivées.' : undefined} /></Card>
         : shown.map((item, index) => {
-          const [label, tone] = STATUS[item.status];
+          const [label, tone] = item.convocation ? [item.convocation.state_label, CONVOCATION_TONES[item.convocation.state]] : STATUS[item.status];
+          const open = item.id !== null && item.source === 'interview';
           return (
             <Card key={item.id ?? `dossier-${index}`}>
-              <View style={row.head}>
+              <Pressable accessibilityRole={open ? 'button' : undefined} accessibilityLabel={open ? `Ouvrir la convocation${item.position ? ` ${item.position}` : ''}` : undefined}
+                disabled={!open} onPress={() => open && router.push({ pathname: '/applications/convocation/[id]', params: { id: String(item.id) } })} style={row.head}>
                 <Icon name="calendar" size={24} color={colors.gold} />
-                <Text style={row.title}>Entretien{item.position ? ` · ${item.position}` : ''}</Text>
-              </View>
+                <Text style={row.title}>{item.convocation ? 'Convocation' : 'Entretien'}{item.position ? ` · ${item.position}` : ''}</Text>
+                {open && <Icon name="chevronRight" size={18} color={colors.muted} />}
+              </Pressable>
               <Badge label={label} tone={tone} />
               <Line icon="clock" text={`${formatDateTime(item.starts_at)} (heure d’Alger)`} />
               {!!item.location && <Line icon="pin" text={item.location} />}
@@ -66,7 +76,8 @@ export default function Interviews() {
               {!!item.note && <Text style={row.note}>{item.note}</Text>}
               {item.source === 'dossier' && <Text style={row.note}>Convocation enregistrée sur votre dossier par le service recrutement. Elle n’est pas rattachée à une annonce précise et se confirme auprès de lui.</Text>}
               {item.status === 'cancelled' && <Text style={row.note}>Cet entretien a été annulé par le service recrutement.</Text>}
-              {tab === 'upcoming' && item.status === 'proposed' && <Button title="Confirmer ma présence" busy={busy === item.id} onPress={() => confirmPresence(item)} />}
+              {!!interviews.data && tab === 'upcoming' && item.status === 'proposed' && <Button title="Confirmer ma présence" busy={busy === item.id} onPress={() => confirmPresence(item)} />}
+              {open && !!item.convocation && <Button title="Voir la convocation" icon="file" secondary onPress={() => router.push({ pathname: '/applications/convocation/[id]', params: { id: String(item.id) } })} />}
               {!!item.location && <Button title="Voir le lieu" icon="pin" secondary onPress={() => openPlace(item.location)} />}
             </Card>
           );

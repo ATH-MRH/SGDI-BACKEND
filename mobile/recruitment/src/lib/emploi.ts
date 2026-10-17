@@ -34,10 +34,22 @@ export type Application = {
 export type ChatMessage = { id: number; sender: 'candidate' | 'recruiter'; body: string; client_id: string; created_at: string | null; read: boolean };
 export type Conversation = { application_id: number; kind: 'offer' | 'spontaneous'; title: string; company: Company | null; last_message: ChatMessage | null; unread: number; submitted_at: string | null };
 export type Thread = { application_id: number; title: string; company: Company | null; items: ChatMessage[] };
+/** États d'une convocation pour le candidat : lecture, réponse et résultat sont tenus séparément par le serveur. */
+export type ConvocationState = 'new' | 'viewed' | 'confirmed' | 'rescheduled' | 'cancelled' | 'done' | 'no_show';
+export type Convocation = {
+  reference: string; version: number; state: ConvocationState; state_label: string; viewed: boolean; previous_starts_at: string | null;
+  address: string | null; map_url: string | null; contact_details: string | null; purpose: string | null; documents_to_bring: string | null;
+  issued_at: string | null; can_confirm: boolean;
+  /** Matrice du QR de la version en vigueur (détail seulement) : dessinée par l'application, aucun service extérieur. */
+  qr?: string[]; society?: string | null;
+};
 export type Interview = {
   id: number | null; source: 'interview' | 'dossier'; application_id: number | null; position: string; company: string | null; starts_at: string; timezone: string;
   location: string; contact: string | null; note: string | null; status: 'proposed' | 'confirmed' | 'cancelled' | 'done' | 'no_show' | 'dossier'; past: boolean;
+  /** Absente pour un entretien antérieur aux convocations avec QR ou pour une convocation du dossier. */
+  convocation?: Convocation | null;
 };
+export type ConvocationDetail = Interview & { checked_at: string };
 export type InterviewList = { items: Interview[]; timezone: string; now: string };
 export type JobAlert = { id: number; wilaya: string | null; profession: string | null; contract_type: string | null; company_id: number | null; company: string | null; active: boolean };
 export type AppNotification = { id: number; kind: 'application' | 'message' | 'interview' | 'offer'; title: string; body: string; application_id: number | null; interview_id: number | null; offer_id: number | null; created_at: string | null; read: boolean };
@@ -366,12 +378,28 @@ export function splitInterviews(items: Interview[]): { upcoming: Interview[]; pa
   return { upcoming: items.filter(item => !closed(item)), past: items.filter(closed).reverse() };
 }
 
+export const CONVOCATION_TONES: Record<ConvocationState, StateTone> = {
+  new: 'gold', viewed: 'blue', confirmed: 'green', rescheduled: 'gold', cancelled: 'neutral', done: 'green', no_show: 'neutral',
+};
+/** Ce que le candidat peut encore faire : rien sur une convocation annulée, passée ou close. */
+export const convocationOpen = (item: Pick<Interview, 'status' | 'past'>) => !item.past && (item.status === 'proposed' || item.status === 'confirmed');
+/** Copie enregistrée sur le téléphone : l'heure de la dernière vérification auprès du serveur, pour le dire quand elle n'a pas pu être refaite. */
+export function offlineNotice(savedAt: string | null, online: boolean): string | null {
+  if (online) return null;
+  return savedAt ? `Hors connexion : convocation enregistrée le ${formatDateTime(savedAt)}. Son actualité (report, annulation) n’a pas pu être vérifiée.`
+    : 'Hors connexion : aucune convocation enregistrée sur ce téléphone.';
+}
+/** Nom du PDF enregistré : la référence et la version, rien de personnel. */
+export const convocationFileName = (convocation: Pick<Convocation, 'reference' | 'version'>) => `${convocation.reference}-V${convocation.version}.pdf`.replace(/[^A-Za-z0-9._-]/g, '');
+
 export const alertLabel = (alert: Pick<JobAlert, 'profession' | 'wilaya' | 'contract_type' | 'company'>) =>
   [alert.profession, alert.wilaya, alert.contract_type, alert.company].filter(Boolean).join(' · ') || 'Toutes les offres';
 
 /** Écran ouvert par une notification. */
-export function notificationTarget(item: Pick<AppNotification, 'kind' | 'application_id' | 'offer_id'>): { pathname: string; params?: Record<string, string> } {
+export function notificationTarget(item: Pick<AppNotification, 'kind' | 'application_id' | 'offer_id'> & { interview_id?: number | null }): { pathname: string; params?: Record<string, string> } {
   if (item.kind === 'message' && item.application_id) return { pathname: '/messages/[id]', params: { id: String(item.application_id) } };
+  // Une convocation ouvre la convocation concernée ; sans identifiant (ancienne notification), la liste.
+  if (item.kind === 'interview' && 'interview_id' in item && item.interview_id) return { pathname: '/applications/convocation/[id]', params: { id: String(item.interview_id) } };
   if (item.kind === 'interview') return { pathname: '/applications/interviews' };
   if (item.kind === 'offer' && item.offer_id) return { pathname: '/offers/[id]', params: { id: String(item.offer_id) } };
   if (item.application_id) return { pathname: '/applications/[id]', params: { id: String(item.application_id) } };
