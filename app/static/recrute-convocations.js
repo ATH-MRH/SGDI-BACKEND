@@ -5,9 +5,9 @@
 const CONV_STATUS={draft:["Brouillon, non envoyée","pill-amber"],proposed:["Envoyée","pill-blue"],confirmed:["Envoyée","pill-blue"],
   cancelled:["Annulée","pill-gray"],done:["Entretien réalisé","pill-green"],no_show:["Absence constatée","pill-red"]};
 const CONV_CANDIDATE_PILL={new:"pill-amber",viewed:"pill-blue",confirmed:"pill-green",rescheduled:"pill-amber",cancelled:"pill-gray",done:"pill-green",no_show:"pill-red"};
-const CONV_VERSION_STATE={active:"En vigueur",superseded:"Remplacée",cancelled:"Annulée",closed:"Entretien clos"};
+const CONV_VERSION_STATE={active:"En vigueur",superseded:"Remplacée",cancelled:"Annulée",closed:"Entretien clos",outdated:"À réémettre"};
 const CONV_SCAN_STATE={active:["Convocation en vigueur","pill-green"],superseded:["Ancienne version","pill-red"],cancelled:["Convocation annulée","pill-red"],
-  closed:["Entretien déjà clos","pill-gray"],past:["Date dépassée","pill-amber"]};
+  closed:["Entretien déjà clos","pill-gray"],past:["Date dépassée","pill-amber"],outdated:["Document à réémettre","pill-red"]};
 const CONV_PENDING_KEY="atlas_recrute_pending_convocation";
 let convState={form:null,requestId:null,preview:false,scan:null,scanner:null,scanError:"",scanBusy:false};
 
@@ -47,6 +47,7 @@ function convCardHTML(d,i,open){
     if(i.status==="draft")actions.push(`<button type="button" class="primary" onclick="convSend(${Number(i.id)})">Envoyer la convocation</button>`,`<button type="button" class="secondary" onclick="convOpenForm(${Number(i.id)})">Modifier le brouillon</button>`);
     if(live)actions.push(`<button type="button" class="secondary" onclick="convOpenForm(${Number(i.id)},true)">Reporter ou modifier</button>`);
     if(live&&!i.version)actions.push(`<button type="button" class="secondary" onclick="convSend(${Number(i.id)})">Émettre le document avec QR</button>`);
+    if(live&&i.needs_reissue)actions.push(`<button type="button" class="primary" onclick="convSend(${Number(i.id)})">Réémettre la convocation</button>`);
     if(i.status==="draft"||live)actions.push(`<button type="button" class="secondary" onclick="convCancel(${Number(i.id)},${i.status==="draft"})">${i.status==="draft"?"Supprimer le brouillon":"Annuler"}</button>`);
     if(i.can_confirm_arrival)actions.push(`<button type="button" class="primary" onclick="convConfirmArrival(${Number(i.id)},${Number(i.version)})">Confirmer l’arrivée du candidat</button>`);
     if(live)actions.push(`<button type="button" class="secondary" onclick="convOutcomeForm(${Number(i.id)})"${i.past?"":` title="Disponible à l’heure de l’entretien"`}>Compte rendu de l’entretien</button>`);
@@ -55,6 +56,7 @@ function convCardHTML(d,i,open){
   return `<article class="emploi-interview conv-card" id="conv-${Number(i.id)}"><header class="conv-card-head"><div><b>${esc(i.reference)}${sent?` · version ${Number(i.version)}`:""}</b><div class="emploi-sub">${esc(convDateTime(i.starts_at))} · heure d’Alger${i.previous_starts_at?` · reportée, initialement ${esc(convDateTime(i.previous_starts_at))}`:""}</div></div>
       <div class="emploi-state"><span class="pill ${pill}">${esc(label)}</span>${i.candidate_state_label?`<span class="pill ${CONV_CANDIDATE_PILL[i.candidate_state]||"pill-gray"}">Candidat : ${esc(i.candidate_state_label)}</span>`:""}</div></header>
     <dl class="conv-facts">${facts.map(([key,value])=>`<dt>${esc(key)}</dt><dd>${esc(value).replace(/\n/g,"<br>")}</dd>`).join("")}</dl>
+    ${i.needs_reissue?'<p class="rec-note conv-warning">Le document envoyé ne correspond plus à cet entretien (modifié sans nouvelle version). Réémettez la convocation : le candidat sera prévenu.</p>':""}
     ${i.arrived_at?`<p class="conv-arrival">Arrivée confirmée le ${esc(convUtc(i.arrived_at))} (heure d’Alger) par ${esc(i.arrived_by||"")}</p>`:""}
     ${i.report||i.appreciation||i.assessment?`<p class="emploi-quote"><b>Compte rendu interne${i.appreciation?` — ${esc(i.appreciation)}`:""}${i.assessment?` · note ${String(i.assessment.average).replace(".",",")} / 10`:""}</b><br>${esc(i.report||"")}</p>`:""}
     ${i.versions?.length?`<details class="conv-versions"><summary>Versions envoyées (${i.versions.length})</summary><ul>${i.versions.map(v=>`<li><span>Version ${Number(v.version)} · ${esc(convDateTime(v.starts_at))} · émise le ${esc(formatDateFr(v.issued_at))} par ${esc(v.issued_by||"")}</span><span class="pill ${v.state==="active"?"pill-green":"pill-gray"}">${esc(CONV_VERSION_STATE[v.state]||v.state)}</span><button type="button" class="dashboard-mini-action" onclick="convOpenPdf(${Number(i.id)},${Number(v.version)})">PDF</button></li>`).join("")}</ul></details>`:""}

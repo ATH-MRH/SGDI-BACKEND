@@ -141,7 +141,8 @@ def emploi_convocation(interview_id: int, account: Account = Depends(_account), 
     row, application, offer, company = _own_interview(db, account, interview_id)
     item = engage.interview_out(row, application, offer, company)
     version = conv.current_version(db, row)
-    if item['convocation'] is not None and version is not None and row.status != INTERVIEW_CANCELLED:
+    # QR seulement pour un document exact : une version devenue inexacte attend sa réémission par le recrutement.
+    if item['convocation'] is not None and version is not None and row.status != INTERVIEW_CANCELLED and not conv.outdated(row, version):
         item['convocation']['qr'] = conv.qr_matrix(version.token)
         item['convocation']['society'] = version.snapshot.get('society')
     return {**item, 'checked_at': engage.now_local().isoformat(timespec='minutes')}
@@ -166,6 +167,8 @@ def emploi_convocation_document(interview_id: int, account: Account = Depends(_a
         raise HTTPException(status_code=404, detail='Aucun document pour cet entretien.')
     if row.status == INTERVIEW_CANCELLED:
         raise HTTPException(status_code=409, detail='Cette convocation a été annulée.')
+    if conv.outdated(row, version):
+        raise HTTPException(status_code=409, detail='Cette convocation est en cours de mise à jour par le service recrutement.')
     data = convocation_pdf.render(version.snapshot, version=version.version, issued_at=version.issued_at, qr=conv.qr_matrix(version.token))
     name = f'{conv.reference(row)}-V{version.version}.pdf'
     return Response(content=data, media_type='application/pdf', headers={

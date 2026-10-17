@@ -171,14 +171,24 @@ def candidate_state(interview: Interview) -> str:
     return 'new'
 
 
+def outdated(interview: Interview, row: Version) -> bool:
+    """Version en vigueur dont la date ou le lieu ne correspondent plus à l'entretien : modifié sans nouvelle version
+    (par le code précédent après un retour arrière, par exemple). Elle ne doit jamais valoir pour l'ancienne date."""
+    snapshot = row.snapshot or {}
+    return (snapshot.get('starts_at') != interview.starts_at.isoformat(timespec='minutes')
+            or (snapshot.get('location') or '') != (interview.location or ''))
+
+
 def version_state(interview: Interview, row: Version) -> str:
-    """État d'une version présentée au scan : active, remplacée, annulée, ou entretien clos."""
+    """État d'une version présentée au scan : active, remplacée, inexacte, annulée, ou entretien clos."""
     if row.cancelled_at or interview.status == INTERVIEW_CANCELLED:
         return 'cancelled'
     if row.version != interview.version or row.superseded_at:
         return 'superseded'
     if interview.status in (INTERVIEW_DONE, INTERVIEW_NO_SHOW):
         return 'closed'
+    if outdated(interview, row):
+        return 'outdated'
     return 'active'
 
 
