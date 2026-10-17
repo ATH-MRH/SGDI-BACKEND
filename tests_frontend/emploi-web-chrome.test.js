@@ -20,11 +20,16 @@ test('candidate website: catalogue, filters, real SMS authentication, CV upload 
  await api(`/drh/job-offers/${offer.id}/publish`,{token:staff,method:'POST'});
  await api('/public/mobile/gateway/poll',{body:{},headers:{'X-SMS-Gateway-Key':gateway}});
  browser=await puppeteer.launch({executablePath:CHROME,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- await page.setViewport({width:1440,height:950});await page.goto(base+'/emploi',{waitUntil:'networkidle0'});await page.waitForSelector('.offer-card');
+ await page.setViewport({width:1440,height:950});await page.goto(base+'/emploi',{waitUntil:'networkidle0'});await page.waitForSelector('.offer-card');await page.waitForSelector('#offer-detail h2');assert.match(await page.$eval('#offer-detail',el=>el.textContent),/Mission de démonstration/);
+ for(const width of [320,390,768,1440]){
+   await page.setViewport({width,height:950});
+   const overflow=await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(x=>x.getBoundingClientRect().right>innerWidth+1).map(x=>({tag:x.tagName,cls:x.className,w:x.getBoundingClientRect().width,right:x.getBoundingClientRect().right})).slice(0,12));
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'catalogue sans débordement à '+width+' '+JSON.stringify(overflow));
+ }await page.setViewport({width:1440,height:950});
  if(process.env.EMPLOI_SCREENSHOT_DIR){fs.mkdirSync(process.env.EMPLOI_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.EMPLOI_SCREENSHOT_DIR,'emploi-1440.png'),fullPage:true});}
  assert.match(await page.$eval('.offer-card',el=>el.textContent),/Superviseur web de test/);
  await page.select('select[name=wilaya]','Alger');await page.click('#offer-search button[type=submit]');await page.waitForFunction(()=>document.querySelector('#offer-results').getAttribute('aria-busy')==='false');
- await page.click('.offer-link');await page.waitForSelector('[role=button]');await page.waitForFunction(()=>document.body.textContent.includes('Postuler'));
+ await page.setViewport({width:390,height:844});await page.click('.offer-select');await page.waitForSelector('.detail-back',{visible:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.click('.detail-back');await page.setViewport({width:1440,height:950});await page.click('.offer-link');await page.waitForSelector('[role=button]');await page.waitForFunction(()=>document.body.textContent.includes('Postuler'));
  await click(page,'Postuler');await page.waitForSelector('input[aria-label="Nom"]');
  await page.type('input[aria-label="Nom"]','Webtest');await page.type('input[aria-label="Prénom"]','Nadia');await page.type('input[aria-label="Numéro de téléphone, sans l’indicatif"]','0551234567');
  await click(page,'Recevoir le code par SMS');await page.waitForSelector('input[aria-label="Code de validation"]');
