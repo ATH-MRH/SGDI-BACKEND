@@ -220,6 +220,9 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .face-origin{opacity:.85}
 .face-terminals{margin:10px 0}
 .ft-toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.ft-heading{font-size:12px;font-weight:900;letter-spacing:.08em;color:#475569;margin:0 0 6px}
+.ft-alert{margin:8px 0;padding:8px 12px;border-radius:10px;background:#fef3c7;border:1px solid #fcd34d;color:#78350f;font-weight:800;font-size:13px}
+.ft-table tr.is-unavailable td{color:#64748b}
 .ft-btn{width:auto;min-height:36px;margin:0;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--navy);font-weight:800;font-size:12.5px;cursor:pointer}
 .ft-btn.ft-primary{border-color:var(--navy);background:var(--navy);color:#fff}
 .ft-btn:disabled{opacity:.45;cursor:not-allowed}
@@ -728,7 +731,7 @@ body.ptr-v5.has-post .shift-staffing{order:3}
 }
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=20261008-audit"></script>
-<script defer src="/static/pointeur-facial.js?v=20261010-integration-v1"></script>
+<script defer src="/static/pointeur-facial.js?v=20261018-equipements-v1"></script>
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/pointeur-workstation.css?v=20261008-audit">
@@ -799,15 +802,16 @@ body.ptr-v5.has-post .shift-staffing{order:3}
         </div>
         <!-- Pointage facial automatique : même zone centrale, moteur facial existant (pointeur-facial.js). -->
         <section id="faceView" class="face-view hidden" aria-live="polite">
-          <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Cochez les terminaux à utiliser, puis activez-les.</p></div>
+          <div class="face-head"><div><div class="face-title">POINTAGE FACIAL AUTOMATIQUE</div><p class="scanner-hint">Mes équipements : cochez ceux à utiliser, puis « Utiliser ».</p></div>
             <div class="face-camera"><span id="faceCameraLabel">—</span></div></div>
           <div id="faceStatus" class="face-status face-ready">Initialisation…</div>
           <!-- Terminaux déjà enregistrés par l'Administration Système et autorisés pour ce compte : sélection multiple, aucun appairage ici. -->
           <div id="faceTerminals" class="face-terminals hidden">
-            <div class="ft-toolbar" role="group" aria-label="Sélection des terminaux">
+            <div class="ft-heading">MES ÉQUIPEMENTS</div>
+            <div class="ft-toolbar" role="group" aria-label="Sélection des équipements">
               <button type="button" class="ft-btn" data-ft="all">Sélectionner tout</button>
               <button type="button" class="ft-btn" data-ft="none">Désélectionner tout</button>
-              <button type="button" id="ftActivate" class="ft-btn ft-primary" data-ft="activate" disabled>Activer les terminaux sélectionnés</button>
+              <button type="button" id="ftActivate" class="ft-btn ft-primary" data-ft="activate" disabled>Utiliser les équipements sélectionnés</button>
               <button type="button" id="ftStop" class="ft-btn" data-ft="stop" disabled>Arrêter la surveillance</button>
             </div>
             <dl class="ft-counters" aria-live="polite">
@@ -816,8 +820,9 @@ body.ptr-v5.has-post .shift-staffing{order:3}
               <div><dt>Hors ligne</dt><dd id="ftCountOffline">0</dd></div>
               <div class="ft-last"><dt>Dernier événement</dt><dd id="ftLastEvent">Aucun</dd></div>
             </dl>
+            <div id="ftAlert" class="ft-alert hidden" role="alert"></div>
             <div class="ft-scroll"><table class="ft-table">
-              <thead><tr><th class="ft-check"><input type="checkbox" id="ftAll" aria-label="Sélectionner tous les terminaux"></th><th>Terminal</th><th>Site</th><th>État</th><th>Dernière activité</th></tr></thead>
+              <thead><tr><th class="ft-check"><input type="checkbox" id="ftAll" aria-label="Sélectionner tous les équipements"></th><th>Équipement · type</th><th>Site</th><th>État · disponibilité</th><th>Dernière activité</th></tr></thead>
               <tbody id="ftRows"></tbody>
             </table></div>
           </div>
@@ -1470,7 +1475,8 @@ function renderSystemState(){
   setSystemItem("sysLive",live[0],live[1]);
   const pill=document.getElementById("stationState"),label=document.getElementById("stationStateLabel");
   if(pill&&label){
-    const state=!online?["is-bad","HORS LIGNE"]:liveState==="ok"?["is-ok","SYSTÈME OPÉRATIONNEL"]:liveState==="error"?["is-bad","RELÈVE INTERROMPUE"]:["is-pending","CONNEXION EN COURS…"];
+    const pf=window.PointeurFacial||{},noDevice=facialMode&&pf.listed&&!(pf.devices||[]).length;
+    const state=!online?["is-bad","HORS LIGNE"]:noDevice?["is-bad","AUCUN ÉQUIPEMENT UTILISABLE"]:liveState==="ok"?["is-ok","SYSTÈME OPÉRATIONNEL"]:liveState==="error"?["is-bad","RELÈVE INTERROMPUE"]:["is-pending","CONNEXION EN COURS…"];
     if(pill.className!=="station-state "+state[0])pill.className="station-state "+state[0];
     if(label.textContent!==state[1])label.textContent=state[1];
   }

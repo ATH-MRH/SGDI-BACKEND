@@ -112,7 +112,7 @@ test('« Tous les sites » : les terminaux autorisés de TOUS les sites du compt
 test('aucun terminal autorisé : état explicite et compact, aucune tentative, aucune action de configuration', async () => {
   const r = await boot({ devices: [], authorizedTotal: 0 });
   r.d.getElementById('faceModeBtn').click(); await wait(350);
-  assert.match(r.text('faceView'), /POINTAGE FACIAL AUTOMATIQUE.*AUCUN TERMINAL AUTORISÉ Aucun terminal de reconnaissance faciale n'est autorisé pour ce compte/);
+  assert.match(r.text('faceView'), /POINTAGE FACIAL AUTOMATIQUE.*AUCUN ÉQUIPEMENT AFFECTÉ Aucun équipement affecté à votre compte/);
   assert.ok(r.d.getElementById('faceView').classList.contains('no-video')); assert.equal(visible(r, 'facePreview'), false);
   assert.equal(r.of('/recognize').length, 0); assert.equal(r.of('/preview.jpg').length, 0);
   assert.deepEqual(sys(r, 'sysCamera'), ['Non disponible', 'bad']);
@@ -242,7 +242,7 @@ test('mise en page : cadre vidéo stable, aucun bouton « Capturer » ni « Appa
   r.d.getElementById('faceNav').click(); await wait(350);
   assert.equal(r.T.getFacialMode(), true);
   assert.deepEqual([...r.d.querySelectorAll('#faceView button')].map((b) => b.textContent.trim()),
-    ['Sélectionner tout', 'Désélectionner tout', 'Activer les terminaux sélectionnés', 'Arrêter la surveillance']);
+    ['Sélectionner tout', 'Désélectionner tout', 'Utiliser les équipements sélectionnés', 'Arrêter la surveillance']);
   assert.doesNotMatch(r.text('faceView'), /capturer|valider|appairer|associer/i);
   r.close();
 });

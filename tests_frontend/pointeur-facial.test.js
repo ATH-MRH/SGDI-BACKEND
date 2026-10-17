@@ -31,7 +31,7 @@ async function boot(state = {}, { site = '12', stored } = {}) {
   w.__pointeurTest.setSession({ token: 'tok', username: 'PTG01' });
   w.__pointeurTest.stopLivePolling();
   w.__pointeurTest.setSelectedSite(site);
-  if (stored) w.localStorage.setItem('atlas_pointer_face_terminals', JSON.stringify(stored));
+  if (stored) w.localStorage.setItem('atlas_pointer_equipment:PTG01', JSON.stringify(stored));
   w.eval(FACIAL_SRC);
   const F = w.PointeurFacial;
   const of = (suffix) => calls.filter((c) => c.path.endsWith(suffix));
@@ -51,12 +51,12 @@ test('liste des terminaux autorisés : Nom | Site | État | Sélection — rien 
   const r = await boot({ devices: [CAM(7, 12), CAM(8, 13), KIOSK(3, 12), KIOSK(4, 13, { online: false, connection: 'NEVER', state: 'OFFLINE', last_communication: null })] }, { site: '' });
   await r.F.start();
   assert.equal(r.of('/pointer/terminals')[0].search, '', 'tous les sites autorisés du compte');
-  assert.deepEqual([...r.d.querySelectorAll('.ft-table thead th')].map((th) => th.textContent.trim()), ['', 'Terminal', 'Site', 'État', 'Dernière activité']);
+  assert.deepEqual([...r.d.querySelectorAll('.ft-table thead th')].map((th) => th.textContent.trim()), ['', 'Équipement · type', 'Site', 'État · disponibilité', 'Dernière activité']);
   assert.deepEqual(r.rows().map((x) => [x.key, x.cells[2], x.checked]), [['cam:7', 'SITE 12', false], ['cam:8', 'SITE 13', false], ['trm:3', 'SITE 12', false], ['trm:4', 'SITE 13', false]]);
   assert.match(r.row('cam:7').cells[1], /CAM-7.*Entrée/); assert.equal(r.d.querySelector('#ftRows tr[data-key="cam:7"] td[title]').title, 'DAHUA IPC'); assert.match(r.row('cam:7').cells[3], /Disponible/);
   assert.match(r.row('trm:3').cells[3], /En ligne · au repos.*Terminal autonome/); assert.match(r.row('trm:4').cells[3], /Jamais connecté/);
   assert.equal(r.row('trm:4').cells[4], 'Jamais');
-  assert.match(r.text('faceStatus'), /SÉLECTIONNEZ LES TERMINAUX/);
+  assert.match(r.text('faceStatus'), /SÉLECTIONNEZ VOS ÉQUIPEMENTS/);
   assert.equal(r.d.getElementById('ftActivate').disabled, true, 'rien à activer sans sélection');
   await wait(1200);
   assert.equal(r.of('/recognize').length + r.of('/activate').length + r.of('/preview.jpg').length, 0, 'aucune reconnaissance avant activation');
@@ -75,7 +75,7 @@ test('sélection : un, plusieurs, tout, rien — compteurs et sélection mémori
   assert.equal(r.d.getElementById('ftActivate').disabled, false);
   r.click('all');
   assert.deepEqual(r.rows().map((x) => x.checked), [true, true, true]); assert.equal(r.count('ftCountSelected'), '3'); assert.equal(r.d.getElementById('ftAll').checked, true);
-  assert.deepEqual(JSON.parse(r.w.localStorage.getItem('atlas_pointer_face_terminals')), ['cam:7', 'cam:8', 'trm:3']);
+  assert.deepEqual(JSON.parse(r.w.localStorage.getItem('atlas_pointer_equipment:PTG01')), ['cam:7', 'cam:8', 'trm:3']);
   r.click('none');
   assert.deepEqual(r.rows().map((x) => x.checked), [false, false, false]); assert.equal(r.count('ftCountSelected'), '0');
   const all = r.d.getElementById('ftAll'); all.checked = true; all.dispatchEvent(new r.w.Event('change', { bubbles: true }));
@@ -185,12 +185,12 @@ test('activation : un résultat PAR terminal — refusé, révoqué ou hors pér
 test('aucun terminal autorisé / aucun terminal disponible / périmètre refusé : messages distincts, aucune tentative', async () => {
   let r = await boot({ devices: [], authorizedTotal: 0 });
   await r.F.start();
-  assert.match(r.text('faceStatus'), /AUCUN TERMINAL AUTORISÉ.*Administration Système/);
+  assert.match(r.text('faceStatus'), /AUCUN ÉQUIPEMENT AFFECTÉ.*Administration Système/);
   assert.ok(r.d.getElementById('faceTerminals').classList.contains('hidden')); assert.equal(r.F.running, false);
   r.close();
   r = await boot({ devices: [], authorizedTotal: 2 });
   await r.F.start();
-  assert.match(r.text('faceStatus'), /AUCUN TERMINAL DISPONIBLE.*désactivés, non appairés ou révoqués/);
+  assert.match(r.text('faceStatus'), /AUCUN ÉQUIPEMENT UTILISABLE.*désactivés, non appairés ou révoqués/);
   r.close();
   r = await boot({ listStatus: 403 });
   await r.F.start();
@@ -315,8 +315,77 @@ test('nom renvoyé par le serveur échappé (aucune injection HTML), y compris l
 });
 
 test('page : tableau compact et compteurs présents, script versionné (cache immuable)', () => {
-  assert.match(HTML, /<script defer src="\/static\/pointeur-facial\.js\?v=20261010-integration-v1"><\/script>/);
+  assert.match(HTML, /<script defer src="\/static\/pointeur-facial\.js\?v=20261018-equipements-v1"><\/script>/);
   for (const id of ['faceTerminals', 'ftRows', 'ftAll', 'ftActivate', 'ftStop', 'ftCountSelected', 'ftCountActive', 'ftCountOffline', 'ftLastEvent']) assert.match(HTML, new RegExp(`id="${id}"`));
-  assert.match(HTML, />Sélectionner tout<[\s\S]*>Désélectionner tout<[\s\S]*>Activer les terminaux sélectionnés<[\s\S]*>Arrêter la surveillance</);
+  assert.match(HTML, />Sélectionner tout<[\s\S]*>Désélectionner tout<[\s\S]*>Utiliser les équipements sélectionnés<[\s\S]*>Arrêter la surveillance</);
   assert.doesNotMatch(HTML, /faceCameraSelect/);
+});
+
+// ── Mes équipements (Gestion des équipements) ───────────────────────────────────────────
+const BLOCKED = (key, code, message) => ({ key, name: key.toUpperCase(), kind: key.startsWith('cam') ? 'CAMERA' : 'TERMINAL', site_id: 12, site: 'SITE 12', hardware: 'Tablette Android', code, message });
+
+test('mes équipements : un appareil révoqué ou désactivé reste visible, jamais sélectionnable', async () => {
+  const r = await boot({ devices: [CAM(7)], unavailable: [BLOCKED('trm:5', 'REVOKED', "Terminal révoqué par l'administration"), BLOCKED('trm:6', 'FACIAL_OFF', 'Pointage facial non activé sur ce terminal par l\'administration')] });
+  await r.F.start();
+  assert.deepEqual(r.rows().map((x) => x.key), ['cam:7', 'trm:5', 'trm:6']);
+  assert.equal(r.d.querySelector('#ftRows tr[data-key="trm:5"] input').disabled, true);
+  assert.match(r.row('trm:5').cells[3], /Révoqué.*Terminal révoqué/); assert.match(r.row('trm:6').cells[3], /Indisponible.*non activé/);
+  r.click('all');
+  assert.equal(r.count('ftCountSelected'), '1', 'tout sélectionner ne coche que les équipements utilisables');
+  r.click('activate'); await wait(80);
+  assert.deepEqual(r.of('/activate')[0].body.keys, ['cam:7']);
+  r.close();
+});
+
+test('mes équipements : seuls des appareils inutilisables — liste visible et message explicite, jamais « opérationnel »', async () => {
+  const r = await boot({ devices: [], authorizedTotal: 1, unavailable: [BLOCKED('trm:5', 'REVOKED', "Terminal révoqué par l'administration")] });
+  r.w.__pointeurTest.setFacialMode(true);
+  await r.F.start();
+  assert.match(r.text('faceStatus'), /AUCUN ÉQUIPEMENT UTILISABLE/);
+  assert.equal(r.d.getElementById('faceTerminals').classList.contains('hidden'), false);
+  r.w.renderSystemState();
+  assert.equal(r.d.getElementById('stationStateLabel').textContent, 'AUCUN ÉQUIPEMENT UTILISABLE');
+  r.close();
+  const ok = await boot({ devices: [CAM(7)] });                      // témoin : un équipement utilisable
+  ok.w.__pointeurTest.setFacialMode(true);
+  await ok.F.start();
+  ok.w.renderSystemState();
+  assert.notEqual(ok.d.getElementById('stationStateLabel').textContent, 'AUCUN ÉQUIPEMENT UTILISABLE');
+  ok.close();
+});
+
+test('mes équipements : aucun appareil affecté → message demandé, aucune tentative', async () => {
+  const r = await boot({ devices: [], authorizedTotal: 0 });
+  await r.F.start();
+  assert.match(r.text('faceStatus'), /AUCUN ÉQUIPEMENT AFFECTÉ Aucun équipement affecté à votre compte\. Contactez l'Administration Système\./);
+  assert.equal(r.of('/activate').length, 0);
+  r.close();
+});
+
+test('mes équipements : un appareil hors ligne sélectionné déclenche une alerte claire', async () => {
+  const r = await boot({ devices: [KIOSK(4, 12, { online: false, connection: 'LOST', state: 'OFFLINE' }), CAM(7)] });
+  await r.F.start();
+  assert.ok(r.d.getElementById('ftAlert').classList.contains('hidden'), 'pas d\'alerte tant que rien n\'est choisi');
+  r.check('trm:4');
+  assert.match(r.d.getElementById('ftAlert').textContent, /Hors ligne : TAB-4/);
+  r.check('trm:4', false);
+  assert.ok(r.d.getElementById('ftAlert').classList.contains('hidden'));
+  r.close();
+});
+
+test('mes équipements : sélection conservée par compte, jamais partagée avec un autre compte du poste', async () => {
+  const r = await boot({ devices: [CAM(7), CAM(8)] });
+  await r.F.start();
+  r.check('cam:8');
+  assert.deepEqual(JSON.parse(r.w.localStorage.getItem('atlas_pointer_equipment:PTG01')), ['cam:8']);
+  r.F.stop();
+  r.w.__pointeurTest.setSession({ token: 'tok2', username: 'PTG02' });
+  await r.F.start();
+  assert.deepEqual(r.rows().map((x) => x.checked), [false, false], 'l\'autre compte ne reçoit pas la sélection');
+  r.F.stop();
+  r.w.__pointeurTest.setSession({ token: 'tok', username: 'PTG01' });
+  await r.F.start();
+  assert.deepEqual(r.rows().map((x) => [x.key, x.checked]), [['cam:7', false], ['cam:8', true]]);
+  assert.equal(r.of('/activate').length, 0, 'la sélection restaurée n\'active rien');
+  r.close();
 });

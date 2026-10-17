@@ -25,12 +25,14 @@
   const ERROR_RETRY_MS = 5000;  // reprise après erreur réseau/caméra
   const STATUS_MS = 10000;      // relevé d'état de TOUS les équipements (un seul appel)
   const PREVIEW_MS = 1000;      // aperçu : UNE seule caméra à la fois
-  const STORE_KEY = "atlas_pointer_face_terminals";
+  // Sélection mémorisée PAR COMPTE (préférence d'affichage, jamais une autorisation : le serveur
+  // revérifie tout à « Utiliser »). L'ancienne clé commune à tous les comptes n'est plus lue.
+  const STORE_PREFIX = "atlas_pointer_equipment:";
 
   const F = {
     running: false, devices: [], selected: new Set(), runners: new Map(), monitored: new Set(), notes: new Map(),
     focusKey: null, previewTimer: null, previewUrl: null, previewBusy: false, statusTimer: null, displayUntil: 0, lastState: "",
-    lastEvent: null, authorizedTotal: 0, engineReady: false,
+    lastEvent: null, authorizedTotal: 0, engineReady: false, unavailable: [],
     // État réellement connu, affiché dans « État du système » : jamais supposé.
     cameraState: "OFF", engineState: "OFF", siteId: "", generation: 0,
   };
@@ -357,11 +359,16 @@
       const st = rowState(dev);
       return `<tr data-key="${esc(dev.key)}" class="${F.focusKey === dev.key ? "is-focus" : ""}">
         <td class="ft-check"><input type="checkbox" data-key="${esc(dev.key)}" aria-label="Sélectionner ${esc(dev.name)}"${F.selected.has(dev.key) ? " checked" : ""}></td>
-        <td title="${esc(dev.hardware || "")}"><b>${esc(dev.name)}</b>${dev.location ? `<small>${esc(dev.location)}</small>` : ""}</td>
+        <td title="${esc(dev.hardware || "")}"><b>${esc(dev.name)}</b><small>${esc(dev.hardware || "")}${dev.location ? " · " + esc(dev.location) : ""}</small></td>
         <td>${esc(dev.site || "")}</td>
         <td><span class="ft-state" data-tone="${st.tone}">${esc(st.label)}</span>${st.detail && st.detail !== st.label ? `<small>${esc(st.detail)}</small>` : ""}</td>
         <td class="ft-time">${esc(activity(dev))}</td></tr>`;
-    }).join("");
+    }).join("") + F.unavailable.map((dev) => `<tr data-key="${esc(dev.key)}" class="is-unavailable">
+        <td class="ft-check"><input type="checkbox" disabled aria-label="${esc(dev.name)} : indisponible"></td>
+        <td title="${esc(dev.hardware || "")}"><b>${esc(dev.name)}</b><small>${esc(dev.hardware || "")}${dev.location ? " · " + esc(dev.location) : ""}</small></td>
+        <td>${esc(dev.site || "")}</td>
+        <td><span class="ft-state" data-tone="bad">${dev.code === "REVOKED" ? "Révoqué" : "Indisponible"}</span><small>${esc(dev.message || "")}</small></td>
+        <td class="ft-time">—</td></tr>`).join("");
     const states = F.devices.map((dev) => [dev, rowState(dev)]);
     const engaged = (dev) => F.runners.has(dev.key) || F.monitored.has(dev.key) || F.selected.has(dev.key);
     const set = (id, value) => { const el = $(id); if (el) el.textContent = String(value); };
@@ -377,14 +384,26 @@
     if (activate) activate.disabled = none || !F.engineReady;
     if (stop) stop.disabled = !Array.from(F.selected).some((k) => F.runners.has(k) || F.monitored.has(k));
     const box = $("faceTerminals");
-    if (box) box.classList.toggle("hidden", !F.devices.length);
+    if (box) box.classList.toggle("hidden", !F.devices.length && !F.unavailable.length);
+    // Alerte claire pour tout équipement choisi (ou surveillé) hors ligne.
+    const alert = $("ftAlert"), lost = states.filter(([dev, st]) => st.offline && engaged(dev)).map(([dev]) => dev.name);
+    if (alert) {
+      alert.classList.toggle("hidden", !lost.length);
+      alert.textContent = lost.length ? `⚠ Hors ligne : ${lost.join(", ")} — vérifiez l'alimentation et le réseau de l'appareil, ou utilisez le QR / la saisie manuelle.` : "";
+    }
   }
 
+  const account = () => {
+    const session = window.pointerSession || (typeof pointerSession !== "undefined" ? pointerSession : null);
+    return String((session && ((session.user && (session.user.id || session.user.username)) || session.username)) || "");
+  };
   function saveSelection() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(Array.from(F.selected))); } catch (e) { /* stockage indisponible */ }
+    if (!account()) return;
+    try { localStorage.setItem(STORE_PREFIX + account(), JSON.stringify(Array.from(F.selected))); } catch (e) { /* stockage indisponible */ }
   }
   function storedSelection() {
-    try { const v = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; }
+    if (!account()) return [];
+    try { const v = JSON.parse(localStorage.getItem(STORE_PREFIX + account()) || "[]"); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; }
   }
 
   F.toggle = function (key, on) {
@@ -445,6 +464,8 @@
   function applyListing(listing) {
     const known = new Map((listing.terminals || []).map((d) => [d.key, d]));
     F.authorizedTotal = listing.authorized_total || 0;
+    F.unavailable = Array.isArray(listing.unavailable) ? listing.unavailable : [];
+    F.listed = true;                                   // liste reçue : l'état du poste peut en conclure
     F.engineReady = !!(listing.engine && listing.engine.ready);
     Array.from(F.runners.keys()).concat(Array.from(F.monitored)).forEach((key) => {
       if (!known.has(key)) stopRunner(key);
@@ -497,6 +518,7 @@
     const generation = ++F.generation;
     const stale = () => generation !== F.generation;
     F.siteId = String(site() || "");
+    F.listed = false; F.unavailable = [];
     F.running = true;
     bind();
     setStatus("READY", "Chargement des terminaux…");
@@ -510,9 +532,9 @@
       renderTable();
       if (!F.devices.length) {
         const none = !F.authorizedTotal;
-        setStatus("DISABLED", `<div class="face-check">${none ? "AUCUN TERMINAL AUTORISÉ" : "AUCUN TERMINAL DISPONIBLE"}</div><small>${none
-          ? "Aucun terminal de reconnaissance faciale n'est autorisé pour ce compte. Voir l'Administration Système."
-          : "Les terminaux autorisés pour ce compte sont désactivés, non appairés ou révoqués."}</small>`);
+        setStatus("DISABLED", `<div class="face-check">${none ? "AUCUN ÉQUIPEMENT AFFECTÉ" : "AUCUN ÉQUIPEMENT UTILISABLE"}</div><small>${none
+          ? "Aucun équipement affecté à votre compte. Contactez l'Administration Système."
+          : "Les équipements affectés à votre compte sont désactivés, non appairés ou révoqués (détail dans « Mes équipements »)."}</small>`);
         setSystem("NONE", F.engineReady ? "OFF" : "DISABLED");
         F.running = false;
         return;
@@ -521,7 +543,7 @@
         setStatus("DISABLED", `<div class="face-check">RECONNAISSANCE FACIALE DÉSACTIVÉE</div><small>Utilisez le QR ou la saisie manuelle.</small>`);
         setSystem("NONE", "DISABLED");
       } else {
-        setStatus("READY", `SÉLECTIONNEZ LES TERMINAUX<br><small>Cochez un ou plusieurs terminaux puis « Activer les terminaux sélectionnés ».</small>`);
+        setStatus("READY", `SÉLECTIONNEZ VOS ÉQUIPEMENTS<br><small>Cochez un ou plusieurs équipements puis « Utiliser les équipements sélectionnés ».</small>`);
         setSystem("NONE", "INIT");
       }
       F.statusTimer = setInterval(pollStatus, STATUS_MS);
