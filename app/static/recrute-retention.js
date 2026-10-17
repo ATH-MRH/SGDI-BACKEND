@@ -9,8 +9,9 @@ const RETENTION_CATEGORIES=[["declined_applications","Candidatures refusées","C
   ["inactive_accounts","Espaces candidats inactifs","Espace candidat inactif"],["departed_recruits","Personnes recrutées puis parties","Personne recrutée puis partie"]];
 // Libellés des décomptes renvoyés par l'API ; une clé inconnue est affichée telle quelle plutôt que masquée.
 const RETENTION_ITEMS={application:"Candidature",documents:"Pièces",messages:"Messages",interviews:"Entretiens",notes:"Notes",events:"Lignes d’historique",document_requests:"Demandes de pièces",
-  contracts:"Contrat préparé",account:"Espace candidat",cv:"CV",photo:"Photo",alerts:"Alertes d’offres",notifications:"Notifications",push_devices:"Appareils de notification",sessions:"Sessions ouvertes",
-  candidate_dossier:"Dossier de candidature",applications_detached:"Candidatures conservées, détachées de l’espace"};
+  contracts:"Contrat préparé",account:"Espace candidat",cv:"CV",photo:"Photo",alerts:"Alertes d’offres",notifications:"Notifications",push_deliveries:"Envois push en file",push_devices:"Appareils de notification",sessions:"Sessions ouvertes",
+  candidate_dossier:"Dossier de candidature",applications_detached:"Candidatures conservées, détachées de l’espace",
+  profile_snapshot:"Copie du profil envoyée",profile_snapshots:"Copies du profil jointes aux candidatures conservées"};
 let retentionState={data:null,error:"",forbidden:false,loading:false,request:0,asOf:"",category:"",query:"",society:"",page:1,open:""};
 
 function retentionHost(){return document.getElementById("retentionSection")}
@@ -33,7 +34,7 @@ function retentionDetail(row){
   const list=(counts,empty)=>{const entries=Object.entries(counts||{});
     return entries.length?`<ul class="retention-list">${entries.map(([key,value])=>`<li><span>${esc(RETENTION_ITEMS[key]||key)}</span><strong>${Number(value)||0}</strong></li>`).join("")}</ul>`:`<p class="rec-note">${empty}</p>`};
   return `<div class="retention-detail"><div><h4>Éléments concernés</h4>${list(row.would_delete,"L’API ne détaille aucun élément pour ce dossier.")}</div>`
-    +(row.would_keep?`<div><h4>Éléments qui seraient conservés</h4>${list(row.would_keep,"Aucun.")}</div>`:"")
+    +(row.would_keep?`<div><h4>Éléments qui seraient conservés</h4>${list(row.would_keep,"Aucun.")}${row.would_keep_reason?`<p class="rec-note">${esc(row.would_keep_reason)}</p>`:""}</div>`:"")
     +`<div><h4>Repères</h4><ul class="retention-list">${[["Référence",row.reference],["Société",row.society],["Poste",row.position],["Matricule employé",row.employee_code],["Statut employé",row.employee_status],
       ["Base de la date",row.basis]].filter(([,value])=>value).map(([label,value])=>`<li><span>${label}</span><strong>${esc(value)}</strong></li>`).join("")||"<li><span>Aucun autre repère</span></li>"}</ul></div></div>`;
 }

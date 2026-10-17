@@ -56,21 +56,22 @@ test('recrute.html loads the processing workspace and exposes it in the navigati
 test('dashboard: clickable counters, filters sent to the server, table and pipeline views', async () => {
   const app = workspace({ responses: { '/workspace': board() } });
   await app.run('refreshEmploi()');
-  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-counter span')), COUNTERS.map(c => c.label));
-  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-counter strong')), COUNTERS.map(c => String(c.count)));
+  app.run("emploiState.mode='table';renderEmploi()");
+  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-counter span')), COUNTERS.filter(c=>['new','review','interviews','hired'].includes(c.key)).concat(COUNTERS.filter(c=>!['new','review','interviews','hired'].includes(c.key))).map(c => c.label));
+  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-counter strong')), COUNTERS.filter(c=>['new','review','interviews','hired'].includes(c.key)).concat(COUNTERS.filter(c=>!['new','review','interviews','hired'].includes(c.key))).map(c => String(c.count)));
   assert.deepEqual(texts(app.host.querySelectorAll('thead th')), ['Candidat', 'Annonce', 'Reçue le', 'Étape · décision · contrat', 'Recruteur', 'Pièces et messages', 'Actions']);
   const rows = app.host.querySelectorAll('tbody tr');
   assert.equal(rows.length, 3);
   assert.match(rows[1].textContent, /1 attendue/); assert.match(rows[1].textContent, /2 messages non lus/);
   assert.match(rows[2].textContent, /Candidature spontanée/); assert.match(rows[2].textContent, /Non retenue · non communiquée/, 'an internal decision is flagged as not communicated');
   for (const label of ['Société', 'Annonce', 'Wilaya', 'Recruteur', 'Étape', 'Reçues à partir du', 'Reçues jusqu’au']) assert.ok(app.host.querySelector(`[aria-label="${label}"]`), label);
-  assert.match(app.host.querySelectorAll('.emploi-counter')[5].getAttribute('onclick'), /emploiSetBucket\('decisions'\)/); await app.run("emploiSetBucket('decisions')");
+  assert.match([...app.host.querySelectorAll('.emploi-counter')].find(button=>button.textContent.includes('Décisions en attente')).getAttribute('onclick'), /emploiSetBucket\('decisions'\)/); await app.run("emploiSetBucket('decisions')");
   assert.equal(app.calls.at(-1)[1], '/api/drh/job-offers/workspace?bucket=decisions');
   await app.run("emploiSetFilter('stage','review')"); await new Promise(resolve => setTimeout(resolve));
   assert.equal(app.calls.at(-1)[1], '/api/drh/job-offers/workspace?stage=review&bucket=decisions');
   app.run("emploiState.mode='pipeline';renderEmploi()");
-  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-column header span')), STAGES.map(s => s.label));
-  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-column header b')), ['1', '1', '0', '0', '0', '1', '0', '0', '0', '0']);
+  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-column header span')), ['Réception','Étude','Entretien','Décision','Contrat','Recrutement']);
+  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-column header b')), ['1', '1', '0', '1', '0', '0']);
   const failing = workspace({ responses: { '/workspace': new Error('Panne réseau') } }); await failing.run('refreshEmploi()');
   assert.match(failing.host.querySelector('.rec-error-state').textContent, /Panne réseau/); assert.equal(failing.host.querySelector('tbody'), null);
 });
@@ -80,7 +81,7 @@ test('application file: profile, received documents with name, type, size, date 
   await app.run('openEmploiDossier(1)');
   assert.equal(app.host.querySelector('h2').textContent, 'TEST1 Nadia');
   assert.deepEqual(texts(app.host.querySelectorAll('nav[aria-label="Rubriques du dossier"] .tab-btn')).map(t => t.replace(/ \d.*$/, '')),
-    ['Dossier', 'Pièces', 'Traitement', 'Entretiens', 'Échanges', 'Notes et historique', 'Contrat']);
+    ['Synthèse', 'Pièces', 'Traitement', 'Entretiens', 'Échanges', 'Notes et historique', 'Contrat']);
   assert.match(app.host.textContent, /Disponible immédiatement\./); assert.match(app.host.textContent, /1 rue du Test/); assert.match(app.host.textContent, /CAND-2026-000001/);
   app.run("emploiSetTab('documents')");
   assert.deepEqual(texts(app.host.querySelectorAll('thead th')), ['Pièce', 'Fichier', 'Type', 'Taille', 'Reçue le', 'Provenance', 'Actions']);
@@ -197,4 +198,30 @@ test('tips and company pages are managed here; drafts are labelled, nothing is i
   assert.deepEqual(app.calls.find(call => call[0] === 'PUT').slice(1), ['/api/drh/job-offers/tips/1', { title: 'Préparer son entretien', summary: 'La veille', body: 'Texte du conseil', category: 'entretien', minutes: 4, status: 'published' }]);
   await app.run("emploiSetView('companies')");
   assert.match(app.host.textContent, /aucun chiffre n’est inventé/); assert.equal(app.host.querySelector('input[name="headcount"]').placeholder, 'Laisser vide si non vérifié');
+});
+
+// Une candidature reste visible exactement une fois, même pour les étapes détaillées.
+test('pipeline: six groupes, états précis et décisions internes conservés, textes échappés', async()=>{
+  const rows=STAGES.map((stage,i)=>item(i+1,{stage:stage.code,stage_label:stage.label,next_action:'<script>action</script>'}));
+  rows.push(item(99,{stage:'future_step',stage_label:'Étape future',outcome:'unfavorable',outcome_label:'Non retenue'}));
+  const data=board(rows);data.stages=[...STAGES,{code:'future_step',label:'Étape future'}];
+  const app=workspace({responses:{'/workspace':data}});await app.run('refreshEmploi()');
+  assert.equal(app.host.querySelectorAll('.emploi-card').length,11);
+  assert.deepEqual(texts(app.host.querySelectorAll('.emploi-column header b')),['1','2','2','1','3','1','1']);
+  assert.equal(app.host.querySelector('.emploi-card script'),null);
+  assert.match(app.host.textContent,/Non retenue · non communiquée/);
+  assert.match(app.host.textContent,/Présélection/);
+  assert.equal(app.host.querySelector('.emploi-pipeline').getAttribute('tabindex'),'0');
+});
+
+test('portefeuille: changer de société ferme le dossier courant et recharge le bon périmètre',async()=>{
+  const app=workspace({responses:{'/workspace':board()}});
+  let society='IRON GLOBAL SÉCURITÉ';app.ctx.portfolioSociety=()=>society;
+  await app.run('refreshEmploi()');
+  assert.match(app.calls.at(-1)[1],/society=IRON/);
+  app.run('emploiState.view="dossier";emploiState.dossier={id:1};');
+  society='IRON GLOBAL SOLUTION';await app.run('refreshEmploi()');
+  assert.equal(app.run('emploiState.view'),'board');
+  assert.equal(app.run('emploiState.dossier'),null);
+  assert.equal(new URL('https://test'+app.calls.at(-1)[1]).searchParams.get('society'),society);
 });

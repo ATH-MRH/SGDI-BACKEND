@@ -106,7 +106,9 @@ def test_incomplete_table_cannot_advance_alembic_revision(pg_database, ddl):
             _module().upgrade()
         db.execute(sa.text('INSERT INTO facial_device_authorizations(user_id,camera_id) VALUES(1,1)'))
         db.execute(sa.text(ddl))
-    refused = alembic(url, 'upgrade', 'head')
+    # Révision visée : la migration faciale elle-même (les autres branches exigent des tables que
+    # cette base minimale n'a pas).
+    refused = alembic(url, 'upgrade', '20261017_0001')
     assert refused.returncode != 0 and 'préexistante incompatible' in refused.stderr
     with engine.connect() as db:
         assert db.execute(sa.text('SELECT version_num FROM alembic_version')).scalar_one() == '20261015_0002'

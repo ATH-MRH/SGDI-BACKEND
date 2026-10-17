@@ -27,7 +27,7 @@ export type SentDocument = { label: string; name: string; mime_type: string; siz
 export type DocumentRequest = { id: number; label: string; note: string | null; due: string | null; status: 'requested' | 'received'; received_at: string | null };
 export type SharedContract = { position: string; contract_type: string; state: string; state_label: string; start_date: string | null; signed_on: string | null };
 export type Application = {
-  id: number; kind: 'offer' | 'spontaneous'; position: string; submitted_at: string | null; reference: string; state: ApplicationState;
+  id: number; kind: 'offer' | 'spontaneous'; position: string; submitted_at: string | null; reference: string; state: ApplicationState; state_scope?: 'application' | 'dossier';
   offer: { id: number; title: string; company: Company; wilaya: string | null; contract_type: string | null; open: boolean } | null;
   message: string | null; withdrawn: boolean; can_withdraw: boolean; documents: SentDocument[]; document_requests: DocumentRequest[]; contract: SharedContract | null;
 };
@@ -116,9 +116,9 @@ const STATE_TONES: Record<string, StateTone> = {
 };
 export const stateTone = (status: string): StateTone => STATE_TONES[status] || 'neutral';
 
-/** Une candidature à une annonce a son propre état ; une candidature spontanée suit l'état du dossier. */
-export const stateScope = (application: Pick<Application, 'kind'>) => application.kind === 'offer'
-  ? { heading: 'État de votre candidature', note: 'Cet état ne concerne que cette annonce. Vos autres candidatures sont suivies séparément.' }
+/** Le serveur précise la portée ; sans ce champ, garder la compatibilité avec les anciens serveurs. */
+export const stateScope = (application: Pick<Application, 'kind' | 'state_scope'>) => application.kind === 'offer' || application.state_scope === 'application'
+  ? { heading: 'État de votre candidature', note: 'Cet état concerne cette candidature. Vos autres candidatures sont suivies séparément.' }
   : { heading: 'État de votre dossier', note: 'L’état est celui enregistré par le service recrutement pour votre dossier.' };
 
 export const newRequestId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 8)}`;

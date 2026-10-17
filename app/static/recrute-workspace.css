@@ -1,0 +1,126 @@
+/* Recrutement : shell commun, appliqué à toutes les rubriques et fenêtres.
+   Géométrie et palette de navigation reprises du shell DRH / OPS (sgdi-app.css).
+   Ce fichier reste limité à la surface recrutement. */
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] {
+  --atlas-font:Arial,sans-serif;
+  --navy:#14243b; --blue:#0064f5; --bg:#f5f6f8; --line:#e2e8f0;
+  --ink:#17263d; --muted:#627086; font-family:Arial,sans-serif;
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(button,input,select,textarea) {font-family:Arial,sans-serif}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app {
+  grid-template-columns:250px minmax(0,1fr);grid-template-rows:76px minmax(calc(100vh - 76px),auto);
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar {
+  background:#fff;color:#0f2d5a;border-right:1px solid var(--line);padding:18px 12px;
+  display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand:not(.hidden) {
+  display:flex;padding:12px;margin-bottom:20px;border:1px solid var(--line);border-radius:10px;
+  background:#f8fafc;color:#0f2d5a;font-size:12px;line-height:1.5;min-height:72px;
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand :is(img,.sidebar-brand-initials) {width:42px;height:42px;flex-shrink:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar-title {color:var(--muted);font-size:10px;padding:0 12px 12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav {gap:6px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn {
+  color:#0f2d5a;min-height:46px;padding:11px 12px;border-radius:8px;font-size:13px;font-weight:600;
+  white-space:normal;line-height:1.4;min-width:0;overflow-wrap:anywhere;
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn:hover {background:#eff6ff;color:#1d4ed8}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn.active {background:#0064f5;color:white;box-shadow:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-icon {background:transparent;color:inherit;width:22px;height:22px;border-radius:0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main {padding:26px 28px 32px;max-width:100%;overflow:hidden}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.rec-page-header,.section-head,.candidate-page-head) {margin-bottom:22px;gap:16px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.rec-page-heading,.section-head,.candidate-page-head) h2 {font-size:26px;line-height:1.2;letter-spacing:-.5px;color:var(--ink)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.rec-page-heading,.section-head,.candidate-page-head) p {font-size:13px;line-height:1.6;max-width:760px;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.table-card,.dashboard-panel,.announcement-card,.rec-filters,.emploi-counter) {border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 5px #14243b04;background:#fff}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.primary,.secondary,.dashboard-mini-action,.tab-btn) {border-radius:8px;font-weight:600}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .primary {background:var(--blue);color:#fff;min-height:42px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .primary:hover {background:#0052cf}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(input,select) {min-height:40px;border-radius:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(button,a,input,select,textarea):focus-visible {outline:3px solid #60a5fa;outline-offset:3px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.rec-tabs,.emploi-views) {gap:4px;padding:4px;border:1px solid var(--line);border-radius:10px;background:white;width:fit-content;max-width:100%;flex-wrap:wrap}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-tabs .tab-btn {border:0;min-height:36px;background:transparent;box-shadow:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-tabs .tab-btn.active {background:#eaf2ff;color:#0758d8}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-workspace-nav {display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.rec-workspace-nav button {border:0;background:transparent;color:var(--muted);padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600;min-height:40px}
+.rec-workspace-nav button.active {background:#e6efff;color:#0758d8}
+.rec-workspace-nav>span {margin-left:auto;color:var(--muted);font-size:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters {grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:0 0 20px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counter {padding:16px;gap:8px;min-height:92px;border-top:3px solid #bad6ff}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counter strong {font-size:28px;color:#14243b}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counter.active {background:#eff6ff;border-color:#0064f5}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-filters {padding:14px;gap:10px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-toolbar {margin:18px 0 14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-pipeline {gap:12px;padding:0 0 16px;align-items:stretch;scroll-snap-type:x proximity}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column {flex:1 0 200px;min-width:200px;padding:10px;background:#f0f3f8;min-height:300px;scroll-snap-align:start;border-color:var(--line)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column>header {margin:-10px -10px 4px;padding:14px 12px;background:#e5efff;color:#1457b5;border-radius:12px 12px 0 0;align-items:center}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column:nth-child(2)>header {background:#fff3d6;color:#885c05}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column:nth-child(3)>header {background:#eee9ff;color:#6442a8}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column:nth-child(n+4)>header {background:#e1f4e9;color:#17613b}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column>header b {background:#ffffffad;padding:4px 8px;border-radius:20px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-card {border:1px solid var(--line);padding:14px 12px;gap:7px;border-radius:10px;box-shadow:0 2px 4px #14243b05;overflow-wrap:anywhere}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-card:hover {border-color:#0064f5;box-shadow:0 3px 10px #0064f512}
+.emploi-card strong {font-size:14px}.emploi-card .emploi-origin {font-size:11px;color:#1759ac;background:#edf4ff;padding:4px 8px;border-radius:20px;width:fit-content}
+.emploi-next {border-top:1px solid var(--line);padding-top:9px;margin-top:4px;color:#1759ac;line-height:1.5}
+.emploi-next small {display:block;margin-bottom:3px;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-panel {padding:22px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-facts {gap:18px 24px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-facts dt {letter-spacing:.04em;color:var(--muted)}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-facts dd {line-height:1.5}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-interview {padding:18px;background:#fbfcfe}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-quote {padding:16px;line-height:1.6}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-form {gap:16px;margin-top:20px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.modal-card,.modal-box,.emploi-viewer-box) {border-radius:14px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-note {padding:16px 0}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-history {gap:14px;line-height:1.6}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table th {background:#f8fafc;color:#627086}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table td {padding-top:16px;padding-bottom:16px}
+@media(max-width:1100px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app {grid-template-columns:220px minmax(0,1fr)}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main {padding:22px 18px}
+  .rec-workspace-nav>span {width:100%;margin:4px 0}
+}
+@media(max-width:900px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .app {display:flex;flex-direction:column}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .top {order:0;min-height:72px}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar {order:1;height:auto;position:static;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav {flex-direction:row;overflow:auto;gap:6px}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-nav-btn {flex:0 0 auto;white-space:nowrap}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .sidebar-brand:not(.hidden),body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .recruit-sidebar-title {display:none}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .main {order:2;padding:20px 14px}
+}
+@media(max-width:480px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters {grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counter {padding:12px;min-height:80px}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-panel {padding:16px}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.rec-page-heading,.section-head,.candidate-page-head) h2 {font-size:23px}
+}
+@media(prefers-reduced-motion:reduce) {body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] * {scroll-behavior:auto;transition:none}}
+.emploi-journey {display:flex;gap:6px;margin:0 0 20px;overflow:auto;padding:4px 0 8px}
+.emploi-journey span {flex:1;min-width:100px;text-align:center;padding:10px 12px;background:#e9edf3;color:#627086;border-radius:8px;font-size:12px;white-space:nowrap}
+.emploi-journey span.current {background:#e5efff;color:#0758d8;font-weight:700;border:1px solid #9bc1ff}
+
+@media(min-width:601px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table {table-layout:fixed}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table :is(th,td) {white-space:normal;overflow-wrap:anywhere;min-width:0}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table :is(.rec-cell-main,.candidate-identity) {min-width:0}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .rec-table :is(.rec-row-actions,.rec-actions) {flex-wrap:wrap;white-space:normal}
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.emploi-filters,.retention-filters).rec-filters {grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+@media(max-width:640px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] :is(.emploi-filters,.retention-filters).rec-filters {grid-template-columns:minmax(0,1fr)}
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .retention-filters input[type=search] {grid-column:auto}
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-filters .emploi-period {text-transform:none;letter-spacing:0;margin:0;gap:8px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-filters .emploi-period input {flex:1;width:0;min-width:0}
+@media(min-width:1400px) {
+  body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-column {flex-basis:165px;min-width:165px}
+}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters {grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:12px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters .emploi-counter:nth-child(2) {border-top-color:#edc56a}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters .emploi-counter:nth-child(3) {border-top-color:#c4aff4}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters .emploi-counter:nth-child(4) {border-top-color:#91d8b2}
+.emploi-secondary-counters {display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-secondary-counters .emploi-counter {display:flex;flex-direction:row-reverse;align-items:center;min-height:34px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;gap:8px;box-shadow:none}
+body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-secondary-counters .emploi-counter strong {font-size:12px;background:#edf3fc;padding:3px 6px;border-radius:6px}
+@media(max-width:640px) {body.atlas-ui[data-atlas-surface="recruitment"][data-recruitment-ui="v5"] .emploi-counters {grid-template-columns:repeat(2,minmax(0,1fr))}}
