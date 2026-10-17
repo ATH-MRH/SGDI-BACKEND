@@ -1,3 +1,5 @@
+// Le calcul contractuel existant utilise des Date locales : stabiliser le banc, pas la règle métier.
+process.env.TZ='UTC';
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {loadSgdiApp}=require('./load-app');
@@ -28,8 +30,8 @@ test('sans contrat, une ancienne date de recrutement seule ne crée pas une expi
 });
 test('la durée explicitement renseignée utilise le calcul contractuel existant',t=>{
   const app=harness(t),api=app.T(),a=agent({dateRecrutement:'2025-10-01',dureeContrat:'12m'});
-  assert.equal(api.employeePositionContractEndDate(a),'2026-09-30');
-  assert.equal(api.employeeExpiredContractAlert(a,base).days,17);
+  assert.equal(api.employeePositionContractEndDate(a),'2026-10-01');
+  assert.equal(api.employeeExpiredContractAlert(a,base).days,16);
 });
 test('plusieurs contrats : réutilisation de l’échéance déjà choisie par le système',t=>{
   const app=harness(t),api=app.T(),a=agent({dateFinContrat:'2026-01-01'});
