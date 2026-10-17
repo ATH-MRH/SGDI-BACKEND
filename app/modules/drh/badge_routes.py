@@ -660,27 +660,42 @@ def my_badge_rights(db: Session = Depends(get_db), user: User = Depends(current_
 
 
 @router.get("/dashboard")
-def dashboard(society: str | None = Query(None, max_length=150), db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+def dashboard(society: str | None = Query(None, max_length=150), site_id: int | None = Query(None, ge=1),
+              db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     _access(user)
     ensure_reference_template(db)
     employees = [row for row in _scoped_employees(db, user, society) if not _is_sortant(row)]
+    if site_id:
+        sites = _current_sites(db, [row.id for row in employees])
+        employees = [row for row in employees if row.id in sites and sites[row.id][1].id == site_id]
     badges = _active_badges(db, [row.id for row in employees])
-    soon = date.today() + timedelta(days=30)
+    today = date.today()
+    soon = today + timedelta(days=30)
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     ids = {row.id for row in employees}
-    all_badges = [row for row in db.execute(select(EmployeeBadge.employee_id, EmployeeBadge.status, EmployeeBadge.issued_at)).all() if row.employee_id in ids]
-    events = _history_rows(db, user, society)[:8]
+    all_badges = [row for row in db.execute(select(EmployeeBadge.employee_id, EmployeeBadge.status, EmployeeBadge.issued_at,
+                                                    EmployeeBadge.valid_until, EmployeeBadge.revoke_reason)).all() if row.employee_id in ids]
+    active = list(badges.values())
+    expired = [badge for badge in active if badge.valid_until and badge.valid_until < today]
+    events = _history_rows(db, user, society)
     return {
         "employees": len(employees),
         "with_badge": len(badges),
         "without_badge": len(employees) - len(badges),
         "without_photo": sum(1 for row in employees if not _photo_value(row)),
-        "to_print": sum(1 for badge in badges.values() if not badge.print_count),
-        "expiring": sum(1 for badge in badges.values() if badge.valid_until and badge.valid_until <= soon),
+        "to_print": sum(1 for badge in active if not badge.print_count),
+        "expiring": sum(1 for badge in active if badge.valid_until and today <= badge.valid_until <= soon),
         "revoked": sum(1 for row in all_badges if row.status == STATUS_REVOKED),
         "issued_this_month": sum(1 for row in all_badges if row.issued_at and row.issued_at >= month_start),
+        # Portail badge.irongs.com : état du parc de badges émis
+        "total_badges": len(all_badges),
+        "active": len(active) - len(expired),
+        "expired": len(expired),
+        "lost": sum(1 for row in all_badges if row.status == STATUS_REVOKED and str(row.revoke_reason or "").startswith(REVOKE_REASONS["perdu"])),
+        "to_renew": len(expired) + sum(1 for badge in active if badge.valid_until and today <= badge.valid_until <= soon),
         "templates": sum(1 for row in db.execute(select(BadgeTemplate.society).where(BadgeTemplate.active == 1)).all() if _society_visible(user, row.society)),
-        "recent": events,
+        "recent": events[:8],
+        "recent_issues": [event for event in events if event["action"] == "EMISSION"][:6],
     }
 
 
