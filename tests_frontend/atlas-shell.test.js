@@ -223,8 +223,9 @@ test('Administration groups its existing business settings without removing admi
   assert.equal(nav.querySelector('[data-route="admin/users"] .nav-label').textContent, 'Utilisateurs');
   assert.equal(nav.querySelector('[data-route="admin/niveaux"] .nav-label').textContent, "Profils d'accès");
   const primaryRoutes = [...nav.querySelectorAll(':scope > .nav-link')].map(el => el.dataset.route);
-  assert.equal(primaryRoutes.filter(route => route !== 'custom/admin/dhl' && route !== 'agenda/dashboard').length, 15,
-    '15 primary Administration entries; existing agenda/custom shortcuts remain independent');
+  assert.equal(primaryRoutes.filter(route => route !== 'custom/admin/dhl' && route !== 'agenda/dashboard').length, 16,
+    '16 primary Administration entries (dont Terminaux faciaux); existing agenda/custom shortcuts remain independent');
+  assert.ok(primaryRoutes.includes('admin/terminaux-faciaux'));
   assert.equal(JSON.stringify(settings), stored, 'rendering never rewrites stored navigation preferences');
 });
 

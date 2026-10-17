@@ -125,13 +125,17 @@ def _enrolled(db, site, who=None, vector=None, **kw):
     return emp, who
 
 
-def _user(client, db, *, sites, features, societies=(SOC,)):
+def _user(client, db, *, sites, features, societies=(SOC,), system=False):
+    """`system` : Administration Système (Sécurité des accès × Administrer) — seule habilitée à
+    enregistrer, appairer, révoquer ou supprimer un terminal."""
     name = f"tr{_tag()}"
     user = User(username=name, full_name=name, role="ops", access_level="H3", authorized_societies=list(societies),
                 authorized_sites=list(sites), authorized_modules=["pointage"], password_hash=hash_password("trpass1234"), is_active=True)
     db.add(user); db.flush()
     for feature, action in features:
         db.add(UserFeaturePermission(user_id=user.id, module_key="attendance", feature_key=feature, action_key=action))
+    if system:
+        db.add(UserFeaturePermission(user_id=user.id, module_key="administration", feature_key="security", action_key="admin"))
     db.commit()
     token = client.post("/api/auth/login", json={"username": name, "password": "trpass1234"}).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -198,9 +202,12 @@ def test_pairing_rejects_bad_keys_and_is_rate_limited(client, auth_headers, db):
 def test_terminal_admin_rbac_scope_and_types(client, auth_headers, db):
     site, other = _site(db), _site(db)
     reader = _user(client, db, sites=[site.id], features=[("biometric_status", "read")])
-    admin = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")])
+    admin = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")], system=True)
+    manager = _user(client, db, sites=[site.id], features=[("biometric_status", "read"), ("biometric_admin", "admin")])
     body = {"name": "TAB-R", "terminal_type": "TABLET_ANDROID", "site_id": site.id}
     assert client.post(f"{API}/terminals", headers=reader, json=body).status_code == 403          # pointeur ordinaire
+    # Gestion du pointage (biometric_admin) sans Administration Système : ni enregistrement ni appairage.
+    assert client.post(f"{API}/terminals", headers=manager, json=body).status_code == 403
     r = client.post(f"{API}/terminals", headers=admin, json=body)
     assert r.status_code == 200
     assert client.post(f"{API}/terminals", headers=admin, json=body).status_code == 409           # nom unique par site
@@ -351,8 +358,15 @@ def test_entry_then_exit_through_attendance_core_without_any_click(client, auth_
     r = device.recognize(client, burst(face(who))).json()
     assert (r["state"], r["recorded"], r["action"], r["employee"]["matricule"]) == ("ATTENDANCE_RECORDED", True, "ENTRÉE", emp.code)
     cfg = service.active_config(db)
-    assert r["confidence"] >= cfg.recognition_threshold + cfg.review_margin and r["liveness"] >= cfg.liveness_threshold
+    # Les scores ne sont plus renvoyés à la borne (appareil non fiable) : ils restent dans l'audit.
+    assert "confidence" not in r and "liveness" not in r
     assert "embedding" not in json.dumps(r)
+    from app.modules.auth.models import AuditEvent
+    audited = db.execute(select(AuditEvent).where(AuditEvent.action == "biometrics.terminal.recognize")
+                         .order_by(AuditEvent.id.desc())).scalars().first()
+    state = audited.new_state if isinstance(audited.new_state, dict) else json.loads(audited.new_state)
+    assert state["confidence"] >= cfg.recognition_threshold + cfg.review_margin
+    assert state["liveness"] >= cfg.liveness_threshold
     # Personne restée devant la tablette : aucun second pointage.
     again = device.recognize(client, burst(face(who))).json()
     assert (again["state"], again["recorded"]) == ("ALREADY_RECORDED", False)
@@ -592,7 +606,7 @@ def test_delete_and_archive_keep_original_permissions_and_scope(client, auth_hea
     tid, _ = _terminal(client, auth_headers, local)
     other_tid, _ = _terminal(client, auth_headers, outside)
     reader = _user(client, db, sites=[local.id], features=[('biometric_status','read')])
-    manager = _user(client, db, sites=[local.id], features=[('biometric_status','read'),('biometric_admin','admin')])
+    manager = _user(client, db, sites=[local.id], features=[('biometric_status','read'),('biometric_admin','admin')], system=True)
     assert client.delete(f"{API}/terminals/{tid}", headers=reader).status_code == 403
     assert client.get(f"{API}/terminals?include_deleted=true", headers=reader).status_code == 403
     assert client.delete(f"{API}/terminals/{other_tid}", headers=manager).status_code == 404
@@ -601,3 +615,43 @@ def test_delete_and_archive_keep_original_permissions_and_scope(client, auth_hea
     assert client.get(f"{API}/terminals/{tid}/audit", headers=manager).status_code == 200
     rows = client.get(f"{API}/terminals?include_deleted=true", headers=manager).json()
     assert all(row['site_id'] == local.id for row in rows)
+
+
+# ── Audit pointeur.irongs.com — P2 : limiteur des bornes, corps, horodatage, indice ──────
+def test_unknown_terminal_flood_never_blocks_a_paired_terminal_of_the_same_address(client, auth_headers, db):
+    """Le compteur par adresse ne compte que les identifiants INCONNUS : une borne associée qui
+    partage cette adresse (même NAT) continue de fonctionner."""
+    from app.core import rate_limit
+
+    site = _site(db)
+    _, device = _terminal(client, auth_headers, site)
+    path = API + "/terminal/challenge"
+    rate_limit.clear("terminal-auth:testclient")
+    codes = [client.post(path, content=b"{}", headers=device.headers("POST", path, b"{}", terminal_id=f"trm_inconnu_{i}")).status_code
+             for i in range(34)]
+    assert codes[:30] == [401] * 30 and codes[-1] == 429
+    assert device.session(client).status_code == 200                 # la borne réelle n'est pas coupée
+    assert device.challenge(client).status_code == 200
+    rate_limit.clear("terminal-auth:testclient")
+
+
+def test_unknown_terminal_body_is_never_read(client, auth_headers, db):
+    """Identifiant inconnu : refus avant toute lecture du corps (jusqu'à 20 Mo auparavant)."""
+    from app.core import rate_limit
+
+    rate_limit.clear("terminal-auth:testclient")
+    path = API + "/terminal/recognize"
+    huge = b"x" * (terminals.MAX_BODY_BYTES + 1024)
+    r = client.post(path, content=huge, headers=Device().headers("POST", path, b"", terminal_id="trm_inconnu_gros"))
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "TERMINAL_UNKNOWN"   # et non 413 : le corps n'a pas été lu
+    rate_limit.clear("terminal-auth:testclient")
+
+
+def test_oversized_timestamp_is_a_clean_refusal(client, auth_headers, db):
+    site = _site(db)
+    _, device = _terminal(client, auth_headers, site)
+    path = API + "/terminal/challenge"
+    for stamp in ("9" * 400, "1e999", "-5", ""):
+        r = client.post(path, content=b"{}", headers=device.headers("POST", path, b"{}", ts=stamp))
+        assert r.status_code == 401 and r.json()["detail"]["code"] == "TERMINAL_SIGNATURE_INVALID", stamp
+    assert device.session(client).status_code == 200                 # une requête valide n'est jamais bloquée par ces échecs

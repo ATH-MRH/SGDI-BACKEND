@@ -50,6 +50,7 @@ EXTRA_WINDOW_END = timedelta(minutes=45)           # TFIN+30 → TFIN+45 : nouve
 KIND_NORMAL = "NORMAL"                             # vacation officielle du cycle
 KIND_EXTRA = "EXTRA_SHIFT"                         # vacation supplémentaire (maintien)
 KIND_LABELS = {KIND_NORMAL: "Vacation normale", KIND_EXTRA: "Vacation supplémentaire (maintien)"}
+INTENT_REENTRY = "REENTRY"                         # saisie manuelle motivée : reprise de poste après une sortie erronée
 INTENT_EXTRA_ENTRY = "EXTRA_SHIFT_ENTRY"           # saisie manuelle : entrée explicite, jamais une sortie
 
 ENTRY_IN_WINDOW = "IN_WINDOW"                      # T-30 ≤ entrée ≤ T

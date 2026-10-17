@@ -196,6 +196,7 @@ def event_to_scan_row(event: AttendanceEvent, employee: Employee | None = None) 
         "action": LEGACY_ACTION.get(event.event_type, event.event_type.lower()),
         "cycle": event.cycle,
         "scannedAt": local.isoformat(),
+        "presenceDate": event.presence_date.isoformat() if event.presence_date else local.date().isoformat(),
         "site": data.get("siteName") or "",
         "siteId": event.site_id,
         "scannedBy": event.actor_label or "",
@@ -436,7 +437,7 @@ def record_scan(
     if abandon_details is not None and open_arrival is None:
         raise HTTPException(409, "Vacation sans prise de service ouverte valide")
     event_type = EVENT_DEPARTURE if open_arrival else EVENT_ARRIVAL
-    cycle_number = sum(1 for e in events if e.event_type == EVENT_ARRIVAL) + (1 if event_type == EVENT_ARRIVAL else 0)
+    cycle_number: int | None = None                                   # fixé plus bas, une fois la journée connue
     presence_day = now.date()
     if event_type == EVENT_DEPARTURE and open_arrival:
         presence_day = open_arrival.presence_date
@@ -481,18 +482,60 @@ def record_scan(
                       site_id=site.id if site is not None else None, events=events, extra=extra)
     extra_shift = counted is not None and counted.get("kind") == counted_time.KIND_EXTRA
 
+    # Journée de TRAVAIL : une arrivée de nuit après minuit appartient à la vacation commencée la
+    # veille (work_date du planning officiel), pas au jour civil. Sans cela, deux nuits
+    # consécutives tombaient sur une seule journée de présence et la paie en perdait une.
+    closed_work_day: date | None = None
+    if (event_type == EVENT_ARRIVAL and counted is not None and not extra_shift
+            and counted["entry_status"] not in counted_time.REFUSALS and counted.get("work_date")):
+        work_day = date.fromisoformat(str(counted["work_date"])[:10])
+        if work_day != presence_day:
+            target = _presence_for(db, employee.id, work_day)
+            if target is not None and target.closed_at is not None:
+                # Journée de travail déjà clôturée (lisible par la paie) : jamais modifiée ici. Le
+                # passage reste rattaché au jour civil et une anomalie demande la régularisation.
+                closed_work_day = work_day
+            else:
+                presence_day, existing = work_day, target
+                legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
+    # Numéro de vacation dans la JOURNÉE de présence (1, 2…). Le départ reprend celui de son
+    # arrivée. L'ancien calcul comptait les arrivées des 40 derniers événements : il dérivait
+    # d'un jour à l'autre puis se déréglait (arrivée 21 / départ 20) après 20 vacations.
+    if cycle_number is None:
+        if event_type == EVENT_DEPARTURE and open_arrival is not None:
+            cycle_number = int(open_arrival.cycle or 1)
+        else:
+            cycle_number = 1 + len(db.execute(select(AttendanceEvent.id).where(
+                AttendanceEvent.employee_id == employee.id, AttendanceEvent.event_type == EVENT_ARRIVAL,
+                AttendanceEvent.presence_date == presence_day)).all())
+
     # Le délai entre deux arrivées ne s'applique pas à la vacation supplémentaire : sa fenêtre
     # (TFIN+30 → TFIN+45) est la règle.
+    reentry = False
     if event_type == EVENT_ARRIVAL and last_arrival_at is not None and not extra_shift:
         remaining = NEW_ARRIVAL_DELAY - (now - last_arrival_at)
-        if remaining > timedelta(0):
+        if remaining > timedelta(0) and intent == counted_time.INTENT_REENTRY and _reentry_possible(last_event, site, now):
+            # Reprise de poste : la sortie précédente (double scan, erreur de saisie, abandon
+            # enregistré à tort) appartient à une vacation encore en cours. Seul un opérateur
+            # habilité à la saisie manuelle peut rouvrir, avec un motif ; rien n'est effacé : la
+            # sortie reste dans le journal et la reprise ouvre une nouvelle vacation, signalée.
+            if source != SOURCE_MANUAL or not manual_entry_allowed:
+                raise HTTPException(status_code=403, detail="Reprise de poste réservée à la saisie manuelle habilitée")
+            if not observation:
+                raise HTTPException(status_code=422, detail="Motif obligatoire pour une reprise de poste")
+            reentry = True
+        elif remaining > timedelta(0):
             remaining_minutes = max(1, int(remaining.total_seconds() // 60) + 1)
             hours, minutes = divmod(remaining_minutes, 60)
             wait_label = f"{hours} h {minutes:02d}" if hours else f"{minutes} min"
             raise HTTPException(status_code=409, detail=f"Nouvelle arrivée disponible dans {wait_label}. Le départ précédent est bien enregistré.")
 
-    if existing is not None and existing.closed_at is not None:
+    closed_presence = existing is not None and existing.closed_at is not None
+    if closed_presence and not (event_type == EVENT_DEPARTURE and open_arrival is not None):
         raise HTTPException(status_code=409, detail="Journée clôturée : pointage refusé. Une correction post-clôture est nécessaire.")
+    # Sortie d'une vacation ouverte dont la journée d'arrivée a été clôturée entre-temps (poste de
+    # nuit) : le fait est enregistré — sinon l'agent ne peut plus sortir et la vacation reste sans
+    # temps compté — mais la journée clôturée n'est PAS modifiée ; une anomalie le signale.
 
     heure = now.strftime("%H:%M:%S")
     worked_minutes = (
@@ -570,8 +613,23 @@ def record_scan(
     if assignment:
         item.update({"siteBackendId": assignment.site_id, "siteId": assignment.site_id, "siteName": site_name,
                      "groupe": assignment.group_code or ""})
-    record = upsert_presence(db, item, "feuillePresence")
-    event.presence_id = record.get("backendId") if isinstance(record, dict) else None
+    if closed_presence:
+        record = {"backendId": existing.id, "closed": True}
+        event.presence_id = existing.id
+        raise_anomaly(db, anomaly_type="DEPARTURE_AFTER_CLOSURE", employee=employee, site_id=event.site_id,
+                      presence_date=presence_day, event=event, source=source,
+                      message=f"Sortie à {now.strftime('%H:%M')} enregistrée après la clôture de la journée du {presence_day.isoformat()}",
+                      details={"departure_at": now.isoformat(), "closed_at": existing.closed_at.isoformat(),
+                               "regularization": "correction post-clôture"})
+    else:
+        record = upsert_presence(db, item, "feuillePresence")
+        event.presence_id = record.get("backendId") if isinstance(record, dict) else None
+    if closed_work_day is not None:
+        raise_anomaly(db, anomaly_type="ARRIVAL_AFTER_CLOSURE", employee=employee, site_id=event.site_id,
+                      presence_date=closed_work_day, event=event, source=source,
+                      message=f"Arrivée à {now.strftime('%H:%M')} pour la vacation du {closed_work_day.isoformat()}, journée déjà clôturée",
+                      details={"arrival_at": now.isoformat(), "work_date": closed_work_day.isoformat(),
+                               "recorded_on": presence_day.isoformat(), "regularization": "correction post-clôture"})
 
     # Anomalies détectables à l'événement.
     if source == SOURCE_MANUAL:
@@ -584,6 +642,12 @@ def record_scan(
                       presence_date=presence_day, event=event, source=source,
                       message=f"Durée {worked_minutes} min pour {authorized_minutes} min autorisées",
                       details={"worked_minutes": worked_minutes, "authorized_minutes": authorized_minutes})
+    if reentry:
+        raise_anomaly(db, anomaly_type="REENTRY", severity="info", employee=employee, site_id=event.site_id,
+                      presence_date=presence_day, event=event, source=source,
+                      message=f"Reprise de poste à {now.strftime('%H:%M')} après une sortie à "
+                              f"{to_local(last_event.occurred_at).strftime('%H:%M')} (saisie par {actor_label or 'opérateur'})",
+                      details={"observation": observation, "previous_departure_event_id": last_event.id})
     if extra_shift and event_type == EVENT_ARRIVAL:
         # Maintien détecté : un fait à connaître, pas une faute (sévérité « info »).
         raise_anomaly(db, anomaly_type=counted_time.KIND_EXTRA, severity="info", employee=employee, site_id=event.site_id,
@@ -599,13 +663,23 @@ def record_scan(
                           presence_date=presence_day, event=event, source=source,
                           message=f"Arrivée un jour non travaillé selon le planning ({plan['period'] or 'repos'})")
         expected = _hhmm_to_minutes(plan["start_time"]) if plan["known"] and plan["on"] else None
-        if expected is not None:
+        scheduled = counted.get("scheduled_start") if counted is not None else None
+        if scheduled:
+            # Vacation officielle : retard = écart au début RÉEL de la vacation (date comprise),
+            # donc correct aussi pour une arrivée après minuit sur un poste de nuit.
+            start_at = datetime.fromisoformat(scheduled)
+            late = int((now - start_at).total_seconds() // 60)
+            expected_label = start_at.strftime("%H:%M")
+        elif expected is not None:
             late = (now.hour * 60 + now.minute) - expected
-            if late > max(0, settings.attendance_late_tolerance_minutes) and late < 12 * 60:
-                raise_anomaly(db, anomaly_type="LATE", employee=employee, site_id=event.site_id,
-                              presence_date=presence_day, event=event, source=source,
-                              message=f"Arrivée à {now.strftime('%H:%M')} pour {plan['start_time']} prévu ({late} min de retard)",
-                              details={"expected": plan["start_time"], "late_minutes": late})
+            expected_label = plan["start_time"]
+        else:
+            late = None
+        if late is not None and late > max(0, settings.attendance_late_tolerance_minutes) and late < 12 * 60:
+            raise_anomaly(db, anomaly_type="LATE", employee=employee, site_id=event.site_id,
+                          presence_date=presence_day, event=event, source=source,
+                          message=f"Arrivée à {now.strftime('%H:%M')} pour {expected_label} prévu ({late} min de retard)",
+                          details={"expected": expected_label, "late_minutes": late})
 
     # Feuille de présence de la rotation (lot 1) : reflet opérationnel du FAIT ci-dessus. Le fait
     # est déjà écrit ; ce rattachement est isolé dans son point de sauvegarde et ne peut ni le
@@ -644,6 +718,89 @@ def record_scan(
         "rotation_alert": rotation_alert,
         **({"counted": counted_time.view({"counted": counted})} if counted is not None else {}),
     }
+
+
+def _reentry_possible(last_event: AttendanceEvent | None, site: Site | None, now: datetime) -> bool:
+    """Le dernier passage est une SORTIE dont la vacation est encore en cours : avant la fin
+    prévue de la vacation officielle, sinon dans la fenêtre de cycle ouvert de son arrivée."""
+    if last_event is None or last_event.event_type != EVENT_DEPARTURE:
+        return False
+    snapshot = (last_event.data or {}).get("counted") if isinstance(last_event.data, dict) else None
+    if isinstance(snapshot, dict) and snapshot.get("scheduled_end"):
+        return now < datetime.fromisoformat(snapshot["scheduled_end"])
+    return now - to_local(last_event.occurred_at) < open_cycle_window(site)
+
+
+def regularize_departure(db: Session, *, arrival_event_id: int, exit_at: datetime, reason: str, actor: Any | None,
+                         request: Any = None) -> dict[str, Any]:
+    """Régularisation EXPLICITE d'un oubli de sortie : ajoute au journal la sortie manquante d'une
+    arrivée restée ouverte, à l'heure déclarée et motivée par un responsable. Rien n'est modifié :
+    l'arrivée, les passages suivants et une journée déjà clôturée restent tels quels. La vacation
+    reçoit enfin un temps comptabilisé (borné par le planning officiel), lu par le récapitulatif."""
+    from app.modules.attendance import counted as counted_time
+
+    reason = str(reason or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(422, detail="Motif de régularisation obligatoire")
+    arrival = db.get(AttendanceEvent, arrival_event_id)
+    if arrival is None or arrival.event_type != EVENT_ARRIVAL:
+        raise HTTPException(404, detail="Arrivée introuvable")
+    _lock_employee(db, arrival.employee_id)
+    db.refresh(arrival)
+    employee = db.get(Employee, arrival.employee_id)
+    site = db.get(Site, arrival.site_id) if arrival.site_id else None
+    arrival_at = to_local(arrival.occurred_at)
+    exit_local = (exit_at if exit_at.tzinfo else exit_at.replace(tzinfo=TZ)).astimezone(TZ)
+    following = db.execute(select(AttendanceEvent).where(
+        AttendanceEvent.employee_id == arrival.employee_id, AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)),
+        AttendanceEvent.id != arrival.id,
+        (AttendanceEvent.occurred_at > arrival.occurred_at)
+        | ((AttendanceEvent.occurred_at == arrival.occurred_at) & (AttendanceEvent.id > arrival.id)),
+    ).order_by(AttendanceEvent.occurred_at, AttendanceEvent.id).limit(1)).scalar_one_or_none()
+    if following is not None and following.event_type == EVENT_DEPARTURE:
+        raise HTTPException(409, detail="Cette arrivée a déjà sa sortie")
+    if exit_local <= arrival_at:
+        raise HTTPException(422, detail="La sortie doit être postérieure à l'arrivée")
+    if exit_local > _now_local():
+        raise HTTPException(422, detail="La sortie ne peut pas être dans le futur")
+    if exit_local - arrival_at > open_cycle_window(site):
+        raise HTTPException(422, detail="Sortie trop éloignée de l'arrivée pour une seule vacation")
+    if following is not None and exit_local >= to_local(following.occurred_at):
+        raise HTTPException(422, detail="La sortie doit précéder le passage suivant de l'employé")
+
+    snapshot = counted_time.close((arrival.data or {}).get("counted") if isinstance(arrival.data, dict) else None, exit_local)
+    worked = max(0, int((exit_local - arrival_at).total_seconds() // 60))
+    presence = _presence_for(db, arrival.employee_id, arrival.presence_date)
+    closed = presence is not None and presence.closed_at is not None
+    data = arrival.data if isinstance(arrival.data, dict) else {}
+    event = AttendanceEvent(
+        employee_id=arrival.employee_id, society=arrival.society, site_id=arrival.site_id,
+        presence_id=presence.id if presence is not None else None, presence_date=arrival.presence_date,
+        occurred_at=to_utc_naive(exit_local), event_type=EVENT_DEPARTURE, source=SOURCE_MANUAL, cycle=arrival.cycle,
+        actor_user_id=getattr(actor, "id", None), actor_label=getattr(actor, "username", None), observation=reason[:500],
+        data={"matricule": data.get("matricule"), "agentName": data.get("agentName"), "siteName": data.get("siteName"),
+              "workedMinutes": worked, "regularized": True, "regularizedAt": _now_local().isoformat(),
+              "regularizedArrivalEventId": arrival.id, **({"counted": snapshot} if snapshot is not None else {})},
+    )
+    db.add(event)
+    db.flush()
+    if presence is not None and not closed:
+        # Journée encore ouverte : l'heure de sortie y est reportée. Une journée clôturée n'est
+        # jamais touchée ici (correction post-clôture, permission renforcée, par sa propre route).
+        presence.departure_time = exit_local.strftime("%H:%M:%S")
+    counted_time.resolve_unclosed(db, arrival=arrival, exit_at=exit_local)
+    raise_anomaly(db, anomaly_type="EXIT_REGULARIZED", severity="info", employee=employee, site_id=arrival.site_id,
+                  presence_date=arrival.presence_date, event=event, source=SOURCE_MANUAL,
+                  message=f"Sortie régularisée à {exit_local.strftime('%H:%M')} par {getattr(actor, 'username', None) or 'opérateur'}",
+                  details={"reason": reason[:500], "arrival_event_id": arrival.id, "presence_closed": closed})
+    append_audit(db, action="attendance.regularize_exit", resource="attendance_event", resource_id=event.id, result="success",
+                 user=actor, request=request, society=arrival.society,
+                 old_state={"arrival_event_id": arrival.id, "open": True},
+                 new_state={"departure_event_id": event.id, "exit_at": exit_local.isoformat(), "reason": reason[:500],
+                            "counted_minutes": (snapshot or {}).get("counted_minutes"), "presence_closed": closed})
+    return {"event_id": event.id, "arrival_event_id": arrival.id, "exit_at": exit_local.isoformat(), "worked_minutes": worked,
+            "counted_minutes": (snapshot or {}).get("counted_minutes"), "presence_updated": presence is not None and not closed,
+            "presence_closed": closed}
 
 
 # ── Statut de journée et corrections ─────────────────────────────────────────────────────

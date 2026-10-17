@@ -16,6 +16,8 @@ class LegacyCollectionPolicy:
     read: LegacyAccess
     write: LegacyAccess
     modules: frozenset[str]
+    # Modules autorisés à LIRE sans pouvoir écrire (en plus de `modules`).
+    read_modules: frozenset[str] = frozenset()
 
 
 _SQL = {
@@ -63,6 +65,24 @@ _SECRETARIAT = {
 }
 
 
+# Pointage consulté depuis DRH : mêmes données qu'OPS, en lecture seule. Le module RH lit ces
+# collections ; leur écriture reste réservée à OPS (et à l'administration).
+_POINTAGE = {"pointages", "pointageMensuel", "feuillePresence", "feuillePresenceArchive", "feuillePresenceCloture"}
+_READ_ONLY_MODULES = {name: frozenset({"rh"}) for name in _POINTAGE}
+
+# Actions legacy qui écrivent le Pointage (feuille mensuelle et feuille de présence). Le mouvement
+# de personnel en fait partie : il crée ou modifie la ligne de présence du jour avant d'archiver
+# l'ordre de mouvement, et n'est appelé que depuis les écrans OPS.
+POINTAGE_WRITE_ACTIONS = frozenset({
+    "save-pointage-cell", "save-pointage-observation", "clear-pointage-sheet",
+    "validate-pointage", "unlock-pointage", "validate-pointage-day", "unlock-pointage-day",
+    "validate-pointage-all", "unlock-pointage-all",
+    "upsert-presence-line", "delete-presence-line", "add-presence-agent", "assign-vacant-agent",
+    "validate-presence-line", "unlock-presence-line", "close-presence-day", "reopen-presence-day",
+    "save-presence-movement",
+})
+
+
 def _collection_modules(name: str) -> frozenset[str]:
     if name in {"alertes", "dialogue", "echanges", "messages", "notificationLog", "notifications"}:
         return frozenset({"rh", "ops", "finance", "commercial", "materiel", "secretariat"})
@@ -79,13 +99,21 @@ def _collection_modules(name: str) -> frozenset[str]:
 
 def collection_policy(name: str) -> LegacyCollectionPolicy:
     if name in _SQL or name in _LEGACY:
-        return LegacyCollectionPolicy(LegacyAccess.READ_ALLOWED, LegacyAccess.WRITE_ALLOWED, _collection_modules(name))
+        return LegacyCollectionPolicy(LegacyAccess.READ_ALLOWED, LegacyAccess.WRITE_ALLOWED, _collection_modules(name),
+                                      _READ_ONLY_MODULES.get(name, frozenset()))
     if name in _ADMIN:
         return LegacyCollectionPolicy(LegacyAccess.ADMIN_ONLY, LegacyAccess.ADMIN_ONLY, frozenset({"admin"}))
     return LegacyCollectionPolicy(LegacyAccess.DISABLED, LegacyAccess.DISABLED, frozenset())
 
 
-def user_legacy_modules(user) -> frozenset[str]:
+# Le terminal terrain (rôle ou clé de module « pointeur ») lit les collections OPS dont il a
+# besoin, mais n'écrit jamais par le pont legacy : ses pointages passent par les routes de
+# pointage (heure serveur, périmètre site, permission fine, auteur tracé). Sans cette règle,
+# l'alias pointeur → ops lui ouvrait l'écriture de présences antidatées et d'affectations.
+_READ_ONLY_ALIASES = frozenset({"pointeur"})
+
+
+def user_legacy_modules(user, *, write: bool = False) -> frozenset[str]:
     values = {
         str(value or "").strip().lower()
         for source in (getattr(user, "authorized_modules", None), getattr(user, "authorized_structures", None))
@@ -99,6 +127,8 @@ def user_legacy_modules(user) -> frozenset[str]:
         "dc": "commercial", "achats": "materiel", "stock": "materiel",
         "sg": "secretariat", "secretariat_general": "secretariat",
     }
+    if write:
+        aliases = {key: target for key, target in aliases.items() if key not in _READ_ONLY_ALIASES}
     values.add(aliases.get(role, role))
     values.update(aliases.get(value, value) for value in tuple(values))
     if role in {"admin", "adm", "adm1", "adm2"}:
@@ -114,4 +144,10 @@ def user_can_read_collection(user, name: str) -> bool:
         return False
     if policy.read is LegacyAccess.ADMIN_ONLY:
         return admin
-    return admin or bool(policy.modules & user_legacy_modules(user))
+    return admin or bool((policy.modules | policy.read_modules) & user_legacy_modules(user))
+
+
+def user_can_write_pointage(user) -> bool:
+    """Écrire le Pointage suit la règle d'écriture de sa collection : module OPS ou administration."""
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    return role in {"admin", "adm", "adm1", "adm2"} or bool(collection_policy("pointages").modules & user_legacy_modules(user))

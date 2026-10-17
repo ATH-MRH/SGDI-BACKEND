@@ -74,7 +74,7 @@ function ptResolveDayCode(agent,sheet,ym,day){
   return f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
 }
 
-async function ptPersistCell(agentId,ym,day,code){
+async function ptPersistCell(agentId,ym,day,code){if(ptGuardReadOnly())return;
   try{
     await sgdiRunLegacyAction("save-pointage-cell",{data:{agentId,periode:ym,day:String(day).padStart(2,"0"),code:code||""}});
     uiSaveState("Sauvegardé","success");
@@ -85,7 +85,7 @@ async function ptPersistCell(agentId,ym,day,code){
   }
 }
 
-function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();ptPersistCell(agentId,ym,day,code)}
+function ptSetCell(agentId,ym,day,code){if(ptGuardReadOnly())return;const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();ptPersistCell(agentId,ym,day,code)}
 
 function ptWarnIfPaieAlreadyClosed(agentId,ym){
   const key=String(agentId??"");
@@ -131,7 +131,7 @@ function ptSyncFeuillePresenceMonth(ym){
   return changed;
 }
 
-async function ptValiderSheet(agentId,ym){
+async function ptValiderSheet(agentId,ym){if(ptGuardReadOnly())return;
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
     await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
@@ -142,7 +142,7 @@ async function ptValiderSheet(agentId,ym){
   }catch(e){toast("Validation refusée : "+(e.message||e),"error")}
 }
 
-async function ptDevaliderSheet(agentId,ym){
+async function ptDevaliderSheet(agentId,ym){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   if(!confirm("Déverrouiller ce pointage validé ?"))return;
   try{
@@ -154,7 +154,7 @@ async function ptDevaliderSheet(agentId,ym){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 
-async function ptValiderTous(ym,soc){
+async function ptValiderTous(ym,soc){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   const ag=pointageEligibleAgents(soc);
   if(!ag.length){toast("Aucun employé à valider","error");return}
@@ -168,7 +168,7 @@ async function ptValiderTous(ym,soc){
   }catch(e){toast("Validation globale refusée : "+(e.message||e),"error")}
 }
 
-async function ptDevaliderTous(ym,soc){
+async function ptDevaliderTous(ym,soc){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   if(!confirm(`Déverrouiller TOUS les pointages validés pour ${ym} ?`))return;
   try{
@@ -304,15 +304,15 @@ function renderPointageArchives(){
   </div>`;
 }
 
-async function fpqSetField(date,agentId,field,value){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetField(date,agentId,field,value){if(ptGuardReadOnly())return;if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
 
-async function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetRowField(rowId,field,value){if(ptGuardReadOnly())return;const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
 
-async function fpqSetSite(date,agentId,siteId){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetSite(date,agentId,siteId){if(ptGuardReadOnly())return;if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
 
-async function fpqDelete(date,agentId){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDelete(date,agentId){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
 
-async function fpqDeleteRow(rowId){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDeleteRow(rowId){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
 
 function fpqMovementCapacityBlockMessage(agentId,patch){
   if(!patch?.siteId||patch.siteId==="autres")return "";
@@ -328,7 +328,7 @@ function fpqMovementCapacityBlockMessage(agentId,patch){
   return "";
 }
 
-async function fpqValiderLigne(date,agentId){
+async function fpqValiderLigne(date,agentId){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const f=fpqEnsure(date,agentId);
@@ -341,7 +341,7 @@ async function fpqValiderLigne(date,agentId){
   }catch(e){toast("Validation ligne refusée : "+(e.message||e),"error")}
 }
 
-async function fpqDevaliderLigne(date,agentId){
+async function fpqDevaliderLigne(date,agentId){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   const f=fpqGet(date,agentId);if(!f)return;
   try{
@@ -352,11 +352,11 @@ async function fpqDevaliderLigne(date,agentId){
   }catch(e){toast("Déverrouillage ligne refusé : "+(e.message||e),"error")}
 }
 
-async function fpqCloturerJournee(date){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : clôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
+async function fpqCloturerJournee(date){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : clôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
 
 function fpqDeclôturerJournee(date){return fpqDecloturerJournee(date)}
 
-async function fpqDecloturerJournee(date){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déclôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqGuardArchive(date))return;if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
+async function fpqDecloturerJournee(date){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déclôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqGuardArchive(date))return;if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
 
 function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!=="ops")return"";if(typeof canAccess==="function"&&!canAccess("ops"))return"";const today=new Date().toISOString().slice(0,10);const allDates=new Set();(db.feuillePresence||[]).forEach(f=>allDates.add(f.date));allDates.add(today);const c=db.feuillePresenceCloture||{};const pending=[...allDates].filter(d=>!c[d]).sort((a,b)=>b.localeCompare(a));if(!pending.length)return"";const todayPending=pending.includes(today);const oldPending=pending.filter(d=>d!==today).sort((a,b)=>b.localeCompare(a));const todayCount=(db.feuillePresence||[]).filter(f=>f.date===today).length;const oldList=oldPending.slice(0,5).map(d=>{const cnt=(db.feuillePresence||[]).filter(f=>f.date===d).length;return`<button class="text-[11px] px-2 py-0.5 rounded-full font-bold" style="background:#fff;color:#b91c1c;border:1px solid #fca5a5" onclick="setFpqDate('${d}');navigate('pointage/feuille')">📅 ${formatDate(d)} · ${cnt} ligne${cnt>1?"s":""}</button>`}).join(" ");const moreOld=oldPending.length>5?` <span class="text-[11px] text-red-700 font-semibold">+ ${oldPending.length-5} autre(s)…</span>`:"";const todayLabel=new Date(today).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});const bg=todayPending&&!oldPending.length?"linear-gradient(90deg,#043970,#043970)":"linear-gradient(90deg,#fee2e2,#fecaca)";const border=todayPending&&!oldPending.length?"#043970":"#dc2626";const titleColor=todayPending&&!oldPending.length?"#043970":"#991b1b";const subColor=todayPending&&!oldPending.length?"#043970":"#7f1d1d";return`<div class="no-print mx-4 mt-3 p-4 rounded-lg shadow-lg fpq-banner-pulse" style="background:${bg};border:3px solid ${border}">
     <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -379,9 +379,9 @@ function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!
     </div>
   </div>`}
 
-function fpqClearAll(date,soc){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
+function fpqClearAll(date,soc){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
 
-function fpqSupprimerFeuille(date){
+function fpqSupprimerFeuille(date){if(ptGuardReadOnly())return;
   if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);
   if(!lignes.length){toast("Aucune feuille à supprimer pour cette date","info");return}
@@ -395,9 +395,9 @@ function fpqSupprimerFeuille(date){
   renderView();
 }
 
-function fpqDuplicateYesterday(date,soc){const d=new Date(date);d.setDate(d.getDate()-1);const prev=d.toISOString().slice(0,10);const src=(db.feuillePresence||[]).filter(f=>f.date===prev&&(!soc||f.societe===soc));if(!src.length){toast("Aucune feuille pour le "+formatDate(prev),"error");return}if(!confirm(`Copier ${src.length} ligne(s) du ${formatDate(prev)} vers le ${formatDate(date)} ?`))return;let n=0;src.forEach(s=>{const exists=fpqGet(date,s.agentId);if(exists)return;const f={...s,id:uid("fpq"),date,heureArrivee:"",heureDepart:"",heureReleve:"",observations:"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.feuillePresence.push(f);n++});saveDB();toast(n+" ligne(s) copiée(s)","success");renderView()}
+function fpqDuplicateYesterday(date,soc){if(ptGuardReadOnly())return;const d=new Date(date);d.setDate(d.getDate()-1);const prev=d.toISOString().slice(0,10);const src=(db.feuillePresence||[]).filter(f=>f.date===prev&&(!soc||f.societe===soc));if(!src.length){toast("Aucune feuille pour le "+formatDate(prev),"error");return}if(!confirm(`Copier ${src.length} ligne(s) du ${formatDate(prev)} vers le ${formatDate(date)} ?`))return;let n=0;src.forEach(s=>{const exists=fpqGet(date,s.agentId);if(exists)return;const f={...s,id:uid("fpq"),date,heureArrivee:"",heureDepart:"",heureReleve:"",observations:"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.feuillePresence.push(f);n++});saveDB();toast(n+" ligne(s) copiée(s)","success");renderView()}
 
-function fpqAddAllAgents(date,soc){const ag=pointageOperationalAgents(soc);if(!ag.length){toast("Aucun employé opérationnel","error");return}if(!confirm(`Ajouter les ${ag.length} agents opérationnels à la feuille du ${formatDate(date)} ?`))return;let n=0;ag.forEach(a=>{if(!fpqGet(date,a.id)){fpqEnsure(date,a.id);n++}});saveDB();toast(n+" agent(s) opérationnel(s) ajouté(s)","success");renderView()}
+function fpqAddAllAgents(date,soc){if(ptGuardReadOnly())return;const ag=pointageOperationalAgents(soc);if(!ag.length){toast("Aucun employé opérationnel","error");return}if(!confirm(`Ajouter les ${ag.length} agents opérationnels à la feuille du ${formatDate(date)} ?`))return;let n=0;ag.forEach(a=>{if(!fpqGet(date,a.id)){fpqEnsure(date,a.id);n++}});saveDB();toast(n+" agent(s) opérationnel(s) ajouté(s)","success");renderView()}
 
 function fpqParseHoraires(site,periode){
   if(periode==="matin")return {a:"06:00",d:"14:00",r:"14:00"};
@@ -494,7 +494,7 @@ function fpqLineOrder(f){
   return Number.isFinite(created)?created:999999;
 }
 
-function fpqGenerateAuto(date,soc,siteId){
+function fpqGenerateAuto(date,soc,siteId){if(ptGuardReadOnly())return;
   if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const selectedSite=siteId?(db.sites||[]).find(s=>String(s.id)===String(siteId)||String(s.backendId||"")===String(siteId)):null;
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&siteBelongsToPrimarySociete(s,soc)&&(!selectedSite||siteMatchesReference(selectedSite,{siteId:s.id,siteBackendId:s.backendId,siteName:s.nom||s.intitule})));
@@ -538,7 +538,7 @@ function fpqGenerateAuto(date,soc,siteId){
   renderView();
 }
 
-function fpqAddAgentModal(date){
+function fpqAddAgentModal(date){if(ptGuardReadOnly())return;
   const ag=(db.agents||[]).filter(a=>a.statut==="actif").sort((x,y)=>(x.nom||"").localeCompare(y.nom||""));
   openModal(`<h3 class="font-bold text-lg mb-3">➕ Ajouter un agent à la feuille du ${formatDate(date)}</h3>
     <form onsubmit="event.preventDefault();fpqConfirmAdd('${date}')">
@@ -548,7 +548,7 @@ function fpqAddAgentModal(date){
     </form>`);
 }
 
-async function fpqConfirmAdd(date){const fd=new FormData(document.querySelector(".modal-bg form"));const id=fd.get("agentId");if(!id)return;if(fpqGet(date,id)){toast("Cet agent figure déjà sur la feuille","error");return}try{await sgdiRunLegacyAction("add-presence-agent",{data:{date,agentId:id}});await sgdiPullState({silent:true});closeModal();toast("Agent ajouté par le backend","success");renderView()}catch(e){toast("Ajout refusé : "+(e.message||e),"error")}}
+async function fpqConfirmAdd(date){if(ptGuardReadOnly())return;const fd=new FormData(document.querySelector(".modal-bg form"));const id=fd.get("agentId");if(!id)return;if(fpqGet(date,id)){toast("Cet agent figure déjà sur la feuille","error");return}try{await sgdiRunLegacyAction("add-presence-agent",{data:{date,agentId:id}});await sgdiPullState({silent:true});closeModal();toast("Agent ajouté par le backend","success");renderView()}catch(e){toast("Ajout refusé : "+(e.message||e),"error")}}
 
 function fpqFonctionAbbr(label){
   const stop=new Set(["a","au","aux","d","de","des","du","et","en","l","la","le","les","un","une"]);
@@ -565,7 +565,7 @@ function fpqApsAgentsForPrise(date,currentId){
   return [...standby,...aps].filter(a=>{if(seen.has(a.id))return false;seen.add(a.id);return true}).sort((x,y)=>(x.matricule||x.nom||"").localeCompare(y.matricule||y.nom||""));
 }
 
-async function fpqAssignVacantAgent(rowId,agentId){
+async function fpqAssignVacantAgent(rowId,agentId){if(ptGuardReadOnly())return;
   if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f||!agentId)return;
   if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date))return;
@@ -579,7 +579,7 @@ function fpqToggleSite(key){if(_fpqCollapsed.has(key))_fpqCollapsed.delete(key);
 
 function fpqSetSort(key){if(_fpqSortKey===key)_fpqSortDir*=-1;else{_fpqSortKey=key;_fpqSortDir=1;}renderView()}
 
-function ptOpenCodePicker(agentId,ym,day){
+function ptOpenCodePicker(agentId,ym,day){if(ptGuardReadOnly())return;
   const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé · déverrouillez d'abord","error");return}
   const k=String(day).padStart(2,"0");const cur=s.days[k]||"";const mo=ym.split("-")[1];
   const grp=(title,codes)=>`<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:6px">${title}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${codes.map(code=>{const c=POINTAGE_CODES[code];const sel=code===cur;return`<button onclick="ptPickCode('${agentId}','${ym}',${day},'${code}')" style="background:${c.bg};color:${c.color};border:${sel?`2px solid ${c.color}`:`1px solid ${c.color}44`};border-radius:7px;padding:5px 13px;font-family:ui-monospace,monospace;font-weight:900;font-size:13px;cursor:pointer;${sel?`box-shadow:0 0 0 3px ${c.color}33`:""}" title="${c.label}">${code}</button>`}).join("")}</div></div>`;
@@ -596,9 +596,9 @@ function ptOpenCodePicker(agentId,ym,day){
   </div>`);
 }
 
-function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);ptWarnIfPaieAlreadyClosed(agentId,ym);closeModal();renderView()}
+function ptPickCode(agentId,ym,day,code){if(ptGuardReadOnly())return;ptSetCell(agentId,ym,day,code);ptWarnIfPaieAlreadyClosed(agentId,ym);closeModal();renderView()}
 
-function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}
+function ptFillRow(agentId,ym,code){if(ptGuardReadOnly())return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}
 
 function ptWarnIfPaieAlreadyClosed(agentId,ym){
   const key=String(agentId??"");
@@ -608,7 +608,7 @@ function ptWarnIfPaieAlreadyClosed(agentId,ym){
   toast(`⚠ La paie de ${label} est déjà clôturée pour ${(a.nom||"")+" "+(a.prenom||"")} — ce pointage ne sera pas repris tant que le bulletin n'est pas régénéré.`,"error");
 }
 
-async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
+async function ptClearRow(agentId,ym){if(ptGuardReadOnly())return;if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 
@@ -617,6 +617,7 @@ function ptCellHTML(agentId,ym,day,code,isWeekend,isToday,locked){
   const cls=["pt-day"];if(isWeekend)cls.push("weekend");if(isToday)cls.push("today");
   const btnCls=(code?"pt-code-chip":"pt-code-dot")+(locked?" locked":" editable");
   const bg=c?c.bg:"transparent";const fg=c?c.color:(isWeekend?"#1e40af":"#94a3b8");
+  if(ptReadOnly())return`<td class="${cls.join(" ")}"><span class="${code?"pt-code-chip":"pt-code-dot"}${locked?" locked":" readonly"}" style="background:${bg};color:${fg}"${c?` title="${escapeHTML(`${code} — ${c.label}`)}"`:""}>${code||"·"}</span></td>`;
   const title=locked?"Pointage validé — déverrouillez la ligne pour modifier":(c?`${code} — ${c.label}`:"Cliquer pour choisir le code");
   return`<td class="${cls.join(" ")}"><button type="button" class="${btnCls}" onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" style="background:${bg};color:${fg}" title="${escapeHTML(title)}">${code||"·"}</button></td>`;
 }
@@ -662,7 +663,7 @@ function ptSupervisorObservationCell(agentId,ym,day,sheet,isValide){
   </td>`;
 }
 
-async function ptSupervisorSaveObservation(agentId,ym,day){
+async function ptSupervisorSaveObservation(agentId,ym,day){if(ptGuardReadOnly())return;
   const inputId=`pt-sup-obs-${agentId}-${ym}-${day}`;
   const el=document.getElementById(inputId);
   const text=(el?.value||"").trim();
@@ -679,14 +680,14 @@ async function ptSupervisorSaveObservation(agentId,ym,day){
   }catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
 }
 
-function ptSupervisorSetDailyCode(agentId,ym,day,code){
+function ptSupervisorSetDailyCode(agentId,ym,day,code){if(ptGuardReadOnly())return;
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : ligne verrouillée.","error");return}
   ptSetCell(agentId,ym,Number(day),code);
   renderView();
 }
 
-function ptSupervisorCorrectDailyCode(agentId,ym,day){
+function ptSupervisorCorrectDailyCode(agentId,ym,day){if(ptGuardReadOnly())return;
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : déverrouillez avant correction.","error");return}
   const key=String(day).padStart(2,"0");
@@ -695,7 +696,7 @@ function ptSupervisorCorrectDailyCode(agentId,ym,day){
   renderView();
 }
 
-async function ptSupValiderDay(agentId,ym,day){
+async function ptSupValiderDay(agentId,ym,day){if(ptGuardReadOnly())return;
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
     const code=(ptGetSheet(agentId,ym)?.days||{})[String(day).padStart(2,"0")]||"";
@@ -714,7 +715,7 @@ async function ptSupValiderDay(agentId,ym,day){
   }catch(e){toast("Validation refusée : "+(e.message||e),"error")}
 }
 
-async function ptSupDevaliderDay(agentId,ym,day){
+async function ptSupDevaliderDay(agentId,ym,day){if(ptGuardReadOnly())return;
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   if(!confirm("Déverrouiller ce jour validé ?"))return;
   try{
@@ -726,7 +727,7 @@ async function ptSupDevaliderDay(agentId,ym,day){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 
-function ptSupervisorOpenCorrection(agentId,ym,day){
+function ptSupervisorOpenCorrection(agentId,ym,day){if(ptGuardReadOnly())return;
   const sheet=ptGetSheet(agentId,ym);
   if(sheet?.valide){toast("Pointage mensuel validé : correction non autorisée ici.","error");return}
   if(!ptSupDayValidated(sheet,day)){toast("Aucune validation passée à corriger.","info");return}
@@ -746,7 +747,7 @@ function ptSupervisorOpenCorrection(agentId,ym,day){
   </div>`);
 }
 
-async function ptSupervisorClearCorrection(agentId,ym,day){
+async function ptSupervisorClearCorrection(agentId,ym,day){if(ptGuardReadOnly())return;
   try{
     await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
     ptSetCell(agentId,ym,Number(day),"");
@@ -756,7 +757,7 @@ async function ptSupervisorClearCorrection(agentId,ym,day){
   }catch(e){toast("Effacement refusé : "+(e.message||e),"error")}
 }
 
-function ptSupervisorOpenDailyEditor(agentId,ym,day){
+function ptSupervisorOpenDailyEditor(agentId,ym,day){if(ptGuardReadOnly())return;
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day))return ptSupervisorOpenCorrection(agentId,ym,day);
   const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
@@ -775,7 +776,7 @@ function ptSupervisorOpenDailyEditor(agentId,ym,day){
   </div>`);
 }
 
-async function ptSupervisorApplyCorrection(agentId,ym,day,code){
+async function ptSupervisorApplyCorrection(agentId,ym,day,code){if(ptGuardReadOnly())return;
   try{
     await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
     const out=await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day,code}});
@@ -901,7 +902,7 @@ function ptDonutSVG(slices,total,cx,cy,r,ir){
   }).join("");
 }
 
-function renderPointageDashboard(isDrh){
+function renderPointageDashboard(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);const todayDate=today();
   const ag=pointageEligibleAgents(soc);
   const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
@@ -930,13 +931,13 @@ function renderPointageDashboard(isDrh){
   const ICO_CLOCK=`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg>`;
   const kpi=(label,n,route,tone,sub,ico)=>`<button type="button" class="pt-dash-kpi${tone?` ${tone}`:""}" onclick="navigate('${route}')"><span class="pt-dash-kpi-ico">${ico}</span><span class="pt-dash-kpi-body"><span class="pt-dash-kpi-label">${escapeHTML(label)}</span><span class="pt-dash-kpi-val">${n}</span><span class="pt-dash-kpi-sub">${sub||""}</span></span></button>`;
   const kpiRow=[
-    kpi("Agents suivis",ag.length,isDrh?"pointage/recap":"pointage/saisie","","Effectif filtré",ICO_PERSON),
-    isDrh?"":kpi("Présents aujourd'hui",fpqPresents,"pointage/feuille","ok",fpqRate+"% · "+formatDate(todayDate),ICO_CHECK),
+    kpi("Agents suivis",ag.length,"pointage/saisie","","Effectif filtré",ICO_PERSON),
+    kpi("Présents aujourd'hui",fpqPresents,"pointage/feuille","ok",fpqRate+"% · "+formatDate(todayDate),ICO_CHECK),
     kpi("Couverture saisie",coverage+"%","pointage/stats",coverage>=80?"ok":"warn","Mois en cours",ICO_DOC),
-    kpi("Pointages validés",valid,isDrh?"pointage/recap":"pointage/saisie","ok","Lignes verrouillées",ICO_LOCK),
+    kpi("Pointages validés",valid,"pointage/saisie","ok","Lignes verrouillées",ICO_LOCK),
     kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"ok":"amber","Sur saisies du mois",ICO_BAR),
-    isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"warn":"ok","Feuilles à contrôler",ICO_CLOCK)
-  ].filter(Boolean).join("");
+    kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"warn":"ok","Feuilles à contrôler",ICO_CLOCK)
+  ].join("");
   const codeChip=(k)=>{const v=POINTAGE_CODES[k];if(!v)return"";const n=tot[k]||0;const hasVal=n>0;return `<button type="button" class="pt-dash-chip${hasVal?" has-value":""}" onclick="navigate('pointage/stats')"${hasVal?` style="--accent:${v.color};--accent-bg:${v.bg}"`:""}><span class="code-tag">${escapeHTML(k)}</span><span class="code-label">${escapeHTML(v.label)}</span><span class="code-val">${n}</span></button>`;};
   const codeFamily=(title,codes)=>`<div class="pt-dash-fam"><div class="pt-dash-fam-head"><b>${escapeHTML(title)}</b><span class="n">${codes.length} code${codes.length>1?"s":""}</span></div><div class="pt-dash-chip-wrap">${codes.map(codeChip).join("")}</div></div>`;
   const codesPanel=`<div class="pt-dash-panel">
@@ -979,9 +980,9 @@ function renderPointageDashboard(isDrh){
       <h1>Tableau de bord pointage</h1>
       <div class="ops-dash-hero-sub"><span>Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</span><span class="ops-dash-live"><span class="ops-dash-live-dot"></span>Temps réel</span></div>
     </div>
-    ${isDrh?"":`<button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="navigate('pointage/saisie')">📋 Pointage quotidien</button>`}
+    <button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="navigate('pointage/saisie')">📋 Pointage quotidien</button>
   </div></div>
-  <div class="pt-dash-kpis"${isDrh?` style="--pt-kpi-cols:4"`:""}>${kpiRow}</div>
+  <div class="pt-dash-kpis">${kpiRow}</div>
   <div class="pt-dash-body-grid">${codesPanel}${statsPanel}</div>`;
 }
 
@@ -1018,7 +1019,6 @@ function fpqStartLiveRefresh(){
 function fpqStopLiveRefresh(){clearInterval(_fpqLiveTimer);_fpqLiveTimer=null;}
 
 function renderFeuillePresentQR(){
-  const isDrh=session?.transverse==="drh";
   const date=fpqCurrentDate();
   const soc=ptCurrentSoc();
   const dateLabel=new Date(date).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
@@ -1145,11 +1145,11 @@ function renderFeuillePresentQR(){
     <button type="button" onclick="fpqOpenDailyCodeModal('')" class="card p-3 text-center" style="background:#fee2e2;cursor:pointer;border:none"><div class="text-xs text-red-700 font-semibold">Non pointés</div><div class="text-2xl font-black text-red-700">${nonPointeCount}</div></button>
     <div class="card p-3 text-center" style="background:#f0f9ff"><div class="text-xs text-blue-700 font-semibold">Total agents</div><div class="text-2xl font-black text-blue-700">${agents.length}</div></div>
   </div>
-  ${isDrh?"":`<div class="flex items-center justify-between mt-3 mb-1">
+  <div class="flex items-center justify-between mt-3 mb-1">
     <div class="text-xs font-black uppercase text-slate-500">Compteurs par code</div>
     <button type="button" class="btn btn-ghost text-xs" onclick="fpqToggleCodeCards()">${fpqCodeCardsHidden()?"▼ Afficher les compteurs":"▲ Masquer les compteurs"}</button>
   </div>
-  ${fpqCodeCardsHidden()?"":dailyCodeCardsHTML}`}
+  ${fpqCodeCardsHidden()?"":dailyCodeCardsHTML}
   </div>
   ${groupBySite?`<div id="fpq-live-tbody">${siteGroupsHTML||`<div class="card p-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</div>`}</div>`:`<div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#043970;color:#fff">${(()=>{const sk=_fpqSortKey,sd=_fpqSortDir;const th=(label,key,align,w)=>{const act=sk===key;const arr=act?(sd===1?"▲":"▼"):"⇅";return`<th onclick="fpqSetSort('${key}')" class="px-3 py-2 text-${align} text-xs font-bold" style="border:1px solid #cbd5e1;${w?`width:${w};`:""}cursor:pointer;user-select:none;white-space:nowrap">${label} <span style="font-size:9px;opacity:${act?1:.45}">${arr}</span></th>`;};return`<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th>${th("SITE","site","left")}${th("NOM PRÉNOM","nom","left")}${th("CODE","code","center","60px")}${th("HEURE ARRIVÉE","arrivee","center","110px")}${th("HEURE DÉPART","depart","center","110px")}<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th>${th("ÉTAT","etat","center","100px")}`;})()}</tr></thead>
@@ -1200,28 +1200,30 @@ function renderPointage(view,sub,arg,_skipEnsure){
       return;
     }
   }
-  const isDrh=session?.transverse==="drh";
+  const readOnly=ptReadOnly();
   const isOps=session?.transverse==="ops";
   // Un compte OPS peut légitimement être limité à certains sites sans être un
   // superviseur terrain. La restriction de sites ne doit donc masquer l'onglet
   // "Saisie automatique" que hors des modules DRH et OPS.
-  const hideAuto=!isDrh&&!isOps&&isSupOrUser();
-  if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
+  const hideAuto=!readOnly&&!isOps&&isSupOrUser();
+  // Lecture seule : mêmes écrans qu'OPS. Seul « QR par site » est retiré, car un QR
+  // affiché sert à créer des pointages.
+  if(readOnly&&sub==="qr")sub="feuille";
   if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
   const supervisorActive=supervisorModuleActive();
   if(supervisorActive&&sub==="auto")sub="feuille";
-  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&(k==="qr"||k==="auto")));
+  const allowedTabs=(readOnly?POINTAGE_TABS.filter(([k])=>k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&(k==="qr"||k==="auto")));
   const tabsHTML=allowedTabs.map(([k,l])=>{
     const label=supervisorActive&&k==="feuille"?"Pointage mensuel":(supervisorActive&&k==="saisie"?"Feuille quotidienne":l);
     return`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${label}</button>`;
   }).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
-  if(sub==="dashboard")body=renderPointageDashboard(isDrh);
+  if(sub==="dashboard")body=renderPointageDashboard();
   else if(sub==="feuille"){body=supervisorActive?renderPointageSaisieAuto():renderFeuillePresentQR();}
-  else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
-  else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur(_ptFreshNav):renderPointageSaisie();
+  else if(sub==="qr"&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
+  else if(sub==="saisie")body=supervisorActive?renderPointageSaisieSuperviseur(_ptFreshNav):renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
   else if(sub==="planning"){body=renderPointagePlanning7J();setTimeout(ptPlanningStartMonitor,100);}
   else if(sub==="recap")body=renderPointageRecap(arg);
@@ -1229,8 +1231,8 @@ function renderPointage(view,sub,arg,_skipEnsure){
   else if(sub==="stats")body=renderPointageStats();
   else if(sub==="legende")body=renderPointageLegende();
   else if(sub==="archives")body=renderPointageArchives();
-  else body=isDrh?renderPointageSaisieAuto():renderPointageSaisie();
-  if(["auto","saisie"].includes(sub))body=ptEmployeeQrScanCard()+body;
+  else body=renderPointageSaisie();
+  if(!readOnly&&["auto","saisie"].includes(sub))body=ptEmployeeQrScanCard()+body;
   view.innerHTML=head+body;
   if(sub==="auto")setTimeout(ptAutoSaisieStartLiveRefresh,100);
 }

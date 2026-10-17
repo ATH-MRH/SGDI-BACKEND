@@ -411,3 +411,37 @@ def test_employee_biometric_status_exposes_rh_status_for_the_enrollment_window(c
         emp = _employee(db, site, status=status)
         body = client.get(f"/api/biometrics/employees/{emp.id}", headers=auth_headers).json()
         assert body["identity"]["statut"] == status
+
+
+# ── Audit pointeur.irongs.com — P2 : indice d'employé, débit de reconnaissance ───────────
+def test_employee_hint_must_match_the_best_candidate_and_never_narrows_the_comparison(client, auth_headers, db, monkeypatch):
+    """Un identifiant préalable ne réduit plus la comparaison à un seul gabarit : le meilleur
+    candidat du site doit être l'employé désigné, sinon aucun pointage."""
+    site, emp, cam, who = _pilot_enrolled(client, auth_headers, db)
+    other = _employee(db, site)
+    monkeypatch.setattr(settings, "biometric_enabled", True)
+    client.patch(f"/api/biometrics/cameras/{cam}", headers=auth_headers, json={"facial_attendance_enabled": True})
+    client.post("/api/biometrics/config", headers=auth_headers, json={"provenance": "Test : non-répétition nulle pour l'indice", "cooldown_seconds": 0})
+    _sees(face(who))
+    wrong = client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=auth_headers, json={"employee_id": other.id}).json()
+    assert (wrong["state"], wrong["recorded"]) == ("REFUSED", False) and "désigné" in wrong["message"]
+    _sees(face(who))
+    right = client.post(f"/api/biometrics/cameras/{cam}/recognize", headers=auth_headers, json={"employee_id": emp.id}).json()
+    assert (right["state"], right["recorded"]) == ("ATTENDANCE_RECORDED", True)
+
+
+def test_recognition_and_preview_are_rate_limited_per_account_and_camera(client, auth_headers, db, monkeypatch):
+    from app.modules.biometrics import routes as bio_routes
+
+    site, emp, cam, who = _pilot_enrolled(client, auth_headers, db)
+    monkeypatch.setattr(settings, "biometric_enabled", True)
+    client.patch(f"/api/biometrics/cameras/{cam}", headers=auth_headers, json={"facial_attendance_enabled": True})
+    monkeypatch.setattr(bio_routes, "RECOGNIZE_MAX_PER_MINUTE", 2)
+    # Compteur en mémoire, partagé par la session de test : les identifiants de caméra sont
+    # réutilisés après la purge d'un autre module.
+    from app.core import rate_limit
+    from app.modules.auth.models import User
+    admin_id = db.query(User).filter(User.username == "testadmin").one().id
+    rate_limit.clear(f"camera-recognize:{admin_id}:{cam}")
+    codes = [_recognize(client, auth_headers, cam, who).status_code for _ in range(4)]
+    assert codes[:2] == [200, 200] and codes[-1] == 429

@@ -10,7 +10,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
-HEAD = "20261017_0003"            # tête additive : code officiel des sites (badges)
+# Jonction Pointeur / IRON Emploi / Studio Badges / lot d'import des contrats / circuit et
+# convocations du recrutement / code officiel des sites, sans réécriture des parents.
+HEAD = "20261023_0001"
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 

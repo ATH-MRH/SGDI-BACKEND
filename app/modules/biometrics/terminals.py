@@ -69,7 +69,11 @@ MIN_FRAMES = 2                   # liveness médian + détection d'image figée
 MAX_FRAMES = 5
 MAX_BODY_BYTES = MAX_FRAMES * (test_mode.MAX_FRAME_BYTES * 4 // 3 + 64) + 4096
 FRAME_DIGEST_RETENTION = timedelta(days=7)
-LAST_SEEN_THROTTLE = timedelta(seconds=60)
+# Battement de cœur : une borne en service relit son état toutes les HEARTBEAT_SECONDS, même au
+# repos (aucun passage). La dernière communication est donc écrite à chaque battement ; son
+# absence prolongée signifie une perte de connexion, pas une absence d'activité.
+HEARTBEAT_SECONDS = 30
+LAST_SEEN_THROTTLE = timedelta(seconds=20)
 SIGNATURE_DOMAIN = "ATLAS-TERMINAL-1"
 
 
@@ -162,7 +166,9 @@ def pair(db: Session, *, code: str, public_key: Any, device_label: str | None, i
         BiometricTerminal.pairing_code_hash == _sha256(normalized)).values(
         public_key=key, key_fingerprint=fingerprint, pairing_code_hash=None,
         pairing_expires_at=None, paired_at=_now(), config_version=BiometricTerminal.config_version + 1,
-        meta={**(terminal.meta or {}), "device_label": str(device_label or "")[:120] or None}),
+        # Nouvel appareil : il devra déclarer lui-même son battement de cœur.
+        meta={**{k: v for k, v in (terminal.meta or {}).items() if k != "heartbeat_s"},
+              "device_label": str(device_label or "")[:120] or None}),
         execution_options={"synchronize_session": False})
     if not changed.rowcount:
         db.rollback()
@@ -231,23 +237,30 @@ async def authenticated_terminal(request: Request, db: Session = Depends(get_db)
     timestamp = request.headers.get("x-atlas-timestamp", "")
     signature = request.headers.get("x-atlas-signature", "")
     ip_limiter = f"terminal-auth:{ip}"
-    if rate_limit.failure_count(ip_limiter, 300) >= 30:
-        raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
-    body = await _read_body(request, MAX_BODY_BYTES)
+    # Le terminal est identifié AVANT toute lecture du corps (jusqu'à 20 Mo) : une requête anonyme
+    # ne fait plus tamponner son corps par le serveur.
     terminal = db.execute(select(BiometricTerminal).where(BiometricTerminal.public_id == public_id)).scalar_one_or_none() \
-        if public_id else None
+        if public_id and len(public_id) <= 80 else None
     if terminal is None or terminal.deleted_at or not terminal.public_key:
-        rate_limit.record_failure(ip_limiter, 300)
+        # Le compteur par IP ne bloque que les identifiants INCONNUS : les bornes associées qui
+        # partagent cette adresse (même NAT, même sortie 4G) ne sont plus coupées par un tiers.
+        if rate_limit.record_failure(ip_limiter, 300) > 30:
+            raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
         raise _error(401, "TERMINAL_UNKNOWN", "Terminal non associé")
     if terminal.revoked_at:
         raise _error(401, "TERMINAL_REVOKED", "Terminal révoqué")
+    body = await _read_body(request, MAX_BODY_BYTES)
     try:
-        skew = abs(time.time() - int(timestamp) / 1000)
-    except ValueError:
+        skew = abs(time.time() - int(timestamp) / 1000) if len(timestamp) <= 16 else float("inf")
+    except (ValueError, OverflowError):
         skew = float("inf")
     if skew > SIGNATURE_SKEW_SECONDS or not _verify_signature(
             terminal.public_key, signed_message(public_id, request.method, _signed_path(request), timestamp, body), signature):
-        rate_limit.record_failure(ip_limiter, 300)
+        # Signatures invalides : comptées par terminal ET par adresse ; au-delà du seuil, la
+        # réponse reste un refus mais n'est plus journalisée (pas d'inondation de l'audit). Une
+        # requête correctement signée n'est jamais bloquée par ce compteur.
+        if rate_limit.record_failure(f"terminal-sig:{terminal.id}:{ip}", 300) > 30:
+            raise _error(429, "RATE_LIMITED", "Trop d'échecs d'authentification")
         append_audit(db, action="biometrics.terminal.auth", resource="biometric_terminal", resource_id=terminal.id,
                      result="refused", society=terminal.society,
                      new_state={"ip": ip, "reason": "horodatage hors fenêtre" if skew > SIGNATURE_SKEW_SECONDS else "signature invalide"})
@@ -325,17 +338,22 @@ def _remote_capture():
 
 
 @router.get("/terminal/session")
-def terminal_session(req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
+def terminal_session(hb: int = 0, req: TerminalRequest = Depends(authenticated_terminal), db: Session = Depends(get_db)) -> dict[str, Any]:
     """État du terminal pour l'écran de borne : identité, disponibilité du facial / du QR,
-    paramètres de rafale. Aucune donnée employé."""
+    paramètres de rafale. Aucune donnée employé. `hb=1` : battement de cœur périodique — la
+    borne déclare qu'elle le maintient, ce qui permet de reconnaître une vraie perte de connexion."""
     terminal = req.terminal
+    if hb and (terminal.meta or {}).get("heartbeat_s") != HEARTBEAT_SECONDS:
+        terminal.meta = {**(terminal.meta or {}), "heartbeat_s": HEARTBEAT_SECONDS}
+        db.commit()
     site = db.get(Site, terminal.site_id)
     return {"terminal": {"terminal_id": terminal.public_id, "name": terminal.name, "terminal_type": terminal.terminal_type,
                          "site_id": terminal.site_id, "site": site.name if site else None, "society": terminal.society,
                          "location": terminal.location},
             "facial": facial_availability(terminal), "qr": {"available": True},
             "remote_capture": _remote_capture().session_info(),
-            "burst": BURST, "challenge_ttl": CHALLENGE_TTL_SECONDS, "server_time": int(time.time() * 1000)}
+            "burst": BURST, "challenge_ttl": CHALLENGE_TTL_SECONDS, "heartbeat_ms": HEARTBEAT_SECONDS * 1000,
+            "server_time": int(time.time() * 1000)}
 
 
 @router.post("/terminal/challenge")
@@ -446,7 +464,9 @@ def terminal_recognize(req: TerminalRequest = Depends(authenticated_terminal), d
     result.pop("terminal_id", None)
     result["duration_ms"] = round((time.perf_counter() - req.received) * 1000, 1)
     _audit(db, terminal, "biometrics.terminal.recognize", result, {**audit, "duration_ms": result["duration_ms"]})
-    return result
+    # Les scores (présence réelle, similarité) restent dans l'audit : renvoyés à un appareil non
+    # fiable, ils permettaient d'ajuster une présentation essai après essai.
+    return {key: value for key, value in result.items() if key not in ("liveness", "confidence")}
 
 
 @router.post("/terminal/qr")

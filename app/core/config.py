@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # voir docs/biometrics.md). Sans clé, aucun gabarit ne peut être enregistré.
     biometric_enabled: bool = False
     biometric_template_key: str | None = None
+    # Rotation de la clé des gabarits : ancienne clé, acceptée en LECTURE seulement le temps de
+    # rechiffrer. Vide en temps normal. Voir docs/biometric-key-rotation.md.
+    biometric_template_key_previous: str | None = None
     biometric_models_dir: str = "/app/models/biometrics"
     # Mode Test biométrique (caméra du navigateur : Mac, PC, tablette, smartphone) — DÉSACTIVÉ
     # par défaut et INDÉPENDANT de biometric_enabled : il peut fonctionner sans activer le vrai
@@ -91,6 +94,10 @@ class Settings(BaseSettings):
     # Enrôlement supervisé (aperçu + confirmation humaine) SANS activer le pointage facial :
     # prépare un pilote. Faux par défaut ; BIOMETRIC_ENABLED l'autorise aussi.
     biometric_enrollment_enabled: bool = False
+    # Verrou : ferme TOUT enrôlement (aperçu, confirmation, référence depuis la photo DRH, prise
+    # distante) même si BIOMETRIC_ENABLED l'autoriserait. Ne touche pas au pointage facial des
+    # gabarits existants. Faux par défaut : comportement inchangé.
+    biometric_enrollment_locked: bool = False
     biometric_test_mode_max_per_minute: int = 30
     # LOT B — DRH → Fiche de position → Photo employé : préparation automatique de la référence
     # faciale lorsqu'une photo est ajoutée/actualisée (caméra ou import) depuis la fiche. FAUX par

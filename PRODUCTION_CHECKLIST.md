@@ -52,9 +52,9 @@ http://adresse-ip:8000
 
 ## 5. Sauvegardes
 
-Activer une sauvegarde PostgreSQL quotidienne dans Coolify ou via `pg_dump`.
+Activer la sauvegarde quotidienne chiffree avec copie hors serveur (`docs/backups.md`).
 
-Verifier regulierement que la restauration est possible.
+Verifier regulierement que la restauration est possible (`scripts/backup_restore_test.sh`).
 
 ## 6. Securite
 

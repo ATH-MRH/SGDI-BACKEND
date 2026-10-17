@@ -1,5 +1,6 @@
 // Service Worker — Pointeur ATLAS
-const CACHE = 'pointeur-atlas-v3';
+// v4 : purge des photos du personnel mises en cache par les versions précédentes.
+const CACHE = 'pointeur-atlas-v4';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -14,7 +15,9 @@ self.addEventListener('activate', e => {
 // Network-first : API jamais mise en cache
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
+  // Jamais en cache : l'API, et les photos/documents du personnel (/uploads/), qui restaient sur
+  // un poste partagé après la déconnexion.
+  if (e.request.method !== 'GET' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) return;
   e.respondWith(
     fetch(e.request)
       .then(res => {

@@ -15,14 +15,16 @@ from app.modules.irongs.models import Position
 from app.modules.auth.routes import is_admin_role
 from app.core.audit import append_audit
 from app.core.scope_policy import ScopeKind, society_scope
-from app.modules.irongs.legacy_policy import LegacyAccess, collection_policy, user_legacy_modules
+from app.modules.irongs.legacy_policy import (
+    POINTAGE_WRITE_ACTIONS, LegacyAccess, collection_policy, user_can_write_pointage, user_legacy_modules,
+)
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
-def _legacy_capabilities(user) -> set[str]:
-    return set(user_legacy_modules(user))
+def _legacy_capabilities(user, *, write: bool = False) -> set[str]:
+    return set(user_legacy_modules(user, write=write))
 
 
 def _legacy_gate(db: Session, request: Request, user, name: str, write: bool = False) -> None:
@@ -31,7 +33,10 @@ def _legacy_gate(db: Session, request: Request, user, name: str, write: bool = F
     allowed = access in {LegacyAccess.WRITE_ALLOWED if write else LegacyAccess.READ_ALLOWED}
     allowed = allowed or (access is LegacyAccess.ADMIN_ONLY and is_admin_role(user.role))
     allowed = allowed and society_scope(user).kind is not ScopeKind.NONE
-    allowed = allowed and (is_admin_role(user.role) or bool(policy.modules & _legacy_capabilities(user)))
+    # Lecture : modules propriétaires et modules consultants ; écriture : propriétaires seulement,
+    # ET capacités d'écriture du compte (le terminal terrain lit sans écrire par ces routes).
+    modules = policy.modules if write else policy.modules | policy.read_modules
+    allowed = allowed and (is_admin_role(user.role) or bool(modules & _legacy_capabilities(user, write=write)))
     actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])}
     allowed = allowed and (not actions or request_action(request) in actions or "admin" in actions)
     if not allowed:
@@ -242,6 +247,7 @@ def create_item(name: str, payload: ItemPayload, request: Request, db: Session =
         if name == "echanges" and data.get("type") == "message":
             data["from"] = user.username
         service.ensure_item_allowed_for_user(data, user, name)
+        service.ensure_item_refs_allowed_for_user(db, data, user, name)
         result = service.create_item(db, name, data)
     _legacy_success(db, request, user, name, write=True, resource_id=result.get("id"), new_state=result)
     return result
@@ -266,6 +272,8 @@ def replace_item(name: str, item_id: str, payload: ItemPayload, request: Request
         existing = service.get_item(db, name, item_id)
         service.ensure_item_allowed_for_user(existing, user, name)
         service.ensure_item_allowed_for_user(payload.data, user, name)
+        service.ensure_item_refs_allowed_for_user(db, existing, user, name)
+        service.ensure_item_refs_allowed_for_user(db, payload.data, user, name)
         result = service.update_item(db, name, item_id, payload.data, partial=False)
     _legacy_success(db, request, user, name, write=True, resource_id=item_id, old_state=existing, new_state=result)
     return result
@@ -279,6 +287,8 @@ def patch_item(name: str, item_id: str, payload: ItemPayload, request: Request, 
         service.ensure_item_allowed_for_user(existing, user, name)
         merged = {**existing, **payload.data}
         service.ensure_item_allowed_for_user(merged, user, name)
+        service.ensure_item_refs_allowed_for_user(db, existing, user, name)
+        service.ensure_item_refs_allowed_for_user(db, merged, user, name)
         result = service.update_item(db, name, item_id, payload.data, partial=True)
     _legacy_success(db, request, user, name, write=True, resource_id=item_id, old_state=existing, new_state=result)
     return result
@@ -290,6 +300,7 @@ def delete_item(name: str, item_id: str, request: Request, db: Session = Depends
     with _legacy_operation(db, request, user, name, write=True, resource_id=item_id):
         existing = service.get_item(db, name, item_id)
         service.ensure_item_allowed_for_user(existing, user, name)
+        service.ensure_item_refs_allowed_for_user(db, existing, user, name)
         result = service.delete_item(db, name, item_id)
     _legacy_success(db, request, user, name, write=True, resource_id=item_id, old_state=existing)
     return result
@@ -352,7 +363,13 @@ def valider_facture(item_id: str, request: Request, db: Session = Depends(get_db
 def legacy_action(
     action: str,
     payload: LegacyActionPayload,
+    request: Request,
     db: Session = Depends(get_db),
     user=Depends(current_user),
 ) -> dict[str, Any]:
+    if action in POINTAGE_WRITE_ACTIONS and not user_can_write_pointage(user):
+        append_audit(db, action="legacy.write", resource="pointage_action", resource_id=action,
+                     result="refused", user=user, request=request)
+        db.commit()
+        raise HTTPException(status_code=403, detail="Pointage en lecture seule pour ce compte")
     return service.run_legacy_action(db, action, payload, user)

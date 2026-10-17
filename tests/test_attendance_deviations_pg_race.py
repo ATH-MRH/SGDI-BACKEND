@@ -7,7 +7,7 @@ clôture qui croise des pointages ne perd ni ne double rien."""
 import threading
 import uuid
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +26,26 @@ from tests.test_attendance_learning_pg_race import (  # noqa: F401 (fixtures ré
 )
 
 pytestmark = pytest.mark.skipif(not PG_URL, reason="ATTENDANCE_PG_URL non défini (base PostgreSQL jetable requise)")
+
+
+@pytest.fixture(autouse=True)
+def fixed_learning_clock(monkeypatch):
+    """Le modèle de ces scénarios est appris à la clôture de la 16ᵉ rotation (10/10/2026).
+
+    L'apprentissage date ses versions avec utcnow, indépendamment du `now` passé au rattrapage
+    et à la projection (même constat et même remède que tests/test_attendance_rotation_projection.py).
+    Sans cette horloge, une version apprise prend effet à l'heure réelle d'exécution : dès que
+    celle-ci dépasse le début de la période projetée, les créneaux antérieurs sortent du planning
+    (« avant la première règle ») et le nombre d'occurrences dépend du moment où le test tourne.
+    """
+    from app.modules.attendance import learning
+
+    class LearningClock(datetime):
+        @classmethod
+        def utcnow(cls):
+            return START + timedelta(hours=8 * 16, minutes=1)
+
+    monkeypatch.setattr(learning, "datetime", LearningClock)
 
 
 def _active(Session):

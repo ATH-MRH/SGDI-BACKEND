@@ -185,7 +185,7 @@ async function ptPlanningRefreshNow(){
 }
 
 function renderPointageSaisie(){
-  const isDrh=session?.transverse==="drh";
+  const readOnly=ptReadOnly();
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   ptSyncFeuillePresenceMonth(ym);
   const ag=pointageEligibleAgents(soc);
@@ -236,7 +236,7 @@ function renderPointageSaisie(){
     <span class="lbl">Légende</span>${legendBaseHTML}
     <button type="button" class="pt-manuel-legend-toggle" onclick="const ex=this.nextElementSibling;const sh=ex.classList.toggle('show');this.textContent=sh?'− Masquer les codes avancés':'+ Codes avancés (récupération, maintien, absences graduées)'">+ Codes avancés (récupération, maintien, absences graduées)</button>
     <div class="pt-manuel-legend-extra">${legendExtraHTML}</div>
-    ${isDrh?"":`<div class="pt-manuel-hint">Astuce : <b>cliquer sur une case</b> ouvre le sélecteur de code · <b>Valider</b> verrouille le pointage de l'agent.</div>`}
+    ${readOnly?`<div class="pt-manuel-hint">Consultation seule : les saisies et validations se font depuis OPS.</div>`:`<div class="pt-manuel-hint">Astuce : <b>cliquer sur une case</b> ouvre le sélecteur de code · <b>Valider</b> verrouille le pointage de l'agent.</div>`}
   </div>`;
   const filterBar=`<div class="pt-auto-toolbar">
     ${supervisorModuleActive()?"":`<div class="pt-auto-monthnav"><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',-1))" title="Mois précédent">‹</button><span class="lbl capitalize">${escapeHTML(monthLabel)}</span><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',1))" title="Mois suivant">›</button></div>`}
@@ -244,7 +244,7 @@ function renderPointageSaisie(){
     ${ptSortControlsHTML()}
     <div class="pt-auto-chips">${chipsHTML}</div>
     <div class="flex-1"></div>
-    ${isDrh?"":`<button class="btn btn-primary text-xs" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
+    ${readOnly?"":`<button class="btn btn-primary text-xs" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
     <button class="btn btn-ghost text-xs" onclick="ptDevaliderTous('${ym}','${soc.replace(/'/g,"\\'")}')">🔓 Tout déverrouiller</button>`}
     <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
   </div>`;
@@ -259,7 +259,7 @@ function renderPointageSaisie(){
   const dayHeadersNum=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-num">${String(i+1).padStart(2,"0")}</th>`).join("");
   const dayHeadersDow=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-dow">${weekdayShort[new Date(yr,mo-1,i+1).getDay()]}</th>`).join("");
   const headHTML=`<thead>
-    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th><th class="pt-col-code" rowspan="2">Code</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-sum" rowspan="2" style="color:#b45309;background:#fef9c3" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="pt-col-sum" rowspan="2" style="color:#7f1d1d;background:#fecaca" title="AB+A2+A3 déjà inclus dans A paie">Ax</th><th class="pt-col-rate" rowspan="2">Renseigné</th>${isDrh?"":`<th class="pt-col-action" rowspan="2">Statut</th>`}</tr>
+    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th><th class="pt-col-code" rowspan="2">Code</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-sum" rowspan="2" style="color:#b45309;background:#fef9c3" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="pt-col-sum" rowspan="2" style="color:#7f1d1d;background:#fecaca" title="AB+A2+A3 déjà inclus dans A paie">Ax</th><th class="pt-col-rate" rowspan="2">Renseigné</th><th class="pt-col-action" rowspan="2">Statut</th></tr>
     <tr>${dayHeadersDow}</tr>
   </thead>`;
   const rows=filtered.map((a,idx)=>{
@@ -285,11 +285,11 @@ function renderPointageSaisie(){
       <td class="pt-col-sum" style="color:#b45309">${nFx||"·"}</td>
       <td class="pt-col-sum" style="color:#7f1d1d">${nAx||"·"}</td>
       <td class="pt-col-rate"><div class="pt-rate-track"><div class="pt-rate-fill" style="width:${st.taux}%;background:${rateColor}"></div></div><div class="pt-rate-txt">${st.taux}%</div></td>
-      ${isDrh?"":`<td class="pt-col-action">${locked?`<button type="button" class="pt-lock-btn locked" title="${escapeHTML(valideTitle)}" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔒 Verrouillé</button>`:`<button type="button" class="pt-lock-btn" onclick="ptValiderSheet('${a.id}','${ym}')">🔓 Valider</button>`}</td>`}
+      <td class="pt-col-action">${readOnly?(locked?`<span class="pt-lock-btn locked" title="${escapeHTML(valideTitle)}">🔒 Verrouillé</span>`:`<span class="pt-lock-btn">🔓 Non validé</span>`):(locked?`<button type="button" class="pt-lock-btn locked" title="${escapeHTML(valideTitle)}" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔒 Verrouillé</button>`:`<button type="button" class="pt-lock-btn" onclick="ptValiderSheet('${a.id}','${ym}')">🔓 Valider</button>`)}</td>
     </tr>`;
   }).join("");
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
-  const tableHTML=`<table class="pt-auto pt-manuel"${isDrh?' style="pointer-events:none"':""}>${headHTML}<tbody>${rows}</tbody></table>`;
+  const tableHTML=`<table class="pt-auto pt-manuel">${headHTML}<tbody>${rows}</tbody></table>`;
   return kpisHTML+filterBar+legendHTML+`<div class="pt-auto-card">
     <div class="pt-auto-card-head"><h2>Saisie manuelle — <span class="capitalize">${escapeHTML(monthLabel)}</span></h2><span class="meta">${days} jours · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</span></div>
     <div class="pt-auto-scroll">${tableHTML}</div>
@@ -330,7 +330,7 @@ function ptEmployeeQrTimeout(fn,delay){
   const id=setTimeout(()=>{ptEmployeeQrTimeouts.delete(id);fn()},delay);
   ptEmployeeQrTimeouts.add(id);
 }
-function ptEmployeeQrStart(){
+function ptEmployeeQrStart(){if(ptGuardReadOnly())return;
   const reader=document.getElementById("pt-employee-qr-reader");
   const button=document.getElementById("pt-employee-qr-open");
   const result=document.getElementById("pt-employee-qr-result");
@@ -387,7 +387,7 @@ function ptEmployeeQrStop(){
   return ptEmployeeQrCleanup;
 }
 
-async function ptEmployeeQrSubmit(token){
+async function ptEmployeeQrSubmit(token){if(ptGuardReadOnly())return;
   const hash=location.hash,generation=sgdiViewRenderGeneration,view=document.getElementById("view");
   let scannerGeneration=ptEmployeeQrGeneration;
   const current=()=>scannerGeneration===ptEmployeeQrGeneration&&hash===location.hash&&generation===sgdiViewRenderGeneration&&document.getElementById("view")===view&&window.SGDIModules?.activeModuleKey==="pointage";

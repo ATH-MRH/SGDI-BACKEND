@@ -596,19 +596,20 @@ def test_kill_switch_disables_the_whole_api_without_touching_data(client, db, dr
 def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     import sqlite3
 
-    from tests.test_attendance_official_shift_migration import HEAD, _alembic, _ok
+    from tests.test_attendance_official_shift_migration import _alembic, _ok
 
+    # Test the Studio Badges branch itself; explicit merge heads are covered by the PostgreSQL join tests.
     path = tmp_path / "badges.db"
     url = f"sqlite:///{path}"
-    _ok(_alembic(url, "upgrade", "head"))
+    _ok(_alembic(url, "upgrade", "20261015_0002"))
     tables = lambda: {row[0] for row in sqlite3.connect(path).execute("SELECT name FROM sqlite_master WHERE type='table'")}  # noqa: E731
     version = lambda: sqlite3.connect(path).execute("SELECT version_num FROM alembic_version").fetchone()[0]  # noqa: E731
     badge_tables = {"badge_templates", "employee_badges", "badge_events", "badge_settings"}
-    assert badge_tables <= tables() and version() == HEAD
+    assert badge_tables <= tables() and version() == "20261015_0002"
 
     _ok(_alembic(url, "downgrade", "20261016_0001"))                                  # studio jamais utilisé : tables retirées
     assert not badge_tables & tables() and version() == "20261016_0001"
-    _ok(_alembic(url, "upgrade", "head"))
+    _ok(_alembic(url, "upgrade", "20261015_0002"))
     con = sqlite3.connect(path)
     con.execute("INSERT INTO badge_events (created_at, action, label) VALUES ('2026-10-11 10:00:00', 'EMISSION', 'Badge BDG-1 émis')")
     con.commit()
@@ -616,5 +617,5 @@ def test_downgrade_keeps_badge_tables_as_soon_as_they_hold_data(tmp_path):
     _ok(_alembic(url, "downgrade", "20261016_0001"))                                  # données présentes : rien n'est supprimé
     assert badge_tables <= tables() and version() == "20261016_0001"
     assert sqlite3.connect(path).execute("SELECT label FROM badge_events").fetchall() == [("Badge BDG-1 émis",)]
-    _ok(_alembic(url, "upgrade", "head"))                                              # la remontée retrouve les tables telles quelles
-    assert sqlite3.connect(path).execute("SELECT count(*) FROM badge_events").fetchone()[0] == 1 and version() == HEAD
+    _ok(_alembic(url, "upgrade", "20261015_0002"))                                              # la remontée retrouve les tables telles quelles
+    assert sqlite3.connect(path).execute("SELECT count(*) FROM badge_events").fetchone()[0] == 1 and version() == "20261015_0002"

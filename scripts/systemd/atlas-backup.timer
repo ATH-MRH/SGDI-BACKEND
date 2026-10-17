@@ -1,0 +1,12 @@
+# Planification quotidienne — modèle, NON activé par le dépôt. Voir docs/backups.md.
+[Unit]
+Description=Sauvegarde chiffrée ATLAS, chaque nuit
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 UTC
+RandomizedDelaySec=10min
+# Une sauvegarde manquée (serveur éteint) est rattrapée au démarrage.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

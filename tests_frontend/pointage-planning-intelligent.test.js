@@ -44,7 +44,7 @@ const PLAN = { site_id: 3, site: 'DHL HAMOUL 01', mode: 'ACTIVE', state: 'STABLE
     { date: '2026-10-03', start: '22:00', end: '06:00', group: 'C', rest: false, expected: [P(31, 'K301', '<img src=x onerror=alert(1)>', 'CONFIRMED')], expected_count: 1, exceptions: [], version: 6, version_source: 'HUMAN', period: 'current', actual: null },
     { date: '2026-10-04', start: '06:00', end: '14:00', group: null, rest: true, expected: [], expected_count: 0, exceptions: [], version: 6, version_source: 'HUMAN', period: 'future', actual: null }] };
 
-function boot({ items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning', plan = PLAN } = {}) {
+function boot({ canLearn = true, items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning', plan = PLAN } = {}) {
   const calls = [];
   const errors = [];
   const vc = new VirtualConsole();
@@ -60,6 +60,7 @@ function boot({ items = [STABLE, FRESH, OFF], enabled = true, hash = '#/planning
         calls.push(call);
         let data = {};
         if (u.pathname === '/api/auth/me') data = { username: 'OPS01', full_name: 'Resp OPS' };
+        else if (u.pathname === '/api/attendance/capabilities') data = { writes: { rotation_learning: canLearn, rotation_settings: canLearn } };
         else if (u.pathname === '/api/attendance/sites') data = [{ id: 3, name: 'DHL HAMOUL 01', society: 'SOC' }, { id: 4, name: 'Site neuf', society: 'SOC' }];
         else if (u.pathname === '/api/attendance/rotation-learning') data = { enabled, engine_version: 'rot-learn-1', items: u.searchParams.get('site_id') ? items.filter((i) => String(i.site_id) === u.searchParams.get('site_id')) : items };
         else if (u.pathname === '/api/attendance/rotation-learning/3/groups') data = GROUPS;
@@ -243,4 +244,15 @@ test('planning projeté : apprentissage = prévision, révision requise signalé
   assert.match(empty.d.querySelector('[data-pl-banner]').textContent, /Aucun cycle démontré/);
   assert.match(empty.d.getElementById('pl-plan-rows').textContent, /Aucune rotation projetée/);
   empty.dom.window.close();
+});
+
+test('compte en consultation : le planning reste lisible, sans bouton d’activation ni de suspension', async () => {
+  const { d, calls, dom } = boot({ canLearn: false });
+  await tick(80);
+  assert.match(d.querySelector('[data-pl-card="4"] .pl-banner').textContent, /PLANNING EN COURS D'APPRENTISSAGE/);
+  assert.equal(d.querySelector('[data-pl-card="5"] .pill').textContent, 'Désactivé');
+  assert.equal(d.querySelectorAll('[data-pl-mode]').length, 0);
+  assert.ok(d.querySelector('[data-pl-groups]'), 'la consultation des groupes détectés reste proposée');
+  assert.equal(calls.some((c) => c.method !== 'GET'), false);
+  dom.window.close();
 });

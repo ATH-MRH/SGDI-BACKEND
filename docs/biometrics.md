@@ -173,9 +173,11 @@ VRAIE CAMÉRA DAHUA**) ; décision sur le mode kiosque (§11).
 6. Accorder les permissions biométriques explicites aux seules personnes habilitées.
 7. Dérouler le protocole du §8, calibrer, puis enrôler.
 
-**Rotation de clé** : un gabarit chiffré avec une ancienne clé devient illisible ; le système le
-signale explicitement (erreur, jamais d'ignorance silencieuse qui laisserait passer un doublon).
-Procédure : désactiver les gabarits, changer la clé, ré-enrôler.
+**Rotation de clé** : un gabarit chiffré avec une clé absente de la configuration est illisible ;
+le système le signale explicitement (erreur, jamais d'ignorance silencieuse qui laisserait passer
+un doublon). Une rotation se fait donc à deux clés — `BIOMETRIC_TEMPLATE_KEY` (active) et
+`BIOMETRIC_TEMPLATE_KEY_PREVIOUS` (ancienne, en lecture seule le temps de rechiffrer) — sans
+réenrôlement : procédure dans `docs/biometric-key-rotation.md`.
 
 ## 10. Migration des photos à nom prévisible — procédure de production
 
@@ -699,6 +701,7 @@ candidate). Aucun gabarit créé, remplacé ou désactivé (`app/modules/biometr
 
 | Réglage serveur | Défaut | Effet |
 |---|---|---|
+| `BIOMETRIC_ENROLLMENT_LOCKED` | `false` | `true` : ferme tout enrôlement (aperçu, confirmation, référence depuis la photo DRH, prise distante), même quand `BIOMETRIC_ENABLED=true` l'autoriserait. Le pointage facial des gabarits existants continue. |
 | `DRH_FACIAL_REFERENCE_AUTO_SYNC_ENABLED` | `false` | `true` : une photo ajoutée/actualisée depuis la Fiche de position prépare automatiquement la référence faciale. Exige aussi `BIOMETRIC_ENROLLMENT_ENABLED` (ou `BIOMETRIC_ENABLED`) et `BIOMETRIC_TEMPLATE_KEY`. |
 | `FACIAL_REFERENCE_CONSENT_MODE` | `explicit` | `explicit` : accord admissible exigé (règle historique). `no_objection` : aucun accord manuel exigé ; un **refus** ou un **retrait** enregistré bloque toujours. Aucun consentement n'est créé ni supprimé. |
 

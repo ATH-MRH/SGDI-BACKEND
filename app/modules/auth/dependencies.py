@@ -1,3 +1,5 @@
+import re
+
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -80,9 +82,61 @@ API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
     # Saisie manuelle du pointeur : la permission fine ne réactive pas un module
     # révoqué. Couvre recherche/contexte, PRÉSENT, ABSENT et ABANDON POSTE.
     ("/api/portal/attendance-manual", frozenset({"pointage", "pointeur"})),
+    # Validation d'un QR salarié : un pointage est écrit. Réservée aux applications de pointage
+    # (le QR lui-même est émis par le salarié, avec un jeton portail, hors de cette table).
+    ("/api/portal/attendance-qr/scan", frozenset({"pointage", "pointeur", "ops"})),
+    # Lectures du poste de pointage (sites, feuille, relève en direct, portrait, anomalies, flux,
+    # effectifs, alertes, statistiques, référentiel léger) : mêmes applications, plus la DRH
+    # qui consulte le référentiel et l'onglet Pointages. Sans ces lignes, tout compte interne
+    # d'un autre module lisait noms, matricules et photos de sa société.
+    ("/api/portal/attendance-sites", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-sheet", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-live", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-employee", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-employees", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-anomalies", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-feed", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-staffing", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-statistics", frozenset({"pointage", "pointeur", "ops", "drh"})),
+    ("/api/portal/attendance-alerts", frozenset({"pointage", "pointeur", "ops", "drh"})),
     # Biométrie : terminal (reconnaissance) + administration ; actions sensibles soumises en
     # plus à une permission biométrique explicite (app/modules/biometrics/routes.py).
     ("/api/biometrics", frozenset({"pointage", "pointeur", "ops", "drh"})),
+)
+
+# Écritures : sous-ensemble plus strict que la lecture du même préfixe. Le terminal terrain
+# (clé « pointeur ») LIT les présences OPS mais n'en écrit aucune par ces routes : ses pointages
+# passent par /api/portal/attendance-* (heure serveur, périmètre site, permission fine).
+API_MODULE_WRITE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
+    ("/api/ops/pointage", frozenset({"ops", "pointage"})),
+)
+READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_READ_METHODS = READ_ONLY_METHODS
+_LEGACY_ATTENDANCE_ROLE_KEYS: dict[str, frozenset[str]] = {
+    "ops": frozenset({"ops"}), "superviseur": frozenset({"ops"}), "supervisor": frozenset({"ops"}),
+    "dispatch": frozenset({"ops"}), "pointeur": frozenset({"pointeur"}), "pointage": frozenset({"pointage"}),
+    "drh": frozenset({"drh"}), "rh": frozenset({"drh"}),
+}
+# Écritures Pointage / Présence / Rotation : le module propriétaire est exigé en plus du
+# préfixe ci-dessus, qui n'ouvre que la LECTURE aux modules consultants (DRH lit le centre de
+# contrôle et l'onglet Pointages de l'Employé 360 sans jamais y écrire). Une écriture sans
+# propriétaire opérationnel listé ici ou dans API_MODULE_PREFIXES n'existe pas : la première
+# règle qui correspond s'applique, puis le préfixe.
+API_WRITE_MODULE_RULES: tuple[tuple[re.Pattern[str], frozenset[str]], ...] = (
+    # Comptes pointeurs : gestion d'identités, déjà portée par la permission explicite
+    # Administration › Utilisateurs (attendance/pointer_users.py) — modules du préfixe inchangés.
+    (re.compile(r"^/api/attendance/pointers(/|$)"), frozenset({"pointage", "ops", "drh"})),
+    # Qualification d'un écart de rotation et décision planifiée : décisions d'exploitation OPS.
+    (re.compile(r"^/api/attendance/rotation-(deviations|planning)(/|$)"), frozenset({"ops"})),
+    # Centre de contrôle (pointage.irongs.com) : correction, clôture, réouverture, anomalies,
+    # réglages et apprentissage de rotation — module du centre de contrôle ou OPS.
+    (re.compile(r"^/api/attendance(/|$)"), frozenset({"ops", "pointage"})),
+    # Scan du QR d'un employé : terminal Pointeur et scanner du Pointage — mêmes modules que
+    # la saisie /api/ops/pointage.
+    (re.compile(r"^/api/portal/attendance-qr(/|$)"), frozenset({"ops", "pointage", "pointeur"})),
+    # Reconnaissance faciale : crée un pointage, contrairement au reste de /api/biometrics
+    # (enrôlement, référence faciale) que DRH utilise légitimement.
+    (re.compile(r"^/api/biometrics/cameras/[^/]+/recognize$"), frozenset({"ops", "pointage", "pointeur"})),
 )
 
 MODULE_KEY_ALIASES = {
@@ -94,7 +148,21 @@ MODULE_KEY_ALIASES = {
 
 def request_module_keys(request: Request) -> frozenset[str] | None:
     """Retourne les modules existants capables d'utiliser la route demandee."""
-    path = request.url.path.lower().rstrip("/")
+    return route_module_keys(request.method, request.url.path)
+
+
+def route_module_keys(method: str, path: str) -> frozenset[str] | None:
+    """Même décision à partir d'une méthode et d'un chemin : sert au contrôle d'accès ET au calcul
+    des capacités affichées par les écrans — une seule règle pour les deux."""
+    path = path.lower().rstrip("/")
+    if method.upper() not in READ_ONLY_METHODS:
+        # Deux jeux de règles d'écriture cohabitent (module propriétaire par route, et préfixes
+        # d'écriture du terminal terrain). Chacun fournit au plus une règle ; si les deux visent
+        # la même route, seuls les modules admis par LES DEUX restent : le plus strict l'emporte.
+        matched = [keys for pattern, keys in API_WRITE_MODULE_RULES if pattern.match(path)][:1]
+        matched += [keys for prefix, keys in API_MODULE_WRITE_PREFIXES if path == prefix or path.startswith(f"{prefix}/")][:1]
+        if matched:
+            return frozenset.intersection(*matched)
     for prefix, module_keys in API_MODULE_PREFIXES:
         if path == prefix or path.startswith(f"{prefix}/"):
             return module_keys
@@ -133,6 +201,29 @@ def _legacy_module_keys(user: User) -> set[str]:
     return _normalized_module_keys(list(allowed))
 
 
+def user_holds_module(user: User, required: frozenset[str] | None, path: str | None = None) -> bool:
+    """Décision de module d'une route, partagée par le contrôle d'accès et par les écrans
+    qui n'affichent une action que si le serveur l'acceptera. `path` : chemin de la route, pour
+    la seule tolérance qui en dépend (comptes historiques sur le pointage du portail)."""
+    if required is None:
+        return True
+    from app.modules.auth.routes import is_admin_role
+
+    if is_admin_role(user.role):
+        return True
+    configured = user.authorized_modules
+    allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
+    legacy_path = (path or "").lower()
+    if (configured is None and legacy_path.startswith("/api/portal/attendance-")
+            and not legacy_path.startswith("/api/portal/attendance-manual")):
+        # Comptes historiques (modules NULL) : ces routes n'avaient aucune porte de module ; un
+        # superviseur ou un pointeur historique y accédait par son rôle. Son rôle continue de
+        # valoir application de pointage ici — et ici seulement (la saisie manuelle garde sa
+        # porte stricte existante). Une liste de modules explicite fait toujours foi.
+        allowed = allowed | _LEGACY_ATTENDANCE_ROLE_KEYS.get(str(user.role or "").strip().lower(), frozenset())
+    return not allowed.isdisjoint(required)
+
+
 def enforce_module_access(db: Session, request: Request, user: User) -> None:
     """Bloque cote API un module non coche dans le compte utilisateur.
 
@@ -140,16 +231,7 @@ def enforce_module_access(db: Session, request: Request, user: User) -> None:
     un accès global. Une liste vide signifie qu'aucun module dédié n'est autorisé.
     Les rôles Administration conservent leur accès transversal existant.
     """
-    required = request_module_keys(request)
-    configured = user.authorized_modules
-    if required is None:
-        return
-    from app.modules.auth.routes import is_admin_role
-
-    if is_admin_role(user.role):
-        return
-    allowed = _legacy_module_keys(user) if configured is None else _normalized_module_keys(configured)
-    if allowed.isdisjoint(required):
+    if not user_holds_module(user, request_module_keys(request), request.url.path):
         append_audit(
             db,
             action="authorization.module",
@@ -207,8 +289,12 @@ def badge_operational_request(request: Request, user: User) -> bool:
 
 def request_action(request: Request) -> str:
     """Traduit une opération HTTP en action métier administrable par utilisateur."""
-    method = request.method.upper()
-    path = request.url.path.lower()
+    return route_action(request.method, request.url.path)
+
+
+def route_action(method: str, path: str) -> str:
+    method = method.upper()
+    path = path.lower()
     if path.rstrip("/") == "/api/drh/badges/preview/pdf":
         # Épreuve « SPÉCIMEN » du Studio Badges : POST (la maquette en cours voyage dans le corps)
         # mais aucune écriture, aucune émission ni impression comptée. C'est une consultation ;
@@ -235,6 +321,13 @@ def request_action(request: Request) -> str:
     if path.startswith("/api/auth/users") or path.startswith("/api/auth/access-rules"):
         return "admin" if method not in {"GET", "HEAD", "OPTIONS"} else "read"
     return {"GET": "read", "HEAD": "read", "OPTIONS": "read", "POST": "create", "PUT": "update", "PATCH": "update", "DELETE": "delete"}.get(method, "read")
+
+
+def user_holds_action(user: User, action: str) -> bool:
+    """Liste authorized_actions vide = profil ; « admin » ouvre toutes les actions."""
+    actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
+    actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
+    return not actions or action in actions or "admin" in actions
 
 
 def current_token_payload(
@@ -270,9 +363,10 @@ def current_user(
                      resource_id=request.url.path, result="refused", user=user, request=request)
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun périmètre société explicite")
-    actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
-    actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
-    if actions and request_action(request) not in actions and "admin" not in actions and not badge_operational_request(request, user):
+    # Même règle que l'action du profil (user_holds_action, partagée avec les écrans), plus
+    # l'exception opérationnelle du Studio Badges : le module « badge » vaut droit d'émettre et
+    # d'imprimer, sauf compte explicitement limité à la consultation.
+    if not user_holds_action(user, request_action(request)) and not badge_operational_request(request, user):
         append_audit(db, action="authorization.action", resource="api", resource_id=request.url.path,
                      result="refused", user=user, request=request)
         db.commit()

@@ -18,7 +18,9 @@ function row(over = {}) {
   };
 }
 
-function boot({ standalone = false, board, anomalies = [] } = {}) {
+const ALL_WRITES = { writes: { correct_presence: true, correct_closed_presence: true, close_day: true, reopen_presence: true, resolve_anomaly: true, rotation_settings: true, rotation_learning: true, rotation_rebuild: true, qualify_deviation: true, rotation_decision: true }, read_only: false };
+
+function boot({ standalone = false, board, anomalies = [], capabilities = ALL_WRITES } = {}) {
   const calls = [], navigations = [];
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', (e) => { if (/navigation/i.test(e.message)) navigations.push(e.message); });
@@ -32,6 +34,7 @@ function boot({ standalone = false, board, anomalies = [] } = {}) {
         calls.push({ path: u.pathname, query: Object.fromEntries(u.searchParams), method: opts.method || 'GET', body: opts.body ? JSON.parse(opts.body) : null });
         let data = {};
         if (u.pathname === '/api/auth/me') data = { username: 'OPS01', full_name: 'Chef OPS' };
+        else if (u.pathname === '/api/attendance/capabilities') { if (capabilities === 'error') return { ok: false, status: 500, text: async () => '{}' }; data = capabilities; }
         else if (u.pathname === '/api/attendance/sites') data = [{ id: 3, name: 'Site A', society: 'SOC' }];
         else if (u.pathname === '/api/attendance/board') data = board || { date: '2027-04-05', kpi: { expected: 3, present: 1, absent: 1, not_pointed: 1, late: 0, conge: 0, maladie: 0, repos: 0, anomalies: 1, incomplete: 0 }, total: 60, page: Number(u.searchParams.get('page')), page_size: 25, pages: 3, items: [row()] };
         else if (u.pathname === '/api/attendance/anomalies') data = { total: anomalies.length, page: 1, page_size: 25, pages: 1, items: anomalies };
@@ -322,14 +325,10 @@ const TERM = { id: 4, terminal_id: 'trm_public', name: 'TAB-ENTREE-01', terminal
   key_fingerprint: 'abcd1234abcd1234', pairing_pending: false, pairing_expires_at: null, last_seen_at: '2026-09-30T08:05:00Z',
   revoked_at: null, revoked_reason: null, config_version: 2, device_label: 'Mozilla/5.0 (Linux; Android 14; SM-X210)' };
 
-test('terminaux : liste sans secret, code d\'association à usage unique, activation explicite, révocation motivée', async () => {
+test('terminaux : liste sans secret, activation explicite, audit — aucune commande d\'association, de révocation ni de création', async () => {
   const { d, w, calls, dom } = bootBio({
     '/api/biometrics/terminals': [200, [TERM]],
-    'POST /api/biometrics/terminals': [200, { ...TERM, id: 9, paired: false, name: 'TAB-NEW' }],
-    'POST /api/biometrics/terminals/4/pairing-code': [200, { code: 'ABCDE-FGHJK', expires_in: 600, pair_path: '/borne#pair=ABCDEFGHJK' }],
-    'POST /api/biometrics/terminals/9/pairing-code': [200, { code: 'ZZZZZ-YYYYY', expires_in: 600, pair_path: '/borne#pair=ZZZZZYYYYY' }],
     'PATCH /api/biometrics/terminals/4': [200, { ...TERM, facial_attendance_enabled: true }],
-    'POST /api/biometrics/terminals/4/revoke': [200, { ...TERM, revoked_at: '2026-09-30T09:00:00Z' }],
     '/api/biometrics/terminals/4/audit': [200, [{ at: '2026-09-30T08:05:00Z', action: 'biometrics.terminal.recognize', result: 'success', state: 'ATTENDANCE_RECORDED', matricule: 'A0001', reason: null }]],
   }, 'terminals');
   const confirms = [];
@@ -343,32 +342,84 @@ test('terminaux : liste sans secret, code d\'association à usage unique, activa
   await tick(80);
   assert.match(confirms.at(-1), /pointage facial RÉEL/);
   assert.deepEqual(calls.find((c) => c.method === 'PATCH').body, { facial_attendance_enabled: true });
-  // Code d'association : affiché une fois, lien vers la borne, jamais stocké par la page.
-  d.querySelector('[data-term-pair="4"]').click();
-  await tick(80);
-  assert.equal(d.getElementById('pair-code').textContent, 'ABCDE-FGHJK');
-  assert.match(d.querySelector('.modal').textContent, /pointeur\.irongs\.com\/borne/);
-  d.getElementById('pair-close').click();
-  await tick(40);
-  assert.equal(d.getElementById('pair-code'), null);
   // Audit du terminal.
   d.querySelector('[data-term-audit="4"]').click();
   await tick(80);
   assert.match(d.querySelector('.modal').textContent, /recognize.*success.*ATTENDANCE_RECORDED.*A0001/);
   d.getElementById('audit-close').click();
-  // Révocation : motif obligatoire.
-  w.prompt = () => 'Tablette perdue';
-  d.querySelector('[data-term-revoke="4"]').click();
-  await tick(80);
-  assert.deepEqual(calls.find((c) => c.path.endsWith('/revoke')).body, { reason: 'Tablette perdue' });
-  // Création : facial jamais activé à la création, code proposé aussitôt.
-  d.getElementById('terminal-add').click();
-  await tick(80);
-  d.getElementById('t-name').value = 'TAB-NEW';
-  d.getElementById('term-form').dispatchEvent(new w.Event('submit', { cancelable: true }));
-  await tick(120);
-  const created = calls.find((c) => c.method === 'POST' && c.path === '/api/biometrics/terminals').body;
-  assert.deepEqual(created, { name: 'TAB-NEW', terminal_type: 'TABLET_ANDROID', site_id: 3, location: null });
-  assert.equal(d.getElementById('pair-code').textContent, 'ZZZZZ-YYYYY');
+  // Association, révocation, suppression, création : Administration Système uniquement.
+  assert.equal(d.querySelectorAll('[data-term-pair], [data-term-revoke], [data-term-delete], #terminal-add, #term-form, #pair-code').length, 0);
+  assert.ok(calls.every((c) => !/pairing-code|\/revoke/.test(c.path) && !(c.method === 'POST' && c.path === '/api/biometrics/terminals') && c.method !== 'DELETE'));
+  dom.window.close();
+});
+
+// ── Permissions effectives : les contrôles d'écriture suivent /attendance/capabilities ─────
+const NO_WRITES = { writes: Object.fromEntries(Object.keys(ALL_WRITES.writes).map((k) => [k, false])), read_only: true };
+const OPEN_ANOMALY = [{ id: 5, type: 'LATE', severity: 'warning', nom: 'Ouali Amine', message: 'Arrivée à 08:40', status: 'OPEN', date: '2027-04-05' }];
+const isWrite = (c) => c.method !== 'GET' && c.path !== '/api/auth/login';
+const visible = (el) => !!el && !el.classList.contains('hidden');
+
+test('compte en consultation (DRH seul) : aucun contrôle d’écriture, consultation et filtres intacts', async () => {
+  const { d, w, calls, dom } = boot({ capabilities: NO_WRITES, anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.ok(calls.some((c) => c.path === '/api/attendance/capabilities' && c.method === 'GET'));
+  assert.match(d.getElementById('brand-user').textContent, /consultation/);
+  assert.match(d.getElementById('board-rows').textContent, /Ouali Amine/, 'la situation du jour reste lisible');
+  assert.equal(d.querySelectorAll('[data-correct]').length, 0, 'pas de bouton Corriger');
+  assert.equal(visible(d.getElementById('close-btn')), false, 'pas de bouton Clôturer');
+  assert.equal(visible(d.getElementById('s-settings')), false, 'pas de bouton Paramètres de rotation');
+  assert.ok(d.querySelector('[data-bio]'), 'la consultation de la fiche biométrique reste proposée');
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.match(d.getElementById('anomaly-rows').textContent, /Arrivée à 08:40/);
+  assert.equal(d.querySelectorAll('[data-resolve]').length, 0, 'pas de bouton Traiter');
+  d.querySelector('[data-view="board"]').click();
+  d.getElementById('f-status').value = 'absent';
+  d.getElementById('f-status').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await tick(60);
+  assert.ok(calls.some((c) => c.path === '/api/attendance/board' && c.query.status === 'absent'), 'les filtres interrogent toujours le serveur');
+  d.getElementById('close-btn').click();
+  await tick(60);
+  assert.equal(d.querySelector('.modal'), null, 'un clic forcé sur un contrôle masqué n’ouvre rien');
+  assert.deepEqual(calls.filter(isWrite), [], 'aucune requête d’écriture émise');
+  dom.window.close();
+});
+
+test('capacités indisponibles : l’écran reste en consultation (refus par défaut)', async () => {
+  const { d, calls, dom } = boot({ capabilities: 'error' });
+  await tick(60);
+  assert.match(d.getElementById('board-rows').textContent, /Ouali Amine/);
+  assert.equal(d.querySelectorAll('[data-correct]').length, 0);
+  assert.equal(visible(d.getElementById('close-btn')), false);
+  assert.deepEqual(calls.filter(isWrite), []);
+  dom.window.close();
+});
+
+test('droits partiels : seules les actions réellement accordées sont proposées', async () => {
+  const capabilities = { writes: { ...NO_WRITES.writes, correct_presence: true, resolve_anomaly: true } };
+  const board = { date: '2027-04-05', kpi: { expected: 2, present: 2, absent: 0, not_pointed: 0, late: 0, conge: 0, maladie: 0, repos: 0, anomalies: 0, incomplete: 0 },
+    total: 2, page: 1, page_size: 25, pages: 1, items: [row(), row({ employee_id: 2, matricule: 'M002', nom: 'Saidi Lina', presence_id: 12, closed: true })] };
+  const { d, dom } = boot({ capabilities, board, anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.doesNotMatch(d.getElementById('brand-user').textContent, /consultation/);
+  assert.ok(d.querySelector('[data-correct="11"]'), 'journée ouverte : correction accordée');
+  assert.equal(d.querySelector('[data-correct="12"]'), null, 'journée clôturée : correction renforcée non accordée');
+  assert.equal(visible(d.getElementById('close-btn')), false, 'clôture non accordée');
+  assert.equal(visible(d.getElementById('s-settings')), false);
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.ok(d.querySelector('[data-resolve="5"]'), 'traitement d’anomalie accordé');
+  dom.window.close();
+});
+
+test('compte opérationnel : tous les contrôles d’écriture restent proposés', async () => {
+  const { d, dom } = boot({ anomalies: OPEN_ANOMALY });
+  await tick(60);
+  assert.ok(d.querySelector('[data-correct="11"]'));
+  assert.equal(visible(d.getElementById('close-btn')), true);
+  assert.equal(visible(d.getElementById('s-settings')), true);
+  d.querySelector('[data-view="anomalies"]').click();
+  await tick(60);
+  assert.ok(d.querySelector('[data-resolve="5"]'));
   dom.window.close();
 });

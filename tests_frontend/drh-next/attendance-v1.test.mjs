@@ -79,12 +79,30 @@ test("menu : plus d'entrée « Alertes » morte ; « Pointage » affiche les KPI
   assert.doesNotMatch(app, /renderComingSoon|pas encore planifié/);
   const { window } = setup();
   const calls = [];
-  window.fetch = async (url) => { calls.push(String(url)); return jsonResp({ date: "2027-04-05", kpi: { expected: 12, present: 9, absent: 2, anomalies: 3 }, total: 12, items: [] }); };
+  const board = { date: "2027-04-05", kpi: { expected: 12, present: 9, absent: 2, anomalies: 3 }, total: 12, items: [] };
+  let writes = { correct_presence: false, close_day: false, resolve_anomaly: false };
+  window.fetch = async (url) => { calls.push(String(url)); return jsonResp(String(url).includes("/attendance/capabilities") ? { writes, read_only: true } : board); };
   await renderAttendance();
   await tick(); await tick();
-  const text = document.querySelector("#dn-view").textContent;
-  assert.equal(calls.length, 1); assert.match(calls[0], /\/attendance\/board\?page_size=1$/);
-  assert.match(text, /Effectif prévu12/); assert.match(text, /Anomalies ouvertes3/); assert.match(text, /centre de contrôle Pointage/);
+  let text = document.querySelector("#dn-view").textContent;
+  assert.deepEqual(calls.map((u) => u.replace(/^.*\/attendance\//, "")).sort(), ["board?page_size=1", "capabilities"]);
+  assert.match(text, /Effectif prévu12/); assert.match(text, /Anomalies ouvertes3/);
+  // DRH seul : la page consulte, elle n'annonce aucune action de gestion.
+  assert.match(text, /Consultation uniquement/); assert.match(text, /Consulter le centre de contrôle Pointage/);
+  assert.doesNotMatch(text, /Ouvrir le centre de contrôle/);
+  // Habilitation opérationnelle réellement accordée : la gestion est proposée.
+  writes = { correct_presence: true, close_day: false, resolve_anomaly: false };
+  await renderAttendance();
+  await tick(); await tick();
+  text = document.querySelector("#dn-view").textContent;
+  assert.match(text, /Corrections, clôtures et anomalies/); assert.match(text, /Ouvrir le centre de contrôle Pointage/);
+  assert.doesNotMatch(text, /Consultation uniquement/);
+  // Capacités indisponibles : consultation par défaut, les KPI restent affichés.
+  window.fetch = async (url) => (String(url).includes("/attendance/capabilities") ? { ok: false, status: 500, json: async () => ({}), text: async () => "{}" } : jsonResp(board));
+  await renderAttendance();
+  await tick(); await tick();
+  text = document.querySelector("#dn-view").textContent;
+  assert.match(text, /Effectif prévu12/); assert.match(text, /Consultation uniquement/);
 });
 
 test("onglet Pointage : rubrique « Pointage & vacations » — mois, synthèse, historique réel / comptabilisé, refus, anomalies", async () => {

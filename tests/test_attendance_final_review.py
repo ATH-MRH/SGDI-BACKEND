@@ -72,7 +72,7 @@ def world(client, db, monkeypatch):
                  ("biometric_admin", "validate"), ("biometric_admin", "admin")]
 
     def user(societies, sites, modules=("pointage", "drh"), actions=("read", "create", "update", "validate", "unlock"),
-             features=biometric, role="ops"):
+             features=biometric, role="ops", system=False):
         username = f"rv{_tag()}"
         u = User(username=username, full_name=username, role=role, access_level="H3", authorized_societies=list(societies),
                  authorized_sites=list(sites), authorized_structures=[], authorized_modules=list(modules),
@@ -80,13 +80,15 @@ def world(client, db, monkeypatch):
         db.add(u); db.flush()
         for f, a in features:
             db.add(UserFeaturePermission(user_id=u.id, module_key="attendance", feature_key=f, action_key=a))
+        if system:          # Administration Système : seule habilitée à enregistrer un équipement facial
+            db.add(UserFeaturePermission(user_id=u.id, module_key="administration", feature_key="security", action_key="admin"))
         db.commit()
         token = client.post("/api/auth/login", json={"username": username, "password": "reviewpass1"}).json()["access_token"]
         return {"Authorization": f"Bearer {token}"}
 
     model = client.post("/api/biometrics/camera-models", headers=user([SOC_A, SOC_B], [], role="ops"), json={
         "manufacturer": "DAHUA", "model": f"Rev {_tag()}", "adapter": "DAHUA"}).json()
-    admin_all = user([SOC_A, SOC_B], [])
+    admin_all = user([SOC_A, SOC_B], [], system=True)
     cams = {k: client.post("/api/biometrics/cameras", headers=admin_all, json={
         "name": f"CAM-{k}-{_tag()}", "camera_model_id": model["id"], "site_id": s.id, "host": "10.0.0.9",
         "usage": "ATTENDANCE_AND_ENROLLMENT"}).json()["id"] for k, s in (("a1", a1), ("b1", b1))}
