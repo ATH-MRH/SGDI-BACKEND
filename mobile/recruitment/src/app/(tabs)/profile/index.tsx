@@ -113,7 +113,7 @@ function Space() {
       <Card style={{ gap: 0, paddingVertical: 4 }}>
         <Row icon="bookmark" title="Mes opportunités" subtitle="Offres enregistrées et alertes" onPress={() => router.push('/offers/opportunities')} />
         <View style={styles.divider} />
-        <Row icon="calendar" title="Mes convocations" subtitle={summary.upcoming_interviews ? `${summary.upcoming_interviews} à venir` : 'Aucune convocation à venir'} onPress={() => router.push('/applications/interviews')} />
+        <Row icon="calendar" title="Mes convocations" subtitle={summary.unread_convocations ? `${summary.unread_convocations} à consulter · ${summary.upcoming_interviews} à venir` : summary.upcoming_interviews ? `${summary.upcoming_interviews} à venir` : 'Aucune convocation à venir'} onPress={() => router.push('/applications/interviews')} />
         <View style={styles.divider} />
         <Row icon="bell" title="Notifications et conseils" subtitle={summary.unread_notifications ? `${summary.unread_notifications} non lue${summary.unread_notifications > 1 ? 's' : ''}` : 'Votre espace emploi'} onPress={() => router.push('/espace')} />
       </Card>

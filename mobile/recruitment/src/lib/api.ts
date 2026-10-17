@@ -7,6 +7,7 @@ const PRODUCTION_API = 'https://recrute.irongs.com/api';
 // EXPO_PUBLIC_API_URL ne sert qu'aux essais sur un serveur de recette. Une adresse sans HTTPS
 // n'est acceptée qu'en développement : une application distribuée parle toujours en HTTPS.
 function resolveApi(): string {
+  if (process.env.EXPO_PUBLIC_EMPLOI_WEB === '1' && typeof document !== 'undefined') return '/api';
   const override = (process.env.EXPO_PUBLIC_API_URL || '').trim().replace(/\/+$/, '');
   const development = typeof __DEV__ !== 'undefined' && __DEV__;
   if (override.startsWith('https://') || (development && override.startsWith('http://'))) return override;

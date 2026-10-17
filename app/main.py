@@ -1703,6 +1703,10 @@ def _build_index_html() -> str:
     return content
 
 
+from app.modules import recruitment_web
+app.include_router(recruitment_web.router)
+
+
 @app.get("/", include_in_schema=False)
 def frontend(request: Request) -> HTMLResponse:
     host = request.headers.get("host", "").split(":")[0].lower()
@@ -1720,6 +1724,8 @@ def frontend(request: Request) -> HTMLResponse:
             media_type="text/html; charset=utf-8",
             headers=_NO_CACHE,
         )
+    if recruitment_web.is_employment_host(host):
+        return recruitment_web.landing_page()
     if _is_recrute_host(host):
         return FileResponse(
             STATIC_DIR / "recrute.html",

@@ -1,3 +1,4 @@
+import { badgeLabel } from '../../lib/notification-count';
 import { Tabs } from 'expo-router';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,8 +28,8 @@ export default function TabsLayout() {
       tabBarItemStyle: { paddingHorizontal: 0 }, tabBarStyle: { backgroundColor: colors.white, borderTopColor: colors.border, borderTopWidth: 1, height: 76 + insets.bottom, paddingTop: 8, paddingBottom: 12 + insets.bottom } }}>
       {TABS.map(tab => (
         <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.title, tabBarAccessibilityLabel: tab.name === 'messages' && summary.unread_messages ? `Messages, ${summary.unread_messages} non lus` : tab.title,
-          tabBarBadge: tab.name === 'messages' && summary.unread_messages ? summary.unread_messages : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.gold, color: colors.white, fontSize: 11, fontFamily: fonts.bold },
+          tabBarBadge: badgeLabel(tab.name === 'messages' ? summary.unread_messages : tab.name === '(home)' ? summary.unread_notifications : tab.name === 'applications' ? summary.unread_convocations || 0 : 0),
+          tabBarBadgeStyle: { backgroundColor: '#BF303C', color: colors.white, fontSize: 11, fontFamily: fonts.bold },
           tabBarIcon: ({ focused }) => (
             <View style={[bar.icon, focused && bar.active]}><Icon name={tab.icon} size={22} color={focused ? colors.white : colors.muted} filled={focused} /></View>
           ) }} />

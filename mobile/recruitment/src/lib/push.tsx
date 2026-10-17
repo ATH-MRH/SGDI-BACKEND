@@ -29,7 +29,7 @@ function notifications(): Module | null {
   if (!loaded) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     loaded = require('expo-notifications') as Module;
-    loaded.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }) });
+    loaded.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: true }) });
   }
   return loaded;
 }
@@ -39,13 +39,18 @@ type Payload = Partial<Pick<AppNotification, 'kind' | 'application_id' | 'offer_
 export function PushProvider({ children }: { children: ReactNode }) {
   const { session, call } = useCandidateSession();
   const { mode } = useServer();
-  const { refresh } = useSummary();
+  const { refresh, summary } = useSummary();
   const [status, setStatus] = useState<PushStatus>(blocker || 'idle'), [busy, setBusy] = useState(false);
   const token = useRef<string | null>(null), handled = useRef<string | null>(null);
   const active = !!session && mode === 'emploi';
 
+  useEffect(() => {
+    const module = notifications();
+    if (module) module.setBadgeCountAsync(active ? summary.unread_notifications : 0).catch(() => {});
+  }, [active, summary.unread_notifications]);
+
   const register = useCallback(async (module: Module) => {
-    if (Platform.OS === 'android') await module.setNotificationChannelAsync(ANDROID_CHANNEL, { name: 'IRON Emploi', importance: module.AndroidImportance.HIGH, sound: 'default' });
+    if (Platform.OS === 'android') await module.setNotificationChannelAsync(ANDROID_CHANNEL, { name: 'IRON Emploi', importance: module.AndroidImportance.HIGH, sound: 'default', showBadge: true });
     const value = (await module.getExpoPushTokenAsync({ projectId })).data;
     await call('/public/emploi/me/push-device', { method: 'PUT', body: { token: value, platform: Platform.OS } });
     token.current = value; setStatus('registered');
@@ -100,6 +105,7 @@ export function PushProvider({ children }: { children: ReactNode }) {
 
   /** Avant la déconnexion : ce téléphone ne doit plus recevoir les notifications de cet espace. */
   const unregister = useCallback(async () => {
+    await notifications()?.setBadgeCountAsync(0).catch(() => {});
     const value = token.current;
     if (!value) return;
     token.current = null; setStatus('idle');

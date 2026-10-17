@@ -1,3 +1,4 @@
+import { NotificationCount } from '../../../components/notification-count';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
@@ -35,9 +36,11 @@ export default function Espace() {
   function open(item: AppNotification) {
     setOpened(item);
     if (!item.read) {
-      // Marquée lue sur le serveur ; l'affichage suit sans attendre, la navigation aussi.
-      setData(previous => previous ? { unread: Math.max(0, previous.unread - 1), items: previous.items.map(row => row.id === item.id ? { ...row, read: true } : row) } : previous);
-      call(`/public/emploi/notifications/${item.id}/read`, { method: 'POST' }).then(refresh).catch(() => {});
+      // Only decrease the counter after the server has recorded the read.
+      call(`/public/emploi/notifications/${item.id}/read`, { method: 'POST' }).then(() => {
+        setData(previous => previous && previous.items.some(row => row.id === item.id && !row.read) ? { unread: Math.max(0, previous.unread - 1), items: previous.items.map(row => row.id === item.id ? { ...row, read: true } : row) } : previous);
+        refresh();
+      }).catch(reload);
     }
   }
   function follow(item: AppNotification) { setOpened(null); router.push(notificationTarget(item) as never); }
@@ -49,7 +52,7 @@ export default function Espace() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={[styles.content, { paddingTop: 8 }]}>
       <Stack.Screen options={{ title: 'Votre espace emploi', headerRight: () => (
-        <View accessibilityLabel={unread ? `${unread} notification${unread > 1 ? 's' : ''} non lue${unread > 1 ? 's' : ''}` : 'Aucune notification non lue'} style={{ padding: 6 }}><Icon name="bell" size={24} color={colors.navy} />{unread > 0 && <View style={page.dot} />}</View>
+        <View accessibilityLabel={unread ? `${unread} notification${unread > 1 ? 's' : ''} non lue${unread > 1 ? 's' : ''}` : 'Aucune notification non lue'} style={{ padding: 6 }}><Icon name="bell" size={24} color={colors.navy} /><NotificationCount count={unread} /></View>
       ) }} />
 
       {!enabled ? (

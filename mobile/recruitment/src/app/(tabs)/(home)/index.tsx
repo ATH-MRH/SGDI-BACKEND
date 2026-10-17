@@ -1,3 +1,4 @@
+import { NotificationCount } from '../../../components/notification-count';
 import { useState } from 'react';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -38,7 +39,7 @@ export default function Home() {
           <Pressable accessibilityRole="button" accessibilityLabel={summary.unread_notifications ? `Notifications et conseils, ${summary.unread_notifications} non lues` : 'Notifications et conseils'}
             hitSlop={6} onPress={() => router.push('/espace')} style={home.round}>
             <Icon name="bell" size={23} color={colors.navy} />
-            {summary.unread_notifications > 0 && <View style={home.dot} />}
+            <NotificationCount count={summary.unread_notifications} />
           </Pressable>
         </View>
 
