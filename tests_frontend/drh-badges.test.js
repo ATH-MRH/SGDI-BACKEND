@@ -112,7 +112,7 @@ test("dashboard, staff list and history render from the scoped API", async () =>
     "/history": { value: { items: [{ id: 1, action: "IMPRESSION", label: "Badge imprimé", created_at: "2026-10-02T09:00:00", society: "IGS", username: "drh", employee_id: 7 }], total: 1, page: 1, pages: 1 } },
   });
   w.renderBadgeStudio(view, "dashboard"); await settle();
-  assert.equal(view.querySelectorAll(".bs-kpi").length, 8);
+  assert.equal(view.querySelectorAll(".bs-kpi").length, 9);
   assert.equal(view.querySelectorAll(".bs-tabs a").length, 8);
   assert.match(view.textContent, /Badge <i>émis<\/i>/);                 // affiché comme du texte, jamais interprété
   assert.equal(view.querySelector(".bs-activity i"), null);

@@ -57,6 +57,7 @@ router = APIRouter()
 
 DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "drh": (("DRH",), "DRH"),
+    "badge": (("DRH",), "STUDIO BADGES"),
     "ops": (("OPS",), "OPS"),
     "materiel": (("MAT",), "MATERIEL/EQUIP"),
     "fac": (("FAC", "FIN"), "FACTURATION"),
@@ -80,8 +81,11 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
 # elle seule : "beo" est un nom de domaine, jamais une clé module (STRICT_SUBDOMAINS).
 SUBDOMAIN_MODULE_ALIASES: dict[str, str] = {
     "finance": "finances", "commercial": "dc", "portail-rh": "portail", "beo": "site_workforce",
+    # badge.irongs.com : portail du Studio Badges, fonction du module DRH (droits « Badges du
+    # personnel ») — exige la clé drh, comme les API /api/drh/badges qu'il appelle.
+    "badge": "drh",
 }
-STRICT_SUBDOMAINS: frozenset[str] = frozenset({"beo"})
+STRICT_SUBDOMAINS: frozenset[str] = frozenset({"beo", "badge"})
 
 
 def required_module_for_subdomain(subdomain: str) -> str:
