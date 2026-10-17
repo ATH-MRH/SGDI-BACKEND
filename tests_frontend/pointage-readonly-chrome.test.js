@@ -11,6 +11,10 @@ const { spawn, execFileSync } = require("child_process");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const PY = process.env.ATLAS_E2E_PYTHON || "python3";
+// Le serveur de test est l'application elle-même : sans ses dépendances Python (cas de la tâche
+// frontend de la CI, qui n'installe que Node), il ne peut pas démarrer. Même règle que
+// recrute-convocations-e2e : test ignoré explicitement, jamais en échec silencieux.
+const backend = (() => { try { execFileSync(PY, ["-c", "import fastapi, sqlalchemy, uvicorn"], { stdio: "ignore" }); return true; } catch (_) { return false; } })();
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-pointage-readonly-"));
 const DB_PATH = path.join(TMP, "e2e.db");
 const ADMIN = { username: "adminRO", password: "Admin-ReadOnly-E2E!2026" };
@@ -60,7 +64,7 @@ const shown = (page, selector) => page.evaluate((s) => { const el = document.que
 const count = (page, selector) => page.evaluate((s) => document.querySelectorAll(s).length, selector);
 
 test("Centre de contrôle Pointage — contrôles d'écriture selon les permissions effectives (Chrome réel)",
-  { skip: !CHROME_PATH ? "Chrome introuvable (PUPPETEER_EXECUTABLE_PATH)" : (!puppeteer ? "puppeteer-core absent" : false) }, async (t) => {
+  { skip: !CHROME_PATH ? "Chrome introuvable (PUPPETEER_EXECUTABLE_PATH)" : (!puppeteer ? "puppeteer-core absent" : (!backend ? "dépendances Python de l'application absentes (requirements.txt)" : false)) }, async (t) => {
   t.after(async () => {
     for (const b of browsers) await b.close().catch(() => {});
     if (serverProc) serverProc.kill();
