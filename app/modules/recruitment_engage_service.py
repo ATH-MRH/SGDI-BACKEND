@@ -236,13 +236,14 @@ def log_event(db: Session, application: Application, kind: str, summary: str, ac
     db.add(RecruitmentApplicationEvent(application_id=application.id, kind=kind, summary=summary[:400], actor=actor[:100]))
 
 
-def set_visible_status(db: Session, application: Application, status: str, actor: str) -> Notification | None:
-    """Change l'état vu par le candidat et le prévient. Sans changement, rien n'est envoyé."""
+def set_visible_status(db: Session, application: Application, status: str, actor: str, *, inform: bool = True) -> Notification | None:
+    """Change l'état vu par le candidat et le prévient. Sans changement, rien n'est envoyé. `inform=False` : un autre
+    message (la convocation, par exemple) dit déjà la même chose ; l'état change sans seconde notification."""
     if application.status == status:
         return None
     application.status, application.status_updated_at, application.status_updated_by = status, datetime.utcnow(), actor
     label, message = jobs.APPLICATION_STATES[status]
-    if status == 'withdrawn':
+    if status == 'withdrawn' or not inform:
         return None
     return notify(db, application.account_id, 'application', f'Candidature : {label}', f'{application.position or "Votre candidature"} — {message}',
                   application_id=application.id)

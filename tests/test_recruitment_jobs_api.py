@@ -83,8 +83,15 @@ def session(client, phone='0551122334', first_name='Nadia', last_name='Emploi'):
     assert client.post('/api/public/mobile/gateway/poll', headers=GATEWAY).status_code == 200
     issued = client.post('/api/public/mobile/request-code', json={'first_name': first_name, 'last_name': last_name, 'phone': phone})
     assert issued.status_code == 202, issued.text
-    job = client.post('/api/public/mobile/gateway/poll', headers=GATEWAY).json()['job']
-    code = re.search(r'\b\d{6}\b', job['message'])[0]
+    # La file de la passerelle peut encore porter un message d'un test précédent : on lit jusqu'au code demandé.
+    code = None
+    for _ in range(5):
+        job = client.post('/api/public/mobile/gateway/poll', headers=GATEWAY).json().get('job') or {}
+        found = re.search(r'\b\d{6}\b', job.get('message') or '')
+        if found:
+            code = found[0]
+            break
+    assert code, 'aucun code reçu par la passerelle de test'
     verified = client.post('/api/public/mobile/verify-code', json={'challenge_id': issued.json()['challenge_id'], 'code': code})
     assert verified.status_code == 200, verified.text
     opened = client.post('/api/public/emploi/session', headers={'Authorization': 'Bearer ' + verified.json()['access_token']})

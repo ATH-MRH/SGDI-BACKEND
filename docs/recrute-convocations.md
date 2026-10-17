@@ -37,7 +37,7 @@ La convocation **est** l'entretien de la candidature (`recruitment_interviews`) 
 - **Aucune redirection :** une adresse lue n'est jamais suivie. Seule une adresse https de l'origine configurée est acceptée.
 - **Génération locale :** le QR est généré localement (reportlab, comme les badges). Les tests le relisent avec un vrai décodeur (zxing-cpp) sur le rendu du PDF.
 
-États au scan : en vigueur, ancienne version (« ne validez pas l'ancienne date »), annulée, entretien clos, date dépassée. Les autres cas reçoivent un message distinct : QR invalide (422), inconnu (404), accès refusé hors périmètre (403, sans aucune identité) et connexion requise (401).
+États au scan : en vigueur, ancienne version (« ne validez pas l'ancienne date »), document à réémettre (date ou lieu modifiés sans nouvelle version), annulée, entretien clos, date dépassée. Les autres cas reçoivent un message distinct : QR invalide (422), inconnu (404), accès refusé hors périmètre (403, sans aucune identité) et connexion requise (401).
 
 ## Document PDF
 
@@ -86,6 +86,7 @@ Une convocation d'un autre espace répond comme introuvable.
 ## Notifications
 
 - **Canal :** la file persistante existante, avec ses reprises et le traitement des appareils désinscrits. Seuls les téléphones du candidat concerné sont visés, selon la préférence « Entretiens ».
+- **Une seule notification par envoi :** l'état « Entretien » de la candidature change sans seconde notification.
 - **Texte d'écran verrouillé :** « Convocation à un entretien », « Convocation reportée », « Convocation modifiée » ou « Entretien annulé », suivi de « Ouvrez IRON Emploi… ». Ni lieu, ni heure, ni société.
 - **Push en échec :** la convocation reste envoyée et visible dans l'application.
 - **Ce que prouve un reçu :** un reçu Expo / FCM accepté n'est pas une preuve de réception sur le téléphone.
@@ -122,7 +123,8 @@ Aucune purge n'est lancée. La validation ANPDP de la notice reste à obtenir.
 4. **Retour arrière du code :**
    - avec le code de la PR, `python3 -m alembic downgrade 20261016_0002`, qui supprime les brouillons seulement ;
    - puis `git revert -m 1 <commit de fusion>` ;
-   - un `stamp` n'est pas nécessaire et n'est pas recommandé.
+   - un `stamp` n'est pas nécessaire et n'est pas recommandé ;
+   - à la remise en service, un entretien reporté ou déplacé par le code précédent n'a pas de nouvelle version. Le scan le signale « Document à réémettre » ; le QR et le PDF candidat sont retirés et l'arrivée est refusée jusqu'à la réémission (bouton « Réémettre la convocation », candidat prévenu).
 5. **Application :** un nouvel APK (profil `preview`, configuration Firebase existante) est nécessaire pour « Mes convocations », le détail, le QR et le PDF. L'APK actuel continue de fonctionner : il ignore les champs ajoutés et ne reçoit jamais de brouillon.
 
 ## Limites et essais restant à faire sur téléphone
