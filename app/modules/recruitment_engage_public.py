@@ -8,10 +8,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.modules import recruitment_convocation_pdf as convocation_pdf
+from app.modules import recruitment_convocations as conv
 from app.modules import recruitment_engage_service as engage
 from app.modules import recruitment_jobs_service as jobs
 from app.modules.recruitment_engage_models import (
-    CANDIDATE, INTERVIEW_CANCELLED, INTERVIEW_CONFIRMED, INTERVIEW_PROPOSED, RecruitmentInterview as Interview, RecruitmentJobAlert as Alert,
+    CANDIDATE, INTERVIEW_CANCELLED, INTERVIEW_CONFIRMED, INTERVIEW_DRAFT, INTERVIEW_PROPOSED, RecruitmentInterview as Interview, RecruitmentJobAlert as Alert,
     RecruitmentMessage as Message, RecruitmentNotification as Notification, RecruitmentPushDevice as PushDevice,
 )
 from app.modules.recruitment_jobs_models import (
@@ -113,7 +115,8 @@ def emploi_send_message(application_id: int, payload: MessageIn, response: Respo
 @router.get('/interviews')
 def emploi_interviews(account: Account = Depends(_account), db: Session = Depends(get_db)):
     rows = {application.id: (application, offer, company) for application, offer, company in _own_applications(db, account)}
-    interviews = db.scalars(select(Interview).where(Interview.application_id.in_(rows))).all() if rows else []
+    # Un brouillon du recruteur n'existe pas pour le candidat.
+    interviews = db.scalars(select(Interview).where(Interview.application_id.in_(rows), Interview.status != INTERVIEW_DRAFT)).all() if rows else []
     items = [engage.interview_out(row, *rows[row.application_id]) for row in interviews]
     legacy = engage.legacy_convocation(jobs.dossier(db, account), interviews)
     if legacy:
@@ -122,18 +125,68 @@ def emploi_interviews(account: Account = Depends(_account), db: Session = Depend
     return {'items': items, 'timezone': engage.TIMEZONE, 'now': engage.now_local().isoformat(timespec='minutes')}
 
 
-@router.post('/interviews/{interview_id}/confirm')
-def emploi_confirm_interview(interview_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
-    row = db.scalar(select(Interview).where(Interview.id == interview_id).with_for_update())
-    if row is None:
+def _own_interview(db: Session, account: Account, interview_id: int, *, lock: bool = False) -> tuple[Interview, Application, Offer | None, Company | None]:
+    """Entretien envoyé d'une candidature de cet espace ; sinon, comme un brouillon ou celui d'un autre : introuvable."""
+    stmt = select(Interview).where(Interview.id == interview_id)
+    row = db.scalar(stmt.with_for_update() if lock else stmt)
+    if row is None or row.status == INTERVIEW_DRAFT:
         raise HTTPException(status_code=404, detail='Entretien introuvable.')
     application, offer, company = _own_application(db, account, row.application_id)
+    return row, application, offer, company
+
+
+@router.get('/interviews/{interview_id}')
+def emploi_convocation(interview_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    """Détail d'une convocation, avec le QR de la version en vigueur (dessiné par l'application, hors connexion compris)."""
+    row, application, offer, company = _own_interview(db, account, interview_id)
+    item = engage.interview_out(row, application, offer, company)
+    version = conv.current_version(db, row)
+    # QR seulement pour un document exact : une version devenue inexacte attend sa réémission par le recrutement.
+    if item['convocation'] is not None and version is not None and row.status != INTERVIEW_CANCELLED and not conv.outdated(row, version):
+        item['convocation']['qr'] = conv.qr_matrix(version.token)
+        item['convocation']['society'] = version.snapshot.get('society')
+    return {**item, 'checked_at': engage.now_local().isoformat(timespec='minutes')}
+
+
+@router.post('/interviews/{interview_id}/viewed')
+def emploi_convocation_viewed(interview_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    """Accusé de lecture de la version en vigueur. Distinct de la confirmation de présence."""
+    row, application, offer, company = _own_interview(db, account, interview_id, lock=True)
+    if row.version and (row.viewed_version or 0) < row.version:
+        row.viewed_version = row.version
+        db.commit()
+    return engage.interview_out(row, application, offer, company)
+
+
+@router.get('/interviews/{interview_id}/convocation')
+def emploi_convocation_document(interview_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    """PDF de la version en vigueur, à enregistrer sur le téléphone. Pas de document pour une convocation annulée."""
+    row, _, _, _ = _own_interview(db, account, interview_id)
+    version = conv.current_version(db, row)
+    if version is None:
+        raise HTTPException(status_code=404, detail='Aucun document pour cet entretien.')
+    if row.status == INTERVIEW_CANCELLED:
+        raise HTTPException(status_code=409, detail='Cette convocation a été annulée.')
+    if conv.outdated(row, version):
+        raise HTTPException(status_code=409, detail='Cette convocation est en cours de mise à jour par le service recrutement.')
+    data = convocation_pdf.render(version.snapshot, version=version.version, issued_at=version.issued_at, qr=conv.qr_matrix(version.token))
+    name = f'{conv.reference(row)}-V{version.version}.pdf'
+    return Response(content=data, media_type='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="{name}"', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@router.post('/interviews/{interview_id}/confirm')
+def emploi_confirm_interview(interview_id: int, account: Account = Depends(_account), db: Session = Depends(get_db)):
+    row, application, offer, company = _own_interview(db, account, interview_id, lock=True)
     if row.status == INTERVIEW_CANCELLED:
         raise HTTPException(status_code=409, detail='Cet entretien a été annulé par le service recrutement.')
     if row.starts_at < engage.now_local():
         raise HTTPException(status_code=409, detail='Cet entretien est déjà passé.')
     if row.status == INTERVIEW_PROPOSED:
         row.status, row.confirmed_at = INTERVIEW_CONFIRMED, datetime.utcnow()
+        row.viewed_version = max(row.viewed_version or 0, row.version or 0)   # confirmer suppose d'avoir lu cette version
+        engage.log_event(db, application, 'interview', f'Présence confirmée par le candidat (entretien du {engage.describe(row.starts_at)}'
+                         + (f', convocation version {row.version})' if row.version else ')'), 'candidat')
     db.commit()
     return engage.interview_out(row, application, offer, company)
 
@@ -225,7 +278,8 @@ def emploi_summary(account: Account = Depends(_account), db: Session = Depends(g
     """Compteurs des pastilles de l'application."""
     ids = [application.id for application, _, _ in _own_applications(db, account)]
     upcoming = db.scalar(select(func.count()).select_from(Interview).where(
-        Interview.application_id.in_(ids), Interview.status != INTERVIEW_CANCELLED, Interview.starts_at >= engage.now_local())) if ids else 0
+        Interview.application_id.in_(ids), Interview.status.notin_([INTERVIEW_CANCELLED, INTERVIEW_DRAFT]),
+        Interview.starts_at >= engage.now_local())) if ids else 0
     return {'unread_messages': sum(engage.unread_counts(db, ids, CANDIDATE).values()),
             'unread_notifications': db.scalar(select(func.count()).select_from(Notification).where(
                 Notification.account_id == account.id, Notification.read_at.is_(None))),
@@ -289,8 +343,9 @@ def emploi_withdraw(application_id: int, account: Account = Depends(_account), d
         application.withdrawn_at, application.outcome = datetime.utcnow(), 'withdrawn'
         engage.set_visible_status(db, application, 'withdrawn', 'candidat')
         for row in db.scalars(select(Interview).where(Interview.application_id == application.id,
-                                                      Interview.status.in_([INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED]))).all():
+                                                      Interview.status.in_([INTERVIEW_PROPOSED, INTERVIEW_CONFIRMED, INTERVIEW_DRAFT]))).all():
             row.status, row.cancelled_at = INTERVIEW_CANCELLED, datetime.utcnow()
+            conv.cancel_versions(db, row)                    # le QR d'une candidature retirée s'affiche annulé au scan
         engage.log_event(db, application, 'withdrawal', 'Candidature retirée par le candidat', 'candidat')
     db.commit()
     return {'withdrawn': True}

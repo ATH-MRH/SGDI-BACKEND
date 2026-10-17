@@ -6,7 +6,7 @@ const EMPLOI_API="/api/drh/job-offers";
 const EMPLOI_STAGE_PILL={received:"pill-blue",review:"pill-blue",shortlisted:"pill-indigo",convocation:"pill-amber",interview:"pill-amber",decision:"pill-amber",hiring_file:"pill-green",contract:"pill-green",signature:"pill-green",hired:"pill-green"};
 const EMPLOI_OUTCOME_PILL={pending:"pill-gray",favorable:"pill-green",unfavorable:"pill-red",withdrawn:"pill-gray"};
 const EMPLOI_INTERVIEW={proposed:["Proposé, à confirmer","pill-amber"],confirmed:["Confirmé par le candidat","pill-green"],cancelled:["Annulé","pill-gray"],done:["Réalisé","pill-blue"],no_show:["Candidat absent","pill-red"]};
-const EMPLOI_TABS=[["summary","Synthèse"],["documents","Pièces"],["processing","Traitement"],["interviews","Entretiens"],["messages","Échanges"],["notes","Notes et historique"],["contract","Contrat"]];
+const EMPLOI_TABS=[["summary","Synthèse"],["documents","Pièces"],["processing","Traitement"],["interviews","Convocations et entretiens"],["messages","Échanges"],["notes","Notes et historique"],["contract","Contrat"]];
 let emploiState={view:"board",mode:"pipeline",bucket:"",filters:{},data:null,dossier:null,tab:"summary",thread:null,error:"",busy:false,request:0,tips:null,companies:null,inbox:null,templates:null,viewer:null};
 
 function emploiHost(){return document.getElementById("processingSection")}
@@ -55,7 +55,7 @@ function refreshEmploi(){
 }
 function emploiHeader(){
   const views=[["board","Candidatures"],["inbox","Échanges"],["tips","Conseils emploi"],["companies","Sociétés"]];
-  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Candidatures</h2><p>Toutes les demandes de l’application, de la réception au recrutement.</p></div><div class="rec-page-actions">${emploiCan("create")?'<button type="button" class="primary" onclick="openRecruitCandidateForm()">+ Ajouter un candidat</button>':""}</div></header>
+  return `<header class="rec-page-header"><div class="rec-page-heading"><h2>Candidatures</h2><p>Toutes les demandes de l’application, de la réception au recrutement.</p></div><div class="rec-page-actions"><button type="button" class="secondary" onclick="convOpenScanner()">Scanner une convocation</button>${emploiCan("create")?'<button type="button" class="primary" onclick="openRecruitCandidateForm()">+ Ajouter un candidat</button>':""}</div></header>
     <nav class="tabs rec-tabs emploi-views" aria-label="Rubriques">${views.map(([key,label])=>`<button type="button" class="tab-btn${emploiState.view===key?" active":""}" onclick="emploiSetView('${key}')">${label}</button>`).join("")}</nav>`;
 }
 function emploiSetView(view){emploiState.view=view;emploiState.dossier=null;emploiState.error="";return refreshEmploi()}
@@ -185,31 +185,10 @@ function emploiProcessingHTML(d){
       ${emploiCan()?'<button class="secondary" type="submit">Enregistrer le suivi</button>':""}</form></section></div>`;
 }
 function emploiSaveFollowUp(form){const data=Object.fromEntries(new FormData(form).entries());return emploiAct(()=>emploiSend(`/applications/${emploiState.dossier.id}/processing`,"PUT",{assigned_to:data.assigned_to||null,next_action:data.next_action||null,next_action_due:data.next_action_due||null}),"Suivi enregistré.")}
+// Convocations et entretiens : module recrute-convocations.js (création, versions, PDF, scan, arrivée, compte rendu).
 function emploiInterviewsHTML(d){
-  const can=emploiCan()&&d.outcome!=="withdrawn";
-  return `<section class="table-card emploi-panel"><h3>Entretiens de cette candidature</h3>
-    ${d.interviews.length?d.interviews.map(i=>{const [label,pill]=EMPLOI_INTERVIEW[i.status]||[i.status,"pill-gray"],open=["proposed","confirmed"].includes(i.status);
-      return `<article class="emploi-interview"><header><b>${esc(emploiDateTime(i.starts_at))}</b> <span class="pill ${pill}">${esc(label)}</span>${i.previous_starts_at?` <span class="emploi-sub">reporté, initialement ${esc(emploiDateTime(i.previous_starts_at))}</span>`:""}</header>
-        <p>${esc(i.location)}${i.contact?` · Interlocuteur : ${esc(i.contact)}`:""} · heure d’Alger</p>${i.note?`<p class="emploi-sub">${esc(i.note)}</p>`:""}
-        ${i.report||i.appreciation?`<p class="emploi-quote"><b>Compte rendu interne${i.appreciation?` — ${esc(i.appreciation)}`:""}</b><br>${esc(i.report||"")}</p>`:""}
-        ${can&&open?`<div class="emploi-actions"><button type="button" class="secondary" onclick="emploiEditInterview(${Number(i.id)})">Reporter ou modifier</button><button type="button" class="secondary" onclick="if(confirm('Annuler cet entretien ? Le candidat sera prévenu.'))emploiAct(()=>emploiSend('/interviews/${Number(i.id)}/cancel','POST'),'Entretien annulé, candidat prévenu.')">Annuler</button><button type="button" class="secondary" onclick="emploiOutcomeForm(${Number(i.id)})">Enregistrer présence et compte rendu</button></div><div id="emploiInterviewForm${Number(i.id)}"></div>`:""}</article>`}).join("")
-      :'<p class="emploi-empty">Aucun entretien proposé pour cette candidature.</p>'}
-    ${d.dossier_convocation?`<p class="rec-note">Convocation historique saisie sur le dossier du candidat : ${esc(formatDateFr(d.dossier_convocation.date))}${d.dossier_convocation.heure?` à ${esc(d.dossier_convocation.heure)}`:""}${d.dossier_convocation.lieu?`, ${esc(d.dossier_convocation.lieu)}`:""}. Elle concerne le dossier, pas cette annonce en particulier.</p>`:""}
-    ${can?`<h4>Proposer un entretien</h4>${emploiInterviewFormHTML()}`:""}</section>`;
+  return typeof convocationsTabHTML==="function"?convocationsTabHTML(d):'<section class="table-card emploi-panel"><p class="emploi-empty">Module des convocations indisponible : rechargez la page.</p></section>';
 }
-function emploiInterviewFormHTML(i=null){
-  const [day,time]=i?String(i.starts_at).split("T"):["",""];
-  return `<form class="emploi-form" onsubmit="event.preventDefault();emploiSaveInterview(this,${i?Number(i.id):"null"})"><div><label>Date<input name="date" type="date" required value="${esc(day)}"></label></div><div><label>Heure (Alger)<input name="time" type="time" required value="${esc((time||"").slice(0,5))}"></label></div><div><label>Lieu<input name="location" required maxlength="300" value="${esc(i?.location||"")}"></label></div><div><label>Interlocuteur<input name="contact" maxlength="150" value="${esc(i?.contact||"")}"></label></div><div class="emploi-wide"><label>Consignes pour le candidat<input name="note" maxlength="1000" value="${esc(i?.note||"")}"></label></div><label class="emploi-check"><input type="checkbox" name="send_email"> Envoyer aussi la convocation par e-mail (si le canal est configuré)</label><button class="primary" type="submit">${i?"Enregistrer la modification":"Envoyer la convocation"}</button></form>`;
-}
-function emploiEditInterview(id){const i=emploiState.dossier.interviews.find(row=>row.id===id);document.getElementById(`emploiInterviewForm${id}`).innerHTML=emploiInterviewFormHTML(i)}
-function emploiSaveInterview(form,id){
-  const data=Object.fromEntries(new FormData(form).entries()),body={starts_at:`${data.date}T${data.time}:00`,location:data.location,contact:data.contact||null,note:data.note||null,send_email:data.send_email==="on"};
-  return emploiAct(()=>id?emploiSend(`/interviews/${id}`,"PUT",body):emploiSend(`/applications/${emploiState.dossier.id}/interviews`,"POST",body),id?"Entretien modifié.":"Convocation enregistrée.");
-}
-function emploiOutcomeForm(id){
-  document.getElementById(`emploiInterviewForm${id}`).innerHTML=`<form class="emploi-form" onsubmit="event.preventDefault();emploiSaveOutcome(this,${id})"><div><label>Présence<select name="attendance"><option value="present">Présent</option><option value="absent">Absent</option></select></label></div><div><label>Appréciation<select name="appreciation"><option value="">—</option><option>Favorable</option><option>Réservé</option><option>Défavorable</option></select></label></div><div class="emploi-wide"><label>Compte rendu (interne, jamais transmis au candidat)<textarea name="report" maxlength="6000"></textarea></label></div><button class="primary" type="submit">Enregistrer</button></form>`;
-}
-function emploiSaveOutcome(form,id){const data=Object.fromEntries(new FormData(form).entries());return emploiAct(()=>emploiSend(`/interviews/${id}/outcome`,"POST",{attendance:data.attendance,report:data.report||null,appreciation:data.appreciation||null}),"Compte rendu enregistré.")}
 async function emploiLoadThread(){
   try{emploiState.thread=await apiFetch(`${EMPLOI_API}/applications/${emploiState.dossier.id}/messages`);emploiState.dossier.unread_messages=0}catch(error){emploiState.thread={error:emploiError(error),items:[]}}
   if(emploiState.view==="dossier"&&emploiState.tab==="messages")renderEmploi();

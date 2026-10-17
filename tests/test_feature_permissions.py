@@ -49,10 +49,11 @@ def test_catalog_has_all_23_modules_and_only_applicable_actions(client, db):
 
     assert response.status_code == 200
     body = response.json()
-    # 23 modules de STOCKAGE, présentés en 24 entrées : attendance = « Gestion du pointage »
-    # (pointage) + « Pointage » (pointeur), sans aucune nouvelle clé de stockage.
+    # 23 modules de STOCKAGE, présentés en 25 entrées : attendance = « Gestion du pointage »
+    # (pointage) + « Pointage » (pointeur) ; drh = « Gestion RH » + « Studio Badges » (badge),
+    # sans aucune nouvelle clé de stockage.
     assert list(dict.fromkeys(module["module_key"] for module in body["modules"])) == list(CANONICAL_MODULES)
-    assert len(body["modules"]) == 24
+    assert len(body["modules"]) == 25
     assert body["granular_permissions_active"] is False
     for module in body["modules"]:
         expected = FEATURE_CATALOG[module["module_key"]]

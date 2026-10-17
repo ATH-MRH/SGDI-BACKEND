@@ -57,6 +57,8 @@ router = APIRouter()
 
 DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "drh": (("DRH",), "DRH"),
+    # Comptes historiques (sans liste de modules) : préfixe DRH, comme avant le module dédié.
+    "badge": (("DRH",), "STUDIO BADGES"),
     "ops": (("OPS",), "OPS"),
     "materiel": (("MAT",), "MATERIEL/EQUIP"),
     "fac": (("FAC", "FIN"), "FACTURATION"),

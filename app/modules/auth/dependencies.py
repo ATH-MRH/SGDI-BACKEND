@@ -33,6 +33,9 @@ SOCIETY_SCOPED_PREFIXES = (
 # panneau Administration systeme; aucune seconde source d'autorisation n'est
 # introduite ici.
 API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
+    # Studio Badges : module dédié « badge » (badge.irongs.com), distinct de DRH. Doit précéder
+    # « /api/drh » : cocher DRH seul ne donne pas accès aux badges.
+    ("/api/drh/badges", frozenset({"badge"})),
     ("/api/drh/candidates", frozenset({"drh", "recrute"})),
     ("/api/drh/job-offers", frozenset({"drh", "recrute"})),
     ("/api/drh/recruitment-retention", frozenset({"drh", "recrute"})),
@@ -187,6 +190,10 @@ def request_action(request: Request) -> str:
         # mais aucune écriture, aucune émission ni impression comptée. C'est une consultation ;
         # sans cette exception, le mot-clé « /pdf » ci-dessous la classerait « export ». Chemin
         # exact : l'impression officielle /api/drh/badges/print/pdf reste « export ».
+        return "read"
+    if path.rstrip("/") == "/api/drh/job-offers/convocations/resolve":
+        # Lecture d'un QR de convocation : POST pour que l'identifiant du QR voyage dans le corps (jamais dans
+        # l'adresse, donc jamais dans les journaux d'accès), mais aucune écriture hors audit. C'est une consultation.
         return "read"
     if any(part in path for part in ("/export", "/download", "/pdf")):
         return "export"

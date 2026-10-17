@@ -117,7 +117,7 @@ def test_full_recruitment_journey_from_mobile_application_to_drh(client, db, sec
     assert moved.status_code == 200 and moved.json()['interviews'][0]['previous_starts_at'] == when().isoformat()
     assert client.get(f'{API}/interviews', headers=headers).json()['items'][0]['status'] == 'proposed'    # report : à confirmer de nouveau
     assert client.post(f"{API}/interviews/{interview['id']}/confirm", headers=headers).json()['status'] == 'confirmed'
-    assert [n['title'] for n in notifications(client, headers)['items'] if n['kind'] == 'interview'] == ['Entretien reporté', 'Entretien proposé']
+    assert [n['title'] for n in notifications(client, headers)['items'] if n['kind'] == 'interview'] == ['Convocation reportée', 'Convocation à un entretien']
 
     # ── Entretien : présence et compte rendu (internes)
     early = client.post(f"{STAFF}/interviews/{interview['id']}/outcome", headers=securite, json={'attendance': 'present'})

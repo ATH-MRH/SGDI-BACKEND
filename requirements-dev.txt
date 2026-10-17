@@ -7,3 +7,6 @@ openpyxl==3.1.5
 reportlab==4.2.5
 anthropic>=0.40.0
 xlwt==1.3.0
+# Convocations IRON Emploi : rendu du PDF (pdfium) et lecture réelle de son QR (zxing-cpp), en test uniquement.
+pypdfium2==5.14.0
+zxing-cpp==3.1.1
