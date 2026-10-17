@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import math
 import re
 import secrets
@@ -761,6 +762,152 @@ def _register_attendance(
     )
 
 
+# ── Scan QR au Pointeur : QR employé du portail (JWT court, usage unique) ou QR d'un badge
+# officiel émis par le Studio Badges. Le QR du badge est un lien PUBLIC de consultation : il
+# n'est jamais un jeton d'authentification. Il ne vaut pointage qu'ici, scanné par un compte
+# Pointeur authentifié et habilité, après validation serveur complète (signature du badge émis,
+# badge actif et non expiré, employé actif et hors liste noire, périmètre société/site, puis
+# toutes les règles d'Attendance Core). Le simple code employé (K01…) ou un nom n'est jamais lu.
+_BADGE_QR_PATH = re.compile(r"^/(?:api/)?public/badge/([^/?#]+)/?$")
+_BADGE_QR_TOKEN = re.compile(r"^[0-9a-f]{32}$")
+
+QR_UNRECOGNIZED, QR_EXPIRED, QR_ALREADY_USED = "QR_UNRECOGNIZED", "QR_EXPIRED", "QR_ALREADY_USED"
+BADGE_REVOKED, BADGE_INACTIVE, BADGE_EXPIRED = "BADGE_REVOKED", "BADGE_INACTIVE", "BADGE_EXPIRED"
+EMPLOYEE_BLOCKED, SITE_NOT_ALLOWED = "EMPLOYEE_BLOCKED", "SITE_NOT_ALLOWED"
+ALREADY_RECORDED, NO_SHIFT, DAY_CLOSED = "ALREADY_RECORDED", "NO_SHIFT", "DAY_CLOSED"
+
+# (message affiché, gravité) : « error » = QR invalide, badge révoqué ou blocage (rouge) ;
+# « business » = refus métier (orange).
+QR_SCAN_REFUSALS: dict[str, tuple[str, str]] = {
+    QR_UNRECOGNIZED: ("QR code non reconnu", "error"),
+    QR_EXPIRED: ("QR code expiré", "error"),
+    QR_ALREADY_USED: ("Présence déjà enregistrée", "business"),
+    BADGE_REVOKED: ("Badge révoqué", "error"),
+    BADGE_INACTIVE: ("Badge inactif", "error"),
+    BADGE_EXPIRED: ("QR code expiré", "error"),
+    EMPLOYEE_BLOCKED: ("Badge inactif", "error"),
+    SITE_NOT_ALLOWED: ("Employé non autorisé sur ce site", "business"),
+    ALREADY_RECORDED: ("Présence déjà enregistrée", "business"),
+    NO_SHIFT: ("Aucun service prévu pour cet employé", "business"),
+    DAY_CLOSED: ("Journée clôturée : pointage refusé", "business"),
+}
+
+
+def _qr_refusal(db: Session, scanner: User, code: str, status_code: int, *, kind: str,
+                employee: Any = None, badge_id: int | None = None) -> HTTPException:
+    """Refus tracé (code stable, jamais le contenu du QR) et réponse sans donnée personnelle."""
+    message, severity = QR_SCAN_REFUSALS[code]
+    try:
+        db.rollback()
+        append_audit(db, action="attendance.qr_scan.refused", resource="attendance_event", result="refused",
+                     user=scanner, resource_id=getattr(employee, "id", None), society=getattr(employee, "society", None),
+                     new_state={"code": code, "qr": kind, "badge_id": badge_id, "recorded": False})
+        db.commit()
+    except Exception:  # noqa: BLE001 — l'audit ne doit jamais masquer le refus
+        db.rollback()
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message, "severity": severity},
+                         headers={"X-Attendance-Code": code})
+
+
+def _translate_scan_refusal(exc: HTTPException) -> str | None:
+    """Refus existants (périmètre, Attendance Core) → code stable. Les refus du travail posté
+    (en-tête X-Attendance-Refusal) gardent leur message détaillé ; le reste passe inchangé."""
+    if (exc.headers or {}).get("X-Attendance-Refusal") or not isinstance(exc.detail, str):
+        return None
+    detail = exc.detail
+    if detail.startswith("Pointage refusé :"):
+        return EMPLOYEE_BLOCKED
+    if detail in ("Employé hors de la société sélectionnée", "Société non autorisée",
+                  "Employé hors du périmètre société/site du pointeur",
+                  "Cet employé n’est pas affecté au site sélectionné"):
+        return SITE_NOT_ALLOWED
+    if detail.startswith("Journée clôturée"):
+        return DAY_CLOSED
+    if detail.startswith("Nouvelle arrivée disponible dans"):
+        return ALREADY_RECORDED
+    return None
+
+
+def _badge_qr_parts(token: str) -> tuple[str, str, str | None] | None:
+    """(référence employé, signature, numéro de badge) d'une adresse de badge, sinon None."""
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    try:
+        url = urlsplit(token)
+    except ValueError:
+        return None
+    match = _BADGE_QR_PATH.match(url.path or "")
+    if url.scheme not in ("http", "https") or not match:
+        return None
+    query = parse_qs(url.query, keep_blank_values=True)
+    if any(len(values) != 1 for values in query.values()):
+        return None
+    return unquote(match.group(1)).strip(), (query.get("t") or [""])[0], (query.get("b") or [None])[0]
+
+
+def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: tuple[str, str, str | None]) -> dict[str, Any]:
+    from app.main import _public_employee_token
+    from app.modules.drh.badge_models import STATUS_ACTIVE, STATUS_REVOKED, EmployeeBadge
+    from app.modules.drh.models import EmployeeBlacklistEntry
+
+    ref, signature, raw_badge_id = parts
+    if raw_badge_id is None:
+        # Lien de consultation historique (sans badge émis) : jamais une preuve de pointage.
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-consultation")
+    if not ref.isdigit() or not raw_badge_id.isdigit() or not _BADGE_QR_TOKEN.match(signature or ""):
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
+    badge_id = int(raw_badge_id)
+    if not hmac.compare_digest(signature, _public_employee_token("badge", f"{ref}:{badge_id}")):
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
+    badge = db.get(EmployeeBadge, badge_id)
+    employee = db.get(Employee, int(ref)) if badge is not None and str(badge.employee_id) == ref else None
+    if employee is None:
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", badge_id=badge_id)
+
+    # Périmètre du compte Pointeur AVANT tout état du badge : rien n'est révélé hors périmètre.
+    try:
+        _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+        _ensure_selected_site_access(db, scanner, payload.get("site_id"))
+        _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
+    except HTTPException as exc:
+        code = _translate_scan_refusal(exc)
+        if code is None:
+            raise
+        raise _qr_refusal(db, scanner, code, exc.status_code, kind="badge", employee=employee, badge_id=badge_id) from None
+
+    if badge.status == STATUS_REVOKED or badge.revoked_at is not None:
+        raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if badge.status != STATUS_ACTIVE:
+        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if badge.valid_until and badge.valid_until < datetime.now(attendance_core.TZ).date():
+        raise _qr_refusal(db, scanner, BADGE_EXPIRED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    blacklisted = db.execute(select(EmployeeBlacklistEntry.id).where(
+        EmployeeBlacklistEntry.employee_id == employee.id, EmployeeBlacklistEntry.status == "active").limit(1)).first()
+    if _employee_portal_block_reason(employee) or {**legacy, **extra}.get("badgeActif") is False or blacklisted:
+        raise _qr_refusal(db, scanner, EMPLOYEE_BLOCKED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if attendance_core.active_assignment(db, employee.id) is None:
+        raise _qr_refusal(db, scanner, NO_SHIFT, 409, kind="badge", employee=employee, badge_id=badge_id)
+    # Badge statique : chaque lecture est un passage distinct ; l'anti-rebond et les règles de
+    # présence d'Attendance Core tranchent les doublons, sous le verrou de l'employé.
+    return _record_qr_scan(db, scanner, employee, f"badge-{badge_id}-{secrets.token_hex(12)}", "badge", badge_id)
+
+
+def _record_qr_scan(db: Session, scanner: User, employee: Employee, key: str, kind: str,
+                    badge_id: int | None = None) -> dict[str, Any]:
+    try:
+        result = _register_attendance(db, employee, scanner, key, "portail-rh-employee-qr")
+    except HTTPException as exc:
+        code = _translate_scan_refusal(exc)
+        if code is None:
+            raise
+        raise _qr_refusal(db, scanner, code, exc.status_code, kind=kind, employee=employee, badge_id=badge_id) from None
+    if kind == "badge" and result.get("duplicate"):
+        result["message"] = QR_SCAN_REFUSALS[ALREADY_RECORDED][0]
+    return result
+
+
 @router.post("/attendance-qr/scan", status_code=status.HTTP_201_CREATED)
 def scan_employee_attendance_qr(
     payload: dict[str, Any],
@@ -771,24 +918,35 @@ def scan_employee_attendance_qr(
     token = _clean_text(payload.get("token"))
     if not token:
         raise HTTPException(status_code=400, detail="QR obligatoire")
+    badge_parts = _badge_qr_parts(token)
+    if badge_parts is not None:
+        return _scan_badge_qr(db, scanner, payload, badge_parts)
     try:
         qr = decode_token(token)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="QR expiré ou invalide")
+    except ValueError as exc:
+        expired = str(exc.__cause__ or "") == "Token expiré"
+        raise _qr_refusal(db, scanner, QR_EXPIRED if expired else QR_UNRECOGNIZED, 400, kind="portal") from None
     if not qr.get("attendance_qr") or not qr.get("nonce"):
-        raise HTTPException(status_code=400, detail="Ce QR n'est pas un QR de pointage employé")
+        # Autre famille de jeton (session, portail…) : jamais une preuve de pointage.
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="portal")
 
     nonce = str(qr["nonce"])
     if attendance_core.key_used(db, nonce):
-        raise HTTPException(status_code=409, detail="Ce QR a déjà été utilisé")
+        raise _qr_refusal(db, scanner, QR_ALREADY_USED, 409, kind="portal")
 
     employee = employee_by_ref(db, str(qr.get("sub") or ""))
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
-    _ensure_selected_site_access(db, scanner, payload.get("site_id"))
-    _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
-    return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
+    try:
+        _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
+        _ensure_selected_site_access(db, scanner, payload.get("site_id"))
+        _ensure_employee_on_selected_site(db, employee, payload.get("site_id"))
+    except HTTPException as exc:
+        code = _translate_scan_refusal(exc)
+        if code is None:
+            raise
+        raise _qr_refusal(db, scanner, code, exc.status_code, kind="portal", employee=employee) from None
+    return _record_qr_scan(db, scanner, employee, nonce, "portal")
 
 
 def _attendance_selected_sites(db: Session, user: User, site_id: int | None = None,

@@ -173,7 +173,7 @@ test('scan refusé : le motif structuré de la réponse est affiché, jamais une
   assert.match(t.text('lastScanCard'), /NOUVELLE ENTRÉE NON AUTORISÉE.*Nouvelle entrée possible 14:30 → 14:45.*AUCUN MOUVEMENT ENREGISTRÉ/);
   const resp = (status, detail) => ({ status, headers: { get: () => null } });
   const warn = t.w.console.warn; t.w.console.warn = () => {};
-  assert.equal(t.T().operationalError(resp(500), { detail: [{ loc: ['body'], msg: 'Traceback' }] }).message, 'Service momentanément indisponible. Réessayez dans un instant.');
+  assert.equal(t.T().operationalError(resp(500), { detail: [{ loc: ['body'], msg: 'Traceback' }] }).message, 'Pointage impossible — réessayez ou contactez le responsable');
   assert.equal(t.T().operationalError(resp(422), { detail: [{ loc: ['body', 'token'], msg: 'field required' }] }).message, 'Pointage impossible : informations incomplètes ou invalides.');
   assert.equal(t.T().operationalError(resp(409), { detail: 'Journée clôturée : pointage refusé.' }).message, 'Journée clôturée : pointage refusé.');
   t.w.console.warn = warn;
