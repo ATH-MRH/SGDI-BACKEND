@@ -173,14 +173,21 @@ def test_pairing_code_is_single_use_expiring_and_never_stored_in_clear(client, a
     assert row.pairing_code_hash and code.replace("-", "") not in json.dumps({"h": row.pairing_code_hash, "m": row.meta})
     device = Device()
     assert client.post(f"{API}/terminal/pair", json={"code": code.lower(), "public_key": device.jwk}).status_code == 200
-    # Usage unique : le même code ne sert plus, même avec une autre clé.
+    row = db.get(BiometricTerminal, term["id"]); db.refresh(row)
+    first_key = row.key_fingerprint
+    # Usage unique : le même code ne sert plus, même avec une autre clé — refus explicite « déjà utilisé ».
     r = client.post(f"{API}/terminal/pair", json={"code": code, "public_key": Device().jwk})
-    assert r.status_code == 401 and r.json()["detail"]["code"] == "PAIRING_CODE_INVALID"
+    assert r.status_code == 409 and r.json()["detail"] == {"code": "PAIRING_CODE_USED", "message": "QR déjà utilisé"}
+    db.refresh(row); assert row.key_fingerprint == first_key, "la clé du premier appareil reste en place"
     # Expiration.
     code2 = client.post(f"{API}/terminals/{term['id']}/pairing-code", headers=auth_headers).json()["code"]
     row = db.get(BiometricTerminal, term["id"]); db.refresh(row)
     row.pairing_expires_at = datetime.utcnow() - timedelta(seconds=1); db.commit()
-    assert client.post(f"{API}/terminal/pair", json={"code": code2, "public_key": Device().jwk}).status_code == 401
+    r = client.post(f"{API}/terminal/pair", json={"code": code2, "public_key": Device().jwk})
+    assert r.status_code == 410 and r.json()["detail"] == {"code": "PAIRING_CODE_EXPIRED", "message": "QR expiré — générez un nouveau code"}
+    # Code inventé : invalide.
+    r = client.post(f"{API}/terminal/pair", json={"code": "ZZZZZ-ZZZZZ", "public_key": Device().jwk})
+    assert r.status_code == 401 and r.json()["detail"]["code"] == "PAIRING_CODE_INVALID"
     actions = {a for (a,) in db.execute(select(AuditEvent.action).where(AuditEvent.resource == "biometric_terminal",
                                                                           AuditEvent.resource_id == str(term["id"])))}
     assert {"biometrics.terminal.create", "biometrics.terminal.pairing_code", "biometrics.terminal.pair"} <= actions
