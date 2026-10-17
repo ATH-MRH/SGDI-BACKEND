@@ -83,7 +83,7 @@ test('second badge pendant le traitement du premier : signalé, jamais ignoré e
 test('doublon renvoyé par le serveur : affiché « déjà enregistré », pas comme un nouveau mouvement', async () => {
   const app = await boot();
   app.w.showResult({ action: 'arrivee', duplicate: true, name: 'ADDA IBRAHIM', matricule: 'M1' }, 'success');
-  assert.match(app.d.getElementById('result').textContent, /DÉJÀ ENREGISTRÉ — AUCUN NOUVEAU MOUVEMENT/);
+  assert.match(app.d.getElementById('result').textContent, /PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT/);
   app.w.showResult({ action: 'arrivee', name: 'ADDA IBRAHIM', matricule: 'M1' }, 'success');
   assert.match(app.d.getElementById('result').textContent, /ARRIVÉE ENREGISTRÉE/);
   await teardown(app);
@@ -130,4 +130,53 @@ test('service worker : ni l’API ni les photos du personnel ne sont mises en ca
   assert.match(sw, /startsWith\('\/api\/'\)/);
   assert.match(sw, /startsWith\('\/uploads\/'\)/);
   assert.match(sw, /pointeur-atlas-v4/);                              // nouveau nom : l'ancien cache (photos) est purgé à l'activation
+});
+
+// QR badges officiels : la gravité vient du serveur (orange = refus métier, rouge = QR invalide,
+// badge révoqué ou blocage) ; une erreur serveur n'affiche jamais de succès ni de détail technique.
+const refusedWith = (status, detail) => async () => ({ ok: false, status, headers: { get: () => null }, json: async () => ({ detail }) });
+
+for (const [label, status, detail, css, text] of [
+  ['refus métier en orange', 409, { code: 'ALREADY_RECORDED', message: 'Présence déjà enregistrée', severity: 'business' }, 'refused', /Présence déjà enregistrée/],
+  ['site non autorisé en orange', 403, { code: 'SITE_NOT_ALLOWED', message: 'Employé non autorisé sur ce site', severity: 'business' }, 'refused', /Employé non autorisé sur ce site/],
+  ['QR non reconnu en rouge', 400, { code: 'QR_UNRECOGNIZED', message: 'QR code non reconnu', severity: 'error' }, 'error', /QR code non reconnu/],
+  ['badge révoqué en rouge', 403, { code: 'BADGE_REVOKED', message: 'Badge révoqué', severity: 'error' }, 'error', /Badge révoqué/],
+]) {
+  test(`scan badge : ${label}`, async () => {
+    const app = await boot({ '/api/portal/attendance-qr/scan': refusedWith(status, detail) });
+    await app.t.onQr('https://drh.example.invalid/public/badge/1?t=x&b=2');
+    const result = app.d.getElementById('result');
+    assert.ok(result.classList.contains(css), result.className);
+    assert.ok(!result.classList.contains('success'));
+    assert.match(result.textContent, text);
+    await teardown(app);
+  });
+}
+
+test('scan badge : erreur serveur sans détail → message dédié, jamais un succès', async () => {
+  const app = await boot({ '/api/portal/attendance-qr/scan': async () => ({ ok: false, status: 500, headers: { get: () => null }, json: async () => { throw new SyntaxError('Internal Server Error'); } }) });
+  await app.t.onQr('https://drh.example.invalid/public/badge/1?t=x&b=2');
+  const result = app.d.getElementById('result');
+  assert.ok(result.classList.contains('error'));
+  assert.match(result.textContent, /Pointage impossible — réessayez ou contactez le responsable/);
+  assert.doesNotMatch(result.textContent, /ENREGISTRÉE|Internal Server Error/);
+  await teardown(app);
+});
+
+test('scan badge : présence déjà enregistrée (anti-rebond) en orange, sans nouveau mouvement', async () => {
+  const app = await boot({ '/api/portal/attendance-qr/scan': async () => ({ ok: true, status: 201, headers: { get: () => null }, json: async () => ({ success: true, duplicate: true, message: 'Présence déjà enregistrée', action: 'arrivee', heure: '08:00:00', employee: { matricule: 'M1', nom: 'A', prenom: 'B' } }) }) });
+  await app.t.onQr('https://drh.example.invalid/public/badge/1?t=x&b=2');
+  const result = app.d.getElementById('result');
+  assert.ok(result.classList.contains('warning'), result.className);
+  assert.match(result.textContent, /PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT/);
+  await teardown(app);
+});
+
+test('scan badge : succès en vert', async () => {
+  const app = await boot({ '/api/portal/attendance-qr/scan': async () => ({ ok: true, status: 201, headers: { get: () => null }, json: async () => ({ success: true, action: 'arrivee', heure: '08:00:00', employee: { matricule: 'M1', nom: 'A', prenom: 'B' } }) }) });
+  await app.t.onQr('https://drh.example.invalid/public/badge/1?t=x&b=2');
+  const result = app.d.getElementById('result');
+  assert.ok(result.classList.contains('success'), result.className);
+  assert.match(result.textContent, /ARRIVÉE ENREGISTRÉE/);
+  await teardown(app);
 });

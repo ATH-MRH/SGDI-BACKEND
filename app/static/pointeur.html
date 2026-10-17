@@ -93,7 +93,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .usb-reader{min-height:310px;border-radius:18px;background:linear-gradient(145deg,#031f3e,#07549a);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;position:relative;overflow:hidden}
 .usb-reader:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(77,174,255,.3),transparent 48%);pointer-events:none}.usb-icon{font-size:72px;position:relative}.usb-title{font-size:24px;font-weight:950;margin-top:10px;position:relative}.usb-hint{font-size:14px;opacity:.8;max-width:440px;margin-top:7px;position:relative}.usb-ready{margin-top:20px;border:1px solid rgba(134,239,172,.55);background:rgba(22,163,74,.22);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;position:relative}.wedge-input{position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:0}
 .result{display:none;margin-top:14px;border-radius:17px;padding:15px;border:1px solid}
-.result.show{display:block}.result.success{background:#dcfce7;border-color:#86efac;color:#14532d}.result.error{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}.result.warning{background:#fef3c7;border-color:#fcd34d;color:#78350f}
+.result.show{display:block}.result.success{background:#dcfce7;border-color:#86efac;color:#14532d}.result.error{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}.result.warning,.result.refused{background:#fef3c7;border-color:#fcd34d;color:#78350f}
 .result-kicker{font-size:11px;font-weight:900;letter-spacing:.08em}.result-name{font-size:19px;font-weight:950;margin:3px 0}.result-meta{font-size:13px;font-weight:650}
 .employee-result{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}.employee-photo{width:172px;height:172px;border-radius:24px;object-fit:cover;border:4px solid rgba(255,255,255,.8);box-shadow:0 8px 20px rgba(15,23,42,.15);background:#fff}.employee-photo-fallback{width:172px;height:172px;border-radius:24px;display:grid;place-items:center;background:#fff;color:var(--navy);font-size:50px;font-weight:950;border:4px solid rgba(255,255,255,.8)}.result-company{font-size:12px;margin-top:7px;font-weight:800}.result-status{display:inline-block;margin-top:8px;background:#16a34a;color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:950}
 .manual-panel{margin:0;padding:0}.manual-heading{text-align:center;font-size:22px;font-weight:950;padding:12px 0 10px;border-bottom:1px dashed var(--line);margin-bottom:20px}
@@ -1417,13 +1417,15 @@ function refusalBlockHTML(refusal){
   return null;
 }
 // Jamais d'erreur technique brute à l'écran : message opérationnel, détail en console.
+// Refus métier (orange) / QR invalide, badge révoqué, blocage (rouge) : gravité donnée par le serveur.
+const SERVER_ERROR_MESSAGE="Pointage impossible — réessayez ou contactez le responsable";
 function operationalError(response,data){
-  const error=new Error("Pointage impossible. Réessayez ou contactez le responsable.");
+  const error=new Error(SERVER_ERROR_MESSAGE);
   const raw=response.headers&&response.headers.get?response.headers.get("X-Attendance-Refusal"):null;
-  if(raw){try{const counted=JSON.parse(raw);error.refusal={code:counted.code,message:counted.message,counted};error.message=counted.message||error.message;return error}catch(e){}}
+  if(raw){try{const counted=JSON.parse(raw);error.refusal={code:counted.code,message:counted.message,counted};error.severity="business";error.message=counted.message||error.message;return error}catch(e){}}
   if(typeof data.detail==="string"&&data.detail)error.message=data.detail;
-  else if(data.detail&&typeof data.detail.message==="string")error.message=data.detail.message;
-  else if(response.status>=500)error.message="Service momentanément indisponible. Réessayez dans un instant.";
+  else if(data.detail&&typeof data.detail.message==="string"){error.message=data.detail.message;error.code=data.detail.code;error.severity=data.detail.severity}
+  else if(response.status>=500)error.message=SERVER_ERROR_MESSAGE;
   else if(response.status===422)error.message="Pointage impossible : informations incomplètes ou invalides.";
   if(data.detail&&typeof data.detail!=="string")console.warn("Pointage refusé",response.status,data.detail);
   return error;
@@ -1806,14 +1808,14 @@ async function onQr(token){
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,data);
-    const entry=recordScanEntry(data);
-    showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);
+    const entry={...recordScanEntry(data),duplicate:!!data.duplicate};     // doublon : aucun nouveau mouvement, jamais en vert
+    showResult(entry,entry.overtime||entry.duplicate?"warning":"success");renderHistory();playTone(!entry.overtime&&!entry.duplicate);
     pollLive();                                                   // la fiche « Dernier pointage » suit sans attendre
     navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){
     if(error.refusal)showLastRefusal({id:"x"+Date.now(),heure:opsStamp().slice(11,19),...error.refusal});
     if(transportFailure(error))showResult({kicker:"CONNEXION PERDUE",message:TRANSPORT_MESSAGE},"error");
-    else showResult({message:error.message||"QR invalide"},"error");
+    else showResult({message:error.message||"QR code non reconnu"},error.severity==="business"?"refused":"error");
     playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
@@ -1831,7 +1833,7 @@ function playTone(success){
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"||type==="warning"){
-    const action=data.duplicate?"DÉJÀ ENREGISTRÉ — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE");
+    const action=data.duplicate?"PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE");
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
     const photo=safePhotoSrc(data.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(data.photo))}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
     el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
