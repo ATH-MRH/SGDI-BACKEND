@@ -15,7 +15,8 @@ Création, émission, impression et suivi des badges du personnel, dans le Porta
 ## Principes
 
 - **La fiche employé reste la source de vérité.** Société, nom, prénom, matricule, fonction,
-  site, code du site (indicatif du site de l'affectation active) et statut y sont lus ; aucune
+  site, code officiel du site (`sites.official_code` du site de l'affectation active, saisi dans
+  Gestion des sites ; jamais l'indicatif radio ni le nom) et statut y sont lus ; aucune
   fiche n'est dupliquée. Une photo ajoutée depuis le studio est enregistrée par le circuit de la
   fiche (même API, même synchronisation de la référence faciale).
 - **Un badge émis est un instantané.** Identité, site, fonction, photo et maquette sont figés à
@@ -83,8 +84,20 @@ migration.
 - **Autorisation explicite** : Paramètres › Groupe sanguin sur les badges. L'activation exige le
   droit `admin` des badges et la référence de l'autorisation interne qui encadre ce traitement ;
   sans référence, l'option reste désactivée. Chaque changement est tracé dans l'historique.
-- **Masqué** si l'affichage n'est pas autorisé, si la fiche n'en porte pas ou si la valeur n'est
-  pas reconnue. L'écran « Créer un badge » indique lequel de ces cas s'applique.
+- **Obligatoire une fois autorisé** : chaque badge officiel émis avec un modèle qui comporte
+  l'élément « Groupe sanguin » le porte. Absent ou non reconnu, l'émission est refusée (unitaire
+  et en lot) jusqu'à la régularisation de la fiche. Procédure si la donnée est indisponible :
+  un responsable habilité (droit `validate`) émet avec une **dérogation motivée** (non
+  communiqué, analyse en attente, refus de l'employé), tracée dans l'historique sans aucune
+  valeur ; le badge ne porte alors pas de groupe sanguin et sera renouvelé après régularisation.
+- **Masqué** tant que l'affichage n'est pas autorisé (aucune obligation dans ce cas). L'écran
+  « Créer un badge » indique toujours l'état de la fiche (renseigné, non renseigné, valeur non
+  reconnue) pour régulariser les données à l'avance, sans jamais montrer la valeur.
+- **Conformité** : l'activation reste subordonnée à la validation du responsable de la
+  conformité. Repères à vérifier par lui : loi algérienne n° 18-07 du 10 juin 2018 (données de
+  santé = données sensibles : base légale ou consentement exprès, déclaration ou autorisation
+  auprès de l'ANPDP), nécessité de l'affichage sur un badge porté visiblement, information des
+  employés. Sans cette validation, ne pas activer l'option en production.
 - **Jamais public** : absent de l'API publique du badge, de la page ouverte par le QR (serveur et
   application), du QR lui-même, des journaux et de l'écran historique des autres portails.
 - **Côté serveur** : la valeur n'est transmise aux écrans DRH que si son affichage est autorisé
@@ -145,20 +158,26 @@ Sous `/api/drh` : module « drh » requis, périmètre société appliqué, acti
 
 ## Permissions
 
-L'accès au module DRH permet de **consulter** (tableau de bord, listes, historique, aperçus,
-épreuves « SPÉCIMEN »). Chaque action exige une permission explicite, accordée dans
-Administration › Matrice des droits › DRH › **Badges du personnel** :
+L'accès **explicite** au module « Studio Badges » (clé `badge`, Administration › Utilisateurs ›
+Modules) vaut **droit opérationnel** : consulter, rechercher, prévisualiser, émettre, renouveler,
+imprimer (seul ou en lot), consulter l'historique, sans autre permission ni action générique
+du profil (`BADGE_OPERATIONAL_ROUTES`, `auth/dependencies.py`). Le module DRH seul ne donne rien.
+Les opérations sensibles restent des permissions explicites, Administration › Permissions ›
+**Studio Badges** :
 
 | Permission | Autorise |
 |---|---|
-| `create` | Émettre, renouveler, remplacer un badge (unitaire ou en lot) |
-| `validate` | Révoquer un badge |
-| `export` | Imprimer (PDF carte ou planche A4) |
-| `admin` | Créer, modifier, dupliquer, archiver les modèles ; paramètres |
+| `create` | Émettre, renouveler, remplacer (accordé aussi par le module) |
+| `export` | Imprimer, carte ou planche A4 (accordé aussi par le module) |
+| `validate` | Révoquer un badge ; dérogation au groupe sanguin |
+| `admin` | Modèles partagés, paramètres (dont l'autorisation du groupe sanguin) |
 
-Un administrateur global les possède toutes. Un refus est journalisé (`authorization.badge`).
-Après la mise en production, personne d'autre ne peut émettre tant que ces permissions n'ont
-pas été accordées.
+Restent toujours appliqués : compte actif, sociétés autorisées, **sites autorisés** (un compte
+limité à des sites ne voit, n'émet et n'imprime que les badges de ces sites), et la restriction
+explicite de **lecture seule** (actions du compte sans aucune écriture : `read`, éventuellement
+`validate`/`unlock`), plus forte que le module. Un administrateur global possède tout. Chaque
+refus est journalisé (`authorization.badge`) et le portail affiche sa raison précise
+(`GET /permissions` → `reasons`).
 
 ## QR code
 
@@ -208,6 +227,12 @@ profils concernés par les permissions ci-dessus ; (3) remplacer l'écran histor
 redirection, une fois les usages constatés dans l'historique.
 
 ## Données et migrations
+
+- `20261017_0003_site_official_code` : colonne facultative `sites.official_code` (+ index), le
+  code officiel imprimé sur les badges (ex. ETP/DF/H01). `sites.indicatif` est l'indicatif radio
+  du site, pas ce code. Aucune valeur n'est déduite : les codes se saisissent dans la fiche du
+  site, chaque changement est journalisé (`ops.site.official_code`). Sans code, l'émission avec
+  un modèle qui l'imprime est refusée. Descente : colonne conservée.
 
 - `20261015_0001_badge_studio` : quatre tables nouvelles (`badge_templates`, `employee_badges`,
   `badge_events`, `badge_settings`). Aucune table existante n'est modifiée.

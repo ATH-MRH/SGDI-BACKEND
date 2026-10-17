@@ -153,7 +153,7 @@ test("issuing a badge posts the employee, the chosen template and the photo fram
   view.querySelector('[data-bs="view-flat"]').click();
   assert.doesNotMatch(view.querySelector("[data-bs-preview]").innerHTML, /bs-holder/);
   view.querySelector('[data-bs="issue"]').click(); await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(issued[0])), { employee_id: 7, template_id: 1, crop: { zoom: 1, dx: 0, dy: 0 }, valid_until: null });
+  assert.deepEqual(JSON.parse(JSON.stringify(issued[0])), { employee_id: 7, template_id: 1, crop: { zoom: 1, dx: 0, dy: 0 }, valid_until: null, blood_group_waiver: null });
   assert.ok(calls.some(c => c[0] === "toast" && /BDG-2026-000009/.test(c[1])));
   dom.window.close();
 });
@@ -255,7 +255,7 @@ test("without explicit badge permissions the screens stay read-only", async () =
   w.renderBadgeStudio(view, "creer"); await settle();
   for (const action of ["issue", "print", "revoke"]) assert.equal(view.querySelector(`[data-bs="${action}"]`), null, action);
   assert.ok(view.querySelector('[data-bs="show-issued"]')); assert.ok(view.querySelector('[data-bs="proof"]'));
-  assert.match(view.textContent, /Permission requise/); assert.match(view.textContent, /Caractères non imprimables[\s\S]*Nom/);
+  assert.match(view.textContent, /Réservé aux comptes autorisés au module Studio Badges/); assert.match(view.textContent, /Caractères non imprimables[\s\S]*Nom/);
   w.location.hash = "#/drh/badges/modeles";
   w.renderBadgeStudio(view, "modeles"); await settle();
   assert.equal(view.querySelector('[data-bs="tpl-duplicate"],[data-bs="tpl-archive"],[data-bs="tpl-default"],a[href*="studio/"]:not(.bs-tabs a)'), null);

@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.core.granular_permissions import is_global_administrator, load_feature_permissions
 from app.core.pagination import paginate_list
 from app.db.session import get_db
-from app.modules.auth.dependencies import current_user
+from app.modules.auth.dependencies import current_user, has_badge_module, read_only_restricted
 from app.modules.auth.models import User
 from app.modules.drh import badge_design, badge_pdf, service
 from app.modules.drh.badge_models import (
@@ -74,10 +74,14 @@ PDF_HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "
 
 # ── Accès ────────────────────────────────────────────────────────────────────
 
-# Permissions fines (Administration › Matrice des droits › DRH › Badges du personnel). L'accès
-# au module DRH permet de CONSULTER ; chaque action ci-dessous exige une permission explicite.
+# Droits du Studio Badges. L'accès EXPLICITE au module « Studio Badges » (clé badge) vaut droit
+# opérationnel : émettre, renouveler ou remplacer un badge (create) et imprimer, seul ou en lot
+# (export). Les opérations sensibles restent des permissions explicites (Administration ›
+# Permissions › Studio Badges) : révoquer (validate), modèles partagés et paramètres, dont les
+# règles du groupe sanguin (admin). Une restriction explicite de lecture seule l'emporte.
 RIGHTS = {"create": "émettre, renouveler ou remplacer un badge", "validate": "révoquer un badge",
           "export": "imprimer un badge", "admin": "gérer les modèles et les paramètres des badges"}
+OPERATIONAL_RIGHTS = ("create", "export")
 
 
 def _access(user: User) -> None:
@@ -96,9 +100,31 @@ def _access(user: User) -> None:
 def badge_rights(db: Session, user: User) -> dict[str, bool]:
     if is_global_administrator(user):
         return {action: True for action in RIGHTS}
+    if read_only_restricted(user):
+        return {action: False for action in RIGHTS}
     granted = {grant.action_key for grant in load_feature_permissions(db, user.id)
                if grant.module_key == "drh" and grant.feature_key == "badges"}
-    return {action: action in granted for action in RIGHTS}
+    operational = has_badge_module(user)
+    return {action: action in granted or (operational and action in OPERATIONAL_RIGHTS) for action in RIGHTS}
+
+
+def right_reason(user: User, action: str) -> str:
+    """Explication précise d'un droit absent, affichée telle quelle dans le portail."""
+    if read_only_restricted(user):
+        return "Votre compte est limité à la consultation : aperçus et épreuves SPÉCIMEN uniquement."
+    if action in OPERATIONAL_RIGHTS:
+        return ("Réservé aux comptes autorisés au module Studio Badges (Administration › Utilisateurs › "
+                "Modules › Studio Badges).")
+    if action == "validate":
+        return "Révocation réservée aux responsables habilités (Administration › Permissions › Studio Badges › Révoquer)."
+    return "Modèles partagés et paramètres réservés aux administrateurs des badges (Administration › Permissions › Studio Badges)."
+
+
+def rights_out(db: Session, user: User) -> dict[str, Any]:
+    rights = badge_rights(db, user)
+    return {**rights, "operational": all(rights[action] for action in OPERATIONAL_RIGHTS),
+            "read_only": read_only_restricted(user) and not is_global_administrator(user),
+            "reasons": {action: right_reason(user, action) for action, allowed in rights.items() if not allowed}}
 
 
 def _require(db: Session, user: User, request: Request, action: str) -> None:
@@ -107,7 +133,31 @@ def _require(db: Session, user: User, request: Request, action: str) -> None:
         append_audit(db, action="authorization.badge", resource="api", resource_id=f"badges:{action}",
                      result="refused", user=user, request=request)
         db.commit()
-        raise HTTPException(status_code=403, detail=f"Permission explicite requise pour {RIGHTS[action]} (DRH › Badges du personnel).")
+        raise HTTPException(status_code=403, detail=f"Impossible de {RIGHTS[action]}. {right_reason(user, action)}")
+
+
+def _site_scope(user: User) -> set[int] | None:
+    """Sites explicitement autorisés au compte (None : aucune restriction par site)."""
+    from app.modules.ops.routes import _authorized_site_ids
+
+    if is_global_administrator(user):
+        return None
+    return set(_authorized_site_ids(user)) or None
+
+
+def _site_visible(scope: set[int] | None, site_id: int | None) -> bool:
+    return scope is None or (site_id is not None and site_id in scope)
+
+
+def _badge_employee(db: Session, user: User, employee_id: int) -> Employee:
+    """Employé du périmètre du compte : société, puis sites autorisés (affectation active)."""
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    scope = _site_scope(user)
+    if scope is not None:
+        current = _current_sites(db, [employee.id]).get(employee.id)
+        if not _site_visible(scope, current[1].id if current else None):
+            raise HTTPException(status_code=403, detail="Employé hors des sites autorisés pour votre compte.")
+    return employee
 
 
 def _society_visible(user: User, society: str | None) -> bool:
@@ -117,6 +167,9 @@ def _society_visible(user: User, society: str | None) -> bool:
 def _badge_or_404(db: Session, user: User, badge_id: int) -> EmployeeBadge:
     badge = db.get(EmployeeBadge, badge_id)
     if badge is None or (_allowed_societies(user) and not _canonical_allowed_society(user, badge.society)):
+        raise HTTPException(status_code=404, detail="Badge introuvable")
+    scope = _site_scope(user)
+    if scope is not None and not _site_visible(scope, (badge.snapshot or {}).get("site_id") if isinstance(badge.snapshot, dict) else None):
         raise HTTPException(status_code=404, detail="Badge introuvable")
     return badge
 
@@ -162,15 +215,52 @@ def blood_group_of(employee: Employee) -> str:
     return badge_design.normalize_blood_group(data.get("groupeSanguin") or data.get("groupe_sanguin"))
 
 
+BLOOD_WAIVERS = {"non_communique": "Groupe sanguin non communiqué par l'employé",
+                 "analyse_en_attente": "Analyse de groupage sanguin en attente",
+                 "refus": "Refus de l'employé de le faire figurer sur son badge"}
+
+
 def blood_group_state(employee: Employee, options: dict[str, Any]) -> dict[str, Any]:
-    """État affichable dans l'interface DRH. La valeur n'est transmise que si l'affichage est autorisé."""
+    """Contrôle de la donnée pour l'interface : présente et valide (ok), absente ou invalide.
+    L'état seul permet de régulariser les fiches avant toute émission ; la VALEUR n'est transmise
+    que si son affichage est autorisé pour la société."""
     data = _employee_data(employee)
     raw = str(data.get("groupeSanguin") or data.get("groupe_sanguin") or "").strip()
     value = badge_design.normalize_blood_group(raw)
-    if not options.get("show_blood_group"):
-        return {"status": "non_autorise", "authorized": False}
     status = "ok" if value else ("invalide" if raw else "absent")
-    return {"status": status, "authorized": True, **({"value": value} if value else {})}
+    authorized = bool(options.get("show_blood_group"))
+    return {"status": status, "authorized": authorized, **({"value": value} if authorized and value else {})}
+
+
+def design_uses(design: dict[str, Any] | None, *, kind: str | None = None, field: str | None = None) -> bool:
+    """La maquette montre-t-elle un élément de ce type, ou un texte avec ce champ {{…}} ?"""
+    for page in (design or {}).get("pages") or []:
+        for element in page.get("elements") or []:
+            if element.get("hidden"):
+                continue
+            if kind and element.get("type") == kind:
+                return True
+            if field and element.get("type") == "text" and "{{" in str(element.get("text") or "") and \
+                    field in badge_design._FIELD_RE.findall(str(element.get("text") or "")):
+                return True
+    return False
+
+
+def site_code_state(current: tuple[Assignment, Site] | None) -> str:
+    if not current:
+        return "sans_affectation"
+    return "ok" if str(current[1].official_code or "").strip() else "absent"
+
+
+def site_code_problem(employee_values_: dict[str, Any], current: tuple[Assignment, Site] | None) -> str | None:
+    """Message bloquant si le code officiel du site ne peut pas être imprimé. Jamais de valeur supposée."""
+    if employee_values_.get("site_code"):
+        return None
+    if not current:
+        return ("Code officiel du site non renseigné : l'employé n'a pas d'affectation active. "
+                "Affectez-le à son site avant d'émettre le badge.")
+    return (f"Code officiel du site non renseigné pour le site « {current[1].name or current[1].id} ». "
+            "Complétez-le dans Gestion des sites (fiche du site › Code officiel du site), puis émettez le badge.")
 
 
 def employee_values(employee: Employee, current: tuple[Assignment, Site] | None, *, blood: bool = False) -> dict[str, str]:
@@ -188,7 +278,9 @@ def employee_values(employee: Employee, current: tuple[Assignment, Site] | None,
         "matricule": str(data.get("matricule") or employee.code or employee.id).strip(),
         "fonction": str((assignment.position if assignment else "") or affectation.get("poste") or data.get("fonction") or employee.position or "").strip(),
         "site": site_name,
-        "site_code": str((site.indicatif if site else "") or site_name).strip(),
+        # Code OFFICIEL du site d'affectation (sites.official_code). Jamais l'indicatif radio, le nom
+        # du site ou du client : absent, il reste vide et l'émission est bloquée.
+        "site_code": str((site.official_code if site else "") or "").strip().upper(),
         "statut": str(data.get("statutProfessionnel") or data.get("categorie") or data.get("statut") or employee.status or "").strip(),
         **({"groupe_sanguin": value} if blood and (value := blood_group_of(employee)) else {}),
     }
@@ -550,7 +642,7 @@ def _add_months(day: date, months: int) -> date:
 
 
 def issue_badge(db: Session, user: User, request: Request, employee: Employee, template: BadgeTemplate, *,
-                crop: dict[str, Any] | None, valid_until: date | None) -> EmployeeBadge:
+                crop: dict[str, Any] | None, valid_until: date | None, blood_group_waiver: str | None = None) -> EmployeeBadge:
     if str(employee.status or "").strip().lower() == "sortant":
         raise HTTPException(status_code=409, detail="Employé sortant : aucun badge ne peut être émis.")
     options = load_settings(db, employee.society)
@@ -565,6 +657,22 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
     if problems:
         raise HTTPException(status_code=409, detail="Caractères non imprimables sur le badge (alphabet non latin) : " + ", ".join(problems)
                             + ". Saisissez ces informations en caractères latins sur la fiche.")
+    if design_uses(template.design, field="site_code") and (problem := site_code_problem(values, current)):
+        raise HTTPException(status_code=409, detail=problem)
+    waiver = None
+    if options["show_blood_group"] and design_uses(template.design, kind="blood") and "groupe_sanguin" not in values:
+        # Affichage autorisé : chaque badge officiel porte le groupe sanguin. S'il manque, aucune
+        # valeur n'est supposée : on régularise la fiche, ou un responsable (droit de révocation)
+        # émet avec une dérogation motivée, tracée sans donnée médicale.
+        state = blood_group_state(employee, options)["status"]
+        missing = "invalide sur la fiche (valeurs admises : O+, O−, A+, A−, B+, B−, AB+, AB−)" if state == "invalide" else "non renseigné sur la fiche"
+        if not blood_group_waiver:
+            raise HTTPException(status_code=409, detail=f"Groupe sanguin {missing} : régularisez la fiche employé (DRH), ou émettez avec une dérogation motivée.")
+        if blood_group_waiver not in BLOOD_WAIVERS:
+            raise HTTPException(status_code=422, detail="Motif de dérogation inconnu.")
+        if not badge_rights(db, user)["validate"]:
+            raise HTTPException(status_code=403, detail="Dérogation au groupe sanguin réservée aux responsables habilités (Administration › Permissions › Studio Badges › Révoquer).")
+        waiver = blood_group_waiver
     today = date.today()
     if valid_until is None and options["validity_months"]:
         valid_until = _add_months(today, options["validity_months"])
@@ -585,10 +693,11 @@ def issue_badge(db: Session, user: User, request: Request, employee: Employee, t
                   validite=valid_until.strftime("%d/%m/%Y") if valid_until else "")
     badge.snapshot = {"values": values, "crop": badge_design.clean_crop(crop), "qr_url": _qr_url(request, employee, badge.id),
                       "site_id": current[1].id if current else None, "template_version": template.version,
-                      "blood_group_shown": "groupe_sanguin" in values}
+                      "blood_group_shown": "groupe_sanguin" in values, **({"blood_group_waiver": waiver} if waiver else {})}
     _set_public_badge_state(employee, True)
     _log(db, user, request, "EMISSION", f"Badge {badge.number} émis pour {values['nom_complet']} ({values['matricule']})", badge=badge,
-         details={"number": badge.number, "template": template.name, "replaced": [row.number for row in replaced]})
+         details={"number": badge.number, "template": template.name, "replaced": [row.number for row in replaced],
+                  **({"blood_group_waiver": waiver} if waiver else {})})
     return badge
 
 
@@ -597,6 +706,7 @@ class IssueIn(BaseModel):
     template_id: int | None = None
     crop: dict[str, Any] | None = None
     valid_until: date | None = None
+    blood_group_waiver: str | None = Field(None, max_length=30)
 
 
 class IssueBatchIn(BaseModel):
@@ -625,7 +735,12 @@ class PreviewIn(BaseModel):
 def _scoped_employees(db: Session, user: User, society: str | None) -> list[Employee]:
     effective = _effective_society_filter(user, society)
     rows = service.list_employees(db, society=effective, allowed_societies=_allowed_societies(user))
-    return [row for row in rows if _society_visible(user, row.society)]
+    rows = [row for row in rows if _society_visible(user, row.society)]
+    scope = _site_scope(user)
+    if scope is not None:
+        sites = _current_sites(db, [row.id for row in rows])
+        rows = [row for row in rows if _site_visible(scope, sites[row.id][1].id if row.id in sites else None)]
+    return rows
 
 
 def _active_badges(db: Session, employee_ids: list[int]) -> dict[int, EmployeeBadge]:
@@ -655,6 +770,7 @@ class _BloodPolicy:
 def _employee_row(employee: Employee, current: tuple[Assignment, Site] | None, badge: EmployeeBadge | None, *, blood: bool = False) -> dict[str, Any]:
     values = employee_values(employee, current, blood=blood)
     return {"id": employee.id, **values, "employee_status": employee.status, "unprintable": unprintable_fields(values),
+            "site_id": current[1].id if current else None, "site_code_status": site_code_state(current),
             "has_photo": bool(_photo_value(employee)), "badge": _badge_out(badge, blood=blood) if badge else None}
 
 
@@ -663,9 +779,9 @@ def _is_sortant(employee: Employee) -> bool:
 
 
 @router.get("/permissions")
-def my_badge_rights(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, bool]:
+def my_badge_rights(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     _access(user)
-    return badge_rights(db, user)
+    return rights_out(db, user)
 
 
 @router.get("/dashboard")
@@ -722,7 +838,7 @@ def badge_employee_facets(society: str | None = Query(None, max_length=150), db:
         if values["societe"]:
             societies.add(values["societe"])
         if current:
-            site_rows[current[1].id] = {"id": current[1].id, "name": current[1].name or "", "code": current[1].indicatif or ""}
+            site_rows[current[1].id] = {"id": current[1].id, "name": current[1].name or "", "code": current[1].official_code or ""}
         if values["fonction"]:
             functions.add(values["fonction"])
     return {"societies": sorted(societies, key=str.upper),
@@ -765,7 +881,7 @@ def badge_employees(society: str | None = Query(None, max_length=150), q: str | 
 def badge_employee(employee_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     """Tout ce qu'il faut pour préparer le badge d'un employé : champs, QR, modèle proposé, badges déjà émis."""
     _access(user)
-    employee = _ensure_employee_allowed(db, user, employee_id)
+    employee = _badge_employee(db, user, employee_id)
     current = _current_sites(db, [employee.id]).get(employee.id)
     history = db.execute(select(EmployeeBadge).where(EmployeeBadge.employee_id == employee.id).order_by(EmployeeBadge.id.desc())).scalars().all()
     active = next((row for row in history if row.status == STATUS_ACTIVE), None)
@@ -773,14 +889,15 @@ def badge_employee(employee_id: int, request: Request, db: Session = Depends(get
     blood = badge_settings["show_blood_group"]
     return {**_employee_row(employee, current, active, blood=blood), "qr": badge_design.qr_matrix(_qr_url(request, employee)),
             "default_template_id": default_template(db, employee.society).id, "badges": [_badge_out(row, blood=blood) for row in history],
-            "settings": badge_settings, "can_issue": not _is_sortant(employee), "rights": badge_rights(db, user),
-            "blood_group": blood_group_state(employee, badge_settings)}
+            "settings": badge_settings, "can_issue": not _is_sortant(employee), "rights": rights_out(db, user),
+            "blood_group": blood_group_state(employee, badge_settings), "blood_waivers": BLOOD_WAIVERS,
+            "site_code_problem": site_code_problem(employee_values(employee, current), current)}
 
 
 @router.get("/employees/{employee_id}/photo")
 def badge_employee_photo(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
     _access(user)
-    employee = _ensure_employee_allowed(db, user, employee_id)
+    employee = _badge_employee(db, user, employee_id)
     content = employee_photo(db, employee, load_settings(db, employee.society)["photo_source"])
     if content is None:
         raise HTTPException(status_code=404, detail="Aucune photo sur la fiche de l'employé")
@@ -790,11 +907,12 @@ def badge_employee_photo(employee_id: int, db: Session = Depends(get_db), user: 
 @router.post("/issue")
 def issue(payload: IssueIn, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
     _require(db, user, request, "create")
-    employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    employee = _badge_employee(db, user, payload.employee_id)
     template = _template_or_404(db, user, payload.template_id) if payload.template_id else default_template(db, employee.society)
     if not template.active:
         raise HTTPException(status_code=409, detail="Ce modèle est archivé.")
-    badge = issue_badge(db, user, request, employee, template, crop=payload.crop, valid_until=payload.valid_until)
+    badge = issue_badge(db, user, request, employee, template, crop=payload.crop, valid_until=payload.valid_until,
+                        blood_group_waiver=payload.blood_group_waiver)
     db.commit()
     return _badge_out(badge, detail=True, blood=blood_allowed(db, badge.society))
 
@@ -814,7 +932,7 @@ def issue_batch(payload: IssueBatchIn, request: Request, db: Session = Depends(g
             issued.append(_badge_out(existing[employee_id]))
             continue
         try:
-            employee = _ensure_employee_allowed(db, user, employee_id)
+            employee = _badge_employee(db, user, employee_id)
             badge = issue_badge(db, user, request, employee, template or default_template(db, employee.society), crop=None, valid_until=None)
             db.commit()
             issued.append(_badge_out(badge))
@@ -949,7 +1067,7 @@ def preview_pdf(payload: PreviewIn, request: Request, db: Session = Depends(get_
         design = default_template(db, None).design
     values, photo, qr = dict(SAMPLE_VALUES), None, badge_design.qr_matrix("https://drh.irongs.com/public/badge/specimen")
     if payload.employee_id:
-        employee = _ensure_employee_allowed(db, user, payload.employee_id)
+        employee = _badge_employee(db, user, payload.employee_id)
         values = {key: value for key, value in SAMPLE_VALUES.items() if key != "groupe_sanguin"}
         values.update(employee_values(employee, _current_sites(db, [employee.id]).get(employee.id), blood=blood_allowed(db, employee.society)))
         photo = employee_photo(db, employee, load_settings(db, employee.society)["photo_source"])

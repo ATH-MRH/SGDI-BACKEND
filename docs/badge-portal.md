@@ -30,11 +30,22 @@ Aucun second service, aucune seconde instance FastAPI, aucun second processus de
 - API `/api/drh/badges/…` (`API_MODULE_PREFIXES`, `auth/dependencies.py`) : module `badge` exigé,
   sur tous les domaines ; un compte « Studio Badges » sans module DRH y accède, un compte DRH seul
   reçoit 403. Le reste de `/api/drh` est inchangé.
-- Droits fins : **Administration › Permissions › Studio Badges** (consultation, émission,
-  révocation, impression, modèles et paramètres). Stockage inchangé (`drh` / `badges`) : aucune
-  migration, les droits déjà attribués restent valables. Le périmètre société et les actions
-  autorisées du compte s'appliquent toujours. Changer de domaine ne donne aucun droit.
+- **Droit opérationnel** : le module « Studio Badges » suffit pour émettre et imprimer (seul ou
+  en lot), quel que soit le profil d'actions, sauf restriction explicite de lecture seule.
+  Révocation, modèles partagés et paramètres restent des permissions explicites
+  (**Administration › Permissions › Studio Badges**, stockage `drh` / `badges`). Sociétés et
+  sites autorisés s'appliquent toujours (voir `docs/drh-badge-studio.md`, Permissions).
 - Après déploiement, cocher « Studio Badges » pour chaque compte qui gère les badges.
+
+## Code officiel du site et groupe sanguin
+
+- Bandeau noir : **SITE : code officiel** du site d'affectation (`sites.official_code`, Gestion
+  des sites › fiche du site › Code officiel du site). Jamais l'indicatif radio, le nom du site ou
+  du client. Absent : « Code officiel du site non renseigné » et émission refusée.
+- Groupe sanguin : en grand à gauche du QR, obligatoire sur chaque badge officiel une fois son
+  affichage autorisé (Paramètres, référence de l'autorisation de conformité) ; absent ou
+  invalide : régularisation de la fiche ou dérogation motivée d'un responsable. Jamais dans le
+  QR, la page publique, l'API publique ni les journaux.
 
 ## Tableau de bord
 

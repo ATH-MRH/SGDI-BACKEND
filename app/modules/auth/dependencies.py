@@ -181,6 +181,30 @@ def enforce_application_host(request: Request, user: User) -> None:
         enforce_subdomain_login_scope(request, user)
 
 
+# Studio Badges (badge.irongs.com) : l'accès explicite au module « badge » vaut droit opérationnel
+# (émettre, imprimer, imprimer en lot) sans action générique supplémentaire du profil. Une
+# restriction explicite de lecture seule (actions du compte sans aucune écriture) reste plus forte.
+BADGE_OPERATIONAL_ROUTES = frozenset({"/api/drh/badges/issue", "/api/drh/badges/issue-batch", "/api/drh/badges/print/pdf"})
+_WRITE_ACTIONS = frozenset({"create", "update", "delete", "export", "admin"})
+
+
+def has_badge_module(user: User) -> bool:
+    """Module « Studio Badges » coché explicitement pour le compte (jamais déduit de la DRH)."""
+    modules = user.authorized_modules if isinstance(user.authorized_modules, list) else []
+    return "badge" in {str(value or "").strip().lower() for value in modules}
+
+
+def read_only_restricted(user: User) -> bool:
+    """Actions du compte explicitement limitées à la consultation (aucune action d'écriture)."""
+    actions = {str(value or "").strip().lower() for value in (user.authorized_actions or [])} & AUTHORIZED_ACTIONS
+    return bool(actions) and not (actions & _WRITE_ACTIONS)
+
+
+def badge_operational_request(request: Request, user: User) -> bool:
+    return (request.method.upper() == "POST" and request.url.path.lower().rstrip("/") in BADGE_OPERATIONAL_ROUTES
+            and has_badge_module(user) and not read_only_restricted(user))
+
+
 def request_action(request: Request) -> str:
     """Traduit une opération HTTP en action métier administrable par utilisateur."""
     method = request.method.upper()
@@ -248,9 +272,12 @@ def current_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun périmètre société explicite")
     actions = [str(value).strip().lower() for value in (user.authorized_actions or [])]
     actions = [value for value in actions if value in AUTHORIZED_ACTIONS]
-    if actions and request_action(request) not in actions and "admin" not in actions:
+    if actions and request_action(request) not in actions and "admin" not in actions and not badge_operational_request(request, user):
         append_audit(db, action="authorization.action", resource="api", resource_id=request.url.path,
                      result="refused", user=user, request=request)
         db.commit()
+        if request.url.path.lower().rstrip("/") in BADGE_OPERATIONAL_ROUTES and has_badge_module(user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Votre compte est limité à la consultation : aperçus et épreuves SPÉCIMEN uniquement.")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Action non autorisée : {request_action(request)}")
     return user

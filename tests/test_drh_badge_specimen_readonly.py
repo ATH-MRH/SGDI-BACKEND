@@ -67,7 +67,9 @@ def test_read_only_account_gets_the_specimen_without_any_write(client, db, drh):
     emp = _employee(db)
     issued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()   # badge existant (compte habilité)
     reader = _account(client, db, actions=("read",))
-    assert client.get(f"{API}/permissions", headers=reader).json() == {"create": False, "validate": False, "export": False, "admin": False}
+    rights = client.get(f"{API}/permissions", headers=reader).json()
+    assert {key: rights[key] for key in ("create", "validate", "export", "admin")} == {"create": False, "validate": False, "export": False, "admin": False}
+    assert rights["read_only"] is True and "consultation" in rights["reasons"]["create"]
     before = _counts(db)
     for body in ({"employee_id": emp.id}, {"template_id": issued["template_id"]}, {"design": issued["design"]}):
         resp = client.post(f"{API}/preview/pdf", json=body, headers=reader)
@@ -105,17 +107,24 @@ def test_writes_stay_refused_for_a_read_only_account(client, db, drh, with_badge
     assert db.get(EmployeeBadge, issued["id"]).status == "ACTIF"
 
 
-def test_badge_rights_still_decide_for_accounts_without_action_restriction(client, db, drh):
+def test_the_badge_module_grants_issue_and_print_while_sensitive_actions_stay_explicit(client, db, drh):
     emp = _employee(db)
     issued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()
-    plain = _account(client, db, actions=())                         # aucune restriction générique, aucun droit badges
+    plain = _account(client, db, actions=())                         # module Studio Badges, aucune permission explicite
     assert client.post(f"{API}/preview/pdf", json={"employee_id": emp.id}, headers=plain).status_code == 200
-    for method, path, body in (("post", "/issue", {"employee_id": emp.id}), ("post", "/print/pdf", {"badge_ids": [issued["id"]]}),
-                               ("post", f"/{issued['id']}/revoke", {"reason": "perdu"}), ("put", "/settings", {"society": SOC, "data": {}})):
+    assert client.post(f"{API}/print/pdf", json={"badge_ids": [issued["id"]]}, headers=plain).status_code == 200
+    for method, path, body in (("post", f"/{issued['id']}/revoke", {"reason": "perdu"}), ("put", "/settings", {"society": SOC, "data": {}})):
         assert getattr(client, method)(f"{API}{path}", json=body, headers=plain).status_code == 403, path
-    printer = _account(client, db, actions=("read", "export"), badge_rights=("read", "export"))
-    assert client.post(f"{API}/print/pdf", json={"badge_ids": [issued["id"]]}, headers=printer).status_code == 200   # impression : inchangée
-    assert client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=printer).status_code == 403
+    # Profil courant sans « export » (create, read, update, validate) : l'impression ne demande plus rien de plus.
+    usual = _account(client, db, actions=("create", "read", "update", "validate"))
+    assert client.post(f"{API}/print/pdf", json={"badge_ids": [issued["id"]]}, headers=usual).status_code == 200
+    reissued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=usual)
+    assert reissued.status_code == 200, reissued.text
+    printer = _account(client, db, actions=("read", "export"))       # impression seule au profil : émission aussi permise par le module
+    assert client.post(f"{API}/print/pdf", json={"badge_ids": [reissued.json()["id"]]}, headers=printer).status_code == 200
+    # Sans le module, rien ne passe, même avec toutes les permissions explicites.
+    outsider = _account(client, db, actions=(), modules=("drh",), badge_rights=("read", "create", "export"))
+    assert client.post(f"{API}/print/pdf", json={"badge_ids": [reissued.json()["id"]]}, headers=outsider).status_code == 403
 
 
 def test_account_without_drh_access_is_still_refused(client, db, drh):
