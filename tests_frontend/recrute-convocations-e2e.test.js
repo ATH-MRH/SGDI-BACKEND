@@ -179,7 +179,7 @@ from app.modules.recruitment_engage_models import RecruitmentInterview
 s=SessionLocal(); row=s.get(RecruitmentInterview, ${interviewId}); row.starts_at=engage.now_local()-timedelta(minutes=2); s.commit(); print('ok')`);
   await page.evaluate(id => openEmploiDossier(id, 'interviews'), applicationId);
   await page.waitForSelector('.conv-card');
-  await clickText(page, '.conv-card button', 'Compte rendu de l’entretien');
+  await clickText(page, '.conv-card button', 'Remplir le compte rendu');
   await page.waitForSelector(`#convOutcome${interviewId} form`);
   const criteria = await page.$$eval(`#convOutcome${interviewId} .interview-grid label`, els => els.map(el => el.textContent));
   assert.equal(criteria.length, 8, 'la grille du vivier (8 critères) est reprise');

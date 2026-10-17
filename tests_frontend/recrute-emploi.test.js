@@ -153,13 +153,13 @@ test('convocations: draft, sent with its versions, cancelled; historical convoca
   const app = workspace({ responses: { '/applications/1': d } });
   await app.run("openEmploiDossier(1,'interviews')");
   assert.match(texts(app.host.querySelectorAll('nav[aria-label="Rubriques du dossier"] .tab-btn'))[3], /^Convocations et entretiens/);
-  assert.deepEqual(texts(app.host.querySelectorAll('.conv-head button')), ['Convoquer le candidat', 'Scanner une convocation']);
+  assert.deepEqual(texts(app.host.querySelectorAll('.conv-head button')), ['Planifier un autre entretien', 'Scanner une convocation']);
   const [draft, sent, cancelled] = app.host.querySelectorAll('.conv-card');
   assert.match(draft.textContent, /Brouillon, non envoyée/); assert.doesNotMatch(draft.textContent, /Candidat :/, 'a draft has no candidate state');
   assert.deepEqual(texts(draft.querySelectorAll('.emploi-actions button')), ['Envoyer la convocation', 'Modifier le brouillon', 'Supprimer le brouillon', 'Aperçu PDF']);
   assert.match(sent.textContent, /CONV-2026-000002 · version 2/); assert.match(sent.textContent, /Candidat : Reportée/); assert.match(sent.textContent, /reportée, initialement/);
   assert.deepEqual(texts(sent.querySelectorAll('.conv-versions li .pill')), ['En vigueur', 'Remplacée'], 'old versions stay identifiable');
-  assert.deepEqual(texts(sent.querySelectorAll('.emploi-actions button')), ['Reporter ou modifier', 'Annuler', 'Confirmer l’arrivée du candidat', 'Compte rendu de l’entretien']);
+  assert.deepEqual(texts(sent.querySelectorAll('.emploi-actions button')), ['Reporter ou modifier', 'Annuler', 'Confirmer l’arrivée du candidat', 'Compte rendu disponible à l’heure prévue']);
   assert.match(sent.querySelector('dl').textContent, /12 rue des Tests/); assert.match(sent.innerHTML, /12 rue des Tests<br>Hydra/);
   assert.match(cancelled.textContent, /Annulée/); assert.equal(cancelled.querySelectorAll('.emploi-actions button').length, 0);
   // Document devenu inexact (modifié hors versions) : réémission proposée, aucune arrivée possible.
@@ -359,4 +359,40 @@ test('portefeuille: changer de société ferme le dossier courant et recharge le
   assert.equal(app.run('emploiState.view'),'board');
   assert.equal(app.run('emploiState.dossier'),null);
   assert.equal(new URL('https://test'+app.calls.at(-1)[1]).searchParams.get('society'),society);
+});
+
+
+test('convocation workflow: next action follows real state; PDF/QR is directly accessible without granting write rights', async()=>{
+  const cases=[
+    [{},/En attente de confirmation/],
+    [{confirmed_at:'2026-10-17T09:00:00'},/Présence confirmée par le candidat/],
+    [{can_confirm_arrival:true},/À l’arrivée du candidat, scannez/],
+    [{arrived_at:'2026-10-20T08:30:00'},/Arrivée enregistrée/],
+    [{past:true,arrived_at:'2026-10-20T08:30:00'},/Vous pouvez remplir le compte rendu/],
+    [{past:true},/aucune absence n’est automatique/],
+    [{status:'done'},/Poursuivez dans l’onglet Traitement/],
+    [{status:'cancelled'},/Ne pas utiliser ce document/],
+    [{needs_reissue:true},/Réémettez le document avant l’accueil/],
+  ];
+  for(const [values,expected] of cases){
+    const app=workspace({actions:['read'],responses:{'/applications/1':dossier({convocation_defaults:DEFAULTS,interviews:[convocation(2,values)]})}});
+    await app.run("openEmploiDossier(1,'interviews')");
+    assert.match(app.host.querySelector('.conv-next').textContent,expected);
+    assert.equal(app.host.querySelectorAll('.conv-card .emploi-actions button').length,0);
+    assert.equal(app.host.querySelectorAll('.conv-document-actions button').length,values.needs_reissue?0:2);
+  }
+  const app=workspace({responses:{'/applications/1':dossier({convocation_defaults:DEFAULTS,interviews:[convocation(2)]})}});
+  await app.run("openEmploiDossier(1,'interviews')");
+  assert.equal(app.host.querySelector('button[onclick="convOutcomeForm(2)"]').disabled,true);
+  assert.match(app.host.querySelector('.conv-reception').textContent,/Pas encore consultée.*Présence non confirmée/);
+  assert.match(app.host.textContent,/L’envoi ne prouve pas la réception sur le téléphone/);
+  const fetched=[];app.ctx.emploiFetchBlob=async path=>{fetched.push(path);return 'PDF'};
+  await app.run('convViewPdf(2,1)');
+  assert.deepEqual(fetched,['/interviews/2/convocation?version=1']);
+  assert.equal(app.doc.querySelector('#emploiViewer').getAttribute('role'),'dialog');
+  assert.equal(app.doc.querySelector('#emploiViewer iframe').getAttribute('src'),'blob:test');
+  app.run('closeEmploiViewer()');assert.equal(app.doc.querySelector('#emploiViewer'),null);
+  app.ctx.emploiFetchBlob=async()=>{throw new Error('Accès refusé <script>')};
+  await app.run('convViewPdf(2,1)');
+  assert.deepEqual(app.banners.at(-1),['error','Accès refusé &lt;script>']);
 });

@@ -1,6 +1,6 @@
-"""Livraison Pointeur depuis l'état réel de production : base en 20261017_0002 (main avec le journal
-du lot exceptionnel d'import des contrats, le circuit et les convocations du recrutement), peuplée, puis
-migrée jusqu'à la jonction 20261022_0001.
+"""Livraison Pointeur depuis l'état réel de production : base en 20261017_0003 (main avec le journal
+du lot exceptionnel d'import des contrats, le recrutement et le code officiel des sites), peuplée, puis
+migrée jusqu'à la jonction 20261023_0001.
 
 Données entièrement fictives. Exécuté uniquement si TEST_POSTGRES_ADMIN_URL désigne un serveur
 PostgreSQL JETABLE."""
@@ -16,7 +16,7 @@ from tests.test_pointeur_iron_emploi_merge_pg import alembic, ok, revisions, see
 
 pytestmark = pytest.mark.skipif(not os.getenv('TEST_POSTGRES_ADMIN_URL'), reason='PostgreSQL jetable requis')
 
-PRODUCTION, FINAL = '20261017_0002', '20261022_0001'
+PRODUCTION, FINAL = '20261017_0003', '20261023_0001'
 
 
 def seed_contract_import_grant(engine):

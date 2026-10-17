@@ -77,133 +77,15 @@ test('assistant responsive dans Chrome réel aux quatre étapes',{skip:!chrome||
   }finally{await browser.close()}
 });
 
-test('dérogation : préparation seulement, cellules null visibles et compteur du lot',async()=>{
-  const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-oneoff';contractExcelImport.preview={total:75,complete:1,prepared_missing:74,blocked:0,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'Préparé exceptionnellement':75},rows:[{row:2,candidate:'CANDIDAT TEST',status:'Préparé exceptionnellement',values:{start_date:null,end_date:null,position:null,client_site:null,salary:null},missing_fields:['start_date','position'],required_missing_fields:['start_date','position']}]};renderContractExcelImport()`);
-  const text=h.dom.window.document.body.textContent;
-  assert.match(text,/Dérogation exceptionnelle appliquée à ce lot uniquement/);
-  assert.match(text,/75 lignes.*1 complètes.*74 préparées avec données manquantes/s);
-  assert.match(text,/Non renseigné/);
-  assert.match(text,/Préparé exceptionnellement/);
-  assert.match(text,/Enregistrer le lot préparé/);
-  assert.doesNotMatch(text,/Créer \d+ contrats/);
-  await h.run('confirmContractExcelImport()');
-  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirm')).length,0);
-  h.run(`sgdiApi=async(path,opts)=>{if(path.endsWith('/prepare'))return {...contractExcelImport.preview,created_contracts:0,created_employees:0,created_documents:0};throw new Error('Création interdite')}`);
-  await h.run('prepareExceptionalContractExcelImport()');
-  assert.equal(h.run('contractExcelImport.step'),4);
-  assert.equal(h.run('contractExcelImport.result.created_contracts'),0);
-  assert.equal(h.run('contractExcelImport.result.rows[0].values.salary'),null);
-  assert.match(h.dom.window.document.body.textContent,/aucun contrat, employé ou document contractuel/);
-});
 
-test('dérogation : valeur présente et zéro conservés, valeurs invalides bloquent l’enregistrement',async()=>{
+test('retrait one-off : aucun bouton de reset ni action de préparation exceptionnelle',async()=>{
   const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.step=3;contractExcelImport.preview={total:1,complete:0,prepared_missing:0,blocked:1,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',counts:{'À CORRIGER':1},rows:[{row:2,status:'À CORRIGER',reason:'Client invalide',values:{start_date:'2026-10-15',position:'MAGASINIER'},missing_fields:['client_site'],required_missing_fields:['client_site']}]};renderContractExcelImport()`);
-  assert.match(h.dom.window.document.body.textContent,/MAGASINIER/);
-  const save=h.dom.window.document.querySelector('[onclick="prepareExceptionalContractExcelImport()"]');
-  assert.ok(save.disabled);
-  await h.run('prepareExceptionalContractExcelImport()');
-  assert.equal(h.calls.filter(c=>c.path.endsWith('/prepare')).length,0);
-});
-
-test('fichier exceptionnel 96 lignes : D et E, valeurs originales et compteurs de correspondance',async()=>{
-  const h=harness();await h.run('openContractExcelImport()');
-  h.run(`sgdiApi=async()=>({session_id:'contract-96',preparation_only_file:true,default_sheet:0,sheets:[{index:0,name:'Contractualisation',importable:true,row_count:96,columns:[{index:3,header:'Nom + prénom',samples:['BELARBI BABOUA'],suggested:'name'},{index:4,header:'',letter:'E',samples:['KARIM'],suggested:null},{index:5,header:'Date début',samples:['2026-07-13'],suggested:'start_date'}]}]})`);
-  await h.run("uploadContractExcelFile(new document.defaultView.File(['x'],'modele-contractualisation (1).xlsx'))");
-  assert.equal(h.run('contractExcelImport.mode'),'full');
-  assert.equal(h.run('contractExcelImport.precedence'),'excel');
-  let text=h.dom.window.document.body.textContent;
-  assert.match(text,/96 lignes.*D \(nom\).*E \(prénom sans en-tête\)/s);
-  assert.doesNotMatch(text,/Données communes/);
-  h.run(`contractExcelImport.step=3;contractExcelImport.preview={total:96,recognized:75,to_review:1,not_found:20,preparable:75,complete:0,prepared_missing:75,blocked:0,preparation_only:true,message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',rows:[{row:2,candidate:'CANDIDAT COURANT',match_status:'MATCH CERTAIN',status:'Préparé exceptionnellement',values:{start_date:'2026-07-13',position:'CARISTE',salary:55000,client_site:'DHL ORAN SOLUTION',end_date:null}},{row:3,candidate:'IDENTITE INSUFFISANTE',match_status:'À VÉRIFIER',status:'À VÉRIFIER',values:{}},{row:4,candidate:'HORS PERIMETRE',match_status:'CANDIDAT INTROUVABLE',status:'CANDIDAT INTROUVABLE',values:{}}]};renderContractExcelImport()`);
-  text=h.dom.window.document.body.textContent;
-  assert.match(text,/96 lignes/);assert.match(text,/75 MATCH CERTAIN/);
-  assert.match(text,/1 À VÉRIFIER/);assert.match(text,/20 CANDIDAT INTROUVABLE/);
-  assert.match(text,/Non renseigné/);assert.match(text,/Enregistrer le lot préparé \(75 lignes\)/);
-  assert.doesNotMatch(text,/Créer \d+ contrats/);
-  h.run(`sgdiApi=async(path)=>{if(path.endsWith('/prepare'))return {...contractExcelImport.preview,created_contracts:0,created_employees:0,created_documents:0};throw new Error('Création interdite')}`);
-  await h.run('confirmContractExcelImport()');assert.equal(h.run('contractExcelImport.step'),3);
-  await h.run('prepareExceptionalContractExcelImport()');assert.equal(h.run('contractExcelImport.step'),4);
-  assert.equal(h.run('contractExcelImport.result.created_contracts'),0);
-  assert.equal(h.run('contractExcelImport.result.rows[0].values.salary'),55000);
-});
-
-test('reset one-off : bouton uniquement pour l’erreur de réservation et un admin autorisé',async()=>{
-  const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.config.oneoff_reset_allowed=true;renderContractExcelImport()`);
+  h.run(`contractExcelImport.config.oneoff_reset_allowed=true;contractExcelImport.error='Dérogation déjà liée à une session ; réattribution interdite';renderContractExcelImport()`);
   assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-  h.run(`contractExcelImport.error='Erreur de date';renderContractExcelImport()`);
-  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-  h.run(`contractExcelImport.error='Dérogation déjà liée à une session ; réattribution interdite';contractExcelImport.config.oneoff_reset_allowed=false;renderContractExcelImport()`);
-  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-  h.run(`contractExcelImport.config.oneoff_reset_allowed=true;renderContractExcelImport()`);
-  assert.match(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-});
-
-test('reset one-off : contexte, confirmation exacte et un seul POST administratif sans création',async()=>{
-  const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.error='Dérogation déjà liée à une session ; réattribution interdite';Object.assign(contractExcelImport.config,{oneoff_reset_allowed:true,oneoff_file_sha256:'a'.repeat(64),oneoff_batch_key:'lot-test'});var resetCalls=[];var confirmation='';confirm=message=>{confirmation=message;return true};sgdiApi=async(path,options={})=>{resetCalls.push({path,options});if(path.includes('/oneoff/reset-context?'))return {old_session_id:'contract-old-test',can_reset:true};if(path.endsWith('/oneoff/reset'))return {old_session_id:'contract-old-test',status:'reset'};throw new Error('Action non autorisée')}`);
-  await h.run('resetExceptionalContractImportSession()');
-  assert.equal(h.run('confirmation'),'Cette action libère uniquement la session exceptionnelle actuelle. Aucun contrat ni employé ne sera créé. Continuer ?');
-  const calls=h.run('resetCalls');assert.equal(calls.length,2);
-  assert.match(calls[0].path,/society=SOCIETE/);
-  assert.equal(calls[1].options.method,'POST');
-  assert.equal(calls[1].options.body.old_session_id,'contract-old-test');
-  assert.equal(calls[1].options.body.file_sha256,'a'.repeat(64));
-  assert.equal(h.run('contractExcelImport.step'),1);
-  assert.equal(h.run('contractExcelImport.session_id'),null);
-  assert.match(h.dom.window.document.body.textContent,/contract-old-test libérée/);
-  assert.doesNotMatch(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-  await h.run('resetExceptionalContractImportSession()');assert.equal(h.run('resetCalls.length'),2);
-});
-
-test('reset one-off : annulation utilisateur ou session encore utilisable ne déclenche aucun POST',async()=>{
-  for(const allowed of [true,false]){
-    const h=harness();await h.run('openContractExcelImport()');
-    h.run(`contractExcelImport.error='Dérogation déjà liée à une session';Object.assign(contractExcelImport.config,{oneoff_reset_allowed:true,oneoff_file_sha256:'a'.repeat(64),oneoff_batch_key:'lot-test'});var resetPosts=0;confirm=()=>false;sgdiApi=async(path,options={})=>{if(options.method==='POST')resetPosts++;return {can_reset:${allowed},old_session_id:'contract-old-test',reason:'Ancienne session encore utilisable'}}`);
-    await h.run('resetExceptionalContractImportSession()');
-    assert.equal(h.run('resetPosts'),0);assert.equal(h.run('contractExcelImport.busy'),false);
-  }
-});
-
-
-for(const [profile,allowed] of [['RH01 H5',true],['autre Cadre H5',false],['ADMIN H5',true]])test(profile+' : échec HTTP 409 après téléversement : config H5 et erreur conservées, bouton visible à l’étape 1',async()=>{
-  const h=harness();
-  // Utiliser le vrai transport de production, avec uniquement HTTP simulé.
-  const app=fs.readFileSync('app/static/sgdi-app.js','utf8');
-  const transport=app.slice(app.indexOf('function sgdiApiErrorMessage('),app.indexOf('async function sgdiActionApi('));
-  h.run(`
-    var AbortController=document.defaultView.AbortController;
-    var console={error:()=>{}}, sgdiApiUrl=path=>path, sgdiAuthHeaders=()=>({}), sgdiAuthToken=()=>null;
-    var sgdiIsAuthFailure=()=>false, sgdiIsMutatingMethod=()=>false;
-    var fetch=async(url,opts)=>{
-      const uploading=opts.method==='POST';
-      if(uploading&&!(opts.body instanceof FormData))throw new Error('Fichier non téléversé');
-      const out=uploading?{detail:'Dérogation déjà liée à une session ; réattribution interdite'}:
-        url.endsWith('/config')?{oneoff_reset_allowed:${allowed},fields:[],limits:{extensions:['.xlsx'],max_file_mb:5,max_rows:1000}}:
-        url.includes('dc-client-sites')?{items:[]}:[];
-      return {ok:!uploading,status:uploading?409:200,text:async()=>JSON.stringify(out)};
-    };
-  `);
-  h.run(transport);
-  await h.run('openContractExcelImport()');
-  await h.run("uploadContractExcelFile(new document.defaultView.File(['workbook'],'modele-contractualisation (1).xlsx'))");
-  assert.equal(h.run('contractExcelImport.step'),1);
-  assert.equal(h.run('contractExcelImport.config.oneoff_reset_allowed'),allowed);
-  assert.match(h.run('contractExcelImport.error'),/Dérogation déjà liée/);
-  assert.equal(Boolean(h.dom.window.document.querySelector('[onclick="resetExceptionalContractImportSession()"]')),allowed);
-  if(allowed)assert.match(h.dom.window.document.body.textContent,/Réinitialiser la session exceptionnelle/);
-});
-
-
-test('exclusions provisoires : seules les 71 lignes éligibles peuvent être préparées',async()=>{
-  const h=harness();await h.run('openContractExcelImport()');
-  h.run(`contractExcelImport.step=3;contractExcelImport.session_id='contract-exclusions';contractExcelImport.preview={message:'Dérogation exceptionnelle appliquée à ce lot uniquement.',total:96,recognized:71,to_review:5,not_found:20,preparable:71,blocked:0,complete:0,prepared_missing:71,preparation_only:true,counts:{'Préparé exceptionnellement':71,'À VÉRIFIER':5,'CANDIDAT INTROUVABLE':20},rows:[{row:9,candidate:'IDENTITÉ À VÉRIFIER',candidate_id:null,excluded_candidate_id:2312,match_status:'À VÉRIFIER',status:'À VÉRIFIER',reason:'Exclusion provisoire décidée : identité à vérifier avec un employé préexistant',values:{start_date:null}}]};renderContractExcelImport()`);
-  assert.match(h.dom.window.document.body.textContent,/71 MATCH CERTAIN.*5 À VÉRIFIER.*20 CANDIDAT INTROUVABLE/s);
-  assert.match(h.dom.window.document.body.textContent,/Enregistrer le lot préparé \(71 lignes\)/);
-  assert.match(h.dom.window.document.body.textContent,/Exclusion provisoire décidée/);
-  assert.doesNotMatch(h.dom.window.document.body.textContent,/Créer \d+ contrats/);
+  assert.equal(h.run('typeof resetExceptionalContractImportSession'),'undefined');
+  assert.equal(h.run('typeof prepareExceptionalContractExcelImport'),'undefined');
+  assert.doesNotMatch(source,/oneoff\/reset|\/prepare['"`]|RH01/);
+  h.run(`contractExcelImport.step=3;contractExcelImport.preview={preparation_only:true,counts:{'PRÊT':1},rows:[]};renderContractExcelImport()`);
   await h.run('confirmContractExcelImport()');
   assert.equal(h.calls.filter(c=>c.path.endsWith('/confirm')).length,0);
 });

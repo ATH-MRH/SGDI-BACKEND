@@ -143,7 +143,7 @@ function emploiSetTab(tab){emploiState.tab=tab;renderEmploi();if(tab==="messages
 async function emploiAct(run,success){
   if(emploiState.busy)return;emploiState.busy=true;
   try{const result=await run();if(result&&result.id)emploiState.dossier=result;renderEmploi();const extra=(result?.channels||[]).join(" ");if(success||extra)showBanner([success,extra].filter(Boolean).join(" "),"success");return result}
-  catch(error){showBanner(emploiError(error),"error")}
+  catch(error){showBanner(esc(emploiError(error)),"error")}
   finally{emploiState.busy=false}
 }
 function emploiProfileHTML(d){
@@ -242,7 +242,7 @@ async function emploiFetchBlob(path,options={}){
 function emploiSaveBlob(blob,name){const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),60000)}
 async function emploiPreviewContract(){
   try{emploiSaveBlob(await emploiFetchBlob(`/applications/${emploiState.dossier.id}/contract/preview`,{method:"POST"}),`apercu-contrat-${emploiState.dossier.reference}.docx`)}
-  catch(error){showBanner(emploiError(error),"error")}
+  catch(error){showBanner(esc(emploiError(error)),"error")}
 }
 
 // ── Visionneuse ─────────────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ async function emploiOpenCandidate(id,phone){
     if(!item){showBanner("Ce dossier n’est plus dans le vivier recrutement (transmis à la DRH ou archivé).","error");return}
     if(!tabState.new.items.some(row=>Number(row.id)===Number(id)))tabState.new.items.unshift(item);
     activeTab="new";showRecruitSection("candidates",false);openCandidateForm(Number(id));
-  }catch(error){showBanner(emploiError(error),"error")}
+  }catch(error){showBanner(esc(emploiError(error)),"error")}
 }
 function emploiJourneyHTML(d){
   return `<nav class="emploi-journey" tabindex="0" aria-label="Étape actuelle de la candidature">${EMPLOI_PIPELINE_GROUPS.map(group=>`<span${group.codes.includes(d.stage)?' aria-current="step" class="current"':""}>${esc(group.label)}</span>`).join("")}</nav>`;
@@ -306,9 +306,9 @@ function emploiTipsHTML(){
 function emploiEditTip(id){const t=emploiState.tips.find(row=>row.id===id),form=document.getElementById("emploiTipForm");if(!t||!form)return;for(const key of ["id","title","summary","category","minutes","body"])form.elements[key].value=t[key];document.getElementById("emploiTipTitle").textContent="Modifier le conseil";form.querySelector("button").textContent="Enregistrer"}
 async function emploiSaveTip(form){
   const data=Object.fromEntries(new FormData(form).entries()),current=emploiState.tips.find(row=>String(row.id)===data.id),body={title:data.title,summary:data.summary,body:data.body,category:data.category,minutes:Number(data.minutes)||3,status:current?.status||"draft"};
-  try{await emploiSend(data.id?`/tips/${Number(data.id)}`:"/tips",data.id?"PUT":"POST",body);showBanner("Conseil enregistré.","success");loadEmploiTips()}catch(error){showBanner(emploiError(error),"error")}
+  try{await emploiSend(data.id?`/tips/${Number(data.id)}`:"/tips",data.id?"PUT":"POST",body);showBanner("Conseil enregistré.","success");loadEmploiTips()}catch(error){showBanner(esc(emploiError(error)),"error")}
 }
-async function emploiPublishTip(id,status){const t=emploiState.tips.find(row=>row.id===id);if(!t)return;try{await emploiSend(`/tips/${id}`,"PUT",{title:t.title,summary:t.summary,body:t.body,category:t.category,minutes:t.minutes,status});showBanner(status==="published"?"Conseil publié dans l’application.":"Conseil retiré de l’application.","success");loadEmploiTips()}catch(error){showBanner(emploiError(error),"error")}}
+async function emploiPublishTip(id,status){const t=emploiState.tips.find(row=>row.id===id);if(!t)return;try{await emploiSend(`/tips/${id}`,"PUT",{title:t.title,summary:t.summary,body:t.body,category:t.category,minutes:t.minutes,status});showBanner(status==="published"?"Conseil publié dans l’application.":"Conseil retiré de l’application.","success");loadEmploiTips()}catch(error){showBanner(esc(emploiError(error)),"error")}}
 
 // ── Sociétés et présentations ───────────────────────────────────────────────
 async function loadEmploiCompanies(){try{const [companies,meta]=await Promise.all([apiFetch(EMPLOI_API+"/companies"),apiFetch(EMPLOI_API+"/meta")]);emploiState.companies=companies.items;emploiState.logos=meta.logos||[];emploiState.error=""}catch(error){emploiState.companies=[];emploiState.error=emploiError(error)}renderEmploi()}
@@ -320,6 +320,6 @@ function emploiCompaniesHTML(){
 }
 async function emploiSaveCompany(form,id){
   const data=Object.fromEntries(new FormData(form).entries()),current=emploiState.companies.find(row=>row.id===id);
-  try{await emploiSend(`/companies/${id}`,"PUT",{...Object.fromEntries(Object.entries(data).map(([key,value])=>[key,value||null])),name:data.name,website:current?.website||null,is_active:current?.is_active!==false});showBanner("Fiche société enregistrée.","success");loadEmploiCompanies()}catch(error){showBanner(emploiError(error),"error")}
+  try{await emploiSend(`/companies/${id}`,"PUT",{...Object.fromEntries(Object.entries(data).map(([key,value])=>[key,value||null])),name:data.name,website:current?.website||null,is_active:current?.is_active!==false});showBanner("Fiche société enregistrée.","success");loadEmploiCompanies()}catch(error){showBanner(esc(emploiError(error)),"error")}
 }
 if(typeof module!=="undefined")module.exports={emploiState};
