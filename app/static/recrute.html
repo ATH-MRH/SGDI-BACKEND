@@ -164,10 +164,10 @@ tr:last-child td{border-bottom:0}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
-<link rel="stylesheet" href="/static/recrute-emploi.css?v=20261017-convocations" media="screen">
+<link rel="stylesheet" href="/static/recrute-emploi.css?v=20261017-feedback-flow" media="screen">
 <link rel="stylesheet" href="/static/recruitment-dashboard-v5.css?v=20261004-company-brand" media="screen">
 <link rel="stylesheet" href="/static/recruitment-v6.css?v=20261011-recruit-flow" media="screen">
-<link rel="stylesheet" href="/static/recrute-workspace.css?v=20261016-workspace" media="screen">
+<link rel="stylesheet" href="/static/recrute-workspace.css?v=20261017-feedback-flow" media="screen">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="recruitment" data-recruitment-ui="v5" data-recruitment-shell="v6">
@@ -445,7 +445,9 @@ function editSalaryDzd(field){
 }
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 function showBanner(message,type){
-  document.getElementById("banner").innerHTML=message?`<div class="banner ${type}">${message}</div>`:"";
+  const host=document.getElementById("banner");
+  host.innerHTML=message?`<div class="banner ${type}" role="${type==="error"?"alert":"status"}" tabindex="-1">${type==="error"?'<strong>Action impossible</strong><br>':""}${message}</div>`:"";
+  if(message&&type==="error"){host.firstElementChild?.focus({preventScroll:true});host.scrollIntoView?.({block:"center",behavior:"smooth"})}
 }
 
 async function login(){
@@ -838,6 +840,7 @@ function legacyRecruitAnnouncements(){
   try{const rows=JSON.parse(localStorage.getItem(RECRUIT_ANNOUNCEMENTS_KEY)||"[]");return Array.isArray(rows)?rows.filter(row=>row&&row.title&&row.society):[]}catch(error){return []}
 }
 async function loadRecruitAnnouncements(){
+  if(recruitAnnouncementBusy)return false;
   const request=++recruitAnnouncementRequest;
   try{
     const [list,meta]=await Promise.all([apiFetch(ANNOUNCEMENT_API),apiFetch(ANNOUNCEMENT_API+"/meta")]);
@@ -887,28 +890,45 @@ function announcementPayload(data){
     salary_amount:String(data.salary_amount??"").trim()===""?null:Number(data.salary_amount),salary_period:data.salary_period||null};
 }
 function announcementErrorText(error){const message=error?.message;return Array.isArray(message)?message.map(item=>item?.msg||String(item)).join(" ; "):String(message||"Une erreur est survenue")}
+function showAnnouncementFailure(error,{publication=false,item=null}={}){
+  const message=announcementErrorText(error);
+  if(publication&&item){
+    openAnnouncementForm(item.id);
+    for(const [name,id] of [["title","annTitle"],["wilaya","annWilaya"],["contract_type","annContract"],["missions","annMissions"],["profile","annProfile"]]){
+      if(String(item[name]||"").trim())continue;
+      const field=document.getElementById(id);
+      if(field){field.setAttribute("aria-invalid","true");field.setAttribute("aria-describedby","announcementFormError");field.addEventListener("input",()=>field.removeAttribute("aria-invalid"),{once:true})}
+    }
+  }
+  const box=document.getElementById("announcementFormError");
+  const text=(publication?"Publication impossible : ":"Enregistrement impossible : ")+message;
+  if(box){box.textContent=text;box.classList.add("show");box.tabIndex=-1;box.focus({preventScroll:true});box.scrollIntoView?.({block:"center",behavior:"smooth"})}
+  else showBanner(esc(text),"error");
+}
 async function saveRecruitAnnouncement(form){
   if(recruitAnnouncementBusy)return;
   const data=Object.fromEntries(new FormData(form).entries()),box=document.getElementById("announcementFormError"),button=form.querySelector('button[type="submit"]');
-  recruitAnnouncementBusy=true;if(button)button.disabled=true;if(box)box.classList.remove("show");
+  recruitAnnouncementBusy=true;recruitAnnouncementRequest++;if(button)button.disabled=true;if(box)box.classList.remove("show");
   try{
     const saved=await apiFetch(data.id?`${ANNOUNCEMENT_API}/${Number(data.id)}`:ANNOUNCEMENT_API,{method:data.id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(announcementPayload(data))});
+    recruitAnnouncementRequest++;
+    if(portfolioSociety()&&recruitmentSocietyKey(saved.society)!==recruitmentSocietyKey(portfolioSociety())){activeSociety="";const select=document.getElementById("societySelect");if(select)select.value="";updateRecruitmentBrand()}
     const index=recruitAnnouncements.findIndex(row=>Number(row.id)===Number(saved.id));
     if(index>=0)recruitAnnouncements[index]=saved;else recruitAnnouncements.unshift(saved);
     renderRecruitAnnouncements();showBanner(data.id?"Annonce enregistrée.":"Brouillon enregistré. Publiez-le pour le rendre visible des candidats.","success");
-  }catch(error){if(box){box.textContent=announcementErrorText(error);box.classList.add("show")}if(button)button.disabled=false}
+  }catch(error){showAnnouncementFailure(error);if(button)button.disabled=false}
   finally{recruitAnnouncementBusy=false}
 }
 async function setAnnouncementStatus(id,action){
   const item=announcementById(id);if(!item||recruitAnnouncementBusy||!recruitmentCan("update"))return;
   if(action==="close"&&!confirm(`Clôturer « ${item.title} » ? Elle ne sera plus visible et n’acceptera plus de candidature.`))return;
   if(action==="publish"&&!confirm(`Publier « ${item.title} » ? Elle sera visible de tous dans l’application IRON Emploi.`))return;
-  recruitAnnouncementBusy=true;
+  recruitAnnouncementBusy=true;recruitAnnouncementRequest++;
   try{
     const saved=await apiFetch(`${ANNOUNCEMENT_API}/${Number(id)}/${action==="close"?"close":"publish"}`,{method:"POST"});
     recruitAnnouncements[recruitAnnouncements.findIndex(row=>Number(row.id)===Number(id))]=saved;
     renderRecruitAnnouncements();showBanner(action==="close"?"Annonce clôturée.":"Annonce publiée.","success");
-  }catch(error){showBanner(announcementErrorText(error),"error")}
+  }catch(error){showAnnouncementFailure(error,{publication:action==="publish",item})}
   finally{recruitAnnouncementBusy=false}
 }
 async function deleteRecruitAnnouncement(id){
@@ -1827,8 +1847,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(recruteSession?.token)enterApp();
 });
 </script>
-<script src="/static/recrute-emploi.js?v=20261017-convocations"></script>
-<script src="/static/recrute-convocations.js?v=20261017-convocations"></script>
+<script src="/static/recrute-emploi.js?v=20261017-feedback-flow"></script>
+<script src="/static/recrute-convocations.js?v=20261017-feedback-flow"></script>
 <script src="/static/recrute-retention.js?v=20261011-retention"></script>
 <script src="/static/recrute-import.js?v=20261007-import-excel"></script>
 </body>

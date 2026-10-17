@@ -112,6 +112,7 @@ function startServer(state) {
     }
     if(url.pathname==='/api/drh/job-offers/workspace')return json(applicationFixtures(state));
     if(/^\/api\/drh\/job-offers\/applications\/\d+$/.test(url.pathname)){
+      if(state.convocationDossier)return json(state.convocationDossier);
       const item=applicationFixtures(state).items[0];
       return json({...item,profile:item.candidate,dossier_state:{code:'review',label:'En cours d’étude'},documents:[{id:1,label:'CV',name:'cv-demo.pdf',mime_type:'application/pdf',size:1024,source:'candidature',received_at:item.received_at}],
         document_requests:[],notes:[],history:[],interviews:[],other_applications:[],dossier_cv:null,contract:null,drh_transfer:null});
@@ -508,6 +509,32 @@ test('Chrome réel — rubrique unifiée, pipeline, sept onglets du dossier et c
       await page.evaluate(()=>showRecruitSection('retention'));await page.waitForSelector('.retention-mode');await check('conservation');
       await shot(page,`conservation-${width}`);
       assert.deepEqual(errors,[],`${width}: erreurs JS`);await page.close();
+    }
+  });
+});
+
+
+test('Chrome réel — sidebar DRH/OPS et convocation: prochaine étape, PDF direct et compte rendu avant l’heure', {skip:SKIP,timeout:120000},async()=>{
+  await withApp('many',['read','create','update'],async({browser,base,state})=>{
+    const item=applicationFixtures(state).items[0];
+    state.convocationDossier={...item,profile:item.candidate,dossier_state:{code:'review',label:'En cours d’étude'},documents:[],document_requests:[],notes:[],history:[],other_applications:[],contract:null,drh_transfer:null,
+      convocation_defaults:{candidate:'Candidat Démo',has_account:true},interviews:[{id:1,reference:'CONV-DEMO-1',version:1,status:'proposed',starts_at:'2026-11-19T10:00:00',location:'Siège',address:'Adresse de démonstration',candidate_state:'new',candidate_state_label:'Nouvelle',viewed_by_candidate:false,confirmed_at:null,past:false,can_confirm_arrival:false,versions:[{version:1,state:'active',starts_at:'2026-11-19T10:00:00',issued_at:'2026-10-17',issued_by:'Démo'}]}]};
+    for(const width of [1440,1024,768,390]){
+      const {page,errors}=await openApp(browser,base,state.data.announcements,width);
+      const sidebar=await page.$eval('.recruit-sidebar',el=>({background:getComputedStyle(el).backgroundImage,color:getComputedStyle(el).color,icons:[...el.querySelectorAll('.recruit-nav-icon')].map(n=>getComputedStyle(n).display)}));
+      assert.match(sidebar.background,/linear-gradient.*rgb\(10, 45, 107\)/);
+      assert.equal(sidebar.color,'rgb(255, 255, 255)');assert.ok(sidebar.icons.every(display=>display==='none'));
+      await page.evaluate(()=>openEmploiDossier(1,'interviews'));await page.waitForSelector('.conv-card');
+      assert.match(await page.$eval('.conv-next',el=>el.innerText),/En attente de confirmation/);
+      assert.equal(await page.$eval('[onclick="convOutcomeForm(1)"]',el=>el.disabled),true);
+      assert.equal(await page.$$eval('.conv-document-actions button',nodes=>nodes.length),2);
+      assert.match(await page.$eval('.conv-head',el=>el.innerText),/Planifier un autre entretien/);
+      const layout=await page.evaluate(inspectLayout);assert.ok(layout.scrollWidth<=width);assert.deepEqual(layout.outside,[]);
+      await shot(page,`convocation-parcours-${width}`);
+      await page.evaluate(()=>{emploiState.dossier.interviews[0].past=true;emploiState.dossier.interviews[0].can_confirm_arrival=true;renderEmploi()});
+      assert.equal(await page.$eval('[onclick="convOutcomeForm(1)"]',el=>el.disabled),false);
+      await page.click('[onclick="convOutcomeForm(1)"]');await page.waitForSelector('#convOutcome1 form');
+      assert.deepEqual(errors,[]);await page.close();
     }
   });
 });
