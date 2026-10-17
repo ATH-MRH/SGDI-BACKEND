@@ -16,7 +16,12 @@ function sgdiBrowserModuleLabel(){
 function sgdiApplyBrowserTitle(){
   const label=sgdiBrowserModuleLabel();
   if(label==="DHL FORWARDING")return;
-  if(window.__BADGE_AUTONOMOUS_APP__){try{document.title="STUDIO BADGES — IRON GLOBAL"}catch(_e){}return}
+  if(window.__BADGE_AUTONOMOUS_APP__){
+    try{document.title="STUDIO BADGES — IRON GLOBAL"}catch(_e){}
+    // Écran demandé (ex. bouton de la fiche employé) : retrouvé après la connexion et le choix de société.
+    try{if(/^#\/drh\/badges\/[a-z]/.test(location.hash||""))sessionStorage.setItem("badgePortalTarget",location.hash)}catch(_e){}
+    return;
+  }
   try{document.title=label+" — Suite de gestion intégrée"}catch(_e){}
 }
 sgdiApplyBrowserTitle();
@@ -4488,6 +4493,20 @@ function mySoc(){return session?.societe||""}
 // (OPS, Matériel, Administration) n'ont pas accès aux routes DRH et gardent l'écran historique.
 function badgeStudioAvailable(){return session?.transverse==="drh"}
 function badgeStudioRoute(a){return "drh/badges/creer"+(a&&a.backendId?"/"+encodeURIComponent(a.backendId):"")}
+/* Gestion des badges : portail dédié https://badge.irongs.com sur les domaines de production
+   (*.irongs.com). Ailleurs (poste de développement), l'écran reste servi sur place. Seule une
+   route est transmise (identifiant interne de l'employé) : ni jeton ni donnée personnelle. */
+function badgePortalUrl(route){
+  const host=String(location.hostname||"").toLowerCase();
+  if(!host.endsWith(".irongs.com")||host==="badge.irongs.com")return null;
+  return "https://badge.irongs.com/#/"+String(route||"drh/badges/dashboard").replace(/^#?\/?/,"");
+}
+function openBadgeStudio(route){
+  const url=badgePortalUrl(route);
+  if(!url){navigate(route);return}
+  const win=window.open(url,"_blank","noopener");
+  if(!win)location.assign(url);
+}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
 function globalSocieteBandHTML(){
   if(!session)return"";
@@ -6856,6 +6875,8 @@ function renderInternal(options={}){
   }
   if(window.__BADGE_AUTONOMOUS_APP__&&session.transverse==="badge"){
     // badge.irongs.com : uniquement les écrans du Studio Badges (#/drh/badges/…).
+    let target="";try{target=sessionStorage.getItem("badgePortalTarget")||"";sessionStorage.removeItem("badgePortalTarget")}catch(_e){}
+    if(target&&/^#\/drh\/badges\/[a-z]/.test(target)&&location.hash!==target){location.hash=target;return}
     if(!/^drh\/badges(\/|$)/.test((location.hash||"").slice(2))){location.hash="#/drh/badges/dashboard";return}
     renderBadgeStandaloneShell();return;
   }
@@ -7580,15 +7601,7 @@ function renderSidebar(){
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)})()},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length})()},
         {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length})()},
-        // Studio Badges DRH : une rubrique par écran, toutes sous #/drh/badges/…
-        {label:"TABLEAU DE BORD",route:"drh/badges/dashboard",group:"GESTION DES BADGES"},
-        {label:"CRÉER UN BADGE",route:"drh/badges/creer",group:"GESTION DES BADGES"},
-        {label:"BADGES DU PERSONNEL",route:"drh/badges/personnel",group:"GESTION DES BADGES"},
-        {label:"STUDIO DE CONCEPTION",route:"drh/badges/studio",group:"GESTION DES BADGES"},
-        {label:"MODÈLES",route:"drh/badges/modeles",group:"GESTION DES BADGES"},
-        {label:"IMPRESSION EN LOT",route:"drh/badges/lot",group:"GESTION DES BADGES"},
-        {label:"HISTORIQUE",route:"drh/badges/historique",group:"GESTION DES BADGES"},
-        {label:"PARAMÈTRES",route:"drh/badges/parametres",group:"GESTION DES BADGES"}
+        // Gestion des badges : portail dédié badge.irongs.com (bouton de la fiche employé).
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
@@ -13927,7 +13940,7 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}${badgeStudioAvailable()&&a.backendId?`<button class="btn text-xs" style="${ficheTopButtonStyle}" data-badge-studio-link onclick="navigate(badgeStudioRoute(db.agents.find(x=>x.id==='${a.id}')))">Créer / gérer le badge</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}${badgeStudioAvailable()&&a.backendId?`<button class="btn text-xs" style="${ficheTopButtonStyle}" data-badge-studio-link onclick="openBadgeStudio(badgeStudioRoute(db.agents.find(x=>x.id==='${a.id}')))">Créer / gérer le badge</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">

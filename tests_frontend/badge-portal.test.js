@@ -60,3 +60,42 @@ test('only badge routes are served on the portal host', () => {
   assert.equal(w.location.hash, '#/drh/badges/dashboard');
   app.window.close();
 });
+
+// ── Phase B : DRH renvoie vers le portail ──
+function hostApp(url) {
+  const app = loadSgdiApp(['badgePortalUrl', 'openBadgeStudio', 'badgeStudioRoute', 'renderInternal'], { url });
+  assert.equal(app.loadError, null);
+  return app;
+}
+
+test('production DRH hosts point badge management to badge.irongs.com, never with a token', () => {
+  const drh = hostApp('https://drh.irongs.com/#/drh/dashboard');
+  const t = drh.T();
+  assert.equal(t.badgePortalUrl('drh/badges/creer/42'), 'https://badge.irongs.com/#/drh/badges/creer/42');
+  assert.equal(t.badgePortalUrl(), 'https://badge.irongs.com/#/drh/badges/dashboard');
+  assert.equal(t.badgeStudioRoute({ backendId: 42, id: 'ag1', nom: 'X' }), 'drh/badges/creer/42');
+  let opened = null;
+  drh.window.open = (url, target, features) => { opened = [url, target, features]; return {}; };
+  t.openBadgeStudio('drh/badges/creer/42');
+  assert.equal(JSON.stringify(opened), JSON.stringify(['https://badge.irongs.com/#/drh/badges/creer/42', '_blank', 'noopener']));
+  drh.window.close();
+  for (const url of ['http://localhost:8000/', 'https://badge.irongs.com/']) {
+    const other = hostApp(url);
+    assert.equal(other.T().badgePortalUrl('drh/badges/creer/1'), null, url);   // développement et portail : écran servi sur place
+    other.window.close();
+  }
+});
+
+test('the portal opens the requested screen after login and society selection', () => {
+  const app = loadSgdiApp(['renderInternal'], { url: 'https://badge.irongs.com/#/drh/badges/creer/42' });
+  app.window.__BADGE_AUTONOMOUS_APP__ = true;
+  app.window.sessionStorage.setItem('badgePortalTarget', '#/drh/badges/creer/42');
+  const t = app.T();
+  t.setSession({ username: 'DRH01', nom: 'Recette', role: 'drh', societe: 'IRON GLOBAL SÉCURITÉ', transverse: 'badge', permissionsFromServer: true, effectiveModules: ['drh'] });
+  app.window.location.hash = '#/drh/badges/dashboard';
+  app.window.renderView = () => {};
+  t.renderInternal();
+  assert.equal(app.window.location.hash, '#/drh/badges/creer/42');
+  assert.equal(app.window.sessionStorage.getItem('badgePortalTarget'), null);          // utilisé une seule fois
+  app.window.close();
+});
