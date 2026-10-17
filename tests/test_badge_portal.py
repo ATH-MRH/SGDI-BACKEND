@@ -38,26 +38,47 @@ def test_badge_host_serves_the_same_versioned_app_marked_as_badge_portal(client)
     assert portal.headers["cache-control"].startswith("no-cache")
 
 
-def test_login_on_the_badge_host_requires_the_drh_module(client, db):
-    assert _login(client, _user(db, modules=["drh"]), "badge.irongs.com").status_code == 200
-    refused = _login(client, _user(db, modules=["commercial"]), "badge.irongs.com")
-    assert refused.status_code == 403
-    assert _login(client, _user(db, modules=["badge"]), "badge.irongs.com").status_code == 403   # aucune clé « badge » propre
+def test_login_on_the_badge_host_requires_the_dedicated_badge_module(client, db):
+    assert _login(client, _user(db, modules=["badge"]), "badge.irongs.com").status_code == 200          # module Studio Badges
+    assert _login(client, _user(db, modules=["drh"]), "badge.irongs.com").status_code == 403            # DRH seul : refusé
+    assert _login(client, _user(db, modules=["commercial"]), "badge.irongs.com").status_code == 403
     legacy_ok = _user(db, modules=None, username=f"DRH{uuid.uuid4().int % 10**5:05d}")
     legacy_ko = _user(db, modules=None, username=f"COM{uuid.uuid4().int % 10**5:05d}")
-    assert _login(client, legacy_ok, "badge.irongs.com").status_code == 200
+    assert _login(client, legacy_ok, "badge.irongs.com").status_code == 200                            # comptes historiques DRH
     assert _login(client, legacy_ko, "badge.irongs.com").status_code == 403
+    assert _login(client, _user(db, modules=["badge"]), "drh.irongs.com").status_code == 403            # et l'inverse
 
 
-def test_badge_api_is_identical_on_the_portal_host(client, db, drh):
+def _token(client, name):
+    return {"Authorization": "Bearer " + client.post("/api/auth/login", json={"username": name, "password": "portail-badge-1"}).json()["access_token"]}
+
+
+def test_badge_api_requires_the_badge_module_on_every_host(client, db, drh):
     emp = _employee(db)
     for host in (BADGE, DRH):
         headers = {**drh, **host}
         assert client.get(f"{API}/permissions", headers=headers).json() == {"create": True, "validate": True, "export": True, "admin": True}
         assert client.get(f"{API}/employees/{emp.id}", headers=headers).status_code == 200
-    outsider = _user(db, modules=["commercial"])
-    token = client.post("/api/auth/login", json={"username": outsider, "password": "portail-badge-1"}).json()["access_token"]
-    assert client.get(f"{API}/dashboard", headers={"Authorization": f"Bearer {token}", **BADGE}).status_code == 403
+    badge_only = _token(client, _user(db, modules=["badge"]))
+    assert client.get(f"{API}/dashboard", headers={**badge_only, **BADGE}).status_code == 200            # sans module DRH
+    assert client.get(f"{API}/employees/{emp.id}", headers=badge_only).status_code == 200
+    assert client.post(f"{API}/preview/pdf", json={"employee_id": emp.id}, headers=badge_only).status_code == 200
+    assert client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=badge_only).status_code == 403   # droits badges requis
+    drh_only = _token(client, _user(db, modules=["drh"]))
+    assert client.get(f"{API}/dashboard", headers={**drh_only, **DRH}).status_code == 403              # DRH seul : plus d'accès
+    assert client.get("/api/drh/employees", headers=drh_only).status_code != 403                       # le reste de la DRH inchangé
+    outsider = _token(client, _user(db, modules=["commercial"]))
+    assert client.get(f"{API}/dashboard", headers={**outsider, **BADGE}).status_code == 403
+
+
+def test_admin_catalog_presents_studio_badges_as_its_own_module():
+    from app.core.permission_catalog import catalog_entries
+
+    entries = {entry["entry_key"]: entry for entry in catalog_entries()}
+    badge = entries["badge"]
+    assert badge["label"] == "Studio Badges" and badge["domain"] == "badge.irongs.com" and badge["module_key"] == "drh"
+    assert [feature["feature_key"] for feature in badge["features"]] == ["badges"]                      # stockage inchangé : drh/badges
+    assert "badges" not in [feature["feature_key"] for feature in entries["drh"]["features"]]
 
 
 def test_dashboard_counts_the_badge_fleet_and_filters_by_site(client, db, drh):

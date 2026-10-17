@@ -33,6 +33,9 @@ SOCIETY_SCOPED_PREFIXES = (
 # panneau Administration systeme; aucune seconde source d'autorisation n'est
 # introduite ici.
 API_MODULE_PREFIXES: tuple[tuple[str, frozenset[str]], ...] = (
+    # Studio Badges : module dédié « badge » (badge.irongs.com), distinct de DRH. Doit précéder
+    # « /api/drh » : cocher DRH seul ne donne pas accès aux badges.
+    ("/api/drh/badges", frozenset({"badge"})),
     ("/api/drh/candidates", frozenset({"drh", "recrute"})),
     ("/api/drh/job-offers", frozenset({"drh", "recrute"})),
     ("/api/drh/recruitment-retention", frozenset({"drh", "recrute"})),

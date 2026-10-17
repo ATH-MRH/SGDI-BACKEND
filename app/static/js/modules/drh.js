@@ -254,7 +254,13 @@ function renderDRHPeriodeEssai(view){
 
 function renderDRH(view,sub,arg){
   // Studio Badges : ses écrans lisent leur propre API ; pas de rechargement complet des employés.
-  if(sub==="badges")return renderBadgeStudio(view,arg||"dashboard");
+  if(sub==="badges"){
+    // Phase B : sur les domaines de production, la gestion des badges vit sur badge.irongs.com ;
+    // les anciennes adresses #/drh/badges/… y renvoient (même écran, même paramètre).
+    const portal=typeof badgePortalUrl==="function"?badgePortalUrl(/^#\/drh\/badges\//.test(location.hash||"")?location.hash.slice(2):"drh/badges/"+(arg||"dashboard")):null;
+    if(portal){view.innerHTML=`<div class="card p-6"><h2 class="text-lg font-bold mb-2">Gestion des badges</h2><p class="mb-3">La gestion des badges dispose désormais de son portail dédié.</p><a class="btn btn-primary" href="${portal}">Ouvrir badge.irongs.com</a></div>`;location.replace(portal);return}
+    return renderBadgeStudio(view,arg||"dashboard");
+  }
   sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="conges")return renderCongesModule(view,true);

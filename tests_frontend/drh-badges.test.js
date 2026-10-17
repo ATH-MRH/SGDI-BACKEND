@@ -62,15 +62,15 @@ test("badge modules are lazy dependencies of the DRH module, under the DRH route
   assert.deepEqual(Array.from(w.SGDIModules.getModule("badges").dependencies), ["badges-studio"]);
   assert.equal(w.SGDIModules.moduleKeyForRoute("badges"), null);
   assert.match(DRH, /dependencies: \["drh-dashboard", "leaves", "badges"\]/);
-  assert.match(DRH, /if\(sub==="badges"\)return renderBadgeStudio\(view,arg\|\|"dashboard"\);\n  sgdiEnsureEmployeesForDisplay/);
+  assert.match(DRH, /if\(sub==="badges"\)\{[\s\S]*?return renderBadgeStudio\(view,arg\|\|"dashboard"\);\n  \}\n  sgdiEnsureEmployeesForDisplay/);
   dom.window.close();
 });
 
-test("the DRH sidebar lists the eight badge screens and the employee sheet links to the studio", () => {
-  const routes = [...SHELL.matchAll(/route:"(drh\/badges\/[a-z]+)",group:"GESTION DES BADGES"/g)].map(m => m[1]);
-  assert.deepEqual(routes, ["dashboard", "creer", "personnel", "studio", "modeles", "lot", "historique", "parametres"].map(r => "drh/badges/" + r));
+test("the DRH sidebar no longer lists badge screens; the employee sheet opens the badge portal", () => {
+  assert.equal([...SHELL.matchAll(/group:"GESTION DES BADGES"/g)].length, 0);              // phase B : portail badge.irongs.com
   assert.ok(SHELL.includes("data-badge-studio-link") && SHELL.includes(">Créer / gérer le badge</button>"));
-  assert.ok(POSITIONS.includes('sub==="badge"){if(typeof badgeStudioAvailable==="function"&&badgeStudioAvailable()){location.replace('));
+  assert.ok(SHELL.includes(`onclick="openBadgeStudio(badgeStudioRoute(`));
+  assert.ok(POSITIONS.includes('sub==="badge"){if(typeof badgeStudioAvailable==="function"&&badgeStudioAvailable()){const portal=typeof badgePortalUrl==="function"?badgePortalUrl(badgeStudioRoute()):null;location.replace(portal||'));
 });
 
 test("a badge face is drawn from the design with escaped employee values", () => {
