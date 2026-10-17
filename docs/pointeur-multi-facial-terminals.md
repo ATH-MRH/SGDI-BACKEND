@@ -80,10 +80,16 @@ Au clic sur **Reconnaissance faciale** :
 1. `GET /api/biometrics/pointer/terminals[?site_id=&society=]` — équipements appairés, actifs,
    autorisés pour le compte et du périmètre sélectionné (tous les sites autorisés si aucun site
    n'est choisi). La réponse ne contient ni adresse, ni identifiant de connexion, ni clé.
-2. Tableau à cases à cocher : **Terminal | Site | État | Dernière activité**, « Sélectionner tout »,
-   « Désélectionner tout », « Activer les terminaux sélectionnés », « Arrêter la surveillance ».
+2. Zone **Mes équipements** — tableau à cases à cocher : **Équipement · type | Site | État ·
+   disponibilité | Dernière activité**, « Sélectionner tout », « Désélectionner tout », « Utiliser
+   les équipements sélectionnés », « Arrêter la surveillance ». Les équipements affectés mais
+   inutilisables (`unavailable` : révoqué, désactivé, non appairé, facial coupé) restent affichés
+   avec leur motif, sans case active. Un équipement choisi hors ligne déclenche une alerte.
    Compteurs : sélectionnés, actifs, hors ligne, dernier événement. La sélection est mémorisée
-   dans le navigateur ; elle est toujours recontrôlée par le serveur.
+   dans le navigateur **par compte** (`atlas_pointer_equipment:<compte>`) ; ce n'est qu'une
+   préférence d'affichage, toujours recontrôlée par le serveur. Sans aucun équipement affecté :
+   « Aucun équipement affecté à votre compte. Contactez l'Administration Système. » ; en mode
+   facial sans équipement utilisable, l'état du poste n'affiche jamais « Système opérationnel ».
 3. `POST /api/biometrics/pointer/terminals/activate` — **un résultat par équipement** :
    `ACTIVATED` (caméra), `MONITORED` (borne autonome, avec son état réel), `REFUSED` avec un code
    (`NOT_AUTHORIZED`, `REVOKED`, `NOT_PAIRED`, `DISABLED`, `FACIAL_OFF`, `ENGINE_UNAVAILABLE`).

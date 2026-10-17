@@ -21,7 +21,7 @@ function facialServer(state) {
       if (state.listStatus) return json({ detail: state.listDetail || 'Site non autorisé pour ce compte Pointeur' }, state.listStatus);
       const site = u.searchParams.get('site_id');
       const rows = state.devices.filter((d) => !site || String(d.site_id) === site);
-      return json({ server_time: '2026-10-09T14:00:00+01:00', engine: state.engine, terminals: rows,
+      return json({ server_time: '2026-10-09T14:00:00+01:00', engine: state.engine, terminals: rows, unavailable: state.unavailable || [],
         authorized_total: state.authorizedTotal == null ? rows.length : state.authorizedTotal, last_event: state.lastEvent || null });
     }
     if (u.pathname === '/api/biometrics/pointer/terminals/activate') {

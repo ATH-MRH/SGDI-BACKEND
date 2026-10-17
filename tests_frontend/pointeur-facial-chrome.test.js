@@ -142,7 +142,7 @@ for (const width of WIDTHS) {
       assert.ok(!out.later.buttons.some((b) => /appair|associer/i.test(b)), 'aucun bouton d\'appairage dans Pointeur');
       if (cameras.length) {
         assert.deepEqual(out.listed.rows.map((r) => [r[0], r[2]]), [['cam:7', false], ['cam:8', false], ['trm:3', false]], 'liste à cocher, rien de présélectionné');
-        assert.deepEqual(out.later.buttons, ['Sélectionner tout', 'Désélectionner tout', 'Activer les terminaux sélectionnés', 'Arrêter la surveillance']);
+        assert.deepEqual(out.later.buttons, ['Sélectionner tout', 'Désélectionner tout', 'Utiliser les équipements sélectionnés', 'Arrêter la surveillance']);
         assert.deepEqual(out.later.rows.map((r) => r[2]), [true, true, true]);
         assert.match(out.later.rows[0][1], /^Actif/); assert.match(out.later.rows[1][1], /^Actif/); assert.match(out.later.rows[2][1], /^Actif · au repos/);
         assert.equal(out.later.counters, '3/3/0', 'sélectionnés / actifs / hors ligne');
@@ -159,7 +159,7 @@ for (const width of WIDTHS) {
         assert.match(out.after.status, /PRÊT — placez-vous face à la caméra/);
       } else {
         assert.equal(out.after.recognize, 0); assert.equal(out.after.stage, null, 'aucun cadre noir sans source vidéo');
-        assert.match(out.after.status, /AUCUN TERMINAL AUTORISÉ Aucun terminal de reconnaissance faciale n'est autorisé pour ce compte/);
+        assert.match(out.after.status, /AUCUN ÉQUIPEMENT AFFECTÉ Aucun équipement affecté à votre compte/);
         assert.deepEqual(out.after.buttons, [], 'aucune action proposée');
         assert.ok(out.after.boxes.faceView.height < 220, `état compact (${out.after.boxes.faceView.height}px)`);
       }
