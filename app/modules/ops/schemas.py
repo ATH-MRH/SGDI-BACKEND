@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+import re
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 _UPPERCASE_FIELDS = {"name", "client_name", "commune", "wilaya", "position", "society", "indicatif"}
 
@@ -17,9 +19,32 @@ class _UpperMixin(BaseModel):
         return data
 
 
-class SiteBase(_UpperMixin):
+# Code officiel : lettres, chiffres et séparateurs usuels (ETP/DF/H01). Jamais déduit du nom.
+_OFFICIAL_CODE_RE = re.compile(r"^[A-Z0-9](?:[A-Z0-9/ ._-]{0,48}[A-Z0-9])?$")
+
+
+def clean_official_code(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = re.sub(r"\s+", " ", str(value).strip().upper())
+    if not text:
+        return None
+    if not _OFFICIAL_CODE_RE.match(text):
+        raise ValueError("Code officiel du site invalide : lettres, chiffres et / - . _ (50 caractères au plus), ex. ETP/DF/H01.")
+    return text
+
+
+class _OfficialCodeMixin(BaseModel):
+    @field_validator("official_code", mode="before", check_fields=False)
+    @classmethod
+    def _official_code(cls, value: Any) -> str | None:
+        return clean_official_code(value)
+
+
+class SiteBase(_OfficialCodeMixin, _UpperMixin):
     name: str
     indicatif: str | None = None
+    official_code: str | None = None
     client_name: str | None = None
     client_id: int | None = None
     address: str | None = None
@@ -41,9 +66,10 @@ class SiteCreate(SiteBase):
     pass
 
 
-class SiteUpdate(_UpperMixin):
+class SiteUpdate(_OfficialCodeMixin, _UpperMixin):
     name: str | None = None
     indicatif: str | None = None
+    official_code: str | None = None
     client_name: str | None = None
     client_id: int | None = None
     address: str | None = None

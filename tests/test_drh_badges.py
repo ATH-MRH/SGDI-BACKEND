@@ -33,12 +33,13 @@ def _jpeg(size=(300, 400), colour="white"):
     return out.getvalue()
 
 
-def _employee(db, *, society=SOC, photo=True, status="actif", indicatif="ETP/DF/H01"):
+def _employee(db, *, society=SOC, photo=True, status="actif", official_code="ETP/DF/H01", indicatif="RACHID (HAROUN-HICHEM)"):
     emp = Employee(code=f"BG{_tag()}", first_name="Mohamed", last_name=f"Abdelkader{_tag()}", society=society,
                    status=status, position="Agent")
     db.add(emp)
     db.flush()
-    site = Site(name=f"Site {_tag()}", indicatif=indicatif, active=1, equipment_plan={"societe": society})
+    # Indicatif radio ≠ code officiel : le badge n'imprime que le code officiel.
+    site = Site(name=f"Site {_tag()}", indicatif=indicatif, official_code=official_code, active=1, equipment_plan={"societe": society})
     db.add(site)
     db.flush()
     db.add(Assignment(employee_id=emp.id, site_id=site.id, group_code="A", position="Cariste", start_date=date(2026, 1, 1), active=1))
@@ -307,34 +308,32 @@ def test_society_scope_and_roles(client, db, drh):
     assert client.get(f"{API}", headers=other).json()["total"] == 0
     assert client.get(f"{API}/history", headers=other).json()["total"] == 0
 
-    reader = _login(client, db, role="drh", societies=[SOC], rights=())            # accès au module DRH seul : consultation
-    assert client.get(f"{API}", headers=reader).json()["total"] == 1
-    assert client.get(f"{API}/permissions", headers=reader).json() == {"create": False, "validate": False, "export": False, "admin": False}
-    assert client.get(f"{API}/employees/{mine.id}", headers=reader).json()["rights"]["create"] is False
+    # Module Studio Badges sans permission explicite : droit opérationnel (émettre, imprimer) ;
+    # révocation, modèles partagés et paramètres restent réservés.
+    operator = _login(client, db, role="drh", societies=[SOC], rights=())
+    assert client.get(f"{API}", headers=operator).json()["total"] == 1
+    rights = client.get(f"{API}/permissions", headers=operator).json()
+    assert {key: rights[key] for key in ALL_RIGHTS} == {"create": True, "validate": False, "export": True, "admin": False}
+    assert rights["operational"] is True and set(rights["reasons"]) == {"validate", "admin"}
+    assert client.get(f"{API}/employees/{mine.id}", headers=operator).json()["rights"]["create"] is True
     refused = {
-        "issue": client.post(f"{API}/issue", json={"employee_id": mine.id}, headers=reader),
-        "issue-batch": client.post(f"{API}/issue-batch", json={"employee_ids": [mine.id], "skip_existing": False}, headers=reader),
-        "print": client.post(f"{API}/print/pdf", json={"badge_ids": [badge["id"]]}, headers=reader),
-        "revoke": client.post(f"{API}/{badge['id']}/revoke", json={"reason": "perdu"}, headers=reader),
-        "settings": client.put(f"{API}/settings", json={"society": SOC, "data": {}}, headers=reader),
-        "template": client.post(f"{API}/templates", json={"name": "x", "society": SOC, "design": badge["design"]}, headers=reader),
-        "duplicate": client.post(f"{API}/templates/{badge['template_id']}/duplicate", headers=reader),
+        "revoke": client.post(f"{API}/{badge['id']}/revoke", json={"reason": "perdu"}, headers=operator),
+        "settings": client.put(f"{API}/settings", json={"society": SOC, "data": {}}, headers=operator),
+        "template": client.post(f"{API}/templates", json={"name": "x", "society": SOC, "design": badge["design"]}, headers=operator),
+        "duplicate": client.post(f"{API}/templates/{badge['template_id']}/duplicate", headers=operator),
     }
     assert {name: resp.status_code for name, resp in refused.items()} == dict.fromkeys(refused, 403)
-    assert "Permission explicite requise" in refused["issue"].json()["detail"]
+    assert "Révocation réservée aux responsables habilités" in refused["revoke"].json()["detail"]
     db.expire_all()
     assert db.get(EmployeeBadge, badge["id"]).status == "ACTIF" and db.get(EmployeeBadge, badge["id"]).print_count == 0
-    assert db.execute(select(AuditEvent).where(AuditEvent.action == "authorization.badge", AuditEvent.resource_id == "badges:create",
+    assert db.execute(select(AuditEvent).where(AuditEvent.action == "authorization.badge", AuditEvent.resource_id == "badges:validate",
                                                AuditEvent.result == "refused")).first()
 
-    issuer = _login(client, db, role="agent", societies=[SOC], rights=("create",))  # une permission n'en donne pas une autre
+    issuer = _login(client, db, role="agent", societies=[SOC], rights=("create",))  # le module donne émission ET impression
     renewed = client.post(f"{API}/issue", json={"employee_id": mine.id}, headers=issuer)
     assert renewed.status_code == 200 and renewed.json()["id"] != badge["id"]
-    assert client.post(f"{API}/print/pdf", json={"badge_ids": [renewed.json()["id"]]}, headers=issuer).status_code == 403
+    assert client.post(f"{API}/print/pdf", json={"badge_ids": [renewed.json()["id"]]}, headers=issuer).status_code == 200
     assert client.post(f"{API}/{renewed.json()['id']}/revoke", json={"reason": "perdu"}, headers=issuer).status_code == 403
-    printer = _login(client, db, role="agent", societies=[SOC], rights=("export",))
-    assert client.post(f"{API}/print/pdf", json={"badge_ids": [renewed.json()["id"]]}, headers=printer).status_code == 200
-    assert client.post(f"{API}/issue", json={"employee_id": mine.id}, headers=printer).status_code == 403
     badge = renewed.json()
 
     assert first_badge["id"] != badge["id"]

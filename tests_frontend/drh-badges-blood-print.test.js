@@ -168,7 +168,7 @@ test("the create screen states the blood group status and previews without issui
   const states = [
     [{ status: "ok", authorized: true, value: `AB${MINUS}` }, /Groupe sanguin AB−/],
     [{ status: "absent", authorized: true }, /non renseigné/],
-    [{ status: "non_autorise", authorized: false }, /non autorisé/],
+    [{ status: "ok", authorized: false }, /en attente de validation de conformité[\s\S]*Fiche : renseigné/],
   ];
   for (const [blood, text] of states) {
     const emp = { ...EMPLOYEE, blood_group: blood, ...(blood.value ? { groupe_sanguin: blood.value } : {}) };
@@ -225,7 +225,7 @@ test("without the print right there is no print action, the backend refuses anyw
   await show(env, "creer", "#/drh/badges/creer/7");
   assert.equal(env.view.querySelector('[data-bs="print-dialog"]'), null);
   assert.equal(env.view.querySelector('[data-bs="issue"]'), null);
-  assert.match(env.view.textContent, /Impression : Permission requise/);
+  assert.match(env.view.textContent, /Impression : Réservé aux comptes autorisés au module Studio Badges/);
   env.dom.window.close();
 });
 
@@ -344,4 +344,66 @@ test("read-only profile: the specimen PDF is offered and downloaded, no write ac
   assert.ok(!env.calls.some(c => /\/issue|\/print\/pdf|\/revoke|\/settings|\/templates/.test(String(c[1] || "")) && c[0] === "fetch"));
   assert.ok(!env.calls.some(c => c[1] && c[1].method && c[1].method !== "GET" && c[0] !== "fetch"), "aucune écriture via l'API");
   env.dom.window.close();
+});
+
+// ── badge.irongs.com : code officiel du site, groupe sanguin obligatoire, raisons précises ──
+const SITE_TEXT = { id: "site", type: "text", text: "SITE : {{site_code}}", x: 3, y: 4.6, w: 42, h: 6.5, size: 12, color: "#FFFFFF", align: "center", rotation: 0, opacity: 1 };
+const WITH_SITE = { ...TEMPLATE, design: { ...DESIGN, pages: [{ ...DESIGN.pages[0], elements: [SITE_TEXT, ...DESIGN.pages[0].elements] }, DESIGN.pages[1]] } };
+const NO_CODE = { ...EMPLOYEE, site_code: "", site_code_status: "absent",
+  site_code_problem: "Code officiel du site non renseigné pour le site « Site A ». Complétez-le dans Gestion des sites (fiche du site › Code officiel du site), puis émettez le badge." };
+
+test("a missing official site code blocks issuance only when the template prints it", async () => {
+  const blocked = setup({ "/templates": { value: { items: [WITH_SITE], fields: {}, fonts: ["Helvetica"] } }, "/employees/7": { value: NO_CODE } }, ALL);
+  await show(blocked, "creer", "#/drh/badges/creer/7");
+  assert.equal(blocked.view.querySelector('[data-bs="issue"]'), null);
+  assert.equal(blocked.view.querySelector('[data-bs="issue-print"]'), null);
+  assert.ok(blocked.view.querySelector('[data-bs="proof"]'), "l'épreuve reste possible");
+  assert.match(blocked.view.querySelector("[data-bs-site-problem]").textContent, /Code officiel du site non renseigné[\s\S]*Gestion des sites/);
+  assert.match(blocked.view.querySelector(".bs-dl").textContent, /Code officiel du site—/);
+  assert.doesNotMatch(blocked.view.textContent, /ETP\/DF\/H01/);                          // jamais l'exemple
+  blocked.dom.window.close();
+  const free = setup({ "/employees/7": { value: NO_CODE } }, ALL);                         // modèle sans code site
+  await show(free, "creer", "#/drh/badges/creer/7");
+  assert.ok(free.view.querySelector('[data-bs="issue"]'));
+  free.dom.window.close();
+});
+
+test("an authorized but missing blood group asks to regularize the record, a manager may issue with a documented waiver", async () => {
+  const emp = { ...EMPLOYEE, blood_group: { status: "absent", authorized: true },
+    blood_waivers: { non_communique: "Groupe sanguin non communiqué par l'employé", analyse_en_attente: "Analyse de groupage sanguin en attente" } };
+  const operator = setup({ "/employees/7": { value: emp } }, { ...ALL, validate: false });
+  await show(operator, "creer", "#/drh/badges/creer/7");
+  assert.match(operator.view.querySelector("[data-bs-blood-problem]").textContent, /obligatoire sur les badges officiels/);
+  assert.equal(operator.view.querySelector('[data-bs="issue"]'), null);
+  assert.match(operator.view.querySelector("[data-bs-issue-blocked]").textContent, /groupe sanguin n'est pas régularisé/);
+  operator.dom.window.close();
+  const issued = [];
+  const manager = setup({ "/employees/7": { value: emp }, "/issue": { method: "POST", value: (url, options) => { issued.push(options.body); return { id: 9, number: "BDG-2026-000009" }; } } }, ALL);
+  await show(manager, "creer", "#/drh/badges/creer/7");
+  const select = manager.view.querySelector('[data-bs-field="blood-waiver"]');
+  assert.deepEqual([...select.options].map(o => o.value), ["", "non_communique", "analyse_en_attente"]);
+  assert.equal(select.disabled, false);
+  select.value = "analyse_en_attente";
+  manager.view.querySelector('[data-bs="issue"]').click(); await settle();
+  assert.equal(issued[0].blood_group_waiver, "analyse_en_attente");
+  assert.equal(issued[0].groupe_sanguin, undefined);                                      // aucune valeur envoyée ni supposée
+  manager.dom.window.close();
+});
+
+test("the studio badges operator sees issue and print actions, refusals carry the server's precise reason", async () => {
+  const operator = setup({ "/employees/7": { value: { ...EMPLOYEE, badge: BADGE, badges: [BADGE] } } },
+    { create: true, export: true, validate: false, admin: false, operational: true, reasons: { validate: "Révocation réservée aux responsables habilités.", admin: "Réservé." } });
+  await show(operator, "creer", "#/drh/badges/creer/7");
+  assert.ok(operator.view.querySelector('[data-bs="print-dialog"]'));
+  assert.ok(operator.view.querySelector('[data-bs="issue"]'));
+  assert.equal(operator.view.querySelector('[data-bs="revoke"]'), null);
+  assert.doesNotMatch(operator.view.textContent, /Permission requise/);
+  operator.dom.window.close();
+  const reader = setup({ "/employees/7": { value: { ...EMPLOYEE, badge: BADGE, badges: [BADGE] } } },
+    { ...NONE, read_only: true, reasons: { create: "Votre compte est limité à la consultation : aperçus et épreuves SPÉCIMEN uniquement.",
+      export: "Votre compte est limité à la consultation : aperçus et épreuves SPÉCIMEN uniquement." } });
+  await show(reader, "creer", "#/drh/badges/creer/7");
+  assert.match(reader.view.textContent, /Impression : Votre compte est limité à la consultation/);
+  assert.match(reader.view.textContent, /Émission : Votre compte est limité à la consultation/);
+  reader.dom.window.close();
 });

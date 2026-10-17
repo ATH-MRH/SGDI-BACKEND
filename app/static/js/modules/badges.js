@@ -28,7 +28,14 @@
   const STATUS = { ACTIF: ["Actif", "ok"], REVOQUE: ["Révoqué", "bad"], REMPLACE: ["Remplacé", "muted"] };
 
   const state = { seq: 0, templates: null, fields: {}, fonts: [], photos: new Map(), selection: new Set(), uid: 0, rights: null, facets: null };
-  const NO_RIGHT = "Permission requise (Administration › Matrice des droits › DRH › Badges du personnel).";
+  const NO_RIGHT = "Modèles partagés et paramètres réservés aux administrateurs des badges (Administration › Permissions › Studio Badges).";
+  /** Raison précise d'un droit absent, fournie par le serveur (lecture seule, module, opération sensible). */
+  const REASONS = {
+    create: "Réservé aux comptes autorisés au module Studio Badges (Administration › Utilisateurs › Modules › Studio Badges).",
+    validate: "Révocation réservée aux responsables habilités (Administration › Permissions › Studio Badges › Révoquer).",
+  };
+  REASONS.export = REASONS.create;
+  const reason = action => (state.rights && state.rights.reasons && state.rights.reasons[action]) || REASONS[action] || NO_RIGHT;
   const can = action => !!(state.rights && state.rights[action]);
   /* Verrou de consultation de l'application (sgdi-view-mode) : à chaque navigation, il désactive
      les champs de #view jusqu'au clic sur Outils › Déverrouiller. Il protège les formulaires
@@ -461,7 +468,7 @@
         <div><strong data-bs-count>${state.selection.size}</strong> employé(s) sélectionné(s)${pick ? `<button class="btn btn-ghost" data-bs="select-results">Sélectionner tous les résultats (${esc(data.total || 0)})</button><button class="btn btn-ghost" data-bs="clear-selection">Vider la sélection</button>` : ""}</div>
         <label>Modèle (badges à émettre)<select class="select" data-bs-field="lot-template" ${free(canIssue)}><option value="">Modèle par défaut de la société</option>${templateOptions(listState.template)}</select></label>
         <label>Sortie<select class="select" data-bs-field="lot-layout" ${free(canPrint)}><option value="">Selon les paramètres</option><option value="card" ${listState.layout === "card" ? "selected" : ""}>Une carte par page (format exact)</option><option value="a4" ${listState.layout === "a4" ? "selected" : ""}>Planche A4 (marges et traits de coupe)</option></select></label>
-        <div class="bs-lot-actions"><button class="btn btn-ghost" data-bs="lot-preview">Aperçu collectif</button>${canIssue && canPrint ? `<button class="btn btn-primary" data-bs="lot-issue-print">Émettre les badges manquants et imprimer</button>` : ""}${canPrint ? `<button class="btn btn-secondary" data-bs="lot-print">Imprimer les badges déjà émis</button>` : `<p class="bs-note is-warn">Impression : ${NO_RIGHT}</p>`}</div>
+        <div class="bs-lot-actions"><button class="btn btn-ghost" data-bs="lot-preview">Aperçu collectif</button>${canIssue && canPrint ? `<button class="btn btn-primary" data-bs="lot-issue-print">Émettre les badges manquants et imprimer</button>` : ""}${canPrint ? `<button class="btn btn-secondary" data-bs="lot-print">Imprimer les badges déjà émis</button>` : `<p class="bs-note is-warn">Impression : ${esc(reason("export"))}</p>`}</div>
         <p class="bs-muted">Les badges déjà émis sont réimprimés à l'identique (instantané de l'émission) ; le modèle choisi ne s'applique qu'aux badges émis maintenant. Imprimez à 100 % (taille réelle).</p>
         <div data-bs-report></div></div>` : "";
     const option = (value, label, selected) => `<option value="${esc(value)}" ${String(value) === String(selected) ? "selected" : ""}>${esc(label)}</option>`;
@@ -606,20 +613,32 @@
       return;
     }
     const badge = emp.badge;
-    const info = [["Société", emp.societe], ["Nom", emp.nom], ["Prénom", emp.prenom], ["Matricule", emp.matricule], ["Fonction", emp.fonction], ["Site", emp.site], ["Code du site", emp.site_code], ["Statut professionnel", emp.statut]];
-    const missing = info.filter(([label, value]) => !value && ["Nom", "Matricule", "Fonction", "Code du site"].includes(label)).map(([label]) => label);
-    const blood = emp.blood_group || { status: "non_autorise" };
-    const bloodNote = {
-      ok: `<p class="bs-note is-ok">Groupe sanguin <strong>${esc(blood.value || "")}</strong> repris de la fiche (information déclarative, non vérifiée médicalement) : affiché sur le badge si le modèle comporte l'élément « Groupe sanguin ».</p>`,
-      absent: `<p class="bs-note is-warn">Groupe sanguin non renseigné sur la fiche : il est masqué sur le badge.</p>`,
-      invalide: `<p class="bs-note is-warn">Groupe sanguin de la fiche non reconnu (attendu : O+, O−, A+, A−, B+, B−, AB+, AB−) : il est masqué sur le badge.</p>`,
-      non_autorise: `<p class="bs-muted">Groupe sanguin : affichage non autorisé sur les badges (Paramètres) ; il est masqué.</p>`,
-    }[blood.status] || "";
+    const info = [["Société", emp.societe], ["Nom", emp.nom], ["Prénom", emp.prenom], ["Matricule", emp.matricule], ["Fonction", emp.fonction], ["Site", emp.site], ["Code officiel du site", emp.site_code], ["Statut professionnel", emp.statut]];
+    const missing = info.filter(([label, value]) => !value && ["Nom", "Matricule", "Fonction"].includes(label)).map(([label]) => label);
+    // Le modèle choisi décide de ce qui est obligatoire : code officiel du site, groupe sanguin.
+    const tpl = (state.templates || []).find(t => String(t.id) === String(create.templateId));
+    const shows = test => !tpl || !tpl.design || (tpl.design.pages || []).some(page => (page.elements || []).some(el => !el.hidden && test(el)));
+    const siteBlock = !!emp.site_code_problem && shows(el => el.type === "text" && /\{\{\s*site_code\s*\}\}/.test(el.text || ""));
+    const siteNote = emp.site_code_problem ? `<p class="bs-note ${siteBlock ? "is-bad" : "is-warn"}" data-bs-site-problem>${esc(emp.site_code_problem)}</p>` : "";
+    const blood = emp.blood_group || { status: "absent", authorized: false };
+    const bloodBlock = !!blood.authorized && blood.status !== "ok" && shows(el => el.type === "blood");
+    const bloodNote = !blood.authorized
+      ? `<p class="bs-muted">Groupe sanguin : affichage sur les badges en attente de validation de conformité (Paramètres) ; il est masqué. Fiche : ${{ ok: "renseigné", absent: "non renseigné", invalide: "valeur non reconnue" }[blood.status] || "—"}.</p>`
+      : {
+        ok: `<p class="bs-note is-ok">Groupe sanguin <strong>${esc(blood.value || "")}</strong> repris de la fiche (information déclarative, non vérifiée médicalement), affiché en grand sur le badge.</p>`,
+        absent: `<p class="bs-note is-bad" data-bs-blood-problem>Groupe sanguin non renseigné sur la fiche : obligatoire sur les badges officiels. Régularisez la fiche employé (DRH) avant l'émission.</p>`,
+        invalide: `<p class="bs-note is-bad" data-bs-blood-problem>Groupe sanguin de la fiche non reconnu (attendu : O+, O−, A+, A−, B+, B−, AB+, AB−) : régularisez la fiche employé (DRH) avant l'émission.</p>`,
+      }[blood.status] || "";
+    const waiver = bloodBlock && can("validate") ? `<label>Dérogation documentée (groupe sanguin indisponible)<select class="select" data-bs-field="blood-waiver" data-no-lock><option value="">— Aucune : régulariser d'abord la fiche —</option>${Object.entries(emp.blood_waivers || {}).map(([key, label]) => `<option value="${esc(key)}">${esc(label)}</option>`).join("")}</select></label>` : "";
+    const issueBlocked = siteBlock ? "Émission impossible tant que le code officiel du site n'est pas renseigné."
+      : bloodBlock && !can("validate") ? "Émission impossible tant que le groupe sanguin n'est pas régularisé sur la fiche (dérogation réservée aux responsables habilités)." : "";
+    const canAddPhoto = can("create") && (typeof canAccessModuleHostKey !== "function" || canAccessModuleHostKey("drh"));
     shell(view, "creer", `<div class="bs-create">
       <div class="bs-col">${search}
         <div class="card bs-panel"><h2>Données de la fiche</h2>
           <dl class="bs-dl">${info.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value || "—")}</dd></div>`).join("")}</dl>
           ${missing.length ? `<p class="bs-note is-warn">À compléter sur la fiche : ${esc(missing.join(", "))}.</p>` : ""}
+          ${siteNote}
           ${bloodNote}
           ${ficheId(emp.id) ? `<a class="btn btn-ghost" href="#/effectif/agent/${esc(ficheId(emp.id))}">Ouvrir la fiche employé</a>` : ""}</div>
         <div class="card bs-panel"><h2>Photo</h2>
@@ -628,7 +647,7 @@
             <label>Horizontal<input type="range" min="-0.5" max="0.5" step="0.01" value="${create.crop.dx}" data-bs-field="crop-dx" data-no-lock></label>
             <label>Vertical<input type="range" min="-0.5" max="0.5" step="0.01" value="${create.crop.dy}" data-bs-field="crop-dy" data-no-lock></label>
             <button class="btn btn-ghost" data-bs="crop-reset">Recentrer</button>` : `<p class="bs-note is-bad">Aucune photo sur la fiche de cet employé.</p>`}
-          ${can("create") ? `<label class="btn btn-secondary bs-file">${emp.has_photo ? "Remplacer la photo" : "Ajouter une photo"}<input type="file" accept="image/jpeg,image/png" data-bs-field="photo-file" data-no-lock hidden></label>` : ""}</div>
+          ${canAddPhoto ? `<label class="btn btn-secondary bs-file">${emp.has_photo ? "Remplacer la photo" : "Ajouter une photo"}<input type="file" accept="image/jpeg,image/png" data-bs-field="photo-file" data-no-lock hidden></label>` : ""}</div>
       </div>
       <div class="bs-col bs-col-preview"><div class="card bs-panel">
         <div class="bs-preview-bar"><label>Modèle<select class="select" data-bs-field="template" data-no-lock>${templateOptions(create.templateId)}</select></label>
@@ -641,14 +660,15 @@
           ${badge ? `<dl class="bs-dl"><div><dt>Numéro</dt><dd>${esc(badge.number)}</dd></div><div><dt>État</dt><dd>${statusPill(badge)}</dd></div><div><dt>Émis le</dt><dd>${esc(dateFr(badge.issued_at))} par ${esc(badge.issued_by || "—")}</dd></div><div><dt>Validité</dt><dd>${badge.valid_until ? esc(dateFr(badge.valid_until)) : "Sans date de fin"}</dd></div><div><dt>Impressions</dt><dd>${esc(badge.print_count)}</dd></div></dl>
             <div class="bs-actions">${can("export") && badge.status === "ACTIF" ? `<button class="btn btn-primary" data-bs="print-dialog">Imprimer le badge</button>` : ""}
             <button class="btn btn-ghost" data-bs="show-issued">Voir le badge émis</button>${can("validate") ? `<button class="btn btn-danger" data-bs="revoke">Révoquer</button>` : ""}</div>
-            ${can("export") ? "" : `<p class="bs-note is-warn">Impression : ${NO_RIGHT}</p>`}
+            ${can("export") ? "" : `<p class="bs-note is-warn">Impression : ${esc(reason("export"))}</p>`}
             <p class="bs-muted">Une réimpression reproduit le badge tel qu'émis et s'inscrit dans l'historique, sans nouvelle émission.</p><hr>` : ""}
           ${(emp.unprintable || []).length ? `<p class="bs-note is-bad">Caractères non imprimables (alphabet non latin) : ${esc(emp.unprintable.join(", "))}. Saisissez ces informations en caractères latins sur la fiche.</p>` : ""}
-          ${!can("create") ? `<p class="bs-note is-warn">Émission : ${NO_RIGHT}</p><div class="bs-actions"><button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>` : (emp.unprintable || []).length ? "" : emp.can_issue ? `<label>Fin de validité (facultatif)<input class="input" type="date" data-bs-field="valid-until" data-no-lock></label>
+          ${!can("create") ? `<p class="bs-note is-warn">Émission : ${esc(reason("create"))}</p><div class="bs-actions"><button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>` : (emp.unprintable || []).length ? "" : !emp.can_issue ? `<p class="bs-note is-bad">Employé sortant : aucun badge ne peut être émis.</p>` : issueBlocked ? `<p class="bs-note is-bad" data-bs-issue-blocked>${esc(issueBlocked)}</p><div class="bs-actions"><button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>` : `<label>Fin de validité (facultatif)<input class="input" type="date" data-bs-field="valid-until" data-no-lock></label>
+            ${waiver}
             <div class="bs-actions"><button class="btn ${badge ? "btn-secondary" : "btn-primary"}" data-bs="issue">${badge ? "Émettre un nouveau badge (remplace l'actuel)" : "Émettre le badge"}</button>
             ${!badge && can("export") ? `<button class="btn btn-secondary" data-bs="issue-print">Émettre puis imprimer</button>` : ""}
             <button class="btn btn-ghost" data-bs="proof">Épreuve PDF</button></div>
-            <p class="bs-muted">L'émission fige les informations et la photo telles qu'elles sont aujourd'hui.</p>` : `<p class="bs-note is-bad">Employé sortant : aucun badge ne peut être émis.</p>`}</div>
+            <p class="bs-muted">L'émission fige les informations et la photo telles qu'elles sont aujourd'hui.</p>`}</div>
         <div class="card bs-panel"><h2>Badges émis</h2>${emp.badges.length ? `<ul class="bs-activity">${emp.badges.map(b => `<li>${statusPill(b)}<div><strong>${esc(b.number)}</strong><small>${esc(dateFr(b.issued_at))} · ${esc(b.template_name || "—")}${b.revoke_reason ? " · " + esc(b.revoke_reason) : ""}</small></div></li>`).join("")}</ul>` : `<p class="bs-muted">Aucun badge émis pour cet employé.</p>`}</div>
       </div></div>`);
     createPreview(view);
@@ -803,12 +823,13 @@
       <label>Espace entre les cartes (mm)<input class="input" type="number" min="0" max="20" step="0.5" name="sheet_gap_mm" value="${esc(d.sheet_gap_mm)}" ${lock}></label>
       <label class="bs-inline"><input type="checkbox" name="crop_marks" ${d.crop_marks ? "checked" : ""} ${lock}> Traits de coupe sur la planche A4</label>
       <fieldset class="bs-blood-settings"><legend>Groupe sanguin sur les badges</legend>
-        <p class="bs-muted">Donnée médicale sensible, reprise de la fiche employé (information déclarative, non vérifiée médicalement). Elle n'est jamais affichée sur la page publique du QR ni contenue dans le QR. Son affichage sur les badges doit être autorisé par les règles internes de confidentialité : indiquez la référence de cette autorisation.</p>
+        <p class="bs-muted">Donnée médicale sensible, reprise de la fiche employé (information déclarative, non vérifiée médicalement). Elle n'est jamais affichée sur la page publique du QR ni contenue dans le QR. Son affichage sur les badges doit être autorisé par les règles internes de confidentialité et de protection des données : indiquez la référence de cette autorisation.</p>
+        <p class="bs-muted">Une fois autorisé, chaque badge officiel le porte en grand : un groupe absent ou non reconnu bloque l'émission jusqu'à la régularisation de la fiche, sauf dérogation motivée d'un responsable habilité (tracée, sans aucune valeur supposée).</p>
         <label class="bs-inline"><input type="checkbox" name="show_blood_group" ${d.show_blood_group ? "checked" : ""} ${lock}> Afficher le groupe sanguin sur les badges (élément « Groupe sanguin » du modèle)</label>
         <label>Référence de l'autorisation interne (obligatoire pour activer)<input class="input" name="blood_group_authorization" maxlength="200" data-no-uppercase="1" placeholder="Ex. : note DRH n° …, avis du délégué à la protection des données du …" value="${esc(d.blood_group_authorization || "")}" ${lock}></label>
         <p class="bs-note ${d.show_blood_group ? "is-ok" : "is-warn"}">${d.show_blood_group ? "Affichage autorisé" + (d.blood_group_authorization ? " — référence : " + esc(d.blood_group_authorization) : "") + "." : "Affichage non autorisé : le groupe sanguin est masqué sur tous les badges."}</p>
       </fieldset>
-      <div class="bs-actions">${can("admin") ? `<button class="btn btn-primary" type="submit" data-no-save-overlay="1">Enregistrer les paramètres</button>` : `<p class="bs-note is-warn">${NO_RIGHT}</p>`}</div></form>`);
+      <div class="bs-actions">${can("admin") ? `<button class="btn btn-primary" type="submit" data-no-save-overlay="1">Enregistrer les paramètres</button>` : `<p class="bs-note is-warn">${esc(reason("admin"))}</p>`}</div></form>`);
   }
 
   // ── Routage et événements ─────────────────────────────────────────────────
@@ -863,7 +884,8 @@
         if (emp.badge && !confirm(`Le badge ${emp.badge.number} sera remplacé par un nouveau badge. Continuer ?`)) return;
         target.disabled = true;
         try {
-          const badge = await api("/issue", { method: "POST", body: { employee_id: emp.id, template_id: Number(create.templateId) || null, crop: create.crop, valid_until: (view.querySelector('[data-bs-field="valid-until"]') || {}).value || null } });
+          const badge = await api("/issue", { method: "POST", body: { employee_id: emp.id, template_id: Number(create.templateId) || null, crop: create.crop, valid_until: (view.querySelector('[data-bs-field="valid-until"]') || {}).value || null,
+            blood_group_waiver: (view.querySelector('[data-bs-field="blood-waiver"]') || {}).value || null } });
           syncLocalBadgeState(emp.id, true);
           notify(`Badge ${badge.number} émis.`, "success");
           rerender();
@@ -906,7 +928,7 @@
     view.addEventListener("change", event => {
       const field = event.target.dataset && event.target.dataset.bsField;
       if (!field || event.target.closest(".bs-studio")) return;
-      if (field === "template") { create.templateId = event.target.value; createPreview(view); }
+      if (field === "template") { create.templateId = event.target.value; rerender(); }   // obligations propres au modèle
       else if (field === "photo-file") addPhoto(view, event.target.files[0]);
       else if (field === "lot-template") listState.template = event.target.value;
       else if (field === "f-society") { listState.society = event.target.value; listState.site = ""; listState.page = 1; rerender(); }
@@ -1025,7 +1047,7 @@
   function destroyAll() { state.seq++; clearTimeout(searchTimer); forgetPhotos(); if (window.BadgeStudioEditor) window.BadgeStudioEditor.destroy(); }
   window.renderBadgeStudio = renderBadgeStudio;
   window.badgeStudioDestroy = destroyAll;
-  window.BadgeStudio = { isLatin, loadUnicodeFont, can, NO_RIGHT, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos, openPreview, free, query };
+  window.BadgeStudio = { isLatin, loadUnicodeFont, can, NO_RIGHT, reason, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos, openPreview, free, query };
 
   SGDIModules.registerModule({
     key: "badges", routes: [], dependencies: ["badges-studio"], init: function () {},
