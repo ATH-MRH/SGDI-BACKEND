@@ -13620,7 +13620,7 @@ function applyOpsEffectifFilters(list){
       }else{
       const directRef=selectedSite?siteMatchesReference(selectedSite,{...aff,siteId:aff?.siteId??a.siteId,site_id:a.site_id}):false;
       const listedRef=false;
-      if(!directRef&&!listedRef&&siteId!==String(f.site))return false;
+      if(!directRef&&!listedRef&&siteId!==String(f.site)&&effectifAgentSiteKey(a)!==String(f.site))return false;
       }
     }
     if(f.poste&&poste!==f.poste)return false;
@@ -13653,9 +13653,14 @@ function effectifFilteredData(filter){
   const soc=effectifSocieteFilter();
   if(soc)list=list.filter(a=>a.societe===soc);
   const filterSource=list.slice();
+  // Filtre SITE (DRH et OPS) : options et compteurs sur la liste avant ce filtre ; un site
+  // hors société / périmètre est remis à « Tous les sites » avant d'être appliqué.
+  const siteOptions=typeof effectifSiteFilterEnabled==="function"&&effectifSiteFilterEnabled()?effectifSiteFilterOptions(filterSource):null;
+  const siteFilter=siteOptions?effectifSiteFilterValue(siteOptions):"";
+  if(siteFilter&&!isOpsEffectifContext())list=list.filter(a=>effectifAgentSiteKey(a)===siteFilter);
   list=applyOpsEffectifFilters(list);
   list=sortEffectif(list,effectifSort);
-  return{list,title,soc,filter,filterSource};
+  return{list,title,soc,filter,filterSource,siteOptions,siteFilter};
 }
 
 
