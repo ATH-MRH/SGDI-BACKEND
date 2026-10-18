@@ -260,6 +260,86 @@ function setOpsEffectifSearch(v){
   opsEffectifSearchTimer=setTimeout(()=>applyOpsEffectifSearchInPlace(v),80);
 }
 
+// Filtre SITE commun DRH / OPS. Valeur = identifiant SQL du site (siteBackendId de
+// l'affectation active, le site_id de /api/ops/employees/page) ; "__none__" = aucune
+// affectation active. La société active est mémorisée avec le choix : en changer revient
+// sur « Tous les sites » plutôt que de garder un site hors périmètre.
+const EFFECTIF_SITE_NONE="__none__";
+const DRH_EFFECTIF_SITE_KEY="drhEffectifSiteFilter";
+function effectifSiteFilterEnabled(){return isOpsEffectifContext()||isDrhModuleContext()}
+function effectifSiteKey(site){return String(site?.backendId||site?.id||"")}
+function effectifAgentSiteKey(a){
+  if(!agentHasLiveAffectation(a))return EFFECTIF_SITE_NONE;
+  const aff=agentLiveAffectation(a)||{};
+  if(aff.siteBackendId!==undefined&&aff.siteBackendId!==null&&aff.siteBackendId!=="")return String(aff.siteBackendId);
+  // Fiche legacy sans identifiant SQL : rattacher au site connu par sa référence ou son nom.
+  const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
+  return site?effectifSiteKey(site):String(aff.siteId||"nom:"+normalizedSearchText(aff.siteName));
+}
+function effectifSiteFilterState(){
+  if(isOpsEffectifContext()){const f=opsEffectifFilters();return {site:f.site,soc:f.siteSoc}}
+  try{return JSON.parse(sessionStorage.getItem(DRH_EFFECTIF_SITE_KEY)||"{}")||{}}catch(e){return {}}
+}
+function storeEffectifSiteFilter(site){
+  const value={site:String(site||""),soc:effectifSocieteFilter()||""};
+  if(isOpsEffectifContext()){
+    const f=opsEffectifFilters();f.site=value.site;f.siteSoc=value.soc;
+    sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
+  }else sessionStorage.setItem(DRH_EFFECTIF_SITE_KEY,JSON.stringify(value));
+}
+// Options = sites déjà chargés (db.sites, filtrés par le serveur selon sociétés et sites
+// autorisés) de la société active, complétés par les sites des affectations actives de la
+// liste affichée. Compteurs seulement quand cette liste est complète en mémoire (DRH).
+function effectifSiteFilterOptions(baseList){
+  const soc=effectifSocieteFilter();
+  const byKey=new Map();
+  (db.sites||[]).filter(s=>siteMatchesSociete(s,soc)&&siteInSupervisorScope(s)).forEach(s=>{
+    const key=effectifSiteKey(s);
+    if(key)byKey.set(key,{value:key,label:s.nom||s.intitule||"Site",count:0});
+  });
+  let none=0;
+  (baseList||[]).forEach(a=>{
+    const key=effectifAgentSiteKey(a);
+    if(key===EFFECTIF_SITE_NONE){none++;return}
+    if(!byKey.has(key)){const aff=agentLiveAffectation(a)||{};byKey.set(key,{value:key,label:aff.siteName||aff.siteId||"Site",count:0})}
+    byKey.get(key).count++;
+  });
+  const sites=[...byKey.values()].sort((x,y)=>x.label.localeCompare(y.label,"fr",{numeric:true,sensitivity:"base"}));
+  return {sites,none,total:(baseList||[]).length,counted:Array.isArray(baseList),known:sites.length>0||none>0};
+}
+function effectifSiteFilterValue(options){
+  const state=effectifSiteFilterState();
+  let site=String(state.site||"");
+  if(!site||site===EFFECTIF_SITE_NONE)return site;
+  const socChanged=state.soc!==undefined&&String(state.soc||"")!==String(effectifSocieteFilter()||"");
+  // Ancien choix OPS mémorisé avec l'identifiant local du site.
+  const known=(db.sites||[]).find(s=>String(s.id)===site||String(s.backendId||"")===site);
+  if(known)site=effectifSiteKey(known);
+  if(socChanged||(options?.known&&!options.sites.some(o=>o.value===site))){storeEffectifSiteFilter("");return ""}
+  return site;
+}
+function effectifSiteFilterSelectHTML(filter,options,selected){
+  const n=count=>options.counted?` (${count})`:"";
+  return `<select id="effectif-site-filter" class="select" data-no-lock data-effectif-site-filter aria-label="Filtrer les employés par site" onchange="setEffectifSiteFilter(this.value,'${escapeHTML(filter||"actifs")}')">
+    <option value="" ${selected?"":"selected"}>Tous les sites${n(options.total)}</option>
+    ${options.sites.map(o=>`<option value="${escapeHTML(o.value)}" ${selected===o.value?"selected":""}>${escapeHTML(o.label)}${n(o.count)}</option>`).join("")}
+    <option value="${EFFECTIF_SITE_NONE}" ${selected===EFFECTIF_SITE_NONE?"selected":""}>Sans affectation${n(options.none)}</option>
+  </select>`;
+}
+function effectifSiteEmptyMessage(selected){
+  if(selected===EFFECTIF_SITE_NONE)return "Aucun employé sans affectation";
+  return selected?"Aucun employé affecté à ce site":"Aucun employé.";
+}
+function setEffectifSiteFilter(value,filter){
+  storeEffectifSiteFilter(value);
+  const done=setEffectifStableFilter(isOpsEffectifContext()?opsEffectifActiveFilter():(filter||"actifs"));
+  // Le sélecteur est recréé au rendu : rendre le focus clavier s'il a été perdu.
+  return Promise.resolve(done).then(()=>{
+    const active=document.activeElement;
+    if(!active||active===document.body)document.querySelector("#effectif-list-zone [data-effectif-site-filter]")?.focus({preventScroll:true});
+  });
+}
+
 function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");return setEffectifStableFilter(opsEffectifActiveFilter())}
 
 function opsEffectifAdvancedOpen(){return sessionStorage.getItem("opsEffectifAdvanced")==="1"}
@@ -318,9 +398,7 @@ function opsEffectifHeaderSearchHTML(){
 function opsEffectifFiltersHTML(sourceList,filteredCount){
   if(!isOpsEffectifContext())return "";
   const f=opsEffectifFilters();
-  const soc=effectifSocieteFilter();
   const advanced=opsEffectifAdvancedOpen();
-  const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc)).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const postes=[...new Set((sourceList||[]).map(a=>agentLiveAffectation(a)?.poste||a.affectationCourante?.poste||a.fonction||a.position||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const situations=[...new Set((sourceList||[]).map(a=>a.situation||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   if(f.poste&&!postes.includes(f.poste))postes.push(f.poste);
@@ -328,7 +406,6 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card ops-effectif-filter-card">
     <div class="ops-effectif-filter-main">
-      <div><label class="label">Site</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
       <div><label class="label">Poste / fonction</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
       <div><label class="label">Situation familiale</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
       <div class="ops-effectif-filter-actions"><button type="button" class="btn btn-secondary text-xs" onclick="toggleOpsEffectifAdvanced()">${advanced?"Masquer filtres":"Filtres avancés"}</button><button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button></div>
@@ -412,10 +489,11 @@ function employeeListRowHTML(a,filter){
 
 let opsEffectifPageRequest=0;
 function opsEffectifPageParams(filter){
+  const site=effectifSiteFilterValue(effectifSiteFilterOptions(null));
+  const siteRow=(db.sites||[]).find(s=>effectifSiteKey(s)===site);
   const f=opsEffectifFilters();
-  const site=(db.sites||[]).find(s=>String(s.id)===String(f.site)||String(s.backendId||"")===String(f.site));
   return {mode:effectifModeToApi(filter),society:effectifSocieteFilter(),page:effectifCurrentPage(filter),page_size:25,
-    q:String(f.q||"").trim(),site_id:f.site==="__none__"?"__none__":(f.site?(site?.backendId||f.site):""),sort:effectifSort,
+    q:String(f.q||"").trim(),site_id:siteRow?.backendId||site,sort:effectifSort,
     poste:f.poste||"",situation:f.situation||"",recrut_from:f.recrutFrom||"",recrut_to:f.recrutTo||"",
     birth_from:f.birthFrom||"",birth_to:f.birthTo||"",age_min:f.ageMin||"",age_max:f.ageMax||"",
     ...(filter==="operationnels"?{operational_requires_dotation:!!effectifConfigSettings().operationalRequiresDotation,
@@ -499,6 +577,9 @@ function effectifListHTML(filter,serverData){
   const data=serverData||effectifFilteredData(filter);
   const {list,title,soc,filterSource}=data;
   const total=serverData?serverData.total:list.length;
+  const siteOptions=effectifSiteFilterEnabled()?(data.siteOptions||effectifSiteFilterOptions(null)):null;
+  const siteFilter=siteOptions?(data.siteFilter??effectifSiteFilterValue(siteOptions)):"";
+  const siteHTML=siteOptions?effectifSiteFilterSelectHTML(filter,siteOptions,siteFilter):"";
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   const sortHTML=`<select class="select" data-no-lock onchange="setEffectifSort(this.value)">
@@ -511,20 +592,23 @@ function effectifListHTML(filter,serverData){
   </select>`;
   const opsHeader=isOpsEffectifContext()?`<div class="card ops-effectif-hero">
     <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${total} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
-    <div class="ops-effectif-tools"><label><span>Recherche</span><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/></label><label><span>Tri</span>${sortHTML}</label></div>
-  </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header">
+    <div class="ops-effectif-tools"><label><span>Recherche</span><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/></label><label for="effectif-site-filter"><span>Site</span>${siteHTML}</label><label><span>Tri</span>${sortHTML}</label></div>
+  </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header drh-effectif-list-header--filters">
     <div class="drh-effectif-title-block">
       <h1 class="text-2xl font-black effectif-page-title" style="line-height:1.15">${escapeHTML(title)}</h1>
       <p class="text-xs text-slate-400 mt-0.5">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:""}</p>
     </div>
     <div class="drh-effectif-search-slot">${effectifHeaderSearchHTML(filter)}</div>
-    <div class="drh-effectif-sort-slot"><span class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Tri</span>${sortHTML}</div>
+    <div class="drh-effectif-filter-slots">
+      <div class="drh-effectif-sort-slot drh-effectif-site-slot"><label for="effectif-site-filter" class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Site</label>${siteHTML}</div>
+      <div class="drh-effectif-sort-slot"><span class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Tri</span>${sortHTML}</div>
+    </div>
   </div>`:`<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 mb-4"><div><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div>${effectifHeaderSearchHTML(filter)}<div class="flex items-center justify-end gap-2 flex-wrap"><span class="text-xs text-slate-500">Tri :</span><div style="max-width:260px">${sortHTML}</div></div></div>`;
   return `<div class="effectif-page ${isOpsEffectifContext()?"ops-effectif-page":""}">${opsHeader}
   ${isDrhModuleContext()&&filter!=="instance_affectation"?(filter==="suspension"?drhSuspensionOverviewHTML(list):drhEffectifActionsBarHTML()):""}
   ${opsEffectifFiltersHTML(filterSource,total)}
   ${effectifBulkDeleteToolbarHTML()}
-  ${list.length===0?`<div class="card p-10 text-center text-slate-500">${serverData?.loading?"Chargement des employés…":"Aucun employé."}</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
+  ${list.length===0?`<div class="card p-10 text-center text-slate-500">${serverData?.loading?"Chargement des employés…":escapeHTML(effectifSiteEmptyMessage(siteFilter))}</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
     <colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%">${isOpsEffectifContext()?`<col style="width:8%"><col style="width:6%"><col style="width:8%">`:""}<col style="width:108px"><col style="width:148px">${actionHeader?`<col style="width:92px">`:""}</colgroup>
     <thead><tr>${selectHead}${effectifTableHeadersHTML({ops:isOpsEffectifContext(),actionHeader})}</tr></thead>
     <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}${serverData?.pagination||""}</div>`;
