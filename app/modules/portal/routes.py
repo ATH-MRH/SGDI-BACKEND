@@ -901,7 +901,7 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
     possession du lien n'est jamais suffisante : compte Pointeur, périmètre, statut, liste noire,
     affectation et règles d'Attendance Core s'appliquent ensuite."""
     from app.main import _public_employee_token
-    from app.modules.drh.badge_models import STATUS_ACTIVE, STATUS_REVOKED, EmployeeBadge
+    from app.modules.drh.badge_models import EmployeeBadge
 
     ref, signature, raw_badge_id = parts
     if not ref or len(ref) > 80 or not _BADGE_QR_TOKEN.match(signature or "") \
@@ -928,14 +928,39 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
     employee = db.get(Employee, int(ref)) if badge is not None and str(badge.employee_id) == ref else None
     if employee is None:
         raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", badge_id=badge_id, fault="badge_inconnu")
-    _ensure_badge_scope(db, scanner, payload, employee, "badge", badge_id)
+    return _scan_issued_badge(db, scanner, payload, employee, badge, "badge")
+
+
+def _scan_a1_badge(db: Session, scanner: User, payload: dict[str, Any], state: str, badge_id: int | None) -> dict[str, Any]:
+    """QR de pointage A1 (badge_qr) : signature propre, puis exactement les règles du badge Studio."""
+    from app.modules.drh import badge_qr
+    from app.modules.drh.badge_models import EmployeeBadge
+
+    if state != badge_qr.OK:
+        code = QR_MISREAD if state == badge_qr.DAMAGED else QR_UNRECOGNIZED
+        raise _qr_refusal(db, scanner, code, 400, kind="badge-a1", fault=state)
+    badge = db.get(EmployeeBadge, badge_id)
+    employee = db.get(Employee, badge.employee_id) if badge is not None and badge.employee_id else None
+    if employee is None:
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-a1", badge_id=badge_id, fault="badge_inconnu")
+    return _scan_issued_badge(db, scanner, payload, employee, badge, "badge-a1")
+
+
+def _scan_issued_badge(db: Session, scanner: User, payload: dict[str, Any], employee: Employee, badge: Any,
+                       kind: str) -> dict[str, Any]:
+    """Badge émis par le Studio, quel que soit le format de son QR : périmètre, révocation,
+    remplacement, validité, puis fiche employé, liste noire, vacation et Attendance Core."""
+    from app.modules.drh.badge_models import STATUS_ACTIVE, STATUS_REVOKED
+
+    badge_id = badge.id
+    _ensure_badge_scope(db, scanner, payload, employee, kind, badge_id)
     if badge.status == STATUS_REVOKED or badge.revoked_at is not None:
-        raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind="badge", employee=employee, badge_id=badge_id)
+        raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind=kind, employee=employee, badge_id=badge_id)
     if badge.status != STATUS_ACTIVE:
-        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind="badge", employee=employee, badge_id=badge_id)
+        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind=kind, employee=employee, badge_id=badge_id)
     if badge.valid_until and badge.valid_until < datetime.now(attendance_core.TZ).date():
-        raise _qr_refusal(db, scanner, BADGE_EXPIRED, 403, kind="badge", employee=employee, badge_id=badge_id)
-    return _finish_badge_scan(db, scanner, employee, "badge", badge_id, f"badge-{badge_id}")
+        raise _qr_refusal(db, scanner, BADGE_EXPIRED, 403, kind=kind, employee=employee, badge_id=badge_id)
+    return _finish_badge_scan(db, scanner, employee, kind, badge_id, f"badge-{badge_id}")
 
 
 def _ensure_badge_scope(db: Session, scanner: User, payload: dict[str, Any], employee: Employee, kind: str,
@@ -995,6 +1020,11 @@ def scan_employee_attendance_qr(
     token = _clean_text(payload.get("token"))
     if not token:
         raise HTTPException(status_code=400, detail="QR obligatoire")
+    from app.modules.drh import badge_qr
+
+    a1_state, a1_badge_id = badge_qr.read(token)
+    if a1_state != badge_qr.ABSENT:
+        return _scan_a1_badge(db, scanner, payload, a1_state, a1_badge_id)
     badge_parts = _badge_qr_parts(token)
     if badge_parts is not None:
         return _scan_badge_qr(db, scanner, payload, badge_parts)

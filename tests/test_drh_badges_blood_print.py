@@ -8,7 +8,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from sqlalchemy import select
 
 from app.modules.auth.models import AuditEvent
-from app.modules.drh import badge_design, badge_pdf
+from app.modules.drh import badge_design, badge_pdf, badge_qr
 from app.modules.drh.badge_models import BadgeEvent, BadgeSettings, BadgeTemplate, EmployeeBadge
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 from tests.test_drh_badges import (  # noqa: F401 (fixtures réutilisées)
@@ -218,7 +218,8 @@ def test_public_api_page_qr_and_logs_never_contain_the_blood_group(client, db, d
     _authorize(client, drh)
     badge = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()
     url = db.get(EmployeeBadge, badge["id"]).snapshot["qr_url"]
-    assert "sang" not in url.lower() and "AB" not in url.split("?")[0].split("/")[-1]       # rien dans le QR
+    # Rien dans le QR : l'adresse A1 ne contient que le numéro du badge et sa signature.
+    assert badge_qr.read(url) == (badge_qr.OK, badge["id"]) and url.rsplit("/", 1)[1] == badge_qr.token_for(badge["id"])
     path = url.split("://", 1)[1].split("/", 1)[1]
     public = client.get("/api/" + path)
     assert public.status_code == 200 and public.json()["badgeActif"] is True

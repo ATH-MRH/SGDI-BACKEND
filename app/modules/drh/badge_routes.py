@@ -338,9 +338,20 @@ def employee_photo(db: Session, employee: Employee, source: str = "portrait") ->
 
 
 def _qr_url(request: Request, employee: Employee, badge_id: int | None = None) -> str:
-    """Adresse de vérification. Pour un badge émis, elle porte SON numéro interne (b=) et un
-    jeton propre : révoqué ou remplacé, ce badge-là ne se valide plus, même si l'employé en
-    reçoit un nouveau."""
+    """Adresse du QR. Pour un badge émis : format de pointage A1 (badge_qr), propre à CE badge —
+    révoqué ou remplacé, il ne se valide plus — et lisible par une douchette quelle que soit la
+    disposition du clavier (ni « = », ni « & », ni « ? »). Sans badge émis (aperçu, écran de
+    consultation) : lien public signé historique, inchangé."""
+    from app.modules.drh import badge_qr
+
+    if badge_id is None:
+        return _studio_link_v0(request, employee, None)
+    return badge_qr.url_for(str(request.base_url), badge_id)
+
+
+def _studio_link_v0(request: Request, employee: Employee, badge_id: int | None = None) -> str:
+    """Lien public signé `…/public/badge/<id>?t=…[&b=…]` : format de tous les badges émis avant le
+    format A1. Ces badges, déjà imprimés, restent valides au Pointeur et en consultation publique."""
     from urllib.parse import quote
 
     from app.main import _public_employee_token

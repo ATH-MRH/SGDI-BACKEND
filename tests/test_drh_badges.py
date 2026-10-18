@@ -12,7 +12,7 @@ from app.core.photo_storage import PHOTOS_DIR, ensure_upload_dirs
 from app.core.security import hash_password
 from app.core.config import settings
 from app.modules.auth.models import AuditEvent, User, UserFeaturePermission
-from app.modules.drh import badge_design, badge_pdf, badge_text, portrait
+from app.modules.drh import badge_design, badge_pdf, badge_qr, badge_text, portrait
 from app.modules.drh.badge_models import BadgeEvent, BadgeTemplate, EmployeeBadge
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, Site
@@ -187,7 +187,7 @@ def test_issue_takes_a_snapshot_that_survives_later_changes(client, db, drh):
     assert client.get(f"{API}/{badge['id']}/photo", headers=drh).status_code == 200
 
     stored = db.get(EmployeeBadge, badge["id"])
-    assert "/public/badge/" in stored.snapshot["qr_url"] and "?t=" in stored.snapshot["qr_url"]
+    assert badge_qr.read(stored.snapshot["qr_url"]) == (badge_qr.OK, badge["id"])       # QR de pointage A1 signé
     actions = [row.action for row in db.execute(select(BadgeEvent).where(BadgeEvent.badge_id == badge["id"])).scalars()]
     assert actions == ["EMISSION"]
     assert db.execute(select(AuditEvent).where(AuditEvent.action == "badge.emission", AuditEvent.resource_id == str(badge["id"]))).first()
@@ -354,7 +354,7 @@ def test_a_revoked_or_replaced_badge_no_longer_validates_with_its_own_qr(client,
     emp = _employee(db)
     lost = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()
     lost_url = db.get(EmployeeBadge, lost["id"]).snapshot["qr_url"]
-    assert f"&b={lost['id']}" in lost_url
+    assert badge_qr.read(lost_url) == (badge_qr.OK, lost["id"])                       # propre à CE badge
     assert _public(client, lost_url).json()["badgeActif"] is True
 
     assert client.post(f"{API}/{lost['id']}/revoke", json={"reason": "perdu"}, headers=drh).status_code == 200
@@ -367,9 +367,10 @@ def test_a_revoked_or_replaced_badge_no_longer_validates_with_its_own_qr(client,
     new_url = db.get(EmployeeBadge, new["id"]).snapshot["qr_url"]
     assert _public(client, new_url).json()["badgeActif"] is True
     assert _public(client, lost_url).json()["badgeActif"] is False                 # le badge perdu reste invalide
-    forged = lost_url.replace(f"&b={lost['id']}", f"&b={new['id']}")               # jeton du badge perdu rejoué sur le nouveau
+    lost_code, new_code = lost_url.rsplit("/", 1)[1], new_url.rsplit("/", 1)[1]
+    forged = lost_url.replace(lost_code, new_code[:9] + lost_code[9:])            # signature du badge perdu rejouée sur le nouveau
     assert _public(client, forged).status_code == 404
-    assert _public(client, new_url.split("?")[0] + f"?b={new['id']}").status_code == 404
+    assert client.get(f"/api/public/badge/{emp.id}?b={new['id']}").status_code == 404    # numéro seul, sans signature
 
     renewed = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()
     assert renewed["id"] != new["id"]
