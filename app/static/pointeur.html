@@ -804,6 +804,9 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
 @media (prefers-reduced-motion:reduce){#lastScanCard .last-scan-float,#appView #result.show{animation:none!important}.lsf-progress{display:none}}
 @media (forced-colors:active){#lastScanCard .last-scan-float,#appView #result.show{border:2px solid CanvasText}.lsf-progress{background:CanvasText}}
 </style>
+<!-- Poste V6 : disposition en deux colonnes (pointage + tableau à gauche ; présents + effectifs par
+     fonction à droite, hauteurs ajustables). Chargée après les couches qu'elle remplace. -->
+<link rel="stylesheet" href="/static/pointeur-v6.css?v=20261018-v6">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -840,9 +843,8 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
   <main class="main">
     <!-- Poste de contrôle V5 : tout vient du flux live (planning officiel + Attendance Core). -->
 
-    <section class="station-upper">
     <div id="maintienBanner" class="v5-maintien hidden" role="status"></div>
-    <div id="postKpis" class="v5-kpis" aria-label="Personnes sur la vacation active"></div>
+    <div id="postKpis" class="v5-kpis" role="group" aria-label="Personnes sur la vacation active — choisir un compteur pour afficher la liste"></div>
     <div class="status-row">
       <span class="v5-activity-label">Activité du jour (mouvements)</span>
       <div id="shiftStaffing" class="shift-staffing"><span class="shift-staffing-empty">Chargement de l’effectif contractuel…</span></div>
@@ -856,6 +858,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
     </div>
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
     <div class="work-grid">
+      <div class="v6-left">
       <section id="scannerCard" class="scanner-card">
         <!-- POSTE DE SÉCURITÉ : dernier passage ACCEPTÉ par Attendance Core (facial, QR, saisie),
              affiché automatiquement — aucun clic, aucune recherche. -->
@@ -936,19 +939,35 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
             <div class="manual-actions">
               <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
               <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
-              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="openAbandonModal()"><span aria-hidden="true">↪</span><span>ABANDON POSTE</span></button>
+              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="recordAbandon()"><span aria-hidden="true">↪</span><span>ABANDON POSTE</span></button>
             </div>
-            <div class="abandon-caption"><span id="abandonThresholdCaption">Départ anticipé (≥ 60 min)</span> · Quitte le site avant la fin du service</div>
-            <p class="abandon-info">Un abandon de poste est automatiquement transmis à OPS et DRH et sera enregistré dans le BRQ.</p>
+            <p class="abandon-caption"><span id="abandonThresholdCaption">Départ anticipé (≥ 60 min)</span> avant la fin du service · transmis à OPS et DRH, disponible pour le BRQ</p>
             <div id="manualFeedback" class="manual-feedback" role="status" aria-live="polite"></div>
             <button class="manual-back" onclick="resetManualPanel()">← Changer d'employé</button>
           </div>
         </div>
       </section>
-      <div class="side-col">
-      <section id="presentNowCard" class="v5-card" aria-label="Présents actuellement">
-        <h2 class="v5-title">Présents actuellement <span id="presentNowCount" class="v5-count">0</span></h2>
-        <div id="presentNowList" class="v5-list"></div><button class="see-present" onclick="showAllPresent()">Voir tous les présents →</button>
+      <section id="movementsCard" class="v5-card" aria-label="Derniers mouvements">
+      <div class="tracking-toolbar"><div class="tracking-tabs" role="tablist" aria-label="Suivi des pointages">
+        <button role="tab" aria-selected="true" data-tracking-tab="today" onclick="setTrackingTab('today')">Aujourd’hui</button><button role="tab" aria-selected="false" data-tracking-tab="entries" onclick="setTrackingTab('entries')">Entrées</button><button role="tab" aria-selected="false" data-tracking-tab="exits" onclick="setTrackingTab('exits')">Sorties</button><button role="tab" aria-selected="false" data-tracking-tab="anomalies" onclick="setTrackingTab('anomalies')">Anomalies</button></div>
+        <div class="tracking-controls"><input id="trackingSearch" aria-label="Recherche employé dans le suivi" placeholder="Recherche employé" oninput="renderTracking()"><select id="trackingSite" aria-label="Site du suivi" onchange="changeAttendanceSite(this.value)"></select><input id="trackingDate" type="date" aria-label="Date du suivi" onchange="loadHistory();loadAttendanceAnomalies()"><button onclick="refreshPointeurData()">Actualiser</button><button id="detachTracking" onclick="openTrackingWindow()">Ouvrir dans une nouvelle fenêtre ↗</button></div></div>
+      <div id="trackingStatus" role="status"></div><div class="tracking-scroll"><table id="trackingTable"><thead id="trackingHead"></thead><tbody id="trackingBody"></tbody></table></div>
+      <div id="movementsList" class="v5-moves hidden"></div>
+      </section>
+      </div>
+      <div class="side-col" id="sideCol">
+      <section id="presentNowCard" class="v5-card" aria-labelledby="presentNowTitle">
+        <h2 class="v5-title"><span id="presentNowTitle">Présents actuellement</span><span class="v6-title-end"><button type="button" id="detailBack" class="v6-back" hidden onclick="setPostDetail('general')">← Vue générale</button><span id="presentNowCount" class="v5-count">0</span></span></h2>
+        <div id="presentNowList" class="v5-list" aria-live="polite"></div><button class="see-present" onclick="showAllPresent()">Voir tous les présents →</button>
+      </section>
+      <div id="panelSplit" class="v6-split">
+        <div id="panelSplitter" class="v6-splitter" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="presentNowCard functionsCard" aria-valuemin="10" aria-valuemax="90" aria-valuenow="55" aria-label="Hauteur des panneaux Présents actuellement et Effectifs par fonction (flèches haut et bas)"><i aria-hidden="true"></i></div>
+        <button type="button" class="v6-split-btn" data-split="-1" aria-label="Agrandir les effectifs par fonction" title="Agrandir les effectifs par fonction">▲</button><button type="button" class="v6-split-btn" data-split="1" aria-label="Agrandir la liste des présents" title="Agrandir la liste des présents">▼</button><button type="button" class="v6-split-btn" data-split="reset" aria-label="Réinitialiser les dimensions des panneaux" title="Réinitialiser les dimensions">⟲</button>
+      </div>
+      <section id="functionsCard" class="v5-card" aria-labelledby="functionsTitle">
+        <h2 class="v5-title" id="functionsTitle">Effectifs présents par fonction</h2>
+        <div id="functionsList" class="v6-functions"></div>
+        <div id="functionsTotal" class="v6-fn-total" aria-live="polite"></div>
       </section>
       <section id="todoCard" class="v5-card" aria-label="À traiter">
         <h2 class="v5-title">À traiter <span id="todoCount" class="v5-count">0</span></h2>
@@ -976,31 +995,10 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
       </section>
       </div>
     </div>
-    </section>
-    <section id="movementsCard" class="v5-card" aria-label="Derniers mouvements">
-      <div class="tracking-toolbar"><div class="tracking-tabs" role="tablist" aria-label="Suivi des pointages">
-        <button role="tab" aria-selected="true" data-tracking-tab="today" onclick="setTrackingTab('today')">Aujourd’hui</button><button role="tab" aria-selected="false" data-tracking-tab="entries" onclick="setTrackingTab('entries')">Entrées</button><button role="tab" aria-selected="false" data-tracking-tab="exits" onclick="setTrackingTab('exits')">Sorties</button><button role="tab" aria-selected="false" data-tracking-tab="anomalies" onclick="setTrackingTab('anomalies')">Anomalies</button></div>
-        <div class="tracking-controls"><input id="trackingSearch" aria-label="Recherche employé dans le suivi" placeholder="Recherche employé" oninput="renderTracking()"><select id="trackingSite" aria-label="Site du suivi" onchange="changeAttendanceSite(this.value)"></select><input id="trackingDate" type="date" aria-label="Date du suivi" onchange="loadHistory();loadAttendanceAnomalies()"><button onclick="refreshPointeurData()">Actualiser</button><button id="detachTracking" onclick="openTrackingWindow()">Ouvrir dans une nouvelle fenêtre ↗</button></div></div>
-      <div id="trackingStatus" role="status"></div><div class="tracking-scroll"><table id="trackingTable"><thead id="trackingHead"></thead><tbody id="trackingBody"></tbody></table></div>
-      <div id="movementsList" class="v5-moves hidden"></div>
-    </section>
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
 </section>
 
-<div id="abandonOverlay" class="abandon-overlay hidden">
-  <section class="abandon-modal" role="dialog" aria-modal="true" aria-labelledby="abandonTitle">
-    <h2 id="abandonTitle">CONFIRMER L’ABANDON DE POSTE</h2>
-    <div id="abandonFacts"></div>
-    <label for="abandonObservation">MOTIF / OBSERVATION</label>
-    <textarea id="abandonObservation" class="manual-observation" required maxlength="500" oninput="updateAbandonConfirmation()"></textarea>
-    <div id="abandonError" class="manual-feedback" role="alert"></div>
-    <div class="abandon-modal-actions">
-      <button id="abandonCancel" type="button" class="manual-back" onclick="closeAbandonModal()">ANNULER</button>
-      <button id="abandonConfirm" type="button" class="abandon-btn" disabled onclick="confirmAbandon()">CONFIRMER L’ABANDON DE POSTE</button>
-    </div>
-  </section>
-</div>
 <script>
 const SESSION_KEY="atlas_pointer_session";
 let pointerSession=null;
@@ -1438,7 +1436,8 @@ function personAvatarHTML(e){
 function renderPost(){
   const post=postState;
   document.body.classList.toggle("has-post",!!post);
-  if(!post)return;
+  // Sans flux du poste (relève impossible, périmètre sans poste) : compteurs « — », jamais 0.
+  if(!post){setHTML("postKpis",[["expected","Attendus"],["present","Présents"],["absent","Absents / non pointés"],["maintien","En maintien"],["anomalies","Anomalies"]].map(([key,label])=>'<button type="button" class="v5-card v5-kpi" data-kpi="'+key+'" data-tone="muted" aria-pressed="false" disabled aria-label="'+label+' : donnée indisponible"><small>'+label+'</small><b>—</b></button>').join(""));renderSidePanels();return}
 
   const m=post.maintien,mEl=document.getElementById("maintienBanner");
   if(mEl){
@@ -1446,21 +1445,15 @@ function renderPost(){
     if(m)setHTML("maintienBanner",'<b>MAINTIENS — VACATION '+esc(m.previous.start)+' → '+esc(m.previous.end)+'</b><span>Nouvelle entrée autorisée : '+esc(m.opens)+' → '+esc(m.closes)+'</span><span>'+(m.state==="OPEN"?"Fermeture dans ":"Ouverture dans ")+'<b id="maintienCountdown"></b></span>');
   }
   const k=post.kpi||{},num=v=>v==null?"—":String(v);
-  const kpi=(label,value,tone,hint)=>'<div class="v5-card v5-kpi" data-tone="'+tone+'"><small>'+label+'</small><b>'+esc(num(value))+'</b>'+(hint?'<span>'+esc(hint)+'</span>':'')+'</div>';
-  setHTML("postKpis",kpi("Attendus",k.expected,"blue",post.current?"Groupe "+post.current.group:"")+kpi("Présents",k.present,"green","personnes uniques")
-    +kpi("Absents / non pointés",k.absent,k.absent?"red":"muted",k.excused?k.excused+" en congé, maladie ou mission":"")+kpi("En maintien",k.maintien,k.maintien?"orange":"muted","")+kpi("Anomalies",k.anomalies,k.anomalies?"red":"muted","à traiter"));
+  // Compteurs cliquables (V6) : chacun ouvre sa liste détaillée dans le panneau des présents.
+  const kpi=(key,label,value,tone,hint)=>'<button type="button" class="v5-card v5-kpi" data-kpi="'+key+'" data-tone="'+tone+'" aria-pressed="'+(postDetail.kind===key)+'" aria-label="'+esc(label+" : "+(value==null?"donnée indisponible":value)+" — afficher la liste")+'" onclick="setPostDetail(\''+key+'\')"><small>'+label+'</small><b>'+esc(num(value))+'</b>'+(hint?'<span>'+esc(hint)+'</span>':'')+'</button>';
+  setHTML("postKpis",kpi("expected","Attendus",k.expected,"blue",post.current?"Groupe "+post.current.group:"")+kpi("present","Présents",k.present,"green","personnes uniques")
+    +kpi("absent","Absents / non pointés",k.absent,k.absent?"red":"muted",k.excused?k.excused+" en congé, maladie ou mission":"")+kpi("maintien","En maintien",k.maintien,k.maintien?"orange":"muted","")+kpi("anomalies","Anomalies",k.anomalies,k.anomalies?"red":"muted","à traiter"));
   const refused=document.getElementById("refusedCount");if(refused)refused.textContent=String((post.activity||{}).refused_today||0);
-  const present=Array.isArray(post.present)?post.present:[];
-  const pc=document.getElementById("presentNowCount");if(pc)pc.textContent=String(present.length);
-  setHTML("presentNowList",present.length?present.map(row=>{const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
-    return '<div class="v5-person" data-employee="'+esc(e.id)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:""].filter(Boolean).join(" · "))+'</div><div class="v5-person-meta">Entrée réelle '+esc(row.entry)+(row.shift_start?' · Vacation '+esc(row.shift_start)+' → '+esc(row.shift_end):'')+'</div></div><span class="v5-badge'+(row.badge==="EN_MAINTIEN"?" is-maintien":"")+'">'+esc(row.badge_label)+'</span></div>'}).join(""):'<div class="v5-empty">Aucune personne présente actuellement.</div>');
   const todo=Array.isArray(post.todo)?post.todo:[];
   const tc=document.getElementById("todoCount");if(tc){tc.textContent=String(todo.length);tc.classList.toggle("is-alert",todo.length>0)}
-  setHTML("todoList",todo.length?todo.map((item,index)=>{const e=item.employee||{},who=[[e.nom,e.prenom].filter(Boolean).join(" "),e.matricule].filter(Boolean).join(" · ");
-    return '<div class="v5-todo" data-code="'+esc(item.code)+'" data-severity="'+esc(item.severity||"warning")+'"><b>'+esc(item.label)+'</b>'+(who?'<div>'+esc(who)+'</div>':'')
-      +(item.scheduled_end?'<div>Fin prévue : '+esc(item.scheduled_end)+'</div>':'')+(item.overdue_since?'<div>'+(item.code==="VACATION_NON_CLOTUREE"?"Toujours présent après : ":"Fenêtre terminée à : ")+esc(item.overdue_since)+'</div>':'')
-      +(!item.scheduled_end&&item.message?'<div>'+esc(item.message)+'</div>':'')
-      +(item.action==="MANUAL_ENTRY"?'<button type="button" class="v5-inline-btn" onclick="openManualFor('+index+')">SAISIE MANUELLE</button>':'')+'</div>'}).join(""):'<div class="v5-empty">Rien à traiter.</div>');
+  setHTML("todoList",todo.length?todo.map(todoItemHTML).join(""):'<div class="v5-empty">Rien à traiter.</div>');
+  renderSidePanels();
   renderMovements();
   tickPost();
   const idle=document.getElementById("lastScanCard");
@@ -1481,6 +1474,167 @@ function openManualFor(index){
   if(!isManualPanelOpen())toggleManualPanel();
   manualResults=[e];selectManualResult(0);
 }
+function todoItemHTML(item,index){
+  const e=item.employee||{},who=[[e.nom,e.prenom].filter(Boolean).join(" "),e.matricule].filter(Boolean).join(" · ");
+  return '<div class="v5-todo" data-code="'+esc(item.code)+'" data-severity="'+esc(item.severity||"warning")+'"><b>'+esc(item.label)+'</b>'+(who?'<div>'+esc(who)+'</div>':'')
+    +(item.site&&postState&&postState.status==="OVERVIEW"?'<div>Site : '+esc(item.site)+'</div>':'')
+    +(item.scheduled_end?'<div>Fin prévue : '+esc(item.scheduled_end)+'</div>':'')+(item.overdue_since?'<div>'+(item.code==="VACATION_NON_CLOTUREE"?"Toujours présent après : ":"Fenêtre terminée à : ")+esc(item.overdue_since)+'</div>':'')
+    +(!item.scheduled_end&&item.message?'<div>'+esc(item.message)+'</div>':'')
+    +(item.action==="MANUAL_ENTRY"?'<button type="button" class="v5-inline-btn" onclick="openManualFor('+index+')">SAISIE MANUELLE</button>':'')+'</div>';
+}
+// ══ Poste V6 : compteurs cliquables, effectifs présents par fonction, panneaux ajustables ══════
+// Toutes les listes viennent du flux live (`post`) déjà relevé toutes les 2 s : aucune requête de
+// plus. Le site et la société sont ceux du poste ; une donnée absente du serveur reste « — ».
+let postDetail={kind:"general",key:""},detailRows=[];
+const DETAIL_TITLES={general:"Présents actuellement",expected:"Attendus",present:"Présents",absent:"Absents / non pointés",maintien:"En maintien",anomalies:"Anomalies"};
+const NO_FUNCTION="Fonction non renseignée";
+const pctFormat=new Intl.NumberFormat("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1});
+function functionKey(employee){
+  const label=String(employee&&(employee.fonction||employee.poste)||"").trim();
+  return label?label.normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").toUpperCase():"";
+}
+// Une ligne par fonction réellement présente (libellés de la base ATLAS, sans casse ni accent
+// distinctifs) ; « Fonction non renseignée » en dernier, toujours comptée dans le total.
+function presentFunctions(present){
+  const groups=new Map();
+  for(const row of present){
+    const e=row.employee||{},key=functionKey(e);
+    let group=groups.get(key);
+    if(!group){group={key,label:key?String(e.fonction||e.poste).trim().replace(/\s+/g," ").toLocaleUpperCase("fr-FR"):NO_FUNCTION.toLocaleUpperCase("fr-FR"),rows:[]};groups.set(key,group)}
+    group.rows.push(row);
+  }
+  return [...groups.values()].sort((a,b)=>(a.key?0:1)-(b.key?0:1)||b.rows.length-a.rows.length||a.label.localeCompare(b.label,"fr"));
+}
+function setPostDetail(kind,key=""){
+  // Un second clic sur le compteur (ou la fonction) affiché ramène à la vue générale.
+  postDetail=kind==="general"||(postDetail.kind===kind&&postDetail.key===key)?{kind:"general",key:""}:{kind,key};
+  document.querySelectorAll("#postKpis [data-kpi]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.kpi===postDetail.kind)));
+  renderSidePanels();
+  document.getElementById("presentNowList")?.scrollTo?.(0,0);
+}
+function presentRowHTML(row,index){
+  const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",overview=postState&&postState.status==="OVERVIEW";
+  return '<div class="v5-person" role="button" tabindex="0" data-pick="'+index+'" data-employee="'+esc(e.id)+'" aria-label="'+esc("Ouvrir la fiche de "+name)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:"",overview?row.site:""].filter(Boolean).join(" · "))+'</div><div class="v5-person-meta">Entrée réelle '+esc(row.entry)+(row.shift_start?' · Vacation '+esc(row.shift_start)+' → '+esc(row.shift_end):'')+'</div></div><span class="v5-badge'+(row.badge==="EN_MAINTIEN"?" is-maintien":"")+'">'+esc(row.badge_label)+'</span></div>';
+}
+function expectedRowHTML(row,index){
+  const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",tone=row.state==="PRESENT"?"":row.state==="ABSENT"?" is-absent":" is-excused";
+  return '<div class="v5-person" role="button" tabindex="0" data-pick="'+index+'" data-employee="'+esc(e.id)+'" aria-label="'+esc("Ouvrir la fiche de "+name)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:"",row.site||""].filter(Boolean).join(" · "))+'</div>'+(row.entry?'<div class="v5-person-meta">Entrée réelle '+esc(row.entry)+'</div>':'')+'</div><span class="v5-badge'+tone+'">'+esc(String(row.state_label||"").toUpperCase())+'</span></div>';
+}
+// Panneau haut droit : « Présents actuellement » (vue générale) ou détail du compteur / de la fonction choisis.
+function renderSidePanels(){
+  const post=postState,present=post&&Array.isArray(post.present)?post.present:null,kind=postDetail.kind;
+  let title=DETAIL_TITLES[kind]||DETAIL_TITLES.general,count=null,html="",rows=[];
+  const unavailable='<div class="v5-empty">Donnée indisponible : aucune vacation déterminée pour ce périmètre.</div>';
+  if(!post){html='<div class="v5-empty">Données du poste indisponibles.</div>'}
+  else if(kind==="expected"||kind==="absent"){
+    const expected=Array.isArray(post.expected)?post.expected:null;
+    if(!expected)html=unavailable;
+    else{rows=kind==="absent"?expected.filter(r=>r.state==="ABSENT"):expected;count=rows.length;
+      html=rows.length?rows.map(expectedRowHTML).join(""):'<div class="v5-empty">'+(kind==="absent"?"Aucun absent sur la vacation en cours.":"Aucune personne attendue sur la vacation en cours.")+'</div>'}
+  }else if(kind==="anomalies"){
+    const todo=Array.isArray(post.todo)?post.todo:[];count=todo.length;
+    html=todo.length?todo.map(todoItemHTML).join(""):'<div class="v5-empty">Aucune anomalie à traiter.</div>';
+  }else if(present){
+    rows=present;
+    if(kind==="maintien")rows=present.filter(r=>r.badge==="EN_MAINTIEN");
+    if(kind==="function"){const group=presentFunctions(present).find(g=>g.key===postDetail.key);rows=group?group.rows:[];title=group?group.label:(postDetail.key||NO_FUNCTION.toLocaleUpperCase("fr-FR"))}
+    count=rows.length;
+    html=rows.length?rows.map(presentRowHTML).join(""):'<div class="v5-empty">'+(kind==="maintien"?"Aucune personne en maintien.":kind==="function"?"Plus aucun présent pour cette fonction.":"Aucune personne présente actuellement.")+'</div>';
+  }
+  detailRows=rows.map(r=>({...(r.employee||{}),site:(r.employee||{}).site||r.site||(post&&post.site)||""}));
+  setHTML("presentNowList",html);
+  const titleEl=document.getElementById("presentNowTitle");if(titleEl)titleEl.textContent=kind==="general"?title:(kind==="function"?"Fonction · ":"")+title;
+  const countEl=document.getElementById("presentNowCount");if(countEl)countEl.textContent=count==null?"—":String(count);
+  const back=document.getElementById("detailBack");if(back)back.hidden=kind==="general";
+  document.getElementById("presentNowCard")?.classList.toggle("is-detail",kind!=="general");
+  renderFunctions(present);
+  refreshManualStatus();
+}
+// Panneau bas droit : effectifs PRÉSENTS par fonction. Le total est celui du compteur « Présents ».
+function renderFunctions(present){
+  if(!document.getElementById("functionsList"))return;
+  if(!present){setHTML("functionsList",'<div class="v5-empty">Données indisponibles.</div>');setHTML("functionsTotal","");return}
+  const total=present.length,groups=presentFunctions(present);
+  setHTML("functionsList",groups.length?groups.map(g=>{
+    const n=g.rows.length,pct=total?n/total*100:0,label=pctFormat.format(pct)+" %",active=postDetail.kind==="function"&&postDetail.key===g.key;
+    return '<button type="button" class="v6-fn" data-fn="'+esc(g.key)+'" aria-pressed="'+active+'" aria-label="'+esc(g.label+" : "+n+" présent"+(n>1?"s":"")+", "+label+" — voir les employés")+'"><span class="v6-fn-name">'+esc(g.label)+'</span><span class="v6-fn-count"><b>'+n+'</b> présent'+(n>1?"s":"")+'</span><span class="v6-fn-pct">'+label+'</span><span class="v6-fn-bar" aria-hidden="true"><i style="width:'+pct.toFixed(2)+'%"></i></span><span class="v6-fn-go" aria-hidden="true">›</span></button>';
+  }).join(""):'<div class="v5-empty">Aucune personne présente actuellement.</div>');
+  setHTML("functionsTotal",'<span>TOTAL EN POSTE</span><b>'+total+'</b><span>'+(total?"100 %":"—")+'</span>');
+}
+// Fiche d'un employé choisi dans une liste : même fiche que la saisie manuelle (droits inchangés,
+// le serveur reste seul juge de chaque action).
+function openEmployeeCard(employee){
+  if(!employee||!employee.id||scanBusy)return;
+  if(!isManualPanelOpen())toggleManualPanel();
+  manualResults=[{id:employee.id,matricule:employee.matricule,nom:employee.nom,prenom:employee.prenom,photo:employee.photo,poste:employee.fonction||employee.poste||"",societe:employee.societe||"",site:employee.site||""}];
+  selectManualResult(0);
+}
+// Statut actuel de l'employé de la fiche, lu dans le flux live (mis à jour à chaque relève).
+function currentStatusOf(id){
+  const same=r=>r&&r.employee&&String(r.employee.id)===String(id);
+  const present=(postState&&postState.present||[]).find(same);
+  if(present)return {label:(present.badge_label||"EN POSTE")+" · entrée "+present.entry,tone:present.badge==="EN_MAINTIEN"?"orange":"green"};
+  const expected=(postState&&postState.expected||[]).find(same);
+  if(expected)return {label:String(expected.state_label||"").toUpperCase(),tone:expected.state==="ABSENT"?"red":expected.state==="EXCUSED"?"orange":"green"};
+  return postState?{label:"AUCUNE PRÉSENCE EN COURS",tone:"muted"}:{label:"—",tone:"muted"};
+}
+function refreshManualStatus(){
+  const el=document.getElementById("manualStatus");if(!el||!manualSelected)return;
+  const s=currentStatusOf(manualSelected.id);
+  if(el.textContent!==s.label)el.textContent=s.label;
+  if(el.dataset.tone!==s.tone)el.dataset.tone=s.tone;
+}
+(()=>{
+  const list=document.getElementById("presentNowList");
+  const pick=event=>{const row=event.target.closest&&event.target.closest("[data-pick]");if(!row||!list.contains(row))return false;openEmployeeCard(detailRows[Number(row.dataset.pick)]);return true};
+  list?.addEventListener("click",event=>{if(!event.target.closest("button"))pick(event)});
+  list?.addEventListener("keydown",event=>{if((event.key==="Enter"||event.key===" ")&&event.target.matches("[data-pick]")){event.preventDefault();event.stopPropagation();pick(event)}});
+  document.getElementById("functionsList")?.addEventListener("click",event=>{const b=event.target.closest(".v6-fn");if(b)setPostDetail("function",b.dataset.fn)});
+})();
+// Séparateur des deux panneaux de droite : glisser (souris, tactile), clavier, boutons ▲ ▼ ⟲.
+// La proportion est mémorisée sur ce poste ; chaque panneau garde une hauteur minimale.
+const SPLIT_KEY="atlas_pointer_v6_split",SPLIT_DEFAULT=.55,SPLIT_MIN_PX=120,SPLIT_STEP=.05;
+let splitRatio=SPLIT_DEFAULT;
+function readSplit(){try{const v=Number(localStorage.getItem(SPLIT_KEY));return v>=.1&&v<=.9?v:SPLIT_DEFAULT}catch(e){return SPLIT_DEFAULT}}
+function splitBounds(){
+  const col=document.getElementById("sideCol"),bar=document.getElementById("panelSplit");
+  const h=col?col.clientHeight-(bar?bar.offsetHeight:0):0;
+  if(!(h>0))return [.1,.9];
+  const min=Math.min(.45,Math.max(.1,SPLIT_MIN_PX/h));return [min,1-min];
+}
+function applySplit(ratio,persist=false){
+  const [lo,hi]=splitBounds();
+  const value=Number(ratio);
+  splitRatio=Math.min(hi,Math.max(lo,Number.isFinite(value)?value:SPLIT_DEFAULT));
+  document.getElementById("sideCol")?.style.setProperty("--v6-split",splitRatio.toFixed(4));
+  const sep=document.getElementById("panelSplitter");
+  if(sep){sep.setAttribute("aria-valuenow",String(Math.round(splitRatio*100)));sep.setAttribute("aria-valuetext","Présents "+Math.round(splitRatio*100)+" %, fonctions "+(100-Math.round(splitRatio*100))+" %")}
+  if(persist)try{localStorage.setItem(SPLIT_KEY,splitRatio.toFixed(4))}catch(e){}
+}
+function resetSplit(){try{localStorage.removeItem(SPLIT_KEY)}catch(e){}applySplit(SPLIT_DEFAULT)}
+(()=>{
+  const sep=document.getElementById("panelSplitter"),bar=document.getElementById("panelSplit");if(!sep||!bar)return;
+  applySplit(readSplit());
+  document.addEventListener("DOMContentLoaded",()=>applySplit(readSplit()));   // mise en page connue : bornes exactes
+  let drag=null;
+  sep.addEventListener("pointerdown",event=>{
+    if(event.button!==0&&event.pointerType==="mouse")return;
+    const col=document.getElementById("sideCol").getBoundingClientRect();
+    drag={top:col.top,height:col.height-bar.offsetHeight,id:event.pointerId};
+    sep.setPointerCapture?.(event.pointerId);sep.classList.add("is-dragging");event.preventDefault();
+  });
+  sep.addEventListener("pointermove",event=>{if(drag&&drag.height>0)applySplit((event.clientY-drag.top-bar.offsetHeight/2)/drag.height)});
+  const end=()=>{if(!drag)return;drag=null;sep.classList.remove("is-dragging");applySplit(splitRatio,true)};
+  sep.addEventListener("pointerup",end);sep.addEventListener("pointercancel",end);sep.addEventListener("lostpointercapture",end);
+  sep.addEventListener("dblclick",resetSplit);
+  sep.addEventListener("keydown",event=>{
+    const step={ArrowUp:-SPLIT_STEP,ArrowDown:SPLIT_STEP,PageUp:-3*SPLIT_STEP,PageDown:3*SPLIT_STEP}[event.key];
+    if(step!==undefined){event.preventDefault();event.stopPropagation();applySplit(splitRatio+step,true)}
+    else if(event.key==="Home"||event.key==="End"){event.preventDefault();event.stopPropagation();applySplit(event.key==="Home"?0:1,true)}
+  });
+  bar.addEventListener("click",event=>{const b=event.target.closest("[data-split]");if(!b)return;b.dataset.split==="reset"?resetSplit():applySplit(splitRatio+Number(b.dataset.split)*SPLIT_STEP,true)});
+  addEventListener("resize",()=>applySplit(splitRatio));
+})();
 // Motif RÉEL du refus (Attendance Core) traduit en message opérationnel, sans qualification disciplinaire.
 function refusalBlockHTML(refusal){
   const c=refusal.counted||{},prev=c.previous||{},code=refusal.code;
@@ -1772,7 +1926,7 @@ async function logout(){
   if(isLoggingOut)return;
   isLoggingOut=true;
   try{
-    closeAbandonModal(true);
+
     stopIdleWatch();
     await stopScanner();
     window.PointeurFacial&&PointeurFacial.stop();
@@ -1788,7 +1942,7 @@ async function logout(){
     // Données du périmètre du compte : vidées avec la session. Sinon le compte suivant les voyait
     // jusqu'au premier rafraîchissement réussi — et les gardait si ce rafraîchissement échouait.
     trackingEvents=[];trackingDailyServer=null;planningEvents=[];serverSummary=null;postState=null;presenceAlertsData=[];
-    manualResults=[];trackingAnomalies=[];authorizedAttendanceSites=[];liveCursor=null;liveRefusalCursor=null;lastScanShownId="";
+    manualResults=[];trackingAnomalies=[];authorizedAttendanceSites=[];liveCursor=null;liveRefusalCursor=null;lastScanShownId="";postDetail={kind:"general",key:""};
     for(const id of ["liveFeedList","trackingBody","planningContent","manualResults","result"]){const node=document.getElementById(id);if(node)node.innerHTML=""}
     for(const redraw of [()=>{document.getElementById("lastScanCard").innerHTML=lastScanIdleHTML()},renderPost,renderHistory]){try{redraw()}catch(e){/* zone absente de cette vue */}}
     closeManualPanel();resetManualPanel();
@@ -2061,7 +2215,6 @@ function closeManualPanel(){
 }
 function resetManualPanel(){
   if(scanBusy)return;
-  closeAbandonModal();
   manualSelected=null;manualResults=[];
   document.getElementById("manualQuery").value="";
   document.getElementById("manualObservation").value="";
@@ -2104,7 +2257,13 @@ function selectManualResult(index){
   if(!manualSelected)return;
   const initials=[manualSelected.prenom,manualSelected.nom].filter(Boolean).map(v=>v[0]).join("").toUpperCase();
   const photo=safePhotoSrc(manualSelected.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(manualSelected.photo))}" alt="Photo de ${esc(manualSelected.nom)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
-  document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><dl class="employee-facts"><dt>Code</dt><dd>${esc(manualSelected.matricule)}</dd><dt>Fonction</dt><dd>${esc(manualSelected.poste||"—")}</dd><dt>Société</dt><dd>${esc(manualSelected.societe||"—")}</dd><dt>Site</dt><dd>${esc(manualSelected.site||"—")}</dd></dl><span class="employee-found">● Employé trouvé</span></div></div>`;
+  // Fiche compacte : photo, identité, matricule, fonction, société, site et statut actuel (flux live).
+  const status=currentStatusOf(manualSelected.id);
+  document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div class="employee-main"><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><dl class="employee-facts"><dt>Matricule</dt><dd>${esc(manualSelected.matricule)}</dd><dt>Fonction</dt><dd>${esc(manualSelected.poste||"—")}</dd><dt>Société</dt><dd>${esc(manualSelected.societe||"—")}</dd><dt>Site</dt><dd>${esc(manualSelected.site||"—")}</dd><dt>Statut</dt><dd><span id="manualStatus" class="employee-status" data-tone="${esc(status.tone)}">${esc(status.label)}</span></dd></dl></div></div>`;
+  const locked=manualActionsLocked();
+  setManualActionsBusy(false);
+  const feedback=document.getElementById("manualFeedback");
+  if(locked){feedback.textContent="Saisie manuelle non autorisée pour ce compte : consultation seule.";feedback.className="manual-feedback show error"}
   document.getElementById("manualSearchStep").classList.add("hidden");
   document.getElementById("manualCardStep").classList.remove("hidden");
   loadManualContext(manualSelected);
@@ -2151,70 +2310,48 @@ async function loadManualContext(employee){
     button.classList.toggle("hidden",!explicit);
   }catch(e){/* contexte indisponible : la saisie reste possible, Attendance Core décide */}
 }
-let abandonContext=null,abandonLoading=false;
+// ABANDON POSTE : traité dès le clic, sans fenêtre de confirmation. Le serveur vérifie d'abord la
+// situation (prise de service ouverte, vacation valide, fin connue, seuil, journée non clôturée,
+// droits) ; si une condition manque, AUCUNE écriture et la raison exacte est affichée. Le POST
+// refait tous les contrôles sous verrou (heure serveur, idempotence par vacation).
+function manualActionsLocked(){return !!(postState&&postState.permissions&&postState.permissions.manual_entry===false)}
+const ABANDON_DEFAULT_OBSERVATION="Départ anticipé constaté au poste de pointage";
 function remainingLabel(minutes){const n=Math.max(0,Math.floor(minutes)),h=Math.floor(n/60),m=n%60;return h?h+" h "+String(m).padStart(2,"0"):m+" min"}
 function abandonTime(value){return value?value.slice(11,16):"—"}
-function setManualActionsBusy(busy){["manualPointerBtn","manualAbsentBtn","manualAbandonBtn"].forEach(id=>document.getElementById(id).disabled=busy)}
-function updateAbandonConfirmation(){document.getElementById("abandonConfirm").disabled=scanBusy||!abandonContext||!abandonContext.applicable||!document.getElementById("abandonObservation").value.trim()}
-function closeAbandonModal(force=false){
-  if(scanBusy&&!force)return;
-  document.getElementById("abandonOverlay").classList.add("hidden");abandonContext=null;
-  document.getElementById("manualAbandonBtn").focus();
-}
-async function openAbandonModal(){
-  if(!manualSelected||scanBusy||abandonLoading)return;
-  const employee=manualSelected,site=selectedSiteId;
-  abandonLoading=true;scanBusy=true;setManualActionsBusy(true);
-  const feedback=document.getElementById("manualFeedback");
+function setManualActionsBusy(busy){["manualPointerBtn","manualAbsentBtn","manualAbandonBtn"].forEach(id=>document.getElementById(id).disabled=busy||manualActionsLocked())}
+async function recordAbandon(){
+  if(!manualSelected||scanBusy||manualActionsLocked())return;
+  const employee=manualSelected,site=selectedSiteId,feedback=document.getElementById("manualFeedback");
+  const headers={Authorization:"Bearer "+pointerSession.token};
+  scanBusy=true;setManualActionsBusy(true);
+  feedback.textContent="";feedback.className="manual-feedback";
   try{
-    const response=await fetch("/api/portal/attendance-manual/abandon/context?employee_id="+encodeURIComponent(employee.id)+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-manual/abandon/context?employee_id="+encodeURIComponent(employee.id)+siteQuery("&"),{headers});
     const ctx=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,ctx);
     if(manualSelected!==employee||selectedSiteId!==site)return;
-    abandonContext=ctx;
-    document.getElementById("abandonThresholdCaption").textContent="Départ anticipé (≥ "+ctx.threshold_minutes+" min)";
-    const facts=[["Employé",ctx.employee_name],["Matricule / code",ctx.matricule],["Société",ctx.society],["Site",ctx.site_name],["Poste",ctx.position||"—"],["Vacation / service",(ctx.shift||"Vacation")+" · #"+ctx.shift_id],["Début prévu",abandonTime(ctx.scheduled_start_at)],["Fin prévue",abandonTime(ctx.scheduled_end_at)],["Départ constaté",abandonTime(ctx.actual_departure_at)],["Temps restant",remainingLabel(ctx.remaining_minutes)]];
-    document.getElementById("abandonFacts").innerHTML='<dl class="v5-facts">'+facts.map(([label,value])=>'<dt>'+esc(label)+'</dt><dd>'+esc(value)+'</dd>').join("")+'</dl>';
-    document.getElementById("abandonObservation").value="";
-    const error=document.getElementById("abandonError");error.textContent=ctx.applicable?"":"Abandon de poste non applicable : il reste "+Math.floor(ctx.remaining_minutes)+" minutes. Le seuil requis est de "+ctx.threshold_minutes+" minutes.";error.className=ctx.applicable?"manual-feedback":"manual-feedback show error";
-    document.getElementById("abandonOverlay").classList.remove("hidden");
-    document.getElementById("abandonObservation").focus();
-  }catch(error){feedback.textContent=error.message||"Abandon de poste indisponible";feedback.className="manual-feedback show error"}
-  finally{scanBusy=false;abandonLoading=false;setManualActionsBusy(false);updateAbandonConfirmation()}
+    if(ctx.threshold_minutes)document.getElementById("abandonThresholdCaption").textContent="Départ anticipé (≥ "+ctx.threshold_minutes+" min)";
+    if(!ctx.applicable)throw new Error("Abandon de poste refusé : il reste "+remainingLabel(ctx.remaining_minutes)+" avant la fin prévue du service ("+abandonTime(ctx.scheduled_end_at)+"). Le seuil requis est de "+ctx.threshold_minutes+" minutes.");
+    const observation=document.getElementById("manualObservation").value.trim()||ABANDON_DEFAULT_OBSERVATION;
+    const saved=await fetch("/api/portal/attendance-manual/abandon",{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({employee_id:ctx.employee_id,site_id:ctx.site_id,society:ctx.society,shift_id:ctx.shift_id,observation})});
+    const data=await saved.json().catch(()=>({}));
+    if(saved.status===401){logout();throw new Error("Session expirée")}
+    if(!saved.ok)throw operationalError(saved,data);
+    const sent=a=>data.notifications&&data.notifications[a]&&data.notifications[a].status==="CREATED";
+    feedback.innerHTML='<b>ABANDON DE POSTE ENREGISTRÉ</b><dl class="v5-facts"><dt>Départ réel</dt><dd>'+esc(abandonTime(data.actual_departure_at))+'</dd><dt>Fin prévue</dt><dd>'+esc(abandonTime(data.scheduled_end_at))+'</dd><dt>Temps restant</dt><dd>'+esc(remainingLabel(data.remaining_minutes))+'</dd><dt>Transmission</dt><dd>'
+      +esc((sent("OPS")?"OPS informé":"OPS : transmission en attente")+" · "+(sent("DRH")?"DRH informée":"DRH : transmission en attente"))+'</dd></dl>';
+    feedback.className="manual-feedback show success";playTone(true);navigator.vibrate?.([80,40,80]);
+    Promise.resolve(loadHistory()).catch(()=>{});pollLive();
+  }catch(error){
+    const lost=transportFailure(error);
+    feedback.textContent=lost?TRANSPORT_MESSAGE:(error.message||"Abandon de poste impossible");
+    feedback.className="manual-feedback show error";playTone(false);
+  }finally{scanBusy=false;setManualActionsBusy(false)}
 }
-async function confirmAbandon(){
-  const ctx=abandonContext,observation=document.getElementById("abandonObservation").value.trim();
-  if(scanBusy||!ctx||!ctx.applicable||!observation)return;
-  scanBusy=true;setManualActionsBusy(true);updateAbandonConfirmation();document.getElementById("abandonCancel").disabled=true;
-  try{
-    const response=await fetch("/api/portal/attendance-manual/abandon",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:ctx.employee_id,site_id:ctx.site_id,society:ctx.society,shift_id:ctx.shift_id,observation})});
-    const data=await response.json().catch(()=>({}));
-    if(response.status===401){logout();throw new Error("Session expirée")}
-    if(!response.ok)throw operationalError(response,data);
-    document.getElementById("abandonOverlay").classList.add("hidden");abandonContext=null;
-    const feedback=document.getElementById("manualFeedback");
-    feedback.innerHTML='<b>ABANDON DE POSTE ENREGISTRÉ</b><p>Départ enregistré : '+esc(abandonTime(data.actual_departure_at))+'<br>Temps restant : '+esc(remainingLabel(data.remaining_minutes))+'</p>'
-      +["OPS","DRH"].map(a=>'<div>'+esc(data.notifications&&data.notifications[a]&&data.notifications[a].status==="CREATED"?(a==="OPS"?"✓ OPS informé":"✓ DRH informée"):a+" : transmission en attente")+'</div>').join("");
-    feedback.className="manual-feedback show success";playTone(true);
-    loadHistory().catch(()=>{});pollLive();
-    document.getElementById("manualAbandonBtn").focus();
-  }catch(error){const el=document.getElementById("abandonError");el.textContent=error.message||"Enregistrement impossible";el.className="manual-feedback show error"}
-  finally{scanBusy=false;setManualActionsBusy(false);document.getElementById("abandonCancel").disabled=false;updateAbandonConfirmation()}
-}
-document.addEventListener("keydown",event=>{
-  if(document.getElementById("abandonOverlay").classList.contains("hidden"))return;
-  if(event.key==="Escape"){event.preventDefault();closeAbandonModal()}
-  if(event.key==="Tab"){
-    const targets=Array.from(document.querySelectorAll("#abandonOverlay textarea,#abandonOverlay button:not(:disabled)"));
-    const first=targets[0],last=targets[targets.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
-  }
-});
 
 async function confirmManualPointage(action="present",options={}){
-  if(!manualSelected||scanBusy)return;
+  if(!manualSelected||scanBusy||manualActionsLocked())return;
   const intent=options.intent||null,reasonEl=document.getElementById("manualReason"),reason=reasonEl?reasonEl.value.trim():"";
   if(intent&&manualContext&&manualContext.reason_required&&!reason){
     const fb=document.getElementById("manualFeedback");fb.textContent="Motif obligatoire pour cette saisie manuelle.";fb.className="manual-feedback show error";reasonEl.focus();return;
@@ -2258,7 +2395,7 @@ async function confirmManualPointage(action="present",options={}){
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
   }finally{
     scanBusy=false;
-    button.disabled=false;absentButton.disabled=false;document.getElementById("manualAbandonBtn").disabled=false;
+    setManualActionsBusy(false);
   }
 }
 function normalizeUsbQrToken(value){
@@ -2388,7 +2525,7 @@ const originalChangeSite=changeAttendanceSite;
 changeAttendanceSite=async function(value){
   if(scanBusy){rebuildAttendanceSites();return}
   if(value&&!authorizedAttendanceSites.some(s=>String(s.id)===String(value)&&(!selectedSociety||societyKey(s.society)===societyKey(selectedSociety))))return;
-  trackingOnlyPresent=false;trackingEvents=[];trackingDailyServer=null;trackingAnomalies=[];postState=null;serverSummary=null;activeSheet=null;setHTML('presentNowList','');setHTML('postKpis','');renderTracking();
+  trackingOnlyPresent=false;trackingEvents=[];trackingDailyServer=null;trackingAnomalies=[];postState=null;serverSummary=null;activeSheet=null;postDetail={kind:'general',key:''};renderPost();renderTracking();
   selectedSiteId=String(value||'');rebuildAttendanceSites();persistAttendanceScope();
   await originalChangeSite(value);
 };
@@ -2438,7 +2575,7 @@ function renderTracking(){
   const events=trackingEvents.filter(e=>String(e.scanned_at||'').slice(0,10)===date&&(!query||[e.nom,e.matricule,e.poste].join(' ').toLowerCase().includes(query)));
   let columns,rows;
   if(trackingTab==='today'){
-    columns=['Nom et prénom','Code','Fonction',...(detachedTracking?['Société','Site']:[]),'Heure arrivée','Heure départ','Statut',...(detachedTracking?['Observation','Actions']:[])];
+    columns=['Nom et prénom','Matricule','Fonction',...(detachedTracking?['Société','Site']:[]),'Heure arrivée','Heure départ','Statut',...(detachedTracking?['Observation','Actions']:[])];
     const presentRows=(postState?.present||[]).map(r=>{const e=r.employee||{};return {nom:[e.nom,e.prenom].filter(Boolean).join(' '),matricule:e.matricule,poste:e.fonction||e.poste,societe:e.societe,site:r.site||postState.site,arrival:r.entry_at?hms(r.entry_at):r.entry,departure:'',status:r.badge_label||'En poste'}}).filter(r=>!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query));
     rows=(trackingOnlyPresent?presentRows:(trackingDailyServer?trackingDailyServer.filter(r=>r.date===date&&(!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query))):trackingDailyRows(events))).map(r=>[r.nom,r.matricule,r.poste,...(detachedTracking?[r.societe,r.site]:[]),r.arrival,r.departure,r.status,...(detachedTracking?[r.observation,'—']:[])]);
   }else if(trackingTab==='entries'){
