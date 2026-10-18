@@ -9,7 +9,7 @@ const SOC_A='IRON GLOBAL SOLUTION',SOC_B='SWORD CORPORATION';
 const HAMOUL={id:'st_hamoul',backendId:41,nom:'DHL FORWARDING / HAMOUL 01 (40K)',societe:SOC_A};
 const SITE_X={id:'st_x',backendId:42,nom:'SITE X',societe:SOC_A};
 const SITE_SWORD={id:'st_sword',backendId:51,nom:'SITE SWORD',societe:SOC_B};
-const NAMES=['emptyDB','renderEffectif','setEffectifSiteFilter','setEffectifPosteFilter','resetEffectifToolbar','setEffectifSearch',
+const NAMES=['normalizePageHeader','emptyDB','renderEffectif','setEffectifSiteFilter','setEffectifPosteFilter','resetEffectifToolbar','setEffectifSearch',
   'setEffectifSort','setEffectifPage','setOpsEffectifSearch','sgdiEffectifExportList','drhEffectifActionsBarHTML','effectifAgentPoste'];
 
 const aff=(site,poste)=>site?{siteId:site.id,siteBackendId:site.backendId,siteName:site.nom,poste}:{};
@@ -286,4 +286,33 @@ test('OPS superviseur : POSTE et compteurs sur la liste autorisée uniquement',a
   assert.deepEqual(chips(view,'poste').map(c=>c.slice(0,3)),[['','Tous',3],['Cariste','Cariste',2],['Magasinier','Magasinier',1]]);
   await api.setEffectifPosteFilter('Magasinier','actifs');
   assert.deepEqual(ids(view),[3]);
+});
+
+// Régression production (PR #60) : le normalisateur d'en-tête générique classait toute la
+// zone en « module-page-header » et la page en « module-page-header-actions » (flex
+// horizontal) ; avec container-type, la barre sticky tombait à 0 px de large.
+test('normalisateur d’en-tête : la zone des effectifs DRH et OPS n’est plus reclassée',async t=>{
+  for(const fixture of [drhFixture,opsFixture]){
+    const {api,view}=await fixture(t);
+    api.normalizePageHeader(view);
+    const zone=view.querySelector('#effectif-list-zone');
+    assert.equal(zone.classList.contains('module-page-header'),false);
+    assert.equal(view.querySelector('.effectif-page').classList.contains('module-page-header-actions'),false);
+    assert.equal(view.querySelector('.module-page-header-copy,.module-page-header-actions'),null);
+  }
+  const {api,view}=await drhFixture(t);
+  view.innerHTML='<div><h1>Autre page</h1><div><button type="button">Action</button></div></div>';
+  api.normalizePageHeader(view);
+  assert.ok(view.firstElementChild.classList.contains('module-page-header'),'les autres pages restent normalisées');
+});
+
+test('CSS : le bloc sticky ne dépend d’aucun container-type ni @container',()=>{
+  const css=require('node:fs').readFileSync(require('node:path').join(__dirname,'../app/static/sgdi-app.css'),'utf8');
+  const start=css.indexOf('Gestion des effectifs : barre de pilotage DRH / OPS');
+  const block=css.slice(start,css.indexOf('/* Agenda module */',start));
+  assert.ok(start>0&&block.length>0);
+  assert.doesNotMatch(block,/container-type\s*:|@container/);
+  const head=block.match(/#view \.effectif-sticky-head\{[^}]*\}/)[0];
+  for(const rule of ['width:100%','min-width:0','height:auto','flex:0 0 auto'])assert.ok(head.includes(rule),rule);
+  assert.match(block,/@media screen and \(min-width:1200px\) and \(min-height:700px\)\{\s*#view \.effectif-sticky-head\{\s*position:sticky/);
 });
