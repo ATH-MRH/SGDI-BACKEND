@@ -108,7 +108,7 @@ test('déconnexion : aucune donnée du compte précédent ne reste à l’écran
 
 test('fichiers du poste : versionnés, donc renouvelés à chaque livraison malgré le cache d’un an', () => {
   const html = read('pointeur.html');
-  for (const file of ['html5-qrcode.min.js', 'pointeur-facial.js', 'pointeur-workstation.css']) {
+  for (const file of ['html5-qrcode.min.js', 'pointeur-facial.js', 'pointeur-workstation.css', 'pointeur-v6.css']) {
     const match = html.match(new RegExp('/static/' + file.replace(/\./g, '\\.') + '\\?v=([^"\']+)'));
     assert.ok(match, file + ' porte un paramètre de version');
     assert.notEqual(match[1], '1', file + ' : la version figée « 1 » n’est plus utilisée');

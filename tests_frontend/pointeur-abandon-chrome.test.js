@@ -1,4 +1,4 @@
-// Géométrie des trois actions et de la modale dans le vrai moteur Chrome.
+// Géométrie des trois actions et du résultat d'abandon (sans modale, V6) dans le vrai moteur Chrome.
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {spawn}=require('node:child_process');
@@ -13,9 +13,9 @@ setTimeout(async()=>{
   stopLivePolling();
   toggleManualPanel();manualResults=[{id:17,nom:'Agent',prenom:'Test',matricule:'E17',societe:'IGS',site:'Site test'}];selectManualResult(0);
   const buttons=[...document.querySelectorAll('.manual-actions button')].map(b=>{const r=b.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height,right:r.right}});
-  await openAbandonModal();
-  const modal=document.querySelector('.abandon-modal').getBoundingClientRect();
-  const result={buttons,width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,modal:{left:modal.left,right:modal.right,top:modal.top,bottom:modal.bottom},height:innerHeight,shown:!document.getElementById('abandonOverlay').classList.contains('hidden')};
+  await recordAbandon();
+  const feedback=document.getElementById('manualFeedback'),box=feedback.getBoundingClientRect();
+  const result={buttons,width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,modal:{left:box.left,right:box.right,top:box.top,bottom:box.bottom},height:innerHeight,shown:/ABANDON DE POSTE ENREGISTRÉ/.test(feedback.textContent),noModal:!document.getElementById('abandonOverlay')};
   parent.postMessage(result,'*');
 },1600);
 `;
@@ -28,7 +28,7 @@ function dump(port,width){
   const timer=setTimeout(finish,30000);child.stdout.on('data',chunk=>{out+=chunk;if(out.includes('ENDRESULT</pre>'))finish()});child.on('close',()=>{finish();try{fs.rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100})}catch{}});child.on('error',reject);
  });
 }
-test('Chrome : trois actions alignées et modale sans débordement à 390, 430, 768 et 1280 px',{skip:chrome?false:'Chrome indisponible',timeout:150000},async()=>{
+test('Chrome : trois actions alignées et résultat d’abandon sans débordement à 390, 430, 768 et 1280 px',{skip:chrome?false:'Chrome indisponible',timeout:150000},async()=>{
  const raw=fs.readFileSync(path.join(__dirname,'../app/static/pointeur.html'),'utf8');
  const html=raw.replace('<script>','<script>'+setup+'<\/script><script>').replace('</body>','<script>'+probe+'<\/script></body>');
  const server=http.createServer((req,res)=>{
@@ -39,11 +39,12 @@ test('Chrome : trois actions alignées et modale sans débordement à 390, 430, 
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  try{for(const width of [390,430,768,1280]){
   const result=await dump(server.address().port,width);
-  assert.equal(result.shown,true);assert.equal(result.overflow,false,JSON.stringify(result));
+  assert.equal(result.shown,true,JSON.stringify(result));assert.equal(result.noModal,true);assert.equal(result.overflow,false,JSON.stringify(result));
   const [first,...others]=result.buttons;
   assert.equal(result.buttons.length,3);
   for(const button of others){assert.ok(Math.abs(button.top-first.top)<1);assert.ok(Math.abs(button.width-first.width)<2);assert.equal(button.height,first.height)}
   assert.ok(result.buttons.every(b=>b.left>=0&&b.right<=width));
-  assert.ok(result.modal.left>=0&&result.modal.right<=width);assert.ok(result.modal.top>=0&&result.modal.bottom<=result.height);
+  // Résultat juste sous les trois actions, dans la largeur (la page défile sur téléphone).
+  assert.ok(result.modal.left>=0&&result.modal.right<=width,JSON.stringify(result));assert.ok(result.modal.top>=first.top+first.height-1&&result.modal.top-(first.top+first.height)<150,JSON.stringify(result));
  }}finally{server.close()}
 });
