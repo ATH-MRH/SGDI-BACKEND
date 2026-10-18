@@ -1283,6 +1283,37 @@ def public_employee_badge(employee_ref: str, t: str | None = None, b: int | None
     return _public_badge(employee_ref, t, b)
 
 
+def _a1_public_target(code: str) -> tuple[str, str, int]:
+    """QR de pointage A1 (app.modules.drh.badge_qr) ouvert au téléphone : même page publique que le
+    lien signé du badge émis. Signature A1 vérifiée d'abord ; le lien interne est recalculé ici."""
+    from app.modules.drh import badge_qr
+    from app.modules.drh.badge_models import EmployeeBadge
+
+    state, badge_id = badge_qr.read(code)
+    if state != badge_qr.OK or badge_id is None:
+        raise HTTPException(status_code=404, detail="Lien public invalide")
+    with SessionLocal() as db:
+        badge = db.get(EmployeeBadge, badge_id)
+        employee_id = badge.employee_id if badge is not None else None
+    if not employee_id:
+        raise HTTPException(status_code=404, detail="Badge introuvable")
+    ref = str(employee_id)
+    return ref, _public_employee_token("badge", f"{ref}:{badge_id}"), badge_id
+
+
+@app.get("/api/p/{code}", include_in_schema=False)
+@app.get("/api/P/{code}", include_in_schema=False)
+def public_a1_badge(code: str) -> dict:
+    return _public_badge(*_a1_public_target(code))
+
+
+@app.get("/p/{code}", include_in_schema=False)
+@app.get("/P/{code}", include_in_schema=False)
+def public_a1_badge_page(code: str, request: Request) -> HTMLResponse:
+    ref, token, badge_id = _a1_public_target(code)
+    return public_employee_badge_page(ref, request, t=token, b=badge_id)
+
+
 @app.get("/public/badge/{employee_ref}", include_in_schema=False)
 def public_employee_badge_page(employee_ref: str, request: Request, t: str | None = None, b: int | None = None) -> HTMLResponse:
     data = _public_badge(employee_ref, t, b)

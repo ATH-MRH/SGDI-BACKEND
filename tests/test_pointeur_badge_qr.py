@@ -19,7 +19,7 @@ from app.core.security import create_access_token
 from app.main import _public_employee_token
 from app.modules.attendance.models import AttendanceEvent
 from app.modules.drh.badge_models import STATUS_ACTIVE, STATUS_REPLACED, STATUS_REVOKED, EmployeeBadge
-from app.modules.drh.badge_routes import _qr_url
+from app.modules.drh.badge_routes import _qr_url, _studio_link_v0
 from app.modules.drh.models import EmployeeBlacklistEntry
 from app.modules.ops.models import DailyPresence
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
@@ -38,8 +38,10 @@ def _badge(db, employee, status=STATUS_ACTIVE, valid_until=None, revoked=False):
 
 
 def _qr(employee, badge):
-    """Contenu exact du QR imprimé : adresse produite par le Studio Badges lui-même."""
-    return _qr_url(STUDIO, employee, badge.id)
+    """Contenu exact du QR des badges Studio émis AVANT le format A1 (lien public signé avec b=), produit
+    par le constructeur même du Studio. Ces badges restent valides ; le format A1 rejoue cette batterie
+    dans test_badge_qr_a1.py."""
+    return _studio_link_v0(STUDIO, employee, badge.id)
 
 
 @pytest.fixture

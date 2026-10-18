@@ -25,8 +25,9 @@ Création, émission, impression et suivi des badges du personnel, dans le Porta
 - **Un seul badge actif par employé.** Émettre un nouveau badge marque le précédent « remplacé ».
   Une révocation (perte, vol, départ…) est tracée et la page de vérification scannée affiche
   alors « Badge désactivé ».
-- **Le QR ouvre la page publique signée existante** `/public/badge/{ref}` ; les badges déjà en
-  circulation restent valides. Voir « QR code ».
+- **Un seul QR pour pointer et vérifier** : le QR d'un badge émis (format A1, `/p/<code>`) est lu
+  par le Pointeur (douchette, caméra) et ouvre au téléphone la page publique du badge ; les badges
+  déjà en circulation (`/public/badge/{ref}?t=…`) restent valides. Voir « QR code ».
 - **Le porte-badge et le cordon ne sont qu'un aperçu d'écran.** Le PDF d'impression est produit
   par le serveur et ne contient que la carte, au format exact (54 × 86 mm par défaut), ou une
   planche A4 avec traits de coupe. Une épreuve PDF (studio, création) est barrée « SPÉCIMEN » et
@@ -183,9 +184,35 @@ refus est journalisé (`authorization.badge`) et le portail affiche sa raison pr
 
 - Généré par le serveur (PDF, aperçus, page publique, écran historique) : le lien signé n'est
   transmis à aucun service externe.
-- Le QR d'un badge émis porte l'identifiant de CE badge (`b=`) et un jeton qui lui est propre.
+- Le QR d'un badge émis porte l'identifiant de CE badge et une signature qui lui est propre.
   Révoqué, remplacé ou expiré, il affiche « Badge désactivé », même si l'employé a reçu un
-  nouveau badge depuis. Un jeton ne peut pas être rejoué sur un autre badge.
+  nouveau badge depuis. Une signature ne peut pas être rejouée sur un autre badge.
+
+### Format A1 (badges émis depuis la PR « QR de pointage A1 »)
+
+`https://<hôte>/p/A1<numéro : 7 car.><signature : 16 car.>` — exemple au contenu factice :
+`https://badge.irongs.com/p/A10000042ZZZZZZZZZZZZZZZZ` (52 caractères).
+
+- **Pourquoi** : une douchette émule un clavier. La HENEX HC-866 réglée « AZERTY PC » et branchée
+  sur un Mac AZERTY tape « - » au lieu de « = » (et « ! » au lieu de « _ ») : l'adresse précédente
+  `…?t=…&b=…` arrivait en `…?t-…`, refusée (« QR mal lu par le lecteur »). Le format A1 n'emploie
+  que des lettres, des chiffres et « : / . », identiques sur les deux AZERTY et vérifiés sur la
+  HC-866 réelle.
+- **Code** : base 32 de Crockford (chiffres et majuscules, sans I, L, O, U), insensible à la casse
+  par définition (Verr. Maj. sans effet). Aucun autre caractère n'est réinterprété ; une lecture
+  abîmée n'est jamais « réparée » (`?t-` reste refusé).
+- **Signature** : HMAC-SHA256 du numéro de badge, 80 bits, clé dérivée du secret de l'application
+  et propre à cet usage (un jeton de lien public ou de session ne vaut rien en A1).
+- **Contrôles au Pointeur** : identiques au badge Studio — badge actif, remplacé, révoqué, expiré,
+  employé, société, site, liste noire, vacation, clôture, doublons (`app/modules/portal/routes.py`,
+  `_scan_issued_badge`).
+- **Téléphone** : `/p/<code>` (et `/P/<code>`) affiche la page publique du badge ; `/api/p/<code>`
+  sa version JSON. Aucune donnée personnelle dans le QR.
+- **Badges déjà émis** : leur QR est enregistré à l'émission (`snapshot.qr_url`) et n'est jamais
+  réécrit ; ils restent valides au Pointeur et au téléphone. Pour qu'un employé passe au format A1,
+  on **réémet** son badge depuis le studio (l'ancien est alors révoqué : un seul badge physique).
+- **Retour arrière** : le code antérieur ne connaît pas `/p/` ; les badges émis en A1 entre-temps
+  seraient refusés jusqu'au retour du code A1. Les badges plus anciens ne sont pas concernés.
 - Le studio contrôle le QR en direct et à l'enregistrement : 12 mm de côté au minimum, cadre
   carré, entièrement sur la carte, opaque, sombre sur fond clair.
 
