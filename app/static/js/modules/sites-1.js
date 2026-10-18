@@ -9,14 +9,10 @@ function siteAgentsForGroupForm(siteId){
 const SITE_AFFECTATION_PAGE=25;
 
 function siteAffectationGroupesHTML(site){
-  const eff=siteEffectifsNorm(site);
-  const contractuel=+eff.totalContractuel||0;
   const agents=siteAgentsAffectes(site);
-  // Règle historique conservée : au-delà de l'effectif contractuel, les dernières lignes
-  // (ordre matricule) sont présentées en surplus. Aucun employé n'est réaffecté ici.
-  const hasSurplus=contractuel>0&&agents.length>contractuel;
-  const mainAgents=hasSurplus?agents.slice(0,contractuel):agents;
-  const surplusAgents=hasSurplus?agents.slice(contractuel):[];
+  const {contractual:contractuel,surplus}=siteStaffingPresentation(site);
+  // Un écart numérique n'identifie aucun employé : toutes les affectations restent ensemble.
+  const mainAgents=agents;
   const fullName=a=>((a.nom||"")+" "+(a.prenom||"")).trim()||"—";
   const mainRow=(a,i)=>{
     const aff=opsEmployeeLiveAffectation(a);
@@ -30,29 +26,16 @@ function siteAffectationGroupesHTML(site){
       <td>${escapeHTML(a.statut||"—")}</td>
     </tr>`;
   };
-  const surplusRow=a=>{
-    const aff=opsEmployeeLiveAffectation(a);
-    const motif=opsLatestMovementForEmployee(a)?.mouvementMotif||aff?.natureMouvement||"";
-    return `<tr>
-      <td class="stf-cell-strong">${escapeHTML(fullName(a))}</td>
-      <td class="stf-cell-mono">${escapeHTML(a.matricule||"—")}</td>
-      <td>${escapeHTML(aff?.poste||a.fonction||"—")}</td>
-      <td class="stf-cell-mono">${formatDate(aff?.dateDebut)}</td>
-      <td>${motif?escapeHTML(motif):`<span class="stf-text-warn">Motif OM non renseigné</span>`}</td>
-      <td><span class="stf-chip stf-chip--violet">Au-delà du contrat (${contractuel})</span></td>
-    </tr>`;
-  };
   const canOpenMovements=["ops","admin"].includes(session?.transverse)&&!isOpsSupervisorReadOnlySession();
   const more=mainAgents.length>SITE_AFFECTATION_PAGE?`<div class="stf-table-foot"><span data-stf-affect-shown>${SITE_AFFECTATION_PAGE} affiché(s) sur ${mainAgents.length}</span>${opsButtonHTML("Afficher plus",{size:"sm",attrs:`data-site-lock-keep data-stf-affect-more onclick="siteTechAffectShowMore()"`})}</div>`:"";
   const mainBlock=`<div class="stf-subcard">
-    <div class="stf-subcard-head"><h3>Effectifs affectés</h3><span class="stf-count" aria-label="${mainAgents.length} employé(s) affecté(s)">${mainAgents.length}${contractuel?" / "+contractuel:""}</span>
+    <div class="stf-subcard-head"><h3>Effectifs affectés</h3><span class="stf-count" aria-label="${mainAgents.length} employé(s) affecté(s)">${mainAgents.length}${contractuel!==null?" / "+contractuel:""}</span>
       ${mainAgents.length>8?`<label class="stf-search"><span class="ops-sr-only">Rechercher un employé affecté</span>${opsIcon("search")}<input type="search" data-no-lock="1" placeholder="Nom, matricule, poste…" oninput="siteTechAffectFilter(this.value)" onkeydown="if(event.key==='Enter')event.preventDefault()"/></label>`:""}</div>
     ${mainAgents.length?`<div class="stf-table-wrap"><table class="stf-table"><thead><tr><th>Employé</th><th>Matricule</th><th>Poste / fonction</th><th>Date d'affectation</th><th>Groupe</th><th>Situation</th></tr></thead><tbody id="site-affectation-body">${mainAgents.map(mainRow).join("")}</tbody></table></div><p class="stf-empty" data-stf-affect-empty hidden>Aucun employé ne correspond à la recherche.</p>${more}`:`<p class="stf-empty">Aucun employé affecté.</p>`}
   </div>`;
-  const surplusBlock=surplusAgents.length?`<div class="stf-subcard stf-subcard--violet">
-    <div class="stf-subcard-head"><h3>Effectifs en surplus</h3><span class="stf-count stf-count--violet">+${surplusAgents.length}</span></div>
-    <p class="stf-hint">Ces employés dépassent l'effectif contractuel du site (${contractuel}). L'OM doit mentionner le motif.</p>
-    <div class="stf-table-wrap"><table class="stf-table"><thead><tr><th>Employé</th><th>Code</th><th>Fonction</th><th>Date d'affectation</th><th>Motif de l'ordre de mouvement</th><th>Surplus</th></tr></thead><tbody>${surplusAgents.map(surplusRow).join("")}</tbody></table></div>
+  const surplusBlock=surplus>0?`<div class="stf-subcard stf-subcard--violet" data-site-surplus-summary>
+    <div class="stf-subcard-head"><h3>Effectifs en surplus</h3><span class="stf-count stf-count--violet">+${surplus}</span></div>
+    <p class="stf-hint">Employés en surplus non identifiés individuellement</p>
   </div>`:"";
   return `<div class="stf-notice" role="note">${opsIcon("info")}<div><strong>Lecture seule</strong> — Les employés affichés ici viennent uniquement des ordres de mouvement validés.${canOpenMovements?` Toute modification passe par le workflow des ordres de mouvement.`:""}</div>${canOpenMovements?opsButtonHTML("Ordres de mouvement",{size:"sm",icon:"swap",attrs:`data-site-lock-keep onclick="navigate('ops/mouvements')"`}):""}</div>${mainBlock}${surplusBlock}`;
 }

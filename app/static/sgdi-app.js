@@ -4511,6 +4511,7 @@ const OPS_ICON_PATHS={
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/>',
   back:'<path d="M15 5 8 12l7 7"/>',
+  next:'<path d="m9 5 7 7-7 7"/>',
   archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
   alert:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
@@ -4526,7 +4527,7 @@ const OPS_ICON_PATHS={
 };
 function opsIcon(name,cls){
   const paths=OPS_ICON_PATHS[name];
-  return paths?`<svg class="${cls||"ops-icon"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`:"";
+  return paths?`<svg class="${cls||"ops-icon"}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`:"";
 }
 function opsBadgeHTML(count,label){
   const n=Math.trunc(Number(count));
@@ -4536,8 +4537,45 @@ function opsBadgeHTML(count,label){
 // variant : standard | primary | success | warn | danger ; size : "sm" pour les tableaux.
 function opsButtonHTML(label,opts){
   const o=opts||{};
-  const cls=["ops-btn","ops-btn--"+(o.variant||"standard"),o.size==="sm"?"ops-btn--sm":"",o.className||""].filter(Boolean).join(" ");
+  const cls=["ops-btn","ops-btn--"+(o.variant||"standard"),o.size==="sm"?"ops-btn--sm":"",o.className||"",opsPresentationActive()?"":"btn btn-"+(o.variant==="standard"||!o.variant?"secondary":o.variant)].filter(Boolean).join(" ");
   return `<button type="${o.type||"button"}" class="${cls}"${o.attrs?" "+o.attrs:""}>${o.icon?opsIcon(o.icon,"ops-btn__icon"):""}<span class="ops-btn__label">${escapeHTML(label)}</span>${opsBadgeHTML(o.badge,o.badgeLabel)}</button>`;
+}
+// Garde de présentation indépendante du rôle, des droits et du contexte de fiche mémorisé.
+// Un superviseur possédant plusieurs modules ne doit activer l'habillage que dans OPS.
+function opsPresentationActive(){
+  if(!["ops","superviseur"].includes(session?.transverse))return false;
+  const host=String(location.hostname||"").toLowerCase().split(".")[0];
+  if(["drh","pointeur","pointage","brq","recrute","recrutement","emploi"].includes(host))return false;
+  const config=sgdiModuleHostConfig();
+  return !config||["ops","superviseur"].includes(config.key);
+}
+function syncOpsPresentation(){
+  if(!document?.body)return;
+  const active=opsPresentationActive();
+  document.body.toggleAttribute("data-ops-ui",active);
+  document.querySelectorAll(".sgdi-shell").forEach(shell=>shell.classList.toggle("sgdi-ops-shell",active));
+  const roots=[document.getElementById("view"),document.getElementById("modal-host")].filter(Boolean);
+  for(const root of roots){
+    if(!active){
+      root.querySelectorAll("[data-ops-enhanced]").forEach(button=>{
+        button.querySelectorAll("[data-ops-auto-icon]").forEach(icon=>icon.remove());
+        button.classList.remove("ops-btn");
+        delete button.dataset.opsEnhanced;
+      });
+      continue;
+    }
+    // Conserve les éléments, handlers, liens, états désactivés et validations de formulaire.
+    const selector="button.btn,a.btn,.effectif-open-btn,.ops-outgoing-open,.ops-outgoing-page-btn,.ops-sites-cc-btn,.ops-sites-cc-more,.ops-cc-action";
+    root.querySelectorAll(selector).forEach(button=>{
+      if(!button.classList.contains("ops-btn")){
+        button.classList.add("ops-btn");button.dataset.opsEnhanced="1";
+      }
+      if(!button.dataset.opsEnhanced||button.querySelector("svg")||!button.textContent.trim())return;
+      const label=normalizedSearchText(button.textContent);
+      const icon=/supprim|retir/.test(label)?"trash":/enregistr|valid|confirm/.test(label)?"save":/retour|preced|fermer|annul/.test(label)?"back":/ajout|nouve|creer/.test(label)?"plus":/imprim|pv/.test(label)?"print":/filtr|recher/.test(label)?"search":/mouvement|affect/.test(label)?"swap":/suivant/.test(label)?"next":/mission|planning|rotation/.test(label)?"calendar":/dotation|materiel/.test(label)?"box":/anomal|incident/.test(label)?"alert":/rapport|document|export/.test(label)?"file":"eye";
+      button.insertAdjacentHTML("afterbegin",opsIcon(icon,"ops-btn__icon").replace("<svg ",'<svg data-ops-auto-icon="1" '));
+    });
+  }
 }
 function mySoc(){return session?.societe||""}
 // Studio Badges DRH (#/drh/badges/…) : seul écran de badge du Portail DRH. Les autres portails
@@ -6870,7 +6908,7 @@ function render(options={}){
   // hashchange) est TOUJOURS terminée, même sur les pages à retour anticipé (portail,
   // select-societe, sélecteur de société...). Sans ça, ces pages laissaient la barre
   // bloquée à 76 %.
-  try{renderInternal(options)}finally{if(typeof uiProgressDone==="function")uiProgressDone()}
+  try{renderInternal(options)}finally{syncOpsPresentation();if(typeof uiProgressDone==="function")uiProgressDone()}
 }
 function renderInternal(options={}){
   sanitizeCandidatesInDB();
@@ -6943,7 +6981,7 @@ function renderInternal(options={}){
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   const commercialShell=session.transverse==="commercial";
   // Portail OPS (y compris superviseurs terrain) : marqueur des styles de boutons OPS (.ops-btn).
-  const opsShell=["ops","superviseur"].includes(session.transverse);
+  const opsShell=opsPresentationActive();
   app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}${opsShell?" sgdi-ops-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
@@ -9058,6 +9096,7 @@ function syncAdminUsersShell(){
 }
 
 function renderView(){
+  syncOpsPresentation();
   syncAdminUsersShell();
   // Invalide immédiatement tout rendu asynchrone lancé par la vue précédente.
   // Les vues qui utilisent une coque dédiée la réactivent explicitement durant
@@ -21619,7 +21658,7 @@ try{
   let stripTimer=null;
   new MutationObserver(()=>{
     clearTimeout(stripTimer);
-    stripTimer=setTimeout(()=>stripCryptogrammes(document.getElementById("app")||document.body),30);
+    stripTimer=setTimeout(()=>{stripCryptogrammes(document.getElementById("app")||document.body);syncOpsPresentation()},30);
   }).observe(document.body,{childList:true,subtree:true,characterData:true});
 }catch(e){}
 try{sgdiScheduleAutoRefresh()}catch(e){}

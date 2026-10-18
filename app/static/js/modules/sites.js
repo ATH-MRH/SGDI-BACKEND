@@ -742,9 +742,6 @@ function openSiteMovementHistoryModal(siteId){
 function openSiteAffectesModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
   if(supervisorModuleActive()&&!siteInSupervisorScope(site))return toast("Site non autorisé pour ce superviseur","error");
-  const eff=siteEffectifsNorm(site);
-  const backend=siteBackendSituationForSite(site);
-  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
   const backendRows=siteBackendAssignmentRows(site);
   const agentFromAssignmentRow=row=>findEmployeeByRef(row?.employee_id)||findEmployeeByRef(row?.code)||findEmployeeByRef(row?.matricule)||null;
   const rowVisible=item=>{
@@ -755,8 +752,8 @@ function openSiteAffectesModal(siteId){
     return true;
   };
   const agents=(backendRows||siteAgentsAffectes(site)).filter(rowVisible);
-  const surplus=contractuel>0&&agents.length>contractuel?agents.slice(contractuel):[];
-  const main=contractuel>0&&agents.length>contractuel?agents.slice(0,contractuel):agents;
+  const {contractual:contractuel,surplus}=siteStaffingPresentation(site,agents);
+  const main=agents;
   const agentRow=item=>{
     const row=item?.employee_id||item?.assignment_id?item:null;
     const a=row?agentFromAssignmentRow(row):item;
@@ -772,10 +769,10 @@ function openSiteAffectesModal(siteId){
   openModal(`<h3 class="font-bold text-lg mb-2">Effectifs affectés</h3>
     <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-4">
       <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
-      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")} · Contractuel : ${contractuel} · Affecté : ${agents.length}</div>
+      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")} · Contractuel : ${contractuel??"—"} · Affecté : ${agents.length}</div>
     </div>
     ${main.length?`<div class="card overflow-hidden mb-3"><div class="px-3 py-2 bg-slate-50 border-b font-semibold text-sm">Effectifs affectés (${main.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${main.map(agentRow).join("")}</tbody></table></div>`:`<div class="text-sm text-slate-500 p-4 rounded bg-slate-50 border text-center mb-3">Aucun employé affecté.</div>`}
-    ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
+    ${surplus>0?`<div class="card p-3" data-site-surplus-summary><strong>Effectifs en surplus (+${surplus})</strong><p class="text-sm mt-1">Employés en surplus non identifiés individuellement</p></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
@@ -1070,15 +1067,27 @@ function siteEffectifAlertHTML(eff,agents){
   </div>`;
 }
 
-function siteRecapBlockHTML(site,eff){
+// Présentation uniquement : zéro explicite est connu, valeur absente/invalide reste inconnue.
+// Aucun rang dans une liste ni motif libre d'OM ne constitue une qualification nominative.
+function siteStaffingPresentation(site,agents){
   const backend=siteBackendSituationForSite(site);
-  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
-  const agents=siteBackendAssignmentRows(site)||siteAgentsAffectes(site);
-  const realise=agents.length;
-  // Sans effectif contractuel défini, manque et surplus ne sont pas calculables : « — », jamais 0.
-  const known=contractuel>0;
-  const manque=known?Math.max(0,contractuel-realise):null;
-  const surplus=known?Math.max(0,realise-contractuel):null;
+  const raw=backend?.contractual_staff??site?.effectifs?.totalContractuel??site?.effectifs?.total??site?.contractual_staff;
+  const numberOrUnknown=value=>{
+    if(!["number","string"].includes(typeof value)||String(value).trim()==="")return null;
+    const number=Number(value);
+    return Number.isFinite(number)&&number>=0?number:null;
+  };
+  const contractual=numberOrUnknown(raw);
+  const rows=agents??siteBackendAssignmentRows(site)??siteAgentsAffectes(site);
+  // Le compteur serveur reste utilisable même si la liste locale d'employés est paginée.
+  // Une liste explicitement fournie conserve les filtres de la fenêtre de consultation.
+  const realized=agents==null?(numberOrUnknown(backend?.realized_staff)??(Array.isArray(rows)?rows.length:null)):(Array.isArray(rows)?rows.length:null);
+  const known=contractual!==null&&realized!==null;
+  return {contractual,realized,missing:known?Math.max(0,contractual-realized):null,surplus:known?Math.max(0,realized-contractual):null};
+}
+function siteRecapBlockHTML(site,eff){
+  const {contractual:contractuel,realized:realise,missing:manque,surplus}=siteStaffingPresentation(site);
+  const known=contractuel!==null;
   const tile=(key,label,value,icon,tone,title)=>`<div class="stf-kpi stf-kpi--${tone}" data-stf-kpi="${key}"${title?` title="${escapeHTML(title)}"`:""}><span class="stf-kpi-icon">${opsIcon(icon)}</span><div><span class="stf-kpi-label">${escapeHTML(label)}</span><strong class="stf-kpi-value">${escapeHTML(String(value))}</strong></div></div>`;
   return `<section class="site-editor-wide stf-kpis" aria-label="Compteurs opérationnels du site">
     ${tile("ouverture","Date d'ouverture",formatDate(site.dateOuverture),"calendar","info")}

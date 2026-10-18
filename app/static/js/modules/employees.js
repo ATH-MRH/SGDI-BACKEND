@@ -406,18 +406,18 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card ops-effectif-filter-card">
     <div class="ops-effectif-filter-main">
-      <div><label class="label">Poste / fonction</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
-      <div><label class="label">Situation familiale</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
-      <div class="ops-effectif-filter-actions"><button type="button" class="btn btn-secondary text-xs" onclick="toggleOpsEffectifAdvanced()">${advanced?"Masquer filtres":"Filtres avancés"}</button><button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button></div>
+      <div><label class="label" for="ops-filter-poste">Poste / fonction</label><select id="ops-filter-poste" class="select" data-no-lock onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+      <div><label class="label" for="ops-filter-situation">Situation familiale</label><select id="ops-filter-situation" class="select" data-no-lock onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div class="ops-effectif-filter-actions">${opsButtonHTML(advanced?"Masquer filtres":"Filtres avancés",{size:"sm",icon:"search",badge:["recrutFrom","recrutTo","birthFrom","birthTo","ageMin","ageMax"].filter(key=>String(f[key]??"")!=="").length,badgeLabel:"filtre(s) actif(s)",attrs:`aria-expanded="${advanced}" aria-controls="ops-effectif-advanced" onclick="toggleOpsEffectifAdvanced()"`})}${opsButtonHTML("Réinitialiser",{size:"sm",icon:"rotate",attrs:'onclick="resetOpsEffectifFilters()"'})}</div>
     </div>
-    <div id="ops-effectif-result-count" class="ops-effectif-result-count">${filteredCount} résultat(s) affiché(s)</div>
-    ${advanced?`<div class="ops-effectif-advanced">
-      <div><label class="label">Recrutement du</label><input class="input" data-no-lock type="date" value="${val("recrutFrom")}" onchange="setOpsEffectifFilter('recrutFrom',this.value)"/></div>
-      <div><label class="label">Recrutement au</label><input class="input" data-no-lock type="date" value="${val("recrutTo")}" onchange="setOpsEffectifFilter('recrutTo',this.value)"/></div>
-      <div><label class="label">Naissance du</label><input class="input" data-no-lock type="date" value="${val("birthFrom")}" onchange="setOpsEffectifFilter('birthFrom',this.value)"/></div>
-      <div><label class="label">Naissance au</label><input class="input" data-no-lock type="date" value="${val("birthTo")}" onchange="setOpsEffectifFilter('birthTo',this.value)"/></div>
-      <div><label class="label">Age min</label><input class="input" data-no-lock type="number" min="0" value="${val("ageMin")}" onchange="setOpsEffectifFilter('ageMin',this.value)"/></div>
-      <div><label class="label">Age max</label><input class="input" data-no-lock type="number" min="0" value="${val("ageMax")}" onchange="setOpsEffectifFilter('ageMax',this.value)"/></div>
+    <div id="ops-effectif-result-count" class="ops-effectif-result-count" role="status" aria-live="polite">${filteredCount} résultat(s) affiché(s)</div>
+    ${advanced?`<div id="ops-effectif-advanced" class="ops-effectif-advanced">
+      <div><label class="label" for="ops-filter-recrutFrom">Recrutement du</label><input id="ops-filter-recrutFrom" class="input" data-no-lock type="date" value="${val("recrutFrom")}" onchange="setOpsEffectifFilter('recrutFrom',this.value)"/></div>
+      <div><label class="label" for="ops-filter-recrutTo">Recrutement au</label><input id="ops-filter-recrutTo" class="input" data-no-lock type="date" value="${val("recrutTo")}" onchange="setOpsEffectifFilter('recrutTo',this.value)"/></div>
+      <div><label class="label" for="ops-filter-birthFrom">Naissance du</label><input id="ops-filter-birthFrom" class="input" data-no-lock type="date" value="${val("birthFrom")}" onchange="setOpsEffectifFilter('birthFrom',this.value)"/></div>
+      <div><label class="label" for="ops-filter-birthTo">Naissance au</label><input id="ops-filter-birthTo" class="input" data-no-lock type="date" value="${val("birthTo")}" onchange="setOpsEffectifFilter('birthTo',this.value)"/></div>
+      <div><label class="label" for="ops-filter-ageMin">Age min</label><input id="ops-filter-ageMin" class="input" data-no-lock type="number" min="0" value="${val("ageMin")}" onchange="setOpsEffectifFilter('ageMin',this.value)"/></div>
+      <div><label class="label" for="ops-filter-ageMax">Age max</label><input id="ops-filter-ageMax" class="input" data-no-lock type="number" min="0" value="${val("ageMax")}" onchange="setOpsEffectifFilter('ageMax',this.value)"/></div>
     </div>`:""}
   </div>`;
 }

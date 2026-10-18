@@ -193,7 +193,7 @@ test('droits : barre d\'actions et rubriques selon le profil, comme avant la ref
   });
 });
 
-test('affectation : lecture seule, effectifs affectés et surplus selon la règle existante', async t => {
+test('affectation : tous les employés restent affectés, surplus uniquement numérique', async t => {
   const agents = [1, 2, 3].map(n => AGENT(n));
   const ctx = boot(t, { agents });
   ctx.w.opsLatestMovementForEmployee = a => (a.id === 'a3' ? { mouvementMotif: 'Renfort temporaire' } : null);
@@ -201,10 +201,12 @@ test('affectation : lecture seule, effectifs affectés et surplus selon la règl
   const sec = view.querySelector('#stf-sec-affectation');
   assert.match(text(sec.querySelector('.stf-notice')), /Lecture seule — Les employés affichés ici viennent uniquement des ordres de mouvement validés/);
   const [main, surplus] = sec.querySelectorAll('.stf-subcard');
-  assert.equal(main.querySelectorAll('tbody tr').length, 2, 'contrat 2 : deux lignes principales');
+  assert.equal(main.querySelectorAll('tbody tr').length, 3, 'aucun employé retiré de la liste des affectés');
   assert.deepEqual([...main.querySelectorAll('thead th')].map(text), ['Employé', 'Matricule', 'Poste / fonction', "Date d'affectation", 'Groupe', 'Situation']);
-  assert.equal(surplus.querySelectorAll('tbody tr').length, 1);
-  assert.match(text(surplus), /AGENT N3 KT03 Agent 18\/09\/2026 Renfort temporaire Au-delà du contrat \(2\)/);
+  assert.equal(surplus.querySelectorAll('table').length, 0);
+  assert.match(text(surplus), /Effectifs en surplus\s*\+1 Employés en surplus non identifiés individuellement/);
+  assert.doesNotMatch(text(surplus), /KT03|Renfort temporaire|AGENT/);
+  assert.deepEqual(ctx.T().getDb().agents.map(a=>a.id), ['a1','a2','a3']);
   assert.equal(sec.querySelector('input:not([type=search]),select'), null, 'aucune saisie d\'affectation');
   assert.match(sec.querySelector('.stf-notice button').getAttribute('onclick'), /navigate\('ops\/mouvements'\)/);
 });
@@ -227,6 +229,8 @@ test('composant ops-button : badge seulement pour un compteur réel', t => {
   const r = loadSgdiApp(['opsButtonHTML']);
   assert.ifError(r.loadError);
   t.after(() => r.window.close());
+  r.dom.reconfigure({ url: 'https://ops.irongs.com/#/ops/dashboard' });
+  r.T().setSession({ transverse: 'ops' });
   const html = (label, opts) => { const d = r.window.document.createElement('div'); d.innerHTML = r.window.opsButtonHTML(label, opts); return d.firstElementChild; };
   for (const badge of [0, -1, null, undefined, 'abc']) assert.equal(html('Pointage quotidien', { icon: 'calendar', badge }).querySelector('.ops-btn__badge'), null, String(badge));
   const withBadge = html('Pointage quotidien', { icon: 'calendar', badge: 3, badgeLabel: 'alertes' });
@@ -243,9 +247,91 @@ test('composant ops-button : badge seulement pour un compteur réel', t => {
 test('boutons OPS : adaptateur de style confiné au portail OPS', () => {
   const fs = require('node:fs'), path = require('node:path');
   const css = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.css'), 'utf8');
-  const lines = css.split('\n').filter(l => /\.btn:not\(\.ops-btn\)/.test(l));
+  const lines = css.split('\n').filter(l => /\.btn\[data-ops-enhanced\]/.test(l));
   assert.ok(lines.length > 5);
-  for (const line of lines) assert.match(line, /:has\(\.sgdi-ops-shell\)/, 'adaptateur limité à OPS: ' + line.slice(0, 90));
+  for (const line of lines) assert.match(line, /\[data-ops-ui\]/, 'adaptateur limité à OPS: ' + line.slice(0, 90));
   const app = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.js'), 'utf8');
-  assert.match(app, /const opsShell=\["ops","superviseur"\]\.includes\(session\.transverse\);/);
+  assert.match(app, /const opsShell=opsPresentationActive\(\);/);
+});
+
+test('surplus : zéro contractuel explicite est connu, contrat absent/invalide ne crée pas de compteur', async t => {
+  for (const [raw,expected] of [[0,'1'],[2,'0'],[null,'—'],['','—'],[-1,'—'],['invalide','—'],[true,'—']]) {
+    const ctx=boot(t,{site:SITE({effectifs:{totalContractuel:raw},postes:{}}),agents:[AGENT(1)]});
+    const view=await ctx.render();
+    assert.equal(kpis(view).surplus,expected,String(raw));
+    assert.equal(view.querySelectorAll('#site-affectation-body tr').length,1);
+    assert.equal(!!view.querySelector('[data-site-surplus-summary]'),expected==='1');
+    ctx.w.openSiteAffectesModal('s1');
+    const modal=ctx.w.document.getElementById('modal-host');
+    assert.equal(modal.querySelectorAll('tbody tr').length,1);
+    assert.equal(!!modal.querySelector('[data-site-surplus-summary]'),expected==='1');
+    assert.equal(modal.querySelector('[data-site-surplus-summary] table'),null);
+  }
+});
+
+test('surplus : compteur serveur et affectations conservés lorsque le cache employés est partiel', async t=>{
+  const ctx=boot(t,{agents:[AGENT(1)]});
+  ctx.w.__SGDI_SITE_SITUATION_BY_SITE=new Map([['1',{contractual_staff:1,realized_staff:3,
+    by_group:{A:[1,2,3].map(id=>({employee_id:id,code:'KT0'+id,name:'AGENT '+id}))}}]]);
+  const view=await ctx.render();
+  assert.equal(kpis(view).realise,'3');assert.equal(kpis(view).surplus,'2');
+  assert.equal(view.querySelectorAll('#site-affectation-body tr').length,1,'seules les identités réellement disponibles sont affichées');
+  assert.match(text(view.querySelector('[data-site-surplus-summary]')),/\+2/);
+  ctx.w.openSiteAffectesModal('s1');
+  const modal=ctx.w.document.getElementById('modal-host');
+  assert.equal(modal.querySelectorAll('tbody tr').length,3,'les affectations serveur restent toutes consultables');
+  assert.match(text(modal.querySelector('[data-site-surplus-summary]')),/\+2/);
+});
+
+test('présentation OPS : matrice des portails et profils superviseurs, sans contexte de fiche résiduel', t => {
+  const r=loadSgdiApp(['opsPresentationActive','syncOpsPresentation']);
+  t.after(()=>r.window.close());
+  for(const host of ['ops','sup','drh','pointeur','pointage','brq','recrute','recrutement']){
+    for(const transverse of ['ops','superviseur','drh','pointeur','brq','recrutement']){
+      r.dom.reconfigure({url:`https://${host}.irongs.com/#/effectif/actifs`});
+      r.T().setSession({transverse,role:'superviseur',structuresAutorisees:['ops','drh','superviseur']});
+      r.window.sessionStorage.setItem('ficheContext','ops');
+      const expected=['ops','sup'].includes(host)&&['ops','superviseur'].includes(transverse);
+      assert.equal(r.window.opsPresentationActive(),expected,`${host}/${transverse}`);
+      r.window.syncOpsPresentation();
+      assert.equal(r.window.document.body.hasAttribute('data-ops-ui'),expected);
+    }
+  }
+});
+
+test('adaptation des actions OPS : handlers, disabled et texte conservés, rendus tardifs et sortie du module', t => {
+  const r=loadSgdiApp(['syncOpsPresentation']);
+  t.after(()=>r.window.close());
+  r.dom.reconfigure({url:'http://localhost/#/ops/missions'});
+  r.T().setSession({transverse:'ops',structuresAutorisees:['ops','drh']});
+  const view=r.window.document.getElementById('view');
+  view.innerHTML='<button class="btn btn-danger" disabled>Supprimer</button><a class="btn" href="#/sites">Sites</a>';
+  let clicks=0;view.lastChild.addEventListener('click',()=>clicks++);
+  r.window.syncOpsPresentation();r.window.syncOpsPresentation();
+  assert.equal(view.firstChild.disabled,true);
+  assert.equal(view.firstChild.textContent,'Supprimer');
+  assert.equal(view.querySelectorAll('svg').length,2);
+  view.lastChild.click();assert.equal(clicks,1);
+  view.firstChild.textContent='Confirmer';r.window.syncOpsPresentation();
+  assert.equal(view.firstChild.querySelectorAll('svg').length,1);
+  r.T().setSession({transverse:'drh'});r.window.syncOpsPresentation();
+  assert.equal(view.querySelectorAll('.ops-btn,[data-ops-auto-icon]').length,0);
+  assert.equal(view.firstChild.className,'btn btn-danger');
+});
+
+test('signalements : badges recalculés après chargement, sans compteur fictif ni changement de filtre', async t=>{
+  const r=loadSgdiApp(['loadOpsClientObservations']);
+  t.after(()=>r.window.close());
+  r.dom.reconfigure({url:'https://ops.irongs.com/#/ops/signalements'});
+  r.T().setSession({transverse:'ops'});
+  const view=r.window.document.getElementById('view');
+  view.innerHTML='<div id="ops-obs-filters"></div><div id="ops-obs-list"></div>';
+  let rows=[{id:1,status:'nouveau'},{id:2,status:'nouveau'},{id:3,status:'traite'}];
+  r.window.sgdiApi=async()=>rows;
+  await r.window.loadOpsClientObservations();
+  let buttons=[...view.querySelectorAll('#ops-obs-filters button')];
+  assert.deepEqual(buttons.map(b=>b.querySelector('.ops-btn__badge')?.textContent||null),['3','2',null,'1']);
+  assert.match(buttons[1].getAttribute('onclick'),/setOpsClientObservationsFilter\('nouveau'\)/);
+  rows=[];await r.window.loadOpsClientObservations();
+  assert.equal(view.querySelectorAll('.ops-btn__badge').length,0);
 });

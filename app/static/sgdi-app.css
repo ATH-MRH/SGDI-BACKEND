@@ -6720,12 +6720,12 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
 }
 
 /* ----- OPS EFFECTIF COMPACT HEADER/FILTERS ----- */
-.ops-effectif-page{
+body[data-ops-ui] #view .ops-effectif-page{
   width:100%!important;
   max-width:none!important;
   margin:0!important;
 }
-.ops-effectif-hero{
+body[data-ops-ui] #view .ops-effectif-hero{
   margin-bottom:10px!important;
   padding:14px 16px!important;
   display:flex!important;
@@ -6735,22 +6735,22 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
   gap:16px;
   width:100%!important;
 }
-.ops-effectif-title-block{
+body[data-ops-ui] #view .ops-effectif-title-block{
   flex:1 0 auto;
   min-width:260px;
 }
-.ops-effectif-title-block h1{
+body[data-ops-ui] #view .ops-effectif-title-block h1{
   font-size:24px!important;
   line-height:1.05!important;
   font-weight:950!important;
   margin:0!important;
 }
-.ops-effectif-title-block p{
+body[data-ops-ui] #view .ops-effectif-title-block p{
   margin-top:5px;
   color:#64748b;
   font-size:12px;
 }
-.ops-effectif-tools{
+body[data-ops-ui] #view .ops-effectif-tools{
   flex:1 1 664px;
   max-width:820px;
   display:grid!important;
@@ -6758,14 +6758,14 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
   gap:12px;
   align-items:end;
 }
-.ops-effectif-tools label{
+body[data-ops-ui] #view .ops-effectif-tools label{
   display:grid;
   gap:4px;
   font-size:11px;
   font-weight:850;
   color:#64748b;
 }
-.ops-effectif-filter-card{
+body[data-ops-ui] #view .ops-effectif-filter-card{
   width:100%!important;
   max-width:none!important;
   margin-left:0!important;
@@ -6774,26 +6774,26 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
   padding:12px 16px!important;
   background:#fbfdff!important;
 }
-.ops-effectif-filter-main{
+body[data-ops-ui] #view .ops-effectif-filter-main{
   display:grid;
   grid-template-columns:minmax(230px,1.1fr) minmax(230px,1fr) auto;
   gap:12px;
   align-items:end;
 }
-.ops-effectif-filter-actions{
+body[data-ops-ui] #view .ops-effectif-filter-actions{
   display:flex;
   gap:8px;
   justify-content:flex-end;
   align-items:center;
   white-space:nowrap;
 }
-.ops-effectif-result-count{
+body[data-ops-ui] #view .ops-effectif-result-count{
   margin-top:6px;
   color:#64748b;
   font-size:11px;
   font-weight:750;
 }
-.ops-effectif-advanced{
+body[data-ops-ui] #view .ops-effectif-advanced{
   margin-top:10px;
   padding-top:10px;
   border-top:1px solid #e2e8f0;
@@ -6801,39 +6801,39 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
   grid-template-columns:repeat(6,minmax(120px,1fr));
   gap:10px;
 }
-.ops-effectif-page .effectif-table-card{
+body[data-ops-ui] #view .ops-effectif-page .effectif-table-card{
   margin-top:0!important;
 }
 @media(max-width:1120px){
-  .ops-effectif-hero{
+  body[data-ops-ui] #view .ops-effectif-hero{
     flex-direction:column;
     align-items:stretch!important;
   }
   /* En colonne, la base flex des outils devenait leur hauteur (grand vide sous le titre). */
-  .ops-effectif-tools{
+  body[data-ops-ui] #view .ops-effectif-tools{
     flex:0 0 auto;
   }
-  .ops-effectif-filter-main{
+  body[data-ops-ui] #view .ops-effectif-filter-main{
     grid-template-columns:1fr;
   }
-  .ops-effectif-tools{
+  body[data-ops-ui] #view .ops-effectif-tools{
     grid-template-columns:1fr;
   }
-  .ops-effectif-filter-actions{
+  body[data-ops-ui] #view .ops-effectif-filter-actions{
     justify-content:flex-start;
   }
-  .ops-effectif-advanced{
+  body[data-ops-ui] #view .ops-effectif-advanced{
     grid-template-columns:repeat(2,minmax(140px,1fr));
   }
 }
 @media(max-width:720px){
-  .ops-effectif-hero{
+  body[data-ops-ui] #view .ops-effectif-hero{
     padding:12px!important;
   }
-  .ops-effectif-title-block h1{
+  body[data-ops-ui] #view .ops-effectif-title-block h1{
     font-size:21px!important;
   }
-  .ops-effectif-advanced{
+  body[data-ops-ui] #view .ops-effectif-advanced{
     grid-template-columns:1fr;
   }
 }
@@ -11054,67 +11054,95 @@ body.atlas-ui #view .ops-outgoing-page .ops-outgoing-card h1.ops-outgoing-title{
    OPS — composant bouton (.ops-btn) : icône, badge dynamique, variantes.
    Utilisé uniquement par les écrans OPS ; aucune règle sur .btn ni sur button.
    ============================================================= */
-.ops-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-.ops-icon{width:18px;height:18px;flex:0 0 auto}
-.ops-btn{--ops-btn-fg:var(--atlas-primary,#165dde);--ops-btn-bg:var(--atlas-primary-soft,#eaf2ff);--ops-btn-border:#bcd3f7;--ops-btn-hover:#dce9ff;
+body[data-ops-ui] :is(#view,#modal-host) .ops-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+body[data-ops-ui] :is(#view,#modal-host) .ops-icon{width:18px;height:18px;flex:0 0 auto}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn{--ops-btn-fg:var(--atlas-primary,#165dde);--ops-btn-bg:var(--atlas-primary-soft,#eaf2ff);--ops-btn-border:#bcd3f7;--ops-btn-hover:#dce9ff;
   position:relative;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 14px;
   border:1px solid var(--ops-btn-border);border-radius:8px;background:var(--ops-btn-bg);color:var(--ops-btn-fg);
   font:inherit;font-size:13px;font-weight:700;line-height:1.15;white-space:nowrap;cursor:pointer;text-decoration:none;
   transition:background-color .15s,border-color .15s,box-shadow .15s}
-.ops-btn:hover:not(:disabled){background:var(--ops-btn-hover)}
-.ops-btn:focus-visible{outline:none;box-shadow:var(--atlas-focus-ring,0 0 0 3px #165dde30);border-color:var(--ops-btn-fg)}
-.ops-btn:disabled,.ops-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
-.ops-btn[aria-busy="true"]{cursor:progress}
-.ops-btn__icon{width:17px;height:17px;flex:0 0 auto}
-.ops-btn__badge{position:absolute;top:-8px;left:-6px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;border:2px solid #fff;
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn:hover:not(:disabled){background:var(--ops-btn-hover)}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn:focus-visible{outline:none;box-shadow:var(--atlas-focus-ring,0 0 0 3px #165dde30);border-color:var(--ops-btn-fg)}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn:disabled,body[data-ops-ui] :is(#view,#modal-host) .ops-btn[aria-disabled="true"]{opacity:.5;cursor:not-allowed}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn[aria-busy="true"]{cursor:progress}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn__icon{width:17px;height:17px;flex:0 0 auto}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn__badge{position:absolute;top:-8px;left:-6px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;border:2px solid #fff;
   background:var(--atlas-danger,#bb303e);color:#fff;font-size:10.5px;font-weight:800;line-height:15px;text-align:center;box-sizing:border-box}
-.ops-btn--primary{--ops-btn-fg:#fff;--ops-btn-bg:var(--atlas-primary,#165dde);--ops-btn-border:var(--atlas-primary,#165dde);--ops-btn-hover:var(--atlas-primary-hover,#114bb5)}
-.ops-btn--success{--ops-btn-fg:var(--atlas-success,#117647);--ops-btn-bg:var(--atlas-success-soft,#e7f6ef);--ops-btn-border:#a9dcc2;--ops-btn-hover:#d3efe1}
-.ops-btn--warn{--ops-btn-fg:var(--atlas-warning,#9f580a);--ops-btn-bg:var(--atlas-warning-soft,#fff3df);--ops-btn-border:#f3cf96;--ops-btn-hover:#ffe8c2}
-.ops-btn--danger{--ops-btn-fg:var(--atlas-danger,#bb303e);--ops-btn-bg:var(--atlas-danger-soft,#fff0f1);--ops-btn-border:#f4bcc2;--ops-btn-hover:#ffe0e3}
-.ops-btn--sm{min-height:32px;padding:0 10px;font-size:12px;gap:5px}
-.ops-btn--sm .ops-btn__icon{width:15px;height:15px}
-@media (max-width:600px){.ops-btn{min-height:40px}.ops-btn--sm{min-height:36px}}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--primary{--ops-btn-fg:#fff;--ops-btn-bg:var(--atlas-primary,#165dde);--ops-btn-border:var(--atlas-primary,#165dde);--ops-btn-hover:var(--atlas-primary-hover,#114bb5)}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--success{--ops-btn-fg:var(--atlas-success,#117647);--ops-btn-bg:var(--atlas-success-soft,#e7f6ef);--ops-btn-border:#a9dcc2;--ops-btn-hover:#d3efe1}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--warn{--ops-btn-fg:var(--atlas-warning,#9f580a);--ops-btn-bg:var(--atlas-warning-soft,#fff3df);--ops-btn-border:#f3cf96;--ops-btn-hover:#ffe8c2}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--danger{--ops-btn-fg:var(--atlas-danger,#bb303e);--ops-btn-bg:var(--atlas-danger-soft,#fff0f1);--ops-btn-border:#f4bcc2;--ops-btn-hover:#ffe0e3}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--sm{min-height:32px;padding:0 10px;font-size:12px;gap:5px}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--sm .ops-btn__icon{width:15px;height:15px}
+@media (max-width:600px){body[data-ops-ui] :is(#view,#modal-host) .ops-btn{min-height:40px}
+body[data-ops-ui] :is(#view,#modal-host) .ops-btn--sm{min-height:36px}}
 
 /* OPS — adaptateur : les boutons historiques (.btn) des écrans OPS et de leurs fenêtres
    prennent l'apparence .ops-btn. Seul l'habillage change (libellés, actions, états et droits
    intacts). Limité au portail OPS (.sgdi-ops-shell) ; le Command Center sombre garde le sien. */
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)){display:inline-flex!important;align-items:center!important;justify-content:center;gap:7px!important;min-height:36px!important;padding:0 14px!important;
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)){display:inline-flex!important;align-items:center!important;justify-content:center;gap:7px!important;min-height:36px!important;padding:0 14px!important;
   border:1px solid #bcd3f7!important;border-radius:8px!important;background:var(--atlas-primary-soft,#eaf2ff)!important;color:var(--atlas-primary,#165dde)!important;
   font-size:13px!important;font-weight:700!important;line-height:1.15!important;box-shadow:none!important;text-transform:none!important;letter-spacing:0!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):hover:not(:disabled){background:#dce9ff!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):focus-visible{outline:none!important;box-shadow:var(--atlas-focus-ring,0 0 0 3px #165dde30)!important;border-color:var(--atlas-primary,#165dde)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):disabled{opacity:.5!important;cursor:not-allowed!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-ghost{background:var(--atlas-surface,#fff)!important;border-color:#c9daf3!important;color:var(--atlas-primary,#165dde)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-ghost:hover:not(:disabled){background:#f4f7fb!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-primary){background:var(--atlas-primary,#165dde)!important;border-color:var(--atlas-primary,#165dde)!important;color:#fff!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-primary):hover:not(:disabled){background:var(--atlas-primary-hover,#114bb5)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-success{background:var(--atlas-success-soft,#e7f6ef)!important;border-color:#a9dcc2!important;color:var(--atlas-success,#117647)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-success:hover:not(:disabled){background:#d3efe1!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-warn{background:var(--atlas-warning-soft,#fff3df)!important;border-color:#f3cf96!important;color:var(--atlas-warning,#9f580a)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-warn:hover:not(:disabled){background:#ffe8c2!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700){background:var(--atlas-danger-soft,#fff0f1)!important;border-color:#f4bcc2!important;color:var(--atlas-danger,#bb303e)!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700):hover:not(:disabled){background:#ffe0e3!important}
-body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.text-xs,.btn-sm),body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) :is(td,th) .btn:not(.ops-btn){min-height:32px!important;padding:0 10px!important;font-size:12px!important;gap:5px!important}
-@media (max-width:600px){body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)){min-height:40px!important}}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):hover:not(:disabled){background:#dce9ff!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):focus-visible{outline:none!important;box-shadow:var(--atlas-focus-ring,0 0 0 3px #165dde30)!important;border-color:var(--atlas-primary,#165dde)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):disabled{opacity:.5!important;cursor:not-allowed!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-ghost{background:var(--atlas-surface,#fff)!important;border-color:#c9daf3!important;color:var(--atlas-primary,#165dde)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-ghost:hover:not(:disabled){background:#f4f7fb!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):is(.btn-primary){background:var(--atlas-primary,#165dde)!important;border-color:var(--atlas-primary,#165dde)!important;color:#fff!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):is(.btn-primary):hover:not(:disabled){background:var(--atlas-primary-hover,#114bb5)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-success{background:var(--atlas-success-soft,#e7f6ef)!important;border-color:#a9dcc2!important;color:var(--atlas-success,#117647)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-success:hover:not(:disabled){background:#d3efe1!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-warn{background:var(--atlas-warning-soft,#fff3df)!important;border-color:#f3cf96!important;color:var(--atlas-warning,#9f580a)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)).btn-warn:hover:not(:disabled){background:#ffe8c2!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700){background:var(--atlas-danger-soft,#fff0f1)!important;border-color:#f4bcc2!important;color:var(--atlas-danger,#bb303e)!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700):hover:not(:disabled){background:#ffe0e3!important}
+body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)):is(.text-xs,.btn-sm),body.atlas-ui[data-ops-ui] :is(#view,#modal-host) :is(td,th) .btn[data-ops-enhanced]{min-height:32px!important;padding:0 10px!important;font-size:12px!important;gap:5px!important}
+@media (max-width:600px){body.atlas-ui[data-ops-ui] :is(#view,#modal-host) .btn[data-ops-enhanced]:not(:where(.ops-sites-cc *)){min-height:40px!important}}
 
 /* OPS — Gestion des effectifs : tableau compact (DRH inchangé, vue mobile en cartes inchangée).
    Les largeurs fixes cumulaient 102 % + 256 px : dates, codes et en-têtes étaient tronqués. */
 @media (min-width:721px){
-  #view .ops-effectif-page .effectif-table-card{overflow-x:auto!important}
-  #view .ops-effectif-page .effectif-table{table-layout:auto!important;min-width:980px}
-  #view .ops-effectif-page .effectif-table col{width:auto!important}
-  #view .ops-effectif-page .effectif-table :is(th,td){padding:6px 8px!important;overflow:visible!important;text-overflow:clip!important}
-  #view .ops-effectif-page .effectif-table th{white-space:nowrap!important}
-  #view .ops-effectif-page .effectif-table td:is([data-label="Code"],[data-label="Recrutement"],[data-label="Naissance"],[data-label="Age"],[data-label="Statut"]){white-space:nowrap!important;font-variant-numeric:tabular-nums}
-  #view .ops-effectif-page .effectif-table td:is([data-label="Société"],[data-label="Site"],[data-label="Poste"]){min-width:96px;max-width:150px;line-height:1.3}
-  #view .ops-effectif-page .effectif-table td[data-label="Employé"]{min-width:200px}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table-card{overflow-x:auto!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table{table-layout:auto!important;min-width:980px}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table col{width:auto!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table :is(th,td){padding:6px 8px!important;overflow:visible!important;text-overflow:clip!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table th{white-space:nowrap!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table td:is([data-label="Code"],[data-label="Recrutement"],[data-label="Naissance"],[data-label="Age"],[data-label="Statut"]){white-space:nowrap!important;font-variant-numeric:tabular-nums}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table td:is([data-label="Société"],[data-label="Site"],[data-label="Poste"]){min-width:96px;max-width:150px;line-height:1.3}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table td[data-label="Employé"]{min-width:200px}
   /* Actions toujours visibles, même quand le tableau défile horizontalement. */
-  #view .ops-effectif-page .effectif-table :is(th,td):last-child{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-6px 0 8px -6px rgba(23,62,118,.18)}
-  #view .ops-effectif-page .effectif-table thead th:last-child{background:#f8fafc}
-  #view .ops-effectif-page .effectif-table td[data-label="Employé"] .font-semibold{white-space:nowrap}
-  #view .ops-effectif-page .effectif-table .avatar{width:32px!important;height:32px!important;min-width:32px}
-  #view .ops-effectif-page .effectif-table tbody tr{height:auto!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table :is(th,td):last-child{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-6px 0 8px -6px rgba(23,62,118,.18)}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table thead th:last-child{background:#f8fafc}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table td[data-label="Employé"] .font-semibold{white-space:nowrap}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table .avatar{width:32px!important;height:32px!important;min-width:32px}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table tbody tr{height:auto!important}
+}
+
+/* Filtres et liste OPS : densité et grille adaptées à la largeur disponible. */
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-hero{border-left:3px solid #165dde;padding:12px 14px!important;gap:12px}
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-title-block{min-width:0;flex:1 1 220px}
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-title-block h1{font-size:20px!important;line-height:1.2!important;font-weight:800!important}
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-tools{max-width:none;grid-template-columns:minmax(180px,1.3fr) minmax(160px,1fr) minmax(160px,1fr);gap:8px}
+body[data-ops-ui] #view .ops-effectif-page :is(.ops-effectif-tools,.ops-effectif-filter-main,.ops-effectif-advanced)>*{min-width:0}
+body[data-ops-ui] #view .ops-effectif-page :is(.ops-effectif-tools,.ops-effectif-filter-card) :is(input,select){min-width:0;width:100%;min-height:36px;font-size:12px}
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-filter-main{grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) auto;gap:10px}
+body[data-ops-ui] #view .ops-effectif-page .ops-effectif-advanced{grid-template-columns:repeat(3,minmax(0,1fr))}
+body[data-ops-ui] #view .ops-effectif-page .effectif-table tbody tr:hover>td{background:#f5f9ff}
+body[data-ops-ui] #view .ops-effectif-page .effectif-table td.effectif-open-cell:has(+td){right:92px}
+body[data-ops-ui] #view .ops-effectif-page .effectif-table td.effectif-open-cell+td{min-width:92px}
+body[data-ops-ui] #view .ops-sites-cc .ops-btn{--ops-btn-bg:#0f2140;--ops-btn-fg:#e2ecff;--ops-btn-border:#31476b;--ops-btn-hover:#18345b}
+@media(max-width:1120px){
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-tools{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-tools>label:first-child{grid-column:1/-1}
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-filter-main{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-filter-actions{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap}
+}
+@media(max-width:767px){
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-tools{flex:0 0 auto;width:100%}
+  body[data-ops-ui] #view .ops-effectif-page .ops-effectif-advanced{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table{min-width:0!important}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table td.effectif-open-cell{position:static;box-shadow:none}
+  body[data-ops-ui] #view .ops-effectif-page .effectif-table tr{padding:10px!important}
 }
 
 /* =============================================================
@@ -11200,7 +11228,7 @@ body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not
 .stf-field-hint{display:block;margin-top:3px;font-size:11px;color:var(--stf-muted);line-height:1.35}
 .stf :is(.input,.select){min-height:38px;height:38px;font-size:13px;padding-top:0;padding-bottom:0}
 .stf textarea.input{height:auto}
-body.atlas-ui .sgdi-shell #view .stf :is(.input,.select)[readonly],body.atlas-ui .sgdi-shell #view .stf :is(.input,.select):disabled{background-color:#f1f5f9!important;color:#475569!important}
+body.atlas-ui[data-ops-ui] #view .stf :is(.input,.select)[readonly],body.atlas-ui[data-ops-ui] #view .stf :is(.input,.select):disabled{background-color:#f1f5f9!important;color:#475569!important}
 .stf-hint{margin:0;font-size:11.5px;color:var(--stf-muted);line-height:1.4}
 .stf-notice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-radius:8px;background:var(--atlas-info-soft,#e9f6fd);border:1px solid #b6dcf0;color:#0f4c73;font-size:12.5px}
 .stf-notice>div{flex:1;min-width:200px}
@@ -11228,7 +11256,7 @@ body.atlas-ui .sgdi-shell #view .stf :is(.input,.select)[readonly],body.atlas-ui
 .stf-subcard-head{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .stf-subcard-head>h3,.stf-subcard-head h3{margin:0;font-size:13.5px;font-weight:800;color:var(--stf-navy)}
 .stf-subcard-head>.stf-hint{flex:1;min-width:180px}
-.stf-subcard-head>.ops-btn,.stf-subcard-head>.stf-card-actions{margin-left:auto}
+body[data-ops-ui] #view .stf-subcard-head>.ops-btn,body[data-ops-ui] #view .stf-subcard-head>.stf-card-actions{margin-left:auto}
 .stf-count{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;background:#eef2f7;color:#334155;font-size:12px;font-weight:700}
 .stf-count--violet{background:#f1ecff;color:#6d4fc7}
 .stf-search{margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 10px;height:34px;border:1px solid var(--atlas-border-strong,#b9cbe2);border-radius:8px;background:#fff;min-width:min(260px,100%)}
@@ -11307,10 +11335,10 @@ body.atlas-ui .sgdi-shell #view .stf :is(.input,.select)[readonly],body.atlas-ui
   #view .stf .stf-actionbar.site-form-actions{padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
   .stf-actionbar-label{display:none}
   .stf-actionbar-buttons{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
-  .stf-actionbar-buttons .ops-btn{white-space:normal;padding:0 8px;font-size:12px;text-align:center}
-  .stf-actionbar-buttons .ops-btn__icon{display:none}
+  body[data-ops-ui] #view .stf-actionbar-buttons .ops-btn{white-space:normal;padding:0 8px;font-size:12px;text-align:center}
+  body[data-ops-ui] #view .stf-actionbar-buttons .ops-btn__icon{display:none}
 }
-@media (prefers-reduced-motion:reduce){.ops-btn,.stf-tab{transition:none}}
+@media (prefers-reduced-motion:reduce){body[data-ops-ui] :is(#view,#modal-host) .ops-btn,.stf-tab{transition:none}}
 
 /* ── OPS → Sites : Command Center sombre. Tout est confiné à .ops-sites-cc (contenu de la page) ;
    le Global Shell (sidebar, header, bandeau KPI) n'est pas concerné. ── */
@@ -11976,4 +12004,3 @@ body #view .drh-cand-page .drh-cand-card table tbody td{padding:14px 20px!import
 .nc-client-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:#64748b}
 .nc-client-status:empty{display:none}
 .nc-client-status[data-state="error"]{color:#b91c1c;font-weight:600}
-
