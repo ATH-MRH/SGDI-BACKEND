@@ -773,6 +773,7 @@ _BADGE_QR_TOKEN = re.compile(r"^[0-9a-f]{32}$")
 
 QR_UNRECOGNIZED, QR_EXPIRED, QR_ALREADY_USED = "QR_UNRECOGNIZED", "QR_EXPIRED", "QR_ALREADY_USED"
 BADGE_REVOKED, BADGE_INACTIVE, BADGE_EXPIRED = "BADGE_REVOKED", "BADGE_INACTIVE", "BADGE_EXPIRED"
+BADGE_REPLACED = "BADGE_REPLACED"
 EMPLOYEE_BLOCKED, SITE_NOT_ALLOWED = "EMPLOYEE_BLOCKED", "SITE_NOT_ALLOWED"
 ALREADY_RECORDED, NO_SHIFT, DAY_CLOSED = "ALREADY_RECORDED", "NO_SHIFT", "DAY_CLOSED"
 
@@ -784,8 +785,9 @@ QR_SCAN_REFUSALS: dict[str, tuple[str, str]] = {
     QR_ALREADY_USED: ("Présence déjà enregistrée", "business"),
     BADGE_REVOKED: ("Badge révoqué", "error"),
     BADGE_INACTIVE: ("Badge inactif", "error"),
-    BADGE_EXPIRED: ("QR code expiré", "error"),
-    EMPLOYEE_BLOCKED: ("Badge inactif", "error"),
+    BADGE_EXPIRED: ("Badge expiré", "error"),
+    BADGE_REPLACED: ("Badge remplacé — présentez le badge actuel", "error"),
+    EMPLOYEE_BLOCKED: ("Employé inactif", "error"),
     SITE_NOT_ALLOWED: ("Employé non autorisé sur ce site", "business"),
     ALREADY_RECORDED: ("Présence déjà enregistrée", "business"),
     NO_SHIFT: ("Aucun service prévu pour cet employé", "business"),
@@ -845,17 +847,50 @@ def _badge_qr_parts(token: str) -> tuple[str, str, str | None] | None:
     return unquote(match.group(1)).strip(), (query.get("t") or [""])[0], (query.get("b") or [None])[0]
 
 
+def _historical_badge_employee(db: Session, ref: str) -> Employee | None:
+    """Employé désigné par la référence d'un badge historique : l'identifiant interne (cas de
+    tous les badges imprimés par ATLAS), sinon la résolution officielle de la page publique."""
+    from app.main import _public_employee_badge_data
+
+    if ref.isdigit():
+        employee = db.get(Employee, int(ref))
+        if employee is not None:
+            return employee
+    try:
+        data = _public_employee_badge_data(ref)
+    except HTTPException:
+        return None
+    return db.get(Employee, int(data["backendId"])) if str(data.get("backendId") or "").isdigit() else None
+
+
 def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: tuple[str, str, str | None]) -> dict[str, Any]:
+    """Deux formats officiels, mêmes règles ensuite :
+    - badge émis par le Studio Badges (`b=` : badge numéroté, révocable, daté) ;
+    - badge historique (lien public signé sans `b=`, imprimé par l'écran de badge d'ATLAS) :
+      désactivable sur la fiche (`badgeActif`) et remplacé dès qu'un badge Studio est émis.
+    La signature est vérifiée par le mécanisme officiel (`_public_employee_token`) ; la seule
+    possession du lien n'est jamais suffisante : compte Pointeur, périmètre, statut, liste noire,
+    affectation et règles d'Attendance Core s'appliquent ensuite."""
     from app.main import _public_employee_token
     from app.modules.drh.badge_models import STATUS_ACTIVE, STATUS_REVOKED, EmployeeBadge
-    from app.modules.drh.models import EmployeeBlacklistEntry
 
     ref, signature, raw_badge_id = parts
-    if raw_badge_id is None:
-        # Lien de consultation historique (sans badge émis) : jamais une preuve de pointage.
-        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-consultation")
-    if not ref.isdigit() or not raw_badge_id.isdigit() or not _BADGE_QR_TOKEN.match(signature or ""):
+    if not ref or len(ref) > 80 or not _BADGE_QR_TOKEN.match(signature or "") \
+            or (raw_badge_id is not None and (not ref.isdigit() or not raw_badge_id.isdigit())):
         raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
+
+    if raw_badge_id is None:
+        if not hmac.compare_digest(signature, _public_employee_token("badge", ref)):
+            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique")
+        employee = _historical_badge_employee(db, ref)
+        if employee is None:
+            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique")
+        _ensure_badge_scope(db, scanner, payload, employee, "badge-historique", None)
+        if db.execute(select(EmployeeBadge.id).where(EmployeeBadge.employee_id == employee.id).limit(1)).first():
+            # Un badge Studio a été émis : il est seul officiel (révocation, validité, numéro).
+            raise _qr_refusal(db, scanner, BADGE_REPLACED, 403, kind="badge-historique", employee=employee)
+        return _finish_badge_scan(db, scanner, employee, "badge-historique", None, f"badgeh-{employee.id}")
+
     badge_id = int(raw_badge_id)
     if not hmac.compare_digest(signature, _public_employee_token("badge", f"{ref}:{badge_id}")):
         raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
@@ -863,8 +898,19 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
     employee = db.get(Employee, int(ref)) if badge is not None and str(badge.employee_id) == ref else None
     if employee is None:
         raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", badge_id=badge_id)
+    _ensure_badge_scope(db, scanner, payload, employee, "badge", badge_id)
+    if badge.status == STATUS_REVOKED or badge.revoked_at is not None:
+        raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if badge.status != STATUS_ACTIVE:
+        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if badge.valid_until and badge.valid_until < datetime.now(attendance_core.TZ).date():
+        raise _qr_refusal(db, scanner, BADGE_EXPIRED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    return _finish_badge_scan(db, scanner, employee, "badge", badge_id, f"badge-{badge_id}")
 
-    # Périmètre du compte Pointeur AVANT tout état du badge : rien n'est révélé hors périmètre.
+
+def _ensure_badge_scope(db: Session, scanner: User, payload: dict[str, Any], employee: Employee, kind: str,
+                        badge_id: int | None) -> None:
+    """Périmètre du compte Pointeur AVANT tout état du badge : rien n'est révélé hors périmètre."""
     try:
         _ensure_attendance_employee_scope(db, scanner, employee, payload.get("society"))
         _ensure_selected_site_access(db, scanner, payload.get("site_id"))
@@ -873,25 +919,26 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
         code = _translate_scan_refusal(exc)
         if code is None:
             raise
-        raise _qr_refusal(db, scanner, code, exc.status_code, kind="badge", employee=employee, badge_id=badge_id) from None
+        raise _qr_refusal(db, scanner, code, exc.status_code, kind=kind, employee=employee, badge_id=badge_id) from None
 
-    if badge.status == STATUS_REVOKED or badge.revoked_at is not None:
-        raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind="badge", employee=employee, badge_id=badge_id)
-    if badge.status != STATUS_ACTIVE:
-        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind="badge", employee=employee, badge_id=badge_id)
-    if badge.valid_until and badge.valid_until < datetime.now(attendance_core.TZ).date():
-        raise _qr_refusal(db, scanner, BADGE_EXPIRED, 403, kind="badge", employee=employee, badge_id=badge_id)
+
+def _finish_badge_scan(db: Session, scanner: User, employee: Employee, kind: str, badge_id: int | None,
+                       key_prefix: str) -> dict[str, Any]:
+    from app.modules.drh.models import EmployeeBlacklistEntry
+
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
     blacklisted = db.execute(select(EmployeeBlacklistEntry.id).where(
         EmployeeBlacklistEntry.employee_id == employee.id, EmployeeBlacklistEntry.status == "active").limit(1)).first()
-    if _employee_portal_block_reason(employee) or {**legacy, **extra}.get("badgeActif") is False or blacklisted:
-        raise _qr_refusal(db, scanner, EMPLOYEE_BLOCKED, 403, kind="badge", employee=employee, badge_id=badge_id)
+    if {**legacy, **extra}.get("badgeActif") is False:
+        raise _qr_refusal(db, scanner, BADGE_INACTIVE, 403, kind=kind, employee=employee, badge_id=badge_id)
+    if _employee_portal_block_reason(employee) or blacklisted:
+        raise _qr_refusal(db, scanner, EMPLOYEE_BLOCKED, 403, kind=kind, employee=employee, badge_id=badge_id)
     if attendance_core.active_assignment(db, employee.id) is None:
-        raise _qr_refusal(db, scanner, NO_SHIFT, 409, kind="badge", employee=employee, badge_id=badge_id)
+        raise _qr_refusal(db, scanner, NO_SHIFT, 409, kind=kind, employee=employee, badge_id=badge_id)
     # Badge statique : chaque lecture est un passage distinct ; l'anti-rebond et les règles de
     # présence d'Attendance Core tranchent les doublons, sous le verrou de l'employé.
-    return _record_qr_scan(db, scanner, employee, f"badge-{badge_id}-{secrets.token_hex(12)}", "badge", badge_id)
+    return _record_qr_scan(db, scanner, employee, f"{key_prefix}-{secrets.token_hex(12)}", kind, badge_id)
 
 
 def _record_qr_scan(db: Session, scanner: User, employee: Employee, key: str, kind: str,
@@ -903,7 +950,7 @@ def _record_qr_scan(db: Session, scanner: User, employee: Employee, key: str, ki
         if code is None:
             raise
         raise _qr_refusal(db, scanner, code, exc.status_code, kind=kind, employee=employee, badge_id=badge_id) from None
-    if kind == "badge" and result.get("duplicate"):
+    if kind.startswith("badge") and result.get("duplicate"):
         result["message"] = QR_SCAN_REFUSALS[ALREADY_RECORDED][0]
     return result
 

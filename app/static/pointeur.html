@@ -1839,7 +1839,7 @@ function playTone(success){
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"||type==="warning"){
-    const action=data.duplicate?"PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE");
+    const action=data.duplicate?"PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"PRÉSENCE ENREGISTRÉE · DÉPART":"PRÉSENCE ENREGISTRÉE · ARRIVÉE");
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
     const photo=safePhotoSrc(data.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(data.photo))}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
     el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;

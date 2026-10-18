@@ -83,7 +83,7 @@ def test_the_api_variant_of_the_badge_link_is_accepted_too(client, db, setup):
 # 2 — expiré
 def test_expired_badge_is_refused(client, db, setup):
     badge = _badge(db, setup.employee, valid_until=date.today() - timedelta(days=1))
-    _refused(_scan(client, setup.headers, _qr(setup.employee, badge), setup.site), "BADGE_EXPIRED", "QR code expiré", "error", 403)
+    _refused(_scan(client, setup.headers, _qr(setup.employee, badge), setup.site), "BADGE_EXPIRED", "Badge expiré", "error", 403)
     assert _events(db, setup.employee) == []
 
 
@@ -132,11 +132,12 @@ def test_badge_of_a_deleted_employee_link_is_not_recognized(client, db, setup):
 
 
 # 5 — QR historique : lien de consultation sans badge émis, ou badge remplacé
-def test_legacy_consultation_link_is_not_a_proof_of_attendance(client, db, setup):
-    legacy = _qr_url(STUDIO, setup.employee)                         # signature valide, mais sans b=
+def test_historical_badge_is_replaced_once_a_studio_badge_was_issued(client, db, setup):
+    legacy = _qr_url(STUDIO, setup.employee)                         # signature valide, sans b=
     assert "b=" not in legacy
-    _refused(_scan(client, setup.headers, legacy, setup.site), "QR_UNRECOGNIZED", "QR code non reconnu", "error", 400)
+    _refused(_scan(client, setup.headers, legacy, setup.site), "BADGE_REPLACED", "Badge remplacé — présentez le badge actuel", "error", 403)
     assert _events(db, setup.employee) == []
+    assert _scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site).status_code == 201   # le badge Studio
 
 
 def test_replaced_badge_is_inactive(client, db, setup):
@@ -170,19 +171,19 @@ def test_public_consultation_still_works_and_records_nothing(client, db, setup):
 @pytest.mark.parametrize("status", ["inactif", "suspendu", "blackliste", "sortant"])
 def test_inactive_employee_is_refused(client, db, setup, status):
     setup.employee.status = status; db.commit()
-    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "EMPLOYEE_BLOCKED", "Badge inactif", "error", 403)
+    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "EMPLOYEE_BLOCKED", "Employé inactif", "error", 403)
     assert _events(db, setup.employee) == []
 
 
 def test_badge_disabled_on_the_employee_record_is_refused(client, db, setup):
     setup.employee.extra = {"badgeActif": False}; db.commit()
-    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "EMPLOYEE_BLOCKED", "Badge inactif", "error", 403)
+    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "BADGE_INACTIVE", "Badge inactif", "error", 403)
 
 
 def test_active_blacklist_entry_blocks_even_if_the_status_was_not_mirrored(client, db, setup):
     db.add(EmployeeBlacklistEntry(employee_id=setup.employee.id, society=SOC_A, reason="Essai fictif", status="active"))
     db.commit()
-    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "EMPLOYEE_BLOCKED", "Badge inactif", "error", 403)
+    _refused(_scan(client, setup.headers, _qr(setup.employee, setup.badge), setup.site), "EMPLOYEE_BLOCKED", "Employé inactif", "error", 403)
     assert _events(db, setup.employee) == []
 
 
