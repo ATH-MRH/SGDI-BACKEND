@@ -81,12 +81,15 @@ def test_forged_or_foreign_historical_qr_is_refused(client, db, setup, auth_head
         setup.qr.replace(signature, "0" * 32),
         setup.qr.replace(f"/badge/{setup.employee.id}?", f"/badge/{other.id}?"),             # signature d'un autre employé
         f"https://drh.irongs.com/public/badge/{setup.employee.id}?t={_public_employee_token('dotation', str(setup.employee.id))}",
-        f"https://drh.irongs.com/public/badge/{setup.employee.id}",                             # sans signature
-        f"https://drh.irongs.com/public/badge/{setup.employee.code}",                           # matricule seul
         f"https://drh.irongs.com/public/badge/999999999?t={_public_employee_token('badge', '999999999')}",   # inconnu, bien signé
     ]
     for token in forged:
         _refused(_scan(client, setup.headers, token, setup.site), "QR_UNRECOGNIZED", "QR code non reconnu", "error", 400)
+    # Lien sans aucune signature (ancien QR imprimé sans jeton) : toujours refusé, avec sa cause.
+    for token in (f"https://drh.irongs.com/public/badge/{setup.employee.id}",                  # sans signature
+                  f"https://drh.irongs.com/public/badge/{setup.employee.code}"):               # matricule seul
+        _refused(_scan(client, setup.headers, token, setup.site), "BADGE_UNSIGNED",
+                 "Ancien badge sans signature — à réimprimer depuis le Studio Badges", "error", 400)
     assert _events(db, setup.employee) == [] and _events(db, other) == []
 
 
