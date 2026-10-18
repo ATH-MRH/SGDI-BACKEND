@@ -16,7 +16,7 @@ import tests.test_pointeur_badge_qr as tqr
 from app.modules.auth.models import AuditEvent
 from app.modules.drh import badge_design, badge_qr
 from app.modules.drh.badge_models import STATUS_REVOKED, EmployeeBadge
-from app.modules.drh.badge_routes import _qr_url, _studio_link_v0
+from app.modules.drh.badge_routes import _studio_link_v0
 from app.modules.ops.models import Assignment, Site
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
 from tests.test_drh_badges import API, SOC, clean_badges, drh, fast_portrait  # noqa: F401 (fixtures)
@@ -56,8 +56,8 @@ MISREAD = ("QR_MISREAD", "QR mal lu par le lecteur — présentez-le à nouveau 
 
 
 def _a1_qr(employee, badge):
-    """Contenu exact du QR d'un badge émis aujourd'hui : adresse produite par le Studio lui-même."""
-    return _qr_url(STUDIO, employee, badge.id)
+    """QR A1 d'un badge émis avant le retour arrière : la lecture doit en rester complète."""
+    return badge_qr.url_for(str(STUDIO.base_url), badge.id)
 
 
 @pytest.fixture(autouse=True)
@@ -82,77 +82,22 @@ def _pointeur_for(client, db, employee):
     return site, _headers(client, _account(db, modules=("pointeur",), societies=(SOC,), sites=(site,)), POINTEUR)
 
 
-# ── Émission réelle par le Studio, impression, lecture ────────────────────────────────────────
-def test_studio_issues_an_a1_qr_that_the_hc866_cannot_alter(client, db, drh):
+# ── Retour arrière : émission au format précédent, badges A1 imprimés toujours valides ──────────
+def test_rollback_issues_the_previous_format_and_still_reads_printed_a1_badges(client, db, drh):
     emp = _studio_employee(db)
-    issued = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh)
-    assert issued.status_code in (200, 201), issued.text
-    badge_id = issued.json()["id"]
-    url = db.get(EmployeeBadge, badge_id).snapshot["qr_url"]
-    assert badge_qr.read(url) == (badge_qr.OK, badge_id)
-    assert SCANNER_SAFE.match(url) and "/p/A1" in url and len(_code(url)) == 25, "lettres, chiffres, « : / . » seulement"
-    assert url.translate(HC866_ON_MAC) == url, "la douchette ne peut rien en changer"
-    assert emp.code not in url and emp.last_name.upper() not in url.upper(), "aucune donnée personnelle dans le QR"
-    assert client.get(f"{API}/{badge_id}", headers=drh).json()["qr"] == badge_design.qr_matrix(url), "QR dessiné = adresse A1"
-
+    first = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()["id"]
+    url = db.get(EmployeeBadge, first).snapshot["qr_url"]
+    assert url == _studio_link_v0(STUDIO, emp, first) or ("/public/badge/" in url and f"&b={first}" in url)
+    assert badge_qr.read(url) == (badge_qr.ABSENT, None)
     site, pointeur = _pointeur_for(client, db, emp)
-    scanned = _scan(client, pointeur, url.translate(HC866_ON_MAC), site)                   # lecture douchette
-    assert scanned.status_code == 201, scanned.text
-    assert [(e.event_type, e.source) for e in _events(db, emp)] == [("ARRIVAL", "QR")]
-
-    # Le même badge au format d'avant, lu par la HC-866 : « ?t- » — refusé, jamais « réparé ».
-    old = _studio_link_v0(STUDIO, emp, badge_id)
-    assert "?t-" in old.translate(HC866_ON_MAC)
-    _refused(_scan(client, pointeur, old.translate(HC866_ON_MAC), site), *MISREAD)
+    printed_a1 = badge_qr.url_for("https://badge.irongs.com/", first)        # badge imprimé avant le retour arrière
+    assert _scan(client, pointeur, printed_a1.translate(HC866_ON_MAC), site).status_code == 201
+    assert client.get(f"/api/p/{printed_a1.rsplit('/', 1)[1]}").json()["badgeActif"] is True
+    renewed = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()["id"]
+    _refused(_scan(client, pointeur, printed_a1, site), "BADGE_REVOKED", "Badge révoqué", "error", 403)
+    assert client.get(f"/api/p/{printed_a1.rsplit('/', 1)[1]}").json()["badgeActif"] is False
+    assert db.get(EmployeeBadge, renewed).snapshot["qr_url"].endswith(f"&b={renewed}")
     assert len(_events(db, emp)) == 1
-
-    # Réémission : l'ancien badge A1 est remplacé, le nouveau seul est valable.
-    renewed = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()
-    new_url = db.get(EmployeeBadge, renewed["id"]).snapshot["qr_url"]
-    assert new_url != url and badge_qr.read(new_url) == (badge_qr.OK, renewed["id"])
-    replaced = db.get(EmployeeBadge, badge_id); db.refresh(replaced)
-    assert replaced.revoked_at is not None                                                     # remplacé = révoqué par le Studio
-    _refused(_scan(client, pointeur, url, site), "BADGE_REVOKED", "Badge révoqué", "error", 403)
-    assert client.post(f"{API}/{renewed['id']}/revoke", json={"reason": "perdu"}, headers=drh).status_code == 200
-    _refused(_scan(client, pointeur, new_url, site), "BADGE_REVOKED", "Badge révoqué", "error", 403)
-    assert len(_events(db, emp)) == 1
-
-
-def _decode(cv2, image):
-    text, _points, _straight = cv2.QRCodeDetector().detectAndDecode(image)
-    return text
-
-
-def test_the_printed_qr_matrix_decodes_to_the_a1_address(client, db, drh):
-    cv2 = pytest.importorskip("cv2")
-    numpy = pytest.importorskip("numpy")
-    emp = _studio_employee(db)
-    badge_id = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()["id"]
-    url = db.get(EmployeeBadge, badge_id).snapshot["qr_url"]
-    rows = client.get(f"{API}/{badge_id}", headers=drh).json()["qr"]                    # matrice que le Studio imprime
-    grid = numpy.array([[0 if bit == "1" else 255 for bit in row] for row in rows], dtype=numpy.uint8)
-    image = numpy.kron(numpy.pad(grid, 4, constant_values=255), numpy.ones((8, 8), dtype=numpy.uint8))
-    assert _decode(cv2, image) == url
-    assert badge_qr.read(_decode(cv2, image).translate(HC866_ON_MAC)) == (badge_qr.OK, badge_id)
-
-
-def test_the_printed_pdf_badge_decodes_to_the_a1_address(client, db, drh):
-    cv2 = pytest.importorskip("cv2")
-    numpy = pytest.importorskip("numpy")
-    pdfium = pytest.importorskip("pypdfium2")
-    emp = _studio_employee(db)
-    badge_id = client.post(f"{API}/issue", json={"employee_id": emp.id}, headers=drh).json()["id"]
-    url = db.get(EmployeeBadge, badge_id).snapshot["qr_url"]
-    sheet = client.post(f"{API}/print/pdf", json={"badge_ids": [badge_id]}, headers=drh)
-    assert sheet.status_code == 200
-    pages = pdfium.PdfDocument(sheet.content)
-    found = set()
-    for index in range(len(pages)):
-        bitmap = pages[index].render(scale=600 / 72).to_numpy()          # 600 ppp, comme une imprimante à cartes
-        gray = cv2.cvtColor(bitmap, cv2.COLOR_BGRA2GRAY if bitmap.shape[2] == 4 else cv2.COLOR_BGR2GRAY)
-        ok, texts, _, _ = cv2.QRCodeDetector().detectAndDecodeMulti(gray)
-        found.update(text for text in (texts if ok else ()) if text)
-    assert url in found, f"QR imprimé : {sorted(found)}"
 
 
 # ── Lecture : variantes acceptées par définition, aucune réparation ──────────────────────────

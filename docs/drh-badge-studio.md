@@ -213,6 +213,9 @@ refus est journalisé (`authorization.badge`) et le portail affiche sa raison pr
   on **réémet** son badge depuis le studio (l'ancien est alors révoqué : un seul badge physique).
 - **Retour arrière** : le code antérieur ne connaît pas `/p/` ; les badges émis en A1 entre-temps
   seraient refusés jusqu'au retour du code A1. Les badges plus anciens ne sont pas concernés.
+  **Branche `rollback/a1-emission-v0` (déployée en cas de retour arrière)** : les nouveaux badges
+  reprennent le format précédent ; la lecture A1 (Pointeur, `/p/`, `/api/p/`) est intégralement
+  conservée, si bien qu'aucun badge A1 déjà imprimé ne devient invalide.
 - Le studio contrôle le QR en direct et à l'enregistrement : 12 mm de côté au minimum, cadre
   carré, entièrement sur la carte, opaque, sombre sur fond clair.
 

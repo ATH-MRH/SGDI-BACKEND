@@ -338,15 +338,10 @@ def employee_photo(db: Session, employee: Employee, source: str = "portrait") ->
 
 
 def _qr_url(request: Request, employee: Employee, badge_id: int | None = None) -> str:
-    """Adresse du QR. Pour un badge émis : format de pointage A1 (badge_qr), propre à CE badge —
-    révoqué ou remplacé, il ne se valide plus — et lisible par une douchette quelle que soit la
-    disposition du clavier (ni « = », ni « & », ni « ? »). Sans badge émis (aperçu, écran de
-    consultation) : lien public signé historique, inchangé."""
-    from app.modules.drh import badge_qr
-
-    if badge_id is None:
-        return _studio_link_v0(request, employee, None)
-    return badge_qr.url_for(str(request.base_url), badge_id)
+    """RETOUR ARRIÈRE de l'émission A1 : les nouveaux badges reprennent le lien public signé
+    (`…?t=…&b=…`). La LECTURE des badges A1 déjà imprimés est conservée (Pointeur, /p/<code>) :
+    voir app/modules/drh/badge_qr.py et docs/drh-badge-studio.md, « Retour arrière »."""
+    return _studio_link_v0(request, employee, badge_id)
 
 
 def _studio_link_v0(request: Request, employee: Employee, badge_id: int | None = None) -> str:

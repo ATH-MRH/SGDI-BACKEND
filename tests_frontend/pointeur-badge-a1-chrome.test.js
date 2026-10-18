@@ -31,9 +31,9 @@ from types import SimpleNamespace
 from app.db.session import SessionLocal
 from app.core.security import hash_password
 from app.modules.auth.models import User, UserFeaturePermission
-from app.modules.drh import badge_design
+from app.modules.drh import badge_design, badge_qr
 from app.modules.drh.badge_models import EmployeeBadge
-from app.modules.drh.badge_routes import _qr_url, _studio_link_v0
+from app.modules.drh.badge_routes import _studio_link_v0
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Assignment, Site
 s=SessionLocal(); soc=${JSON.stringify(SOCIETY)}; studio=SimpleNamespace(base_url=${JSON.stringify(BASE + '/')})
@@ -44,7 +44,7 @@ for code,last in (('A1CAM','OUALI'),('A1USB','BENALI'),('A1MAJ','HADJ')):
                extra={'photo':'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==','groupeSanguin':'AB-'})
     s.add(e); s.flush(); s.add(Assignment(employee_id=e.id,site_id=site.id,group_code='A',start_date=date(2026,1,1),active=1))
     b=EmployeeBadge(employee_id=e.id,society=soc,status='ACTIF',snapshot={},design={},width_mm=85.6,height_mm=54.0); s.add(b); s.flush()
-    url=_qr_url(studio,e,b.id); b.snapshot={'qr_url':url}
+    url=badge_qr.url_for(studio.base_url,b.id); b.snapshot={'qr_url':url}   # badge A1 imprimé avant le retour arrière
     out.append({'id':e.id,'url':url,'old':_studio_link_v0(studio,e,b.id),'svg':badge_design.qr_svg(url)})
 p=User(username='PTG01',full_name='Poste de garde 01',role='pointeur',access_level='H2',authorized_modules=['pointeur'],authorized_actions=['read','create'],
        authorized_structures=['pointage'],authorized_societies=[soc],authorized_sites=[site.id],password_hash=hash_password(${JSON.stringify(PASSWORD)}),is_active=True)

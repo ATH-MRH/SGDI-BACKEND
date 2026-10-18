@@ -7,7 +7,6 @@ from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.modules.auth.models import AuditEvent, User, UserFeaturePermission
-from app.modules.drh import badge_qr
 from app.modules.drh.badge_models import BadgeEvent, BadgeTemplate, EmployeeBadge
 from app.modules.ops.models import Assignment, Site
 from tests.module_cleanup import purge_rows_created_by_this_module  # noqa: F401 (fixture autouse)
@@ -264,8 +263,7 @@ def test_medical_data_never_reaches_qr_public_page_or_logs_even_with_a_waiver(cl
     client.post(f"{API}/issue", json={"employee_id": other.id, "blood_group_waiver": "analyse_en_attente"}, headers=drh)
     client.post(f"{API}/print/pdf", json={"badge_ids": [badge["id"]]}, headers=drh)
     url = db.get(EmployeeBadge, badge["id"]).snapshot["qr_url"]
-    # Rien dans le QR : l'adresse A1 ne contient que le numéro du badge et sa signature.
-    assert badge_qr.read(url) == (badge_qr.OK, badge["id"]) and url.rsplit("/", 1)[1] == badge_qr.token_for(badge["id"])
+    assert "AB" not in url.split("?")[0].split("/")[-1] and "sang" not in url.lower()
     path = url.split("://", 1)[1].split("/", 1)[1]
     assert "AB-" not in client.get("/api/" + path).text and "sanguin" not in client.get("/" + path).text.lower()
     for state in db.execute(select(AuditEvent.new_state).where(AuditEvent.action.like("badge.%"))).scalars():
