@@ -8757,6 +8757,9 @@ function normalizePageHeader(view){
   // dont le dégradé disparaissait entièrement à cause de cette règle).
   // This page owns its header; its table and pagination are not header actions.
   if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel,.admin-users-page,.ops-outgoing-page'))return;
+  // Gestion des effectifs (DRH / OPS) possède sa barre sticky : classer toute la zone en
+  // en-tête générique la mettait en flex horizontal et réduisait la barre à 0 px de large.
+  if(first.querySelector(':scope > .effectif-page > .effectif-sticky-head'))return;
   if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero')||first.classList.contains('drh-leave-page'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');

@@ -9580,11 +9580,22 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
    conteneur de défilement : le bloc colle à son bord haut, sous le bandeau KPI et le
    header ATLAS qui sont hors de #view. Sticky seulement sur un écran assez grand : sur
    tablette portrait et mobile, le bloc occuperait l'essentiel de la hauteur. */
+/* Boîte strictement à la hauteur et à la largeur de son contenu, quel que soit le parent
+   (pas de container query : en contexte « taille au contenu », un conteneur de taille
+   ramène sa largeur à 0 — cause du grand vide en production après la PR #60). */
+#view .effectif-page{display:block;width:100%;min-width:0;height:auto;min-height:0}
 #view .effectif-sticky-head{
-  container-type:inline-size;
+  box-sizing:border-box;
   display:flex;
   flex-direction:column;
   gap:8px;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  height:auto;
+  min-height:0;
+  max-height:none;
+  flex:0 0 auto;
   margin:0 0 12px;
 }
 @media screen and (min-width:1200px) and (min-height:700px){
@@ -9600,6 +9611,12 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   }
 }
 #view .effectif-toolbar{
+  box-sizing:border-box;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  height:auto;
+  min-height:0;
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
   grid-template-areas:"title reset" "search search" "site site" "poste poste" "sort sort" "chips chips";
@@ -9731,6 +9748,9 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   outline-offset:2px;
 }
 #view .effectif-sticky-head .drh-effectif-actions-card{
+  height:auto!important;
+  min-height:0!important;
+  flex:none!important;
   margin:0!important;
   padding:8px 14px 10px!important;
   border-radius:var(--atlas-radius-lg,14px)!important;
@@ -9747,8 +9767,10 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 }
 #view .drh-effectif-action-btn svg{flex:none;width:14px;height:14px}
 #view .drh-effectif-action-btn:disabled{background:#94a3b8!important;border-color:#94a3b8!important;opacity:.6;cursor:not-allowed}
-/* Tablette : recherche sur sa ligne, puis SITE + POSTE + TRI côte à côte. */
-@container (min-width:440px){
+/* Paliers en largeur d'écran, calculés pour la sidebar ouverte la plus large (288 px) :
+   la barre ne déborde jamais, elle passe au palier compact quand la place manque.
+   Tablette : recherche sur sa ligne, puis SITE + POSTE + TRI côte à côte. */
+@media (min-width:480px){
   #view .effectif-toolbar{
     grid-template-columns:repeat(3,minmax(0,1fr));
     grid-template-areas:"title title reset" "search search search" "site poste sort" "chips chips chips";
@@ -9756,7 +9778,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .effectif-toolbar-reset{justify-self:end}
 }
 /* Desktop étroit : titre et recherche, puis les trois sélecteurs. */
-@container (min-width:680px){
+@media (min-width:1000px){
   #view .effectif-toolbar{
     grid-template-columns:repeat(3,minmax(0,1fr)) auto;
     grid-template-areas:"title search search reset" "site poste sort sort" "chips chips chips chips";
@@ -9764,7 +9786,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .effectif-toolbar-title{min-width:max-content}
 }
 /* Desktop : une seule ligne (titre, recherche, SITE, POSTE, TRI, réinitialiser). */
-@container (min-width:940px){
+@media (min-width:1260px){
   #view .effectif-toolbar{
     grid-template-columns:max-content minmax(200px,1fr) minmax(140px,190px) minmax(140px,190px) minmax(120px,150px) auto;
     column-gap:10px;
