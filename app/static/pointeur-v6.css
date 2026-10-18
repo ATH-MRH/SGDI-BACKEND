@@ -27,9 +27,11 @@
 
 /* ── Colonne gauche : zone de pointage compacte ── */
 .ptr-v5 #appView #scannerCard{padding:10px 12px;gap:7px;display:flex;flex-direction:column;min-height:0}
-.ptr-v5 #appView #scannerCard .station-head{display:flex!important;order:-3;align-items:center;gap:8px;margin:0;padding:0;min-height:0}
+.ptr-v5 #appView #scannerCard .station-head{display:flex;order:-3;align-items:center;gap:8px;margin:0;padding:0;min-height:0}
 .ptr-v5 #appView #scannerCard .station-ico{display:none}
-.ptr-v5 #appView #scannerCard .station-titles{display:flex;align-items:baseline;gap:8px;min-width:0}
+.ptr-v5 #appView #scannerCard .station-titles{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden}
+/* Mode facial sur petit écran : l'en-tête reste rendu à la liste des terminaux (comportement existant). */
+@media(max-width:899px){.ptr-v5 #appView #scannerCard.facial-mode .station-head{display:none}}
 .ptr-v5 #appView #scannerCard .station-head .scanner-title{margin:0;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ptr-ink-2);white-space:nowrap}
 .ptr-v5 #appView #scannerCard .station-sub{margin:0;font-size:11px;color:var(--ptr-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ptr-v5 #appView #scannerCard .station-state{margin-left:auto;height:22px;padding:0 9px;gap:6px;font-size:10px}
@@ -205,6 +207,9 @@ body.ptr-v5:not(.has-post) #appView #postKpis{display:grid!important}
   .ptr-v5 #appView .v6-left,.ptr-v5 #appView .side-col{display:contents!important}
   .ptr-v5 #appView #scannerCard{order:1}.ptr-v5 #appView #presentNowCard{order:2}.ptr-v5 #appView #functionsCard{order:3}.ptr-v5 #appView #movementsCard{order:4}
   .ptr-v5 #appView #scannerCard{overflow:visible}
+  /* Caméra QR (poste tenu en main) : « Réactiver la caméra » au-dessus du cadre, pour que la feuille de
+     confirmation, ancrée en bas d'écran, ne recouvre jamais une commande. */
+  .ptr-v5 #appView #reader{order:1}
   .ptr-v5 #appView #movementsCard{height:min(70dvh,520px)}
   .ptr-v5 #appView #presentNowCard{max-height:min(60dvh,460px)}
   .ptr-v5 #appView #functionsCard{max-height:min(60dvh,460px)}

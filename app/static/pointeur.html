@@ -2425,6 +2425,9 @@ function acceptUsbQr(value){
   card.addEventListener("focusout",event=>{if(!event.relatedTarget?.closest?.(".last-scan-float"))resume()});
   document.addEventListener("keydown",event=>{if(event.key==="Escape"&&confirmOpen()){closeConfirm();refocus()}});
   window.addEventListener("resize",()=>{if(confirmOpen()||document.getElementById("result")?.classList.contains("show"))positionConfirm()});
+  // La carte de pointage change de taille sans redimensionnement de la fenêtre (caméra indisponible →
+  // « Réactiver la caméra », fiche ouverte) : la fenêtre ouverte est replacée, jamais sur une commande.
+  if(typeof ResizeObserver==="function")new ResizeObserver(()=>{if(confirmOpen()||document.getElementById("result")?.classList.contains("show"))positionConfirm()}).observe(document.getElementById("scannerCard"));
 })();
 document.getElementById("wedgeInput").addEventListener("input",event=>{
   if(!pointerSession||cameraMode)return;
