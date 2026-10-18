@@ -770,10 +770,16 @@ def _register_attendance(
 # toutes les règles d'Attendance Core). Le simple code employé (K01…) ou un nom n'est jamais lu.
 _BADGE_QR_PATH = re.compile(r"^/(?:api/)?public/badge/([^/?#]+)/?$")
 _BADGE_QR_TOKEN = re.compile(r"^[0-9a-f]{32}$")
+_BADGE_QR_REF = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+# Signature collée à la référence (« ? » perdu ou transformé par la douchette) : 1771,t=<hex>…
+_MISREAD_IN_REF = re.compile(r"t\W?[0-9a-f]{20,}")
+# « = » transformé : t+<hex>… ; « & » perdu ou transformé : <32 hex> suivis d'autre chose.
+_MISREAD_IN_QUERY = re.compile(r"(?:^|&)t[^=&][0-9a-f]{20,}")
+_MISREAD_SIGNATURE = re.compile(r"^[0-9a-f]{32}.")
 
 QR_UNRECOGNIZED, QR_EXPIRED, QR_ALREADY_USED = "QR_UNRECOGNIZED", "QR_EXPIRED", "QR_ALREADY_USED"
 BADGE_REVOKED, BADGE_INACTIVE, BADGE_EXPIRED = "BADGE_REVOKED", "BADGE_INACTIVE", "BADGE_EXPIRED"
-BADGE_REPLACED = "BADGE_REPLACED"
+BADGE_REPLACED, BADGE_UNSIGNED, QR_MISREAD = "BADGE_REPLACED", "BADGE_UNSIGNED", "QR_MISREAD"
 EMPLOYEE_BLOCKED, SITE_NOT_ALLOWED = "EMPLOYEE_BLOCKED", "SITE_NOT_ALLOWED"
 ALREADY_RECORDED, NO_SHIFT, DAY_CLOSED = "ALREADY_RECORDED", "NO_SHIFT", "DAY_CLOSED"
 
@@ -787,6 +793,8 @@ QR_SCAN_REFUSALS: dict[str, tuple[str, str]] = {
     BADGE_INACTIVE: ("Badge inactif", "error"),
     BADGE_EXPIRED: ("Badge expiré", "error"),
     BADGE_REPLACED: ("Badge remplacé — présentez le badge actuel", "error"),
+    BADGE_UNSIGNED: ("Ancien badge sans signature — à réimprimer depuis le Studio Badges", "error"),
+    QR_MISREAD: ("QR mal lu par le lecteur — présentez-le à nouveau ou utilisez la caméra", "error"),
     EMPLOYEE_BLOCKED: ("Employé inactif", "error"),
     SITE_NOT_ALLOWED: ("Employé non autorisé sur ce site", "business"),
     ALREADY_RECORDED: ("Présence déjà enregistrée", "business"),
@@ -796,14 +804,15 @@ QR_SCAN_REFUSALS: dict[str, tuple[str, str]] = {
 
 
 def _qr_refusal(db: Session, scanner: User, code: str, status_code: int, *, kind: str,
-                employee: Any = None, badge_id: int | None = None) -> HTTPException:
-    """Refus tracé (code stable, jamais le contenu du QR) et réponse sans donnée personnelle."""
+                employee: Any = None, badge_id: int | None = None, fault: str | None = None) -> HTTPException:
+    """Refus tracé (code stable, cause technique, jamais le contenu du QR) et réponse sans donnée personnelle."""
     message, severity = QR_SCAN_REFUSALS[code]
+    state = {"code": code, "qr": kind, "badge_id": badge_id, "recorded": False, **({"fault": fault} if fault else {})}
     try:
         db.rollback()
         append_audit(db, action="attendance.qr_scan.refused", resource="attendance_event", result="refused",
                      user=scanner, resource_id=getattr(employee, "id", None), society=getattr(employee, "society", None),
-                     new_state={"code": code, "qr": kind, "badge_id": badge_id, "recorded": False})
+                     new_state=state)
         db.commit()
     except Exception:  # noqa: BLE001 — l'audit ne doit jamais masquer le refus
         db.rollback()
@@ -847,6 +856,26 @@ def _badge_qr_parts(token: str) -> tuple[str, str, str | None] | None:
     return unquote(match.group(1)).strip(), (query.get("t") or [""])[0], (query.get("b") or [None])[0]
 
 
+def _badge_qr_format_fault(token: str, parts: tuple[str, str, str | None]) -> tuple[str, str]:
+    """(code, cause) d'une adresse de badge refusée AVANT toute vérification de signature. Seule la
+    cause est tracée (jamais l'adresse ni la signature). Elle sépare deux situations que le poste
+    affichait jusqu'ici du même « QR code non reconnu » :
+    - ancien badge imprimé SANS signature (/public/badge/<réf> seul) : de juin à octobre 2026, l'écran de
+      badge historique dessinait le QR sans jeton tant que le lien signé n'était pas reçu ; un tel QR
+      n'est la preuve de rien (référence devinable) et reste refusé : le badge est à réimprimer ;
+    - lecture altérée par la douchette : séparateur « ? », « = » ou « & » perdu ou transformé
+      (disposition clavier du lecteur), la signature se retrouvant collée à un autre champ."""
+    from urllib.parse import urlsplit
+
+    ref, signature, raw_badge_id = parts
+    query = urlsplit(token).query
+    if not query and raw_badge_id is None and _BADGE_QR_REF.match(ref):
+        return (QR_UNRECOGNIZED, "specimen") if ref == "specimen" else (BADGE_UNSIGNED, "sans_signature")
+    if _MISREAD_IN_REF.search(ref) or _MISREAD_IN_QUERY.search(query) or _MISREAD_SIGNATURE.match(signature or ""):
+        return QR_MISREAD, "lecture_alteree"
+    return QR_UNRECOGNIZED, "format_invalide"
+
+
 def _historical_badge_employee(db: Session, ref: str) -> Employee | None:
     """Employé désigné par la référence d'un badge historique : l'identifiant interne (cas de
     tous les badges imprimés par ATLAS), sinon la résolution officielle de la page publique."""
@@ -877,14 +906,15 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
     ref, signature, raw_badge_id = parts
     if not ref or len(ref) > 80 or not _BADGE_QR_TOKEN.match(signature or "") \
             or (raw_badge_id is not None and (not ref.isdigit() or not raw_badge_id.isdigit())):
-        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
+        code, fault = _badge_qr_format_fault(_clean_text(payload.get("token")), parts)
+        raise _qr_refusal(db, scanner, code, 400, kind="badge", fault=fault)
 
     if raw_badge_id is None:
         if not hmac.compare_digest(signature, _public_employee_token("badge", ref)):
-            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique")
+            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique", fault="signature_invalide")
         employee = _historical_badge_employee(db, ref)
         if employee is None:
-            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique")
+            raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge-historique", fault="employe_inconnu")
         _ensure_badge_scope(db, scanner, payload, employee, "badge-historique", None)
         if db.execute(select(EmployeeBadge.id).where(EmployeeBadge.employee_id == employee.id).limit(1)).first():
             # Un badge Studio a été émis : il est seul officiel (révocation, validité, numéro).
@@ -893,11 +923,11 @@ def _scan_badge_qr(db: Session, scanner: User, payload: dict[str, Any], parts: t
 
     badge_id = int(raw_badge_id)
     if not hmac.compare_digest(signature, _public_employee_token("badge", f"{ref}:{badge_id}")):
-        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge")
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", fault="signature_invalide")
     badge = db.get(EmployeeBadge, badge_id)
     employee = db.get(Employee, int(ref)) if badge is not None and str(badge.employee_id) == ref else None
     if employee is None:
-        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", badge_id=badge_id)
+        raise _qr_refusal(db, scanner, QR_UNRECOGNIZED, 400, kind="badge", badge_id=badge_id, fault="badge_inconnu")
     _ensure_badge_scope(db, scanner, payload, employee, "badge", badge_id)
     if badge.status == STATUS_REVOKED or badge.revoked_at is not None:
         raise _qr_refusal(db, scanner, BADGE_REVOKED, 403, kind="badge", employee=employee, badge_id=badge_id)
