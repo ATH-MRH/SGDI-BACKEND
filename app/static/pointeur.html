@@ -806,7 +806,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
 </style>
 <!-- Poste V6 : disposition en deux colonnes (pointage + tableau à gauche ; présents + effectifs par
      fonction à droite, hauteurs ajustables). Chargée après les couches qu'elle remplace. -->
-<link rel="stylesheet" href="/static/pointeur-v6.css?v=20261018-v6">
+<link rel="stylesheet" href="/static/pointeur-v6.css?v=20261018-v6b">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -939,7 +939,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
             <div class="manual-actions">
               <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage('present')">PRÉSENT</button>
               <button id="manualAbsentBtn" type="button" class="absent-btn" onclick="confirmManualPointage('absent')">ABSENT</button>
-              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="recordAbandon()"><span aria-hidden="true">↪</span><span>ABANDON POSTE</span></button>
+              <button id="manualAbandonBtn" type="button" class="abandon-btn" onclick="openAbandonModal()"><span aria-hidden="true">↪</span><span>ABANDON POSTE</span></button>
             </div>
             <p class="abandon-caption"><span id="abandonThresholdCaption">Départ anticipé (≥ 60 min)</span> avant la fin du service · transmis à OPS et DRH, disponible pour le BRQ</p>
             <div id="manualFeedback" class="manual-feedback" role="status" aria-live="polite"></div>
@@ -998,6 +998,20 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
   </main>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
 </section>
+
+<div id="abandonOverlay" class="abandon-overlay hidden">
+  <section class="abandon-modal" role="dialog" aria-modal="true" aria-labelledby="abandonTitle" aria-describedby="abandonFacts">
+    <h2 id="abandonTitle">CONFIRMER L’ABANDON DE POSTE</h2>
+    <div id="abandonFacts"></div>
+    <label for="abandonObservation">MOTIF DE L’ABANDON (OBLIGATOIRE)</label>
+    <textarea id="abandonObservation" class="manual-observation" required aria-required="true" maxlength="500" placeholder="Saisir le motif constaté…" oninput="updateAbandonConfirmation()"></textarea>
+    <div id="abandonError" class="manual-feedback" role="alert"></div>
+    <div class="abandon-modal-actions">
+      <button id="abandonCancel" type="button" class="abandon-cancel" onclick="closeAbandonModal()">ANNULER</button>
+      <button id="abandonConfirm" type="button" class="abandon-btn" disabled onclick="confirmAbandon()">CONFIRMER L’ABANDON</button>
+    </div>
+  </section>
+</div>
 
 <script>
 const SESSION_KEY="atlas_pointer_session";
@@ -1927,6 +1941,7 @@ async function logout(){
   isLoggingOut=true;
   try{
 
+    closeAbandonModal(true);
     stopIdleWatch();
     await stopScanner();
     window.PointeurFacial&&PointeurFacial.stop();
@@ -2215,6 +2230,7 @@ function closeManualPanel(){
 }
 function resetManualPanel(){
   if(scanBusy)return;
+  closeAbandonModal(true);
   manualSelected=null;manualResults=[];
   document.getElementById("manualQuery").value="";
   document.getElementById("manualObservation").value="";
@@ -2310,45 +2326,84 @@ async function loadManualContext(employee){
     button.classList.toggle("hidden",!explicit);
   }catch(e){/* contexte indisponible : la saisie reste possible, Attendance Core décide */}
 }
-// ABANDON POSTE : traité dès le clic, sans fenêtre de confirmation. Le serveur vérifie d'abord la
-// situation (prise de service ouverte, vacation valide, fin connue, seuil, journée non clôturée,
-// droits) ; si une condition manque, AUCUNE écriture et la raison exacte est affichée. Le POST
-// refait tous les contrôles sous verrou (heure serveur, idempotence par vacation).
+// ABANDON POSTE : 1) le serveur contrôle la situation (prise de service ouverte, vacation valide et
+// sa fin, seuil, journée non clôturée, droits) ; si une condition manque, AUCUNE écriture et la
+// raison exacte est affichée. 2) Sinon, fenêtre de confirmation : employé, matricule, site, heure de
+// départ, fin prévue, motif OBLIGATOIRE saisi par l'agent (aucun motif automatique). 3) Le POST refait
+// tous les contrôles sous verrou (heure serveur, idempotence par vacation).
 function manualActionsLocked(){return !!(postState&&postState.permissions&&postState.permissions.manual_entry===false)}
-const ABANDON_DEFAULT_OBSERVATION="Départ anticipé constaté au poste de pointage";
 function remainingLabel(minutes){const n=Math.max(0,Math.floor(minutes)),h=Math.floor(n/60),m=n%60;return h?h+" h "+String(m).padStart(2,"0"):m+" min"}
 function abandonTime(value){return value?value.slice(11,16):"—"}
 function setManualActionsBusy(busy){["manualPointerBtn","manualAbsentBtn","manualAbandonBtn"].forEach(id=>document.getElementById(id).disabled=busy||manualActionsLocked())}
-async function recordAbandon(){
-  if(!manualSelected||scanBusy||manualActionsLocked())return;
+let abandonContext=null,abandonLoading=false;
+function abandonOpen(){return !document.getElementById("abandonOverlay").classList.contains("hidden")}
+function updateAbandonConfirmation(){document.getElementById("abandonConfirm").disabled=scanBusy||!abandonContext||!abandonContext.applicable||!document.getElementById("abandonObservation").value.trim()}
+function closeAbandonModal(force=false){
+  if(scanBusy&&!force)return;
+  const wasOpen=abandonOpen();
+  document.getElementById("abandonOverlay").classList.add("hidden");abandonContext=null;
+  if(wasOpen&&!force)document.getElementById("manualAbandonBtn").focus();
+}
+async function openAbandonModal(){
+  if(!manualSelected||scanBusy||abandonLoading||manualActionsLocked())return;
   const employee=manualSelected,site=selectedSiteId,feedback=document.getElementById("manualFeedback");
-  const headers={Authorization:"Bearer "+pointerSession.token};
-  scanBusy=true;setManualActionsBusy(true);
+  abandonLoading=true;scanBusy=true;setManualActionsBusy(true);
   feedback.textContent="";feedback.className="manual-feedback";
   try{
-    const response=await fetch("/api/portal/attendance-manual/abandon/context?employee_id="+encodeURIComponent(employee.id)+siteQuery("&"),{headers});
+    const response=await fetch("/api/portal/attendance-manual/abandon/context?employee_id="+encodeURIComponent(employee.id)+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
     const ctx=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,ctx);
     if(manualSelected!==employee||selectedSiteId!==site)return;
     if(ctx.threshold_minutes)document.getElementById("abandonThresholdCaption").textContent="Départ anticipé (≥ "+ctx.threshold_minutes+" min)";
     if(!ctx.applicable)throw new Error("Abandon de poste refusé : il reste "+remainingLabel(ctx.remaining_minutes)+" avant la fin prévue du service ("+abandonTime(ctx.scheduled_end_at)+"). Le seuil requis est de "+ctx.threshold_minutes+" minutes.");
-    const observation=document.getElementById("manualObservation").value.trim()||ABANDON_DEFAULT_OBSERVATION;
-    const saved=await fetch("/api/portal/attendance-manual/abandon",{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({employee_id:ctx.employee_id,site_id:ctx.site_id,society:ctx.society,shift_id:ctx.shift_id,observation})});
-    const data=await saved.json().catch(()=>({}));
-    if(saved.status===401){logout();throw new Error("Session expirée")}
-    if(!saved.ok)throw operationalError(saved,data);
+    abandonContext=ctx;
+    const facts=[["Employé",ctx.employee_name],["Matricule",ctx.matricule],["Site",ctx.site_name],["Heure de départ",abandonTime(ctx.actual_departure_at)],["Fin prévue de la vacation",abandonTime(ctx.scheduled_end_at)],["Temps restant",remainingLabel(ctx.remaining_minutes)]];
+    document.getElementById("abandonFacts").innerHTML='<dl class="v5-facts">'+facts.map(([label,value])=>'<dt>'+esc(label)+'</dt><dd>'+esc(value||"—")+'</dd>').join("")+'</dl><p class="abandon-modal-note">Heure retenue : celle du serveur au moment de la confirmation.</p>';
+    document.getElementById("abandonObservation").value="";
+    const error=document.getElementById("abandonError");error.textContent="";error.className="manual-feedback";
+    document.getElementById("abandonOverlay").classList.remove("hidden");
+    document.getElementById("abandonObservation").focus();
+  }catch(error){
+    feedback.textContent=transportFailure(error)?TRANSPORT_MESSAGE:(error.message||"Abandon de poste indisponible");
+    feedback.className="manual-feedback show error";playTone(false);
+  }finally{scanBusy=false;abandonLoading=false;setManualActionsBusy(false);updateAbandonConfirmation()}
+}
+async function confirmAbandon(){
+  const ctx=abandonContext,observation=document.getElementById("abandonObservation").value.trim();
+  const error=document.getElementById("abandonError");
+  if(scanBusy||!ctx||!ctx.applicable)return;
+  if(!observation){error.textContent="Motif obligatoire.";error.className="manual-feedback show error";document.getElementById("abandonObservation").focus();return}
+  scanBusy=true;setManualActionsBusy(true);updateAbandonConfirmation();document.getElementById("abandonCancel").disabled=true;
+  error.textContent="";error.className="manual-feedback";
+  try{
+    const response=await fetch("/api/portal/attendance-manual/abandon",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:ctx.employee_id,site_id:ctx.site_id,society:ctx.society,shift_id:ctx.shift_id,observation})});
+    const data=await response.json().catch(()=>({}));
+    if(response.status===401){logout();throw new Error("Session expirée")}
+    if(!response.ok)throw operationalError(response,data);
+    document.getElementById("abandonOverlay").classList.add("hidden");abandonContext=null;
     const sent=a=>data.notifications&&data.notifications[a]&&data.notifications[a].status==="CREATED";
-    feedback.innerHTML='<b>ABANDON DE POSTE ENREGISTRÉ</b><dl class="v5-facts"><dt>Départ réel</dt><dd>'+esc(abandonTime(data.actual_departure_at))+'</dd><dt>Fin prévue</dt><dd>'+esc(abandonTime(data.scheduled_end_at))+'</dd><dt>Temps restant</dt><dd>'+esc(remainingLabel(data.remaining_minutes))+'</dd><dt>Transmission</dt><dd>'
+    const feedback=document.getElementById("manualFeedback");
+    feedback.innerHTML='<b>ABANDON DE POSTE ENREGISTRÉ</b><dl class="v5-facts"><dt>Départ réel</dt><dd>'+esc(abandonTime(data.actual_departure_at))+'</dd><dt>Fin prévue</dt><dd>'+esc(abandonTime(data.scheduled_end_at))+'</dd><dt>Temps restant</dt><dd>'+esc(remainingLabel(data.remaining_minutes))+'</dd><dt>Motif</dt><dd>'+esc(data.observation||observation)+'</dd><dt>Transmission</dt><dd>'
       +esc((sent("OPS")?"OPS informé":"OPS : transmission en attente")+" · "+(sent("DRH")?"DRH informée":"DRH : transmission en attente"))+'</dd></dl>';
     feedback.className="manual-feedback show success";playTone(true);navigator.vibrate?.([80,40,80]);
     Promise.resolve(loadHistory()).catch(()=>{});pollLive();
-  }catch(error){
-    const lost=transportFailure(error);
-    feedback.textContent=lost?TRANSPORT_MESSAGE:(error.message||"Abandon de poste impossible");
-    feedback.className="manual-feedback show error";playTone(false);
-  }finally{scanBusy=false;setManualActionsBusy(false)}
+    document.getElementById("manualAbandonBtn").focus();
+  }catch(err){
+    // Erreur : la fenêtre reste ouverte avec le motif saisi ; un nouvel essai porte sur la même vacation.
+    error.textContent=transportFailure(err)?TRANSPORT_MESSAGE:(err.message||"Enregistrement impossible");error.className="manual-feedback show error";playTone(false);
+  }finally{scanBusy=false;setManualActionsBusy(false);document.getElementById("abandonCancel").disabled=false;updateAbandonConfirmation()}
 }
+document.addEventListener("keydown",event=>{
+  if(!abandonOpen())return;
+  if(event.key==="Escape"){event.preventDefault();event.stopPropagation();closeAbandonModal()}
+  if(event.key==="Tab"){
+    const targets=Array.from(document.querySelectorAll("#abandonOverlay textarea,#abandonOverlay button:not(:disabled)"));
+    const first=targets[0],last=targets[targets.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+  }
+},true);
 
 async function confirmManualPointage(action="present",options={}){
   if(!manualSelected||scanBusy||manualActionsLocked())return;

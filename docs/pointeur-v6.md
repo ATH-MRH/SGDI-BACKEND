@@ -1,4 +1,4 @@
-# Pointeur V6 — interface du poste, effectifs par fonction, abandon immédiat
+# Pointeur V6 — interface du poste, effectifs par fonction, abandon confirmé
 
 `pointeur.irongs.com` (`app/static/pointeur.html` + `app/static/pointeur-v6.css`). La V6 reprend le
 poste V5 (flux live, planning officiel, Attendance Core) et en change la disposition et
@@ -54,21 +54,22 @@ moins 120 px ; la proportion est mémorisée sur le poste (`localStorage`,
 
 ## Abandon de poste
 
-Un clic sur « ABANDON POSTE » suffit ; il n'y a plus de fenêtre de confirmation.
+1. Au clic sur « ABANDON POSTE », `GET …/attendance-manual/abandon/context` (lecture seule)
+   contrôle la prise de service ouverte, la vacation enregistrée et sa fin, le seuil (60 min par
+   défaut), la journée non clôturée, le périmètre et la permission.
+2. Si une condition manque, aucune fenêtre ne s'ouvre, rien n'est écrit et le message exact
+   s'affiche sous la fiche (par exemple « il reste 45 min avant la fin prévue du service (22:00).
+   Le seuil requis est de 60 minutes »).
+3. Sinon, une fenêtre de confirmation présente l'employé, le matricule, le site, l'heure de
+   départ, la fin prévue de la vacation et le temps restant. Le motif est **obligatoire et saisi par
+   l'agent** : aucun texte automatique. « CONFIRMER L’ABANDON » reste désactivé tant que le motif
+   est vide ; « ANNULER » ou Échap ferment sans écriture.
+4. `POST …/attendance-manual/abandon` refait tous les contrôles sous verrou, avec l'heure du
+   serveur et une idempotence par vacation. En cas d'erreur, la fenêtre reste ouverte avec le motif
+   saisi, et un nouvel essai porte sur la même vacation.
 
-1. `GET …/attendance-manual/abandon/context` (lecture seule) contrôle la prise de service ouverte,
-   la vacation enregistrée et sa fin, le seuil (60 min par défaut), la journée non clôturée, le
-   périmètre et la permission.
-2. Si une condition manque, rien n'est écrit et le message exact s'affiche (par exemple
-   « il reste 45 min avant la fin prévue du service (22:00). Le seuil requis est de 60 minutes »).
-3. Sinon, `POST …/attendance-manual/abandon` refait tous les contrôles sous verrou, avec l'heure
-   du serveur et une idempotence par vacation, comme avant. Le serveur exige toujours un motif :
-   l'observation saisie par l'agent est envoyée, à défaut le texte standard « Départ anticipé
-   constaté au poste de pointage ». Le motif reste donc tracé dans l'audit et dans les alertes OPS
-   et DRH.
-
-Le départ, l'événement `ABANDON_POSTE`, l'anomalie, les deux alertes et l'audit restent écrits
-dans une seule transaction (voir `pointeur-abandon-poste.txt`). L'événement reste consultable
+Le départ, l'événement `ABANDON_POSTE`, l'anomalie, les deux alertes OPS et DRH et l'audit restent
+écrits dans une seule transaction (voir `pointeur-abandon-poste.txt`). L'événement reste consultable
 pour le BRQ par `GET /api/attendance/business-events` ; aucun circuit BRQ n'est créé.
 
 ## Inchangé
@@ -82,7 +83,10 @@ de confirmation de la PR #59 (réutilisée telle quelle).
 - `tests/test_pointeur_v6_post.py` : détail des attendus = KPI, indisponibilité sans vacation,
   nuit, fonctions = présents, sortie et changement de site, abandon qui retire des présents,
   vue multi-sites.
+- `tests/test_pointeur_v6_pg.py` (PostgreSQL jetable, `ATTENDANCE_PG_URL`) : nuit à cheval sur
+  minuit (présent, absent, maladie), changement de site, employé affecté sur deux sites et vue
+  multi-sites (même règle que les compteurs : une ligne par site).
 - `tests_frontend/pointeur-v6.test.js` (jsdom), `tests_frontend/pointeur-abandon.test.js`.
 - `npm run test:pointeur-v6-chrome` (Chrome réel, API simulée, données fictives) : six
   résolutions de 1920×1080 à 390×844, chevauchements, séparateur, tactile, compteurs, douchette,
-  fenêtre flottante.
+  fenêtre flottante, confirmation d'abandon (1366×768 et 390×844).

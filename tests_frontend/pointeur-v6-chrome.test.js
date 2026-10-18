@@ -175,9 +175,45 @@ test('Pointeur V6 — disposition, panneaux ajustables, compteurs et pointage, C
     await page.browserContext().close();
   });
 
+  await t.test('ABANDON POSTE : fenêtre de confirmation dans l’écran, motif obligatoire, ANNULER puis CONFIRMER', async () => {
+    for (const [width, height, touch, id] of [[1366, 768, false, 102], [390, 844, true, 103]]) {
+      const page = await open({ width, height, touch });
+      const label = `${width}×${height}`;
+      await page.evaluate((emp) => { toggleManualPanel(); manualResults = [emp]; selectManualResult(0); },
+        { id, matricule: 'T' + id, nom: id === 102 ? 'BENALI' : 'SAÏDI', prenom: id === 102 ? 'Karim' : 'Nour', poste: 'Cariste', societe: fx.SOCIETY, site: 'SITE TEST NORD' });
+      await page.waitForSelector('#manualCardStep:not(.hidden)');
+      await page.click('#manualAbandonBtn');
+      await page.waitForSelector('#abandonOverlay:not(.hidden)');
+      const m = await page.evaluate(() => {
+        const r = (el) => { const b = el.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, h: b.height }; };
+        return { modal: r(document.querySelector('.abandon-modal')), actions: [...document.querySelectorAll('.abandon-modal-actions button')].map(r),
+          facts: [...document.querySelectorAll('#abandonFacts dt')].map((dt) => dt.textContent + '=' + dt.nextElementSibling.textContent),
+          motif: document.getElementById('abandonObservation').value, disabled: document.getElementById('abandonConfirm').disabled,
+          focus: document.activeElement.id, hScroll: document.documentElement.scrollWidth - innerWidth };
+      });
+      assert.ok(m.modal.x >= 0 && m.modal.r <= width && m.modal.y >= 0 && m.modal.b <= height, `${label} : fenêtre dans l'écran ${JSON.stringify(m.modal)}`);
+      assert.ok(m.actions.length === 2 && m.actions.every((a) => a.h >= 40 && a.x >= m.modal.x && a.r <= m.modal.r), `${label} : ANNULER / CONFIRMER ${JSON.stringify(m.actions)}`);
+      assert.ok(m.facts.includes(`Matricule=T${id}`) && m.facts.includes('Site=SITE TEST NORD') && m.facts.includes('Heure de départ=10:15') && m.facts.includes('Fin prévue de la vacation=14:00'), JSON.stringify(m.facts));
+      assert.equal(m.motif, ''); assert.equal(m.disabled, true); assert.equal(m.focus, 'abandonObservation'); assert.ok(m.hScroll <= 0);
+      await page.screenshot({ path: path.join(ARTIFACTS, `abandon-confirmation-${width}x${height}.png`) });
+      await page.click('#abandonCancel');
+      assert.equal(await page.$eval('#abandonOverlay', (e) => e.classList.contains('hidden')), true);
+      assert.equal(state.writes.filter((w) => w.kind === 'abandon' && w.employee_id === id).length, 0, 'ANNULER : aucune écriture');
+      await page.click('#manualAbandonBtn'); await page.waitForSelector('#abandonOverlay:not(.hidden)');
+      await page.type('#abandonObservation', 'Quitte le site sans relève');
+      await page.click('#abandonConfirm');
+      await page.waitForFunction(() => /ABANDON DE POSTE ENREGISTRÉ/.test(document.getElementById('manualFeedback').textContent), { timeout: 10000 });
+      const writes = state.writes.filter((w) => w.kind === 'abandon' && w.employee_id === id);
+      assert.equal(writes.length, 1); assert.equal(writes[0].observation, 'Quitte le site sans relève');
+      await page.waitForFunction((n) => !document.getElementById('presentNowList').textContent.includes(n), { timeout: 10000 }, id === 102 ? 'BENALI' : 'SAÏDI');
+      await page.browserContext().close();
+    }
+  });
+
   await t.test('douchette : jeton transmis tel quel ; fenêtre flottante sans masquer les commandes ; scans successifs', async () => {
     const page = await open({ width: 1440, height: 900 });
     const scan = async (token) => { await page.focus('#wedgeInput'); await page.keyboard.type(token, { delay: 1 }); await page.keyboard.press('Enter'); };
+    const presentBefore = Number(await page.$eval('#postKpis [data-kpi="present"] b', (e) => e.textContent));
     const token = 'eyJhbGciOiJIUzI1NiJ9.eyJiYWRnZSI6IlQxMTAifQ.T110-signature_A1';
     await scan(token);
     await page.waitForFunction(() => !!document.querySelector('#lastScanCard .last-scan-float'), { timeout: 10000 });
@@ -198,15 +234,15 @@ test('Pointeur V6 — disposition, panneaux ajustables, compteurs et pointage, C
     await page.screenshot({ path: path.join(ARTIFACTS, 'confirmation-flottante-1440x900.png') });
     // Mise à jour en temps réel des panneaux après le scan (arrivée de TOUATI, magasinier).
     await page.waitForFunction(() => /MAGASINIER/.test(document.getElementById('functionsList').textContent), { timeout: 10000 });
-    assert.equal(await page.$eval('#postKpis [data-kpi="present"] b', (e) => e.textContent), '10');
+    assert.equal(await page.$eval('#postKpis [data-kpi="present"] b', (e) => e.textContent), String(presentBefore + 1));
     // Scan suivant (après le verrou existant de 1,8 s entre deux badges) : une seule fenêtre, mise à jour.
     await delay(2000);
     await scan('eyJhbGciOiJIUzI1NiJ9.eyJiYWRnZSI6IlQxMTEifQ.T111-signature_A1');
     await page.waitForFunction(() => /LARBI/.test(document.querySelector('#lastScanCard .last-scan-float')?.innerText || ''), { timeout: 10000 });
     const second = await check();
     assert.equal(second.floats, 1); assert.deepEqual(second.covered, []);
-    await page.waitForFunction(() => document.querySelector('#postKpis [data-kpi="present"] b').textContent === '11', { timeout: 10000 });
-    assert.match(await page.$eval('#functionsTotal', (e) => e.textContent), /11/);
+    await page.waitForFunction((n) => document.querySelector('#postKpis [data-kpi="present"] b').textContent === String(n), { timeout: 10000 }, presentBefore + 2);
+    assert.match(await page.$eval('#functionsTotal', (e) => e.textContent), new RegExp(`TOTAL EN POSTE\\s*${presentBefore + 2}\\s*100`));
     await page.browserContext().close();
   });
 

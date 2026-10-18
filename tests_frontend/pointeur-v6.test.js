@@ -165,7 +165,11 @@ test('PRÉSENT puis ABANDON : compteurs, présents, fonctions, statut et tableau
   // Abandon de OUALI (cariste) : retiré des présents et de sa fonction.
   t.T().setManualResults([{ id: 101, matricule: 'T101', nom: 'OUALI', prenom: 'Amine', poste: 'Cariste', societe: fx.SOCIETY, site: 'SITE TEST NORD' }]);
   t.T().selectManualResult(0); await tick();
-  await t.w.recordAbandon(); await tick(80);
+  await t.w.openAbandonModal(); await tick();
+  assert.equal(t.d.getElementById('abandonOverlay').classList.contains('hidden'), false, 'confirmation demandée');
+  assert.equal(t.state.writes.filter((w) => w.kind === 'abandon').length, 0);
+  t.d.getElementById('abandonObservation').value = 'Quitte le site sans relève'; t.w.updateAbandonConfirmation();
+  await t.w.confirmAbandon(); await tick(80);
   await t.T().pollLive(); await tick();
   assert.match(t.text('manualFeedback'), /ABANDON DE POSTE ENREGISTRÉ/);
   assert.equal(t.kpi('present').querySelector('b').textContent, '9');

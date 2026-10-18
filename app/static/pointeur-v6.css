@@ -102,6 +102,28 @@
 .ptr-v5 #appView .v5-context{max-width:none;margin:8px 0 0;padding:8px 10px;font-size:12px}
 .ptr-v5 #appView .v5-extra-btn{max-width:none;min-height:34px;margin:8px 0 0}
 
+/* ── Confirmation de l'abandon de poste : récapitulatif, motif obligatoire, ANNULER / CONFIRMER ── */
+.ptr-v5 .abandon-overlay{z-index:10000;padding:16px;background:#0a1a3380}
+.ptr-v5 .abandon-modal{width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:18px 20px;border-radius:16px;border-top:6px solid var(--ptr-orange);
+  background:var(--ptr-surface);color:var(--ptr-ink);box-shadow:0 22px 50px #0a2d6b40}
+.ptr-v5 .abandon-modal h2{margin:0 0 12px;font-size:16px;font-weight:900;letter-spacing:.03em;color:var(--ptr-orange-ink)}
+.ptr-v5 .abandon-modal .v5-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:0;font-size:13.5px}
+.ptr-v5 .abandon-modal .v5-facts dt{color:var(--ptr-muted);font-weight:700}
+.ptr-v5 .abandon-modal .v5-facts dd{margin:0;font-weight:800;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.ptr-v5 .abandon-modal-note{margin:8px 0 0;font-size:11.5px;color:var(--ptr-muted)}
+.ptr-v5 .abandon-modal label{display:block;margin:14px 0 6px;font-size:11.5px;font-weight:900;letter-spacing:.05em;color:var(--ptr-ink-2)}
+.ptr-v5 .abandon-modal textarea{width:100%;min-height:76px;padding:9px 11px;border:1px solid var(--ptr-line-strong);border-radius:10px;font:inherit;font-size:14px;resize:vertical;box-sizing:border-box}
+.ptr-v5 .abandon-modal textarea:focus{outline:3px solid var(--ptr-blue);outline-offset:1px}
+.ptr-v5 .abandon-modal .manual-feedback{max-width:none;margin:8px 0 0;text-align:left}
+.ptr-v5 .abandon-modal-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:14px}
+.ptr-v5 .abandon-modal-actions button{height:44px;margin:0;border-radius:10px;font-size:13px;font-weight:900;letter-spacing:.04em;cursor:pointer}
+.ptr-v5 .abandon-modal .abandon-cancel{border:1px solid var(--ptr-line-strong);background:var(--ptr-surface);color:var(--ptr-ink)}
+.ptr-v5 .abandon-modal .abandon-cancel:hover:not(:disabled){background:var(--ptr-surface-2)}
+.ptr-v5 .abandon-modal .abandon-btn{border:0;background:var(--ptr-orange);color:#fff}
+.ptr-v5 .abandon-modal .abandon-btn:disabled{opacity:.45;cursor:not-allowed}
+.ptr-v5 .abandon-modal button:focus-visible{outline:3px solid var(--ptr-blue);outline-offset:2px}
+@media (max-width:480px){.ptr-v5 .abandon-modal{padding:14px}.ptr-v5 .abandon-modal-actions{grid-template-columns:1fr}.ptr-v5 .abandon-modal-actions .abandon-btn{order:-1}}
+
 /* ── Tableau des pointages (sous la zone de pointage uniquement) ── */
 .ptr-v5 #appView #movementsCard{display:flex;flex-direction:column;padding:8px 10px;margin:0;min-height:0;overflow:hidden}
 .ptr-v5 #appView .tracking-toolbar{gap:6px}

@@ -138,6 +138,7 @@ function respond(state, method, url, body) {
   if (p.endsWith('/attendance-manual/context')) return [200, { employee: card(find(url.searchParams.get('employee_id')).row), extra_shift: null, abandon_threshold_minutes: 60, manual_entry_allowed: true, intent: null, reentry: null, reason_required: false, audited: true }];
   if (p.endsWith('/attendance-manual/abandon/context')) return abandonContext(find(url.searchParams.get('employee_id')), site);
   if (p.endsWith('/attendance-manual/abandon') && method === 'POST') {
+    if (typeof body.observation !== 'string' || !body.observation.trim()) return [422, { detail: 'Motif / observation obligatoire (500 caractères maximum)' }];
     state.writes.push({ kind: 'abandon', ...body });
     const person = find(body.employee_id);
     const [status, ctx] = abandonContext(person, site);
