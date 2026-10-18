@@ -28,7 +28,8 @@ test('Pointeur : fiche normale + ROTATION INHABITUELLE (attendu / observé), poi
   assert.equal(box.getAttribute('role'), 'alert');
   assert.match(box.textContent, /⚠ ROTATION INHABITUELLE\s*Attendu\s*Groupe A · 06:00–14:00\s*Observé\s*Groupe B · 14:00–22:00\s*POINTAGE ENREGISTRÉ/);
   assert.equal(card.classList.contains('is-entry'), true, 'le pointage reste une entrée acceptée, pas un refus');
-  assert.equal(card.querySelectorAll('button,input,select,a').length, 0, 'le poste ne pilote pas le planning');
+  // Seul contrôle admis : fermer la fenêtre de confirmation (affichage), jamais une action sur le planning.
+  assert.deepEqual([...card.querySelectorAll('button,input,select,a')].map((el) => el.className), ['lsf-close'], 'le poste ne pilote pas le planning');
 });
 
 test('Pointeur : pointage conforme ou site sans planning actif ⇒ fiche inchangée ; texte échappé', (t) => {

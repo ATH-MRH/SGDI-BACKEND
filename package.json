@@ -41,7 +41,8 @@
     "pretest": "node --test tests_frontend/brq.test.js",
     "test:drh-contract-excel-import": "node --test tests_frontend/drh-contract-excel-import.test.js",
     "test:borne-association-qr-chrome": "node --test --test-force-exit tests_frontend/borne-association-qr-chrome.test.js",
-    "test:pointeur-badge-historique-chrome": "node --test --test-force-exit tests_frontend/pointeur-badge-historique-chrome.test.js"
+    "test:pointeur-badge-historique-chrome": "node --test --test-force-exit tests_frontend/pointeur-badge-historique-chrome.test.js",
+    "test:pointeur-confirmation-chrome": "node --test --test-force-exit tests_frontend/pointeur-confirmation-chrome.test.js"
   },
   "devDependencies": {
     "jsdom": "29.1.1",
