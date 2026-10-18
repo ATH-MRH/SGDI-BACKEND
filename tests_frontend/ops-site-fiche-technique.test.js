@@ -239,3 +239,13 @@ test('composant ops-button : badge seulement pour un compteur réel', t => {
   assert.equal(danger.dataset.x, '1');
   assert.equal(html('<b>', {}).querySelector('b'), null, 'libellé échappé');
 });
+
+test('boutons OPS : adaptateur de style confiné au portail OPS', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.css'), 'utf8');
+  const lines = css.split('\n').filter(l => /\.btn:not\(\.ops-btn\)/.test(l));
+  assert.ok(lines.length > 5);
+  for (const line of lines) assert.match(line, /:has\(\.sgdi-ops-shell\)/, 'adaptateur limité à OPS: ' + line.slice(0, 90));
+  const app = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.js'), 'utf8');
+  assert.match(app, /const opsShell=\["ops","superviseur"\]\.includes\(session\.transverse\);/);
+});

@@ -110,4 +110,11 @@ test('OPS → Fiche technique site — Chrome réel', {
     const unexpected = atlas.errors.filter(e => !/\/api\/(materiel\/stores|commercial\/clients)/.test(`${e.console || ''} ${e.source || ''}`));
     assert.deepEqual(unexpected, []);
   });
+  await t.test('boutons OPS : marqueur présent en OPS, absent en DRH', async () => {
+    assert.equal(await page.evaluate(() => !!document.querySelector('.sgdi-shell.sgdi-ops-shell')), true);
+    const drh = await atlas.login('drh', 'DRH01', 'dashboard');
+    await drh.waitForFunction(() => (document.getElementById('app')?.textContent || '').trim().length > 0 && location.hash !== '#/login', { timeout: 30000, polling: 250 });
+    await atlas.delay(1500);
+    assert.equal(await drh.evaluate(() => document.querySelectorAll('.sgdi-ops-shell').length), 0);
+  });
 });

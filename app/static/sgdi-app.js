@@ -6942,7 +6942,9 @@ function renderInternal(options={}){
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   const commercialShell=session.transverse==="commercial";
-  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
+  // Portail OPS (y compris superviseurs terrain) : marqueur des styles de boutons OPS (.ops-btn).
+  const opsShell=["ops","superviseur"].includes(session.transverse);
+  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}${opsShell?" sgdi-ops-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">

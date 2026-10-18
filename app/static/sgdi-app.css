@@ -11076,6 +11076,47 @@ body.atlas-ui #view .ops-outgoing-page .ops-outgoing-card h1.ops-outgoing-title{
 .ops-btn--sm .ops-btn__icon{width:15px;height:15px}
 @media (max-width:600px){.ops-btn{min-height:40px}.ops-btn--sm{min-height:36px}}
 
+/* OPS — adaptateur : les boutons historiques (.btn) des écrans OPS et de leurs fenêtres
+   prennent l'apparence .ops-btn. Seul l'habillage change (libellés, actions, états et droits
+   intacts). Limité au portail OPS (.sgdi-ops-shell) ; le Command Center sombre garde le sien. */
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)){display:inline-flex!important;align-items:center!important;justify-content:center;gap:7px!important;min-height:36px!important;padding:0 14px!important;
+  border:1px solid #bcd3f7!important;border-radius:8px!important;background:var(--atlas-primary-soft,#eaf2ff)!important;color:var(--atlas-primary,#165dde)!important;
+  font-size:13px!important;font-weight:700!important;line-height:1.15!important;box-shadow:none!important;text-transform:none!important;letter-spacing:0!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):hover:not(:disabled){background:#dce9ff!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):focus-visible{outline:none!important;box-shadow:var(--atlas-focus-ring,0 0 0 3px #165dde30)!important;border-color:var(--atlas-primary,#165dde)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):disabled{opacity:.5!important;cursor:not-allowed!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-ghost{background:var(--atlas-surface,#fff)!important;border-color:#c9daf3!important;color:var(--atlas-primary,#165dde)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-ghost:hover:not(:disabled){background:#f4f7fb!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-primary){background:var(--atlas-primary,#165dde)!important;border-color:var(--atlas-primary,#165dde)!important;color:#fff!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-primary):hover:not(:disabled){background:var(--atlas-primary-hover,#114bb5)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-success{background:var(--atlas-success-soft,#e7f6ef)!important;border-color:#a9dcc2!important;color:var(--atlas-success,#117647)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-success:hover:not(:disabled){background:#d3efe1!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-warn{background:var(--atlas-warning-soft,#fff3df)!important;border-color:#f3cf96!important;color:var(--atlas-warning,#9f580a)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)).btn-warn:hover:not(:disabled){background:#ffe8c2!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700){background:var(--atlas-danger-soft,#fff0f1)!important;border-color:#f4bcc2!important;color:var(--atlas-danger,#bb303e)!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.btn-danger,.text-red-600,.text-red-700):hover:not(:disabled){background:#ffe0e3!important}
+body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)):is(.text-xs,.btn-sm),body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) :is(td,th) .btn:not(.ops-btn){min-height:32px!important;padding:0 10px!important;font-size:12px!important;gap:5px!important}
+@media (max-width:600px){body.atlas-ui:has(.sgdi-ops-shell) :is(#view,#modal-host) .btn:not(.ops-btn):not(:where(.ops-sites-cc *)){min-height:40px!important}}
+
+/* OPS — Gestion des effectifs : tableau compact (DRH inchangé, vue mobile en cartes inchangée).
+   Les largeurs fixes cumulaient 102 % + 256 px : dates, codes et en-têtes étaient tronqués. */
+@media (min-width:721px){
+  #view .ops-effectif-page .effectif-table-card{overflow-x:auto!important}
+  #view .ops-effectif-page .effectif-table{table-layout:auto!important;min-width:980px}
+  #view .ops-effectif-page .effectif-table col{width:auto!important}
+  #view .ops-effectif-page .effectif-table :is(th,td){padding:6px 8px!important;overflow:visible!important;text-overflow:clip!important}
+  #view .ops-effectif-page .effectif-table th{white-space:nowrap!important}
+  #view .ops-effectif-page .effectif-table td:is([data-label="Code"],[data-label="Recrutement"],[data-label="Naissance"],[data-label="Age"],[data-label="Statut"]){white-space:nowrap!important;font-variant-numeric:tabular-nums}
+  #view .ops-effectif-page .effectif-table td:is([data-label="Société"],[data-label="Site"],[data-label="Poste"]){min-width:96px;max-width:150px;line-height:1.3}
+  #view .ops-effectif-page .effectif-table td[data-label="Employé"]{min-width:200px}
+  /* Actions toujours visibles, même quand le tableau défile horizontalement. */
+  #view .ops-effectif-page .effectif-table :is(th,td):last-child{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-6px 0 8px -6px rgba(23,62,118,.18)}
+  #view .ops-effectif-page .effectif-table thead th:last-child{background:#f8fafc}
+  #view .ops-effectif-page .effectif-table td[data-label="Employé"] .font-semibold{white-space:nowrap}
+  #view .ops-effectif-page .effectif-table .avatar{width:32px!important;height:32px!important;min-width:32px}
+  #view .ops-effectif-page .effectif-table tbody tr{height:auto!important}
+}
+
 /* =============================================================
    OPS — Fiche technique site (.stf). Styles limités à cette page.
    ============================================================= */
