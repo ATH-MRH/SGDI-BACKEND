@@ -127,6 +127,17 @@ def _operational_statement(db, user, society):
     return stmt, position, site_id, site_name
 
 
+# Raccourcis : les plus gros effectifs et le choix courant, jamais toute la liste — la
+# réponse reste bornée quel que soit le nombre de sites ou de postes du périmètre.
+SHORTCUT_COUNTS_LIMIT = 5
+
+
+def _top_counts(rows, selected, shape):
+    top = sorted(rows, key=lambda row: (-row[-1], str(row[0])))[:SHORTCUT_COUNTS_LIMIT]
+    top += [row for row in rows if selected not in (None, "") and row[0] == selected and row not in top]
+    return [shape(*row) for row in top]
+
+
 def read_operational_employees(db, user, *, society=None, page=None, page_size=25, q=None, mode=None,
                                site_id=None, sort="nom_asc", poste=None, situation=None,
                                recrut_from=None, recrut_to=None, birth_from=None, birth_to=None,
@@ -137,18 +148,12 @@ def read_operational_employees(db, user, *, society=None, page=None, page_size=2
     postes = None
     if page is not None:
         postes = [value for value in db.scalars(stmt.with_only_columns(position).order_by(position).distinct()) if value]
-    if site_id == "__none__":
-        stmt = stmt.where(current_site.is_(None))
-    elif site_id not in (None, ""):
+    selected_site = None
+    if site_id not in (None, "", "__none__"):
         try:
             selected_site = int(site_id)
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail="Site invalide") from exc
-        # Filter the same current, scope-masked assignment that is displayed.
-        # An older still-active assignment must not reveal another site's row.
-        stmt = stmt.where(current_site == selected_site)
-    if poste:
-        stmt = stmt.where(position == poste)
     if recrut_from:
         stmt = stmt.where(Employee.recruit_date >= recrut_from)
     if recrut_to:
@@ -187,6 +192,25 @@ def read_operational_employees(db, user, *, society=None, page=None, page_size=2
                     "renouvellement_dotation", "dotation_pret", "dotation_pret_mission", "reforme"))).exists())
     elif selected_mode not in {"all", "tous", "recap"}:
         stmt = stmt.where(status.in_(modes.get(selected_mode, (selected_mode,))))
+    # Compteurs des raccourcis SITE / POSTE de Gestion des effectifs, sur tout le résultat
+    # (jamais la seule page) : SITE après société, périmètre et statut mais avant le filtre
+    # site ; POSTE après le filtre site mais avant le filtre poste ; la recherche ne compte
+    # pas. Deux GROUP BY, quel que soit le nombre de sites ou de postes.
+    site_counts = poste_counts = None
+    if page is not None:
+        site_counts = db.execute(stmt.with_only_columns(current_site, site_name, func.count(Employee.id))
+                                 .group_by(current_site, site_name).order_by(None)).all()
+    if site_id == "__none__":
+        stmt = stmt.where(current_site.is_(None))
+    elif selected_site is not None:
+        # Filter the same current, scope-masked assignment that is displayed.
+        # An older still-active assignment must not reveal another site's row.
+        stmt = stmt.where(current_site == selected_site)
+    if page is not None:
+        poste_counts = db.execute(stmt.with_only_columns(position, func.count(Employee.id))
+                                  .group_by(position).order_by(None)).all()
+    if poste:
+        stmt = stmt.where(position == poste)
     if q and q.strip():
         haystack = func.lower(func.coalesce(Employee.code, "") + " " + func.coalesce(Employee.first_name, "") + " " +
                              func.coalesce(Employee.last_name, "") + " " + func.coalesce(Employee.phone, "") + " " +
@@ -234,7 +258,14 @@ def read_operational_employees(db, user, *, society=None, page=None, page_size=2
     if page is None:
         return items
     return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages,
-            "filters": {"postes": postes}}
+            "filters": {"postes": postes, "counts": {
+                "sites": _top_counts([(site, name or "", count) for site, name, count in site_counts if site is not None],
+                                     selected_site, lambda site, name, count: {"site_id": site, "name": name, "count": count}),
+                "sites_none": sum(count for site, _name, count in site_counts if site is None),
+                "sites_total": sum(count for *_rest, count in site_counts),
+                "postes": _top_counts([(value, count) for value, count in poste_counts if value], poste,
+                                      lambda value, count: {"poste": value, "count": count}),
+                "postes_total": sum(count for _value, count in poste_counts)}}}
 
 
 def _raster_type(content):
