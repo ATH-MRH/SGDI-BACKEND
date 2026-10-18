@@ -42,18 +42,20 @@ async function drhFixture(t,{agents=population(),sites=[HAMOUL,SITE_X,SITE_VIDE,
 const visibleIds=view=>[...view.querySelectorAll('tbody tr[data-searchable]')].filter(r=>r.style.display!=='none').map(r=>Number(r.dataset.backendId));
 const siteSelect=view=>view.querySelector('[data-effectif-site-filter]');
 const options=view=>[...siteSelect(view).options].map(o=>[o.value,o.textContent.trim()]);
-const drhCounter=view=>view.querySelector('.drh-effectif-title-block p').textContent;
+const drhCounter=view=>view.querySelector('.effectif-toolbar-title p').textContent;
+const emptyMessage=view=>view.querySelector('[data-effectif-empty-message]').textContent;
 
 test('DRH : SITE est placé entre la recherche et le TRI, accessible, au style du TRI',async t=>{
   const {view}=await drhFixture(t);
-  const header=view.querySelector('.drh-effectif-list-header');
-  const order=[...header.querySelectorAll('.drh-effectif-search-slot,[data-effectif-site-filter],select[onchange^="setEffectifSort"]')];
-  assert.deepEqual(order.map(n=>n.matches('.drh-effectif-search-slot')?'search':n.matches('[data-effectif-site-filter]')?'site':'tri'),['search','site','tri']);
+  const header=view.querySelector('.effectif-toolbar');
+  const order=[...header.querySelectorAll('.effectif-toolbar-search,[data-effectif-site-filter],select[onchange^="setEffectifSort"]')];
+  assert.deepEqual(order.map(n=>n.matches('.effectif-toolbar-search')?'search':n.matches('[data-effectif-site-filter]')?'site':'tri'),['search','site','tri']);
   const select=siteSelect(view);
   assert.equal(select.getAttribute('aria-label'),'Filtrer les employés par site');
   assert.equal(header.querySelector('label[for="effectif-site-filter"]').textContent,'Site');
   assert.equal(select.className,'select');
-  assert.ok(select.closest('.drh-effectif-sort-slot'),'même gabarit CSS que le TRI');
+  assert.ok(select.closest('.effectif-toolbar-field'),'même gabarit CSS que le TRI');
+  assert.ok(view.querySelector('#effectif-sort').closest('.effectif-toolbar-field'));
   assert.ok(select.hasAttribute('data-no-lock'));
 });
 
@@ -108,7 +110,7 @@ test('DRH 7 : le filtre survit au re-rendu de l’écran (DRH non paginé)',asyn
   api.renderEffectif(view,'actifs');
   assert.equal(siteSelect(view).value,'42');
   assert.deepEqual(visibleIds(view).sort(),[3,8]);
-  assert.deepEqual(JSON.parse(w.sessionStorage.getItem('drhEffectifSiteFilter')),{site:'42',soc:SOC_A});
+  assert.deepEqual(JSON.parse(w.sessionStorage.getItem('drhEffectifSiteFilter')),{site:'42',poste:'',soc:SOC_A});
 });
 
 test('DRH 8 : changement de société remet « Tous les sites » et recharge les sites de la société',async t=>{
@@ -143,11 +145,11 @@ test('DRH 9 : aucune option hors périmètre, un site forcé hors périmètre es
 test('DRH 10 : aucun résultat = message explicite',async t=>{
   const {api,view}=await drhFixture(t);
   await api.setEffectifSiteFilter('43','actifs');
-  assert.equal(view.querySelector('.effectif-page > .card.p-10').textContent,'Aucun employé affecté à ce site');
+  assert.equal(emptyMessage(view),'Aucun employé affecté à ce site');
   assert.match(drhCounter(view),/^0 employé\(s\)/);
   const all=await drhFixture(t,{agents:[agent(1,'ABDELKADER',HAMOUL)]});
   await all.api.setEffectifSiteFilter('__none__','actifs');
-  assert.equal(all.view.querySelector('.effectif-page > .card.p-10').textContent,'Aucun employé sans affectation');
+  assert.equal(emptyMessage(all.view),'Aucun employé sans affectation');
 });
 
 test('DRH : alerte contrat expiré, colonnes et bouton Ouvrir inchangés sous filtre',async t=>{
@@ -184,8 +186,9 @@ const opsRow=(id,site)=>({id,code:'K'+id,last_name:'NOM'+id,first_name:'P',socie
 test('OPS : un seul sélecteur SITE dans la barre, entre Recherche et Tri, sites de la société seulement',async t=>{
   const {api,view,requests}=await opsFixture(t);
   await api.renderEffectif(view,'actifs');
-  const labels=[...view.querySelectorAll('.ops-effectif-tools > label > span')].map(s=>s.textContent);
-  assert.deepEqual(labels,['Recherche','Site','Tri']);
+  const labels=[...view.querySelectorAll('.effectif-toolbar-field > label')].map(s=>s.textContent);
+  assert.deepEqual(labels,['Site','Poste / fonction','Tri']);
+  assert.ok(view.querySelector('.effectif-toolbar-search input[oninput^="setEffectifSearch"]'));
   assert.equal(view.querySelectorAll('[data-effectif-site-filter]').length,1);
   assert.equal(view.querySelector('select[onchange*="setOpsEffectifFilter(\'site\'"]'),null,'ancien doublon retiré de la carte de filtres');
   assert.deepEqual(options(view),[['','Tous les sites'],['41','DHL FORWARDING / HAMOUL 01 (40K)'],['42','SITE X'],['__none__','Sans affectation']]);
@@ -198,7 +201,7 @@ test('OPS 1-6 : site précis, Sans affectation, recherche, tri et pagination con
   await api.renderEffectif(view,'actifs');
   await api.setEffectifSiteFilter('41','actifs');
   assert.equal(requests.at(-1).site_id,41);assert.equal(requests.at(-1).page,1);
-  assert.match(view.querySelector('.ops-effectif-title-block p').textContent,/^38 employé\(s\)/);
+  assert.match(view.querySelector('.effectif-toolbar-title p').textContent,/^38 employé\(s\)/);
   assert.equal(siteSelect(view).value,'41');
   await api.setEffectifSort('nom_desc');
   assert.equal(requests.at(-1).site_id,41);assert.equal(requests.at(-1).sort,'nom_desc');
@@ -209,7 +212,7 @@ test('OPS 1-6 : site précis, Sans affectation, recherche, tri et pagination con
   assert.equal(requests.at(-1).site_id,41);assert.equal(requests.at(-1).q,'ABDEL');assert.equal(requests.at(-1).page,1);
   await api.setEffectifSiteFilter('__none__','actifs');
   assert.equal(requests.at(-1).site_id,'__none__');assert.equal(requests.at(-1).q,'ABDEL');
-  assert.match(view.querySelector('.ops-effectif-title-block p').textContent,/^60 employé\(s\)/);
+  assert.match(view.querySelector('.effectif-toolbar-title p').textContent,/^60 employé\(s\)/);
   assert.equal(siteSelect(view).value,'__none__');
   api.setEffectifSort('nom_asc');
   assert.equal(JSON.parse(w.sessionStorage.getItem('opsEffectifFilters')).siteSoc,SOC_A);
@@ -219,9 +222,9 @@ test('OPS : états vides explicites',async t=>{
   const {api,view}=await opsFixture(t);
   await api.renderEffectif(view,'actifs');
   await api.setEffectifSiteFilter('42','actifs');
-  assert.equal(view.querySelector('.effectif-page > .card.p-10').textContent,'Aucun employé affecté à ce site');
+  assert.equal(emptyMessage(view),'Aucun employé affecté à ce site');
   await api.setEffectifSiteFilter('__none__','actifs');
-  assert.equal(view.querySelector('.effectif-page > .card.p-10').textContent,'Aucun employé sans affectation');
+  assert.equal(emptyMessage(view),'Aucun employé sans affectation');
 });
 
 test('OPS 7 : changement de société ou site forcé hors société ⇒ Tous les sites',async t=>{
