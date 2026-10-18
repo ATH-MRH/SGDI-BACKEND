@@ -735,6 +735,75 @@ body.ptr-v5.has-post .shift-staffing{order:3}
 <!-- Mode Test : disponible uniquement dans Gestion du pointage (pas sur l'écran du poste de sécurité). -->
 <link rel="stylesheet" href="/static/login-standalone.css?v=20260913-unified-login">
 <link rel="stylesheet" href="/static/pointeur-workstation.css?v=20261008-audit">
+<!-- Confirmation de pointage : chargée APRÈS pointeur-workstation.css, qu'elle corrige
+     (et avant le thème partagé atlas.css, qui reste la dernière feuille). Dans la carte
+     de scan (colonne flexible de hauteur fixe), la fiche « dernier pointage » était comprimée à
+     quelques pixels et son contenu débordait sur les commandes. Elle garde désormais une taille fixe
+     et n'y montre qu'un résumé ; le détail s'ouvre dans une fenêtre flottante compacte. -->
+<style id="ptr-confirm-style">
+#appView .last-scan{flex:1 1 0;min-height:56px;overflow:hidden;container-type:size;margin:0}
+@container (max-height:230px){#appView .last-scan .scan-visual{display:none}}
+@container (max-height:130px){#appView .last-scan :is(.last-scan-idle-hint,.last-scan-idle-shift){display:none}}
+#appView .last-scan:not(.is-idle){display:flex;align-items:center;padding:10px 14px;background:var(--ptr-surface);border:1px solid var(--ptr-line);border-left:5px solid var(--lsf-accent);border-radius:12px}
+#lastScanCard{--lsf-accent:var(--ptr-green);--lsf-ink:var(--ptr-green-ink);--lsf-soft:var(--ptr-green-soft)}
+#lastScanCard.is-exit{--lsf-accent:var(--ptr-blue);--lsf-ink:var(--ptr-blue);--lsf-soft:var(--ptr-blue-soft)}
+#lastScanCard.is-duplicate{--lsf-accent:var(--ptr-orange);--lsf-ink:var(--ptr-orange-ink);--lsf-soft:var(--ptr-orange-soft)}
+#lastScanCard.is-refused{--lsf-accent:var(--ptr-red);--lsf-ink:var(--ptr-red-ink);--lsf-soft:var(--ptr-red-soft)}
+#lastScanCard .last-scan-summary{display:flex;align-items:center;gap:10px;min-width:0;width:100%;font-size:14px;color:var(--ptr-ink)}
+#lastScanCard .last-scan-summary i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--lsf-accent)}
+#lastScanCard .last-scan-summary b{flex:none;color:var(--lsf-ink);font-weight:900;letter-spacing:.02em}
+#lastScanCard .last-scan-summary .lss-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+#lastScanCard .last-scan-summary .lss-time{margin-left:auto;flex:none;font-variant-numeric:tabular-nums;font-weight:800;color:var(--ptr-ink-2)}
+/* Fenêtre flottante */
+#lastScanCard .last-scan-float{position:fixed;z-index:90;top:var(--lsf-top,88px);left:var(--lsf-left,auto);right:auto;width:var(--lsf-width,420px);box-sizing:border-box;
+  max-height:calc(100dvh - var(--lsf-top,88px) - 16px);overflow:auto;overscroll-behavior:contain;padding:14px 16px 0;text-align:left;
+  background:var(--ptr-surface);color:var(--ptr-ink);border:1px solid var(--ptr-line);border-top:6px solid var(--lsf-accent);border-radius:16px;
+  box-shadow:0 22px 50px #0a2d6b33,0 3px 8px #0a2d6b1f;animation:lsfIn .2s cubic-bezier(.22,1,.36,1)}
+#lastScanCard.float-closed .last-scan-float{display:none}
+#lastScanCard.lsf-refresh .last-scan-float,#lastScanCard .last-scan-float .last-scan-body{animation:none}
+@keyframes lsfIn{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}
+#lastScanCard .last-scan-float .last-scan-body>div:not(.last-scan-photo)>.last-scan-move{grid-column:1/-1;grid-row:1;margin:0 0 12px;padding:0 52px 0 0;border:0;background:none;color:var(--lsf-ink)}
+#lastScanCard .last-scan-float .last-scan-move b{display:block;font-size:21px;line-height:1.15;font-weight:900;letter-spacing:.01em}
+#lastScanCard .last-scan-float .last-scan-move span{display:block;margin-top:3px;font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ptr-ink)}
+#lastScanCard .lsf-close{position:absolute;top:12px;right:12px;width:40px;height:40px;display:grid;place-items:center;border-radius:10px;border:1px solid var(--ptr-line-strong);background:var(--ptr-surface);color:var(--ptr-ink);font-size:24px;line-height:1;cursor:pointer;padding:0}
+#lastScanCard .lsf-close:hover{background:var(--ptr-surface-2)}
+#lastScanCard .lsf-close:focus-visible{outline:3px solid var(--ptr-blue);outline-offset:2px}
+#lastScanCard .last-scan-float .last-scan-body{display:grid;grid-template-columns:92px minmax(0,1fr);grid-template-rows:auto repeat(7,min-content) 1fr;column-gap:14px;row-gap:0;align-items:start;justify-items:stretch;text-align:left;margin:0}
+#lastScanCard .last-scan-float .last-scan-body>div:not(.last-scan-photo){display:contents}
+#lastScanCard .last-scan-float .last-scan-body>div:not(.last-scan-photo)>*{grid-column:2;min-width:0}
+#lastScanCard .last-scan-float .last-scan-body>.last-scan-photo{grid-column:1;grid-row:2/-1}
+#lastScanCard .last-scan-float .last-scan-photo{width:92px;height:auto;aspect-ratio:3/4;border-radius:12px;box-shadow:none}
+#lastScanCard .last-scan-float .last-scan-badge{display:inline-block;margin:0 0 6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:900;letter-spacing:.06em;background:var(--lsf-soft);color:var(--lsf-ink);justify-self:start;border:1px solid color-mix(in srgb,var(--lsf-accent) 35%,transparent)}
+#lastScanCard .last-scan-float .last-scan-name{margin:0;font-size:18px;line-height:1.2;font-weight:900;color:var(--ptr-ink);overflow-wrap:anywhere}
+#lastScanCard .last-scan-float .last-scan-meta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;margin:8px 0 0;font-size:13px}
+#lastScanCard .last-scan-float .last-scan-meta dt{color:var(--ptr-muted);font-weight:700}
+#lastScanCard .last-scan-float .last-scan-meta dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+#lastScanCard .last-scan-float .v5-facts{margin:8px 0 0;font-size:12px}
+#lastScanCard .last-scan-float .last-scan-state{margin:10px 0 0;padding:6px 10px;border-radius:8px;background:var(--lsf-soft);color:var(--lsf-ink);font-size:12px;font-weight:900;letter-spacing:.04em}
+#lastScanCard .last-scan-float .last-scan-rotation{margin:10px 0 0}
+#lastScanCard .lsf-progress{height:4px;margin:14px -16px 0;background:var(--lsf-accent);transform-origin:left center;animation:lsfTimer var(--lsf-ms,5s) linear forwards;animation-delay:var(--lsf-delay,0s)}
+#lastScanCard.is-paused .lsf-progress{animation-play-state:paused}
+@keyframes lsfTimer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+/* Message sans fiche (QR non reconnu, connexion perdue…) : même emplacement, jamais en même temps. */
+#appView #result.is-covered{display:none!important}
+#appView #result.show:not(.is-covered){display:block;position:fixed;z-index:91;top:var(--lsf-top,88px);left:var(--lsf-left,auto);right:auto;bottom:auto;width:var(--lsf-width,420px);box-sizing:border-box;
+  margin:0;transform:none;max-height:calc(100dvh - var(--lsf-top,88px) - 16px);overflow:auto;border-radius:16px;border-top-width:6px;box-shadow:0 22px 50px #0a2d6b33,0 3px 8px #0a2d6b1f;animation:lsfIn .2s cubic-bezier(.22,1,.36,1)}
+#appView #result .result-kicker{font-size:12px;font-weight:900;letter-spacing:.06em}
+#appView #result .result-name{font-size:18px;line-height:1.25;margin-top:4px;overflow-wrap:anywhere}
+/* Tablette et téléphone : fenêtre en bas d'écran, au-dessus du contenu, sans masquer les commandes du haut. */
+body.lsf-sheet #lastScanCard .last-scan-float,body.lsf-sheet #appView #result.show:not(.is-covered){top:auto;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));width:auto;max-width:640px;margin:0 auto;max-height:var(--lsf-sheet-max,min(58dvh,440px))}
+body.lsf-sheet #lastScanCard .last-scan-float{padding:10px 14px 0}
+body.lsf-sheet #lastScanCard .last-scan-float .last-scan-body{grid-template-columns:64px minmax(0,1fr);column-gap:12px}
+body.lsf-sheet #lastScanCard .last-scan-float .last-scan-body>div:not(.last-scan-photo)>.last-scan-move{margin-bottom:8px;padding-right:46px}
+body.lsf-sheet #lastScanCard .last-scan-float .last-scan-photo{width:64px}
+body.lsf-sheet #lastScanCard .last-scan-float .last-scan-meta{grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:1px 8px;margin-top:4px;font-size:12px}
+body.lsf-sheet #lastScanCard .last-scan-float .last-scan-state{margin-top:6px;padding:4px 8px}
+body.lsf-sheet #lastScanCard .lsf-progress{margin:10px -14px 0}
+body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10px}
+@media (max-width:480px){#lastScanCard .last-scan-float .last-scan-move b{font-size:18px}#lastScanCard .last-scan-float .last-scan-name{font-size:16px}#lastScanCard .last-scan-float .last-scan-meta{font-size:12px}}
+@media (prefers-reduced-motion:reduce){#lastScanCard .last-scan-float,#appView #result.show{animation:none!important}.lsf-progress{display:none}}
+@media (forced-colors:active){#lastScanCard .last-scan-float,#appView #result.show{border:2px solid CanvasText}.lsf-progress{background:CanvasText}}
+</style>
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
@@ -952,6 +1021,9 @@ let planningRefreshTimer=null;
 let isLoggingOut=false;
 // Poste de sécurité : relève des passages acceptés (~2 s), affichage du dernier pendant 12 s.
 const LIVE_POLL_MS=2000,LAST_SCAN_DISPLAY_MS=12000;
+// Fenêtre de confirmation flottante : visible CONFIRM_DISPLAY_MS (pause au survol ou au focus),
+// fermable à tout moment ; la fiche reprend son état d'attente après LAST_SCAN_DISPLAY_MS.
+const CONFIRM_DISPLAY_MS=5000;let confirmTimer=null,confirmOpenedAt=0,confirmDeadline=0,confirmKey="";
 let liveTimer=null,liveCursor=null,liveRefusalCursor=null,liveBusy=false,serverSummary=null,lastScanTimer=null,lastScanShownId="";
 const portraitUrls={};
 
@@ -1518,16 +1590,94 @@ function showLastScan(event){
   const badge=event.source==="FACIAL"?"IDENTIFIÉ":event.source==="QR"?"QR VALIDÉ":event.source==="MANUAL"?"SAISIE MANUELLE":String(event.source_label||"POINTAGE").toUpperCase();
   const state=event.state==="PRESENT"?"PRÉSENT":"SORTI";
   card.className="last-scan "+(entry?"is-entry":"is-exit");
-  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
+  card.innerHTML=confirmShellHTML(countedTitle(event,entry),event.heure,name,`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
     <span class="last-scan-badge">${esc(badge)}</span>
     <div class="last-scan-name">${esc(name)}</div>
     <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>
       <dt>Site</dt><dd>${esc(event.site||e.site||"—")}</dd><dt>Société</dt><dd>${esc(e.societe||"—")}</dd>${event.terminal?`<dt>Terminal</dt><dd>${esc(event.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${countedTitle(event,entry)}</b><span>${esc(event.heure||"")}</span></div>
+    ${moveHTML(countedTitle(event,entry),event.heure)}
     ${countedFactsHTML(event,entry)}
-    <div class="last-scan-state">ÉTAT ACTUEL : ${countedState(event,state)}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`;
+    <div class="last-scan-state">ÉTAT ACTUEL : ${countedState(event,state)}</div>${rotationAlertHTML(event.rotation_alert)}</div></div>`);
+  openConfirm(card,e.matricule);
   fillLastScanPhoto(e,token);
   scheduleLastScanIdle();
+}
+// Confirmation : une ligne de résumé reste dans la zone de scan (taille fixe, sans débordement) ;
+// le détail s'affiche dans une fenêtre flottante compacte, à droite de la zone de scan sur
+// ordinateur, en bas d'écran sur tablette et téléphone. Une seule fenêtre à la fois.
+// Ordre de lecture inchangé (photo, badge, nom, détails, mouvement, état) : la grille CSS place le
+// mouvement en tête de la fenêtre ; le bouton et le résumé viennent après la fiche.
+function confirmShellHTML(title,time,name,body){
+  return `<div class="last-scan-float" role="group" aria-label="Confirmation du pointage">${body}
+    <button type="button" class="lsf-close" aria-label="Fermer la confirmation" title="Fermer (Échap)">×</button><div class="lsf-progress" aria-hidden="true"></div></div>
+  <div class="last-scan-summary" aria-hidden="true"><i></i><b>${esc(title)}</b><span class="lss-name">${esc(name)}</span><span class="lss-time">${esc(time||"")}</span></div>`;
+}
+function moveHTML(title,time){return `<div class="last-scan-move"><b>${esc(title)}</b><span>${esc(time||"")}</span></div>`}
+// Confirmation immédiate, dès la réponse du serveur (QR, saisie manuelle) ; la fiche du flux en
+// direct la complète ensuite DANS la même fenêtre, sans la rouvrir ni la superposer.
+function showLocalConfirmation(d){
+  const card=document.getElementById("lastScanCard");if(!card||!d)return;
+  lastScanShownId="l"+Date.now();
+  const duplicate=!!d.duplicate,exit=d.action==="depart";
+  const title=duplicate?"PRÉSENCE DÉJÀ ENREGISTRÉE":exit?"SORTIE ENREGISTRÉE":"ENTRÉE ENREGISTRÉE";
+  const photo=safePhotoSrc(d.photo)?`<div class="last-scan-photo" id="lastScanPhoto"><img src="${esc(safePhotoSrc(d.photo))}" alt="Photo de ${esc(d.name)}"></div>`:lastScanPhotoHTML(d.name);
+  card.className="last-scan "+(duplicate||d.overtime?"is-duplicate":exit?"is-exit":"is-entry");
+  card.innerHTML=confirmShellHTML(title,d.heure,d.name,`<div class="last-scan-body">${photo}<div>
+    ${d.overtime?'<span class="last-scan-badge">⚠ VOLUME HORAIRE DÉPASSÉ</span>':""}
+    <div class="last-scan-name">${esc(d.name)}</div>
+    <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(d.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(d.poste||"—")}</dd>
+      <dt>Site</dt><dd>${esc(d.site||"—")}</dd><dt>Société</dt><dd>${esc(d.societe||"—")}</dd></dl>
+    ${moveHTML(title,d.heure)}
+    <div class="last-scan-state">${duplicate?"AUCUN NOUVEAU MOUVEMENT":"ÉTAT ACTUEL : "+(exit?"SORTI":"PRÉSENT")}</div></div></div>`);
+  openConfirm(card,d.matricule);
+  scheduleLastScanIdle();
+}
+function openConfirm(card,key){
+  const now=Date.now();
+  // Même employé, fenêtre encore ouverte (fiche du flux en direct après la confirmation
+  // immédiate) : contenu actualisé, minuteur conservé.
+  const sameMove=!!key&&key===confirmKey&&now<confirmDeadline;
+  if(!sameMove){confirmOpenedAt=now;confirmKey=key||""}
+  const elapsed=now-confirmOpenedAt;
+  card.classList.toggle("lsf-refresh",sameMove);                  // actualisation : pas de nouvelle animation d'entrée
+  card.style.setProperty("--lsf-ms",CONFIRM_DISPLAY_MS+"ms");
+  card.style.setProperty("--lsf-delay",-elapsed+"ms");
+  document.getElementById("result")?.classList.add("is-covered");
+  positionConfirm();
+  scheduleConfirmClose(CONFIRM_DISPLAY_MS-elapsed);
+}
+function scheduleConfirmClose(ms){
+  clearTimeout(confirmTimer);
+  confirmDeadline=Date.now()+Math.max(0,ms);
+  confirmTimer=setTimeout(closeConfirm,Math.max(0,ms));
+}
+function confirmOpen(){
+  const card=document.getElementById("lastScanCard");
+  return !!card&&!card.classList.contains("is-idle")&&!card.classList.contains("float-closed");
+}
+function closeConfirm(){
+  clearTimeout(confirmTimer);confirmTimer=null;confirmDeadline=0;
+  const card=document.getElementById("lastScanCard");
+  if(card&&!card.classList.contains("is-idle"))card.classList.add("float-closed");
+}
+// Position de la fenêtre : à droite de la zone de scan s'il y a la place ; sinon en bas d'écran,
+// jamais plus haut que la dernière commande visible (son contenu défile au besoin).
+function positionConfirm(){
+  const scanner=document.getElementById("scannerCard"),root=document.documentElement;
+  const rect=scanner&&scanner.getClientRects().length?scanner.getBoundingClientRect():null;
+  const room=rect?window.innerWidth-rect.right-24:0;
+  const sheet=!rect||window.innerWidth<900||room<300;
+  document.body.classList.toggle("lsf-sheet",sheet);
+  if(sheet){
+    const lowest=[".mode-grid",".pointer-search",".action-row","#restartBtn",".station-foot"].map(sel=>document.querySelector(sel))
+      .filter(el=>el&&el.getClientRects().length).map(el=>el.getBoundingClientRect().bottom).filter(b=>b<window.innerHeight);
+    const free=window.innerHeight-Math.max(0,...lowest)-24;
+    root.style.setProperty("--lsf-sheet-max",Math.round(Math.max(170,Math.min(free,window.innerHeight*.58,440)))+"px");
+    return;
+  }
+  root.style.setProperty("--lsf-left",Math.round(rect.right+12)+"px");
+  root.style.setProperty("--lsf-top",Math.round(Math.max(12,rect.top))+"px");
+  root.style.setProperty("--lsf-width",Math.round(Math.min(440,room))+"px");
 }
 function countedTitle(event,entry){
   const c=event.counted;
@@ -1556,13 +1706,14 @@ function showLastRefusal(refusal){
   const token="r"+refusal.id;lastScanShownId=token;
   const e=refusal.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé";
   card.className="last-scan is-refused";
-  card.innerHTML=`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
+  card.innerHTML=confirmShellHTML((refusalBlockHTML(refusal)||{}).title||refusal.label||"POINTAGE REFUSÉ",refusal.heure,name,`<div class="last-scan-body">${lastScanPhotoHTML(name)}<div>
     <span class="last-scan-badge">POINTAGE REFUSÉ</span>
     <div class="last-scan-name">${esc(name)}</div>
     <dl class="last-scan-meta"><dt>Code</dt><dd>${esc(e.matricule||"—")}</dd><dt>Fonction</dt><dd>${esc(e.fonction||e.poste||"—")}</dd>${refusal.terminal?`<dt>Terminal</dt><dd>${esc(refusal.terminal)}</dd>`:""}</dl>
-    <div class="last-scan-move"><b>${esc((refusalBlockHTML(refusal)||{}).title||refusal.label||"POINTAGE REFUSÉ")}</b><span>${esc(refusal.heure||"")}</span></div>
+    ${moveHTML((refusalBlockHTML(refusal)||{}).title||refusal.label||"POINTAGE REFUSÉ",refusal.heure)}
     ${(refusalBlockHTML(refusal)||{}).body||(refusal.message?'<p class="v5-reason">'+esc(refusal.message)+'</p>':"")}
-    <div class="last-scan-state">AUCUN MOUVEMENT ENREGISTRÉ</div></div></div>`;
+    <div class="last-scan-state">AUCUN MOUVEMENT ENREGISTRÉ</div></div></div>`);
+  openConfirm(card,"refus-"+(e.matricule||token));
   fillLastScanPhoto(e,token);
   scheduleLastScanIdle();
 }
@@ -1842,8 +1993,16 @@ function showResult(data,type){
     const action=data.duplicate?"PRÉSENCE DÉJÀ ENREGISTRÉE — AUCUN NOUVEAU MOUVEMENT":(data.action==="depart"?"PRÉSENCE ENREGISTRÉE · DÉPART":"PRÉSENCE ENREGISTRÉE · ARRIVÉE");
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
     const photo=safePhotoSrc(data.photo)?`<img class="employee-photo" src="${esc(safePhotoSrc(data.photo))}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
+    showLocalConfirmation(data);el.classList.add("is-covered");
     el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
-  }else el.innerHTML=`<div class="result-kicker">${esc(data.kicker||"SCAN REFUSÉ")}</div><div class="result-name">${esc(data.message)}</div>`;
+  }else{
+    el.innerHTML=`<div class="result-kicker">${esc(data.kicker||"SCAN REFUSÉ")}</div><div class="result-name">${esc(data.message)}</div>`;
+    // Refus d'un employé identifié : déjà détaillé dans la fenêtre de confirmation ouverte à
+    // l'instant. Sinon le message s'affiche seul, à la même place : jamais deux fenêtres.
+    const card=document.getElementById("lastScanCard");
+    if(confirmOpen()&&card.classList.contains("is-refused")&&Date.now()-confirmOpenedAt<1500)el.classList.add("is-covered");
+    else{closeConfirm();positionConfirm()}
+  }
   clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
 function renderHistory(){
@@ -2116,6 +2275,20 @@ function acceptUsbQr(value){
   if(input)input.value="";
   if(token.length>=20)onQr(token);
 }
+(()=>{
+  const card=document.getElementById("lastScanCard");if(!card)return;
+  const refocus=()=>document.getElementById("wedgeInput")?.focus({preventScroll:true});
+  card.addEventListener("click",event=>{if(event.target.closest(".lsf-close")){closeConfirm();refocus()}});
+  let remaining=0;
+  const pause=()=>{if(!confirmOpen()||!confirmTimer)return;remaining=Math.max(800,confirmDeadline-Date.now());clearTimeout(confirmTimer);confirmTimer=null;card.classList.add("is-paused")};
+  const resume=()=>{if(!confirmOpen()||confirmTimer||!card.classList.contains("is-paused"))return;card.classList.remove("is-paused");scheduleConfirmClose(remaining)};
+  card.addEventListener("mouseover",event=>{if(event.target.closest(".last-scan-float"))pause()});
+  card.addEventListener("mouseout",event=>{if(event.target.closest(".last-scan-float")&&!event.relatedTarget?.closest?.(".last-scan-float"))resume()});
+  card.addEventListener("focusin",event=>{if(event.target.closest(".last-scan-float"))pause()});
+  card.addEventListener("focusout",event=>{if(!event.relatedTarget?.closest?.(".last-scan-float"))resume()});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&confirmOpen()){closeConfirm();refocus()}});
+  window.addEventListener("resize",()=>{if(confirmOpen()||document.getElementById("result")?.classList.contains("show"))positionConfirm()});
+})();
 document.getElementById("wedgeInput").addEventListener("input",event=>{
   if(!pointerSession||cameraMode)return;
   qrKeyBuffer=event.target.value;
