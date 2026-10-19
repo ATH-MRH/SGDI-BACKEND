@@ -47,13 +47,22 @@ test('Chrome : deux blocs, sociétés, suivi indépendant et synchronisation', {
   await page.click('#manualQuery');await page.type('#manualQuery','TEST10');await page.waitForSelector('.manual-result-row');await page.click('.manual-result-row');
   for(const [width,height] of [[1920,1080],[1600,900],[1440,900],[1366,768],[390,844]]){
    await page.setViewport({width,height});await new Promise(r=>setTimeout(r,150));
-   const layout=await page.evaluate(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,width:r.width}};return {header:rect(document.querySelector('.top')),upper:rect(document.querySelector('.station-upper')),lower:rect(document.getElementById('movementsCard')),height:innerHeight,scroll:document.documentElement.scrollHeight,width:innerWidth,scrollWidth:document.documentElement.scrollWidth}});
-   assert.ok(layout.lower.bottom<=height+1,JSON.stringify(layout));assert.ok(layout.lower.height>height*.2,JSON.stringify(layout));assert.ok(layout.scroll<=height+1,JSON.stringify(layout));assert.ok(layout.scrollWidth<=width+1,JSON.stringify(layout));assert.ok(layout.upper.height/layout.lower.height>1.8&&layout.upper.height/layout.lower.height<2.2,JSON.stringify(layout));
+   const layout=await page.evaluate(()=>{const rect=e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height,width:r.width}};return {header:rect(document.querySelector('.top')),scanner:rect(document.getElementById('scannerCard')),lower:rect(document.getElementById('movementsCard')),side:rect(document.getElementById('sideCol')),functions:rect(document.getElementById('functionsCard')),height:innerHeight,scroll:document.documentElement.scrollHeight,width:innerWidth,scrollWidth:document.documentElement.scrollWidth}});
+   assert.ok(layout.scrollWidth<=width+1,JSON.stringify(layout));
+   if(width>=900){
+    // V6 : le tableau est sous la zone de pointage seulement, aligné en bas sur la colonne droite ; écran fixe.
+    assert.ok(layout.lower.bottom<=height+1&&layout.scroll<=height+1,JSON.stringify(layout));
+    assert.ok(layout.lower.top>=layout.scanner.bottom-1&&layout.lower.right<=layout.side.left+1,JSON.stringify(layout));
+    assert.ok(Math.abs(layout.lower.bottom-layout.functions.bottom)<=1,JSON.stringify(layout));
+    assert.ok(layout.lower.height>height*.2,JSON.stringify(layout));
+   }
    for(const selector of ['#societySelector','#siteSelector','.manual-actions']){const r=await page.$eval(selector,e=>({height:e.getBoundingClientRect().height,right:e.getBoundingClientRect().right}));assert.ok(r.height>0&&r.right<=width+1,selector+JSON.stringify(r))}
    const buttons=await page.$$eval('.manual-actions button',items=>items.map(b=>({text:b.textContent,height:b.getBoundingClientRect().height})));assert.equal(buttons.length,3);assert.ok(buttons.every(b=>b.height<=42));
    assert.equal(await page.$('#shiftBanner'),null);
    assert.ok(await page.$eval('.employee-photo',e=>e.complete&&e.naturalWidth>0));
-   assert.equal(await page.$eval('.tracking-scroll',e=>e.scrollHeight>e.clientHeight),true);
+   // Défilement interne du tableau (sa hauteur suit désormais la colonne droite : 20 lignes tiennent en 1920×1080).
+   assert.equal(await page.$eval('.tracking-scroll',e=>getComputedStyle(e).overflowY),'auto');
+   if(height<=900)assert.equal(await page.$eval('.tracking-scroll',e=>e.scrollHeight>e.clientHeight),true);
    if(width>700)assert.equal(await page.$eval('#presentNowList',e=>e.scrollHeight>e.clientHeight),true);
    await page.screenshot({path:captures+'/poste-'+width+'x'+height+'.png'});
   }
@@ -67,7 +76,8 @@ test('Chrome : deux blocs, sociétés, suivi indépendant et synchronisation', {
   const targetPromise=browser.waitForTarget(t=>t.url().endsWith('/pointeur/suivi'));
   await page.click('#detachTracking');const target=await targetPromise;const child=await target.page();await configure(child);await child.reload();await child.waitForSelector('#trackingBody tr');
   await child.setViewport({width:1920,height:1080});
-  assert.equal(await child.$eval('.station-upper',e=>getComputedStyle(e).display),'none');
+  for(const id of ['scannerCard','sideCol','postKpis'])assert.equal(await child.$eval('#'+id,e=>getComputedStyle(e).display),'none',id);
+  assert.ok(await child.$eval('#movementsCard',e=>e.getBoundingClientRect().width>1800));
   assert.equal(await child.$eval('.brand-sub',e=>getComputedStyle(e).display),'block');
   assert.equal(await child.$eval('.brand-sub',e=>e.textContent.trim()),'Suivi détaillé des pointages');
   assert.ok(await child.$eval('#trackingDate',e=>e.getBoundingClientRect().height>0));
