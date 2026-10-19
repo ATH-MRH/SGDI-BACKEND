@@ -2223,6 +2223,7 @@ function toggleManualPanel(){
   }
 }
 function closeManualPanel(){
+  cancelManualReset();
   document.getElementById("manualPanel").classList.add("hidden");
   document.getElementById("scannerCard").classList.remove("manual-mode");
   document.getElementById("manualToggleBtn").textContent="🔤 SAISIE MANUELLE (SANS SMARTPHONE)";
@@ -2230,6 +2231,7 @@ function closeManualPanel(){
 }
 function resetManualPanel(){
   if(scanBusy)return;
+  cancelManualReset();
   closeAbandonModal(true);
   manualSelected=null;manualResults=[];
   document.getElementById("manualQuery").value="";
@@ -2245,6 +2247,7 @@ function resetManualPanel(){
   manualContext=null;
 }
 function onManualQueryInput(){
+  cancelManualReset();
   clearTimeout(manualSearchTimer);
   const query=document.getElementById("manualQuery").value.trim();
   if(query.length<2){manualResults=[];document.getElementById("manualResults").innerHTML="";return}
@@ -2269,6 +2272,7 @@ function renderManualResults(){
 }
 function selectManualResult(index){
   if(scanBusy)return;
+  cancelManualReset();
   manualSelected=manualResults[index];
   if(!manualSelected)return;
   const initials=[manualSelected.prenom,manualSelected.nom].filter(Boolean).map(v=>v[0]).join("").toUpperCase();
@@ -2346,6 +2350,7 @@ function closeAbandonModal(force=false){
 }
 async function openAbandonModal(){
   if(!manualSelected||scanBusy||abandonLoading||manualActionsLocked())return;
+  cancelManualReset();
   const employee=manualSelected,site=selectedSiteId,feedback=document.getElementById("manualFeedback");
   abandonLoading=true;scanBusy=true;setManualActionsBusy(true);
   feedback.textContent="";feedback.className="manual-feedback";
@@ -2405,13 +2410,31 @@ document.addEventListener("keydown",event=>{
   }
 },true);
 
+// Retour automatique à la recherche après un PRÉSENT / ABSENT réussi. Un seul nettoyage en attente,
+// lié à l'employé pointé : il est annulé dès que l'agent passe à autre chose (autre employé,
+// recherche, saisie, fenêtre d'abandon, nouveau pointage, fermeture du panneau) et revérifié à
+// l'échéance — une ancienne opération ne réinitialise jamais une nouvelle sélection et ne ferme
+// jamais une fenêtre d'abandon.
+var manualResetTimer=null;
+function cancelManualReset(){clearTimeout(manualResetTimer);manualResetTimer=null}
+function scheduleManualReset(employee,ms){
+  cancelManualReset();
+  manualResetTimer=setTimeout(()=>{
+    manualResetTimer=null;
+    if(!isManualPanelOpen()||manualSelected!==employee||scanBusy||abandonOpen())return;
+    resetManualPanel();
+  },ms);
+}
+function employeeLabel(employee){return [employee&&employee.nom,employee&&employee.prenom].filter(Boolean).join(" ")}
 async function confirmManualPointage(action="present",options={}){
   if(!manualSelected||scanBusy||manualActionsLocked())return;
   const intent=options.intent||null,reasonEl=document.getElementById("manualReason"),reason=reasonEl?reasonEl.value.trim():"";
   if(intent&&manualContext&&manualContext.reason_required&&!reason){
     const fb=document.getElementById("manualFeedback");fb.textContent="Motif obligatoire pour cette saisie manuelle.";fb.className="manual-feedback show error";reasonEl.focus();return;
   }
+  cancelManualReset();
   scanBusy=true;
+  const employee=manualSelected,who=employeeLabel(employee);
   document.getElementById("manualAbandonBtn").disabled=true;
   const button=document.getElementById("manualPointerBtn");
   const absentButton=document.getElementById("manualAbsentBtn");
@@ -2427,19 +2450,19 @@ async function confirmManualPointage(action="present",options={}){
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw operationalError(response,data);
     if(action==="absent"){
-      feedback.textContent="ABSENCE ENREGISTRÉE À "+(data.heure||"");await loadHistory();playTone(true);navigator.vibrate?.([100,50,100]);
+      feedback.textContent=(who?who+" — ":"")+"ABSENCE ENREGISTRÉE À "+(data.heure||"");await loadHistory();playTone(true);navigator.vibrate?.([100,50,100]);
     }else{
       const entry=recordScanEntry(data);showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
-      feedback.textContent=(entry.action==="depart"?"DÉPART":"PRÉSENCE")+" ENREGISTRÉE À "+entry.heure;
+      feedback.textContent=(who?who+" — ":"")+(entry.action==="depart"?"DÉPART":"PRÉSENCE")+" ENREGISTRÉE À "+entry.heure;
       if(data.counted&&data.counted.kind==="EXTRA_SHIFT"&&data.action!=="depart"){
-        const who=(pointerSession.user&&(pointerSession.user.full_name||pointerSession.user.username))||pointerSession.username||"";
-        feedback.innerHTML='<b>ENTRÉE MANUELLE ENREGISTRÉE</b><dl class="v5-facts"><dt>Source</dt><dd>Pointeur</dd><dt>Saisi par</dt><dd>'+esc(who)+'</dd><dt>Motif</dt><dd>'+esc(data.observation||observation||"—")+'</dd><dt>Statut</dt><dd>EN MAINTIEN · À QUALIFIER</dd></dl>';
+        const agent=(pointerSession.user&&(pointerSession.user.full_name||pointerSession.user.username))||pointerSession.username||"";
+        feedback.innerHTML=(who?'<span class="manual-feedback-who">'+esc(who)+'</span> ':'')+'<b>ENTRÉE MANUELLE ENREGISTRÉE</b><dl class="v5-facts"><dt>Source</dt><dd>Pointeur</dd><dt>Saisi par</dt><dd>'+esc(agent)+'</dd><dt>Motif</dt><dd>'+esc(data.observation||observation||"—")+'</dd><dt>Statut</dt><dd>EN MAINTIEN · À QUALIFIER</dd></dl>';
       }
       pollLive();
     }
     feedback.className="manual-feedback show success";
     button.textContent="PRÉSENT";absentButton.textContent="ABSENT";
-    setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},intent?6000:1800);
+    scheduleManualReset(employee,intent?6000:1800);
   }catch(error){
     const lost=transportFailure(error);
     const message=lost?TRANSPORT_MESSAGE:(error.message||"Pointage impossible");
@@ -2484,6 +2507,7 @@ function acceptUsbQr(value){
   // « Réactiver la caméra », fiche ouverte) : la fenêtre ouverte est replacée, jamais sur une commande.
   if(typeof ResizeObserver==="function")new ResizeObserver(()=>{if(confirmOpen()||document.getElementById("result")?.classList.contains("show"))positionConfirm()}).observe(document.getElementById("scannerCard"));
 })();
+document.getElementById("manualPanel").addEventListener("input",cancelManualReset);
 document.getElementById("wedgeInput").addEventListener("input",event=>{
   if(!pointerSession||cameraMode)return;
   qrKeyBuffer=event.target.value;
