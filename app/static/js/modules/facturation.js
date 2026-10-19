@@ -1416,41 +1416,39 @@ function renderFactureEditor(view){
   },0);
 }
 
-// Échéance d'une facture : date d'échéance enregistrée, sinon date + délai de paiement.
-// Sans délai connu, la facture est due à sa date (aucun délai de 30 jours supposé).
-function factureDueDate(f){
-  if(f?.dateEcheance)return String(f.dateEcheance).slice(0,10);
-  if(!f?.date)return "";
-  const days=parseInt(f.echeance);
-  return Number.isNaN(days)?String(f.date).slice(0,10):addDays(f.date,days);
-}
-// Jours de retard à une date donnée (0 ou négatif : pas encore échue).
+// Échéance d'une facture : règle unique factureEcheance ("" = échéance non renseignée).
+function factureDueDate(f){return factureEcheance(f)}
+// Jours de retard à une date donnée (0 ou négatif : pas encore échue ; null : échéance non renseignée).
 function factureOverdueDays(f,onDate){
   const due=factureDueDate(f);
-  return due?daysBetween(due,onDate):0;
+  return due?daysBetween(due,onDate):null;
 }
 
 function renderFactBalance(view){
-  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
+  // Factures émises seulement : ni brouillons, ni factures annulées.
+  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon"&&f.statut!=="annulee");
   const byClient={};
   list.forEach(f=>{
     const client=f.client||f.clientNom||"—";
-    if(!byClient[client])byClient[client]={client,total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,nb:0};
+    if(!byClient[client])byClient[client]={client,total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,sansEcheance:0,nbSansEcheance:0,nb:0};
     const sp=factureStatutPaye(f);const ttc=f.ttc||f.montantTTC||0;
     byClient[client].total+=ttc;byClient[client].encaisse+=sp.paye;byClient[client].nb++;
     if(sp.reste<=0.01)return;
+    // Sans échéance valide : ni « non échu », ni tranche de retard (aucune date supposée).
     const age=factureOverdueDays(f,today());
-    if(age<=0)byClient[client].nonEchu+=sp.reste;
+    if(age===null){byClient[client].sansEcheance+=sp.reste;byClient[client].nbSansEcheance++;}
+    else if(age<=0)byClient[client].nonEchu+=sp.reste;
     else if(age<=30)byClient[client].j0_30+=sp.reste;
     else if(age<=60)byClient[client].j31_60+=sp.reste;
     else if(age<=90)byClient[client].j61_90+=sp.reste;
     else byClient[client].j90plus+=sp.reste;
   });
-  const rows=Object.values(byClient).sort((a,b)=>(b.j90plus+b.j61_90+b.j31_60+b.j0_30+b.nonEchu)-(a.j90plus+a.j61_90+a.j31_60+a.j0_30+a.nonEchu));
-  const totRow={client:"TOTAL",total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,nb:list.length};
-  rows.forEach(r=>{totRow.total+=r.total;totRow.encaisse+=r.encaisse;totRow.nonEchu+=r.nonEchu;totRow.j0_30+=r.j0_30;totRow.j31_60+=r.j31_60;totRow.j61_90+=r.j61_90;totRow.j90plus+=r.j90plus;});
+  const due=r=>r.j90plus+r.j61_90+r.j31_60+r.j0_30+r.nonEchu+r.sansEcheance;
+  const rows=Object.values(byClient).sort((a,b)=>due(b)-due(a));
+  const totRow={client:"TOTAL",total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,sansEcheance:0,nbSansEcheance:0,nb:list.length};
+  rows.forEach(r=>{totRow.total+=r.total;totRow.encaisse+=r.encaisse;totRow.nonEchu+=r.nonEchu;totRow.sansEcheance+=r.sansEcheance;totRow.nbSansEcheance+=r.nbSansEcheance;totRow.j0_30+=r.j0_30;totRow.j31_60+=r.j31_60;totRow.j61_90+=r.j61_90;totRow.j90plus+=r.j90plus;});
   const thS="padding:9px 10px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;white-space:nowrap;border-bottom:2px solid #1e3a5f;text-align:right";
-  const td=(v,c)=>'<td style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(c||"#1e293b")+'">'+(v>0.01?money(v):"—")+'</td>';
+  const td=(v,c)=>'<td style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(c||"#1e293b")+'">'+(Math.abs(v)>0.01?money(v):"—")+'</td>'; // montant négatif (facture à TTC négatif) affiché, pas masqué
   const renderRow=(r,isTot)=>'<tr style="border-bottom:1px solid #f1f5f9;'+(isTot?"background:#f8fafc;font-weight:800;":"")+'">'+
     '<td style="padding:7px 10px;font-size:12px;font-weight:700;color:#0f2d5a">'+escapeHTML(r.client)+'</td>'+
     '<td style="padding:7px 10px;text-align:center;font-size:11px;color:#64748b">'+r.nb+'</td>'+
@@ -1460,6 +1458,7 @@ function renderFactBalance(view){
     td(r.j31_60,r.j31_60>0?"#d97706":"#94a3b8")+
     td(r.j61_90,r.j61_90>0?"#ea580c":"#94a3b8")+
     td(r.j90plus,r.j90plus>0?"#dc2626":"#94a3b8")+
+    '<td data-sans-echeance="'+r.nbSansEcheance+'" style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(r.sansEcheance>0.01?"#7c3aed":"#94a3b8")+'">'+(r.sansEcheance>0.01?money(r.sansEcheance)+'<div style="font-size:10px;font-weight:600;color:#64748b">'+r.nbSansEcheance+' facture'+(r.nbSansEcheance>1?"s":"")+'</div>':"—")+'</td>'+
     '</tr>';
   view.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'+
@@ -1478,6 +1477,7 @@ function renderFactBalance(view){
     '<th style="'+thS+';background:#92400e">31–60 jours</th>'+
     '<th style="'+thS+';background:#9a3412">61–90 jours</th>'+
     '<th style="'+thS+';background:#7f1d1d">> 90 jours</th>'+
+    '<th style="'+thS+';background:#5b21b6">Échéance non renseignée</th>'+
     '</tr></thead>'+
     '<tbody>'+rows.map(r=>renderRow(r,false)).join("")+renderRow(totRow,true)+'</tbody>'+
     '</table></div>';

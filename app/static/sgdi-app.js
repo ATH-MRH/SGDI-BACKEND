@@ -7223,7 +7223,7 @@ function factChartSVG(factures,paiements,year){
   const months=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
   const billed=Array(12).fill(0),collected=Array(12).fill(0),current=Array(12).fill(0);
   const now=today(),invoiceById=new Map(factures.map(f=>[f.id,f]));
-  factures.forEach(f=>{if(!f.date)return;const d=new Date(f.date);if(d.getFullYear()!==year)return;const m=d.getMonth();billed[m]+=(f.ttc||f.montantTTC||0);const sp=factureStatutPaye(f);const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");if(sp.reste>0.01&&(!due||due>=now))current[m]+=sp.reste;});
+  factures.forEach(f=>{if(!f.date)return;const d=new Date(f.date);if(d.getFullYear()!==year)return;const m=d.getMonth();billed[m]+=(f.ttc||f.montantTTC||0);const sp=factureStatutPaye(f);const due=factureEcheance(f);if(sp.reste>0.01&&(!due||due>=now))current[m]+=sp.reste;});
   (paiements||[]).forEach(p=>{if(!invoiceById.has(p.factureId)||!p.date)return;const d=new Date(p.date);if(d.getFullYear()===year)collected[d.getMonth()]+=(Number(p.montant)||0);});
   const max=Math.max(...billed,...collected,...current,1);
   const W=650,H=175,groupW=50,bW=12,gap=4,pL=10,pB=28;
@@ -17956,8 +17956,18 @@ const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
 const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee","perdue"];
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 
+// Échéance d'une facture : date d'échéance enregistrée (si c'est une date valide), sinon date de
+// facture + délai de paiement numérique (« 30 », « 30 jours ») ; sinon "" : échéance non renseignée.
+// Aucune échéance n'est jamais supposée (ni délai de 30 jours par défaut, ni date de facture).
+function factureEcheance(f){
+  const valid=v=>{const s=String(v??"").trim().slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return"";const d=new Date(s+"T00:00:00Z");return!isNaN(d)&&d.toISOString().slice(0,10)===s?s:""};
+  const explicit=valid(f?.dateEcheance);if(explicit)return explicit;
+  const base=valid(f?.date),delay=String(f?.echeance??"").trim().match(/^(\d{1,4})(\s*jours?)?$/i);
+  return base&&delay?addDays(base,parseInt(delay[1],10)):"";
+}
 // Reste dû : un chèque/une traite impayé(e) et un avoir annulé ne le réduisent plus (même règle que le serveur).
-function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id&&p.suivi?.statut!=="impaye").reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id&&a.statut!=="annule").reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
+// Échue : échéance valide ET dépassée. Facture annulée : plus aucun reste dû.
+function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id&&p.suivi?.statut!=="impaye").reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id&&a.statut!=="annule").reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=factureEcheance(f);if(due&&due<today())st="echue";}return f.statut==="annulee"?{paye:pa,avoir:av,reste:0,statut:"annulee"}:{paye:pa,avoir:av,reste,statut:st}}
 
 
 let factureClientSearchTimer=null;

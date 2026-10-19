@@ -17,7 +17,7 @@ function renderFactDashboard(view){
   factures.forEach(f=>{
     const sp=factureStatutPaye(f);if(sp.reste<=0.01)return;
     unpaid.push({...f,_sp:sp});
-    const echD=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");
+    const echD=factureEcheance(f);
     if(echD&&echD<now)lateCr+=sp.reste;else curCr+=sp.reste;
   });
   const barTotal=totalEncaisse+curCr+lateCr||1;
@@ -26,10 +26,10 @@ function renderFactDashboard(view){
   const yearInvoices=factures.filter(f=>new Date(f.date||"").getFullYear()===curYear);
   const yearInvoiceIds=new Set(yearInvoices.map(f=>f.id));
   const yearCollected=myPaiements.filter(p=>yearInvoiceIds.has(p.factureId)&&new Date(p.date||"").getFullYear()===curYear).reduce((s,p)=>s+(Number(p.montant)||0),0);
-  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
+  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=factureEcheance(f);return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
   const pct=v=>totalVentes>0?Math.round(v/totalVentes*1000)/10:0;
   const unpaidSorted=unpaid.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,10);
-  const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return e&&e<now;}).length;
+  const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=factureEcheance(f);return e&&e<now;}).length;
   view.innerHTML=
     factTabs("dashboard")+
     '<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">'+
@@ -73,7 +73,7 @@ function renderFactDashboard(view){
     '</div>'+
     (unpaidSorted.length===0?'<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">Aucune facture impayée</div>':
     unpaidSorted.map(f=>{
-      const echD=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");
+      const echD=factureEcheance(f);
       const isLate=echD&&echD<now;
       const sd=factStatutDisplay(f);
       return '<div onclick="factureEditorOpen(\''+f.id+'\')" style="padding:12px;border-radius:6px;cursor:pointer;border:1px solid #f3f4f6;margin-bottom:8px;background:#fff" onmouseover="this.style.background=\'#f9fafb\'" onmouseout="this.style.background=\'#fff\'">'+

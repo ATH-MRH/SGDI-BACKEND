@@ -241,7 +241,7 @@ test('Facturation — intégrité financière dans Chrome réel', { timeout: 300
   await t.test('balance âgée : colonne « Non échu » et aucune erreur JavaScript', async () => {
     await go('facturation/balance', () => /balance ag/i.test(document.getElementById('view')?.textContent || ''));
     const heads = await page.$$eval('#view thead th', (ths) => ths.map((th) => th.textContent.trim()));
-    assert.deepStrictEqual(heads, ['Client', 'Factures', 'Total facturé', 'Encaissé', 'Non échu', '0–30 jours', '31–60 jours', '61–90 jours', '> 90 jours']);
+    assert.deepStrictEqual(heads, ['Client', 'Factures', 'Total facturé', 'Encaissé', 'Non échu', '0–30 jours', '31–60 jours', '61–90 jours', '> 90 jours', 'Échéance non renseignée']);
     assert.deepStrictEqual(errors, []);
   });
 });
