@@ -246,6 +246,7 @@ def create_item(name: str, payload: ItemPayload, request: Request, db: Session =
         data = dict(payload.data)
         if name == "echanges" and data.get("type") == "message":
             data["from"] = user.username
+        data = service.prepare_finance_scope(db, name, data, user)
         service.ensure_item_allowed_for_user(data, user, name)
         service.ensure_item_refs_allowed_for_user(db, data, user, name)
         result = service.create_item(db, name, data)
@@ -270,11 +271,12 @@ def replace_item(name: str, item_id: str, payload: ItemPayload, request: Request
     _legacy_gate(db, request, user, name, write=True)
     with _legacy_operation(db, request, user, name, write=True, resource_id=item_id):
         existing = service.get_item(db, name, item_id)
+        data = service.prepare_finance_scope(db, name, dict(payload.data), user)
         service.ensure_item_allowed_for_user(existing, user, name)
-        service.ensure_item_allowed_for_user(payload.data, user, name)
+        service.ensure_item_allowed_for_user(data, user, name)
         service.ensure_item_refs_allowed_for_user(db, existing, user, name)
-        service.ensure_item_refs_allowed_for_user(db, payload.data, user, name)
-        result = service.update_item(db, name, item_id, payload.data, partial=False)
+        service.ensure_item_refs_allowed_for_user(db, data, user, name)
+        result = service.update_item(db, name, item_id, data, partial=False)
     _legacy_success(db, request, user, name, write=True, resource_id=item_id, old_state=existing, new_state=result)
     return result
 
@@ -285,7 +287,7 @@ def patch_item(name: str, item_id: str, payload: ItemPayload, request: Request, 
     with _legacy_operation(db, request, user, name, write=True, resource_id=item_id):
         existing = service.get_item(db, name, item_id)
         service.ensure_item_allowed_for_user(existing, user, name)
-        merged = {**existing, **payload.data}
+        merged = service.prepare_finance_scope(db, name, {**existing, **payload.data}, user)
         service.ensure_item_allowed_for_user(merged, user, name)
         service.ensure_item_refs_allowed_for_user(db, existing, user, name)
         service.ensure_item_refs_allowed_for_user(db, merged, user, name)

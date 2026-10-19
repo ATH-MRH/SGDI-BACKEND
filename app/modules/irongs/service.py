@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.modules.irongs.models import SgdiRecord
 from app.modules.irongs import sql_bridge
 from app.modules.drh.models import Employee
+from app.modules.finance_models import Invoice
 from app.modules.ops.models import Site
 from app.modules.materiel.service import ensure_material_schema
 from app.core.photo_storage import normalize_photo_fields
@@ -326,6 +327,32 @@ def ensure_item_allowed_for_user(item: dict[str, Any], user: Any | None, collect
     society = _item_society(item)
     if society and society not in _user_allowed_societies(user):
         raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
+
+
+def prepare_finance_scope(db: Session, name: str, item: dict[str, Any], user: Any | None) -> dict[str, Any]:
+    """Société d'une pièce Facturation, avant le contrôle de périmètre :
+    - règlement / avoir : celle de la facture réglée (le serveur l'impose ensuite) ;
+    - autre pièce sans société d'un compte restreint : sa société unique, sinon refus.
+    Une pièce sans société échappait au filtre société des comptes restreints."""
+    if name not in sql_bridge.FINANCE_MODELS:
+        return item
+    item = dict(item)
+    unrestricted = _snapshot_unrestricted(user)
+    if name in ("paiements", "avoirs"):
+        ref = str(item.get("factureId") or item.get("invoiceId") or "").strip()
+        found = db.execute(select(Invoice.society).where(Invoice.external_id == ref)).first() if ref else None
+        if found is not None:
+            if not found[0] and not unrestricted:
+                raise HTTPException(status_code=403, detail="Facture sans société : règlement réservé à l'administration")
+            item["societe"] = found[0] or ""
+        return item
+    if unrestricted or _item_society(item):
+        return item
+    societies = [str(s).strip() for s in (getattr(user, "authorized_societies", None) or []) if str(s or "").strip()]
+    if len(societies) != 1:
+        raise HTTPException(status_code=422, detail="Société obligatoire : choisissez la société de la pièce")
+    item["societe"] = societies[0]
+    return item
 
 
 # Collections SQL dont une ligne désigne un employé et un site réels : la société déclarée dans
@@ -758,7 +785,10 @@ def list_items(db: Session, name: str) -> list[Any]:
 
 
 def _upsert_sql_collection_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
-    db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
+    # Les anciennes lignes JSON des collections finance ne sont jamais effacées : elles n'ont pas
+    # été reprises en SQL et peuvent être les seules traces de pièces historiques.
+    if name not in sql_bridge.FINANCE_MODELS:
+        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
     try:
         out = sql_bridge.upsert_item(db, name, item)
         db.commit()

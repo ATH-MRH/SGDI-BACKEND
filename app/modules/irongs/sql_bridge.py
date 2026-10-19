@@ -4,10 +4,11 @@ import re
 import unicodedata
 from copy import deepcopy
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -642,17 +643,210 @@ def upsert_client(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     return client_to_item(row)
 
 
-def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str) -> dict[str, Any]:
+# ── Pièces de règlement (Facturation) ─────────────────────────────────────────────────────
+# Règlements, avoirs, avances et caisse sont des pièces comptables : montant contrôlé et arrondi
+# au centime par le serveur, rattachement à une facture émise, reste à encaisser respecté. Un
+# règlement ou un avoir enregistré ne se réécrit pas (on le supprime puis on le ressaisit) ; un
+# nouvel envoi identique (nouvel essai réseau, double clic) renvoie la pièce déjà enregistrée.
+_IMMUTABLE_SETTLEMENTS = {"paiements", "avoirs"}
+_CASH_TYPES = {"entree", "sortie"}
+# Écriture de caisse générée par un règlement ou une avance : elle suit sa pièce d'origine.
+_CASH_LINK_FIELDS = ("paiementId", "avanceId")
+# Verrous consultatifs PostgreSQL (transaction) : une séquence de numérotation à la fois.
+_INVOICE_NUMBER_LOCK = 0x46414331
+_CREDIT_NUMBER_LOCK = 0x41564F31
+
+
+def _serialize(db: Session, key: int) -> None:
+    """Sérialise une numérotation jusqu'à la fin de la transaction (PostgreSQL ; SQLite
+    sérialise déjà toutes les écritures)."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+
+
+def _cents(value: Any) -> Decimal:
+    try:
+        return Decimal(str(value if value not in (None, "") else 0)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError):
+        return Decimal("0.00")
+
+
+def _settlement_amount(value: Any) -> Decimal:
+    from app.modules.irongs.invoice_lines import MAX_AMOUNT, _decimal, _q
+
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise HTTPException(422, detail="Montant obligatoire")
+    amount = _decimal(value, "Montant", default=Decimal(0))
+    if amount > MAX_AMOUNT:
+        raise HTTPException(422, detail="Montant trop élevé")
+    amount = _q(amount)
+    if amount <= 0:
+        raise HTTPException(422, detail="Le montant doit être strictement positif")
+    return amount
+
+
+def _invoice_ttc(row: Invoice) -> Decimal:
+    legacy = (row.data or {}).get("_legacy") or {}
+    return _cents(legacy.get("ttc") if legacy.get("ttc") not in (None, "") else row.total_ttc)
+
+
+def _settled_amounts(db: Session, invoice_ref: str) -> tuple[Decimal, Decimal]:
+    paid = sum((_cents(a) for (a,) in db.execute(select(Payment.amount).where(Payment.invoice_external_id == invoice_ref))), Decimal("0.00"))
+    credited = sum((_cents(a) for (a,) in db.execute(select(CreditNote.amount).where(CreditNote.invoice_external_id == invoice_ref))), Decimal("0.00"))
+    return paid, credited
+
+
+def _settled_invoice(db: Session, invoice_ref: Any) -> Invoice:
+    ref = str(invoice_ref or "").strip()
+    if not ref:
+        raise HTTPException(422, detail="Facture de rattachement obligatoire")
+    # Verrou de ligne : deux règlements simultanés d'une même facture ne dépassent pas son reste.
+    row = db.execute(select(Invoice).where(Invoice.external_id == ref).with_for_update()).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, detail="Facture introuvable")
+    if (row.status or "brouillon") in ("brouillon", "annulee"):
+        raise HTTPException(409, detail="La facture doit être validée (et non annulée) avant tout règlement ou avoir")
+    return row
+
+
+def _next_credit_number(db: Session, when: Any) -> str:
+    _serialize(db, _CREDIT_NUMBER_LOCK)
+    prefix = f"AV-{(as_date(when) or date.today()).year}-"
+    seq = 0
+    for (data,) in db.execute(select(CreditNote.data)).all():
+        number = str(((data or {}).get("_legacy") or {}).get("numero") or "")
+        if number.startswith(prefix) and number[len(prefix):].isdigit():
+            seq = max(seq, int(number[len(prefix):]))
+    return f"{prefix}{seq + 1:04d}"
+
+
+def _required_society(item: dict[str, Any]) -> str:
+    society = str(item.get("societe") or "").strip()
+    if not society:
+        raise HTTPException(422, detail="Société obligatoire")
+    return society
+
+
+def _cash_link(row: CashEntry) -> str:
+    legacy = (row.data or {}).get("_legacy") or {}
+    return next((str(legacy[k]) for k in _CASH_LINK_FIELDS if legacy.get(k)), "")
+
+
+def _prepare_settlement(db: Session, collection: str, item: dict[str, Any], *, internal: bool) -> dict[str, Any]:
+    item = dict(item)
+    if collection in _IMMUTABLE_SETTLEMENTS:
+        invoice = _settled_invoice(db, item.get("factureId") or item.get("invoiceId"))
+        amount = _settlement_amount(item.get("montant"))
+        ttc = _invoice_ttc(invoice)
+        paid, credited = _settled_amounts(db, invoice.external_id)
+        if collection == "paiements" and amount > ttc - paid - credited:
+            raise HTTPException(409, detail=f"Montant supérieur au reste à encaisser ({max(ttc - paid - credited, Decimal(0))} DZD)")
+        if collection == "avoirs":
+            if credited + amount > ttc:
+                raise HTTPException(409, detail="Le total des avoirs dépasserait le montant TTC de la facture")
+            item["numero"] = _next_credit_number(db, item.get("date"))
+        # Société et client : ceux de la facture réglée, jamais ceux déclarés par le navigateur.
+        item.update({"factureId": invoice.external_id, "societe": invoice.society or "",
+                     "client": invoice.client_name or "", "montant": float(amount)})
+    elif collection == "avances":
+        item["montant"] = float(_settlement_amount(item.get("montant")))
+        item["societe"] = _required_society(item)
+        if not str(item.get("client") or item.get("beneficiaire") or "").strip():
+            raise HTTPException(422, detail="Client de l'avance obligatoire")
+    elif collection == "caisse":
+        if not internal:
+            for key in (*_CASH_LINK_FIELDS, "automatique"):
+                item.pop(key, None)
+        kind = str(item.get("type") or item.get("sens") or "").strip().lower()
+        if kind not in _CASH_TYPES:
+            raise HTTPException(422, detail="Type de mouvement de caisse invalide (entrée ou sortie)")
+        item["type"] = kind
+        item["montant"] = float(_settlement_amount(item.get("montant")))
+        item["societe"] = _required_society(item)
+    item["date"] = item.get("date") or date.today().isoformat()
+    return item
+
+
+def _replayed_settlement(row: Any, item: dict[str, Any]) -> dict[str, Any]:
+    stored = simple_raw(row)
+    same_invoice = str(item.get("factureId") or item.get("invoiceId") or "") == str(stored.get("factureId") or "")
+    try:
+        same_amount = _settlement_amount(item.get("montant")) == _cents(stored.get("montant"))
+    except HTTPException:
+        same_amount = False
+    if not (same_invoice and same_amount):
+        raise HTTPException(409, detail="Un règlement ou un avoir enregistré ne se modifie pas : supprimez-le puis saisissez-le à nouveau.")
+    return stored
+
+
+def _sync_linked_cash(db: Session, collection: str, item: dict[str, Any]) -> None:
+    """Écriture de caisse d'un règlement ou d'une avance, dans la même transaction que la pièce
+    (mêmes catégories que l'ancienne saisie navigateur)."""
+    source_id = legacy_id(item)
+    if collection == "paiements":
+        number = db.execute(select(Invoice.number).where(Invoice.external_id == item["factureId"])).scalar_one_or_none()
+        extra = {"categorie": "Encaissement facture", "libelle": f"Paiement facture {number or ''}".strip(),
+                 "paiementId": source_id, "factureId": item["factureId"]}
+    else:
+        extra = {"categorie": "Avance client", "libelle": f"Avance {item.get('client') or item.get('beneficiaire') or ''}".strip(),
+                 "avanceId": source_id}
+    entry = {"id": f"cs_{source_id}", "date": item.get("date"), "type": "entree", "montant": item["montant"],
+             "mode": item.get("mode") or "", "reference": item.get("reference") or "", "societe": item.get("societe") or "",
+             "automatique": True, "createdAt": item.get("createdAt") or datetime.utcnow().isoformat(), **extra}
+    upsert_finance(db, CashEntry, entry, "caisse", internal=True)
+
+
+def _invoice_status_rules(row: Invoice, item: dict[str, Any]) -> dict[str, Any]:
+    """Statut et numéro d'une facture : seule la route de validation les attribue. Exception :
+    l'import Excel d'une facture historique « en-tête seul » (sans lignes) garde son numéro."""
+    item = dict(item)
+    if row.id and row.status and row.status != "brouillon":
+        return item
+    if row.id is None and str(item.get("sourceImport") or "").lower() == "excel" and not item.get("lignes"):
+        status = str(item.get("statut") or "brouillon").strip().lower()
+        number = str(item.get("numero") or "").strip()
+        if status not in ("brouillon", "emise"):
+            raise HTTPException(422, detail="Statut d'import invalide (brouillon ou émise)")
+        if status == "emise" and (not number or number.upper() == "BROUILLON"):
+            raise HTTPException(422, detail="Numéro obligatoire pour une facture importée émise")
+        item["statut"] = status
+        if status == "brouillon":
+            item["numero"] = "BROUILLON"
+        return item
+    item["statut"], item["numero"] = "brouillon", "BROUILLON"
+    item.pop("validatedAt", None)
+    return item
+
+
+def _ensure_invoice_deletable(db: Session, row: Invoice) -> None:
+    if (row.status or "brouillon") == "brouillon":
+        return
+    legacy = (row.data or {}).get("_legacy") or {}
+    if str(legacy.get("sourceImport") or "").lower() == "excel" and not legacy.get("lignes"):
+        if _settled_amounts(db, row.external_id) == (Decimal("0.00"), Decimal("0.00")):
+            return
+        raise HTTPException(409, detail="Facture importée avec règlements ou avoirs : suppression impossible")
+    raise HTTPException(409, detail="Une facture validée ne peut pas être supprimée : émettez un avoir.")
+
+
+def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str, *, internal: bool = False) -> dict[str, Any]:
     external = legacy_id(item)
     row = db.get(model, as_int(item.get("backendId")) or 0)
     if not row:
         row = db.execute(select(model).where(model.external_id == external)).scalar_one_or_none()
+    if model is not Invoice:
+        if row is not None and collection in _IMMUTABLE_SETTLEMENTS:
+            return _replayed_settlement(row, item)
+        if row is not None and collection == "caisse" and not internal and _cash_link(row):
+            raise HTTPException(409, detail="Écriture générée par un règlement ou une avance : modifiez la pièce d'origine.")
+        item = _prepare_settlement(db, collection, item, internal=internal)
+    created = row is None
     if not row:
         row = model(external_id=external)
         db.add(row)
     row.external_id = external
     if isinstance(row, Invoice):
-        item = _canonical_invoice_item(db, row, item)
+        item = _canonical_invoice_item(db, row, _invoice_status_rules(row, item))
         raw_number = str(item.get("numero") or item.get("number") or "").strip()
         # Plusieurs brouillons doivent pouvoir coexister. La colonne number est
         # unique : « BROUILLON » n'est donc pas un numéro comptable et reste NULL
@@ -682,6 +876,8 @@ def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: s
         row.entry_date = as_date(item.get("date")); row.society = item.get("societe"); row.category = item.get("categorie"); row.label = item.get("libelle") or item.get("label"); row.amount = as_float(item.get("montant")); row.entry_type = item.get("type")
     row.data = {"_legacy": deepcopy(item), "collection": collection}
     db.flush()
+    if (collection == "paiements" and created) or collection == "avances":
+        _sync_linked_cash(db, collection, item)
     return simple_raw(row)
 
 
@@ -774,10 +970,10 @@ def _canonical_invoice_item(db: Session, row: Invoice, item: dict[str, Any]) -> 
                 frozen.pop(key, None)
         if not frozen.get("numero") and row.number:
             frozen["numero"] = row.number
-        # Jamais de retour à « brouillon » par un simple enregistrement : sinon l'appel suivant
-        # pourrait réécrire les lignes d'une facture déjà émise.
-        if str(frozen.get("statut") or "").lower() in ("", "brouillon"):
-            frozen["statut"] = row.status
+        # Le statut d'une facture émise ne change pas par un simple enregistrement : ni retour à
+        # « brouillon » (réécriture des lignes), ni statut de règlement déclaré par le navigateur
+        # (payée/partielle se déduisent des règlements enregistrés).
+        frozen["statut"] = row.status
         return frozen
     return compute_invoice(_apply_contract_units(db, dict(item), stored))
 
@@ -791,11 +987,14 @@ def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
     est isolée dans un savepoint : en cas de collision on relance avec le numéro suivant
     au lieu de laisser planter la requête.
     """
-    row = db.execute(select(Invoice).where(Invoice.external_id == str(item_id))).scalar_one_or_none()
+    # Verrou de ligne : deux validations simultanées du même brouillon sont sérialisées ; la
+    # seconde trouve la facture déjà numérotée et la renvoie telle quelle.
+    row = db.execute(select(Invoice).where(Invoice.external_id == str(item_id)).with_for_update()).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Facture introuvable")
     if row.number and row.status != "brouillon":
         return simple_raw(row)
+    _serialize(db, _INVOICE_NUMBER_LOCK)
     # Validation : recalcul serveur de toutes les lignes (NBR × quantité × prix) et refus
     # d'une ligne incohérente ; le snapshot validé porte ces montants définitifs.
     from app.modules.irongs.invoice_lines import compute_invoice
@@ -1238,5 +1437,12 @@ def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
     if model is DailyPresence:
         from app.modules.attendance.core import legacy_delete_presence
         legacy_delete_presence(db, row)
+    if model is Invoice:
+        _ensure_invoice_deletable(db, row)
+    if model is CashEntry and _cash_link(row):
+        raise HTTPException(status_code=409, detail="Écriture générée par un règlement ou une avance : supprimez la pièce d'origine.")
+    if model in (Payment, Advance):
+        for linked in db.execute(select(CashEntry).where(CashEntry.external_id == f"cs_{row.external_id}")).scalars().all():
+            db.delete(linked)
     db.delete(row); db.commit()
     return {"deleted": item_id, "storage": "sql"}
