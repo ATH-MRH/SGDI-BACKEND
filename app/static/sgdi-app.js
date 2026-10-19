@@ -4488,6 +4488,95 @@ function opsSupervisorReadOnlyNoticeHTML(){
   if(!isOpsSupervisorReadOnlySession())return"";
   return `<div class="card p-3 mb-4" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur terrain : consultation limitée aux sites autorisés. La saisie pointage reste autorisée.</div>`;
 }
+/* Composant bouton OPS : icône, badge dynamique, variantes. Les styles (.ops-btn) sont limités
+   aux écrans OPS dans sgdi-app.css. Le badge n'apparaît que pour un compteur réel > 0. */
+const OPS_ICON_PATHS={
+  building:'<path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6 6 0 0 1 3.5 5.5"/>',
+  userCheck:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 11l2 2 4-4"/>',
+  userMinus:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 11h6"/>',
+  userPlus:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
+  rotate:'<path d="M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4"/>',
+  swap:'<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  box:'<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/>',
+  file:'<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M9 13h6M9 17h6"/>',
+  shield:'<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+  clipboard:'<rect x="5" y="4" width="14" height="17" rx="1"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
+  pin:'<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  hash:'<path d="M5 9h15M4 15h15M10 3 8 21M16 3l-2 18"/>',
+  phone:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  save:'<path d="M5 3h11l5 5v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M7 3v6h9V3M7 21v-7h10v7"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6"/>',
+  back:'<path d="M15 5 8 12l7 7"/>',
+  next:'<path d="m9 5 7 7-7 7"/>',
+  archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>',
+  alert:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  chat:'<path d="M4 5h16v11H9l-5 4z"/>',
+  event:'<path d="M12 3v2M12 19v2M5 12H3M21 12h-2M7 7 5.5 5.5M17 7l1.5-1.5M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/>',
+  map:'<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>',
+  expand:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  check:'<path d="m5 12 5 5L20 7"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  print:'<path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>'
+};
+function opsIcon(name,cls){
+  const paths=OPS_ICON_PATHS[name];
+  return paths?`<svg class="${cls||"ops-icon"}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`:"";
+}
+function opsBadgeHTML(count,label){
+  const n=Math.trunc(Number(count));
+  if(!Number.isFinite(n)||n<=0)return"";
+  return `<span class="ops-btn__badge" aria-hidden="true">${n>99?"99+":n}</span><span class="ops-sr-only"> (${n} ${escapeHTML(label||"élément(s)")})</span>`;
+}
+// variant : standard | primary | success | warn | danger ; size : "sm" pour les tableaux.
+function opsButtonHTML(label,opts){
+  const o=opts||{};
+  const cls=["ops-btn","ops-btn--"+(o.variant||"standard"),o.size==="sm"?"ops-btn--sm":"",o.className||"",opsPresentationActive()?"":"btn btn-"+(o.variant==="standard"||!o.variant?"secondary":o.variant)].filter(Boolean).join(" ");
+  return `<button type="${o.type||"button"}" class="${cls}"${o.attrs?" "+o.attrs:""}>${o.icon?opsIcon(o.icon,"ops-btn__icon"):""}<span class="ops-btn__label">${escapeHTML(label)}</span>${opsBadgeHTML(o.badge,o.badgeLabel)}</button>`;
+}
+// Garde de présentation indépendante du rôle, des droits et du contexte de fiche mémorisé.
+// Un superviseur possédant plusieurs modules ne doit activer l'habillage que dans OPS.
+function opsPresentationActive(){
+  if(!["ops","superviseur"].includes(session?.transverse))return false;
+  const host=String(location.hostname||"").toLowerCase().split(".")[0];
+  if(["drh","pointeur","pointage","brq","recrute","recrutement","emploi"].includes(host))return false;
+  const config=sgdiModuleHostConfig();
+  return !config||["ops","superviseur"].includes(config.key);
+}
+function syncOpsPresentation(){
+  if(!document?.body)return;
+  const active=opsPresentationActive();
+  document.body.toggleAttribute("data-ops-ui",active);
+  document.querySelectorAll(".sgdi-shell").forEach(shell=>shell.classList.toggle("sgdi-ops-shell",active));
+  const roots=[document.getElementById("view"),document.getElementById("modal-host")].filter(Boolean);
+  for(const root of roots){
+    if(!active){
+      root.querySelectorAll("[data-ops-enhanced]").forEach(button=>{
+        button.querySelectorAll("[data-ops-auto-icon]").forEach(icon=>icon.remove());
+        button.classList.remove("ops-btn");
+        delete button.dataset.opsEnhanced;
+      });
+      continue;
+    }
+    // Conserve les éléments, handlers, liens, états désactivés et validations de formulaire.
+    const selector="button.btn,a.btn,.effectif-open-btn,.effectif-toolbar-reset,.ops-outgoing-open,.ops-outgoing-page-btn,.ops-sites-cc-btn,.ops-sites-cc-more,.ops-cc-action";
+    root.querySelectorAll(selector).forEach(button=>{
+      if(!button.classList.contains("ops-btn")){
+        button.classList.add("ops-btn");button.dataset.opsEnhanced="1";
+      }
+      if(!button.dataset.opsEnhanced||button.querySelector("svg")||!button.textContent.trim())return;
+      const label=normalizedSearchText(button.textContent);
+      const icon=/supprim|retir/.test(label)?"trash":/enregistr|valid|confirm/.test(label)?"save":/retour|preced|fermer|annul/.test(label)?"back":/ajout|nouve|creer/.test(label)?"plus":/imprim|pv/.test(label)?"print":/filtr|recher/.test(label)?"search":/mouvement|affect/.test(label)?"swap":/suivant/.test(label)?"next":/mission|planning|rotation/.test(label)?"calendar":/dotation|materiel/.test(label)?"box":/anomal|incident/.test(label)?"alert":/rapport|document|export/.test(label)?"file":"eye";
+      button.insertAdjacentHTML("afterbegin",opsIcon(icon,"ops-btn__icon").replace("<svg ",'<svg data-ops-auto-icon="1" '));
+    });
+  }
+}
 function mySoc(){return session?.societe||""}
 // Studio Badges DRH (#/drh/badges/…) : seul écran de badge du Portail DRH. Les autres portails
 // (OPS, Matériel, Administration) n'ont pas accès aux routes DRH et gardent l'écran historique.
@@ -6819,7 +6908,7 @@ function render(options={}){
   // hashchange) est TOUJOURS terminée, même sur les pages à retour anticipé (portail,
   // select-societe, sélecteur de société...). Sans ça, ces pages laissaient la barre
   // bloquée à 76 %.
-  try{renderInternal(options)}finally{if(typeof uiProgressDone==="function")uiProgressDone()}
+  try{renderInternal(options)}finally{syncOpsPresentation();if(typeof uiProgressDone==="function")uiProgressDone()}
 }
 function renderInternal(options={}){
   sanitizeCandidatesInDB();
@@ -6891,7 +6980,9 @@ function renderInternal(options={}){
     ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
     :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
   const commercialShell=session.transverse==="commercial";
-  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}">
+  // Portail OPS (y compris superviseurs terrain) : marqueur des styles de boutons OPS (.ops-btn).
+  const opsShell=opsPresentationActive();
+  app.innerHTML=`<div class="sgdi-shell atlas-sidebar-v3 atlas-shell-v4 h-screen flex flex-col ${shellSidebarClass}${commercialShell?" sgdi-commercial-shell":""}${opsShell?" sgdi-ops-shell":""}">
     ${connectedAccountHeadingHTML()}
     ${atlasLegacyTopbarHTML(headerTitle,headerSub,isTrans)}
     <div class="sgdi-shell-body flex flex-1 min-h-0">
@@ -9008,6 +9099,7 @@ function syncAdminUsersShell(){
 }
 
 function renderView(){
+  syncOpsPresentation();
   syncAdminUsersShell();
   // Invalide immédiatement tout rendu asynchrone lancé par la vue précédente.
   // Les vues qui utilisent une coque dédiée la réactivent explicitement durant
@@ -21557,7 +21649,7 @@ try{
   let stripTimer=null;
   new MutationObserver(()=>{
     clearTimeout(stripTimer);
-    stripTimer=setTimeout(()=>stripCryptogrammes(document.getElementById("app")||document.body),30);
+    stripTimer=setTimeout(()=>{stripCryptogrammes(document.getElementById("app")||document.body);syncOpsPresentation()},30);
   }).observe(document.body,{childList:true,subtree:true,characterData:true});
 }catch(e){}
 try{sgdiScheduleAutoRefresh()}catch(e){}

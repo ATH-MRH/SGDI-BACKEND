@@ -17,6 +17,7 @@ function boot(t, actions = ['read', 'create', 'update']) {
   const db = r.T().emptyDB();
   const date = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   Object.assign(db, {
     sites: [
       { id: 's1', nom: 'SITE ALGER', societe: 'IRON GLOBAL SOLUTION', actif: true, wilaya: 'Alger', effectifs: { totalContractuel: 2 } },
@@ -31,7 +32,7 @@ function boot(t, actions = ['read', 'create', 'update']) {
       { id: 'p1', date, agentId: 'a1', societe: 'IRON GLOBAL SOLUTION', siteId: 's1', siteName: 'SITE ALGER', code: 'P', scanArrivee: `${date}T08:12:00` },
       { id: 'p2', date, agentId: 'a3', societe: 'AUTRE SOCIETE', siteId: 's2', siteName: 'SITE ORAN', code: 'P', scanArrivee: `${date}T07:00:00` },
     ],
-    missions: [{ id: 'm1', numero: 'MIS-001', agentId: 'a1', agentName: 'BENALI Amine', societe: 'IRON GLOBAL SOLUTION', lieu: 'SITE ALGER', dateDebut: date, dateFin: tomorrow, heureDebut: '08:00', heureFin: '18:00' }],
+    missions: [{ id: 'm1', numero: 'MIS-001', agentId: 'a1', agentName: 'BENALI Amine', societe: 'IRON GLOBAL SOLUTION', lieu: 'SITE ALGER', dateDebut: yesterday, dateFin: tomorrow, heureDebut: '00:00', heureFin: '23:59' }],
     incidents: [],
   });
   r.T().setDb(db);

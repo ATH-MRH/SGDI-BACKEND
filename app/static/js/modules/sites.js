@@ -355,7 +355,7 @@ function sitePositionFieldHTML(s){
         <div id="site-position-current" class="site-position-value">${escapeHTML(sitePositionLabel(s.latitude,s.longitude))}</div>
         <div class="site-position-note">${readOnly?"Position GPS consultable uniquement.":hasPos?"Coordonnées prêtes à enregistrer avec la fiche site.":"Cliquez sur la carte ou déplacez le marqueur pour positionner le site."}</div>
       </div>
-      <div class="site-position-actions"><button id="site-position-map-toggle" type="button" class="btn btn-secondary" aria-expanded="true" onclick="toggleInlineSitePositionMap()">Masquer la carte</button>${session?.transverse==="materiel"||readOnly?"":`<button type="button" class="btn btn-warn site-position-action" onclick="openSitePositionModal('${jsString(s.id)}')">${hasPos?"Ouvrir en grand":"Positionner site"}</button><button type="button" class="btn btn-primary site-position-save" onclick="saveSitePositionInline('${jsString(s.id)}')">Enregistrer position</button>`}</div>
+      <div class="site-position-actions">${opsButtonHTML("Masquer la carte",{size:"sm",icon:"map",attrs:`id="site-position-map-toggle" aria-expanded="true" aria-controls="site-position-inline-wrap" data-site-lock-keep onclick="toggleInlineSitePositionMap()"`})}${session?.transverse==="materiel"||readOnly?"":`${opsButtonHTML(hasPos?"Ouvrir en grand":"Positionner site",{size:"sm",icon:"expand",className:"site-position-action",attrs:`onclick="openSitePositionModal('${jsString(s.id)}')"`})}${opsButtonHTML("Enregistrer position",{size:"sm",variant:"primary",icon:"pin",className:"site-position-save",attrs:`onclick="saveSitePositionInline('${jsString(s.id)}')"`})}`}</div>
     </div>
     <div id="site-position-inline-wrap" class="site-position-inline-wrap">
       <div id="site-position-inline-map" class="sgdi-maplibre-map site-position-inline-map" data-lat="${Number.isFinite(center.lat)?center.lat:28.0339}" data-lng="${Number.isFinite(center.lng)?center.lng:1.6596}" data-has-position="${hasPos?"1":"0"}" role="region" aria-label="Carte GPS du site"></div>
@@ -369,7 +369,7 @@ function toggleInlineSitePositionMap(){
   if(!wrapper||!button)return;
   const willHide=!wrapper.classList.contains("hidden");
   wrapper.classList.toggle("hidden",willHide);
-  button.textContent=willHide?"Afficher la carte":"Masquer la carte";
+  (button.querySelector(".ops-btn__label")||button).textContent=willHide?"Afficher la carte":"Masquer la carte";
   button.setAttribute("aria-expanded",willHide?"false":"true");
   if(!willHide){
     initInlineSitePositionMap();
@@ -401,7 +401,7 @@ function updateSitePositionFormFields(lat,lng){
   const note=box?.querySelector?.(".site-position-note");
   if(note)note.textContent="Coordonnées prêtes à enregistrer avec la fiche site.";
   const action=box?.querySelector?.(".site-position-action");
-  if(action)action.textContent="Ouvrir en grand";
+  if(action)(action.querySelector(".ops-btn__label")||action).textContent="Ouvrir en grand";
   return true;
 }
 
@@ -742,9 +742,6 @@ function openSiteMovementHistoryModal(siteId){
 function openSiteAffectesModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
   if(supervisorModuleActive()&&!siteInSupervisorScope(site))return toast("Site non autorisé pour ce superviseur","error");
-  const eff=siteEffectifsNorm(site);
-  const backend=siteBackendSituationForSite(site);
-  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
   const backendRows=siteBackendAssignmentRows(site);
   const agentFromAssignmentRow=row=>findEmployeeByRef(row?.employee_id)||findEmployeeByRef(row?.code)||findEmployeeByRef(row?.matricule)||null;
   const rowVisible=item=>{
@@ -755,8 +752,8 @@ function openSiteAffectesModal(siteId){
     return true;
   };
   const agents=(backendRows||siteAgentsAffectes(site)).filter(rowVisible);
-  const surplus=contractuel>0&&agents.length>contractuel?agents.slice(contractuel):[];
-  const main=contractuel>0&&agents.length>contractuel?agents.slice(0,contractuel):agents;
+  const {contractual:contractuel,surplus}=siteStaffingPresentation(site,agents);
+  const main=agents;
   const agentRow=item=>{
     const row=item?.employee_id||item?.assignment_id?item:null;
     const a=row?agentFromAssignmentRow(row):item;
@@ -772,10 +769,10 @@ function openSiteAffectesModal(siteId){
   openModal(`<h3 class="font-bold text-lg mb-2">Effectifs affectés</h3>
     <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-4">
       <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
-      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")} · Contractuel : ${contractuel} · Affecté : ${agents.length}</div>
+      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")} · Contractuel : ${contractuel??"—"} · Affecté : ${agents.length}</div>
     </div>
     ${main.length?`<div class="card overflow-hidden mb-3"><div class="px-3 py-2 bg-slate-50 border-b font-semibold text-sm">Effectifs affectés (${main.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${main.map(agentRow).join("")}</tbody></table></div>`:`<div class="text-sm text-slate-500 p-4 rounded bg-slate-50 border text-center mb-3">Aucun employé affecté.</div>`}
-    ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
+    ${surplus>0?`<div class="card p-3" data-site-surplus-summary><strong>Effectifs en surplus (+${surplus})</strong><p class="text-sm mt-1">Employés en surplus non identifiés individuellement</p></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
@@ -1070,35 +1067,37 @@ function siteEffectifAlertHTML(eff,agents){
   </div>`;
 }
 
-function siteRecapBlockHTML(site,eff){
+// Présentation uniquement : zéro explicite est connu, valeur absente/invalide reste inconnue.
+// Aucun rang dans une liste ni motif libre d'OM ne constitue une qualification nominative.
+function siteStaffingPresentation(site,agents){
   const backend=siteBackendSituationForSite(site);
-  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
-  const agents=siteBackendAssignmentRows(site)||siteAgentsAffectes(site);
-  const realise=agents.length;
-  const manque=Math.max(0,contractuel-realise);
-  const surplus=Math.max(0,realise-contractuel);
-  const consignesText=String(site.consignesGenerales||site.consignes||site.consigneGenerale||"").trim();
-  const consignesPreview=consignesText?(consignesText.length>90?consignesText.slice(0,90)+"…":consignesText):"Aucune consigne enregistrée.";
-  const tile=(label,value,color)=>`<div class="site-recap-tile"><span>${escapeHTML(label)}</span><strong${color?` style="color:${color}"`:""}>${escapeHTML(String(value))}</strong></div>`;
-  return `<div class="site-editor-wide site-recap-card">
-    <div class="site-recap-head">
-      <div class="site-recap-grid">
-        ${tile("Date d'ouverture",formatDate(site.dateOuverture))}
-        ${tile("Indicatif",site.indicatif||"—")}
-        ${tile("Téléphone du site",site.telephone||"—")}
-        ${tile("Effectif contrat",contractuel)}
-        ${tile("Effectif réalisé",realise,realise>=contractuel&&contractuel>0?"#15803d":"")}
-        ${tile("Manque",manque,manque?"#dc2626":"#15803d")}
-        ${tile("Surplus",surplus,surplus?"#7c3aed":"#94a3b8")}
-      </div>
-      ${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-primary" data-site-lock-keep onclick="openSiteAjouterEffectifModal('${jsString(siteEditRouteId(site))}')">Ajouter effectif</button>`}
-    </div>
-    <div class="site-recap-consignes">
-      <span class="site-recap-consignes-label">Consignes et instructions</span>
-      <p>${escapeHTML(consignesPreview)}</p>
-      ${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(site))}')">Voir / gérer</button>`}
-    </div>
-  </div>`;
+  const raw=backend?.contractual_staff??site?.effectifs?.totalContractuel??site?.effectifs?.total??site?.contractual_staff;
+  const numberOrUnknown=value=>{
+    if(!["number","string"].includes(typeof value)||String(value).trim()==="")return null;
+    const number=Number(value);
+    return Number.isFinite(number)&&number>=0?number:null;
+  };
+  const contractual=numberOrUnknown(raw);
+  const rows=agents??siteBackendAssignmentRows(site)??siteAgentsAffectes(site);
+  // Le compteur serveur reste utilisable même si la liste locale d'employés est paginée.
+  // Une liste explicitement fournie conserve les filtres de la fenêtre de consultation.
+  const realized=agents==null?(numberOrUnknown(backend?.realized_staff)??(Array.isArray(rows)?rows.length:null)):(Array.isArray(rows)?rows.length:null);
+  const known=contractual!==null&&realized!==null;
+  return {contractual,realized,missing:known?Math.max(0,contractual-realized):null,surplus:known?Math.max(0,realized-contractual):null};
+}
+function siteRecapBlockHTML(site,eff){
+  const {contractual:contractuel,realized:realise,missing:manque,surplus}=siteStaffingPresentation(site);
+  const known=contractuel!==null;
+  const tile=(key,label,value,icon,tone,title)=>`<div class="stf-kpi stf-kpi--${tone}" data-stf-kpi="${key}"${title?` title="${escapeHTML(title)}"`:""}><span class="stf-kpi-icon">${opsIcon(icon)}</span><div><span class="stf-kpi-label">${escapeHTML(label)}</span><strong class="stf-kpi-value">${escapeHTML(String(value))}</strong></div></div>`;
+  return `<section class="site-editor-wide stf-kpis" aria-label="Compteurs opérationnels du site">
+    ${tile("ouverture","Date d'ouverture",formatDate(site.dateOuverture),"calendar","info")}
+    ${tile("indicatif","Indicatif",site.indicatif||"—","hash","info")}
+    ${tile("telephone","Téléphone du site",site.telephone||"—","phone","info")}
+    ${tile("contrat","Effectif contrat",known?contractuel:"—","users","info","Effectif contractuel du site")}
+    ${tile("realise","Effectif réalisé",realise,"userCheck",known&&realise>=contractuel?"success":"neutral","Employés affectés au site par ordre de mouvement validé (distinct de la présence au pointage)")}
+    ${tile("manque","Manque",manque??"—","userMinus",manque?"warn":known?"success":"neutral")}
+    ${tile("surplus","Surplus",surplus??"—","userPlus",surplus?"violet":"neutral")}
+  </section>`;
 }
 
 function siteRotationSummaryHTML(sys){
@@ -1128,10 +1127,10 @@ function siteRotationSummaryHTML(sys){
 
 function updateSiteRotationPreview(sys){
   document.querySelectorAll("[data-rotation-card]").forEach(el=>{
-    const active=el.getAttribute("data-rotation-card")===sys;
-    el.style.border=active?"2px solid #043970":"1px solid #e2e8f0";
-    el.style.background=active?"#f1f5f9":"";
+    el.classList.toggle("is-active",el.getAttribute("data-rotation-card")===sys);
   });
+  const used=document.querySelector("[data-stf-planning-system]");
+  if(used)used.textContent=sys==="3x8"?"3×8":sys;
   const box=document.getElementById("rotation-preview");
   if(box)box.innerHTML=siteRotationSummaryHTML(sys);
 }
@@ -1159,20 +1158,22 @@ function siteRotationPlanningHTML(planning){
 function siteRotationPlanningSectionHTML(site){
   const p=site.rotationPlanning||{};
   const count=Array.isArray(p.rows)?p.rows.length:0;
-  return `<div class="card p-4 mt-4" style="background:#f8fafc;border:1px solid #cbd5e1">
-    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-      <div><h4 class="font-black text-sm uppercase">Planning de rotation automatique</h4><div class="text-xs text-slate-500">Création manuelle d'une période de rotation à partir des groupes A, B, C et D.</div></div>
-      <div class="flex gap-2 flex-wrap justify-end">
-        <button type="button" class="btn btn-secondary text-xs" onclick="generateSiteRotationPlanning('${site.id}')">Générer planning</button>
-        <button type="button" class="btn btn-primary text-xs" onclick="openSiteRotationPlanningWindow('${site.id}')">Voir planning</button>
+  const sys=inferSiteRotationSystem(site);
+  return `<div class="stf-subcard stf-planning">
+    <div class="stf-subcard-head">
+      <div><h3>Planning de rotation automatique</h3><p class="stf-hint">Création manuelle d'une période de rotation à partir des groupes A, B, C et D.</p></div>
+      <div class="stf-card-actions">
+        ${opsButtonHTML("Générer planning",{size:"sm",icon:"rotate",attrs:`onclick="generateSiteRotationPlanning('${site.id}')"`})}
+        ${opsButtonHTML("Voir planning",{size:"sm",variant:"primary",icon:"eye",attrs:`data-site-lock-keep onclick="openSiteRotationPlanningWindow('${site.id}')"`})}
       </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div><label class="label">Du</label><input class="input" type="date" name="rotationPlanningFrom" value="${escapeHTML(p.from||today())}"/></div>
-      <div><label class="label">Au</label><input class="input" type="date" name="rotationPlanningTo" value="${escapeHTML(p.to||today())}"/></div>
+    <div class="stf-planning-grid">
+      <div class="stf-field"><label class="label" for="stf-f-planfrom">Du</label><input class="input" id="stf-f-planfrom" type="date" name="rotationPlanningFrom" value="${escapeHTML(p.from||today())}"/></div>
+      <div class="stf-field"><label class="label" for="stf-f-planto">Au</label><input class="input" id="stf-f-planto" type="date" name="rotationPlanningTo" value="${escapeHTML(p.to||today())}"/></div>
+      <div class="stf-planning-meta"><span>Système utilisé</span><strong data-stf-planning-system>${escapeHTML(sys==="3x8"?"3×8":sys)}</strong></div>
     </div>
     <input type="hidden" name="rotationPlanningJson" value="${escapeHTML(JSON.stringify(p&&p.rows?p:{}))}"/>
-    <div id="site-rotation-planning-status" class="text-xs text-slate-500 mt-3">${count?`${count} jour(s) généré(s). Clique sur Voir planning pour consulter le tableau.`:"Aucun planning généré."}</div>
+    <div id="site-rotation-planning-status" class="stf-planning-status" role="status">${count?`${count} jour(s) généré(s)${p.from&&p.to?` du ${formatDate(p.from)} au ${formatDate(p.to)}`:""}. Clique sur Voir planning pour consulter le tableau.`:"Aucun planning généré."}</div>
   </div>`;
 }
 
@@ -1247,6 +1248,8 @@ function sitesModuleTimeout(callback,delay){
 }
 function sitesModuleDestroy(){
   sitesModuleTimeouts.forEach(clearTimeout);sitesModuleTimeouts.clear();
+  siteTechNavCleanup();
+  try{window.__sgdiSiteTechMapObserver?.disconnect()}catch(_e){}window.__sgdiSiteTechMapObserver=null;
   document.removeEventListener("click",closeSuperviseurDemandeMenu);closeSuperviseurDemandeMenu();
   for(const key of ["__sgdiSitesDashboardMap","__sgdiInlineSitePositionMap","__sgdiSitePositionMap"]){try{window[key]?.remove()}catch(e){console.warn("Nettoyage carte Sites",e)}finally{window[key]=null}}
   window.__sgdiSitesDashboardMarkers=[];window.__sgdiInlineSitePositionMarker=null;window.__sgdiSitePositionMarker=null;

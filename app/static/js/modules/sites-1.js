@@ -5,32 +5,65 @@ function siteAgentsForGroupForm(siteId){
   return (db.agents||[]).filter(a=>{const sid=String(agentLiveAffectation(a)?.siteId||"");return a.statut==="actif"&&(!sid||sid===String(siteId))}).sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
 }
 
+// Affichage progressif : au-delà de SITE_AFFECTATION_PAGE lignes, « Afficher plus ».
+const SITE_AFFECTATION_PAGE=25;
+
 function siteAffectationGroupesHTML(site){
-  const eff=siteEffectifsNorm(site);
-  const contractuel=+eff.totalContractuel||0;
   const agents=siteAgentsAffectes(site);
-  const hasSurplus=contractuel>0&&agents.length>contractuel;
-  const mainAgents=hasSurplus?agents.slice(0,contractuel):agents;
-  const surplusAgents=hasSurplus?agents.slice(contractuel):[];
-  const agentRow=(a,showMotif)=>{
+  const {contractual:contractuel,surplus}=siteStaffingPresentation(site);
+  // Un écart numérique n'identifie aucun employé : toutes les affectations restent ensemble.
+  const mainAgents=agents;
+  const fullName=a=>((a.nom||"")+" "+(a.prenom||"")).trim()||"—";
+  const mainRow=(a,i)=>{
     const aff=opsEmployeeLiveAffectation(a);
-    const motif=showMotif?(opsLatestMovementForEmployee(a)?.mouvementMotif||aff?.natureMouvement||""):""
-    return`<div class="p-2 rounded border border-slate-200 bg-white">
-      <div class="text-xs font-bold truncate">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div>
-      <div class="text-[10px] text-slate-500 truncate">${escapeHTML(a.matricule||"—")} · ${escapeHTML(aff?.poste||a.fonction||"")} · depuis ${formatDate(aff?.dateDebut)}</div>
-      ${motif?`<div class="text-[10px] font-semibold text-amber-700 truncate">Motif OM : ${escapeHTML(motif)}</div>`:""}
-    </div>`;
+    const search=[fullName(a),a.matricule,aff?.poste||a.fonction].join(" ");
+    return `<tr data-stf-affect-row data-search="${escapeHTML(normalizedSearchText(search))}"${i>=SITE_AFFECTATION_PAGE?" hidden data-stf-more":""}>
+      <td class="stf-cell-strong">${escapeHTML(fullName(a))}</td>
+      <td class="stf-cell-mono">${escapeHTML(a.matricule||"—")}</td>
+      <td>${escapeHTML(aff?.poste||a.fonction||"—")}</td>
+      <td class="stf-cell-mono">${formatDate(aff?.dateDebut)}</td>
+      <td>${aff?.groupe?`<span class="stf-chip">Groupe ${escapeHTML(aff.groupe)}</span>`:"—"}</td>
+      <td>${escapeHTML(a.statut||"—")}</td>
+    </tr>`;
   };
-  const mainBlock=`<div class="card p-4 mb-3" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">EFFECTIFS AFFECTÉS</h4><span class="pill pill-gray">${mainAgents.length}${contractuel?" / "+contractuel:""}</span></div>
-    <div class="space-y-2">${mainAgents.length?mainAgents.map(a=>agentRow(a,false)).join(""):`<div class="text-xs text-slate-500 italic">Aucun employé affecté.</div>`}</div>
+  const canOpenMovements=["ops","admin"].includes(session?.transverse)&&!isOpsSupervisorReadOnlySession();
+  const more=mainAgents.length>SITE_AFFECTATION_PAGE?`<div class="stf-table-foot"><span data-stf-affect-shown>${SITE_AFFECTATION_PAGE} affiché(s) sur ${mainAgents.length}</span>${opsButtonHTML("Afficher plus",{size:"sm",attrs:`data-site-lock-keep data-stf-affect-more onclick="siteTechAffectShowMore()"`})}</div>`:"";
+  const mainBlock=`<div class="stf-subcard">
+    <div class="stf-subcard-head"><h3>Effectifs affectés</h3><span class="stf-count" aria-label="${mainAgents.length} employé(s) affecté(s)">${mainAgents.length}${contractuel!==null?" / "+contractuel:""}</span>
+      ${mainAgents.length>8?`<label class="stf-search"><span class="ops-sr-only">Rechercher un employé affecté</span>${opsIcon("search")}<input type="search" data-no-lock="1" placeholder="Nom, matricule, poste…" oninput="siteTechAffectFilter(this.value)" onkeydown="if(event.key==='Enter')event.preventDefault()"/></label>`:""}</div>
+    ${mainAgents.length?`<div class="stf-table-wrap"><table class="stf-table"><thead><tr><th>Employé</th><th>Matricule</th><th>Poste / fonction</th><th>Date d'affectation</th><th>Groupe</th><th>Situation</th></tr></thead><tbody id="site-affectation-body">${mainAgents.map(mainRow).join("")}</tbody></table></div><p class="stf-empty" data-stf-affect-empty hidden>Aucun employé ne correspond à la recherche.</p>${more}`:`<p class="stf-empty">Aucun employé affecté.</p>`}
   </div>`;
-  const surplusBlock=surplusAgents.length?`<div class="card p-4" style="background:#fff7ed;border:1px solid #fdba74">
-    <div class="flex items-center justify-between mb-2"><h4 class="font-black text-lg text-orange-700">EFFECTIFS EN SURPLUS</h4><span class="pill pill-amber">+${surplusAgents.length}</span></div>
-    <div class="text-xs text-amber-700 mb-3">Ces employés dépassent l'effectif contractuel du site (${contractuel}). L'OM doit mentionner le motif.</div>
-    <div class="space-y-2">${surplusAgents.map(a=>agentRow(a,true)).join("")}</div>
+  const surplusBlock=surplus>0?`<div class="stf-subcard stf-subcard--violet" data-site-surplus-summary>
+    <div class="stf-subcard-head"><h3>Effectifs en surplus</h3><span class="stf-count stf-count--violet">+${surplus}</span></div>
+    <p class="stf-hint">Employés en surplus non identifiés individuellement</p>
   </div>`:"";
-  return`<div class="p-3 rounded mb-3" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a"><div class="text-xs font-black uppercase">Lecture seule</div><div class="text-sm font-semibold">Les employés affichés ici viennent uniquement des ordres de mouvement validés.</div></div>${mainBlock}${surplusBlock}`;
+  return `<div class="stf-notice" role="note">${opsIcon("info")}<div><strong>Lecture seule</strong> — Les employés affichés ici viennent uniquement des ordres de mouvement validés.${canOpenMovements?` Toute modification passe par le workflow des ordres de mouvement.`:""}</div>${canOpenMovements?opsButtonHTML("Ordres de mouvement",{size:"sm",icon:"swap",attrs:`data-site-lock-keep onclick="navigate('ops/mouvements')"`}):""}</div>${mainBlock}${surplusBlock}`;
+}
+
+function siteTechAffectFilter(query){
+  const q=normalizedSearchText(String(query||"").trim());
+  const rows=[...document.querySelectorAll("#site-affectation-body [data-stf-affect-row]")];
+  let shown=0;
+  rows.forEach((row,i)=>{
+    const match=!q||String(row.dataset.search||"").includes(q);
+    const paged=q?false:row.hasAttribute("data-stf-more");
+    row.hidden=!match||paged;
+    if(!row.hidden)shown++;
+  });
+  const empty=document.querySelector("[data-stf-affect-empty]");
+  if(empty)empty.hidden=shown>0;
+  const foot=document.querySelector("[data-stf-affect-shown]");
+  if(foot)foot.textContent=`${shown} affiché(s) sur ${rows.length}`;
+}
+
+function siteTechAffectShowMore(){
+  const pending=[...document.querySelectorAll("#site-affectation-body [data-stf-more]")];
+  pending.slice(0,SITE_AFFECTATION_PAGE).forEach(row=>{row.removeAttribute("data-stf-more");row.hidden=false});
+  const rows=document.querySelectorAll("#site-affectation-body [data-stf-affect-row]");
+  const shown=[...rows].filter(r=>!r.hidden).length;
+  const foot=document.querySelector("[data-stf-affect-shown]");
+  if(foot)foot.textContent=`${shown} affiché(s) sur ${rows.length}`;
+  if(!document.querySelector("#site-affectation-body [data-stf-more]"))document.querySelector("[data-stf-affect-more]")?.remove();
 }
 
 function siteRotationOptionsHTML(selected){
@@ -42,13 +75,45 @@ function sitePosteRowHTML(p,v){
   const postes=[...new Set([...POSTES_SITE,(p&&!POSTES_SITE.includes(p)?[p]:[])])];
   const totalCalc=sitePosteTotalCalc(+v.jour||0,+v.nuit||0,v.rotationSystem||"");
   return`<tr class="site-poste-row">
-    <td><select class="select" name="poste_nom"><option value="">— Choisir poste —</option>${postes.map(x=>`<option value="${escapeHTML(x)}" ${p===x?"selected":""}>${escapeHTML(x)}</option>`).join("")}</select></td>
-    <td><input class="input bg-slate-100" type="number" min="0" name="poste_total" value="${totalCalc}" style="max-width:90px" readonly/></td>
-    <td><input class="input" type="number" min="0" name="poste_jour" value="${v.jour||0}" style="max-width:90px" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
-    <td><input class="input" type="number" min="0" name="poste_nuit" value="${v.nuit||0}" style="max-width:90px" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
-    <td><select class="select" name="poste_rotationSystem" onchange="updateSitePosteTotal(this.closest('tr'))"><option value="">—</option>${siteRotationOptionsHTML(v.rotationSystem||"")}</select></td>
-    <td>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove();updateSiteEffectifTotalContractuel()">Retirer</button>`}</td>
+    <td><select class="select" name="poste_nom" aria-label="Poste / fonction" onchange="siteTechRenderPosteErrors()"><option value="">— Choisir poste —</option>${postes.map(x=>`<option value="${escapeHTML(x)}" ${p===x?"selected":""}>${escapeHTML(x)}</option>`).join("")}</select></td>
+    <td><input class="input bg-slate-100 stf-num" type="number" min="0" name="poste_total" value="${totalCalc}" aria-label="Total contractuel du poste (calculé)" readonly/></td>
+    <td><input class="input stf-num" type="number" min="0" step="1" name="poste_jour" value="${v.jour||0}" aria-label="Effectif de jour du poste" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
+    <td><input class="input stf-num" type="number" min="0" step="1" name="poste_nuit" value="${v.nuit||0}" aria-label="Effectif de nuit du poste" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
+    <td><select class="select" name="poste_rotationSystem" aria-label="Système de rotation du poste" onchange="updateSitePosteTotal(this.closest('tr'))"><option value="">—</option>${siteRotationOptionsHTML(v.rotationSystem||"")}</select></td>
+    <td class="stf-cell-action">${isOpsSupervisorReadOnlySession()?"":opsButtonHTML("Retirer",{variant:"danger",size:"sm",icon:"trash",attrs:`aria-label="Retirer ce poste" onclick="this.closest('tr').remove();updateSiteEffectifTotalContractuel()"`})}</td>
   </tr>`;
+}
+
+// Contrôles de cohérence de la liste des postes, affichés avant l'enregistrement. Ils ne
+// changent aucun calcul : ils empêchent seulement qu'une ligne soit ignorée ou écrasée
+// silencieusement par saveSite (poste en double, quantités sans poste, valeur négative).
+function siteTechPosteErrors(){
+  const errors=[];
+  const seen=new Map();
+  document.querySelectorAll("#site-postes-body tr.site-poste-row").forEach((row,i)=>{
+    const nom=String(row.querySelector('[name="poste_nom"]')?.value||"").trim();
+    const jourRaw=row.querySelector('[name="poste_jour"]')?.value,nuitRaw=row.querySelector('[name="poste_nuit"]')?.value;
+    const jour=+jourRaw||0,nuit=+nuitRaw||0;
+    const line=`Ligne ${i+1}`;
+    if(jour<0||nuit<0)errors.push(`${line}${nom?" ("+nom+")":""} : les effectifs ne peuvent pas être négatifs.`);
+    if([jourRaw,nuitRaw].some(v=>v!==""&&v!=null&&!Number.isInteger(+v)))errors.push(`${line}${nom?" ("+nom+")":""} : les effectifs doivent être des nombres entiers.`);
+    if(!nom&&(jour||nuit))errors.push(`${line} : choisissez un poste, sinon ses effectifs ne seront pas enregistrés.`);
+    if(nom){
+      if(seen.has(nom))errors.push(`« ${nom} » apparaît deux fois (lignes ${seen.get(nom)} et ${i+1}) : regroupez les effectifs sur une seule ligne.`);
+      else seen.set(nom,i+1);
+    }
+  });
+  return errors;
+}
+
+function siteTechRenderPosteErrors(){
+  const box=document.getElementById("site-postes-errors");
+  if(!box)return [];
+  if(document.getElementById("site-form")?.dataset.dcContractLocked==="1"){box.hidden=true;box.innerHTML="";return []}
+  const errors=siteTechPosteErrors();
+  box.hidden=!errors.length;
+  box.innerHTML=errors.length?`${opsIcon("alert")}<div><strong>Contrôle de cohérence des postes</strong><ul>${errors.map(e=>`<li>${escapeHTML(e)}</li>`).join("")}</ul></div>`:"";
+  return errors;
 }
 
 function sitePosteTotalCalc(jour,nuit,rotationSystem){
@@ -80,6 +145,7 @@ function updateSiteEffectifTotalContractuel(){
   if(totalTarget)totalTarget.value=total;
   if(jourTarget)jourTarget.value=jour;
   if(nuitTarget)nuitTarget.value=nuit;
+  siteTechRenderPosteErrors();
 }
 
 function sitePostesTableHTML(site){
@@ -145,13 +211,13 @@ function siteMaterielRowHTML(item){
   const serialValue=String(item.codeSerie||item.numeroSerie||item.reference||"");
   const datalistId=`site-mat-refs-${Math.random().toString(36).slice(2)}`;
   return`<tr class="site-materiel-row">
-    <td style="min-width:210px"><select class="select" name="site_mat_magasinId" onchange="siteMaterielMagasinChanged(this)"><option value="">— Choisir magasin —</option>${siteMaterielStoreOptionsHTML([magasinId])}</select></td>
-    <td style="min-width:270px"><select class="select" name="site_mat_articleId" onchange="siteMaterielArticleChanged(this)">${siteMaterielArticleOptionsHTML(magasinId?[magasinId]:[],item)}</select><div class="text-[10px] text-slate-500 mt-1" data-site-mat-stock-info>${article?`Stock disponible : ${qty(dotationStockDisponible(article))} ${escapeHTML(article.unite||"")}`:"Choisissez un article du magasin."}</div></td>
-    <td style="width:88px"><input class="input text-center" type="number" min="1" step="1" name="site_mat_quantite" value="${escapeHTML(String(item.quantite||item.qte||1))}"/></td>
-    <td style="min-width:180px"><input class="input" name="site_mat_codeSerie" list="${datalistId}" value="${escapeHTML(serialValue)}" placeholder="N° série / réf"/><datalist id="${datalistId}">${serials.map(v=>`<option value="${escapeHTML(v)}"></option>`).join("")}</datalist></td>
-    <td style="min-width:130px"><select class="select" name="site_mat_etat"><option value="neuf" ${String(item.etat||"neuf")==="neuf"?"selected":""}>Neuf</option><option value="rénové" ${String(item.etat||"")==="rénové"?"selected":""}>Rénové</option><option value="usagé" ${String(item.etat||"")==="usagé"?"selected":""}>Usagé</option><option value="réformé" ${String(item.etat||"")==="réformé"?"selected":""}>Réformé</option></select></td>
-    <td style="min-width:170px"><input class="input" name="site_mat_observation" value="${escapeHTML(item.observation||item.notes||"")}" placeholder="Observation"/><input type="hidden" name="site_mat_backendId" value="${escapeHTML(item.backendId||"")}"/><input type="hidden" name="site_mat_equipmentBackendId" value="${escapeHTML(item.equipmentBackendId||"")}"/></td>
-    <td>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove()">Retirer</button>`}</td>
+    <td><select class="select" name="site_mat_magasinId" aria-label="Magasin" onchange="siteMaterielMagasinChanged(this)"><option value="">— Choisir magasin —</option>${siteMaterielStoreOptionsHTML([magasinId])}</select></td>
+    <td><select class="select" name="site_mat_articleId" aria-label="Article disponible" onchange="siteMaterielArticleChanged(this)">${siteMaterielArticleOptionsHTML(magasinId?[magasinId]:[],item)}</select><div class="stf-cell-note" data-site-mat-stock-info>${article?`Stock disponible : ${qty(dotationStockDisponible(article))} ${escapeHTML(article.unite||"")}`:"Choisissez un article du magasin."}</div></td>
+    <td><input class="input text-center stf-num" type="number" min="1" step="1" name="site_mat_quantite" aria-label="Quantité" value="${escapeHTML(String(item.quantite||item.qte||1))}"/></td>
+    <td><input class="input" name="site_mat_codeSerie" aria-label="Numéro de série ou référence" list="${datalistId}" value="${escapeHTML(serialValue)}" placeholder="N° série / réf"/><datalist id="${datalistId}">${serials.map(v=>`<option value="${escapeHTML(v)}"></option>`).join("")}</datalist></td>
+    <td><select class="select" name="site_mat_etat" aria-label="État"><option value="neuf" ${String(item.etat||"neuf")==="neuf"?"selected":""}>Neuf</option><option value="rénové" ${String(item.etat||"")==="rénové"?"selected":""}>Rénové</option><option value="usagé" ${String(item.etat||"")==="usagé"?"selected":""}>Usagé</option><option value="réformé" ${String(item.etat||"")==="réformé"?"selected":""}>Réformé</option></select></td>
+    <td><input class="input" name="site_mat_observation" aria-label="Observation" value="${escapeHTML(item.observation||item.notes||"")}" placeholder="Observation"/><input type="hidden" name="site_mat_backendId" value="${escapeHTML(item.backendId||"")}"/><input type="hidden" name="site_mat_equipmentBackendId" value="${escapeHTML(item.equipmentBackendId||"")}"/></td>
+    <td class="stf-cell-action">${isOpsSupervisorReadOnlySession()?"":opsButtonHTML("Retirer",{variant:"danger",size:"sm",icon:"trash",attrs:`aria-label="Retirer cet article" onclick="this.closest('tr').remove()"`})}</td>
   </tr>`;
 }
 
@@ -186,7 +252,7 @@ function siteMaterielTableHTML(site){
 function addSiteMaterielRow(){
   const body=document.getElementById("site-materiel-body");if(!body)return;
   body.insertAdjacentHTML("beforeend",siteMaterielRowHTML({}));
-  const last=body.querySelector("tr:last-child [data-site-mat-magasins]");
+  const last=body.querySelector("tr:last-child [name='site_mat_magasinId']");
   if(last)last.focus();
 }
 
@@ -674,30 +740,165 @@ function applySiteFormLock(){
     form.querySelectorAll('[name^="eff_"],[name^="poste_"],[name="clientId"],[name="client"],[name="societe"]').forEach(el=>{el.disabled=true;});
   }
   if(form.dataset.locked!=="1")return;
-  form.querySelectorAll("input,select,textarea").forEach(el=>{el.disabled=true;el.classList.add("bg-slate-100")});
+  form.querySelectorAll("input:not([data-no-lock]),select:not([data-no-lock]),textarea:not([data-no-lock])").forEach(el=>{el.disabled=true;el.classList.add("bg-slate-100")});
   form.querySelectorAll("button[data-site-lock-keep]").forEach(btn=>{btn.disabled=false;btn.classList.remove("bg-slate-100")});
 }
 
-function siteTechnicalIdentityHTML(site){
+// Rubriques de la fiche technique : clé, libellé de l'onglet, icône.
+const SITE_TECH_SECTIONS=[
+  ["identification","Identification","building"],
+  ["contact","Contact client","user"],
+  ["effectifs","Effectifs","users"],
+  ["rotation","Rotation","rotate"],
+  ["affectation","Affectation","swap"],
+  ["materiel","Matériel","box"],
+  ["documents","Documents","file"],
+  ["consignes","Consignes","shield"],
+  ["procedures","Procédures","clipboard"]
+];
+
+function siteTechClientName(site){
   const client=(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(site.clientId||""));
-  const clientName=client?.nom||client?.raisonSociale||site.client||"—";
+  return client?.nom||client?.raisonSociale||site.client||"—";
+}
+
+function siteTechLatestDate(...values){
+  return values.map(v=>String(v||"").trim()).filter(Boolean).sort().at(-1)||"";
+}
+
+function siteTechnicalIdentityHTML(site,opts){
+  const o=opts||{};
+  const clientName=siteTechClientName(site);
+  const client=(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(site.clientId||""));
   const serviceLines=String(client?.prestationsServices||site.prestationsServices||site.prestation||"")
     .split(/\n+/).map(line=>line.trim()).filter(Boolean);
-  const prestation=serviceLines[0]||site.prestationNom||"—";
-  const detail=serviceLines.slice(1).join(" · ")||site.prestationDetail||site.detailPrestation||"—";
-  return `<section class="site-tech-identity site-editor-wide" aria-label="Résumé de la fiche technique du site">
-    <h1>FICHE TECHNIQUE SITE</h1>
-    <div class="site-tech-identity-grid">
-      <div class="site-tech-identity-column">
-        <div class="site-tech-identity-field"><span>Client</span><strong>${escapeHTML(clientName)}</strong></div>
-        <div class="site-tech-identity-field site-tech-identity-site"><span>Site</span><strong>${escapeHTML(site.nom||"—")}</strong></div>
-      </div>
-      <div class="site-tech-identity-column site-tech-identity-service">
-        <div class="site-tech-identity-field"><span>Prestation</span><strong>${escapeHTML(prestation)}</strong></div>
-        <div class="site-tech-identity-field site-tech-identity-detail"><span>Détail</span><p>${escapeHTML(detail)}</p></div>
+  const prestation=serviceLines[0]||site.prestationNom||"";
+  const detail=serviceLines.slice(1).join(" · ")||site.prestationDetail||site.detailPrestation||"";
+  const archived=site.actif===false||site.archived||String(site.statut||"").toLowerCase()==="archive";
+  const status=archived?`<span class="stf-status stf-status--off">${opsIcon("archive")}Site ${site.archived||String(site.statut||"").toLowerCase()==="archive"?"archivé":"inactif"}</span>`:`<span class="stf-status stf-status--on">${opsIcon("check")}Site actif</span>`;
+  const lock=o.locked?`<span class="stf-status stf-status--lock">${opsIcon("shield")}Fiche verrouillée</span>`:"";
+  const created=site.dateCreation||site.createdAt||"";
+  const updated=siteTechLatestDate(site.updatedAt,site.lockedAt);
+  const field=(label,value,cls)=>`<div class="stf-id-field${cls?" "+cls:""}"><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value||"—")}</dd></div>`;
+  return `<header class="stf-head site-editor-wide" aria-label="En-tête de la fiche technique">
+    <nav class="stf-crumb" aria-label="Fil d'Ariane"><span>OPS</span><span aria-hidden="true">›</span><a href="#/sites/actifs">Sites</a><span aria-hidden="true">›</span><span class="stf-crumb-site">${escapeHTML(site.nom||"Site")}</span><span aria-hidden="true">›</span><strong aria-current="page">Fiche technique</strong></nav>
+    <div class="stf-head-row">
+      <div class="stf-title">${opsIcon("clipboard","stf-title-icon")}<div><h1 data-keep-case>FICHE TECHNIQUE SITE</h1><p>Gestion complète des informations du site et de ses effectifs</p></div></div>
+      <div class="stf-head-side">
+        <div class="stf-head-meta">${status}${lock}${created||updated?`<dl class="stf-dates">${created?`<div><dt>Créé le</dt><dd>${formatDate(created)}</dd></div>`:""}${updated?`<div><dt>Dernière modification le</dt><dd>${formatDate(updated)}</dd></div>`:""}</dl>`:""}</div>
+        ${o.toolbar?`<div class="stf-toolbar" role="group" aria-label="Actions du site">${o.toolbar}</div>`:""}
       </div>
     </div>
+  </header>
+  <section class="stf-identity site-editor-wide" aria-label="Identité du site">
+    <div class="stf-identity-mark">${opsIcon("building")}</div>
+    <dl class="stf-identity-grid">
+      ${field("Client",clientName,"is-lead")}
+      ${field("Dénomination",site.nom,"is-lead")}
+      ${field("Société",site.societe||site.society)}
+      ${field("Adresse",site.adresse)}
+      ${field("Commune",site.commune)}
+      ${field("Wilaya",site.wilaya)}
+      ${field("Type",site.type)}
+      ${prestation?field("Prestation",prestation):""}
+      ${detail?field("Détail",detail,"is-wide"):""}
+    </dl>
   </section>`;
+}
+
+function siteTechTabsHTML(sections){
+  return `<nav class="stf-tabs site-editor-wide" aria-label="Rubriques de la fiche technique"><div class="stf-tabs-track">${sections.map(([key,label,icon],i)=>`<button type="button" class="stf-tab" data-stf-tab="${key}" aria-controls="stf-sec-${key}"${i===0?` aria-current="true"`:""} onclick="siteTechGoTo('${key}')">${opsIcon(icon)}<span>${escapeHTML(label)}</span></button>`).join("")}</div></nav>`;
+}
+
+function siteTechCardHead(id,icon,title,sub,actions){
+  return `<div class="stf-card-head"><div class="stf-card-title">${opsIcon(icon)}<div><h2 id="${id}" tabindex="-1">${escapeHTML(title)}</h2>${sub?`<p>${escapeHTML(sub)}</p>`:""}</div></div>${actions?`<div class="stf-card-actions">${actions}</div>`:""}</div>`;
+}
+
+function siteTechField(label,control,opts){
+  const o=opts||{};
+  return `<div class="stf-field${o.wide?" is-wide":""}"><label class="label" for="${o.id}">${escapeHTML(label)}${o.required?` <span class="stf-req" aria-hidden="true">*</span>`:""}</label>${control}${o.hint?`<small class="stf-field-hint" id="${o.id}-hint">${escapeHTML(o.hint)}</small>`:""}</div>`;
+}
+
+// Navigation interne : les rubriques restent toutes dans le même formulaire. Un onglet fait
+// défiler jusqu'à sa rubrique ; rien n'est masqué ni re-rendu, donc aucune saisie n'est perdue.
+function siteTechGoTo(key){
+  const section=document.getElementById("stf-sec-"+key);
+  if(!section)return;
+  siteTechSetActiveTab(key);
+  window.__sgdiSiteTechNavLockUntil=Date.now()+900;
+  // Défilement de #view seulement : scrollIntoView déplaçait aussi le document et l'en-tête global.
+  const view=document.getElementById("view");
+  const nav=document.querySelector(".stf-tabs");
+  if(view&&view.contains(section)){
+    const offset=(nav?nav.getBoundingClientRect().height:0)+8;
+    const top=view.scrollTop+section.getBoundingClientRect().top-view.getBoundingClientRect().top-offset;
+    const smooth=!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    view.scrollTo?.({top:Math.max(0,top),behavior:smooth?"smooth":"auto"});
+  }else section.scrollIntoView?.({block:"start"});
+  section.querySelector("h2[tabindex]")?.focus({preventScroll:true});
+}
+
+function siteTechSetActiveTab(key){
+  document.querySelectorAll(".stf-tab[data-stf-tab]").forEach(tab=>{
+    const active=tab.dataset.stfTab===key;
+    if(active){
+      tab.setAttribute("aria-current","true");
+      const track=tab.parentElement;
+      if(track&&track.scrollWidth>track.clientWidth){
+        const left=tab.offsetLeft-track.offsetLeft,right=left+tab.offsetWidth;
+        if(left<track.scrollLeft||right>track.scrollLeft+track.clientWidth)track.scrollLeft=Math.max(0,left-24);
+      }
+    }
+    else tab.removeAttribute("aria-current");
+  });
+}
+
+function siteTechNavCleanup(){
+  try{window.__sgdiSiteTechNavCleanup?.()}catch(_e){}
+  window.__sgdiSiteTechNavCleanup=null;
+}
+
+function siteTechInitNav(){
+  siteTechNavCleanup();
+  const scroller=document.getElementById("view");
+  const nav=document.querySelector(".stf-tabs");
+  if(!scroller||!nav)return;
+  let frame=0;
+  const update=()=>{
+    frame=0;
+    if(!document.querySelector(".stf-tabs")){siteTechNavCleanup();return}
+    if(Date.now()<(window.__sgdiSiteTechNavLockUntil||0))return;
+    const limit=nav.getBoundingClientRect().bottom+24;
+    let current=SITE_TECH_SECTIONS[0][0];
+    document.querySelectorAll("[data-stf-section]").forEach(section=>{
+      if(section.getBoundingClientRect().top<=limit)current=section.dataset.stfSection;
+    });
+    if(scroller.scrollTop+scroller.clientHeight>=scroller.scrollHeight-4){
+      const all=document.querySelectorAll("[data-stf-section]");
+      if(all.length)current=all[all.length-1].dataset.stfSection;
+    }
+    const active=document.querySelector(".stf-tab[aria-current]")?.dataset.stfTab;
+    if(active!==current)siteTechSetActiveTab(current);
+  };
+  const onScroll=()=>{if(!frame)frame=requestAnimationFrame(update)};
+  scroller.addEventListener("scroll",onScroll,{passive:true});
+  window.__sgdiSiteTechNavCleanup=()=>{scroller.removeEventListener("scroll",onScroll);if(frame)cancelAnimationFrame(frame)};
+}
+
+// La carte n'est chargée que lorsque son bloc devient visible (MapLibre + tuiles).
+function siteTechInitMapWhenVisible(){
+  const el=document.getElementById("site-position-inline-map");
+  if(!el)return;
+  if(typeof IntersectionObserver!=="function"){initInlineSitePositionMap();return}
+  try{window.__sgdiSiteTechMapObserver?.disconnect()}catch(_e){}
+  const observer=new IntersectionObserver(entries=>{
+    if(!entries.some(e=>e.isIntersecting))return;
+    observer.disconnect();
+    window.__sgdiSiteTechMapObserver=null;
+    if(document.getElementById("site-position-inline-map")===el)initInlineSitePositionMap();
+  },{rootMargin:"200px"});
+  observer.observe(el);
+  window.__sgdiSiteTechMapObserver=observer;
 }
 
 async function renderSiteForm(view,id){
@@ -731,49 +932,113 @@ async function renderSiteForm(view,id){
   const rotationSystem=inferSiteRotationSystem(s);
   const dcLocked=!!(s.contractualReadOnly||s.equipment_plan?.contractualReadOnly);
   const eff=siteEffectifsNorm(s);
-  const canEditSite=siteCanEditFromCurrentModule(s)&&!isOpsSupervisorReadOnlySession();
-  const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
-  const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
+  const supervisorRO=isOpsSupervisorReadOnlySession();
+  const canEditSite=siteCanEditFromCurrentModule(s)&&!supervisorRO;
+  const routeId=jsString(siteEditRouteId(s));
+  const lockNotice=!canEditSite&&!s.isNew?`<div class="stf-notice stf-notice--lock site-editor-wide" role="status">${opsIcon("shield")}<div>Fiche technique site verrouillée après enregistrement.</div></div>`:"";
+  // Mêmes actions et mêmes conditions d'affichage que l'ancienne rangée de boutons.
+  // Documents, Consignes et Procédures sont désormais des rubriques de la page (onglets).
+  const pendingDemandes=supervisorRO?0:siteDemandesList(s).filter(d=>!/trait|rejet|clos|ferm|annul/i.test(String(d.statut||""))).length;
+  const toolbar=s.isNew?"":[
+    session?.transverse==="materiel"||supervisorRO?"":opsButtonHTML("Ajouter effectif",{variant:"primary",icon:"userPlus",attrs:`data-site-lock-keep onclick="openSiteAjouterEffectifModal('${routeId}')"`}),
+    supervisorRO?"":opsButtonHTML("Demandes",{icon:"chat",badge:pendingDemandes,badgeLabel:"demande(s) en attente",attrs:`data-site-lock-keep onclick="openSiteDemandesModal('${routeId}')"`}),
+    supervisorRO?"":opsButtonHTML("Événements",{icon:"event",attrs:`data-site-lock-keep onclick="openSiteCompteRenduForm('${routeId}')"`}),
+    isAdminSystemSession()?opsButtonHTML("Archiver",{variant:"warn",icon:"archive",attrs:`data-site-lock-keep onclick="archiveSite('${routeId}')"`}):"",
+    isAdminSystemSession()?opsButtonHTML("Supprimer",{variant:"danger",icon:"trash",attrs:`data-site-lock-keep onclick="deleteSite('${routeId}')"`}):"",
+    opsButtonHTML("Retour",{icon:"back",attrs:`data-site-lock-keep onclick="navigate('sites/actifs')"`})
+  ].join("");
   const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
-  const siteIdentity=s.isNew?`<div class="site-form-title w-full"><h1>CRÉATION DE SITE</h1></div>`:siteTechnicalIdentityHTML(s);
-  view.innerHTML=`<div class="w-full">${siteIdentity}${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
-  <form id="site-form" class="site-editor-wide site-form-layout" data-dc-contract-locked="${dcLocked?"1":"0"}" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-3"><label class="label">Code officiel du site</label><input class="input" name="codeOfficiel" maxlength="50" placeholder="Ex. ETP/DF/H01" value="${escapeHTML(s.codeOfficiel||"")}"/><small class="text-xs text-slate-500">Imprimé sur les badges du personnel (SITE : code). Distinct de l’indicatif radio.</small></div><div class="col-span-3">${isAdminSystemSession()?`<label class="label">Société</label><select class="select" name="societe">${uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]).map(soc=>`<option value="${escapeHTML(soc)}" ${normalizeSocieteName(s.societe)===normalizeSocieteName(soc)?"selected":""}>${escapeHTML(soc)}</option>`).join("")}</select>`:`<label class="label">Société</label><input class="input bg-slate-50" value="${escapeHTML(s.societe||"—")}" readonly/>`}</div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div><div class="col-span-2"><label class="label">Client (fiche commerciale liée)</label><select class="select" name="clientId"><option value="">— Aucun —</option>${(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")).map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}" ${String(s.clientId||"")===String(c.backendId||c.id||"")?"selected":""}>${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select><p style="font-size:11px;color:#64748b;margin-top:4px">Détermine quels agents ce client verra depuis son portail dédié (si activé).</p></div></div></div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
-      <div class="grid grid-2 mb-4">
-        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200"><label class="label">Effectif total contractuel</label><input class="input bg-slate-100" type="number" min="0" name="eff_totalContractuel" value="${eff.totalContractuel}" readonly/></div>
-        <div class="p-3 rounded-lg bg-slate-50 border border-slate-200"><label class="label">Nombre de groupe</label><input class="input" type="number" min="0" name="eff_groupes" value="${eff.groupes}"/></div>
-      </div>
-      <div class="grid grid-4 mb-4">
-        <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif de jour</label><input class="input bg-slate-100" type="number" min="0" name="eff_jour" value="${eff.jour}" readonly/></div>
-        <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif de nuit</label><input class="input bg-slate-100" type="number" min="0" name="eff_nuit" value="${eff.nuit}" readonly/></div>
-        <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif week-end</label><input class="input" type="number" min="0" name="eff_weekend" value="${eff.weekend}"/></div>
-        <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif jours fériés</label><input class="input" type="number" min="0" name="eff_feries" value="${eff.feries}"/></div>
-      </div>
-      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Liste des postes</h4>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary text-xs" onclick="addSitePosteRow()">Ajouter poste</button>`}</div>
-      <div class="site-table-scroll mb-4"><table><thead><tr><th>Poste</th><th>Total</th><th>Jour</th><th>Nuit</th><th>Système de rotation</th><th></th></tr></thead><tbody id="site-postes-body">${sitePostesTableHTML(s)}</tbody></table></div>
-      <div class="grid grid-2 mb-4">
-        <div><label class="label">Heure relève Jour</label><input class="input" type="time" name="heureReleveJour" value="${escapeHTML(s.heureReleveJour||"")}"/></div>
-        <div><label class="label">Heure relève Nuit</label><input class="input" type="time" name="heureReleveNuit" value="${escapeHTML(s.heureReleveNuit||"")}"/></div>
-      </div>
+  const siteIdentity=s.isNew?`<div class="site-form-title w-full"><h1>CRÉATION DE SITE</h1></div>`:siteTechnicalIdentityHTML(s,{toolbar,locked:!canEditSite});
+  const sections=SITE_TECH_SECTIONS.filter(([key])=>key!=="documents"||!supervisorRO);
+  const section=(key,body)=>`<section id="stf-sec-${key}" class="stf-section" data-stf-section="${key}" aria-labelledby="stf-h-${key}">${body}</section>`;
+  const societeControl=isAdminSystemSession()
+    ?`<select class="select" id="stf-f-societe" name="societe">${uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]).map(soc=>`<option value="${escapeHTML(soc)}" ${normalizeSocieteName(s.societe)===normalizeSocieteName(soc)?"selected":""}>${escapeHTML(soc)}</option>`).join("")}</select>`
+    :`<input class="input bg-slate-50" id="stf-f-societe" value="${escapeHTML(s.societe||"—")}" readonly/>`;
+  const identificationCard=`<div class="stf-card">${siteTechCardHead("stf-h-identification","building","Identification du site")}
+    <div class="stf-grid">
+      ${siteTechField("Dénomination",`<input class="input" id="stf-f-nom" name="nom" aria-required="true" value="${escapeHTML(s.nom)}" />`,{id:"stf-f-nom",required:true})}
+      ${siteTechField("Indicatif",`<input class="input" id="stf-f-indicatif" name="indicatif" aria-describedby="stf-f-indicatif-hint" value="${escapeHTML(s.indicatif||"")}"/>`,{id:"stf-f-indicatif",hint:"Indicatif radio du site."})}
+      ${siteTechField("Code officiel du site",`<input class="input" id="stf-f-code" name="codeOfficiel" maxlength="50" placeholder="Ex. ETP/DF/H01" aria-describedby="stf-f-code-hint" value="${escapeHTML(s.codeOfficiel||"")}"/>`,{id:"stf-f-code",hint:"Imprimé sur les badges du personnel (SITE : code). Distinct de l’indicatif radio."})}
+      ${siteTechField("Société",societeControl,{id:"stf-f-societe"})}
+      ${siteTechField("Adresse",`<input class="input" id="stf-f-adresse" name="adresse" value="${escapeHTML(s.adresse||"")}"/>`,{id:"stf-f-adresse"})}
+      ${siteTechField("Commune",`<input class="input" id="stf-f-commune" name="commune" value="${escapeHTML(s.commune||"")}"/>`,{id:"stf-f-commune"})}
+      ${siteTechField("Wilaya",`<select class="select" id="stf-f-wilaya" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select>`,{id:"stf-f-wilaya"})}
+      ${siteTechField("Type",`<select class="select" id="stf-f-type" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select>`,{id:"stf-f-type"})}
+      ${siteTechField("Date d'ouverture",`<input class="input" id="stf-f-ouverture" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/>`,{id:"stf-f-ouverture"})}
+      ${siteTechField("Site ouvert par",`<input class="input" id="stf-f-ouvertpar" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/>`,{id:"stf-f-ouvertpar"})}
+      ${siteTechField("Téléphone du site",`<input class="input" id="stf-f-telephone" name="telephone" type="tel" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/>`,{id:"stf-f-telephone"})}
+    </div></div>`;
+  const gpsCard=`<div class="stf-card stf-card--gps">${siteTechCardHead("stf-h-gps","pin","Position GPS du site")}${sitePositionFieldHTML(s)}</div>`;
+  const linkedClient=(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(s.clientId||""));
+  const contactCard=`<div class="stf-card">${siteTechCardHead("stf-h-contact","user","Contact client")}
+    <div class="stf-grid stf-grid--3">
+      ${siteTechField("Nom du responsable",`<input class="input" id="stf-f-cnom" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/>`,{id:"stf-f-cnom"})}
+      ${siteTechField("Fonction",`<input class="input" id="stf-f-cfonction" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/>`,{id:"stf-f-cfonction"})}
+      ${siteTechField("Téléphone",`<input class="input" id="stf-f-ctel" name="contact_tel" type="tel" value="${escapeHTML(s.contact?.telephone||"")}"/>`,{id:"stf-f-ctel"})}
+      ${siteTechField("Email",`<input class="input" id="stf-f-cemail" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/>`,{id:"stf-f-cemail"})}
+      ${siteTechField("Client",`<input class="input" id="stf-f-client" name="client" value="${escapeHTML(s.client||"")}"/>`,{id:"stf-f-client"})}
+      ${siteTechField("Client (fiche commerciale liée)",`<select class="select" id="stf-f-clientid" name="clientId" aria-describedby="stf-f-clientid-hint"><option value="">— Aucun —</option>${(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")).map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}" ${String(s.clientId||"")===String(c.backendId||c.id||"")?"selected":""}>${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select>`,{id:"stf-f-clientid",hint:"Détermine quels agents ce client verra depuis son portail dédié (si activé)."})}
     </div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-blue">Système de rotation</div>
-      <div class="site-rotation-card-grid">
-        ${[["24/48","Groupe A : Jour → Nuit → Récupération → Récupération, puis reprise Jour / Nuit."],["3x8","De 6h à 14h · de 14h à 22h · de 22h à 6h · récupération, selon le cycle A/B/C/D."],["1/3","Groupe A en jour ouvrable · B/C/D en nuit une sur trois."],["1/2","A/B en jour un sur deux · C/D en nuit une sur deux."],["1/1","Groupe A1 : cinq jours par semaine, 8h maximum, hors week-end et jours fériés."]].map(([v,d])=>`<label data-rotation-card="${v}" class="card p-4 cursor-pointer transition" style="${rotationSystem===v?"border:2px solid #043970;background:#f1f5f9":"border:1px solid #e2e8f0"}"><input type="radio" name="rotationSystem" value="${v}" ${rotationSystem===v?"checked":""} class="mr-2" onchange="updateSiteRotationPreview(this.value)"/> <span class="font-black text-lg">${v}</span><div class="text-xs text-slate-500 mt-2">${d}</div></label>`).join("")}
-      </div>
-      <div id="rotation-preview">${siteRotationSummaryHTML(rotationSystem)}</div>
+    <div class="stf-portal-line">${opsIcon("info")}<span>Portail client : ${s.clientId?`site rattaché à la fiche commerciale <strong>${escapeHTML(linkedClient?.nom||linkedClient?.raisonSociale||"liée")}</strong>.`:`aucune fiche commerciale liée à ce site.`}</span></div>
+  </div>`;
+  const effKpi=(label,name,value,editable,icon)=>`<div class="stf-eff-kpi${editable?" is-editable":""}">${opsIcon(icon)}<label class="label" for="stf-f-${name}">${escapeHTML(label)}</label><input class="input${editable?"":" bg-slate-100"}" id="stf-f-${name}" type="number" min="0" name="${name}" value="${value}"${editable?"":" readonly"}/></div>`;
+  const effectifsCard=`<div class="stf-card">${siteTechCardHead("stf-h-effectifs","users","Effectifs","Le total, le jour et la nuit sont calculés à partir de la liste des postes.")}
+    <div class="stf-eff-kpis">
+      ${effKpi("Effectif total contractuel","eff_totalContractuel",eff.totalContractuel,false,"users")}
+      ${effKpi("Nombre de groupes","eff_groupes",eff.groupes,true,"hash")}
+      ${effKpi("Effectif de jour","eff_jour",eff.jour,false,"calendar")}
+      ${effKpi("Effectif de nuit","eff_nuit",eff.nuit,false,"clock")}
+      ${effKpi("Effectif week-end","eff_weekend",eff.weekend,true,"calendar")}
+      ${effKpi("Effectif jours fériés","eff_feries",eff.feries,true,"calendar")}
     </div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">Affectation des effectifs</div>${siteAffectationGroupesHTML(s)}${siteRotationPlanningSectionHTML(s)}</div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-green">Équipement et matériel</div>
-      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Dotation matériel du site</h4>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary text-xs" onclick="addSiteMaterielRow()">Ajouter article</button>`}</div>
-      <div class="site-table-scroll mb-2"><table><thead><tr><th>Magasin</th><th>Article disponible</th><th>Qté</th><th>N° Série / Réf</th><th>État</th><th>Observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table></div>
-      <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
-      ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
+    ${dcLocked?`<div class="stf-notice" role="note">${opsIcon("shield")}<div>Effectifs contractuels transmis par le Commercial : postes et totaux en lecture seule.</div></div>`:""}
+    <div class="stf-subcard-head"><h3>Liste des postes</h3><span class="stf-hint">Total du poste = (jour + nuit) × 2, ou jour + nuit en rotation 1/1.</span>${supervisorRO?"":opsButtonHTML("Ajouter poste",{size:"sm",icon:"plus",attrs:`onclick="addSitePosteRow()"`})}</div>
+    <div class="stf-table-wrap"><table class="stf-table stf-table--postes"><colgroup><col class="stf-col-poste"><col class="stf-col-num"><col class="stf-col-num"><col class="stf-col-num"><col class="stf-col-rot"><col class="stf-col-action"></colgroup><thead><tr><th scope="col">Poste / fonction</th><th scope="col">Total</th><th scope="col">Jour</th><th scope="col">Nuit</th><th scope="col">Système de rotation</th><th scope="col"><span class="ops-sr-only">Action</span></th></tr></thead><tbody id="site-postes-body">${sitePostesTableHTML(s)}</tbody></table><p class="stf-empty stf-empty--postes">Aucun poste défini pour ce site.</p></div>
+    <div id="site-postes-errors" class="stf-errors" role="alert" hidden></div>
+    <div class="stf-grid stf-grid--relief">
+      ${siteTechField("Heure relève Jour",`<input class="input" id="stf-f-relj" type="time" name="heureReleveJour" value="${escapeHTML(s.heureReleveJour||"")}"/>`,{id:"stf-f-relj"})}
+      ${siteTechField("Heure relève Nuit",`<input class="input" id="stf-f-reln" type="time" name="heureReleveNuit" value="${escapeHTML(s.heureReleveNuit||"")}"/>`,{id:"stf-f-reln"})}
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSitePVModal('${jsString(s.id)}')">Établir un PV</button>`}${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
+  </div>`;
+  const rotationCards=[["24/48","Groupe A : Jour → Nuit → Récupération → Récupération, puis reprise Jour / Nuit."],["3x8","De 6h à 14h · de 14h à 22h · de 22h à 6h · récupération, selon le cycle A/B/C/D."],["1/3","Groupe A en jour ouvrable · B/C/D en nuit une sur trois."],["1/2","A/B en jour un sur deux · C/D en nuit une sur deux."],["1/1","Groupe A1 : cinq jours par semaine, 8h maximum, hors week-end et jours fériés."]];
+  const rotationCard=`<div class="stf-card">${siteTechCardHead("stf-h-rotation","rotate","Système de rotation","Sélection appliquée au site à l'enregistrement de la fiche.")}
+    <div class="stf-rotation">
+      <fieldset class="site-rotation-card-grid stf-rotation-cards"><legend class="ops-sr-only">Système de rotation du site</legend>
+        ${rotationCards.map(([v,d])=>`<label data-rotation-card="${v}" class="stf-rotation-card${rotationSystem===v?" is-active":""}"><span class="stf-rotation-name"><input type="radio" name="rotationSystem" value="${v}" ${rotationSystem===v?"checked":""} onchange="updateSiteRotationPreview(this.value)"/> ${v==="3x8"?"3×8":v}</span><span class="stf-rotation-desc">${d}</span></label>`).join("")}
+      </fieldset>
+      <div class="stf-rotation-rules"><h3>Règles par groupe</h3><div id="rotation-preview" aria-live="polite">${siteRotationSummaryHTML(rotationSystem)}</div></div>
+    </div>
+    ${siteRotationPlanningSectionHTML(s)}
+  </div>`;
+  const affectationCard=`<div class="stf-card">${siteTechCardHead("stf-h-affectation","swap","Affectation des effectifs")}${siteAffectationGroupesHTML(s)}</div>`;
+  const materielCard=`<div class="stf-card">${siteTechCardHead("stf-h-materiel","box","Équipement et matériel","Dotation matériel du site",supervisorRO?"":opsButtonHTML("Ajouter article",{size:"sm",icon:"plus",attrs:`onclick="addSiteMaterielRow()"`}))}
+    <div class="stf-table-wrap"><table class="stf-table stf-table--materiel"><thead><tr><th scope="col">Magasin</th><th scope="col">Article disponible</th><th scope="col">Qté</th><th scope="col">N° série / réf</th><th scope="col">État</th><th scope="col">Observation</th><th scope="col"><span class="ops-sr-only">Action</span></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
+    <p class="stf-empty stf-empty--materiel">Aucun article doté à ce site.</p></div>
+    <p class="stf-hint">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</p>
+    ${session?.transverse==="materiel"?`<div class="stf-card-foot">${opsButtonHTML("Enregistrer",{variant:"primary",icon:"save",attrs:`data-site-save-action onclick="saveSiteEquipementOnly('${jsString(s.id)}')"`})}</div>`:""}
+  </div>`;
+  const documentsCard=`<div class="stf-card">${siteTechCardHead("stf-h-documents","file","Documents","PV, comptes rendus, bulletins d'information et documents archivés du site.")}${siteArchivedDocumentsHTML(s)}</div>`;
+  const consignesText=s.consignesGenerales||s.consignes||s.consigneGenerale;
+  const consignesCard=`<div class="stf-card">${siteTechCardHead("stf-h-consignes","shield","Consignes","Consignes générales et instructions particulières du site.")}${siteTextBlockHTML(consignesText,"Aucune consigne générale enregistrée pour ce site.")}</div>`;
+  const proceduresCard=`<div class="stf-card">${siteTechCardHead("stf-h-procedures","clipboard","Procédures","Procédures opérationnelles du site.")}${siteTextBlockHTML(s.procedures||s.procedureSite,"Aucune procédure enregistrée pour ce site.")}</div>`;
+  const actionbar=`<div class="stf-actionbar site-form-actions">
+    <div class="stf-actionbar-label">${opsIcon("file")}<div><strong>Fiche technique site</strong><span>${escapeHTML([s.nom,s.societe].filter(Boolean).join(" · "))}</span></div></div>
+    <div class="stf-actionbar-buttons">${session?.transverse==="materiel"||supervisorRO?"":opsButtonHTML("Établir un PV",{icon:"print",attrs:`data-site-lock-keep onclick="openSitePVModal('${jsString(s.id)}')"`})}${supervisorRO?"":opsButtonHTML("Enregistrer modification",{icon:"save",attrs:`data-site-lock-keep data-site-save-action onclick="saveSite('${jsString(s.id)}')"`})}${canEditSite?opsButtonHTML("Enregistrer",{type:"submit",variant:"primary",icon:"check",attrs:`data-site-save-action`}):""}</div>
+  </div>`;
+  view.innerHTML=`<div class="w-full stf">${siteIdentity}${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${s.isNew?"":siteTechTabsHTML(sections)}${lockNotice}
+  <form id="site-form" class="site-editor-wide site-form-layout stf-form" data-dc-contract-locked="${dcLocked?"1":"0"}" data-site-create-form="1" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
+    ${section("identification",`<div class="stf-row-2">${identificationCard}${gpsCard}</div>`)}
+    ${section("contact",contactCard)}
+    ${section("effectifs",effectifsCard)}
+    ${section("rotation",rotationCard)}
+    ${section("affectation",affectationCard)}
+    ${section("materiel",materielCard)}
+    ${supervisorRO?"":section("documents",documentsCard)}
+    ${section("consignes",consignesCard)}
+    ${section("procedures",proceduresCard)}
+    ${actionbar}
   </form></div>`;
-  sitesModuleTimeout(()=>{updateSiteEffectifTotalContractuel();initInlineSitePositionMap();applySiteFormLock()},0);
+  sitesModuleTimeout(()=>{updateSiteEffectifTotalContractuel();siteTechInitMapWhenVisible();applySiteFormLock();siteTechInitNav()},0);
 }
 
 function siteDraftFromCurrentForm(id){
@@ -1087,7 +1352,8 @@ async function syncSiteGroupAssignmentsToEmployees(site){
   return [];
 }
 
-async function saveSiteEquipementOnly(id){
+function saveSiteEquipementOnly(id){return siteSaveExclusive(()=>saveSiteEquipementOnlyRun(id))}
+async function saveSiteEquipementOnlyRun(id){
   if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const lookup=decodeURIComponent(String(id||""));
   const s=(db.sites||[]).find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);
@@ -1133,7 +1399,22 @@ async function saveSiteEquipementOnly(id){
   renderView();
 }
 
-async function saveSite(id){
+// Un seul enregistrement de fiche à la fois : un double clic relançait persistSiteEquipmentDotations
+// avant que les lignes ne reçoivent leur identifiant serveur, d'où des mouvements de stock en double.
+let siteSaveInFlight=false;
+function siteTechSetSaving(busy){
+  document.querySelectorAll("[data-site-save-action]").forEach(btn=>{
+    if(busy){if(!btn.disabled){btn.disabled=true;btn.dataset.siteSaveDisabled="1"}btn.setAttribute("aria-busy","true")}
+    else{if(btn.dataset.siteSaveDisabled==="1"){btn.disabled=false;delete btn.dataset.siteSaveDisabled}btn.removeAttribute("aria-busy")}
+  });
+}
+async function siteSaveExclusive(run){
+  if(siteSaveInFlight){toast("Enregistrement déjà en cours…","info");return}
+  siteSaveInFlight=true;siteTechSetSaving(true);
+  try{return await run()}finally{siteSaveInFlight=false;siteTechSetSaving(false)}
+}
+function saveSite(id){return siteSaveExclusive(()=>saveSiteRun(id))}
+async function saveSiteRun(id){
   if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const f=document.getElementById("site-form");
   const fd=new FormData(f);
@@ -1145,6 +1426,10 @@ async function saveSite(id){
     return;
   }
   if(!s){toast("Création des sites dans Commercial : dc.irongs.com", "info");return;}
+  if(!(s.contractualReadOnly||s.equipment_plan?.contractualReadOnly)){
+    const posteErrors=siteTechRenderPosteErrors();
+    if(posteErrors.length){toast(posteErrors[0],"error");document.getElementById("site-postes-errors")?.scrollIntoView?.({block:"center"});return}
+  }
   // Ne JAMAIS réécrire silencieusement la société d'un site existant à partir du
   // contexte courant de l'éditeur (bug source des sites mal rattachés : sauvegarder
   // une fiche pendant qu'on a une autre société active la faisait basculer). Seule

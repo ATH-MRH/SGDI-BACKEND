@@ -26,7 +26,13 @@ test('OPS → Sites Command Center — Chrome réel', {
   const tiles = { ok: 0, failed: 0 };
   page.on('requestfinished', request => { if (request.url().includes('tile.openstreetmap.org')) tiles.ok += request.response()?.ok() ? 1 : 0; });
   page.on('requestfailed', request => { if (request.url().includes('tile.openstreetmap.org')) tiles.failed += 1; });
-  await page.waitForSelector('[data-testid="ops-sites-command-center"][data-cc-ready] .ops-sites-cc-card', { visible: true, timeout: 20000 });
+  try {
+    await page.waitForSelector('[data-testid="ops-sites-command-center"][data-cc-ready] .ops-sites-cc-card', { visible: true, timeout: 20000 });
+  } catch (error) {
+    fs.writeFileSync(path.join(artifacts, 'startup-diagnostic.json'), JSON.stringify({ errors: atlas.errors, state: await page.evaluate(() => ({ hash: location.hash, text: document.getElementById('view')?.textContent, scripts: [...document.scripts].map(s => s.src) })) }, null, 2));
+    await page.screenshot({ path: path.join(artifacts, 'startup-failure.png') });
+    throw error;
+  }
   await page.waitForFunction(() => document.querySelectorAll('.ops-sites-cc .ops-sites-cc-marker').length > 0, { timeout: 20000 });
   await atlas.delay(2500); // laisse aux tuiles distantes le temps d'arriver (relevé, non bloquant)
 

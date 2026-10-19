@@ -241,7 +241,7 @@ function opsSitesCcCardHTML(row,readOnly){
       <div class="ops-sites-cc-detail-line"><span>Type</span><b>${safe(s.type)}</b></div>
       ${row.opening?`<div class="ops-sites-cc-detail-line"><span>Date d'ouverture</span><b>${escapeHTML(formatDate(row.opening))}</b></div>`:""}
       ${row.pos?`<div class="ops-sites-cc-detail-line"><span>Coordonnées</span><b>${escapeHTML(sitePositionLabel(row.pos.lat,row.pos.lng))}</b></div>`:`<div class="ops-sites-cc-detail-line"><span>Coordonnées</span><b>GPS manquant</b></div>`}
-      <button type="button" class="ops-sites-cc-btn" onclick="event.stopPropagation();openSiteMovementHistoryModal('${jsString(String(s.id||s.backendId||s.indicatif||""))}')">Historique des mouvements <b>${row.movements.length}</b></button>
+      <button type="button" class="ops-sites-cc-btn" onclick="event.stopPropagation();openSiteMovementHistoryModal('${jsString(String(s.id||s.backendId||s.indicatif||""))}')">Historique des mouvements ${opsBadgeHTML(row.movements.length,"mouvement(s)")}</button>
       ${readOnly?"":siteAdminSystemActionsHTML(s)}
     </div>
     <div class="ops-sites-cc-card-foot">

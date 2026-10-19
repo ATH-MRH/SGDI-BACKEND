@@ -393,7 +393,7 @@ function opsClientObservationsFilterTabs(){
   const counts={tous:(opsClientObservationsCache||[]).length,nouveau:0,en_cours:0,traite:0};
   (opsClientObservationsCache||[]).forEach(o=>{counts[o.status]=(counts[o.status]||0)+1});
   const tabs=[["tous","Tous"],["nouveau","Nouveau"],["en_cours","En cours"],["traite","Traité"]];
-  host.innerHTML=tabs.map(([key,label])=>`<button type="button" class="btn ${opsClientObservationsFilter===key?"btn-primary":"btn-secondary"} text-xs" onclick="setOpsClientObservationsFilter('${key}')">${label} (${counts[key]||0})</button>`).join("");
+  host.innerHTML=tabs.map(([key,label])=>opsButtonHTML(label,{size:"sm",icon:"chat",variant:opsClientObservationsFilter===key?"primary":"standard",badge:counts[key],badgeLabel:"signalement(s)",attrs:`aria-pressed="${opsClientObservationsFilter===key}" onclick="setOpsClientObservationsFilter('${key}')"`})).join("");
 }
 
 function setOpsClientObservationsFilter(key){opsClientObservationsFilter=key;renderOpsClientObservationsList()}
@@ -663,15 +663,15 @@ function renderOpsCommandCenterV2(view){
   const explicitActions=Array.isArray(session?.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
   const canWrite=!readOnly&&(!explicitActions.length||explicitActions.some(x=>["create","update","write","manage"].includes(x)));
   const actions=[
-    ["Affecter du personnel","effectif/preparation_affectation","↗","blue",canWrite],
-    ["Planifier une mission","ops/missions","▣","green",canWrite],
-    ["Gérer les dotations","ops/instance_dotation","◇","orange",canWrite],
-    ["Déclarer une anomalie","incidents/dashboard","△","violet",canWrite],
-    ["Rapport OPS","ops/supervision","▥","plain",true]
+    ["Affecter du personnel","effectif/preparation_affectation","swap","blue",canWrite],
+    ["Planifier une mission","ops/missions","calendar","green",canWrite],
+    ["Gérer les dotations","ops/instance_dotation","box","orange",canWrite],
+    ["Déclarer une anomalie","incidents/dashboard","alert","violet",canWrite],
+    ["Rapport OPS","ops/supervision","file","plain",true]
   ].filter(x=>x[4]);
   view.innerHTML=`<section class="ops-cc" data-testid="ops-command-center-v2">
     <div class="ops-cc-head"><div class="ops-cc-title"><span class="ops-cc-title-icon">⌂</span><div><small>${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</small><h1>Tableau de bord OPS</h1><p>Pilotage en temps réel de vos sites, missions et effectifs</p></div></div><div class="ops-cc-clock"><b>${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</b><span><i></i> Temps réel</span></div></div>
-    <nav class="ops-cc-actions" aria-label="Actions rapides OPS">${actions.map(a=>`<a class="ops-cc-action" data-tone="${a[3]}" href="#/${a[1]}"><span>${a[2]}</span>${escapeHTML(a[0])}</a>`).join("")}</nav>
+    <nav class="ops-cc-actions" aria-label="Actions rapides OPS">${actions.map(a=>`<a class="ops-cc-action" data-tone="${a[3]}" href="#/${a[1]}"><span>${opsIcon(a[2])}</span>${escapeHTML(a[0])}</a>`).join("")}</nav>
     ${opsSupervisorReadOnlyNoticeHTML()}
     <div class="ops-cc-grid ops-cc-grid-top">
       <article class="ops-cc-card ops-cc-situation"><div class="ops-cc-card-head"><h2>Situation opérationnelle</h2><a href="#/effectif/actifs">Voir les effectifs →</a></div><div class="ops-cc-situation-body"><div class="ops-cc-donut" style="--ops-cc-pct:${Math.min(100,coverage)}"><div><b>${coverage}%</b><span>Affectés / opérationnels</span></div></div><dl><div><dt>Effectif actif</dt><dd>${activeCount}</dd></div><div><dt>Affectés</dt><dd>${affectedCount}</dd></div><div><dt>Présents aujourd'hui</dt><dd>${presentCount}</dd></div><div><dt>Absents / maladie</dt><dd>${absentCount+sickCount}</dd></div></dl></div></article>
