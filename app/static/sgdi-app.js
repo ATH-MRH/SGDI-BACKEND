@@ -2794,11 +2794,17 @@ async function sgdiBackgroundSqlSync(options){
     if(cancelled||token!==sgdiAuthToken())return;
     // Données complètes chargées : on lève l'écran de chargement et on affiche les vrais chiffres.
     sgdiFullDataReady=true;
+    // Le filet de 20 s n'a plus lieu d'être : sans cette annulation, il reconstruisait la vue
+    // courante 20 s après chaque chargement, hors des gardes d'édition.
+    if(window.__sgdiDataReadySafety){clearTimeout(window.__sgdiDataReadySafety);window.__sgdiDataReadySafety=null;}
     requestAnimationFrame(()=>{
       if(token!==sgdiAuthToken())return;
       try{renderSidebar()}catch(_e){}
       try{refreshModuleCountersRibbon()}catch(_e){}
-      try{if(opt.render!==false&&document.getElementById("view")&&typeof renderView==="function")renderView()}catch(_e){}
+      // Une vue restée sur « Chargement des données… » est rendue dès l'arrivée des données, même
+      // lors d'une synchronisation silencieuse : elle attendait jusqu'ici le filet de 20 s.
+      const awaitingData=!!document.querySelector("#view [data-sgdi-awaiting-data]");
+      try{if(opt.render!==false&&document.getElementById("view")&&typeof renderView==="function")renderView();else if(awaitingData&&typeof renderView==="function")renderView()}catch(_e){}
     });
   });
   sgdiSqlSyncInProgress=pending;
@@ -8894,6 +8900,8 @@ function normalizeCentralPage(view){
   // renderView suivant le chargement. Le premier rendu, asynchrone, n'est jamais normalisé :
   // les rendus suivants doivent produire exactement le même DOM.
   if(view.querySelector(".ops-sites-cc"))return;
+  // Idem pour la fiche technique site (.stf) : rendu asynchrone, en-tête propre.
+  if(view.querySelector(".stf"))return;
   const iconPattern=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
   const walker=document.createTreeWalker(view,NodeFilter.SHOW_TEXT,{acceptNode(node){
     const parent=node.parentElement;
@@ -9121,11 +9129,11 @@ function renderView(){
   // contrats...). Le login et la sélection de société passent avant renderView -> non concernés.
   if(session&&typeof sgdiBackendShouldUse==="function"&&sgdiBackendShouldUse()&&!sgdiFullDataReady){
     const _v=document.getElementById("view");
-    if(_v)_v.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement des données…</div><div class="text-sm">Récupération des chiffres réels depuis le serveur.</div></div>`;
+    if(_v)_v.innerHTML=`<div class="card p-12 text-center text-slate-500" data-sgdi-awaiting-data="1"><div class="text-lg font-black mb-2">Chargement des données…</div><div class="text-sm">Récupération des chiffres réels depuis le serveur.</div></div>`;
     if(typeof uiProgressDone==="function")uiProgressDone();
     // Filet anti-blocage : si le serveur ne répond jamais, on affiche au pire ce qu'on a après 20s.
     if(!window.__sgdiDataReadySafety){
-      window.__sgdiDataReadySafety=setTimeout(()=>{sgdiFullDataReady=true;try{if(typeof renderView==="function")renderView()}catch(e){}},20000);
+      window.__sgdiDataReadySafety=setTimeout(()=>{window.__sgdiDataReadySafety=null;if(sgdiFullDataReady)return;sgdiFullDataReady=true;try{if(typeof renderView==="function")renderView()}catch(e){}},20000);
     }
     return;
   }
@@ -9281,7 +9289,15 @@ function sgdiGuardUncontrolledUrlChange(){
   if(typeof toast==="function")toast("Modifications non enregistrées — enregistrez avant de quitter cette fiche.","error");
   return true;
 }
+// Un même changement de # déclenche popstate puis hashchange : sans ce marqueur, chaque retour
+// arrière ou lien direct rendait la page deux fois (deux rendus asynchrones concurrents).
+let _sgdiUrlEventHandled=null;
+function sgdiUrlEventAlreadyHandled(){
+  return !!_sgdiUrlEventHandled&&_sgdiUrlEventHandled.href===location.href&&Date.now()-_sgdiUrlEventHandled.at<1000;
+}
+function sgdiMarkUrlEventHandled(){_sgdiUrlEventHandled={href:location.href,at:Date.now()};}
 window.addEventListener("hashchange",()=>{
+  if(sgdiUrlEventAlreadyHandled())return;
   if(sgdiGuardUncontrolledUrlChange())return;
   sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;
   if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){
@@ -9289,11 +9305,14 @@ window.addEventListener("hashchange",()=>{
   }else sgdiEnterViewMode(true);
   render();
   sgdiLastKnownHref=location.href;
+  sgdiMarkUrlEventHandled();
 });
 window.addEventListener("popstate",()=>{
+  if(sgdiUrlEventAlreadyHandled())return;
   if(sgdiGuardUncontrolledUrlChange())return;
   sgdiMarkUserNavigation();uiProgressStart();render();
   sgdiLastKnownHref=location.href;
+  sgdiMarkUrlEventHandled();
 });
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
@@ -21648,6 +21667,9 @@ bootApp();
 try{
   let stripTimer=null;
   new MutationObserver(()=>{
+    // OPS : habiller les nouveaux boutons avant la peinture (rappel en microtâche). Le passage
+    // différé de 30 ms laissait apparaître une image à l'ancien style, puis changeait leur taille.
+    if(document.body.hasAttribute("data-ops-ui"))syncOpsPresentation();
     clearTimeout(stripTimer);
     stripTimer=setTimeout(()=>{stripCryptogrammes(document.getElementById("app")||document.body);syncOpsPresentation()},30);
   }).observe(document.body,{childList:true,subtree:true,characterData:true});
