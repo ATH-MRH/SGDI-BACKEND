@@ -145,8 +145,12 @@ def dashboard(db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_s
                              .where(Assignment.site_id.in_(site_ids), *active).group_by(Assignment.site_id)):
         per_site[sid]["effectif"] = n
     absents_rows = []
+    from app.modules.attendance import presence_state
+
+    # Lot 0 : une journée seulement planifiée (générée, sans preuve) n'est ni pointée ni présente.
     for sid, st, n in db.execute(select(DailyPresence.site_id, DailyPresence.status, func.count(DailyPresence.id))
-                                 .where(DailyPresence.site_id.in_(site_ids), DailyPresence.presence_date == today)
+                                 .where(DailyPresence.site_id.in_(site_ids), DailyPresence.presence_date == today,
+                                        presence_state.real_clause())
                                  .group_by(DailyPresence.site_id, DailyPresence.status)):
         per_site[sid]["pointes"] += n
         if st == "present":

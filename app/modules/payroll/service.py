@@ -88,9 +88,19 @@ def compute_presence_variables(db: Session, *, employee_id: int, period: str) ->
         DailyPresence.closed_at.isnot(None),
     )
     rows = db.scalars(stmt).all()
-    worked = sum(1 for r in rows if r.status == "present")
-    absent = sum(1 for r in rows if r.status == "absent")
-    return {"worked_days": worked, "absence_days": absent, "closed_presence_rows": len(rows)}
+    # Lot 0 : une journée générée par une rotation n'est qu'une PRÉVISION. Seule une journée
+    # prouvée (pointée, saisie ou corrigée de façon tracée) puis clôturée compte ; les journées
+    # planifiées ou d'origine incertaine sont dénombrées à part et bloquent la validation.
+    from app.modules.attendance import presence_state
+
+    evidence = presence_state.evidence_for(db, (r.id for r in rows))
+    states = {r.id: presence_state.state(r, evidence.get(r.id)) for r in rows}
+    validated = [r for r in rows if states[r.id] == presence_state.VALIDE]
+    worked = sum(1 for r in validated if r.status == "present")
+    absent = sum(1 for r in validated if r.status == "absent")
+    return {"worked_days": worked, "absence_days": absent, "closed_presence_rows": len(rows),
+            "planned_unconfirmed_days": sum(1 for v in states.values() if v == presence_state.PLANIFIE),
+            "days_to_verify": sum(1 for v in states.values() if v == presence_state.A_VERIFIER)}
 
 
 # ── Calcul du bulletin ──────────────────────────────────────────────────────────────────
@@ -217,6 +227,15 @@ def slip_validation_blockers(slip: PayrollSlip) -> list[str]:
     (NoApplicableRuleError, aucune version trouvée) bloque aussi : un composant à 0 par
     absence de règle serait un montant silencieusement faux, pas juste "non vérifié"."""
     blockers = []
+    # Lot 0 : journées clôturées sans preuve de travail — à régulariser (pointage, saisie ou
+    # correction post-clôture tracée) avant toute validation ; jamais payées ni retirées en silence.
+    inputs = getattr(slip, "inputs", None) or {}
+    planned = int(inputs.get("planned_unconfirmed_days") or 0)
+    to_verify = int(inputs.get("days_to_verify") or 0)
+    if planned:
+        blockers.append(f"présence : {planned} journée(s) seulement planifiée(s), sans pointage ni justification — à régulariser")
+    if to_verify:
+        blockers.append(f"présence : {to_verify} journée(s) d'origine incertaine — à vérifier et justifier")
     for rule_type, entry in (slip.rules_used or {}).items():
         if "error" in entry:
             blockers.append(f"{rule_type} : aucune règle réglementaire applicable trouvée ({entry['error']})")

@@ -338,6 +338,12 @@ def build_report(db: Session, user: Any, *, day: date, society: str | None = Non
             DailyPresence.employee_id.in_(employee_ids or {-1}),
         ).order_by(DailyPresence.id)).scalars()
     }
+    # Lot 0 : une journée seulement planifiée (générée, sans pointage ni justification) n'est pas
+    # une présence ; l'état vient alors du planning (non pointé, absent, repos), comme sans journée.
+    from app.modules.attendance import presence_state
+
+    _evidence = presence_state.evidence_for(db, (row.id for row in presences.values()))
+    presences = {eid: row for eid, row in presences.items() if presence_state.is_real(row, _evidence.get(row.id))}
     abandon_events = db.execute(select(AttendanceEvent).where(
         AttendanceEvent.event_type == EVENT_ABANDON,
         AttendanceEvent.presence_date == day,
