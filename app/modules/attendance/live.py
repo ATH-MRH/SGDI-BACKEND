@@ -190,6 +190,9 @@ TODO_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA)
 TODO_LABELS = {counted_time.ANOMALY_UNCLOSED: "Vacation non clôturée", counted_time.KIND_EXTRA: "Maintien à qualifier",
                counted_time.MANUAL_ENTRY_REQUIRED: "Saisie manuelle requise"}
 EXCUSED_STATUSES = ("conge", "maladie", "mission", "repos")
+EXCUSED_LABELS = {"conge": "Congé", "maladie": "Maladie", "mission": "Mission", "repos": "Repos"}
+EXPECTED_STATE_LABELS = {"PRESENT": "Présent", "ABSENT": "Absent / non pointé", "EXCUSED": "Excusé"}
+EXPECTED_STATE_ORDER = {"ABSENT": 0, "EXCUSED": 1, "PRESENT": 2}
 MOVEMENTS_LIMIT = 30
 MOVEMENTS_WINDOW = timedelta(hours=24)
 
@@ -259,11 +262,12 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
             expected_ids.add(assignment.employee_id)
     employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(expected_ids | set(present) or {0}))).scalars()}
     expected_ids = {i for i in expected_ids if str(getattr(employees.get(i), "status", "") or "").strip().lower() in ("actif", "active")}
-    excused: set[int] = set()
+    excused_status: dict[int, str] = {}
     if current is not None and expected_ids:
-        excused = set(db.execute(select(DailyPresence.employee_id).where(
+        excused_status = dict(db.execute(select(DailyPresence.employee_id, DailyPresence.status).where(
             DailyPresence.presence_date == current["work_date"], DailyPresence.employee_id.in_(expected_ids),
-            DailyPresence.status.in_(EXCUSED_STATUSES))).scalars())
+            DailyPresence.status.in_(EXCUSED_STATUSES))).all())
+    excused = set(excused_status)
 
     def card(employee_id: int) -> dict[str, Any]:
         employee = employees.get(employee_id)
@@ -357,6 +361,20 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
                         "opens": _hm(opens), "closes": _hm(closes), "state": "OPEN" if local >= opens else "UPCOMING"}
 
     absent = expected_ids - set(present) - excused
+    # Détail des attendus (compteurs cliquables) : mêmes ensembles que les KPI, une ligne par personne.
+    # Sans vacation déterminée, la liste est indisponible (None), jamais une liste vide.
+    expected_rows = None
+    if current is not None:
+        entries = {row["employee"]["id"]: row["entry"] for row in present_rows}
+        expected_rows = []
+        for employee_id in expected_ids:
+            state = "PRESENT" if employee_id in present else ("EXCUSED" if employee_id in excused else "ABSENT")
+            status = excused_status.get(employee_id) if state == "EXCUSED" else None
+            expected_rows.append({"employee": card(employee_id), "state": state,
+                                  "state_label": EXCUSED_LABELS.get(status, EXPECTED_STATE_LABELS[state]) if status else EXPECTED_STATE_LABELS[state],
+                                  "entry": entries.get(employee_id), "excused_status": status})
+        expected_rows.sort(key=lambda row: (EXPECTED_STATE_ORDER[row["state"]], row["employee"].get("nom") or "",
+                                            row["employee"].get("prenom") or "", row["employee"]["id"]))
     return {
         "site_id": site_id, "site": site.name if site else "", "status": board["status"], "reason": board["reason"],
         "current": _slot_out(current), "next": _slot_out(board["next"]), "maintien": maintien,
@@ -364,7 +382,7 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
                 "absent": len(absent) if current is not None else None, "excused": len(excused & expected_ids),
                 "maintien": sum(1 for row in present_rows if row["badge"] == "EN_MAINTIEN"), "anomalies": len(todo)},
         "activity": {"refused_today": refused_today},
-        "present": present_rows, "todo": todo, "movements": movements[:MOVEMENTS_LIMIT],
+        "present": present_rows, "expected": expected_rows, "todo": todo, "movements": movements[:MOVEMENTS_LIMIT],
         "permissions": {"manual_entry": bool(manual_entry)},
     }
 
@@ -380,11 +398,13 @@ def overview_post(db: Session, site_ids: set[int], now: datetime, manual_entry: 
     posts = [control_post(db, site_id, now, manual_entry=manual_entry) for site_id in sorted(site_ids)]
     present = {r["employee"]["id"]: {**r, "site": p["site"]} for p in posts for r in p["present"]}
     todo = [{**r, "site": p["site"]} for p in posts for r in p["todo"]]
-    kpi = {key: (sum(p["kpi"][key] for p in posts) if all(p["kpi"].get(key) is not None for p in posts) else None)
+    expected = ([{**r, "site": p["site"]} for p in posts for r in p["expected"]]
+                if all(p["expected"] is not None for p in posts) else None)
+    kpi ={key: (sum(p["kpi"][key] for p in posts) if all(p["kpi"].get(key) is not None for p in posts) else None)
            for key in ("expected", "absent", "excused")}
     kpi.update(present=len(present), maintien=sum(r["badge"] == "EN_MAINTIEN" for r in present.values()), anomalies=len(todo))
     return {"site": "Sites sélectionnés", "status": "OVERVIEW", "current": None, "next": None,
-            "maintien": None, "kpi": kpi, "present": list(present.values()), "todo": todo,
+            "maintien": None, "kpi": kpi, "present": list(present.values()), "expected": expected, "todo": todo,
             "movements": [], "activity": {"refused_today": sum(p["activity"]["refused_today"] for p in posts)},
             "permissions": {"manual_entry": manual_entry}}
 
