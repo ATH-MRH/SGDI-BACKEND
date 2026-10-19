@@ -1,8 +1,30 @@
 # Validation du frontend OPS
 
-Validation du 19 octobre 2026 sur `feat/ops-frontend`. Le commit de départ est `4fada549`, l'état reçu après arrêt de l'autre session est `df2175d0`, et la finalisation fonctionnelle est enregistrée dans `b61a0111`.
+Validation initiale du 19 octobre 2026 sur `feat/ops-frontend`. Le commit de départ est `4fada549`, l'état reçu après arrêt de l'autre session est `df2175d0`, et la première finalisation fonctionnelle est enregistrée dans `b61a0111`.
 
-Les modifications demandées sont réalisées localement. Aucune nouvelle régression n'a été détectée dans la comparaison complète. La suite conserve deux erreurs de nettoyage asynchrone présentes sur la référence et reste donc en code de sortie 1. Le défaut de navigation initiale du Command Center Sites, également reproduit avant les modifications, reste documenté ci-dessous.
+Les modifications demandées sont réalisées. Aucune nouvelle régression n'a été détectée dans les comparaisons complètes initiale et après intégration de `main`. La suite conserve deux erreurs de nettoyage asynchrone présentes sur la référence et reste donc en code de sortie 1. Le défaut de navigation initiale du Command Center Sites, également reproduit pendant la validation initiale avant les modifications, reste documenté ci-dessous.
+
+## Préparation de la Pull Request
+
+Le dernier `origin/main` récupéré est `11213bc7` : les PR #60 et #62 ont ajouté la barre partagée SITE / POSTE, ses compteurs et raccourcis, puis corrigé sa hauteur sticky. Le commit d'intégration `479c7a3b` conserve ces évolutions et les quatre commits OPS précédents.
+
+Les conflits dans `employees.js` et `package.json` sont résolus. Le filtre Poste reste uniquement dans la barre de `main` ; les boutons et libellés accessibles propres à OPS sont conservés. Aucun test de `main` n'a été retiré du script. Les sélecteurs du banc Chrome suivent désormais la barre partagée. La fixture de mission du test OPS Command Center couvre une période réellement en cours à toute heure ; son échec avant 08 h avait été reproduit sur `main`, et aucune règle de production n'a changé.
+
+La comparaison séquentielle complète utilise les mêmes options de runner que la validation initiale, sans édition des sources pendant l'exécution :
+
+| Vérification après intégration | Réussites | Échecs |
+| --- | ---: | ---: |
+| Prétest BRQ de main et de la branche | 12 à chaque passe | 0 |
+| Suite complète `main` à `11213bc7` | 1228 | 2 |
+| Suite complète de la branche intégrée | 1247 | 2 |
+| Tests ciblés OPS, barre partagée et isolation | 93 | 0 |
+| Contrôles Chrome après intégration | 25 | 0 |
+
+Les deux erreurs par fichier et les signatures des callbacks tardifs DRH/facturation sont strictement identiques sur le dernier `main` et sur la branche intégrée. Aucun nouvel échec n'est détecté. Les captures bureau/mobile de la nouvelle barre et du portail DRH ont été vérifiées. Le contrôle Sites du nouveau banc conserve la réserve décrite dans les limites de la validation initiale.
+
+Le diff contre `origin/main` ne contient aucune modification backend, test backend, workflow, design system, cœur de chargement ni fichier propre aux autres modules. Les fichiers backend apportés par l'intégration correspondent exactement à ceux de `main`.
+
+Journaux : `/tmp/ops-pr-main-test.log`, `/tmp/ops-pr-integrated-test.log`, `/tmp/ops-pr-comparison-results.json`, `/tmp/ops-pr-integration-targeted.log`, `/tmp/ops-pr-integration-chrome.log`. Captures : `/tmp/ops-pr-integration-captures/` et `/tmp/ops-pr-integration-fiche/`.
 
 ## Modifications réalisées
 
@@ -28,7 +50,7 @@ Le calcul reste `max(0, effectif_affecté - effectif_contractuel)`. Zéro explic
 
 Aucun fichier backend, droit ou enregistrement d'affectation n'est modifié. La donnée métier nécessaire à une future identification nominative est décrite dans [Présentation des surplus OPS](ops-surplus-presentation.md). Le modèle backend actuel utilisant zéro par défaut, une distinction persistante entre « non renseigné » et « zéro » nécessiterait une évolution explicite du modèle et du DTO.
 
-## Résultats des tests
+## Résultats de la validation initiale
 
 Les comparaisons initiales utilisent deux copies figées, exécutées séquentiellement. Aucun fichier source n'a été édité pendant cette comparaison ni pendant les passes complètes finales. Le jeu de fichiers correspond au script `npm test`, précédé de `pretest`, avec les mêmes options pour les deux références et la version finale : `--test-force-exit --test-concurrency=2 --test-timeout=360000`.
 
@@ -77,4 +99,4 @@ Les artefacts restent hors du dépôt ; ils peuvent être supprimés par le nett
 
 Les commits reçus `02b6fa58` et `df2175d0` sont conservés. `b61a0111` finalise les composants, les filtres, le confinement CSS et les surplus, avec leurs tests et la note métier. Un commit documentaire distinct conserve ce rapport.
 
-Aucun push, aucune fusion dans `main` et aucun déploiement n'a été effectué.
+La validation initiale est restée locale. La préparation de PR autorise ensuite le push de la branche et l'ouverture de la revue. Aucune fusion dans `main` et aucun déploiement ne sont autorisés par cette préparation.
