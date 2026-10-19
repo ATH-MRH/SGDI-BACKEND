@@ -459,7 +459,9 @@ test('OPS effectifs: facettes postes complètes et page corrigée par le serveur
   const {t,w,view}=opsPageFixture();
   w.SGDI_API.employees.page=async()=>({...pageResult([opsEmployee(100)],1,1),filters:{postes:['Gardien','Cariste page suivante']}});
   await t.renderEffectif(view,'recap',true);
-  const poste=view.querySelector('select[onchange*="setOpsEffectifFilter(\'poste\'"]');
+  // POSTE / FONCTION est dans la barre commune (plus dans la carte de filtres).
+  const poste=view.querySelector('[data-effectif-poste-filter]');
+  assert.equal(view.querySelector('select[onchange*="setOpsEffectifFilter(\'poste\'"]'),null);
   assert.deepStrictEqual(Array.from(poste.options,o=>o.value),['','Cariste page suivante','Gardien']);
   await t.setEffectifPage('actifs',7);
   assert.strictEqual(t.opsEffectifPageParams('actifs').page,1);

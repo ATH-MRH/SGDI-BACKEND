@@ -4565,7 +4565,7 @@ function syncOpsPresentation(){
       continue;
     }
     // Conserve les éléments, handlers, liens, états désactivés et validations de formulaire.
-    const selector="button.btn,a.btn,.effectif-open-btn,.ops-outgoing-open,.ops-outgoing-page-btn,.ops-sites-cc-btn,.ops-sites-cc-more,.ops-cc-action";
+    const selector="button.btn,a.btn,.effectif-open-btn,.effectif-toolbar-reset,.ops-outgoing-open,.ops-outgoing-page-btn,.ops-sites-cc-btn,.ops-sites-cc-more,.ops-cc-action";
     root.querySelectorAll(selector).forEach(button=>{
       if(!button.classList.contains("ops-btn")){
         button.classList.add("ops-btn");button.dataset.opsEnhanced="1";
@@ -8848,6 +8848,9 @@ function normalizePageHeader(view){
   // dont le dégradé disparaissait entièrement à cause de cette règle).
   // This page owns its header; its table and pagination are not header actions.
   if(first.matches('[data-drh-recruitment-readonly],.drh-pilot-dashboard,.clients-panel,.admin-users-page,.ops-outgoing-page'))return;
+  // Gestion des effectifs (DRH / OPS) possède sa barre sticky : classer toute la zone en
+  // en-tête générique la mettait en flex horizontal et réduisait la barre à 0 px de large.
+  if(first.querySelector(':scope > .effectif-page > .effectif-sticky-head'))return;
   if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero')||first.classList.contains('drh-leave-page'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');
@@ -13697,25 +13700,9 @@ function applyOpsEffectifFilters(list){
   const q=String(f.q||"").trim().toLowerCase();
   const ageMin=parseInt(f.ageMin,10);
   const ageMax=parseInt(f.ageMax,10);
-  const selectedSite=f.site&&f.site!=="__none__"?(db.sites||[]).find(s=>String(s.id)===String(f.site)||String(s.backendId||"")===String(f.site)):null;
-  const selectedSiteAgentRefs=selectedSite?backendAssignmentRefsForSite(selectedSite):null;
+  // SITE et POSTE / FONCTION sont appliqués par effectifFilteredData (barre commune DRH / OPS).
   return (list||[]).filter(a=>{
-    const aff=agentLiveAffectation(a);
-    const siteId=String(aff?.siteId||"");
-    const siteName=String(aff?.siteName||"");
-    const poste=String(aff?.poste||a.affectationCourante?.poste||a.fonction||a.position||"");
     const age=ageFromDate(a.dateNaissance);
-    if(f.site==="__none__"){if(siteId||siteName)return false}
-    else if(f.site){
-      if(selectedSiteAgentRefs){
-        if(!employeeMatchesAssignmentRefs(a,selectedSiteAgentRefs))return false;
-      }else{
-      const directRef=selectedSite?siteMatchesReference(selectedSite,{...aff,siteId:aff?.siteId??a.siteId,site_id:a.site_id}):false;
-      const listedRef=false;
-      if(!directRef&&!listedRef&&siteId!==String(f.site)&&effectifAgentSiteKey(a)!==String(f.site))return false;
-      }
-    }
-    if(f.poste&&poste!==f.poste)return false;
     if(f.situation&&String(a.situation||"")!==f.situation)return false;
     if(f.recrutFrom&&String(a.dateRecrutement||"")<f.recrutFrom)return false;
     if(f.recrutTo&&String(a.dateRecrutement||"")>f.recrutTo)return false;
@@ -13745,14 +13732,18 @@ function effectifFilteredData(filter){
   const soc=effectifSocieteFilter();
   if(soc)list=list.filter(a=>a.societe===soc);
   const filterSource=list.slice();
-  // Filtre SITE (DRH et OPS) : options et compteurs sur la liste avant ce filtre ; un site
-  // hors société / périmètre est remis à « Tous les sites » avant d'être appliqué.
-  const siteOptions=typeof effectifSiteFilterEnabled==="function"&&effectifSiteFilterEnabled()?effectifSiteFilterOptions(filterSource):null;
+  // Barre commune DRH / OPS : compteurs SITE avant le filtre site, compteurs POSTE après le
+  // site et avant le poste ; un choix hors société / périmètre revient à « Tous ».
+  const toolbar=typeof effectifSiteFilterEnabled==="function"&&effectifSiteFilterEnabled();
+  const siteOptions=toolbar?effectifSiteFilterOptions(filterSource):null;
   const siteFilter=siteOptions?effectifSiteFilterValue(siteOptions):"";
-  if(siteFilter&&!isOpsEffectifContext())list=list.filter(a=>effectifAgentSiteKey(a)===siteFilter);
+  if(siteFilter)list=list.filter(a=>effectifAgentSiteKey(a)===siteFilter);
+  const posteOptions=toolbar?effectifPosteOptionsFromList(filterSource,list):null;
+  const posteFilter=posteOptions?effectifPosteFilterValue(posteOptions):"";
+  if(posteFilter)list=list.filter(a=>effectifAgentPoste(a)===posteFilter);
   list=applyOpsEffectifFilters(list);
   list=sortEffectif(list,effectifSort);
-  return{list,title,soc,filter,filterSource,siteOptions,siteFilter};
+  return{list,title,soc,filter,filterSource,siteOptions,siteFilter,posteOptions,posteFilter};
 }
 
 

@@ -22,7 +22,7 @@ test('OPS : effectifs compacts, actions communes et surplus honnête en Chrome',
         const root=document.querySelector('.ops-effectif-page');
         const frame=root.querySelector('.effectif-table-card');
         const row=root.querySelector('tbody tr');
-        const tools=root.querySelector('.ops-effectif-tools');
+        const tools=root.querySelector('.effectif-toolbar');
         return {width:innerWidth,overflow:document.documentElement.scrollWidth-innerWidth,
           viewOverflow:document.getElementById('view').scrollWidth-document.getElementById('view').clientWidth,
           rowHeight:row.getBoundingClientRect().height,tableDisplay:getComputedStyle(row).display,
@@ -40,7 +40,7 @@ test('OPS : effectifs compacts, actions communes et surplus honnête en Chrome',
   }
   await page.setViewport({width:1440,height:900});
   await t.test('recherche, site, tri et filtres avancés conservent leurs handlers',async()=>{
-    const search='.ops-effectif-tools input';
+    const search='.effectif-toolbar-search input';
     await page.type(search,'KT01');
     await page.waitForFunction(()=>document.querySelectorAll('.ops-effectif-page tbody tr[data-employee-id]').length===1);
     assert.match(await page.$eval('.ops-effectif-page tbody',el=>el.textContent),/KT01/);
@@ -48,7 +48,10 @@ test('OPS : effectifs compacts, actions communes et surplus honnête en Chrome',
     await page.waitForFunction(()=>document.querySelectorAll('.ops-effectif-page tbody tr[data-employee-id]').length===7);
     await page.select('#effectif-site-filter',String(atlas.fixture.sites[1]));
     await page.waitForFunction(()=>document.querySelectorAll('.ops-effectif-page tbody tr[data-employee-id]').length===3);
-    await page.select('.ops-effectif-tools select[onchange*="setEffectifSort"]','nom_desc');
+    assert.equal(await page.$$eval('#effectif-poste-filter',els=>els.length),1,'un seul filtre Poste dans la barre partagée');
+    assert.equal(await page.$$eval('#ops-filter-poste',els=>els.length),0,'aucun ancien filtre Poste en double');
+    await page.select('#effectif-poste-filter','Agent');
+    await page.select('.effectif-toolbar select[onchange*="setEffectifSort"]','nom_desc');
     await page.waitForFunction(()=>!document.querySelector('#effectif-list-zone[aria-busy="true"]'));
     assert.equal(await page.$eval('#effectif-site-filter',el=>el.value),String(atlas.fixture.sites[1]));
     await page.click('[aria-controls="ops-effectif-advanced"]');

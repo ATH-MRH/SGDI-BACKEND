@@ -138,3 +138,36 @@ def test_site_limited_supervisor_sees_only_authorized_sites(client, world):
     listed = client.get("/api/ops/sites", headers=headers)
     assert listed.status_code == 200
     assert {row["id"] for row in listed.json()} == {sites["hamoul"]}
+
+
+def test_shortcut_counts_cover_the_whole_result_not_the_page(client, auth_headers, world):
+    sites = world["sites"]
+
+    def counts(headers=auth_headers, **params):
+        return _page(client, headers, page_size=5, **params)["filters"]["counts"]
+
+    base = counts(society=SOC_A)
+    assert {row["site_id"]: row["count"] for row in base["sites"]} == {sites["hamoul"]: 6, sites["x"]: 1}
+    assert (base["sites_none"], base["sites_total"]) == (2, 9)
+    assert base["postes"] == [{"poste": "APS", "count": 9}] and base["postes_total"] == 9
+    # SITE ne change pas ses propres compteurs ; POSTE devient contextuel au site.
+    hamoul = counts(society=SOC_A, site_id=sites["hamoul"])
+    assert hamoul["sites_total"] == 9 and hamoul["postes_total"] == 6
+    assert counts(society=SOC_A, site_id="__none__")["postes_total"] == 2
+    # Le filtre POSTE et la recherche n'alimentent pas les compteurs.
+    assert counts(society=SOC_A, site_id=sites["hamoul"], poste="APS", q="ABDEL") == hamoul
+    data = _page(client, auth_headers, society=SOC_A, poste="Cariste")
+    assert data["total"] == 0 and data["filters"]["counts"]["postes_total"] == 9
+    supervisor = counts(world["headers"]["supervisor"])
+    assert [row["site_id"] for row in supervisor["sites"]] == [sites["hamoul"]]
+    assert (supervisor["sites_none"], supervisor["sites_total"]) == (0, 6)
+
+
+def test_shortcut_counts_stay_bounded_and_keep_the_selection(monkeypatch, client, auth_headers, world):
+    from app.modules.ops import employee_photos
+    monkeypatch.setattr(employee_photos, "SHORTCUT_COUNTS_LIMIT", 1)
+    sites = world["sites"]
+    top = _page(client, auth_headers, society=SOC_A)["filters"]["counts"]
+    assert [row["site_id"] for row in top["sites"]] == [sites["hamoul"]] and top["sites_total"] == 9
+    chosen = _page(client, auth_headers, society=SOC_A, site_id=sites["x"])["filters"]["counts"]
+    assert [row["site_id"] for row in chosen["sites"]] == [sites["hamoul"], sites["x"]], "le site choisi reste compté"

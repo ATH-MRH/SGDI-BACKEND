@@ -36,28 +36,44 @@ function effectifRecapCardsHTML(activeFilter,showTitle,stable){
     </a>`).join("")}</div>`;
 }
 
+// Icônes au trait (même gabarit SVG que l'accueil du Portail DRH), aucune bibliothèque ajoutée.
+const DRH_EFFECTIF_ACTION_ICONS={
+  detail:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  maladie:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  conge:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  rec_periode_essai:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
+  suspendre:'<path d="M9 5v14M15 5v14"/>',
+  convoquer:'<path d="M3 10v4h4l7 5V5l-7 5z"/><path d="M17.5 9a4 4 0 0 1 0 6M8 14l1.5 5"/>',
+  blacklister:'<circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/>',
+  mise_en_demeure:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 5a3 3 0 0 1 0 6M21 20a5 5 0 0 0-4-4.9"/>',
+  periode_enc:'<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/>',
+  sanctionner:'<path d="m14 13-7.5 7.5a2.1 2.1 0 0 1-3-3L11 10"/><path d="m16 16 5-5M8 8l5-5M9.5 6.5l8 8"/>',
+  avenant:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M14 3v5h5v3M18.4 13.6a1.9 1.9 0 0 1 2.7 2.7L16 21.4l-3.5.9.9-3.5z"/>',
+  nouveau_contrat:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/>',
+  fin_contrat:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 15h7M13 12l3 3-3 3"/>'
+};
 function drhEffectifActionsBarHTML(){
   const btns=[
-    {k:"detail",           l:"DETAIL",             c:"#1e3a8a"},
-    {k:"maladie",          l:"MALADIE",            c:"#f97316"},
-    {k:"conge",            l:"CONGÉ",              c:"#0369a1"},
-    {k:"rec_periode_essai",l:"REC/PERIODE D'ESSAI",c:"#7c3aed"},
-    {k:"suspendre",        l:"SUSPENDRE",          c:"#dc2626"},
-    {k:"convoquer",        l:"CONVOQUER",          c:"#0c4a6e"},
-    {k:"blacklister",      l:"BLACKLISTER",        c:"#111827"},
-    {k:"mise_en_demeure",  l:"MISE EN DEMEURE",    c:"#b45309"},
-    {k:"periode_enc",      l:"PERIODE E-N-C",      c:"#7c2d12"},
-    {k:"sanctionner",      l:"SANCTIONNER",        c:"#9f1239"},
-    {k:"avenant",          l:"AVENANT",            c:"#0f766e"},
-    {k:"nouveau_contrat",  l:"NOUVEAU CONTRAT",    c:"#1d4ed8"},
-    {k:"fin_contrat",      l:"FIN DE CONTRAT",     c:"#374151"},
+    {k:"detail",           l:"DETAIL"},
+    {k:"maladie",          l:"MALADIE"},
+    {k:"conge",            l:"CONGÉ"},
+    {k:"rec_periode_essai",l:"REC/PERIODE D'ESSAI"},
+    {k:"suspendre",        l:"SUSPENDRE"},
+    {k:"convoquer",        l:"CONVOQUER"},
+    {k:"blacklister",      l:"BLACKLISTER"},
+    {k:"mise_en_demeure",  l:"MISE EN DEMEURE"},
+    {k:"periode_enc",      l:"PERIODE E-N-C"},
+    {k:"sanctionner",      l:"SANCTIONNER"},
+    {k:"avenant",          l:"AVENANT"},
+    {k:"nouveau_contrat",  l:"NOUVEAU CONTRAT"},
+    {k:"fin_contrat",      l:"FIN DE CONTRAT"},
   ];
-  return `<section class="drh-effectif-actions-card">
+  return `<section class="drh-effectif-actions-card" aria-label="Actions à faire">
     <div class="drh-effectif-actions-head">
       <h3>Actions à faire</h3>
       <span>Fiche en lecture seule · actions RH autorisées</span>
     </div>
-    <div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-btn" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>
+    <div class="drh-effectif-actions-bar">${btns.map(({k,l})=>`<button type="button" class="drh-effectif-action-btn" onclick="openRhEffectifActionModal('${k}')">${drhPortalHomeIcon(DRH_EFFECTIF_ACTION_ICONS[k])}<span>${l}</span></button>`).join("")}</div>
   </section>`;
 }
 
@@ -260,10 +276,15 @@ function setOpsEffectifSearch(v){
   opsEffectifSearchTimer=setTimeout(()=>applyOpsEffectifSearchInPlace(v),80);
 }
 
-// Filtre SITE commun DRH / OPS. Valeur = identifiant SQL du site (siteBackendId de
-// l'affectation active, le site_id de /api/ops/employees/page) ; "__none__" = aucune
-// affectation active. La société active est mémorisée avec le choix : en changer revient
-// sur « Tous les sites » plutôt que de garder un site hors périmètre.
+// Barre de pilotage de Gestion des effectifs, commune DRH / OPS : recherche, SITE,
+// POSTE / FONCTION, TRI (inchangé), raccourcis comptés et réinitialisation.
+// Ordre des filtres : société → périmètre → SITE → POSTE → recherche.
+// - Compteurs SITE : population du périmètre, avant le filtre site.
+// - Compteurs POSTE : après le filtre site, avant le filtre poste.
+// - Compteur de l'écran : liste réellement affichée, après tous les filtres.
+// SITE = identifiant SQL du site de l'affectation active (siteBackendId, le site_id de
+// /api/ops/employees/page) ; "__none__" = aucune affectation active. La société active est
+// mémorisée avec le choix : en changer revient sur « Tous les sites ».
 const EFFECTIF_SITE_NONE="__none__";
 const DRH_EFFECTIF_SITE_KEY="drhEffectifSiteFilter";
 function effectifSiteFilterEnabled(){return isOpsEffectifContext()||isDrhModuleContext()}
@@ -276,68 +297,178 @@ function effectifAgentSiteKey(a){
   const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
   return site?effectifSiteKey(site):String(aff.siteId||"nom:"+normalizedSearchText(aff.siteName));
 }
-function effectifSiteFilterState(){
-  if(isOpsEffectifContext()){const f=opsEffectifFilters();return {site:f.site,soc:f.siteSoc}}
+// Poste opérationnel : celui de l'affectation active, sinon la fonction / le poste de la
+// fiche — la règle de la colonne Poste et de /api/ops/employees/page.
+function effectifAgentPoste(a){
+  const aff=agentLiveAffectation(a)||{};
+  return String(aff.poste||a?.affectationCourante?.poste||a?.fonction||a?.position||"").trim();
+}
+function effectifFilterState(){
+  if(isOpsEffectifContext()){const f=opsEffectifFilters();return {site:f.site,soc:f.siteSoc,poste:f.poste}}
   try{return JSON.parse(sessionStorage.getItem(DRH_EFFECTIF_SITE_KEY)||"{}")||{}}catch(e){return {}}
 }
-function storeEffectifSiteFilter(site){
-  const value={site:String(site||""),soc:effectifSocieteFilter()||""};
+function storeEffectifFilters(patch){
+  const next={...effectifFilterState(),...patch,soc:effectifSocieteFilter()||""};
+  const site=String(next.site||""),poste=String(next.poste||"");
   if(isOpsEffectifContext()){
-    const f=opsEffectifFilters();f.site=value.site;f.siteSoc=value.soc;
+    const f=opsEffectifFilters();f.site=site;f.siteSoc=next.soc;f.poste=poste;
     sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
-  }else sessionStorage.setItem(DRH_EFFECTIF_SITE_KEY,JSON.stringify(value));
+  }else sessionStorage.setItem(DRH_EFFECTIF_SITE_KEY,JSON.stringify({site,poste,soc:next.soc}));
 }
-// Options = sites déjà chargés (db.sites, filtrés par le serveur selon sociétés et sites
-// autorisés) de la société active, complétés par les sites des affectations actives de la
-// liste affichée. Compteurs seulement quand cette liste est complète en mémoire (DRH).
-function effectifSiteFilterOptions(baseList){
+// Options SITE = sites déjà chargés (db.sites, filtrés par le serveur selon sociétés et sites
+// autorisés) de la société active, complétés par les sites des affectations de la liste.
+// Compteurs : liste complète en mémoire (DRH, superviseur) ou agrégat serveur (OPS paginé).
+function effectifSiteFilterOptions(baseList,serverCounts){
   const soc=effectifSocieteFilter();
   const byKey=new Map();
+  const entry=(key,label)=>{if(!byKey.has(key))byKey.set(key,{value:key,label:label||"Site",count:0});return byKey.get(key)};
   (db.sites||[]).filter(s=>siteMatchesSociete(s,soc)&&siteInSupervisorScope(s)).forEach(s=>{
     const key=effectifSiteKey(s);
-    if(key)byKey.set(key,{value:key,label:s.nom||s.intitule||"Site",count:0});
+    if(key)entry(key,s.nom||s.intitule);
   });
-  let none=0;
+  let none=0,total=(baseList||[]).length;
   (baseList||[]).forEach(a=>{
     const key=effectifAgentSiteKey(a);
     if(key===EFFECTIF_SITE_NONE){none++;return}
-    if(!byKey.has(key)){const aff=agentLiveAffectation(a)||{};byKey.set(key,{value:key,label:aff.siteName||aff.siteId||"Site",count:0})}
-    byKey.get(key).count++;
+    const aff=agentLiveAffectation(a)||{};
+    entry(key,aff.siteName||aff.siteId).count++;
   });
+  if(serverCounts){
+    (serverCounts.sites||[]).forEach(row=>{entry(String(row.site_id),row.name).count=Number(row.count)||0});
+    none=Number(serverCounts.sites_none)||0;total=Number(serverCounts.sites_total)||0;
+  }
   const sites=[...byKey.values()].sort((x,y)=>x.label.localeCompare(y.label,"fr",{numeric:true,sensitivity:"base"}));
-  return {sites,none,total:(baseList||[]).length,counted:Array.isArray(baseList),known:sites.length>0||none>0};
+  // Serveur : seuls les plus gros sites sont comptés ; pas de faux zéro dans le sélecteur.
+  return {sites,none,total,counted:Array.isArray(baseList)||!!serverCounts,partial:!!serverCounts&&!Array.isArray(baseList),known:sites.length>0||none>0};
 }
 function effectifSiteFilterValue(options){
-  const state=effectifSiteFilterState();
+  const state=effectifFilterState();
   let site=String(state.site||"");
   if(!site||site===EFFECTIF_SITE_NONE)return site;
   const socChanged=state.soc!==undefined&&String(state.soc||"")!==String(effectifSocieteFilter()||"");
   // Ancien choix OPS mémorisé avec l'identifiant local du site.
   const known=(db.sites||[]).find(s=>String(s.id)===site||String(s.backendId||"")===site);
   if(known)site=effectifSiteKey(known);
-  if(socChanged||(options?.known&&!options.sites.some(o=>o.value===site))){storeEffectifSiteFilter("");return ""}
+  if(socChanged||(options?.known&&!options.sites.some(o=>o.value===site))){storeEffectifFilters({site:""});return ""}
   return site;
 }
-function effectifSiteFilterSelectHTML(filter,options,selected){
-  const n=count=>options.counted?` (${count})`:"";
-  return `<select id="effectif-site-filter" class="select" data-no-lock data-effectif-site-filter aria-label="Filtrer les employés par site" onchange="setEffectifSiteFilter(this.value,'${escapeHTML(filter||"actifs")}')">
-    <option value="" ${selected?"":"selected"}>Tous les sites${n(options.total)}</option>
-    ${options.sites.map(o=>`<option value="${escapeHTML(o.value)}" ${selected===o.value?"selected":""}>${escapeHTML(o.label)}${n(o.count)}</option>`).join("")}
-    <option value="${EFFECTIF_SITE_NONE}" ${selected===EFFECTIF_SITE_NONE?"selected":""}>Sans affectation${n(options.none)}</option>
+// Options POSTE = postes présents dans le périmètre (avant le filtre site, pour ne pas faire
+// disparaître le choix courant), comptés sur la liste déjà filtrée par site.
+function effectifPosteOptions(labels,counts,total,counted){
+  const byValue=new Map();
+  (labels||[]).forEach(label=>{const value=String(label||"").trim();if(value&&!byValue.has(value))byValue.set(value,{value,label:value,count:0})});
+  counts.forEach((count,value)=>{if(!byValue.has(value))byValue.set(value,{value,label:value,count:0});byValue.get(value).count=count});
+  const postes=[...byValue.values()].sort((x,y)=>x.label.localeCompare(y.label,"fr",{numeric:true,sensitivity:"base"}));
+  return {postes,total,counted,known:postes.length>0};
+}
+function effectifPosteOptionsFromList(scopeList,siteList){
+  const counts=new Map();
+  (siteList||[]).forEach(a=>{const poste=effectifAgentPoste(a);if(poste)counts.set(poste,(counts.get(poste)||0)+1)});
+  return effectifPosteOptions((scopeList||[]).map(effectifAgentPoste),counts,(siteList||[]).length,true);
+}
+function effectifPosteOptionsFromServer(postes,serverCounts){
+  const counts=new Map((serverCounts?.postes||[]).map(row=>[String(row.poste||"").trim(),Number(row.count)||0]));
+  return {...effectifPosteOptions(postes,counts,Number(serverCounts?.postes_total)||0,!!serverCounts),partial:!!serverCounts};
+}
+function effectifPosteFilterValue(options){
+  const poste=String(effectifFilterState().poste||"");
+  if(poste&&options?.known&&!options.postes.some(o=>o.value===poste)){storeEffectifFilters({poste:""});return ""}
+  return poste;
+}
+function effectifFilterSelectHTML(kind,filter,items,selected,{allLabel,total,counted,partial,extra=""}){
+  const n=count=>counted&&!partial?` (${count})`:"";
+  const f=escapeHTML(filter||"actifs");
+  const handler=kind==="site"?"setEffectifSiteFilter":"setEffectifPosteFilter";
+  const aria=kind==="site"?"Filtrer les employés par site":"Filtrer les employés par poste ou fonction";
+  return `<select id="effectif-${kind}-filter" class="select" data-no-lock data-effectif-${kind}-filter data-effectif-focus="${kind}" aria-label="${aria}" onchange="${handler}(this.value,'${f}')">
+    <option value="" ${selected?"":"selected"}>${allLabel}${counted?` (${total})`:""}</option>
+    ${items.map(o=>`<option value="${escapeHTML(o.value)}" ${selected===o.value?"selected":""}>${escapeHTML(o.label)}${n(o.count)}</option>`).join("")}${extra}
   </select>`;
 }
-function effectifSiteEmptyMessage(selected){
-  if(selected===EFFECTIF_SITE_NONE)return "Aucun employé sans affectation";
-  return selected?"Aucun employé affecté à ce site":"Aucun employé.";
+function effectifSiteFilterSelectHTML(filter,options,selected){
+  const none=`<option value="${EFFECTIF_SITE_NONE}" ${selected===EFFECTIF_SITE_NONE?"selected":""}>Sans affectation${options.counted?` (${options.none})`:""}</option>`;
+  return effectifFilterSelectHTML("site",filter,options.sites,selected,{allLabel:"Tous les sites",total:options.total,counted:options.counted,partial:options.partial,extra:none});
 }
-function setEffectifSiteFilter(value,filter){
-  storeEffectifSiteFilter(value);
+function effectifPosteFilterSelectHTML(filter,options,selected){
+  return effectifFilterSelectHTML("poste",filter,options.postes,selected,{allLabel:"Tous les postes",total:options.total,counted:options.counted,partial:options.partial});
+}
+// Raccourcis : « Tous », les plus gros effectifs, le choix courant et (site) « Sans
+// affectation » ; la liste complète reste dans le sélecteur.
+function effectifChipsHTML(kind,filter,items,selected,label){
+  const f=escapeHTML(filter||"actifs");
+  const handler=kind==="site"?"setEffectifSiteFilter":"setEffectifPosteFilter";
+  return `<div class="effectif-chip-group" role="group" aria-label="${label}">${items.map(o=>{
+    const active=selected===o.value;
+    const value=escapeHTML(jsString(o.value));
+    return `<button type="button" class="effectif-chip${active?" is-active":""}" aria-pressed="${active}" data-effectif-chip="${kind}" data-value="${escapeHTML(o.value)}" data-effectif-focus="${kind}-chip:${escapeHTML(o.value)}" title="${escapeHTML(o.title||o.label)} : ${o.count} employé(s)" onclick="${handler}('${value}','${f}','${kind}-chip:${value}')"><span class="effectif-chip-label">${escapeHTML(o.label)}</span><span class="effectif-chip-count">${o.count}</span></button>`;
+  }).join("")}</div>`;
+}
+function effectifTopItems(items,selected,max){
+  const top=items.filter(o=>o.count>0).sort((x,y)=>y.count-x.count||x.label.localeCompare(y.label,"fr")).slice(0,max);
+  const current=selected&&!top.some(o=>o.value===selected)?items.find(o=>o.value===selected):null;
+  return current?[...top,current]:top;
+}
+function effectifSiteChipsHTML(filter,options,selected){
+  if(!options?.counted)return "";
+  const items=[{value:"",label:"Tous",title:"Tous les sites",count:options.total},...effectifTopItems(options.sites,selected,2)];
+  if(options.none||selected===EFFECTIF_SITE_NONE)items.push({value:EFFECTIF_SITE_NONE,label:"Sans affectation",count:options.none});
+  return effectifChipsHTML("site",filter,items,selected,"Raccourcis par site");
+}
+function effectifPosteChipsHTML(filter,options,selected){
+  if(!options?.counted)return "";
+  const items=[{value:"",label:"Tous",title:"Tous les postes",count:options.total},...effectifTopItems(options.postes,selected,3)];
+  return effectifChipsHTML("poste",filter,items,selected,"Raccourcis par poste ou fonction");
+}
+const EFFECTIF_TOOLBAR_ICONS={
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'
+};
+function effectifToolbarHTML(filter,{title,count,soc,sortHTML,siteOptions,siteFilter,posteOptions,posteFilter}){
+  const f=escapeHTML(filter||"actifs");
+  const chips=`${effectifSiteChipsHTML(filter,siteOptions,siteFilter)}${effectifPosteChipsHTML(filter,posteOptions,posteFilter)}`;
+  return `<section class="effectif-toolbar" aria-label="Recherche et filtres des effectifs">
+    <div class="effectif-toolbar-title"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p><span data-effectif-count>${count}</span> employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
+    <div class="effectif-toolbar-search">${drhPortalHomeIcon(EFFECTIF_TOOLBAR_ICONS.search)}<input class="input" data-no-lock aria-label="Rechercher par nom, prénom ou code" value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${f}')"/></div>
+    <div class="effectif-toolbar-field effectif-toolbar-site"><label for="effectif-site-filter">Site</label>${effectifSiteFilterSelectHTML(filter,siteOptions,siteFilter)}</div>
+    <div class="effectif-toolbar-field effectif-toolbar-poste"><label for="effectif-poste-filter">Poste / fonction</label>${effectifPosteFilterSelectHTML(filter,posteOptions,posteFilter)}</div>
+    <div class="effectif-toolbar-field effectif-toolbar-sort"><label for="effectif-sort">Tri</label>${sortHTML}</div>
+    <button type="button" class="effectif-toolbar-reset" data-effectif-focus="reset" onclick="resetEffectifToolbar('${f}')" title="Réinitialiser la recherche, les filtres et le tri" aria-label="Réinitialiser la recherche, les filtres et le tri">${drhPortalHomeIcon(EFFECTIF_TOOLBAR_ICONS.reset)}<span>Réinitialiser</span></button>
+    ${chips?`<div class="effectif-toolbar-chips">${chips}</div>`:""}
+  </section>`;
+}
+function effectifEmptyStateHTML(filter,{loading,siteFilter,posteFilter,searching}){
+  if(loading)return `<div class="card p-10 text-center text-slate-500" data-effectif-empty><p data-effectif-empty-message>Chargement des employés…</p></div>`;
+  const message=posteFilter||(siteFilter&&searching)?"Aucun employé correspondant à ces filtres"
+    :siteFilter===EFFECTIF_SITE_NONE?"Aucun employé sans affectation":siteFilter?"Aucun employé affecté à ce site":"Aucun employé.";
+  const reset=siteFilter||posteFilter?`<button type="button" class="btn btn-secondary text-xs mt-3" onclick="resetEffectifToolbar('${escapeHTML(filter||"actifs")}')">Réinitialiser les filtres</button>`:"";
+  return `<div class="card p-10 text-center text-slate-500" data-effectif-empty><p data-effectif-empty-message>${message}</p>${reset}</div>`;
+}
+// Le contenu est recréé au rendu : rendre le focus clavier à l'élément équivalent.
+function rerenderEffectifToolbar(filter,focusKey){
   const done=setEffectifStableFilter(isOpsEffectifContext()?opsEffectifActiveFilter():(filter||"actifs"));
-  // Le sélecteur est recréé au rendu : rendre le focus clavier s'il a été perdu.
   return Promise.resolve(done).then(()=>{
     const active=document.activeElement;
-    if(!active||active===document.body)document.querySelector("#effectif-list-zone [data-effectif-site-filter]")?.focus({preventScroll:true});
+    if(focusKey&&(!active||active===document.body))document.querySelector(`#effectif-list-zone [data-effectif-focus="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
   });
+}
+function setEffectifSiteFilter(value,filter,focusKey="site"){
+  storeEffectifFilters({site:String(value||"")});
+  return rerenderEffectifToolbar(filter,focusKey);
+}
+function setEffectifPosteFilter(value,filter,focusKey="poste"){
+  storeEffectifFilters({poste:String(value||"")});
+  return rerenderEffectifToolbar(filter,focusKey);
+}
+// Réinitialise recherche, SITE, POSTE et TRI ; jamais la société active.
+function resetEffectifToolbar(filter){
+  effectifSort="nom_asc";
+  storeEffectifFilters({site:"",poste:""});
+  if(isOpsEffectifContext()){
+    clearTimeout(opsEffectifSearchTimer);
+    const f=opsEffectifFilters();f.q="";
+    sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
+  }else sessionStorage.removeItem(effectifSearchKey(filter||"actifs"));
+  return rerenderEffectifToolbar(filter,"reset");
 }
 
 function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");return setEffectifStableFilter(opsEffectifActiveFilter())}
@@ -359,6 +490,8 @@ function applyOpsEffectifSearchInPlace(v){
   });
   const count=document.getElementById("ops-effectif-result-count");
   if(count)count.textContent=shown+" résultat(s) affiché(s)";
+  const visible=document.querySelector("#effectif-list-zone [data-effectif-count]");
+  if(visible)visible.textContent=String(shown);
 }
 
 function setEffectifSearch(v,filter){
@@ -379,6 +512,8 @@ function applyEffectifSearchInPlace(v){
   });
   const count=document.getElementById("effectif-search-result-count");
   if(count)count.textContent=q?shown+" résultat(s) affiché(s)":"";
+  const visible=document.querySelector("#effectif-list-zone [data-effectif-count]");
+  if(visible&&rows.length)visible.textContent=String(shown);
 }
 
 function effectifHeaderSearchHTML(filter){
@@ -399,14 +534,11 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   if(!isOpsEffectifContext())return "";
   const f=opsEffectifFilters();
   const advanced=opsEffectifAdvancedOpen();
-  const postes=[...new Set((sourceList||[]).map(a=>agentLiveAffectation(a)?.poste||a.affectationCourante?.poste||a.fonction||a.position||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const situations=[...new Set((sourceList||[]).map(a=>a.situation||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  if(f.poste&&!postes.includes(f.poste))postes.push(f.poste);
   if(f.situation&&!situations.includes(f.situation))situations.push(f.situation);
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card ops-effectif-filter-card">
     <div class="ops-effectif-filter-main">
-      <div><label class="label" for="ops-filter-poste">Poste / fonction</label><select id="ops-filter-poste" class="select" data-no-lock onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
       <div><label class="label" for="ops-filter-situation">Situation familiale</label><select id="ops-filter-situation" class="select" data-no-lock onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
       <div class="ops-effectif-filter-actions">${opsButtonHTML(advanced?"Masquer filtres":"Filtres avancés",{size:"sm",icon:"search",badge:["recrutFrom","recrutTo","birthFrom","birthTo","ageMin","ageMax"].filter(key=>String(f[key]??"")!=="").length,badgeLabel:"filtre(s) actif(s)",attrs:`aria-expanded="${advanced}" aria-controls="ops-effectif-advanced" onclick="toggleOpsEffectifAdvanced()"`})}${opsButtonHTML("Réinitialiser",{size:"sm",icon:"rotate",attrs:'onclick="resetOpsEffectifFilters()"'})}</div>
     </div>
@@ -505,7 +637,12 @@ function opsEffectifPageData(filter,result,list){
   const routeFilter=escapeHTML(filter||"actifs");
   const pagination=result?`<div class="flex items-center justify-between gap-2 p-3 text-sm" data-ops-effectif-pagination><div class="text-slate-500">${total} employé(s) · page ${page}/${pages}</div><div class="flex gap-2"><button type="button" class="btn btn-ghost text-xs" ${page<=1?"disabled":""} onclick="setEffectifPage('${routeFilter}',${page-1})">Précédent</button><button type="button" class="btn btn-ghost text-xs" ${page>=pages?"disabled":""} onclick="setEffectifPage('${routeFilter}',${page+1})">Suivant</button></div></div>`:"";
   const filterSource=Array.isArray(result?.filters?.postes)?result.filters.postes.map(poste=>({fonction:poste})):list;
-  return {list,title:titles[filter]||titles.actifs,soc:effectifSocieteFilter(),filterSource,total,pagination,loading:!result};
+  const counts=result?.filters?.counts||null;
+  const siteOptions=effectifSiteFilterOptions(null,counts);
+  const posteOptions=effectifPosteOptionsFromServer(Array.isArray(result?.filters?.postes)?result.filters.postes:[],counts);
+  const state=effectifFilterState();
+  return {list,title:titles[filter]||titles.actifs,soc:effectifSocieteFilter(),filterSource,total,pagination,loading:!result,
+    siteOptions,siteFilter:effectifSiteFilterValue(siteOptions),posteOptions,posteFilter:String(state.poste||""),searching:!!String(state.q||"").trim()};
 }
 async function renderOpsEffectifPage(view,filter){
   const request=++opsEffectifPageRequest;
@@ -521,6 +658,11 @@ async function renderOpsEffectifPage(view,filter){
     const result=await SGDI.employees.page(params);
     if(!current())return null;
     if(!result||!Array.isArray(result.items))throw new Error("Réponse employés invalide");
+    const scopePostes=result.filters?.postes;
+    if(params.poste&&Array.isArray(scopePostes)&&!scopePostes.includes(params.poste)){
+      storeEffectifFilters({poste:""});
+      return renderOpsEffectifPage(view,filter);
+    }
     // L'identifiant SQL lie toujours la photo à l'employé, même si des codes/anciens
     // identifiants se ressemblent entre sociétés.
     const list=result.items.map(row=>{
@@ -577,12 +719,14 @@ function effectifListHTML(filter,serverData){
   const data=serverData||effectifFilteredData(filter);
   const {list,title,soc,filterSource}=data;
   const total=serverData?serverData.total:list.length;
-  const siteOptions=effectifSiteFilterEnabled()?(data.siteOptions||effectifSiteFilterOptions(null)):null;
+  const toolbar=effectifSiteFilterEnabled();
+  const siteOptions=toolbar?(data.siteOptions||effectifSiteFilterOptions(null)):null;
   const siteFilter=siteOptions?(data.siteFilter??effectifSiteFilterValue(siteOptions)):"";
-  const siteHTML=siteOptions?effectifSiteFilterSelectHTML(filter,siteOptions,siteFilter):"";
+  const posteOptions=toolbar?(data.posteOptions||effectifPosteOptions([],new Map(),0,false)):null;
+  const posteFilter=posteOptions?(data.posteFilter??effectifPosteFilterValue(posteOptions)):"";
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
-  const sortHTML=`<select class="select" data-no-lock onchange="setEffectifSort(this.value)">
+  const sortHTML=`<select id="effectif-sort" class="select" data-no-lock data-effectif-focus="sort" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
     <option value="nom_desc" ${effectifSort==="nom_desc"?"selected":""}>Nom Z → A</option>
     <option value="recrut_asc" ${effectifSort==="recrut_asc"?"selected":""}>Recrutement (ancien → récent)</option>
@@ -590,25 +734,14 @@ function effectifListHTML(filter,serverData){
     <option value="mat_asc" ${effectifSort==="mat_asc"?"selected":""}>Code ↑</option>
     <option value="mat_desc" ${effectifSort==="mat_desc"?"selected":""}>Code ↓</option>
   </select>`;
-  const opsHeader=isOpsEffectifContext()?`<div class="card ops-effectif-hero">
-    <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${total} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
-    <div class="ops-effectif-tools"><label><span>Recherche</span><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/></label><label for="effectif-site-filter"><span>Site</span>${siteHTML}</label><label><span>Tri</span>${sortHTML}</label></div>
-  </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header drh-effectif-list-header--filters">
-    <div class="drh-effectif-title-block">
-      <h1 class="text-2xl font-black effectif-page-title" style="line-height:1.15">${escapeHTML(title)}</h1>
-      <p class="text-xs text-slate-400 mt-0.5">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:""}</p>
-    </div>
-    <div class="drh-effectif-search-slot">${effectifHeaderSearchHTML(filter)}</div>
-    <div class="drh-effectif-filter-slots">
-      <div class="drh-effectif-sort-slot drh-effectif-site-slot"><label for="effectif-site-filter" class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Site</label>${siteHTML}</div>
-      <div class="drh-effectif-sort-slot"><span class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Tri</span>${sortHTML}</div>
-    </div>
-  </div>`:`<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 mb-4"><div><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div>${effectifHeaderSearchHTML(filter)}<div class="flex items-center justify-end gap-2 flex-wrap"><span class="text-xs text-slate-500">Tri :</span><div style="max-width:260px">${sortHTML}</div></div></div>`;
-  return `<div class="effectif-page ${isOpsEffectifContext()?"ops-effectif-page":""}">${opsHeader}
-  ${isDrhModuleContext()&&filter!=="instance_affectation"?(filter==="suspension"?drhSuspensionOverviewHTML(list):drhEffectifActionsBarHTML()):""}
+  const drhActions=isDrhModuleContext()&&filter!=="instance_affectation";
+  const header=toolbar?`<div class="effectif-sticky-head">${effectifToolbarHTML(filter,{title,count:total,soc,sortHTML,siteOptions,siteFilter,posteOptions,posteFilter})}${drhActions&&filter!=="suspension"?drhEffectifActionsBarHTML():""}</div>
+  ${drhActions&&filter==="suspension"?drhSuspensionOverviewHTML(list):""}`
+    :`<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 mb-4"><div><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div>${effectifHeaderSearchHTML(filter)}<div class="flex items-center justify-end gap-2 flex-wrap"><span class="text-xs text-slate-500">Tri :</span><div style="max-width:260px">${sortHTML}</div></div></div>`;
+  return `<div class="effectif-page ${isOpsEffectifContext()?"ops-effectif-page":""}">${header}
   ${opsEffectifFiltersHTML(filterSource,total)}
   ${effectifBulkDeleteToolbarHTML()}
-  ${list.length===0?`<div class="card p-10 text-center text-slate-500">${serverData?.loading?"Chargement des employés…":escapeHTML(effectifSiteEmptyMessage(siteFilter))}</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
+  ${list.length===0?effectifEmptyStateHTML(filter,{loading:serverData?.loading,siteFilter,posteFilter,searching:!!data.searching}):`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
     <colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%">${isOpsEffectifContext()?`<col style="width:8%"><col style="width:6%"><col style="width:8%">`:""}<col style="width:108px"><col style="width:148px">${actionHeader?`<col style="width:92px">`:""}</colgroup>
     <thead><tr>${selectHead}${effectifTableHeadersHTML({ops:isOpsEffectifContext(),actionHeader})}</tr></thead>
     <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}${serverData?.pagination||""}</div>`;
