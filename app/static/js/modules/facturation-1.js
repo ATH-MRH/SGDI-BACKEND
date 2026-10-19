@@ -142,17 +142,20 @@ let factureFinanceWriteInFlight=false;
 async function factureFinanceReload(){
   try{await syncFacturationFromPostgres({})}catch(e){console.warn("Rechargement Facturation",e)}
 }
-async function factureFinanceWrite(collection,method,id,data,errorLabel){
+async function factureFinanceRequest(url,method,body,errorLabel){
   if(factureFinanceWriteInFlight)return null;
   factureFinanceWriteInFlight=true;
   const button=document.querySelector(".modal-bg form button:not([type=button])");if(button)button.disabled=true;
   try{
-    const url="/api/irongs/collections/"+collection+"/items"+(method==="DELETE"?"/"+encodeURIComponent(id):"");
-    const saved=await sgdiApi(url,method==="DELETE"?{method,legacy:false}:{method,body:{data},legacy:false});
+    const saved=await sgdiApi(url,body?{method,body,legacy:false}:{method,legacy:false});
     await factureFinanceReload();
     return saved||{};
   }catch(e){toast(errorLabel+" : "+(e.message||e),"error");return null}
   finally{factureFinanceWriteInFlight=false;if(button)button.disabled=false}
+}
+function factureFinanceWrite(collection,method,id,data,errorLabel){
+  const url="/api/irongs/collections/"+collection+"/items"+(method==="DELETE"?"/"+encodeURIComponent(id):"");
+  return factureFinanceRequest(url,method,method==="DELETE"?null:{data},errorLabel);
 }
 function factureFinanceIdField(prefix){return `<input type="hidden" name="id" value="${uid(prefix)}">`}
 
@@ -167,6 +170,7 @@ function openPaiementModal(factureId){
         <div><label class="label">Mode *</label><select class="select" name="mode" >${MODES_PAIEMENT.map(m=>`<option>${m}</option>`).join("")}</select></div>
         <div><label class="label">Référence</label><input class="input" name="reference" placeholder="N° chèque, virement..."/></div>
         <div class="col-span-2"><label class="label">Notes</label><textarea class="input" name="notes" rows="2"></textarea></div>
+        <p class="col-span-2 text-xs text-slate-500">Espèces : mouvement de caisse. Chèque et traite : à encaisser. Virement, carte, prélèvement : à rapprocher.</p>
       </div>
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-success">💾 Encaisser</button></div>
     </form>`);
@@ -208,10 +212,41 @@ async function confirmAvoir(factureId){
 function renderFactPaiements(view){
   const factIds=new Set(bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon").map(f=>f.id));
   const list=(db.paiements||[]).filter(p=>factIds.has(p.factureId)).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  const total=list.reduce((s,p)=>s+(p.montant||0),0);
-  view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💳 Paiements reçus</h1><p class="text-slate-500 text-sm">${list.length} paiements · Total ${money(total)}</p></div></div>
+  const total=list.filter(p=>p.suivi?.statut!=="impaye").reduce((s,p)=>s+(p.montant||0),0);
+  view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💳 Paiements reçus</h1><p class="text-slate-500 text-sm">${list.length} paiements · Total ${money(total)}${list.some(p=>p.suivi?.statut==="impaye")?" (impayés exclus)":""}</p></div></div>
     ${factTabs("paiements")}
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun paiement.</div>`:`<table><thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Mode</th><th>Réf.</th><th>Montant</th><th>Notes</th><th></th></tr></thead><tbody>${list.map(p=>{const f=db.factures.find(x=>x.id===p.factureId);return`<tr data-searchable><td class="text-xs">${formatDate(p.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(f?.client||"")}</td><td><span class="pill pill-blue">${safe(p.mode)}</span></td><td class="text-xs font-mono">${safe(p.reference)}</td><td class="font-bold text-emerald-600">${money(p.montant)}</td><td class="text-xs">${escapeHTML((p.notes||"").slice(0,40))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deletePaiement('${p.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun paiement.</div>`:`<table><thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Mode</th><th>Réf.</th><th>Montant</th><th>Suivi</th><th>Notes</th><th></th></tr></thead><tbody>${list.map(p=>{const f=db.factures.find(x=>x.id===p.factureId);return`<tr data-searchable data-paiement-id="${escapeHTML(p.id)}"><td class="text-xs">${formatDate(p.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(f?.client||"")}</td><td><span class="pill pill-blue">${safe(p.mode)}</span></td><td class="text-xs font-mono">${safe(p.reference)}</td><td class="font-bold ${p.suivi?.statut==="impaye"?"text-red-600 line-through":"text-emerald-600"}">${money(p.montant)}</td><td>${paiementSuiviHTML(p)}</td><td class="text-xs">${escapeHTML((p.notes||"").slice(0,40))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deletePaiement('${p.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+}
+
+// Suivi d'un règlement (serveur : PATCH /paiements/{id}/suivi, historisé et audité) :
+// chèque/traite à encaisser → encaissé ou impayé ; virement et autres moyens bancaires à
+// rapprocher → rapproché ; espèces encaissées immédiatement (caisse).
+const PAIEMENT_SUIVI_LIBELLES={encaisse:["Encaissé","pill-green"],a_encaisser:["À encaisser","pill-amber"],impaye:["Impayé","pill-red"],a_rapprocher:["À rapprocher","pill-amber"],rapproche:["Rapproché","pill-green"]};
+const PAIEMENT_SUIVI_ETAPES={a_encaisser:[["encaisse","Encaissé"],["impaye","Impayé"]],a_rapprocher:[["rapproche","Rapproché"]]};
+function paiementSuiviHTML(p){
+  const statut=p.suivi?.statut;if(!statut)return'<span class="text-xs text-slate-400">—</span>';
+  const [label,pill]=PAIEMENT_SUIVI_LIBELLES[statut]||[statut,"pill-gray"];
+  const actions=(PAIEMENT_SUIVI_ETAPES[statut]||[]).map(([to,txt])=>`<button class="btn btn-ghost text-xs" data-suivi="${to}" onclick="openPaiementSuiviModal('${p.id}','${to}')">${txt}</button>`).join("");
+  return `<span class="pill ${pill}">${label}</span>${actions}`;
+}
+function openPaiementSuiviModal(id,statut){
+  const label=(PAIEMENT_SUIVI_LIBELLES[statut]||[statut])[0];
+  openModal(`<h3 class="font-bold text-lg mb-4">Suivi du paiement : ${escapeHTML(label)}</h3>
+    <form onsubmit="event.preventDefault();confirmPaiementSuivi('${id}','${statut}')">
+      <div class="grid grid-2 gap-3">
+        <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
+        <div><label class="label">Référence ${statut==="rapproche"?"(relevé bancaire)":""}</label><input class="input" name="reference"/></div>
+        <div class="col-span-2"><label class="label">Motif${statut==="impaye"?" *":""}</label><textarea class="input" name="motif" rows="2"></textarea></div>
+      </div>
+      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
+    </form>`);
+}
+async function confirmPaiementSuivi(id,statut){
+  const fd=new FormData(document.querySelector(".modal-bg form"));
+  if(statut==="impaye"&&String(fd.get("motif")||"").trim().length<5){toast("Motif de l'impayé obligatoire","error");return}
+  const saved=await factureFinanceRequest("/api/irongs/paiements/"+encodeURIComponent(id)+"/suivi","PATCH",{statut,date:fd.get("date"),reference:fd.get("reference")||"",motif:fd.get("motif")||""},"Suivi du paiement non enregistré");
+  if(!saved)return;
+  closeModal();toast("Suivi enregistré","success");renderView();
 }
 
 // Le serveur supprime aussi l'écriture de caisse liée au paiement.
@@ -259,7 +294,27 @@ function renderFactAvoirs(view){
   const total=list.reduce((s,a)=>s+(a.montant||0),0);
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">↩️ Avoirs</h1><p class="text-slate-500 text-sm">${list.length} avoirs · Total ${money(total)}</p></div></div>
     ${factTabs("avoirs")}
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun avoir.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Facture</th><th>Client</th><th>Montant</th><th>Motif</th><th></th></tr></thead><tbody>${list.map(a=>{const f=db.factures.find(x=>x.id===a.factureId);return`<tr data-searchable><td class="font-mono text-xs">${safe(a.numero)}</td><td class="text-xs">${formatDate(a.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(a.client||f?.client||"")}</td><td class="font-bold text-purple-600">${money(a.montant)}</td><td class="text-xs">${escapeHTML((a.motif||"").slice(0,50))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deleteAvoir('${a.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun avoir.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Facture</th><th>Client</th><th>Montant</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>{const f=db.factures.find(x=>x.id===a.factureId);const cancelled=a.statut==="annule";return`<tr data-searchable data-avoir-id="${escapeHTML(a.id)}"><td class="font-mono text-xs">${safe(a.numero)}</td><td class="text-xs">${formatDate(a.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(a.client||f?.client||"")}</td><td class="font-bold ${cancelled?"text-slate-400 line-through":"text-purple-600"}">${money(a.montant)}</td><td class="text-xs">${escapeHTML((a.motif||"").slice(0,50))}${cancelled?`<div class="text-red-600">Annulé : ${escapeHTML(a.annulation?.motif||"")}</div>`:""}</td><td><span class="pill ${cancelled?"pill-gray":"pill-green"}">${cancelled?"Annulé":"Émis"}</span></td><td>${!cancelled&&window.__factRegles?.annulationAvoirs?`<button class="btn btn-ghost text-xs text-red-600" onclick="openAvoirAnnulationModal('${a.id}')">Annuler</button>`:""}</td></tr>`}).join("")}</tbody></table>`}</div>`;
+  // Règle serveur : l'annulation d'un avoir n'est proposée qu'une fois activée.
+  if(window.__factRegles===undefined){window.__factRegles=null;sgdiApi("/api/irongs/facturation/regles",{method:"GET",legacy:false}).then(r=>{window.__factRegles=r||{};if(String(location.hash).includes("facturation/avoirs"))renderView()}).catch(()=>{window.__factRegles={}})}
+}
+
+// Un avoir numéroté n'est jamais supprimé : il est annulé (motif obligatoire, numéro conservé).
+function openAvoirAnnulationModal(id){
+  const a=(db.avoirs||[]).find(x=>x.id===id);if(!a)return;
+  openModal(`<h3 class="font-bold text-lg mb-3">Annuler l'avoir ${safe(a.numero)}</h3>
+    <p class="text-sm text-slate-600 mb-4">Le numéro reste attribué à cet avoir ; le montant ${money(a.montant)} n'est plus déduit de la facture.</p>
+    <form onsubmit="event.preventDefault();confirmAvoirAnnulation('${id}')">
+      <label class="label">Motif *</label><textarea class="input" name="motif" rows="3"></textarea>
+      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-warn">Annuler l'avoir</button></div>
+    </form>`);
+}
+async function confirmAvoirAnnulation(id){
+  const motif=String(new FormData(document.querySelector(".modal-bg form")).get("motif")||"").trim();
+  if(motif.length<5){toast("Motif d'annulation obligatoire","error");return}
+  const saved=await factureFinanceRequest("/api/irongs/avoirs/"+encodeURIComponent(id)+"/annuler","POST",{motif},"Annulation de l'avoir impossible");
+  if(!saved)return;
+  closeModal();toast("Avoir "+(saved.numero||"")+" annulé","success");renderView();
 }
 
 async function deleteAvoir(id){if(!confirm("Supprimer ?"))return;if(!(await factureFinanceWrite("avoirs","DELETE",id,null,"Suppression de l'avoir impossible")))return;renderView()}

@@ -10,7 +10,8 @@ const NAMES = [
   'openPaiementModal', 'confirmPaiement', 'deletePaiement', 'openAvoirModal', 'confirmAvoir', 'deleteAvoir',
   'openAvanceModal', 'confirmAvance', 'deleteAvance', 'openCaisseModal', 'confirmCaisse', 'deleteCaisse',
   'factureTvaPct', 'factureSavedTvaPct', 'factureEditorSave', 'factureDueDate', 'factureOverdueDays',
-  'renderFactBalance', 'renderFactCaisse',
+  'renderFactBalance', 'renderFactCaisse', 'renderFactPaiements', 'openPaiementSuiviModal', 'confirmPaiementSuivi',
+  'renderFactAvoirs', 'openAvoirAnnulationModal', 'confirmAvoirAnnulation', 'factureStatutPaye', 'factureVoirApercu',
 ];
 const INVOICE = { id: 'fc_1', numero: 'FAC0001/10/26', statut: 'emise', client: 'CLIENT', societe: 'IRON GLOBAL SOLUTION', ttc: 1190, date: '2026-10-01' };
 
@@ -180,5 +181,75 @@ test('balance âgée : ancienneté comptée depuis l’échéance réelle', () =
     assert.match(cells[4], /^100,00/); // non échu (échéance au 15/11)
     assert.strictEqual(cells[5], '—');
     assert.match(cells[8], /^200,00/); // échue le 01/07 : plus de 90 jours
+  } finally { env.window.close(); }
+});
+
+test('reliquat : chèque impayé et avoir annulé ne réduisent plus le reste dû', () => {
+  const { env, t } = setup();
+  try {
+    t.setDb({ factures: [{ ...INVOICE }], paiements: [
+      { id: 'p1', factureId: 'fc_1', montant: 500, suivi: { statut: 'impaye' } },
+      { id: 'p2', factureId: 'fc_1', montant: 300, suivi: { statut: 'a_encaisser' } },
+      { id: 'p3', factureId: 'fc_1', montant: 100 },
+    ], avoirs: [{ id: 'a1', factureId: 'fc_1', montant: 90, statut: 'annule' }, { id: 'a2', factureId: 'fc_1', montant: 10, statut: 'emis' }] });
+    const sp = t.factureStatutPaye(t.getDb().factures[0]);
+    assert.deepStrictEqual([sp.paye, sp.avoir, sp.reste, sp.statut], [400, 10, 780, 'partielle']);
+  } finally { env.window.close(); }
+});
+
+test('paiements : suivi affiché et étape envoyée au serveur', async () => {
+  const { env, t, w, d } = setup();
+  try {
+    t.setDb({ factures: [{ ...INVOICE }], avoirs: [], paiements: [
+      { id: 'pc', factureId: 'fc_1', montant: 100, mode: 'Chèque', suivi: { statut: 'a_encaisser' } },
+      { id: 'pv', factureId: 'fc_1', montant: 50, mode: 'Virement bancaire', suivi: { statut: 'a_rapprocher' } },
+      { id: 'pe', factureId: 'fc_1', montant: 20, mode: 'Espèces', suivi: { statut: 'encaisse' } },
+    ] });
+    t.renderFactPaiements(d.getElementById('view'));
+    const steps = id => Array.from(d.querySelectorAll(`[data-paiement-id="${id}"] [data-suivi]`)).map(b => b.dataset.suivi);
+    assert.deepStrictEqual([steps('pc'), steps('pv'), steps('pe')].map(x => x.join(',')), ['encaisse,impaye', 'rapproche', '']);
+    t.openPaiementSuiviModal('pc', 'impaye');
+    fill(d, { motif: 'x' });
+    await t.confirmPaiementSuivi('pc', 'impaye');
+    assert.strictEqual(w.__calls.length, 0, 'motif trop court : rien n’est envoyé');
+    fill(d, { motif: 'Provision insuffisante', reference: 'BANQUE-1' });
+    await t.confirmPaiementSuivi('pc', 'impaye');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(w.__calls.map(c => [c[0], c[1]]))), [['PATCH', '/api/irongs/paiements/pc/suivi']]);
+  } finally { env.window.close(); }
+});
+
+test('avoirs : pas de suppression ; annulation proposée seulement si la règle est active', async () => {
+  const { env, t, w, d } = setup();
+  try {
+    t.setDb({ factures: [{ ...INVOICE }], paiements: [], avoirs: [
+      { id: 'a1', numero: 'AV-2026-0001', factureId: 'fc_1', montant: 10, statut: 'emis' },
+      { id: 'a2', numero: 'AV-2026-0002', factureId: 'fc_1', montant: 5, statut: 'annule', annulation: { motif: 'Erreur' } },
+    ] });
+    w.__factRegles = { annulationAvoirs: false };
+    t.renderFactAvoirs(d.getElementById('view'));
+    assert.strictEqual(d.querySelectorAll('#view button[onclick^="deleteAvoir"]').length, 0);
+    assert.strictEqual(d.querySelectorAll('#view button[onclick^="openAvoirAnnulationModal"]').length, 0);
+    assert.match(d.querySelector('[data-avoir-id="a2"]').textContent, /Annulé/);
+    w.__factRegles = { annulationAvoirs: true };
+    t.renderFactAvoirs(d.getElementById('view'));
+    assert.deepStrictEqual(Array.from(d.querySelectorAll('#view button[onclick^="openAvoirAnnulationModal"]')).map(b => b.closest('tr').dataset.avoirId), ['a1']);
+    t.openAvoirAnnulationModal('a1');
+    fill(d, { motif: 'Avoir émis par erreur' });
+    await t.confirmAvoirAnnulation('a1');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(w.__calls)), [['POST', '/api/irongs/avoirs/a1/annuler', null]]);
+  } finally { env.window.close(); }
+});
+
+test('aperçu PDF : facture émise à TVA 0 % — TVA nulle, TTC = HT, montant en lettres', () => {
+  const { env, t, d } = setup();
+  try {
+    const f = { ...INVOICE, id: 'fc_0', tvaPct: 0, totalHT: 1000, tvaAmt: 0, ttc: 1000, montantTTC: 1000,
+      lignes: [{ type: 'article', designation: 'AGENT', unite: 'Mois', nbr: 1, qte: 1, prixUnitHT: 1000, totalHT: 1000, tva: 0 }] };
+    t.setDb({ factures: [f], paiements: [], avoirs: [], parametres: {} });
+    t.factureVoirApercu('fc_0');
+    const text = d.getElementById('fact-print-area').textContent.replace(/\s+/g, ' ');
+    assert.match(text, /Total TVA\s*0,00/);
+    assert.match(text, /MILLE/i);
+    assert.ok(!/1 190|190,00/.test(text), 'aucune TVA à 19 % dans l’aperçu');
   } finally { env.window.close(); }
 });

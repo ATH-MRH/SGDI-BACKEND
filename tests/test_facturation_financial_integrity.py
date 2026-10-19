@@ -65,7 +65,7 @@ def _find(client, headers, name, item_id):
 
 def _pay(http, headers, invoice_id, montant, **extra):
     data = {"id": _uid("pa"), "factureId": invoice_id, "date": "2026-10-10", "montant": montant,
-            "mode": "Chèque", "reference": "CHQ-1", **extra}
+            "mode": "Espèces", "reference": "REC-1", **extra}
     return http.post(f"{BASE}/paiements/items", headers=headers, json={"data": data})
 
 
@@ -338,3 +338,123 @@ def test_facturation_account_no_longer_reaches_payroll_collections(client, db):
         assert client.get(f"{BASE}/{name}/items", headers=finances).status_code != 403, name
     for name in ("factures", "paiements", "avances", "avoirs", "caisse", "missionBillables"):
         assert client.get(f"{BASE}/{name}/items", headers=fac).status_code == 200, name
+
+
+# ── Moyens de paiement : caisse espèces, chèques, virements ───────────────────────────────
+
+def _cash(db, payment_id):
+    db.expire_all()
+    return db.query(CashEntry).filter(CashEntry.external_id == f"cs_{payment_id}").count()
+
+
+@pytest.mark.parametrize("mode,nature,statut,cash", [
+    ("Espèces", "especes", "encaisse", 1),
+    ("Chèque", "effet", "a_encaisser", 0),
+    ("Traite", "effet", "a_encaisser", 0),
+    ("Virement bancaire", "banque", "a_rapprocher", 0),
+    ("Carte bancaire", "banque", "a_rapprocher", 0),
+    ("Mixte", "banque", "a_rapprocher", 0),
+])
+def test_only_cash_payments_reach_the_cash_register(client, auth_headers, db, mode, nature, statut, cash):
+    invoice = _issued(client, auth_headers)
+    payment = _pay(client, auth_headers, invoice["id"], 100, mode=mode).json()
+    assert (payment["suivi"]["nature"], payment["suivi"]["statut"]) == (nature, statut)
+    assert _cash(db, payment["id"]) == cash
+
+
+def _followup(http, headers, payment_id, statut, **extra):
+    return http.patch(f"/api/irongs/paiements/{payment_id}/suivi", headers=headers, json={"statut": statut, **extra})
+
+
+def test_bounced_cheque_no_longer_reduces_the_amount_due(client, auth_headers, db):
+    invoice = _issued(client, auth_headers)
+    cheque = _pay(client, auth_headers, invoice["id"], 1190, mode="Chèque", reference="CHQ-77").json()
+    assert _pay(client, auth_headers, invoice["id"], 1).status_code == 409
+    assert _followup(client, auth_headers, cheque["id"], "impaye").status_code == 422  # motif obligatoire
+    r = _followup(client, auth_headers, cheque["id"], "impaye", motif="Provision insuffisante", date="2026-10-15")
+    assert r.status_code == 200, r.text
+    assert r.json()["suivi"]["statut"] == "impaye" and r.json()["montant"] == 1190.0
+    assert [h["statut"] for h in r.json()["suivi"]["historique"]] == ["a_encaisser", "impaye"]
+    assert _followup(client, auth_headers, cheque["id"], "encaisse").status_code == 409
+    assert _pay(client, auth_headers, invoice["id"], 1190, mode="Espèces").status_code == 200
+    from app.modules.auth.models import AuditEvent
+    db.expire_all()
+    assert db.query(AuditEvent).filter(AuditEvent.action == "facturation.payment.followup", AuditEvent.resource_id == cheque["id"]).count() == 1
+
+
+def test_cheque_cashed_and_transfer_reconciled(client, auth_headers):
+    invoice = _issued(client, auth_headers)
+    cheque = _pay(client, auth_headers, invoice["id"], 100, mode="Chèque").json()
+    transfer = _pay(client, auth_headers, invoice["id"], 100, mode="Virement bancaire").json()
+    assert _followup(client, auth_headers, cheque["id"], "encaisse", date="2026-10-16").json()["suivi"]["statut"] == "encaisse"
+    assert _followup(client, auth_headers, transfer["id"], "impaye", motif="Rejet banque").status_code == 409
+    done = _followup(client, auth_headers, transfer["id"], "rapproche", reference="RELEVE-10/2026")
+    assert done.json()["suivi"]["historique"][-1]["reference"] == "RELEVE-10/2026"
+    cash = _pay(client, auth_headers, invoice["id"], 10, mode="Espèces").json()
+    assert _followup(client, auth_headers, cash["id"], "rapproche").status_code == 409
+
+
+def test_payment_followup_requires_update_action_and_society(client, auth_headers, db):
+    invoice = _issued(client, auth_headers, society=OTHER)
+    cheque = _pay(client, auth_headers, invoice["id"], 100, mode="Chèque").json()
+    other = _user(client, db, modules=["fac"], societies=[SOC], actions=["read", "create", "update"])
+    assert _followup(client, other, cheque["id"], "encaisse").status_code == 403
+    reader = _user(client, db, modules=["fac"], societies=[OTHER], actions=["read", "create"])
+    assert _followup(client, reader, cheque["id"], "encaisse").status_code == 403
+
+
+def test_non_cash_advance_has_no_cash_entry(client, auth_headers, db):
+    data = {"id": _uid("av"), "date": "2026-10-05", "societe": SOC, "client": "CLIENT", "montant": 300, "mode": "Chèque"}
+    assert client.post(f"{BASE}/avances/items", headers=auth_headers, json={"data": data}).status_code == 200
+    assert _cash(db, data["id"]) == 0
+
+
+# ── Avoirs : jamais supprimés une fois numérotés, annulation encadrée ─────────────────────
+
+def test_numbered_credit_note_cannot_be_deleted(client, auth_headers, db):
+    invoice = _issued(client, auth_headers)
+    credit = _credit(client, auth_headers, invoice["id"], 50).json()
+    r = client.delete(f"{BASE}/avoirs/items/{credit['id']}", headers=auth_headers)
+    assert r.status_code == 409, r.text
+    db.expire_all()
+    assert db.query(CreditNote).filter(CreditNote.external_id == credit["id"]).count() == 1
+
+
+def test_credit_note_cancellation_is_disabled_until_accounting_approval(client, auth_headers):
+    invoice = _issued(client, auth_headers)
+    credit = _credit(client, auth_headers, invoice["id"], 50).json()
+    assert client.get("/api/irongs/facturation/regles", headers=auth_headers).json() == {"annulationAvoirs": False}
+    r = client.post(f"/api/irongs/avoirs/{credit['id']}/annuler", headers=auth_headers, json={"motif": "Erreur de saisie"})
+    assert r.status_code == 409 and "non activée" in r.text
+    assert _find(client, auth_headers, "avoirs", credit["id"]).get("statut") == "emis"
+
+
+@pytest.fixture
+def cancellation_enabled(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "facturation_credit_note_cancel_enabled", True)
+
+
+def test_credit_note_cancellation_keeps_its_number(client, auth_headers, db, cancellation_enabled):
+    invoice = _issued(client, auth_headers)
+    credit = _credit(client, auth_headers, invoice["id"], 190).json()
+    assert _pay(client, auth_headers, invoice["id"], 1000.01).status_code == 409
+    url = f"/api/irongs/avoirs/{credit['id']}/annuler"
+    assert client.post(url, headers=auth_headers, json={"motif": ""}).status_code == 422
+    r = client.post(url, headers=auth_headers, json={"motif": "Avoir émis par erreur"})
+    assert r.status_code == 200, r.text
+    assert (r.json()["statut"], r.json()["numero"], r.json()["annulation"]["motif"]) == ("annule", credit["numero"], "Avoir émis par erreur")
+    assert client.post(url, headers=auth_headers, json={"motif": "Deuxième essai"}).status_code == 409
+    assert _pay(client, auth_headers, invoice["id"], 1190).status_code == 200
+    following = _credit(client, auth_headers, _issued(client, auth_headers)["id"], 1).json()
+    assert int(following["numero"].rsplit("-", 1)[1]) > int(credit["numero"].rsplit("-", 1)[1])
+    from app.modules.auth.models import AuditEvent
+    db.expire_all()
+    assert db.query(AuditEvent).filter(AuditEvent.action == "facturation.credit_note.cancel", AuditEvent.resource_id == credit["id"]).count() == 1
+
+
+def test_credit_note_cancellation_requires_validate_action(client, auth_headers, db, cancellation_enabled):
+    invoice = _issued(client, auth_headers)
+    credit = _credit(client, auth_headers, invoice["id"], 10).json()
+    headers = _user(client, db, modules=["fac"], societies=[SOC], actions=["read", "create", "update", "delete"])
+    assert client.post(f"/api/irongs/avoirs/{credit['id']}/annuler", headers=headers, json={"motif": "Sans droit valider"}).status_code == 403

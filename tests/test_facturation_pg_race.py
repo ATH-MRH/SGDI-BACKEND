@@ -94,7 +94,7 @@ def _settle(Session, model_name, invoice_id, amount):
     from app.modules.irongs import sql_bridge
 
     model = Payment if model_name == "paiements" else CreditNote
-    item = {"id": f"race_{uuid.uuid4().hex[:10]}", "factureId": invoice_id, "date": "2026-10-10", "montant": amount}
+    item = {"id": f"race_{uuid.uuid4().hex[:10]}", "factureId": invoice_id, "date": "2026-10-10", "montant": amount, "mode": "Espèces"}
     with Session() as db:
         try:
             saved = sql_bridge.upsert_finance(db, model, item, model_name)

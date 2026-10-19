@@ -690,10 +690,42 @@ def _invoice_ttc(row: Invoice) -> Decimal:
     return _cents(legacy.get("ttc") if legacy.get("ttc") not in (None, "") else row.total_ttc)
 
 
+def _legacy_of(data: Any) -> dict[str, Any]:
+    return (data or {}).get("_legacy") or {} if isinstance(data, dict) else {}
+
+
 def _settled_amounts(db: Session, invoice_ref: str) -> tuple[Decimal, Decimal]:
-    paid = sum((_cents(a) for (a,) in db.execute(select(Payment.amount).where(Payment.invoice_external_id == invoice_ref))), Decimal("0.00"))
-    credited = sum((_cents(a) for (a,) in db.execute(select(CreditNote.amount).where(CreditNote.invoice_external_id == invoice_ref))), Decimal("0.00"))
+    """Règlements et avoirs qui réduisent le reste dû : un chèque ou une traite impayé(e) et un
+    avoir annulé n'en font plus partie (ils restent enregistrés et visibles)."""
+    paid = sum((_cents(a) for a, data in db.execute(select(Payment.amount, Payment.data).where(Payment.invoice_external_id == invoice_ref))
+                if (_legacy_of(data).get("suivi") or {}).get("statut") != "impaye"), Decimal("0.00"))
+    credited = sum((_cents(a) for a, data in db.execute(select(CreditNote.amount, CreditNote.data).where(CreditNote.invoice_external_id == invoice_ref))
+                    if _legacy_of(data).get("statut") != "annule"), Decimal("0.00"))
     return paid, credited
+
+
+def _has_settlements(db: Session, invoice_ref: str) -> bool:
+    return bool(db.execute(select(Payment.id).where(Payment.invoice_external_id == invoice_ref).limit(1)).first()
+                or db.execute(select(CreditNote.id).where(CreditNote.invoice_external_id == invoice_ref).limit(1)).first())
+
+
+# Moyens de paiement : seules les espèces passent par la caisse. Chèque et traite sont « à
+# encaisser » (encaissé ou impayé) ; virement, prélèvement, carte et mixte sont « à rapprocher »
+# avec le relevé bancaire. Un impayé ne réduit plus le reste dû de la facture.
+_FOLLOWUP_STEPS = {
+    "especes": ("encaisse", {}),
+    "effet": ("a_encaisser", {"a_encaisser": {"encaisse", "impaye"}}),
+    "banque": ("a_rapprocher", {"a_rapprocher": {"rapproche"}}),
+}
+
+
+def payment_kind(mode: Any) -> str:
+    text = unicodedata.normalize("NFD", str(mode or "")).encode("ascii", "ignore").decode().strip().lower()
+    if "espece" in text or text in ("cash", "liquide"):
+        return "especes"
+    if "cheque" in text or "traite" in text:
+        return "effet"
+    return "banque"
 
 
 def _settled_invoice(db: Session, invoice_ref: Any) -> Invoice:
@@ -748,6 +780,14 @@ def _prepare_settlement(db: Session, collection: str, item: dict[str, Any], *, i
         # Société et client : ceux de la facture réglée, jamais ceux déclarés par le navigateur.
         item.update({"factureId": invoice.external_id, "societe": invoice.society or "",
                      "client": invoice.client_name or "", "montant": float(amount)})
+        if collection == "paiements":
+            kind = payment_kind(item.get("mode"))
+            status = _FOLLOWUP_STEPS[kind][0]
+            item["suivi"] = {"nature": kind, "statut": status,
+                             "historique": [{"statut": status, "at": datetime.utcnow().isoformat(), "par": item.get("createdBy") or ""}]}
+        else:
+            item["statut"] = "emis"
+            item.pop("annulation", None)
     elif collection == "avances":
         item["montant"] = float(_settlement_amount(item.get("montant")))
         item["societe"] = _required_society(item)
@@ -780,9 +820,14 @@ def _replayed_settlement(row: Any, item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sync_linked_cash(db: Session, collection: str, item: dict[str, Any]) -> None:
-    """Écriture de caisse d'un règlement ou d'une avance, dans la même transaction que la pièce
-    (mêmes catégories que l'ancienne saisie navigateur)."""
+    """Écriture de caisse ESPÈCES d'un règlement ou d'une avance, dans la même transaction que la
+    pièce (mêmes catégories que l'ancienne saisie navigateur). Chèque, virement et autres moyens
+    n'entrent pas dans la caisse espèces."""
     source_id = legacy_id(item)
+    if payment_kind(item.get("mode")) != "especes":
+        for linked in db.execute(select(CashEntry).where(CashEntry.external_id == f"cs_{source_id}")).scalars().all():
+            db.delete(linked)
+        return
     if collection == "paiements":
         number = db.execute(select(Invoice.number).where(Invoice.external_id == item["factureId"])).scalar_one_or_none()
         extra = {"categorie": "Encaissement facture", "libelle": f"Paiement facture {number or ''}".strip(),
@@ -823,10 +868,61 @@ def _ensure_invoice_deletable(db: Session, row: Invoice) -> None:
         return
     legacy = (row.data or {}).get("_legacy") or {}
     if str(legacy.get("sourceImport") or "").lower() == "excel" and not legacy.get("lignes"):
-        if _settled_amounts(db, row.external_id) == (Decimal("0.00"), Decimal("0.00")):
+        if not _has_settlements(db, row.external_id):
             return
         raise HTTPException(409, detail="Facture importée avec règlements ou avoirs : suppression impossible")
     raise HTTPException(409, detail="Une facture validée ne peut pas être supprimée : émettez un avoir.")
+
+
+def cancel_credit_note(db: Session, item_id: str, reason: Any, actor: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Annule un avoir : numéro conservé (jamais réattribué), motif obligatoire, montant retiré
+    des avoirs de la facture. Refusé si les règlements dépasseraient alors le montant TTC."""
+    motif = str(reason or "").strip()
+    if len(motif) < 5:
+        raise HTTPException(422, detail="Motif d'annulation obligatoire (5 caractères au moins)")
+    row = db.execute(select(CreditNote).where(CreditNote.external_id == str(item_id)).with_for_update()).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, detail="Avoir introuvable")
+    legacy = dict(_legacy_of(row.data))
+    before = deepcopy(legacy)
+    if legacy.get("statut") == "annule":
+        raise HTTPException(409, detail="Avoir déjà annulé")
+    invoice = db.execute(select(Invoice).where(Invoice.external_id == row.invoice_external_id).with_for_update()).scalar_one_or_none()
+    if invoice is not None:
+        paid, credited = _settled_amounts(db, invoice.external_id)
+        if paid + credited - _cents(row.amount) > _invoice_ttc(invoice):
+            raise HTTPException(409, detail="Annulation impossible : les règlements dépasseraient le montant TTC de la facture")
+    legacy["statut"] = "annule"
+    legacy["annulation"] = {"motif": motif, "par": actor, "at": datetime.utcnow().isoformat()}
+    row.data = {**(row.data or {}), "_legacy": legacy}
+    db.flush()
+    return before, simple_raw(row)
+
+
+def payment_followup(db: Session, item_id: str, status: Any, *, when: Any, reference: Any, reason: Any, actor: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Suivi d'un règlement : chèque/traite encaissé ou impayé, virement rapproché. Montant,
+    facture et date du règlement restent inchangés ; chaque étape est historisée."""
+    row = db.execute(select(Payment).where(Payment.external_id == str(item_id)).with_for_update()).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, detail="Règlement introuvable")
+    legacy = dict(_legacy_of(row.data))
+    before = deepcopy(legacy)
+    kind = payment_kind(legacy.get("mode"))
+    initial, transitions = _FOLLOWUP_STEPS[kind]
+    suivi = dict(legacy.get("suivi") or {"nature": kind, "statut": initial, "historique": []})
+    target = str(status or "").strip().lower()
+    if target not in transitions.get(suivi.get("statut"), set()):
+        raise HTTPException(409, detail=f"Étape de suivi impossible : {suivi.get('statut')} → {target or 'vide'}")
+    motif = str(reason or "").strip()
+    if target == "impaye" and len(motif) < 5:
+        raise HTTPException(422, detail="Motif de l'impayé obligatoire (5 caractères au moins)")
+    step = {"statut": target, "date": date_out(as_date(when) or date.today()), "reference": str(reference or "").strip(),
+            "motif": motif, "par": actor, "at": datetime.utcnow().isoformat()}
+    suivi.update({"statut": target, "historique": [*(suivi.get("historique") or []), step]})
+    legacy["suivi"] = suivi
+    row.data = {**(row.data or {}), "_legacy": legacy}
+    db.flush()
+    return before, simple_raw(row)
 
 
 def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str, *, internal: bool = False) -> dict[str, Any]:
@@ -1441,6 +1537,8 @@ def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
         _ensure_invoice_deletable(db, row)
     if model is CashEntry and _cash_link(row):
         raise HTTPException(status_code=409, detail="Écriture générée par un règlement ou une avance : supprimez la pièce d'origine.")
+    if model is CreditNote and _legacy_of(row.data).get("numero"):
+        raise HTTPException(status_code=409, detail="Un avoir numéroté ne peut pas être supprimé : il peut seulement être annulé.")
     if model in (Payment, Advance):
         for linked in db.execute(select(CashEntry).where(CashEntry.external_id == f"cs_{row.external_id}")).scalars().all():
             db.delete(linked)

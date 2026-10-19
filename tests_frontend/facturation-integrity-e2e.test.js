@@ -155,12 +155,14 @@ test('Facturation — intégrité financière dans Chrome réel', { timeout: 300
     assert.match(out.toast, /reste à encaisser/);
     await page.evaluate(() => window.closeModal());
     await page.evaluate((id) => window.openPaiementModal(id), issued.id);
-    out = await submitModal({ montant: '790' });
+    out = await submitModal({ montant: '790', mode: 'Espèces' });
     assert.strictEqual(out.open, false, out.toast);
     pays = (await rows('paiements')).filter((p) => p.factureId === issued.id);
     assert.deepStrictEqual(pays.map((p) => p.montant).sort((a, b) => a - b), [400, 790]);
+    // Seul le paiement en espèces entre dans la caisse ; le chèque reste « à encaisser ».
     const cash = (await rows('caisse')).filter((c) => c.factureId === issued.id);
-    assert.deepStrictEqual(cash.map((c) => [c.categorie, c.montant, c.societe]).sort(), [['Encaissement facture', 400, SOCIETY], ['Encaissement facture', 790, SOCIETY]]);
+    assert.deepStrictEqual(cash.map((c) => [c.categorie, c.montant, c.societe]), [['Encaissement facture', 790, SOCIETY]]);
+    assert.deepStrictEqual(pays.map((p) => [p.mode, p.suivi.statut]).sort(), [['Chèque', 'a_encaisser'], ['Espèces', 'encaisse']]);
   });
 
   await t.test('avoir numéroté par le serveur, avance et caisse', async () => {
@@ -175,7 +177,7 @@ test('Facturation — intégrité financière dans Chrome réel', { timeout: 300
     assert.match(avoirs[0].numero, /^AV-\d{4}-\d{4}$/);
     await go('facturation/avances', () => typeof window.openAvanceModal === 'function');
     await page.evaluate(() => window.openAvanceModal());
-    out = await submitModal({ client: 'CLIENT AVANCE E2E', montant: '1500' });
+    out = await submitModal({ client: 'CLIENT AVANCE E2E', montant: '1500', mode: 'Espèces' });
     assert.strictEqual(out.open, false, out.toast);
     await go('facturation/caisse', () => typeof window.openCaisseModal === 'function');
     await page.evaluate(() => window.openCaisseModal('sortie'));
@@ -192,8 +194,18 @@ test('Facturation — intégrité financière dans Chrome réel', { timeout: 300
     const payments = await page.$eval('#view', (v) => v.textContent);
     assert.match(payments, /2 paiements/);
     assert.ok(payments.includes(issued.numero));
+    // Chèque encaissé depuis l'écran : étape enregistrée et historisée par le serveur.
+    const cheque = (await rows('paiements')).find((p) => p.factureId === issued.id && p.mode === 'Chèque');
+    await page.evaluate((id) => document.querySelector(`[data-paiement-id="${id}"] [data-suivi="encaisse"]`).click(), cheque.id);
+    let out = await submitModal({ reference: 'REMISE-E2E' });
+    assert.strictEqual(out.open, false, out.toast);
+    const followed = (await rows('paiements')).find((p) => p.id === cheque.id);
+    assert.deepStrictEqual(followed.suivi.historique.map((h) => h.statut), ['a_encaisser', 'encaisse']);
     await go('facturation/avoirs', () => /avoirs/i.test(document.getElementById('view')?.textContent || ''));
     assert.match(await page.$eval('#view', (v) => v.textContent), /AV-\d{4}-\d{4}/);
+    // Avoir numéroté : ni suppression, ni annulation tant que la règle n'est pas activée.
+    await page.waitForFunction(() => window.__factRegles && typeof window.__factRegles === 'object', { timeout: 10000 });
+    assert.strictEqual(await page.$$eval('#view button[onclick^="deleteAvoir"], #view button[onclick^="openAvoirAnnulationModal"]', (b) => b.length), 0);
     await go('facturation/avances', () => /avances clients/i.test(document.getElementById('view')?.textContent || ''));
     assert.ok((await page.$eval('#view', (v) => v.textContent)).includes('CLIENT AVANCE E2E'));
     await go('facturation/caisse', () => /mouvements/.test(document.getElementById('view')?.textContent || ''));

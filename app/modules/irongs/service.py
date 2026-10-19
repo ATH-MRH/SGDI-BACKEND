@@ -847,6 +847,32 @@ def valider_facture(db: Session, item_id: str, user: Any | None) -> dict[str, An
     return result
 
 
+def _finance_document_action(db: Session, collection: str, item_id: str, user: Any | None, action: str, operation) -> dict[str, Any]:
+    existing = get_item(db, collection, item_id)
+    ensure_item_allowed_for_user(existing, user, collection)
+    before, result = operation(_actor_name(user))
+    from app.core.audit import append_audit
+    append_audit(db, action=action, resource=collection, resource_id=item_id, result="success", user=user,
+                 society=result.get("societe") or existing.get("societe"), old_state=before, new_state=result)
+    db.commit()
+    _snapshot_cache_invalidate()
+    return result
+
+
+def cancel_credit_note(db: Session, item_id: str, motif: Any, user: Any | None) -> dict[str, Any]:
+    from app.core.config import get_settings
+    if not get_settings().facturation_credit_note_cancel_enabled:
+        raise HTTPException(status_code=409, detail="Annulation des avoirs non activée : validation comptable en attente.")
+    return _finance_document_action(db, "avoirs", item_id, user, "facturation.credit_note.cancel",
+                                    lambda actor: sql_bridge.cancel_credit_note(db, item_id, motif, actor))
+
+
+def payment_followup(db: Session, item_id: str, payload: dict[str, Any], user: Any | None) -> dict[str, Any]:
+    return _finance_document_action(db, "paiements", item_id, user, "facturation.payment.followup",
+                                    lambda actor: sql_bridge.payment_followup(db, item_id, payload.get("statut"), when=payload.get("date"),
+                                                                              reference=payload.get("reference"), reason=payload.get("motif"), actor=actor))
+
+
 def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], partial: bool = True) -> dict[str, Any]:
     patch = normalize_photo_fields(dict(patch), fallback=item_id)
     if name in sql_bridge.SQL_COLLECTIONS:

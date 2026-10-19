@@ -361,6 +361,29 @@ def valider_facture(item_id: str, request: Request, db: Session = Depends(get_db
     return service.valider_facture(db, item_id, user)
 
 
+@router.get("/facturation/regles")
+def facturation_rules(request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    _legacy_gate(db, request, user, "avoirs")
+    from app.core.config import get_settings
+    return {"annulationAvoirs": bool(get_settings().facturation_credit_note_cancel_enabled)}
+
+
+@router.post("/avoirs/{item_id}/annuler")
+def annuler_avoir(item_id: str, payload: dict[str, Any], request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    # Action « validate » (déduite de /annuler), module Facturation et société de l'avoir.
+    _legacy_gate(db, request, user, "avoirs", write=True)
+    with _legacy_operation(db, request, user, "avoirs", write=True, resource_id=item_id):
+        return service.cancel_credit_note(db, item_id, payload.get("motif"), user)
+
+
+@router.patch("/paiements/{item_id}/suivi")
+def suivi_paiement(item_id: str, payload: dict[str, Any], request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    # Action « update » : encaissement ou impayé d'un chèque/traite, rapprochement d'un virement.
+    _legacy_gate(db, request, user, "paiements", write=True)
+    with _legacy_operation(db, request, user, "paiements", write=True, resource_id=item_id):
+        return service.payment_followup(db, item_id, payload, user)
+
+
 @router.post("/actions/{action}")
 def legacy_action(
     action: str,

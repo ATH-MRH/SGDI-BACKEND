@@ -17956,7 +17956,8 @@ const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
 const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee","perdue"];
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 
-function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
+// Reste dû : un chèque/une traite impayé(e) et un avoir annulé ne le réduisent plus (même règle que le serveur).
+function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id&&p.suivi?.statut!=="impaye").reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id&&a.statut!=="annule").reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
 
 
 let factureClientSearchTimer=null;
