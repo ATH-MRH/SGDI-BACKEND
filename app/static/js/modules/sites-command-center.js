@@ -1,7 +1,8 @@
 /* OPS → Sites : Command Center opérationnel (présentation uniquement).
  * Ce fichier ne porte AUCUNE règle métier : il réutilise les sites, la situation serveur, les
  * affectations, les mouvements, les incidents et la carte MapLibre/OpenStreetMap déjà fournis par
- * sites.js / sgdi-app.js. Il n'est actif que dans le contexte OPS (session.transverse === "ops") ;
+ * sites.js / sgdi-app.js. Thème clair « corporate », confiné à .ops-sites-cc (sgdi-app.css).
+ * Il n'est actif que dans le contexte OPS (session.transverse === "ops") ;
  * Superviseur, Matériel, Administration et Commercial gardent leur rendu. Aucune donnée inventée :
  * un indicateur sans source réelle n'est pas affiché. La création d'un site reste réservée au
  * Commercial (API 403) : aucun bouton « Nouveau site » n'est donc proposé ici. */
@@ -20,7 +21,7 @@ const OPS_SITES_CC_QUICK={
 
 function opsSitesCcEnabled(){return session?.transverse==="ops"}
 function opsSitesCcState(){
-  if(!window.__opsSitesCcState)window.__opsSitesCcState={view:"carte",layout:"grille",q:"",status:"",wilaya:"",client:"",quick:"all"};
+  if(!window.__opsSitesCcState)window.__opsSitesCcState={view:"carte",layout:"liste",q:"",status:"",wilaya:"",client:"",quick:"all"};
   return window.__opsSitesCcState;
 }
 function opsSitesCcPlural(n,one,many){return `${n} ${n>1?many:one}`}
@@ -79,8 +80,8 @@ function opsSitesCcModel(sites,situationBySite){
   };
 }
 
-function opsSitesCcKpiHTML(label,value,tone,quick,title){
-  const inner=`<span class="ops-sites-cc-kpi-top"><i aria-hidden="true"></i><strong>${escapeHTML(String(value))}</strong></span><span class="ops-sites-cc-kpi-label">${escapeHTML(label)}</span>`;
+function opsSitesCcKpiHTML(label,value,tone,quick,title,icon){
+  const inner=`<span class="ops-sites-cc-kpi-icon" aria-hidden="true">${opsIcon(icon||"info")}</span><span class="ops-sites-cc-kpi-body"><strong>${escapeHTML(String(value))}</strong><span class="ops-sites-cc-kpi-label">${escapeHTML(label)}</span></span>`;
   return quick
     ?`<button type="button" class="ops-sites-cc-kpi" data-tone="${tone}" data-cc-quick="${quick}" data-cc-kpi="${escapeHTML(label)}" title="${escapeHTML(title||label)}" onclick="opsSitesCcQuick('${quick}')">${inner}</button>`
     :`<div class="ops-sites-cc-kpi" data-tone="${tone}" data-cc-kpi="${escapeHTML(label)}" title="${escapeHTML(title||label)}">${inner}</div>`;
@@ -88,13 +89,13 @@ function opsSitesCcKpiHTML(label,value,tone,quick,title){
 function opsSitesCcKpisHTML(model){
   const t=model.totals;
   return `<div class="ops-sites-cc-kpis" role="group" aria-label="Indicateurs des sites">
-    ${opsSitesCcKpiHTML("Sites total",t.sites,"info","all","Tous les sites du périmètre")}
-    ${opsSitesCcKpiHTML("Sites actifs",t.active,"ok","actifs","Sites non archivés")}
-    ${opsSitesCcKpiHTML("Sites en alerte",t.alert,t.alert>0?"danger":"ok","alerte","Sites actifs avec manque d'effectif")}
-    ${opsSitesCcKpiHTML("Agents affectés",t.realized,"info","realise","Effectif réalisé sur les sites actifs")}
-    ${t.missions===null?"":opsSitesCcKpiHTML("Missions en cours",t.missions,"violet","","Compteur serveur OPS")}
-    ${opsSitesCcKpiHTML("Incidents ouverts",t.incidents,t.incidents>0?"warn":"ok","incidents","Main courante : incidents non clos")}
-    ${t.coverage===null?"":opsSitesCcKpiHTML("Couverture",t.coverage+"%",t.coverage>=100?"ok":"warn","contractuel","Effectif affecté / effectif contractuel")}
+    ${opsSitesCcKpiHTML("Sites total",t.sites,"primary","all","Tous les sites du périmètre","building")}
+    ${opsSitesCcKpiHTML("Sites actifs",t.active,"ok","actifs","Sites non archivés","check")}
+    ${opsSitesCcKpiHTML("Sites en alerte",t.alert,"danger","alerte","Sites actifs avec manque d'effectif","alert")}
+    ${opsSitesCcKpiHTML("Agents affectés",t.realized,"info","realise","Effectif réalisé sur les sites actifs","users")}
+    ${t.missions===null?"":opsSitesCcKpiHTML("Missions en cours",t.missions,"violet","","Compteur serveur OPS","calendar")}
+    ${opsSitesCcKpiHTML("Incidents ouverts",t.incidents,"warn","incidents","Main courante : incidents non clos","event")}
+    ${t.coverage===null?"":opsSitesCcKpiHTML("Couverture",t.coverage+"%","amber","contractuel","Effectif affecté / effectif contractuel","shield")}
   </div>`;
 }
 
@@ -123,10 +124,10 @@ function opsSitesCcMapPanelHTML(model){
   const readOnly=isOpsSupervisorReadOnlySession();
   return `<section class="ops-sites-cc-panel ops-sites-cc-map-panel" aria-label="Carte des sites">
     <div class="ops-sites-cc-panel-head">
-      <div><h2>Carte des sites</h2><div id="sites-map-label" class="ops-sites-cc-muted">Tous les sites</div></div>
+      <div class="ops-sites-cc-title">${opsIcon("map")}<div><h2>Carte des sites</h2><div id="sites-map-label" class="ops-sites-cc-muted">Tous les sites positionnés sur la carte</div></div></div>
       <div class="ops-sites-cc-map-tools">
         <select id="sites-map-select" class="ops-sites-cc-input" aria-label="Centrer la carte sur un site" onchange="updateSitesMap(this.value)">${options}</select>
-        <a id="sites-map-open" class="ops-sites-cc-btn" href="${escapeHTML(googleMapsSearchUrl(initial?siteMapQuery(initial.site):"Algérie"))}" target="_blank" rel="noopener">Google Maps ↗</a>
+        <a id="sites-map-open" class="ops-sites-cc-btn ops-btn ops-btn--sm" href="${escapeHTML(googleMapsSearchUrl(initial?siteMapQuery(initial.site):"Algérie"))}" target="_blank" rel="noopener">${opsIcon("pin","ops-btn__icon")}<span class="ops-btn__label">Google Maps ↗</span></a>
       </div>
     </div>
     <div class="ops-sites-cc-map-wrap">
@@ -175,33 +176,39 @@ function opsSitesCcWilayaBarsHTML(model){
 }
 function opsSitesCcActivityHTML(model){
   if(!model.activity.length)return `<div class="ops-sites-cc-empty">Aucun mouvement enregistré pour ces sites.</div>`;
-  return `<ol class="ops-sites-cc-activity">${model.activity.map(({row,f})=>`<li>
+  const who=a=>{
+    if(!a)return `<span class="ops-sites-cc-tl-who">—</span>`;
+    const poste=a.affectationCourante?.poste||a.fonction||a.position||a.posteContrat||"";
+    const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+    return `<span class="ops-sites-cc-tl-who">${poste?`<em>${escapeHTML(poste)}</em>`:""}${a.matricule?`<code>${escapeHTML(a.matricule)}</code>`:""}<b>${escapeHTML(name||"—")}</b></span>`;
+  };
+  return `<ol class="ops-sites-cc-activity ops-sites-cc-timeline">${model.activity.map(({row,f})=>`<li>
     <time>${escapeHTML(formatDate(f.date)||"—")}</time>
-    <div><strong>${escapeHTML(f.mouvementMotif||f.mouvementType||"Mouvement")}</strong><span>${escapeHTML(opsMovementAgentLabel(f._agent))}</span><small>${escapeHTML(row.site.nom||"Site")}</small></div>
+    <div><strong>${escapeHTML(f.mouvementMotif||f.mouvementType||"Mouvement")}</strong>${who(f._agent)}<small>${opsIcon("building")}${escapeHTML(row.site.nom||"Site")}</small></div>
   </li>`).join("")}</ol>`;
 }
 function opsSitesCcSynthHTML(model){
   const t=model.totals;
-  const tile=(label,value,quick,tone)=>`<button type="button" class="ops-sites-cc-synth-tile" data-tone="${tone}" data-cc-quick="${quick}" onclick="opsSitesCcQuick('${quick}')" title="${escapeHTML(OPS_SITES_CC_QUICK[quick])}"><span>${escapeHTML(label)}</span><strong>${value}</strong></button>`;
+  const tile=(label,value,quick,tone,icon)=>`<button type="button" class="ops-sites-cc-synth-tile" data-tone="${tone}" data-cc-quick="${quick}" onclick="opsSitesCcQuick('${quick}')" title="${escapeHTML(OPS_SITES_CC_QUICK[quick])}"><i class="ops-sites-cc-synth-icon" aria-hidden="true">${opsIcon(icon)}</i><span>${escapeHTML(label)}</span><strong>${value}</strong></button>`;
   return `<div class="ops-sites-cc-synth">
-    ${tile("En instance d'affectation",t.instance,"instance",t.instance>0?"warn":"ok")}
-    ${tile("Sites opérationnels",t.operational,"operationnel","ok")}
-    ${tile("Effectif contrat",t.contractual,"contractuel","info")}
-    ${tile("Effectif réalisé",t.realized,"realise","info")}
-    ${tile("Manque d'effectif",t.missing,"alerte",t.missing>0?"danger":"ok")}
-    ${tile("Effectif surplus",t.surplus,"surplus",t.surplus>0?"warn":"muted")}
+    ${tile("En instance d'affectation",t.instance,"instance",t.instance>0?"warn":"ok","clock")}
+    ${tile("Sites opérationnels",t.operational,"operationnel","ok","check")}
+    ${tile("Effectif contrat",t.contractual,"contractuel","info","file")}
+    ${tile("Effectif réalisé",t.realized,"realise","info","userCheck")}
+    ${tile("Manque d'effectif",t.missing,"alerte",t.missing>0?"danger":"ok","userMinus")}
+    ${tile("Effectif surplus",t.surplus,"surplus",t.surplus>0?"warn":"muted","userPlus")}
   </div>`;
 }
 function opsSitesCcSideHTML(model){
   return `<aside class="ops-sites-cc-side" aria-label="Analyse des sites">
-    <section class="ops-sites-cc-panel" data-cc-panel="repartition"><div class="ops-sites-cc-panel-head"><h2>Répartition des sites</h2><span class="ops-sites-cc-muted">Par statut réel</span></div>${opsSitesCcDonutHTML(model)}${opsSitesCcWilayaBarsHTML(model)}</section>
-    <section class="ops-sites-cc-panel" data-cc-panel="synthese"><div class="ops-sites-cc-panel-head"><h2>Synthèse des effectifs</h2><span class="ops-sites-cc-muted">Sites actifs</span></div>${opsSitesCcSynthHTML(model)}</section>
+    <section class="ops-sites-cc-panel" data-cc-panel="repartition"><div class="ops-sites-cc-panel-head"><div class="ops-sites-cc-title">${opsIcon("building")}<h2>Répartition des sites</h2></div><span class="ops-sites-cc-muted">Par statut réel</span></div>${opsSitesCcDonutHTML(model)}${opsSitesCcWilayaBarsHTML(model)}</section>
+    <section class="ops-sites-cc-panel" data-cc-panel="synthese"><div class="ops-sites-cc-panel-head"><div class="ops-sites-cc-title">${opsIcon("users")}<h2>Synthèse des effectifs</h2></div><span class="ops-sites-cc-muted">Sites actifs</span></div>${opsSitesCcSynthHTML(model)}</section>
   </aside>`;
 }
 function opsSitesCcFeedHTML(model){
   return `<div class="ops-sites-cc-feed">
-    <section class="ops-sites-cc-panel" data-cc-panel="activite"><div class="ops-sites-cc-panel-head"><h2>Activité récente</h2><span class="ops-sites-cc-muted">Mouvements d'effectif</span></div>${opsSitesCcActivityHTML(model)}</section>
-    ${model.deadlines.length?`<section class="ops-sites-cc-panel" data-cc-panel="echeances"><div class="ops-sites-cc-panel-head"><h2>Prochaines échéances</h2><span class="ops-sites-cc-muted">Ouvertures prévues</span></div><ol class="ops-sites-cc-activity">${model.deadlines.slice(0,6).map(r=>`<li><time>${escapeHTML(formatDate(r.opening))}</time><div><strong>Ouverture du site</strong><span>${escapeHTML(r.site.nom||"Site")}</span></div></li>`).join("")}</ol></section>`:""}
+    <section class="ops-sites-cc-panel" data-cc-panel="activite"><div class="ops-sites-cc-panel-head"><div class="ops-sites-cc-title">${opsIcon("swap")}<h2>Activité récente</h2></div><span class="ops-sites-cc-muted">Mouvements d'effectif</span></div>${opsSitesCcActivityHTML(model)}</section>
+    ${model.deadlines.length?`<section class="ops-sites-cc-panel" data-cc-panel="echeances"><div class="ops-sites-cc-panel-head"><div class="ops-sites-cc-title">${opsIcon("calendar")}<h2>Prochaines échéances</h2></div><span class="ops-sites-cc-muted">Ouvertures prévues</span></div><ol class="ops-sites-cc-activity ops-sites-cc-timeline">${model.deadlines.slice(0,6).map(r=>`<li><time>${escapeHTML(formatDate(r.opening))}</time><div><strong>Ouverture du site</strong><span>${escapeHTML(r.site.nom||"Site")}</span></div></li>`).join("")}</ol></section>`:""}
   </div>`;
 }
 
@@ -241,13 +248,13 @@ function opsSitesCcCardHTML(row,readOnly){
       <div class="ops-sites-cc-detail-line"><span>Type</span><b>${safe(s.type)}</b></div>
       ${row.opening?`<div class="ops-sites-cc-detail-line"><span>Date d'ouverture</span><b>${escapeHTML(formatDate(row.opening))}</b></div>`:""}
       ${row.pos?`<div class="ops-sites-cc-detail-line"><span>Coordonnées</span><b>${escapeHTML(sitePositionLabel(row.pos.lat,row.pos.lng))}</b></div>`:`<div class="ops-sites-cc-detail-line"><span>Coordonnées</span><b>GPS manquant</b></div>`}
-      <button type="button" class="ops-sites-cc-btn" onclick="event.stopPropagation();openSiteMovementHistoryModal('${jsString(String(s.id||s.backendId||s.indicatif||""))}')">Historique des mouvements ${opsBadgeHTML(row.movements.length,"mouvement(s)")}</button>
+      ${opsButtonHTML("Historique des mouvements",{size:"sm",icon:"clock",className:"ops-sites-cc-btn",badge:row.movements.length,badgeLabel:"mouvement(s)",attrs:`onclick="event.stopPropagation();openSiteMovementHistoryModal('${jsString(String(s.id||s.backendId||s.indicatif||""))}')"`})}
       ${readOnly?"":siteAdminSystemActionsHTML(s)}
     </div>
     <div class="ops-sites-cc-card-foot">
-      <button type="button" class="ops-sites-cc-link" aria-expanded="false" aria-controls="${escapeHTML(detailId)}" onclick="event.stopPropagation();opsSitesCcToggleDetail(this)">Effectifs détaillés</button>
-      ${row.pos?`<button type="button" class="ops-sites-cc-link" onclick="event.stopPropagation();opsSitesCcLocate('${jsString(row.key)}')">Localiser</button>`:""}
-      <a class="ops-sites-cc-more" href="#/sites/${row.ref}">Voir le détail →</a>
+      ${opsButtonHTML("Effectifs détaillés",{size:"sm",icon:"users",attrs:`title="Effectifs détaillés" aria-expanded="false" aria-controls="${escapeHTML(detailId)}" onclick="event.stopPropagation();opsSitesCcToggleDetail(this)"`})}
+      ${row.pos?opsButtonHTML("Localiser",{size:"sm",icon:"pin",attrs:`title="Localiser sur la carte" onclick="event.stopPropagation();opsSitesCcLocate('${jsString(row.key)}')"`}):""}
+      <a class="ops-sites-cc-more ops-btn ops-btn--sm ops-btn--primary" href="#/sites/${row.ref}">${opsIcon("eye","ops-btn__icon")}<span class="ops-btn__label">Voir le détail →</span></a>
     </div>
   </article>`;
 }
@@ -268,7 +275,7 @@ function opsSitesCcListHTML(model,pagination){
   const statusLabels=Object.fromEntries(model.byStatus.map(s=>[s.key,s.label]));
   return `<section class="ops-sites-cc-panel ops-sites-cc-list" aria-label="Liste des sites">
     <div class="ops-sites-cc-panel-head">
-      <div><h2 id="ops-sites-cc-count" data-cc-count="${model.rows.length}">Liste des sites (${model.rows.length})</h2><div class="ops-sites-cc-muted">Suivi en temps réel de l'état de vos sites</div></div>
+      <div class="ops-sites-cc-title">${opsIcon("clipboard")}<div><h2 id="ops-sites-cc-count" data-cc-count="${model.rows.length}">Liste des sites (${model.rows.length})</h2><div class="ops-sites-cc-muted">Suivi en temps réel de l'état de vos sites</div></div></div>
       <div class="ops-sites-cc-layout" role="group" aria-label="Affichage de la liste">
         <button type="button" data-cc-layout-btn="grille" aria-pressed="${state.layout==="grille"}" onclick="opsSitesCcSetLayout('grille')">Grille</button>
         <button type="button" data-cc-layout-btn="liste" aria-pressed="${state.layout==="liste"}" onclick="opsSitesCcSetLayout('liste')">Liste</button>
@@ -279,7 +286,7 @@ function opsSitesCcListHTML(model,pagination){
       ${select("ops-sites-cc-status","Statut","Tous les statuts",model.byStatus.map(s=>s.key),state.status,statusLabels)}
       ${select("ops-sites-cc-wilaya","Ville / Wilaya","Toutes les wilayas",model.wilayas,state.wilaya)}
       ${select("ops-sites-cc-client","Client","Tous les clients",model.clients,state.client)}
-      <button type="button" class="ops-sites-cc-btn" onclick="opsSitesCcReset()">Réinitialiser</button>
+      ${opsButtonHTML("Réinitialiser",{size:"sm",icon:"rotate",className:"ops-sites-cc-btn",attrs:`onclick="opsSitesCcReset()"`})}
     </div>
     <div id="sites-filter-info" class="ops-sites-cc-filter-info" hidden></div>
     <div class="ops-sites-cc-grid">${model.rows.map(row=>opsSitesCcCardHTML(row,readOnly)).join("")}</div>
@@ -324,10 +331,12 @@ function renderOpsSitesCommandCenter(view,sites,options){
     ${opsSitesCcScopeHTML(model)}
     ${opsSitesCcKpisHTML(model)}
     <div class="ops-sites-cc-main">
-      ${sgdiOverlayIsOpen()?"":opsSitesCcMapPanelHTML(model)}
+      <div class="ops-sites-cc-primary">
+        ${sgdiOverlayIsOpen()?"":opsSitesCcMapPanelHTML(model)}
+        ${opsSitesCcFeedHTML(model)}
+      </div>
       ${opsSitesCcSideHTML(model)}
     </div>
-    ${opsSitesCcFeedHTML(model)}
     ${opsSitesCcAnalyticsTableHTML(model)}
     ${opsSitesCcListHTML(model,options.pagination)}
   </section>`;
@@ -440,12 +449,12 @@ function opsSitesCcLocate(siteKey){
   opsSitesCcRoot()?.querySelector(".ops-sites-cc-map-panel")?.scrollIntoView?.({behavior:"smooth",block:"nearest"});
 }
 
-// Carte : la vraie carte MapLibre + tuiles OpenStreetMap du tableau de bord, en rendu sombre.
-// Le rendu sombre inverse la luminosité de la couche raster OSM (propriétés de peinture MapLibre) :
-// mêmes tuiles, même attribution, mêmes interactions ; la vue satellite n'est pas modifiée.
+// Carte : la vraie carte MapLibre + tuiles OpenStreetMap du tableau de bord, en rendu clair :
+// la couche OSM est légèrement désaturée pour faire ressortir les marqueurs de statut. Mêmes
+// tuiles, même attribution, mêmes interactions ; la vue satellite n'est pas modifiée.
 function opsSitesCcMapStyle(){
   const style=sgdiMapLibreStyle();
-  style.layers=style.layers.map(layer=>layer.id==="osm"?{...layer,paint:{"raster-brightness-min":1,"raster-brightness-max":0,"raster-hue-rotate":180,"raster-saturation":-0.45,"raster-contrast":0.08}}:layer);
+  style.layers=style.layers.map(layer=>layer.id==="osm"?{...layer,paint:{"raster-saturation":-0.35,"raster-contrast":-0.04}}:layer);
   return style;
 }
 function opsSitesCcMarkerElement(row){

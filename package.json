@@ -8,6 +8,7 @@
     "test:pointeur-v5-chrome": "node --test tests_frontend/pointeur-v5-chrome.test.js tests_frontend/pointeur-facial-chrome.test.js",
     "test:ops-presentation-chrome": "node --test --test-force-exit tests_frontend/ops-presentation-chrome.test.js",
     "test:ops-sites-chrome": "node --test tests_frontend/ops-sites-command-center-chrome.test.js",
+    "test:ops-sites-light-chrome": "node --test --test-force-exit tests_frontend/ops-sites-light-chrome.test.js",
     "test:ops-site-fiche-chrome": "node --test tests_frontend/ops-site-fiche-technique-chrome.test.js",
     "test:global-kpi-chrome": "node --test tests_frontend/global-kpi-ribbon-chrome.test.js",
     "test:ops-command-center": "node --test tests_frontend/ops-command-center-v2.test.js",
