@@ -39,6 +39,7 @@ from app.modules.profitability.routes import router as profitability_router
 from app.modules.fiscalite.routes import router as fiscalite_router
 from app.modules.cockpit.routes import router as cockpit_router
 from app.modules.site_workforce.routes import router as site_workforce_router
+from app.modules.site_workforce.admin_routes import router as site_workforce_admin_router
 from app.modules.attendance.routes import router as attendance_router
 from app.modules.biometrics.routes import router as biometrics_router
 from app.modules.brq.routes import router as brq_router
@@ -48,6 +49,8 @@ from app.modules.employee_mobile.routes import router as employee_mobile_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth", tags=["Auth"])
+# Administration › BEO : champs de la Fiche de position (garde administrateur, hors /site-workforce).
+api_router.include_router(site_workforce_admin_router, prefix="/auth", tags=["Auth"])
 api_router.include_router(mobile_router, prefix="/mobile", tags=["ATLAS MOBILE"])
 api_router.include_router(employee_mobile_router, prefix="/employee-mobile", tags=["ATLAS MOBILE — employé"])
 api_router.include_router(drh_router, prefix="/drh", tags=["DRH"])

@@ -17,7 +17,7 @@ const VIEWS_DIR = path.join(SW_DIR, "views");
 const VIEW_FILES = fs.readdirSync(VIEWS_DIR).filter((f) => f.endsWith(".js")).sort();
 const VIEW_SRCS = VIEW_FILES.map((f) => fs.readFileSync(path.join(VIEWS_DIR, f), "utf8"));
 
-const NAV_KEYS = ["dashboard", "personnel", "pointage", "absences", "justificatifs", "conges", "maladies", "discipline", "reclamations"];
+const NAV_KEYS = ["dashboard", "personnel", "position", "pointage", "absences", "justificatifs", "conges", "maladies", "discipline", "reclamations"];
 
 function freshWindow({ user, site, fetchImpl } = {}) {
   const dom = new JSDOM(
@@ -71,7 +71,7 @@ function shellWindow(fetchImpl) {
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-test("shell.js définit les 9 entrées de navigation, et des sélecteurs limités au périmètre autorisé", async () => {
+test("shell.js définit les 10 entrées de navigation, et des sélecteurs limités au périmètre autorisé", async () => {
   const calls = [];
   const w = shellWindow(scopedFetch(calls));
   await w.SiteWorkforceShell.renderShell();
