@@ -22,6 +22,7 @@ from app.modules.ops.schemas import (
     DailyPresenceCreate,
     DailyPresenceOut,
     DailyPresenceUpdate,
+    InitialAssignmentCreate,
     OpsMovementCreate,
     OpsMovementOut,
     RotationGenerateRequest,
@@ -676,6 +677,29 @@ def list_movements(
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
     return service.list_movements(db, society=society, limit=limit)
+
+
+@router.post("/movements/initial-assignment")
+def assign_unassigned_employee(payload: InitialAssignmentCreate, request: Request, background_tasks: BackgroundTasks,
+                               db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Effectif sans affectation → ordre de mouvement validé → affectation (une transaction)."""
+    from app.modules.ops import initial_assignment
+    from app.modules.ops.employee_photos import employee_scope_conditions
+
+    employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    # Même périmètre que la liste des employés OPS : un compte limité à des sites ne voit pas
+    # les employés sans affectation, il ne peut donc pas en affecter.
+    conditions, _sites = employee_scope_conditions(db, user)
+    if not db.execute(select(Employee.id).where(Employee.id == employee.id, *conditions)).first():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employé hors périmètre")
+    site = _ensure_site_allowed(db, user, payload.site_id)
+    if not _site_society(site) or not employee.society or _normalize_society(_site_society(site)) != _normalize_society(employee.society):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société employé/site incohérente")
+    result = initial_assignment.assign(db, user, employee, site, payload, request=request)
+    assignment = result["assignment"]
+    if _normalize_society(employee.society) == "IRON GLOBAL SECURITE":
+        background_tasks.add_task(iron_sync.push_payload, iron_sync.build_payload(employee, site, assignment))
+    return {**result, "assignment": AssignmentOut.model_validate(assignment).model_dump(mode="json")}
 
 
 @router.post("/movements", response_model=OpsMovementOut)
