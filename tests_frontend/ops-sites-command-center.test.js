@@ -1,4 +1,4 @@
-// OPS → Sites : Command Center sombre (présentation). Vrai sgdi-app.js + modules dans jsdom.
+// OPS → Sites : Command Center clair (présentation). Vrai sgdi-app.js + modules dans jsdom.
 // Contrat : données réelles uniquement, indicateurs manque/surplus compacts, détail conservé,
 // filtres réels, état vide, aucun bouton mort, autres contextes (Matériel, Superviseur…) inchangés.
 // Le rendu visuel, la carte MapLibre/OSM et le responsive sont contrôlés en Chrome réel par
@@ -141,7 +141,7 @@ test('Sites Command Center — filtres recherche / statut / wilaya / client sur 
   assert.deepEqual([root.dataset.ccView, root.dataset.ccLayout], ['carte', 'grille']);
 });
 
-test('Sites Command Center — état vide propre et chargement sombre', t => {
+test('Sites Command Center — état vide propre et chargement', t => {
   const ctx = boot(t, { db: { sites: [] } });
   const root = render(ctx, []);
   assert.equal(root.querySelectorAll('.ops-sites-cc-card').length, 0);
@@ -179,15 +179,16 @@ test('Sites Command Center — réservé au contexte OPS ; Matériel et Supervis
   assert.doesNotMatch(ops.view.textContent, /ALERTE MANQUE D'EFFECTIF|Synthèse situation générale/);
 });
 
-test('Sites Command Center — vraie carte conservée : MapLibre + tuiles et attribution OpenStreetMap, rendu sombre', t => {
+test('Sites Command Center — vraie carte conservée : MapLibre + tuiles et attribution OpenStreetMap, rendu clair', t => {
   const ctx = boot(t);
-  const base = ctx.T().sgdiMapLibreStyle(), dark = ctx.T().opsSitesCcMapStyle();
-  assert.equal(JSON.stringify(dark.sources), JSON.stringify(base.sources), 'mêmes sources de tuiles');
-  assert.match(dark.sources.osm.tiles[0], /tile\.openstreetmap\.org/);
-  assert.match(dark.sources.osm.attribution, /OpenStreetMap/);
-  assert.equal(dark.layers.map(layer => layer.id).join(), 'osm,satellite');
-  assert.equal(dark.layers[0].paint['raster-brightness-max'], 0);
-  assert.equal(dark.layers[1].paint, undefined, 'vue satellite inchangée');
+  const base = ctx.T().sgdiMapLibreStyle(), light = ctx.T().opsSitesCcMapStyle();
+  assert.equal(JSON.stringify(light.sources), JSON.stringify(base.sources), 'mêmes sources de tuiles');
+  assert.match(light.sources.osm.tiles[0], /tile\.openstreetmap\.org/);
+  assert.match(light.sources.osm.attribution, /OpenStreetMap/);
+  assert.equal(light.layers.map(layer => layer.id).join(), 'osm,satellite');
+  assert.equal(light.layers[0].paint['raster-brightness-max'], undefined, 'plus d\'inversion de luminosité');
+  assert.ok(light.layers[0].paint['raster-saturation'] < 0, 'tuiles légèrement désaturées');
+  assert.equal(light.layers[1].paint, undefined, 'vue satellite inchangée');
   const source = fs.readFileSync(path.join(STATIC, 'js/modules/sites-command-center.js'), 'utf8');
   assert.match(source, /new maplibregl\.Map\(/);
   assert.match(source, /new maplibregl\.AttributionControl\(\{compact:false\}\)/, 'attribution toujours affichée');
@@ -204,7 +205,11 @@ test('Sites Command Center — métier Sites intact (fonctions existantes non mo
     'openSiteAffectesModal', 'openSiteAjouterEffectifModal', 'siteMapDashboardHTML', 'updateSitesMap', 'saveSitePositionOnly']) assert.match(sites, new RegExp('function ' + name + '\\('), name);
   assert.match(sites, /dependencies: \["sites-1","sites-command-center"\]/);
   const css = fs.readFileSync(path.join(STATIC, 'sgdi-app.css'), 'utf8');
-  const block = css.slice(css.indexOf('/* ── OPS → Sites : Command Center sombre'));
+  const start = css.indexOf('/* ── OPS → Sites : Command Center clair');
+  assert.ok(start > 0, 'bloc du tableau de bord Sites présent');
+  const block = css.slice(start, css.indexOf('/* ----- PORTAIL DRH', start));
+  assert.doesNotMatch(block, /--(?!ops-sites-|tone)[a-z-]+\s*:/, 'aucune variable CSS globale redéfinie');
+  assert.doesNotMatch(block, /^\s*(:root|body(?!\.atlas-ui #view \.ops-sites-cc)|html)\b/m, 'aucune règle globale');
   for (const line of block.split('\n')) {
     if (/^\s*(#view|body\.atlas-ui)/.test(line)) assert.match(line, /\.ops-sites-cc/, 'style confiné au command center: ' + line.slice(0, 80));
   }
