@@ -51,10 +51,17 @@ def employee_has_active_assignment(db: Session, employee_id: int) -> bool:
     ).scalars().first())
 
 
-def create_assignment(db: Session, payload: Any) -> Assignment:
-    data = payload.model_dump(exclude_unset=True)
+def lock_employee(db: Session, employee_id: int) -> None:
+    """Verrou de ligne de l'employé jusqu'à la fin de la transaction (PostgreSQL) : deux
+    affectations simultanées du même employé se suivent au lieu de se croiser."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(select(Employee.id).where(Employee.id == employee_id).with_for_update())
+
+
+def create_assignment_no_commit(db: Session, data: dict[str, Any]) -> Assignment:
     employee_id = data.get("employee_id")
     if employee_id:
+        lock_employee(db, employee_id)
         existing = db.execute(
             select(Assignment).where(
                 Assignment.employee_id == employee_id,
@@ -66,6 +73,12 @@ def create_assignment(db: Session, payload: Any) -> Assignment:
             old.end_date = old.end_date or date.today()
     row = Assignment(**data)
     db.add(row)
+    db.flush()
+    return row
+
+
+def create_assignment(db: Session, payload: Any) -> Assignment:
+    row = create_assignment_no_commit(db, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(row)
     return row

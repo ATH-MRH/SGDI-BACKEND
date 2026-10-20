@@ -771,6 +771,49 @@ function operationalPreparationActionHTML(blocker,agentId){
   return `<a class="btn btn-secondary text-xs" href="#/${escapeHTML(blocker?.route||"effectif/preparation")}">${action}</a>`;
 }
 
+// Effectif sans affectation : « Affecter » ouvre l'ordre de mouvement de l'employé (aucune
+// affectation directe). Mêmes droits que le serveur : module OPS, action « create », jamais en
+// superviseur lecture seule.
+function opsCanAssignByMovement(){
+  if(!session||!isOpsEffectifContext()||isDrhModuleContext()||isOpsSupervisorReadOnlySession())return false;
+  const actions=Array.isArray(session.actionsAutorisees)?session.actionsAutorisees.map(x=>String(x).toLowerCase()):[];
+  if(actions.length&&!actions.some(x=>x==="create"||x==="admin"))return false;
+  return canAccess("ops/mouvements");
+}
+
+const OPS_ASSIGN_BLOCKED_STATUSES=new Set(["conge","maladie","absent","suspendu","blacklist","blackliste","abandon"]);
+
+// Affectation active à date d'effet future : l'employé reste sans affectation aujourd'hui,
+// mais un second ordre serait un doublon (refusé par le serveur).
+function opsPlannedAssignmentFor(a){
+  const refs=new Set([a?.id,a?.backendId].map(v=>String(v||"")).filter(Boolean));
+  return (db.assignments||[]).find(x=>x&&x.active!==false&&x.active!==0&&(refs.has(String(x.agentBackendId||""))||refs.has(String(x.agentId||"")))&&String(x.dateDebut||"").slice(0,10)>today())||null;
+}
+
+function opsUnassignedAssignButtonHTML(row){
+  const a=(db.agents||[]).find(x=>String(x.id)===String(row?.employee_id));
+  if(!a||agentHasLiveAffectation(a))return "";
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim()||a.matricule||"";
+  const planned=opsPlannedAssignmentFor(a);
+  const stKey=normalizeEmployeeStatusValue(a.statut||a.status||"actif");
+  const blocked=OPS_ASSIGN_BLOCKED_STATUSES.has(stKey)||!!(a.blacklist||a.contractBlocked);
+  const reason=planned?`Affectation planifiée le ${formatDate(planned.dateDebut)} : actualisez à la date d'effet`:blocked?`Employé ${stKey.toUpperCase()} : affectation impossible`:"";
+  const attrs=reason
+    ?`disabled title="${escapeHTML(reason)}" aria-label="${escapeHTML("Affecter "+name+" — "+reason)}" data-assign-employee="${escapeHTML(a.id)}"`
+    :`aria-label="${escapeHTML("Affecter "+name)}" data-assign-employee="${escapeHTML(a.id)}" onclick="opsAssignUnassignedEmployee('${escapeHTML(jsString(a.id))}')"`;
+  return opsButtonHTML(planned?"Planifiée":"Affecter",{size:"sm",variant:"primary",className:"ops-assign-btn",attrs});
+}
+
+function opsAssignUnassignedEmployee(agentId){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
+  if(!agentId)return;
+  // Même présélection que le raccourci historique : l'éditeur d'OM coche cet employé seul.
+  sessionStorage.setItem("opsMovementAgentId",agentId);
+  sessionStorage.setItem("opsMovementSelectedAgent",agentId);
+  sessionStorage.setItem("opsMovementInitialAgent",agentId);
+  navigate("ops/mouvements");
+}
+
 function operationalPreparationFilterKey(filter){
   return {preparation_contrat:"contrat",preparation_dotation:"dotation",preparation_affectation:"affectation",preparation_pv:"pv",pv:"pv",dotation:"dotation",affectation:"affectation",contrat:"contrat"}[filter]||"";
 }
@@ -795,6 +838,7 @@ function operationalPreparationHTML(data,source){
   const activeStyle=key=>filterKey===key?"box-shadow:0 0 0 2px currentColor inset;":"";
   const filterTitles={affectation:"EFFECTIF SANS AFFECTATION",dotation:"SANS DOTATION",contrat:"SANS CONTRAT",pv:"SANS PV D'INSTALLATION"};
   const pageTitle=filterKey&&filterTitles[filterKey]?filterTitles[filterKey]:"Préparation opérationnelle";
+  const assignCol=filterKey==="affectation"&&opsCanAssignByMovement();
   const pageSubtitle=filterKey&&filterTitles[filterKey]?(soc?`<b>${escapeHTML(soc)}</b>`:""):`Employés non opérationnels avec les étapes bloquantes${soc?` · <b>${escapeHTML(soc)}</b>`:""}`;
   const cards=[
     ["Contrat",counters.contrat||0,"#dc2626"],
@@ -803,7 +847,7 @@ function operationalPreparationHTML(data,source){
   ];
   return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-bold">${pageTitle}</h1>${pageSubtitle?`<p class="text-sm text-slate-500">${pageSubtitle}</p>`:""}</div></div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">${cards.map(c=>{const key=c[0].toLowerCase();return`<button type="button" class="card p-4 text-left" onclick="navigate('effectif/preparation_${key}')" style="border-left:4px solid ${c[2]};color:${c[2]};${activeStyle(key)}"><div class="text-xs font-black uppercase text-slate-500">Sans ${escapeHTML(c[0])}</div><div class="text-3xl font-black mt-1" style="color:${c[2]}">${c[1]}</div></button>`}).join("")}</div>
-  ${items.length?`<div class="card overflow-hidden"><table><thead><tr><th>Employé</th><th>Société</th><th>Poste</th><th>Site</th><th>Statut</th><th>Blocage</th></tr></thead><tbody>${items.map(row=>{const blockers=row.blockers||[];const stKey=normalizeEmployeeStatusValue(row.statut||"actif");const stLabel=stKey.toUpperCase();const stCls=["actif","sortant","suspendu","blacklist"].includes(stKey)?"employee-status-pill employee-status-"+stKey:["absent","abandon"].includes(stKey)?"pill pill-red":"pill pill-gray";return `<tr data-searchable><td><div class="font-bold">${escapeHTML(row.name||"—")}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(row.code||"—")}</div></td><td class="text-xs">${escapeHTML(row.society||"—")}</td><td class="text-xs">${escapeHTML(row.position||"—")}</td><td class="text-xs">${escapeHTML(row.site||"Sans affectation")}</td><td><span class="${stCls}">${stLabel}</span></td><td>${blockers.map(b=>`<span class="pill" style="background:${operationalPreparationColor(b.key)}18;color:${operationalPreparationColor(b.key)};font-weight:900;margin:2px">${escapeHTML(b.label)}</span>`).join(" ")}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="card p-10 text-center text-slate-500">Tous les employés de ce périmètre sont prêts ou déjà opérationnels.</div>`}`;
+  ${items.length?`<div class="card ${assignCol?"ops-prep-assign-card":"overflow-hidden"}"><table><thead><tr><th>Employé</th><th>Société</th><th>Poste</th><th>Site</th><th>Statut</th><th>Blocage</th>${assignCol?`<th class="text-right">Action</th>`:""}</tr></thead><tbody>${items.map(row=>{const blockers=row.blockers||[];const stKey=normalizeEmployeeStatusValue(row.statut||"actif");const stLabel=stKey.toUpperCase();const stCls=["actif","sortant","suspendu","blacklist"].includes(stKey)?"employee-status-pill employee-status-"+stKey:["absent","abandon"].includes(stKey)?"pill pill-red":"pill pill-gray";return `<tr data-searchable><td><div class="font-bold">${escapeHTML(row.name||"—")}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(row.code||"—")}</div></td><td class="text-xs">${escapeHTML(row.society||"—")}</td><td class="text-xs">${escapeHTML(row.position||"—")}</td><td class="text-xs">${escapeHTML(row.site||"Sans affectation")}</td><td><span class="${stCls}">${stLabel}</span></td><td>${blockers.map(b=>`<span class="pill" style="background:${operationalPreparationColor(b.key)}18;color:${operationalPreparationColor(b.key)};font-weight:900;margin:2px">${escapeHTML(b.label)}</span>`).join(" ")}</td>${assignCol?`<td class="text-right">${opsUnassignedAssignButtonHTML(row)}</td>`:""}</tr>`}).join("")}</tbody></table></div>`:`<div class="card p-10 text-center text-slate-500">Tous les employés de ce périmètre sont prêts ou déjà opérationnels.</div>`}`;
 }
 
 function renderOperationalPreparation(view,filter){
