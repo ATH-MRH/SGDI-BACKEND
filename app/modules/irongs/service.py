@@ -784,13 +784,13 @@ def list_items(db: Session, name: str) -> list[Any]:
     return data
 
 
-def _upsert_sql_collection_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+def _upsert_sql_collection_item(db: Session, name: str, item: dict[str, Any], *, creating: bool = False) -> dict[str, Any]:
     # Les anciennes lignes JSON des collections finance ne sont jamais effacées : elles n'ont pas
     # été reprises en SQL et peuvent être les seules traces de pièces historiques.
     if name not in sql_bridge.FINANCE_MODELS:
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
     try:
-        out = sql_bridge.upsert_item(db, name, item)
+        out = sql_bridge.upsert_item(db, name, item, creating=creating)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -805,7 +805,7 @@ def _upsert_sql_collection_item(db: Session, name: str, item: dict[str, Any]) ->
 def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
     item = normalize_photo_fields(dict(item), fallback=name)
     if name in sql_bridge.SQL_COLLECTIONS:
-        return _upsert_sql_collection_item(db, name, dict(item))
+        return _upsert_sql_collection_item(db, name, dict(item), creating=True)
     item = _ensure_id(dict(item), name)
     item_id = str(item["id"])
     exists = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()

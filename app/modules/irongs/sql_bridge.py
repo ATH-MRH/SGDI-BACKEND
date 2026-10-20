@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from copy import deepcopy
@@ -807,16 +808,42 @@ def _prepare_settlement(db: Session, collection: str, item: dict[str, Any], *, i
     return item
 
 
-def _replayed_settlement(row: Any, item: dict[str, Any]) -> dict[str, Any]:
+# Champs qui identifient une même opération lors d'un rejeu (même clé d'idempotence = même
+# identifiant de pièce). Le montant, la facture et la date sont toujours comparés.
+_REPLAY_FIELDS = {
+    "paiements": ("mode", "reference", "notes"),
+    "avoirs": ("motif",),
+    "avances": ("mode", "reference", "notes", "client", "beneficiaire", "statut"),
+    "caisse": ("mode", "reference", "categorie", "libelle"),
+}
+
+
+def _replayed_settlement(row: Any, item: dict[str, Any], collection: str | None = None) -> dict[str, Any]:
+    """Rejeu d'une pièce déjà enregistrée : renvoie la pièce si l'opération est la même, sinon 409.
+    Une clé déjà utilisée ne réutilise jamais silencieusement une autre opération."""
     stored = simple_raw(row)
-    same_invoice = str(item.get("factureId") or item.get("invoiceId") or "") == str(stored.get("factureId") or "")
+    collection = collection or ("paiements" if isinstance(row, Payment) else "avoirs")
+    same = str(item.get("factureId") or item.get("invoiceId") or "") == str(stored.get("factureId") or "")
     try:
-        same_amount = _settlement_amount(item.get("montant")) == _cents(stored.get("montant"))
+        same = same and _settlement_amount(item.get("montant")) == _cents(stored.get("montant"))
     except HTTPException:
-        same_amount = False
-    if not (same_invoice and same_amount):
-        raise HTTPException(409, detail="Un règlement ou un avoir enregistré ne se modifie pas : supprimez-le puis saisissez-le à nouveau.")
+        same = False
+    same = same and all(str(item.get(key) or "").strip() == str(stored.get(key) or "").strip()
+                        for key in _REPLAY_FIELDS.get(collection, ()))
+    if collection in ("avances", "caisse"):
+        same = same and _society_key_of(item.get("societe")) == _society_key_of(stored.get("societe"))
+    if collection == "caisse":
+        same = same and str(item.get("type") or item.get("sens") or "").strip().lower() == str(stored.get("type") or "").strip().lower()
+    if item.get("date") not in (None, ""):
+        same = same and as_date(item["date"]) == as_date(stored.get("date"))
+    if not same:
+        raise HTTPException(409, detail="Cette pièce est déjà enregistrée avec un contenu différent : elle ne se modifie pas par un nouvel envoi.")
     return stored
+
+
+def _society_key_of(value: Any) -> str:
+    text = " ".join(str(value or "").strip().upper().split())
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
 def _sync_linked_cash(db: Session, collection: str, item: dict[str, Any]) -> None:
@@ -925,14 +952,75 @@ def payment_followup(db: Session, item_id: str, status: Any, *, when: Any, refer
     return before, simple_raw(row)
 
 
-def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str, *, internal: bool = False) -> dict[str, Any]:
+# Clé d'idempotence = identifiant de la pièce. Contrainte d'unicité correspondante (PostgreSQL).
+_IDEMPOTENT_CONSTRAINTS = {
+    "paiements": "ix_payments_external_id",
+    "avoirs": "ix_credit_notes_external_id",
+    "avances": "ix_advances_external_id",
+    "caisse": "ix_cash_entries_external_id",
+}
+
+
+def _idempotency_lock(collection: str, external: str) -> int:
+    return int.from_bytes(hashlib.blake2b(f"fac:{collection}:{external}".encode(), digest_size=8).digest(),
+                          "big", signed=True)
+
+
+def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str, *, internal: bool = False,
+                   creating: bool = False) -> dict[str, Any]:
+    """Écriture d'une pièce Facturation. Règlements, avoirs, avances et caisse sont idempotents :
+    plusieurs envois simultanés ou successifs d'une même pièce (même identifiant) n'enregistrent
+    qu'une pièce et qu'un mouvement associé, et renvoient tous cette pièce ; la même clé avec un
+    autre contenu est refusée (409). `creating` : POST (création) — un identifiant déjà connu est
+    alors un rejeu, jamais une modification ; règlements et avoirs ne se modifient jamais."""
+    constraint = _IDEMPOTENT_CONSTRAINTS.get(collection)
+    if model is Invoice or internal or constraint is None:
+        return _upsert_finance(db, model, item, collection, internal=internal)
+    external = legacy_id(item)
+    query = select(model).where(model.external_id == external)
+    replay_only = collection in _IMMUTABLE_SETTLEMENTS or creating
+
+    def existing() -> Any:
+        return db.execute(query).scalar_one_or_none()
+
+    row = existing()
+    if row is not None and replay_only:
+        return _replayed_settlement(row, item, collection)
+    # Verrou de clé (fin de transaction), puis nouvelle recherche : une requête simultanée de la
+    # même pièce a pu la valider entre-temps. Les verrous facture et numérotation existants
+    # protègent toujours le reste à encaisser et la séquence des avoirs entre pièces distinctes.
+    _serialize(db, _idempotency_lock(collection, external))
+    row = existing()
+    if row is not None and replay_only:
+        return _replayed_settlement(row, item, collection)
+    # Un backendId fourni par le client ne doit pas renommer une autre pièce.
+    data = {k: v for k, v in item.items() if k != "backendId"}
+    if db.get_bind().dialect.name != "postgresql":
+        return _upsert_finance(db, model, data, collection, internal=internal)
+    try:
+        # Pièce et mouvement de caisse associé sont atomiques, y compris face à un writer qui ne
+        # prendrait pas le verrou de clé. Le savepoint ne fait pas échouer la transaction appelante.
+        with db.begin_nested():
+            return _upsert_finance(db, model, data, collection, internal=internal)
+    except IntegrityError as exc:
+        original = exc.orig
+        if (getattr(original, "pgcode", None) != "23505"
+                or getattr(getattr(original, "diag", None), "constraint_name", None) != constraint):
+            raise
+        row = existing()
+        if row is None:
+            raise
+        return _replayed_settlement(row, item, collection)
+
+
+def _upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str, *, internal: bool = False) -> dict[str, Any]:
     external = legacy_id(item)
     row = db.get(model, as_int(item.get("backendId")) or 0)
     if not row:
         row = db.execute(select(model).where(model.external_id == external)).scalar_one_or_none()
     if model is not Invoice:
         if row is not None and collection in _IMMUTABLE_SETTLEMENTS:
-            return _replayed_settlement(row, item)
+            return _replayed_settlement(row, item, collection)
         if row is not None and collection == "caisse" and not internal and _cash_link(row):
             raise HTTPException(409, detail="Écriture générée par un règlement ou une avance : modifiez la pièce d'origine.")
         item = _prepare_settlement(db, collection, item, internal=internal)
@@ -1483,7 +1571,7 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     raise HTTPException(status_code=400, detail=f"Collection SQL non prise en charge: {name}")
 
 
-def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+def upsert_item(db: Session, name: str, item: dict[str, Any], *, creating: bool = False) -> dict[str, Any]:
     if name == "candidats": return upsert_candidate(db, item)
     if name in {"agents", "employees"}: return upsert_employee(db, item)
     if name == "sites": return upsert_site(db, item)
@@ -1492,7 +1580,7 @@ def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
         # Via Attendance Core : refus des journées clôturées + traçabilité.
         from app.modules.attendance.core import legacy_upsert_presence
         return legacy_upsert_presence(db, item, name)
-    if name in FINANCE_MODELS: return upsert_finance(db, FINANCE_MODELS[name], item, name)
+    if name in FINANCE_MODELS: return upsert_finance(db, FINANCE_MODELS[name], item, name, creating=creating)
     if name in STOCK_MODELS: return upsert_stock(db, STOCK_MODELS[name], item, name)
     if name in {"assignments", "affectations"}:
         saved = upsert_assignment(db, item)

@@ -458,3 +458,34 @@ def test_credit_note_cancellation_requires_validate_action(client, auth_headers,
     credit = _credit(client, auth_headers, invoice["id"], 10).json()
     headers = _user(client, db, modules=["fac"], societies=[SOC], actions=["read", "create", "update", "delete"])
     assert client.post(f"/api/irongs/avoirs/{credit['id']}/annuler", headers=headers, json={"motif": "Sans droit valider"}).status_code == 403
+
+
+# ── Rejeu d'une pièce par l'API (même identifiant = même opération) ──────────────────────
+
+@pytest.mark.parametrize("collection,data", [
+    ("avances", {"societe": SOC, "client": "CLIENT REJEU", "montant": 120, "mode": "Espèces", "date": "2026-10-05"}),
+    ("caisse", {"societe": SOC, "type": "sortie", "categorie": "Carburant", "libelle": "Plein fictif", "montant": 80,
+                "mode": "Espèces", "date": "2026-10-05"}),
+])
+def test_replayed_post_returns_the_piece_and_different_content_conflicts(client, auth_headers, db, collection, data):
+    piece = {"id": _uid("rejeu"), **data}
+    url = f"{BASE}/{collection}/items"
+    first = client.post(url, headers=auth_headers, json={"data": piece})
+    again = client.post(url, headers=auth_headers, json={"data": piece})
+    assert first.status_code == again.status_code == 200 and again.json() == first.json()
+    assert client.post(url, headers=auth_headers, json={"data": {**piece, "montant": 999}}).status_code == 409
+    db.expire_all()
+    assert db.query(CashEntry).filter(CashEntry.external_id == (piece["id"] if collection == "caisse" else f"cs_{piece['id']}")).count() == 1
+    # La modification explicite (PUT) reste possible pour une avance ou un mouvement libre.
+    updated = client.put(f"{url}/{piece['id']}", headers=auth_headers, json={"data": {**piece, "montant": 150}})
+    assert updated.status_code == 200 and updated.json()["montant"] == 150.0
+
+
+def test_replayed_credit_note_returns_the_same_number(client, auth_headers):
+    invoice = _issued(client, auth_headers)
+    piece = {"id": _uid("avo"), "factureId": invoice["id"], "date": "2026-10-12", "montant": 10, "motif": "Correction"}
+    url = f"{BASE}/avoirs/items"
+    first = client.post(url, headers=auth_headers, json={"data": piece}).json()
+    again = client.post(url, headers=auth_headers, json={"data": piece}).json()
+    assert again["numero"] == first["numero"]
+    assert client.post(url, headers=auth_headers, json={"data": {**piece, "motif": "Autre motif"}}).status_code == 409
