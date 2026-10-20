@@ -251,6 +251,21 @@ class OpsMovementCreate(BaseModel):
     data: dict[str, Any] | None = None
 
 
+class InitialAssignmentCreate(BaseModel):
+    """Ordre de mouvement d'un employé sans affectation, validé avec son affectation."""
+    employee_id: int
+    site_id: int
+    effective_date: date
+    # Référence de l'employé côté écran (clé de la ligne de présence), sinon son matricule.
+    agent_ref: str | None = None
+    movement_number: str | None = None
+    group_code: str | None = None
+    motif: str = "Affectation"
+    duree: str | None = None
+    observation: str | None = None
+    site_ref: str | None = None
+
+
 class OpsMovementOut(OpsMovementCreate):
     id: int
 

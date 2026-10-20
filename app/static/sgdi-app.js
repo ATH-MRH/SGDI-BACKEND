@@ -676,7 +676,9 @@ async function sgdiApi(path,options){
     const message=sgdiApiErrorMessage(res.status,raw,out,"Erreur API "+res.status);
     console.error("Erreur API",res.status,url,out);
     if(requestToken===sgdiAuthToken()&&sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
-    throw new Error(message);
+    const error=new Error(message);
+    error.status=res.status;
+    throw error;
   }
   if(requestToken===sgdiAuthToken()&&sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
   if(out.data!==undefined&&Object.keys(out).every(k=>k==='data'||k==='ok'))return out.data;
@@ -1827,7 +1829,7 @@ window.SGDI_API={
   sites:{list:(params)=>sgdiApi("/ops/sites"+(params?sgdiQuery(params):""),{legacy:false}),page:(params)=>sgdiApi("/ops/sites/page"+sgdiQuery(params),{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:(params)=>sgdiApi("/ops/sites/situation-generale"+(params?sgdiQuery(params):""),{legacy:false})},
   pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),dailyPage:(params)=>sgdiApi("/ops/pointage/daily/page"+sgdiQuery(params),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
   events:{list:()=>sgdiApi("/ops/events",{legacy:false}),page:(params)=>sgdiApi("/ops/events/page"+sgdiQuery(params),{legacy:false})},
-  movements:{list:(params)=>sgdiApi("/ops/movements"+(params?sgdiQuery(params):""),{legacy:false}),upsert:(payload)=>sgdiApi("/ops/movements",{method:"POST",body:payload,legacy:false})},
+  movements:{list:(params)=>sgdiApi("/ops/movements"+(params?sgdiQuery(params):""),{legacy:false}),upsert:(payload)=>sgdiApi("/ops/movements",{method:"POST",body:payload,legacy:false}),initialAssignment:(payload)=>sgdiApi("/ops/movements/initial-assignment",{method:"POST",body:payload,legacy:false})},
   assignments:{
     page:(params)=>sgdiApi("/ops/assignments/page"+sgdiQuery(params),{legacy:false}),
     list:(params)=>sgdiApi("/ops/assignments"+sgdiQuery(params),{legacy:false}),
@@ -2427,7 +2429,9 @@ function assignmentFromApi(row){
   };
 }
 function applyAssignmentsToEmployees(assignments){
-  const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0);
+  // Une affectation à date d'effet future (ordre de mouvement planifié) n'est pas l'affectation
+  // courante : même règle que /ops/employees (start_date <= aujourd'hui).
+  const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0&&!(String(x.dateDebut||"").slice(0,10)>today()));
   // On NE vide plus l'affectation en se basant sur db.assignments (souvent incomplet côté client) :
   // c'est ce qui faisait perdre l'affectation à des employés pourtant affectés (50/19 au lieu de 71/0).
   // La vérité de l'affectation vient désormais du serveur (endpoint /drh/employees). Ici on se contente
@@ -15390,9 +15394,10 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
   const full=((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase();
   const employeeCode=a.matricule||a.code||draft.matricule||draft.employeeCode||"";
   const poste=a.affectationCourante?.poste||a.fonction||a.position||"";
-  const isFirst=/premi[eè]re installation/i.test(draft.natureMouvement);
-  const isTemp=/provisoire/i.test(draft.natureMouvement);
-  const isDef=/d[eé]finitif/i.test(draft.natureMouvement)||!isTemp;
+  // Employé sans affectation (origine « Sans affectation ») : première affectation.
+  const isFirst=/premi[eè]re installation/i.test(draft.natureMouvement)||/^sans affectation$/i.test(String(draft.currentPosition||"").trim());
+  const isTemp=/provisoire/i.test(draft.natureMouvement)||/provisoire/i.test(draft.duree||"");
+  const isDef=/d[eé]finitif/i.test(draft.natureMouvement)||/d[eé]finitif/i.test(draft.duree||"")||!isTemp;
   const reference=draft.reference||ref;
   const meta={agentId:a.id,title,category:"OPS",type,reference,date:draft.dateDebut||today()};
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title><style>
@@ -15405,7 +15410,7 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
     <div class="op-row">${opsAssignmentLine("Affectation actuelle",draft.currentPosition,true)}${opsAssignmentLine("Indicatif",draft.currentIndicatif)}</div>
     <div class="op-row">${opsAssignmentLine("Nouvelle Affectation",draft.newPosition,true)}${opsAssignmentLine("Indicatif",draft.newIndicatif)}</div>
     <div class="op-motif"><div class="op-motif-box">Motif du Mouvement : &nbsp; Premiere Affectation ${opsAssignmentCheckbox(isFirst)} &nbsp;&nbsp; Remp Absence ${opsAssignmentCheckbox(false)} &nbsp;&nbsp; Nouvelle Affectation ${opsAssignmentCheckbox(!isFirst)}</div><div class="op-motif-box">Définitif ${opsAssignmentCheckbox(isDef)} &nbsp;&nbsp; Provisoir ${opsAssignmentCheckbox(isTemp)}</div></div>
-    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : <span class="op-dots" style="display:inline-block;width:45mm"></span></div><div>Signature<span class="op-dots" style="display:inline-block;width:54mm"></span></div></div></div></div>
+    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : ${draft.auteur?`<b>${escapeHTML(draft.auteur)}</b>`:`<span class="op-dots" style="display:inline-block;width:45mm"></span>`}</div><div>Signature<span class="op-dots" style="display:inline-block;width:54mm"></span></div></div></div></div>
     <div class="op-sign-grid"><div class="op-sign">En cas de Refus<br/><br/>Signature<br/><br/>............................</div><div class="op-sign">En cas d'Acceptation<br/><br/>Signature<br/><br/>............................</div></div>
     <div class="op-bottom"></div>
   </main></body></html>`;
@@ -20214,6 +20219,8 @@ function opsMovementDraftFromPresence(f){
     groupe:f.groupe||current.groupe||"",
     dateDebut:opsMovementDateValue(f)||today(),
     motifChangement:f.mouvementObs||"",
+    duree:f.mouvementDuree||"",
+    auteur:f.validatedBy||"",
     reference:f.ordreMouvementNumero||f.mouvementNumero||nextOrdreMouvementNumero()
   };
 }
@@ -20248,7 +20255,8 @@ function opsPrintMovementDocument(f,autoPrint=true,opt={}){
   if(!draft.a?.id){toast("Employé introuvable pour l'ordre de mouvement","error");return}
   let html=opsAssignmentDocumentHTML(draft,"ordre_mouvement",{controls:false});
   if(opt.actions)html=html.replace("<body>","<body>"+opsMovementDocumentActionsHTML(f));
-  const w=window.open("","_blank","width=1100,height=760");
+  // opt.win : fenêtre ouverte au clic, avant l'attente du serveur (sinon bloquée comme pop-up).
+  const w=opt.win||window.open("","_blank","width=1100,height=760");
   if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}
   w.document.write(autoPrint?html.replace("</body>","<script>setTimeout(()=>window.print(),350)<\\/script></body>"):html);
   w.document.close();
@@ -20259,10 +20267,10 @@ async function opsArchiveMovementDocument(f){
   const html=opsAssignmentDocumentHTML(draft,"ordre_mouvement",{controls:false});
   return archiveEmployeeGeneratedDocument(draft.a.id,{html,title:"Ordre de mouvement",category:"OPS",type:"ordre_mouvement",reference:draft.reference,date:draft.dateDebut,name:employeeDocumentFileName("Ordre de mouvement",draft.reference)});
 }
-function opsOpenMovementDocumentByRow(rowId){
+function opsOpenMovementDocumentByRow(rowId,autoPrint=false){
   const f=opsMovementRows().find(x=>String(x.id)===String(rowId)||String(x.backendId||"")===String(rowId)||opsMovementKey(x)===String(rowId));
   if(!f)return toast("Mouvement introuvable","error");
-  opsPrintMovementDocument(f,false);
+  opsPrintMovementDocument(f,autoPrint);
 }
 
 
