@@ -354,3 +354,28 @@ test('tableau de bord : aucune facture sans échéance comptée en retard', () =
     assert.match(d.getElementById('view').textContent.replace(/\s+/g, ' '), /3 factures non payées dont 1 où le délais est dépassé/);
   } finally { env.window.close(); }
 });
+
+
+for (const state of ['active', 'modal-closed', 'window-closed']) {
+  test(`QR différé : aperçu ${state}`, async () => {
+    const { env, t, w, d } = setup();
+    const warnings = [];
+    w.console.warn = (...args) => warnings.push(args);
+    let finish;
+    w.__qrReady = new Promise(resolve => { finish = resolve; });
+    w.eval('sgdiLoadQRLib=()=>window.__qrReady');
+    let generated = 0;
+    w.QRCode = function () { generated++; };
+    w.QRCode.CorrectLevel = { M: 0 };
+    try {
+      t.factureVoirApercu(INVOICE.id);
+      assert.ok(d.getElementById('fact-verification-qr'));
+      if (state === 'modal-closed') d.getElementById('modal-host').innerHTML = '';
+      if (state === 'window-closed') w.close();
+      finish();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(generated, state === 'active' ? 1 : 0);
+      assert.deepEqual(warnings, []);
+    } finally { if (state !== 'window-closed') w.close(); }
+  });
+}

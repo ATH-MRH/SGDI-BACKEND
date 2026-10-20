@@ -1176,9 +1176,11 @@ function factureVoirApercu(fId){
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
     '</section></div></div>';
   openModal(html);
+  const qrDocument=document, qrTarget=qrDocument.getElementById("fact-verification-qr");
   Promise.resolve(typeof sgdiLoadQRLib==="function"?sgdiLoadQRLib():null).then(()=>{
-    const target=document.getElementById("fact-verification-qr");if(!target||!window.QRCode)return;
-    target.innerHTML="";new QRCode(target,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+    // La bibliothèque peut arriver après fermeture/remplacement de l'aperçu.
+    if(!qrTarget?.isConnected||qrDocument.getElementById("fact-verification-qr")!==qrTarget||!window.QRCode)return;
+    qrTarget.innerHTML="";new QRCode(qrTarget,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   }).catch(e=>console.warn("QR facture indisponible",e));
 }
 
