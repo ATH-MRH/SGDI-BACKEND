@@ -53,7 +53,13 @@ def _seed_cnas_irg_rules(client, h, *, taux_salarial=0.09, taux_patronal=0.26):
 
 
 def _close_presence(client, h, day: str, emp_id, site_id):
+    # Lot 0 : la journée générée n'est qu'une prévision ; c'est la saisie de présence (tracée)
+    # qui la rend payable, puis la clôture la valide.
     client.post(f"/api/ops/pointage/daily/generate?presence_date={day}", headers=h)
+    saved = client.post("/api/ops/pointage/daily", headers=h, json={
+        "presence_date": day, "employee_id": int(emp_id), "site_id": int(site_id), "status": "present"})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["presence_state"] == "JUSTIFIE"
     client.post(f"/api/ops/pointage/daily/close?presence_date={day}", headers=h)
 
 
@@ -84,6 +90,7 @@ def test_payroll_full_chain_pointage_to_accounting(client, auth_headers):
     assert slip["rules_used"]["cnas_taux_salarial"]["status"] == "active", "la traçabilité doit refléter honnêtement que la règle est vérifiée"
     assert slip["validatable"] is True and slip["validation_blockers"] == []
     assert slip["inputs"]["closed_presence_rows"] >= 1, "le calcul doit refléter le pointage réellement clôturé"
+    assert slip["inputs"]["worked_days"] == 1 and slip["inputs"]["planned_unconfirmed_days"] == 0
 
     validated = client.post(f"/api/payroll/slips/{slip['id']}/validate", headers=auth_headers)
     assert validated.status_code == 200, validated.text

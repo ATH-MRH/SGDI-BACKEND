@@ -424,7 +424,10 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
         candidate_stmt = candidate_stmt.where(Candidate.society.in_(societies))
     candidate_rows = db.execute(candidate_stmt).scalars().all()
 
-    presence_stmt = select(DailyPresence).where(DailyPresence.presence_date == _today())
+    from app.modules.attendance import presence_state
+
+    # Lot 0 : les journées seulement planifiées ne sont pas des présences.
+    presence_stmt = select(DailyPresence).where(DailyPresence.presence_date == _today(), presence_state.real_clause())
     if employee_ids:
         presence_stmt = presence_stmt.where(DailyPresence.employee_id.in_(employee_ids))
     elif societies:
@@ -448,7 +451,8 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
             presence_present_today += 1
 
     month_start = today.replace(day=1)
-    month_stmt = select(DailyPresence).where(DailyPresence.presence_date >= month_start).where(DailyPresence.presence_date <= today)
+    month_stmt = (select(DailyPresence).where(DailyPresence.presence_date >= month_start).where(DailyPresence.presence_date <= today)
+                  .where(presence_state.real_clause()))
     if employee_ids:
         month_stmt = month_stmt.where(DailyPresence.employee_id.in_(employee_ids))
     elif societies:

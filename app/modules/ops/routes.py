@@ -551,7 +551,18 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
         _ensure_site_allowed(db, user, site_id)
     rows = service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
     allowed = None if site_id else _allowed_assignment_site_ids(db, user)
-    return rows if allowed is None else [row for row in rows if row.site_id in set(allowed)]
+    rows = rows if allowed is None else [row for row in rows if row.site_id in set(allowed)]
+    return _with_presence_state(db, rows)
+
+
+def _with_presence_state(db: Session, rows: list[DailyPresence]) -> list[DailyPresence]:
+    """État calculé de chaque journée (lot 0), exposé sans être stocké."""
+    from app.modules.attendance import presence_state
+
+    states = presence_state.states_for(db, rows)
+    for row in rows:
+        row.presence_state = states.get(row.id)
+    return rows
 
 
 _PLANNING_FIELDS = ("group_code", "relief_time", "rotation_system", "rotation_group", "rotation_period",
@@ -602,7 +613,7 @@ def create_daily_presence(payload: DailyPresenceCreate, request: Request, db: Se
             setattr(row, field, value)
     db.commit()
     db.refresh(row)
-    return row
+    return _with_presence_state(db, [row])[0]
 
 
 @router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut)
@@ -631,7 +642,7 @@ def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, reques
             setattr(row, field, value)
     db.commit()
     db.refresh(row)
-    return row
+    return _with_presence_state(db, [row])[0]
 
 
 @router.get("/events/page")
