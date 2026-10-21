@@ -128,6 +128,7 @@ function renderAdminBeo(view){
           <td class="p-3"><span class="pill" style="background:${cfg.tone}22;color:${cfg.tone};font-weight:900">${cfg.label}</span>${cfg.reason?`<div class="text-[11px] text-slate-500 mt-1">${escapeHTML(cfg.reason)}</div>`:""}</td>
           <td class="p-3 whitespace-nowrap">
             <button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(u.username)}')">✏ Périmètre & actions</button>
+            <button class="btn btn-ghost text-xs" data-beo-fields="${escapeHTML(u.username)}" onclick="openAdminBeoPositionFields('${encodeURIComponent(u.username)}')">▥ Champs accessibles</button>
             <button class="btn btn-ghost text-xs text-red-600" onclick="adminRemoveBeoAccess('${encodeURIComponent(u.username)}')">Retirer BEO</button>
           </td>
         </tr>`;
@@ -164,5 +165,125 @@ async function adminSetBeoAccess(username,grant){
 }
 function adminAddBeoAccess(username){return adminSetBeoAccess(username,true)}
 function adminRemoveBeoAccess(encodedUsername){return adminSetBeoAccess(decodeURIComponent(String(encodedUsername||"")),false)}
+
+// ── Fiche de position BEO : champs accessibles par compte ──────────────────────────────
+// Le catalogue (sections, libellés, ordre, sensibilité, profil BEO Standard) vient du SERVEUR
+// (/api/auth/site-workforce/position-fields) : aucune liste de champs n'est codée ici, et le
+// portail beo.irongs.com affiche les mêmes libellés. Le serveur reste seul juge : il refuse
+// une clé inconnue, un compte sans site_workforce, et filtre la réponse du BEO champ par champ.
+let beoPf=null;
+function beoPfFields(){return (beoPf&&beoPf.catalog.sections||[]).flatMap(s=>s.fields)}
+function beoPfApi(path,options){return sgdiApi(path,{legacy:false,...(options||{})})}
+async function openAdminBeoPositionFields(encodedUsername){
+  const u=adminUserByUsername(decodeURIComponent(String(encodedUsername||"")));
+  if(!u||!u.backendId){toast("Utilisateur introuvable","error");return}
+  if(String(u.username).toLowerCase()===String(session?.username||"").toLowerCase()){toast("Vous ne pouvez pas modifier vos propres champs.","error");return}
+  try{
+    const[catalog,current]=await Promise.all([
+      beoPfApi("/auth/site-workforce/position-fields",{method:"GET"}),
+      beoPfApi("/auth/users/"+encodeURIComponent(u.backendId)+"/site-workforce/position-fields",{method:"GET"}),
+    ]);
+    beoPf={user:u,catalog,selected:new Set(current.fields||[]),query:""};
+  }catch(e){toast("Chargement des champs impossible : "+(e.message||e),"error");return}
+  const socs=Array.isArray(u.societesAutorisees)?u.societesAutorisees:[];
+  const sites=Array.isArray(u.sitesAutorises)?u.sitesAutorises:[];
+  openModal(`<div class="beo-pf">
+    <div class="text-xs font-black uppercase tracking-widest text-slate-500">Bureau des Effectifs Ouest</div>
+    <h2 class="text-xl font-black mt-1" data-keep-case>Fiche de position — champs accessibles</h2>
+    <div class="text-sm text-slate-600 mt-1">Utilisateur : <b class="font-mono">${escapeHTML(u.username)}</b>${u.nom?" — "+escapeHTML(u.nom):""}</div>
+    <div class="text-xs text-slate-500 mt-1">Périmètre : ${socs.length?escapeHTML(socs.join(", ")):"aucune société"} · ${sites.length?sites.map(sid=>escapeHTML(beoSiteLabel(sid))).join(", "):"aucun site"}</div>
+    <div class="text-xs text-slate-500 mt-2">Lecture seule. Le périmètre société/site reste appliqué quels que soient les champs cochés ; un champ non coché n'est jamais transmis au portail.</div>
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <input id="beo-pf-search" class="input" type="search" placeholder="Rechercher un champ…" style="max-width:260px" oninput="beoPfSearch(this.value)">
+      <button type="button" class="btn btn-secondary text-xs" onclick="beoPfApplyStandard()">Profil BEO Standard</button>
+      <button type="button" class="btn btn-ghost text-xs" onclick="beoPfSetAll(true)">Tout cocher</button>
+      <button type="button" class="btn btn-ghost text-xs" onclick="beoPfSetAll(false)">Tout décocher</button>
+      <span id="beo-pf-counter" class="ml-auto text-sm font-black text-slate-700"></span>
+    </div>
+    <div id="beo-pf-sections" class="mt-3" style="max-height:52vh;overflow-y:auto"></div>
+    <div id="beo-pf-msg" class="text-sm mt-2"></div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button type="button" class="btn btn-primary" id="beo-pf-save" onclick="beoPfSave()">Enregistrer</button>
+    </div>
+  </div>`);
+  beoPfRender();
+}
+function beoPfRender(){
+  const host=document.getElementById("beo-pf-sections");
+  if(!host||!beoPf)return;
+  host.innerHTML=beoPf.catalog.sections.map(sec=>{
+    const n=sec.fields.filter(f=>beoPf.selected.has(f.key)).length;
+    return`<div class="card p-3 mb-3" data-beo-pf-section="${escapeHTML(sec.key)}">
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="font-black text-slate-900 uppercase text-sm tracking-wide">${escapeHTML(sec.label)} <span class="text-slate-500 font-bold" data-beo-pf-section-count>${n}/${sec.fields.length}</span></div>
+        <label class="text-xs text-slate-600 flex items-center gap-1"><input type="checkbox" data-beo-pf-section-all="${escapeHTML(sec.key)}" ${n===sec.fields.length?"checked":""} onchange="beoPfToggleSection('${escapeHTML(sec.key)}',this.checked)"> Sélectionner toute la section</label>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-1">${sec.fields.map(f=>`<label class="flex items-center gap-2 text-sm py-1" data-beo-pf-row="${escapeHTML(f.key)}" data-beo-pf-label="${escapeHTML(String(f.label).toLowerCase())}">
+        <input type="checkbox" data-beo-pf-field="${escapeHTML(f.key)}" ${beoPf.selected.has(f.key)?"checked":""} onchange="beoPfToggle('${escapeHTML(f.key)}',this.checked)">
+        <span>${escapeHTML(f.label)}</span>${f.sensitive?'<span class="pill" style="background:#fee2e2;color:#b91c1c;font-weight:900">Sensible</span>':""}
+      </label>`).join("")}</div>
+    </div>`;
+  }).join("");
+  beoPfSearch(beoPf.query);
+  beoPfCounter();
+}
+function beoPfCounter(){
+  const el=document.getElementById("beo-pf-counter");
+  if(el)el.textContent=`${beoPf.selected.size} champ${beoPf.selected.size>1?"s":""} autorisé${beoPf.selected.size>1?"s":""} / ${beoPfFields().length}`;
+}
+function beoPfToggle(key,on){if(!beoPf)return;on?beoPf.selected.add(key):beoPf.selected.delete(key);beoPfRender()}
+function beoPfToggleSection(sectionKey,on){
+  const sec=(beoPf&&beoPf.catalog.sections||[]).find(s=>s.key===sectionKey);
+  if(!sec)return;
+  if(on&&!beoPfConfirmSensitive(sec.fields))return beoPfRender();
+  sec.fields.forEach(f=>on?beoPf.selected.add(f.key):beoPf.selected.delete(f.key));
+  beoPfRender();
+}
+// Cocher en masse des données sensibles (salaire, RIB, pièce d'identité, données médicales,
+// sanctions) exige une confirmation explicite de l'administrateur.
+function beoPfConfirmSensitive(fields){
+  const sensitive=fields.filter(f=>f.sensitive&&!beoPf.selected.has(f.key));
+  return !sensitive.length||confirm("Cette sélection inclut des données sensibles :\n\n• "+sensitive.map(f=>f.label).join("\n• ")+"\n\nLes rendre visibles au Chargé des effectifs ?");
+}
+function beoPfSetAll(on){
+  if(!beoPf)return;
+  if(on&&!beoPfConfirmSensitive(beoPfFields()))return;
+  beoPf.selected=new Set(on?beoPfFields().map(f=>f.key):[]);
+  beoPfRender();
+}
+function beoPfApplyStandard(){if(!beoPf)return;beoPf.selected=new Set(beoPf.catalog.standard_profile||[]);beoPfRender()}
+function beoPfSearch(query){
+  if(!beoPf)return;
+  beoPf.query=String(query||"");
+  const q=beoPf.query.trim().toLowerCase();
+  document.querySelectorAll("[data-beo-pf-section]").forEach(sec=>{
+    const title=sec.querySelector(".font-black").textContent.toLowerCase();
+    let visible=0;
+    sec.querySelectorAll("[data-beo-pf-row]").forEach(row=>{
+      const show=!q||row.dataset.beoPfLabel.includes(q)||title.includes(q);
+      row.style.display=show?"":"none";
+      if(show)visible++;
+    });
+    sec.style.display=visible?"":"none";
+  });
+}
+async function beoPfSave(){
+  if(!beoPf)return false;
+  const btn=document.getElementById("beo-pf-save"),msg=document.getElementById("beo-pf-msg");
+  if(btn)btn.disabled=true;
+  try{
+    const out=await beoPfApi("/auth/users/"+encodeURIComponent(beoPf.user.backendId)+"/site-workforce/position-fields",{method:"PUT",body:{fields:[...beoPf.selected].sort()}});
+    logActivity("Champs Fiche de position BEO",beoPf.user.username+" — "+out.count+"/"+out.total);
+    toast(`Champs enregistrés : ${out.count}/${out.total}`,"success");
+    closeModal();
+    beoPf=null;
+    return true;
+  }catch(e){
+    if(msg){msg.textContent="Enregistrement refusé : "+(e.message||e);msg.className="text-sm mt-2 text-red-600 font-bold"}
+    if(btn)btn.disabled=false;
+    return false;
+  }
+}
 
 SGDIModules.registerModule({key:"administration-beo",routes:[]});

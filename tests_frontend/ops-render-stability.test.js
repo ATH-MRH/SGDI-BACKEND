@@ -15,10 +15,45 @@ const APP = fs.readFileSync(path.join(__dirname, '../app/static/sgdi-app.js'), '
 const SOC = 'IRON GLOBAL SOLUTION';
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// Suit les MutationObserver et minuteurs créés par l'application (ex. l'observateur anonyme qui
+// appelle syncOpsPresentation à chaque mutation de document.body, et son minuteur de 30 ms).
+// window.close() vide le document : sans arrêt préalable, cet observateur est rappelé en microtâche
+// sur une fenêtre détruite (TypeError … reading 'body') — activité asynchrone après la fin du test.
+// Le post-rendu de renderView (requestAnimationFrame) passe par les minuteurs jsdom de load-app :
+// window.close() l'annule.
+function trackAppHandles(window) {
+  const observers = new Set(), timeouts = new Set(), intervals = new Set();
+  const Native = window.MutationObserver;
+  window.MutationObserver = class extends Native {
+    constructor(callback) { super(callback); observers.add(this); }
+  };
+  const setT = window.setTimeout, clearT = window.clearTimeout, setI = window.setInterval, clearI = window.clearInterval;
+  window.setTimeout = (fn, ms, ...args) => {
+    const id = setT.call(window, typeof fn === 'function' ? (...a) => { timeouts.delete(id); fn(...a); } : fn, ms, ...args);
+    timeouts.add(id);
+    return id;
+  };
+  window.clearTimeout = id => { timeouts.delete(id); return clearT.call(window, id); };
+  window.setInterval = (...a) => { const id = setI.call(window, ...a); intervals.add(id); return id; };
+  window.clearInterval = id => { intervals.delete(id); return clearI.call(window, id); };
+  return async function cleanup() {
+    for (const observer of observers) observer.disconnect();
+    for (const id of timeouts) clearT.call(window, id);
+    for (const id of intervals) clearI.call(window, id);
+    observers.clear(); timeouts.clear(); intervals.clear();
+    // Laisse s'écouler les microtâches déjà en file (promesses, rappels d'observateur) avant close().
+    await new Promise(resolve => setImmediate(resolve));
+    window.close();
+  };
+}
+
 function boot(t, { url = 'https://ops.irongs.com/#/ops/dashboard', transverse = 'ops' } = {}) {
-  const r = loadSgdiApp(['emptyDB', 'renderView', 'normalizeCentralPage', 'syncOpsPresentation']);
+  let cleanup;
+  const r = loadSgdiApp(['emptyDB', 'renderView', 'normalizeCentralPage', 'syncOpsPresentation'], {
+    beforeApp: window => { cleanup = trackAppHandles(window); },
+  });
   assert.ifError(r.loadError);
-  t.after(() => r.window.close());
+  t.after(cleanup);
   r.dom.reconfigure({ url });
   r.T().setDb(r.T().emptyDB());
   r.T().setSession({ username: 'OPS-01', nom: 'Test', role: 'ops', transverse, societe: SOC, actionsAutorisees: ['read'] });

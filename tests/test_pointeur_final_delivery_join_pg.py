@@ -16,7 +16,8 @@ from tests.test_pointeur_iron_emploi_merge_pg import alembic, ok, revisions, see
 
 pytestmark = pytest.mark.skipif(not os.getenv('TEST_POSTGRES_ADMIN_URL'), reason='PostgreSQL jetable requis')
 
-PRODUCTION, FINAL = '20261017_0003', '20261023_0001'
+# FINAL : tête actuelle (jonction 20261023_0001 puis champs Fiche de position BEO 20261024_0001).
+PRODUCTION, FINAL = '20261017_0003', '20261024_0001'
 
 
 def seed_contract_import_grant(engine):
@@ -40,7 +41,7 @@ def test_production_state_joins_the_pointeur_delivery_without_loss(pg_database):
     ok(alembic(url, 'upgrade', 'head'))
     after = snapshot(engine)
     assert revisions(engine) == {FINAL}
-    assert set(after) == set(before) | {'facial_device_authorizations'}       # une seule table ajoutée, vide
+    assert set(after) == set(before) | {'facial_device_authorizations', 'user_field_permissions'}  # tables ajoutées, vides
     assert {table: after[table] for table in before} == before                # aucune ligne existante touchée
     ok(alembic(url, 'upgrade', 'head'))                                        # rejouable
     assert snapshot(engine) == after

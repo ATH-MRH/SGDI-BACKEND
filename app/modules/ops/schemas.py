@@ -215,6 +215,8 @@ class DailyPresenceOut(DailyPresenceCreate):
     id: int
     generated: int = 0
     closed_at: datetime | None = None
+    # Lot 0 : PLANIFIE / A_VERIFIER / POINTE / JUSTIFIE / VALIDE (app/modules/attendance/presence_state.py).
+    presence_state: str | None = None
 
     model_config = {"from_attributes": True}
 

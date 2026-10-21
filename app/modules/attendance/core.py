@@ -945,10 +945,19 @@ def close_day(db: Session, *, day: date, site_ids: list[int] | None, actor: Any 
         if employee:
             _append_event(db, employee=employee, row=row, event_type=EVENT_CLOSE, source=source, actor=actor)
     anomalies = open_anomalies_for(db, day=day, site_ids=site_ids)
+    # Lot 0 : la clôture fige la journée ; elle ne transforme jamais une prévision en travail.
+    # Les journées seulement planifiées (ou d'origine incertaine) sont signalées, jamais payées.
+    from app.modules.attendance import presence_state
+
+    by_state = presence_state.summarize(db, rows)
+    unconfirmed = by_state[presence_state.PLANIFIE] + by_state[presence_state.A_VERIFIER]
     append_audit(db, action="attendance.close", resource="attendance_day", resource_id=day.isoformat(), result="success",
                  user=actor, request=request,
-                 new_state={"date": day.isoformat(), "closed": len(rows), "site_ids": site_ids, "open_anomalies": len(anomalies)})
-    return {"closed": len(rows), "date": day.isoformat(), "open_anomalies": len(anomalies)}
+                 new_state={"date": day.isoformat(), "closed": len(rows), "site_ids": site_ids, "open_anomalies": len(anomalies),
+                            "planned_unconfirmed": by_state[presence_state.PLANIFIE], "to_verify": by_state[presence_state.A_VERIFIER]})
+    return {"closed": len(rows), "date": day.isoformat(), "open_anomalies": len(anomalies),
+            "planned_unconfirmed": by_state[presence_state.PLANIFIE], "to_verify": by_state[presence_state.A_VERIFIER],
+            "unconfirmed": unconfirmed}
 
 
 def reopen_presence(db: Session, *, row: DailyPresence, reason: str, actor: Any | None, source: str,

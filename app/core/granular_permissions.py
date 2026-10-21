@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.permission_catalog import applicable_actions, is_canonical_action, is_canonical_feature, is_canonical_module
+from app.modules.auth.field_permissions import UserFieldPermission
 from app.modules.auth.models import User, UserFeaturePermission, UserModulePermission
 
 
@@ -215,3 +216,50 @@ def evaluate_permission(
         for grant in grants
     )
     return PermissionDecision(allowed, "explicit_grant" if allowed else "missing_explicit_grant")
+
+
+# Permissions par champ — contrairement au reste de ce fichier, elles SONT branchées : la
+# Fiche de position BEO (app/modules/site_workforce/position_file.py) filtre sa réponse avec.
+def load_field_permissions(db: Session, user_id: int, *, module_key: str, resource_key: str) -> frozenset[str]:
+    """Champs explicitement autorisés (deny by default : aucune ligne = aucun champ)."""
+    return frozenset(db.execute(
+        select(UserFieldPermission.field_key).where(
+            UserFieldPermission.user_id == user_id,
+            UserFieldPermission.module_key == module_key,
+            UserFieldPermission.resource_key == resource_key,
+        )
+    ).scalars())
+
+
+def replace_field_permissions(
+    db: Session,
+    *,
+    user_id: int,
+    created_by_user_id: int | None,
+    module_key: str,
+    resource_key: str,
+    field_keys: Iterable[str],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Remplace la sélection d'une ressource ; les clés doivent avoir été validées contre le
+    catalogue de la ressource par l'appelant. Le routeur garde le commit."""
+    requested = set(field_keys)
+    existing = {
+        row.field_key: row for row in db.execute(
+            select(UserFieldPermission).where(
+                UserFieldPermission.user_id == user_id,
+                UserFieldPermission.module_key == module_key,
+                UserFieldPermission.resource_key == resource_key,
+            ).with_for_update()
+        ).scalars()
+    }
+    additions = tuple(sorted(requested - set(existing)))
+    removals = tuple(sorted(set(existing) - requested))
+    for key in removals:
+        db.delete(existing[key])
+    for key in additions:
+        db.add(UserFieldPermission(
+            user_id=user_id, module_key=module_key, resource_key=resource_key,
+            field_key=key, created_by_user_id=created_by_user_id,
+        ))
+    db.flush()
+    return additions, removals

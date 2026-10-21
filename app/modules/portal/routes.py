@@ -1912,7 +1912,11 @@ def manual_employee_attendance_scan(
                 DailyPresence.employee_id == employee.id,
             ).order_by(DailyPresence.id.desc())
         ).scalars().first()
-        if existing and (existing.arrival_time or str(existing.status or "").lower() == "present"):
+        # Lot 0 : une journée seulement planifiée (générée, sans preuve) n'empêche pas de constater l'absence.
+        from app.modules.attendance import presence_state
+
+        real = existing is not None and presence_state.is_real(existing, presence_state.evidence_for(db, [existing.id]).get(existing.id))
+        if real and (existing.arrival_time or str(existing.status or "").lower() == "present"):
             raise HTTPException(status_code=409, detail="Impossible de marquer absent : une présence est déjà enregistrée aujourd’hui")
         assignment = db.execute(
             select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())

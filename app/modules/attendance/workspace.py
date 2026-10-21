@@ -57,6 +57,14 @@ def read_workspace(db, *, site_ids, month, q="", employee_status=None, employee_
         DailyPresence.site_id.in_(ids or [-1]), DailyPresence.employee_id.in_(emp_ids or [-1]),
         DailyPresence.presence_date >= first, DailyPresence.presence_date <= last
     ).order_by(DailyPresence.id))}
+    # Lot 0 : une journée seulement planifiée (générée, sans preuve) n'est pas un fait enregistré :
+    # la cellule suit le planning et porte l'état « PLANIFIE » / « A_VERIFIER », jamais « P ».
+    from app.modules.attendance import presence_state
+
+    fact_states = presence_state.states_for(db, facts.values())
+    unconfirmed = {key: fact_states[row.id] for key, row in facts.items()
+                   if fact_states.get(row.id) in (presence_state.PLANIFIE, presence_state.A_VERIFIER)}
+    facts = {key: row for key, row in facts.items() if key not in unconfirmed}
     anomalies = {}
     for a in db.scalars(select(AttendanceAnomaly).where(
         AttendanceAnomaly.site_id.in_(ids or [-1]), AttendanceAnomaly.employee_id.in_(emp_ids or [-1]),
@@ -96,6 +104,7 @@ def read_workspace(db, *, site_ids, month, q="", employee_status=None, employee_
             cell = {"date": day.isoformat(), "available": True, "site_id": a.site_id,
                     "status": status, "code": CODE_MAP.get(status, "?" if fact else ""),
                     "recorded": fact is not None, "presence_id": fact.id if fact else None,
+                    "presence_state": fact_states.get(fact.id) if fact else unconfirmed.get((eid, day)),
                     "closed": bool(fact and fact.closed_at), "planning": plan,
                     "arrival": fact.arrival_time if fact else None, "departure": fact.departure_time if fact else None,
                     "anomalies": anomalies.get((eid, day), []),

@@ -165,6 +165,10 @@ def board(
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({a.site_id for a in by_employee.values()}))).scalars()} if by_employee else {}
     presences = {p.employee_id: p for p in db.execute(select(DailyPresence).where(
         DailyPresence.presence_date == day, DailyPresence.employee_id.in_(employee_ids)).order_by(DailyPresence.id)).scalars()} if employee_ids else {}
+    # Lot 0 : état de chaque journée ; une journée seulement planifiée n'est pas une présence.
+    from app.modules.attendance import presence_state
+
+    presence_states = presence_state.states_for(db, presences.values())
     events: dict[int, list[AttendanceEvent]] = {}
     for ev in (db.execute(select(AttendanceEvent).where(
             AttendanceEvent.presence_date == day, AttendanceEvent.employee_id.in_(employee_ids)
@@ -191,7 +195,8 @@ def board(
         arrivals = [e for e in evs if e.event_type == EVENT_ARRIVAL]
         departures = [e for e in evs if e.event_type == EVENT_DEPARTURE]
         last_source = evs[-1].source if evs else ""
-        if presence:
+        state = presence_states.get(presence.id) if presence else None
+        if presence and state not in (presence_state.PLANIFIE, presence_state.A_VERIFIER):
             day_status = presence.status or "present"
         elif plan["known"] and plan["on"] is False:
             day_status = "repos"
@@ -210,6 +215,7 @@ def board(
             "departure": _local_hhmm(departures[-1].occurred_at) if departures else (presence.departure_time or "" if presence else ""),
             "status": day_status, "source": last_source, "incomplete": incomplete,
             "closed": bool(presence and presence.closed_at), "presence_id": presence.id if presence else None,
+            "presence_state": state,
             # Travail posté : heure RÉELLE (arrival/departure) et temps COMPTABILISÉ sont distincts.
             "counted": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_NORMAL), None),
             "extra_shift": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_EXTRA), None),

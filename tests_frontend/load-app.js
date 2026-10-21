@@ -120,6 +120,9 @@ function loadSgdiApp(names = [], options = {}) {
     return code >= 128 || /[\w-]/.test(char) ? char : '\\' + char;
   }).join('');
   window.setInterval = () => 0; // neutralise les boucles de fond (sinon le process ne rend jamais la main)
+  // `beforeApp(window)` : dernier point d'accroche avant l'exécution de l'application (ex. suivre les
+  // MutationObserver et minuteurs qu'elle crée, inaccessibles ensuite depuis le banc).
+  if (typeof options.beforeApp === 'function') options.beforeApp(window);
 
   const exposed = names
     .map((n) => `  ${n}: (typeof ${n} !== 'undefined') ? ${n} : null,`)
