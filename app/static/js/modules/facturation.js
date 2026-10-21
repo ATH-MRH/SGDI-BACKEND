@@ -13,6 +13,8 @@ function statutDevisPill(s){return{"brouillon":"pill-gray","envoye":"pill-blue",
 
 function renderFacturation(view,sub,arg){
   facturationLeaveEditor();
+  // Portail autonome : entrée active de la navigation et cloche à jour, quel que soit le lien suivi.
+  if(window.__FAC_AUTONOMOUS_APP__&&typeof renderFacStandaloneNav==="function")renderFacStandaloneNav();
   if(sub==="dashboard")return renderFactDashboard(view);
   if(sub==="clients")return renderFactClients(view);
   if(sub==="missions")return renderFactMissionBillables(view);
@@ -49,56 +51,119 @@ function _renderFactMissionBillablesHTML(view){
 }
 
 async function renderFactClients(view){
-  const soc=mySoc();const page=sgdiServerCurrentPage("fact-clients",soc||"all");
-  view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
+  const soc=mySoc();
+  view.innerHTML='<div class="fac-ui"><div class="fac-empty">Chargement des clients…</div></div>';
   sgdiShowDataLoadingBar("Chargement des clients...");
-  let list=[];let result=null;
+  let list=[];
   const localList=()=>bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   // Compte Facturation sans module Commercial : référentiel client limité déjà chargé
   // (/api/irongs/facturation/clients) ; l'API Commercial complète lui est refusée.
   if(!sgdiServerAllowsApiModule(["dc"]))list=localList();
   else try{
-    result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
-    list=serverItems(result).map(clientFromApi);
-    list.forEach(c=>sgdiUpsertServerItem("clients",c));
+    // Toutes les pages du référentiel : les indicateurs et filtres portent sur l'ensemble des clients.
+    for(let page=1,pages=1;page<=pages&&page<=50;page++){
+      const result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:100});
+      const items=serverItems(result).map(clientFromApi);
+      items.forEach(c=>sgdiUpsertServerItem("clients",c));
+      list.push(...items);
+      pages=Number(result?.pages)||1;
+    }
+    list.sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   }catch(e){
     console.warn("renderFactClients API error",e);
     list=localList();
   }
-  try{
-    const rows=list.map(c=>{
-      // Même référence contractuelle que la liste Commercial (tarifs et quantités par site).
-      const ttc=clientMontantTTC(c);
-      const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);
-      const nbrSite=clientNbrSites(c);
-      return '<tr data-searchable style="cursor:pointer" onclick="openClientModal(\''+c.id+'\')">'+
-        '<td class="font-semibold" style="color:#1d4ed8">'+escapeHTML(c.nom||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.tel||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.wilaya||"—")+'</td>'+
-        '<td class="font-bold" style="text-align:center">'+nbrSite+'</td>'+
-        '<td class="font-bold" style="text-align:center;color:#043970">'+totalEffectif+'</td>'+
-        '<td class="font-mono font-bold" style="text-align:right;white-space:nowrap;color:#043970">'+(ttc>0?formatDZD(ttc):"—")+'</td>'+
-        '<td><span class="pill '+(c.statut==="actif"?"pill-green":"pill-gray")+'">'+safe(c.statut)+'</span></td>'+
-        '</tr>';
-    }).join("");
-    const total=result?.total??list.length;
-    view.innerHTML=factTabs("clients")+
-      '<div class="flex justify-between items-center mb-3"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">'+total+'</span></div>'+
-      '<div style="display:flex;gap:8px;align-items:center"><button onclick="importClientsExcel()" style="background:#fff;color:#047857;border:1px solid #10b981;border-radius:7px;padding:10px 16px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">⬆ IMPORTER EXCEL</button></div></div>'+
-      '<div class="card overflow-x-auto">'+
-      (list.length===0?'<div class="p-10 text-center text-slate-500">Aucun client.</div>':
-      '<table><thead><tr>'+
-      '<th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th>'+
-      '<th style="text-align:center">Nbr site</th><th style="text-align:center">Total eff.</th>'+
-      '<th style="text-align:right">Montant TTC</th><th>Statut</th>'+
-      '</tr></thead><tbody>'+rows+'</tbody></table>')+
-      '</div>'+(result?sgdiServerPaginationHTML("fact-clients",soc||"all",result):"");
-  }catch(e){
+  window.__facClientsList=list;
+  try{factClientsRenderPage(view)}
+  catch(e){
     console.error("renderFactClients render error",e);
-    view.innerHTML=factTabs("clients")+'<div class="card p-8 text-center text-red-600">Erreur d\'affichage : '+(e.message||e)+'</div>';
+    view.innerHTML=factTabs("clients")+'<div class="fac-ui"><div class="fac-card fac-empty" style="color:#c62f35">Erreur d\'affichage : '+escapeHTML(e.message||e)+'</div></div>';
   }
+}
+function factClientEffectif(c){return (c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0)}
+function factClientIsActive(c){return String(c.statut||"actif").toLowerCase()==="actif"}
+function factClientLogoHTML(c,cls){
+  const src=String(c?.logo||c?.portalLogoDataUri||"");
+  // Seules les images embarquées ou servies par l'application sont affichées.
+  const safeSrc=/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(src)||/^\/static\/[\w./-]+\.(png|jpe?g|webp|svg)$/i.test(src);
+  const initials=String(c?.nom||"?").trim().split(/\s+/).slice(0,2).map(w=>w.charAt(0)).join("").toUpperCase()||"?";
+  return '<span class="fac-logo'+(cls?" "+cls:"")+'">'+(safeSrc?'<img src="'+escapeHTML(src)+'" alt="Logo '+escapeHTML(c.nom||"")+'">':escapeHTML(initials))+'</span>';
+}
+function factClientsFilterState(){return window.__facClientsFilter||(window.__facClientsFilter={q:"",statut:"",wilaya:"",prestation:"",page:1})}
+function factClientsFiltered(){
+  const f=factClientsFilterState();const q=f.q.trim().toLowerCase();
+  return (window.__facClientsList||[]).filter(c=>{
+    if(f.statut==="actif"&&!factClientIsActive(c))return false;
+    if(f.statut==="inactif"&&factClientIsActive(c))return false;
+    if(f.wilaya&&String(c.wilaya||"")!==f.wilaya)return false;
+    if(f.prestation&&!factureClientActivities(c).includes(f.prestation))return false;
+    if(q&&![c.nom,c.raisonSociale,c.reference,c.code,c.nif,c.rc,c.contact,c.tel,c.email].some(v=>String(v||"").toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+function factClientsSetFilter(key,value){
+  const f=factClientsFilterState();f[key]=String(value||"");f.page=1;
+  factClientsRenderTable();
+}
+function factClientsReset(){window.__facClientsFilter=null;factClientsRenderPage(document.getElementById("view"))}
+function factClientsGoPage(page){factClientsFilterState().page=page;factClientsRenderTable()}
+function factClientsRenderPage(view){
+  if(!view)return;
+  const list=window.__facClientsList||[];const f=factClientsFilterState();
+  const year=typeof facSelectedYear==="function"?facSelectedYear():new Date().getFullYear();
+  const active=list.filter(factClientIsActive).length;
+  const sites=list.reduce((s,c)=>s+clientNbrSites(c),0);
+  const effectif=list.reduce((s,c)=>s+factClientEffectif(c),0);
+  const billedYear=bySoc(db.factures||[]).filter(x=>x.statut!=="brouillon"&&String(x.date||"").slice(0,4)===String(year)).reduce((s,x)=>s+(Number(x.ttc||x.montantTTC)||0),0);
+  const opts=(values,cur,all)=>'<option value="">'+all+'</option>'+values.map(v=>'<option value="'+escapeHTML(v)+'"'+(v===cur?" selected":"")+'>'+escapeHTML(v)+'</option>').join("");
+  const wilayas=[...new Set(list.map(c=>String(c.wilaya||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const prestations=[...new Set(list.flatMap(factureClientActivities))].sort((a,b)=>a.localeCompare(b));
+  const kpi=(tone,icon,label,value)=>'<div class="fac-mini-kpi" data-tone="'+tone+'"><div class="fac-kpi-icon">'+facUiIcon(icon,21)+'</div><div style="min-width:0"><span>'+label+'</span><strong>'+value+'</strong></div></div>';
+  view.innerHTML=factTabs("clients")+
+    '<div class="fac-ui fac-clients">'+
+    '<div class="fac-page-head"><div><h1>Clients</h1><p>Gestion de vos clients et contrats commerciaux</p></div><div class="fac-page-actions">'+
+    '<button type="button" class="fac-btn fac-btn-navy" onclick="importClientsExcel()">'+facUiIcon("upload",16)+' Importer Excel</button>'+
+    '<button type="button" class="fac-btn fac-btn-green" onclick="factureEditorNewClient()">'+facUiIcon("plus",16)+' Nouveau client</button></div></div>'+
+    '<div class="fac-filter-bar">'+
+    '<div class="fac-field"><label for="fac-clients-q">Recherche</label><div class="fac-input-icon">'+facUiIcon("search",16)+'<input id="fac-clients-q" class="fac-input" type="search" value="'+escapeHTML(f.q)+'" placeholder="Rechercher un client (nom, référence, NIF, contact...)" oninput="factClientsSetFilter(\'q\',this.value)"></div></div>'+
+    '<div class="fac-field"><label for="fac-clients-statut">Statut</label><select id="fac-clients-statut" class="fac-select" onchange="factClientsSetFilter(\'statut\',this.value)"><option value="">Tous</option><option value="actif"'+(f.statut==="actif"?" selected":"")+'>Actifs</option><option value="inactif"'+(f.statut==="inactif"?" selected":"")+'>Inactifs</option></select></div>'+
+    '<div class="fac-field"><label for="fac-clients-wilaya">Wilaya</label><select id="fac-clients-wilaya" class="fac-select" onchange="factClientsSetFilter(\'wilaya\',this.value)">'+opts(wilayas,f.wilaya,"Toutes")+'</select></div>'+
+    '<div class="fac-field"><label for="fac-clients-prestation">Prestation</label><select id="fac-clients-prestation" class="fac-select" onchange="factClientsSetFilter(\'prestation\',this.value)">'+opts(prestations,f.prestation,"Toutes")+'</select></div>'+
+    '<button type="button" class="fac-btn" onclick="factClientsReset()">Réinitialiser</button></div>'+
+    '<div class="fac-client-kpis">'+
+    kpi("blue","users","Total clients",list.length)+kpi("green","user","Clients actifs",active)+kpi("red","clock","Clients inactifs",list.length-active)+
+    kpi("violet","building","Sites totaux",sites)+kpi("indigo","usersGroup","Effectifs totaux",effectif)+kpi("orange","file","Montant TTC ("+year+")",escapeHTML(money(billedYear)))+
+    '</div>'+
+    '<section class="fac-card" id="fac-clients-table"></section></div>';
+  factClientsRenderTable();
+}
+function factClientsRenderTable(){
+  const host=document.getElementById("fac-clients-table");if(!host)return;
+  const f=factClientsFilterState();const rows=factClientsFiltered();
+  const size=25,pages=Math.max(1,Math.ceil(rows.length/size));f.page=Math.min(Math.max(1,f.page||1),pages);
+  const shown=rows.slice((f.page-1)*size,f.page*size);
+  const body=shown.map(c=>{
+    // Même référence contractuelle que la liste Commercial (tarifs et quantités par site).
+    const ttc=clientMontantTTC(c);const on=factClientIsActive(c);
+    const statut=String(c.statut||"actif");
+    const services=factureClientActivities(c);
+    return '<tr class="fac-row-link" data-searchable data-client-id="'+escapeHTML(c.id)+'" onclick="openClientModal(\''+escapeHTML(jsString(c.id))+'\')">'+
+      '<td><div class="fac-client-cell">'+factClientLogoHTML(c)+'<div><strong>'+escapeHTML(c.nom||"")+'</strong><small>NIF : '+escapeHTML(c.nif||"—")+'</small></div></div></td>'+
+      '<td data-col="reference">'+escapeHTML(c.reference||c.code||"—")+'</td>'+
+      '<td data-col="contact" style="text-transform:uppercase">'+escapeHTML(c.contact||"—")+'</td>'+
+      '<td data-col="tel" style="white-space:nowrap">'+escapeHTML(c.tel||"—")+'</td>'+
+      '<td data-col="wilaya" style="text-transform:uppercase">'+escapeHTML(c.wilaya||"—")+'</td>'+
+      '<td data-col="sites" class="fac-strong" style="text-align:center">'+clientNbrSites(c)+'</td>'+
+      '<td data-col="effectif" class="fac-strong" style="text-align:center">'+factClientEffectif(c)+'</td>'+
+      '<td data-col="prestation" style="text-transform:uppercase;font-size:11.5px;max-width:200px">'+(services.length?services.slice(0,2).map(escapeHTML).join("<br>")+(services.length>2?'<br><span class="fac-muted">+'+(services.length-2)+'</span>':""):"—")+'</td>'+
+      '<td data-col="ttc" class="fac-num'+(ttc>0?" fac-amount-green":"")+'">'+(ttc>0?formatDZD(ttc):"—")+'</td>'+
+      '<td data-col="statut"><span class="fac-badge '+(on?"fac-badge-solid-green":"fac-badge-solid-red")+'">'+escapeHTML(statut.charAt(0).toUpperCase()+statut.slice(1))+'</span></td>'+
+      '<td onclick="event.stopPropagation()"><div class="fac-row-actions"><button type="button" class="fac-icon-btn" title="Consulter la fiche" aria-label="Consulter '+escapeHTML(c.nom||"")+'" onclick="openClientModal(\''+escapeHTML(jsString(c.id))+'\')">'+facUiIcon("eye",16)+'</button>'+
+      '<button type="button" class="fac-icon-btn" title="Compte client" aria-label="Compte client '+escapeHTML(c.nom||"")+'" onclick="navigate(\'facturation/compte/'+escapeHTML(jsString(encodeURIComponent(c.nom||"")))+'\')">'+facUiIcon("list",16)+'</button></div></td></tr>';
+  }).join("");
+  host.innerHTML=(rows.length?'<div class="fac-table-wrap"><table class="fac-table"><thead><tr><th>Nom du client</th><th>Référence</th><th>Contact</th><th>Téléphone</th><th>Wilaya</th><th style="text-align:center">Sites</th><th style="text-align:center">Effectif</th><th>Prestation fournie</th><th class="fac-num">Montant TTC</th><th>Statut</th><th class="fac-num">Actions</th></tr></thead><tbody>'+body+'</tbody></table></div>':
+    '<div class="fac-empty">'+((window.__facClientsList||[]).length?'Aucun client ne correspond aux filtres.':'Aucun client.')+'</div>')+
+    (pages>1?'<div class="fac-pager"><span>'+rows.length+' clients · page '+f.page+' / '+pages+'</span><span style="display:flex;gap:8px"><button type="button" class="fac-btn" '+(f.page<=1?"disabled ":"")+'onclick="factClientsGoPage('+(f.page-1)+')">Précédent</button><button type="button" class="fac-btn" '+(f.page>=pages?"disabled ":"")+'onclick="factClientsGoPage('+(f.page+1)+')">Suivant</button></span></div>':"");
 }
 
 function factureEditorOpen(id){window.__factureEditId=id||"new";navigate("facturation/factures");}
@@ -156,6 +221,8 @@ function renderFactureListPage(view){
     '<th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;background:#fff"></th>'+
     '</tr></thead><tbody id="fact-list-body">'+rows+'</tbody></table>')+
     '</div>';
+  // Ouverture filtrée (cloche « factures en retard », accès rapide du tableau de bord).
+  if(window.__factListStatusFilter){const sel=document.getElementById("fact-status-filter");if(sel){sel.value=window.__factListStatusFilter;filterFactureList()}window.__factListStatusFilter=null}
 }
 
 function factureImportSelectionUpdate(){
@@ -284,7 +351,7 @@ function factureEditorLigneHTML(l){
     '<button type="button" data-move="-1" onclick="factureEditorLigneMove(this,-1)" title="Monter la ligne" aria-label="Monter la ligne">↑</button>'+
     '<button type="button" data-move="1" onclick="factureEditorLigneMove(this,1)" title="Descendre la ligne" aria-label="Descendre la ligne">↓</button>'+
     (type==="article"?'<button type="button" class="fact-line-validate" onclick="factureEditorLigneValider(this)" title="Valider" aria-label="Valider la ligne">✓</button>':"")+
-    '<button type="button" class="fact-line-delete" onclick="factureEditorLigneRemove(this)" title="Supprimer" aria-label="Supprimer la ligne">×</button></div></td>';
+    '<button type="button" class="fact-line-delete" onclick="factureEditorLigneRemove(this)" title="Supprimer" aria-label="Supprimer la ligne">'+facUiIcon("trash",15)+'</button></div></td>';
 
   if(type==="commentaire"){
     const TA="width:100%;border:none;padding:6px 10px;font-size:12px;background:transparent;resize:none;overflow:hidden;min-height:32px;line-height:1.5;box-sizing:border-box;display:block;outline:none;font-style:italic;color:#64748b";
@@ -520,6 +587,7 @@ function factureEditorCalcTotals(){
   const ttc=factureRoundCents(totalHT+totalTVA);
   const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=formatDZD(v);};
   s("fact-r-ht",totalHT);s("fact-r-tva",totalTVA);s("fact-r-ttc",ttc);s("fact-header-ttc",ttc);
+  facEditorRefresh();
 }
 
 function factureComputeLinesTotals(lignes,tvaPct){
@@ -544,6 +612,7 @@ function factureComputeLinesTotals(lignes,tvaPct){
 
 function factureEditorLigneAdd(type){
   document.getElementById("fact-add-menu")?.remove();
+  if(facEditorEl()?.dataset.step!=="2")facEditorShowStep(2);
   const tbody=document.getElementById("fact-lignes-body");if(!tbody)return;
   const emp=tbody.querySelector("#fact-lignes-empty");if(emp)emp.remove();
   const l={type:type||"article"};
@@ -594,7 +663,7 @@ function factureEditorLigneRemove(btn){
   }
   factureEditorCalcTotals();
   const tbody=document.getElementById("fact-lignes-body");
-  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="7" style="padding:24px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic">Aucun article — choisissez une prestation dans le catalogue ci-dessus</td></tr>';
+  if(tbody&&!tbody.querySelector(".fact-ligne-row"))tbody.innerHTML='<tr id="fact-lignes-empty"><td colspan="7" class="fac-empty">Aucun article — choisissez une prestation dans le catalogue ci-dessus</td></tr>';
 }
 
 function factureCalcEcheance(){
@@ -707,16 +776,37 @@ function factureEditorCatalogRender(){
   if(!client||(mySoc()&&client.societe!==mySoc())){el.innerHTML='<p>Choisissez un client pour afficher ses prestations commerciales.</p>';return;}
   const items=factureCommercialArticles(client,factureEditorPeriod());
   const current=el.querySelector('select')?.value||"";
-  const sites=[...new Set(items.map(x=>x.siteNom).filter(Boolean))];
+  const q=(el.querySelector('.fac-catalog-search')?.value||"");
+  // Filtre Site : sites rattachés au client (même dénomination que les prestations par site).
+  const clientSites=(client.tech_sites||[]).map((s,i)=>s.denomination||s.nom||("Site "+(i+1)));
+  const sites=[...new Set([...clientSites,...items.map(x=>x.siteNom).filter(Boolean)])];
   const filter=sites.includes(current)?current:"";
+  const needle=q.trim().toLowerCase();
   const selected=new Set([...document.querySelectorAll('.fact-ligne-row[data-catalog-key]')].map(r=>r.dataset.catalogKey));
-  el.innerHTML='<header><div><h3>Prestations du contrat Commercial</h3><p>Cliquez sur Ajouter. NBR reprend l’effectif du site, le prix et l’unité tarifaire viennent de la prestation ; la quantité suit la période (Jour, Mois), vaut 1 au forfait et se saisit pour les heures.</p></div><label>Site <select onchange="factureEditorCatalogRender()"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label></header><div class="fact-catalog-grid">'+
-    items.map((item,i)=>({item,i})).filter(({item})=>!filter||item.siteNom===filter).map(({item,i})=>{
+  const visible=items.map((item,i)=>({item,i})).filter(({item})=>(!filter||item.siteNom===filter)&&(!needle||(item.designation+" "+(item.siteNom||"")).toLowerCase().includes(needle)));
+  el.innerHTML='<div class="fac-catalog-tools">'+
+    '<div class="fac-input-icon">'+facUiIcon("search",16)+'<input type="search" class="fac-input fac-catalog-search" data-no-draft value="'+escapeHTML(q)+'" placeholder="Rechercher une prestation" aria-label="Rechercher une prestation" oninput="factureEditorCatalogSearch(this)"></div>'+
+    '<label class="fac-catalog-site"><span>Site :</span><select data-no-draft onchange="factureEditorCatalogRender()" aria-label="Filtrer par site"><option value="">Tous les sites</option>'+sites.map(n=>'<option '+(n===filter?'selected ':'')+'value="'+escapeHTML(n)+'">'+escapeHTML(n)+'</option>').join('')+'</select></label>'+
+    '<button type="button" class="fac-btn fac-btn-blue" onclick="factureEditorLigneAdd(\'article\')">'+facUiIcon("plus",16)+' Ajouter une prestation</button></div>'+
+    '<div class="fac-catalog-list">'+
+    visible.map(({item,i})=>{
       const added=selected.has(item.catalogKey),missing=item.prixUnitHT<=0;
-      return '<div class="fact-catalog-card"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+'</small><b>'+formatDZD(item.prixUnitHT)+' HT'+(item.unite?' / '+escapeHTML(item.unite):' · Unité à définir')+'</b><span>'+(item.siteNom?'Effectif contrat : '+(item.effectif??"non renseigné"):item.contractQuantity!=null?'Quantité contrat : '+item.contractQuantity:'Quantité selon la période')+'</span><button type="button" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')">'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'+ Ajouter')+'</button></div>';
-    }).join('')+(items.length?'':'<p>Aucune prestation disponible dans le contrat Commercial.</p>')+'</div>';
+      const detail=(item.siteNom?'Effectif contrat : '+(item.effectif??"non renseigné"):item.contractQuantity!=null?'Quantité contrat : '+item.contractQuantity:'Quantité selon la période');
+      return '<div class="fact-catalog-card fac-catalog-row" data-added="'+(added?1:0)+'">'+
+        '<button type="button" class="fac-catalog-pick" '+(added||missing?'disabled ':'')+'onclick="factureEditorCatalogAdd('+i+')" aria-label="'+escapeHTML((added?'Déjà ajouté : ':missing?'Tarif à compléter : ':'Ajouter ')+item.designation)+'" title="'+(added?'Déjà ajouté':missing?'Tarif à compléter dans Commercial':'Ajouter à la facture')+'"></button>'+
+        '<span class="fac-icon-tile">'+facUiIcon("usersGroup",19)+'</span>'+
+        '<div style="min-width:0"><strong>'+escapeHTML(item.designation)+'</strong><small>'+escapeHTML(item.siteNom||"Catalogue client")+' · '+escapeHTML(detail)+'</small></div>'+
+        '<div class="fac-catalog-price"><b>'+formatDZD(item.prixUnitHT)+' HT'+(item.unite?' / '+escapeHTML(item.unite):' · Unité à définir')+'</b>'+
+        (missing?'<em><span class="fac-badge fac-badge-orange">Tarif à compléter dans Commercial</span></em>':added?'<em><span class="fac-badge fac-badge-blue">Déjà ajouté</span></em>':'')+'</div></div>';
+    }).join('')+(items.length?(visible.length?'':'<p>Aucune prestation ne correspond '+(filter?'au site « '+escapeHTML(filter)+' »':'à la recherche')+'.</p>'):'<p>Aucune prestation disponible dans le contrat Commercial.</p>')+'</div>';
 }
 
+// Recherche dans le catalogue : nouveau rendu de la liste, saisie et curseur conservés.
+function factureEditorCatalogSearch(input){
+  const value=input.value;factureEditorCatalogRender();
+  const next=document.querySelector("#fact-commercial-catalog .fac-catalog-search");
+  if(next&&next!==input){next.focus();try{next.setSelectionRange(value.length,value.length)}catch(e){}}
+}
 function factureEditorCatalogSites(){
   const input=document.getElementById('fact-siteNom');
   if(input)input.value=[...new Set([...document.querySelectorAll('.fact-ligne-row[data-site-nom]')].map(r=>r.dataset.siteNom).filter(Boolean))].join(', ');
@@ -744,8 +834,9 @@ function factureSubjectHTML(client,invoice,editable){
   const options=factureClientActivities(client);
   const selected=Array.isArray(invoice.objetServices)?invoice.objetServices:(invoice.objet?[invoice.objet]:[]);
   const value=selected.join(" ; ");
-  return '<input id="fact-objet" type="hidden" value="'+escapeHTML(value)+'"><details style="border:1px solid #cbd5e1;border-radius:6px;background:#fff"><summary id="fact-subject-summary" style="padding:10px;cursor:pointer;font-size:12px">'+escapeHTML(value||"Choisir les services à facturer")+'</summary><div style="padding:6px 10px;max-height:220px;overflow:auto">'+(options.length?options.map(activity=>'<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;font-size:12px"><input type="checkbox" class="fact-subject-choice" value="'+escapeHTML(activity)+'" '+(selected.includes(activity)?'checked ':'')+(!editable?'disabled ':'')+'onchange="factureSubjectChange()">'+escapeHTML(activity)+'</label>').join(""):'<p style="font-size:12px;color:#64748b">'+(client?'Aucune activité renseignée pour ce client dans Commercial.':'Sélectionnez un client pour afficher ses activités.')+'</p>')+'</div></details>';
+  return '<input id="fact-objet" type="hidden" value="'+escapeHTML(value)+'"><details class="fac-subject"><summary id="fact-subject-summary">'+escapeHTML(value||"Choisir les services à facturer")+'</summary><div class="fac-subject-list">'+(options.length?options.map(activity=>'<label><input type="checkbox" class="fact-subject-choice" value="'+escapeHTML(activity)+'" '+(selected.includes(activity)?'checked ':'')+(!editable?'disabled ':'')+'onchange="factureSubjectChange()">'+escapeHTML(activity)+'</label>').join(""):'<p>'+(client?'Aucune activité renseignée pour ce client dans Commercial.':'Sélectionnez un client pour afficher ses activités.')+'</p>')+'</div></details>';
 }
+
 function factureSubjectChange(){
   const host=document.getElementById("fact-subject-picker");if(!host)return;
   const selected=Array.from(host.querySelectorAll(".fact-subject-choice:checked"),el=>el.value);
@@ -823,7 +914,7 @@ function factureEditorNewClient(){
 async function factureEditorCreateClient(form){
   const fd=new FormData(form),c={nom:String(fd.get("nom")||"").trim(),societe:mySoc()||"",statut:"actif",rc:String(fd.get("rc")||"").trim(),nif:String(fd.get("nif")||"").trim(),tel:String(fd.get("tel")||"").trim(),email:String(fd.get("email")||"").trim(),adresse:String(fd.get("adresse")||"").trim(),modePaiement:String(fd.get("modePaiement")||"Virement bancaire"),delaiPaiement:String(fd.get("delaiPaiement")||"30 jours"),delaiDepotFacture:String(fd.get("delaiDepotFacture")||"0"),remarqueFacture:String(fd.get("remarqueFacture")||"").trim()};
   if(!c.nom){toast("Le nom du client est obligatoire","error");return}
-  try{const saved=clientFromApi(await SGDI.commercial.createClient(clientApiPayload(c)));sgdiUpsertServerItem("clients",saved);closeModal();factureEditorChooseClient(saved.id);toast("Client créé et sélectionné","success")}catch(e){toast("Création impossible : "+(e.message||e),"error")}
+  try{const saved=clientFromApi(await SGDI.commercial.createClient(clientApiPayload(c)));sgdiUpsertServerItem("clients",saved);closeModal();if(document.getElementById("fact-clientId")){factureEditorChooseClient(saved.id);toast("Client créé et sélectionné","success")}else{toast("Client créé","success");renderView()}}catch(e){toast("Création impossible : "+(e.message||e),"error")}
 }
 
 function factureEditorSelectSite(btn){
@@ -839,21 +930,22 @@ function factureEditorRenderClientInfo(c){
   const nif=c.nif||document.getElementById("fact-nif")?.value||"";
   const adresse=c.adresse||"";
   const ai=c.ai||"";
-  el.innerHTML='<div style="margin-top:8px;padding:10px;background:#f8fafc;border-radius:6px;font-size:12px;color:#475569;line-height:1.8">'+
-    (adresse?'<div>'+escapeHTML(adresse)+'</div>':"")+
-    (rc?'<div>RC: '+escapeHTML(rc)+'</div>':"")+
-    (nif?'<div>NIF: '+escapeHTML(nif)+'</div>':"")+
-    (ai?'<div>AI: '+escapeHTML(ai)+'</div>':"")+
-    '</div>';
+  const categorie=c.categorie||c.structure||"";
+  const row=(label,value)=>value?'<div><span>'+label+'</span><b>'+escapeHTML(value)+'</b></div>':"";
+  el.innerHTML='<div class="fac-client-card"><div class="fac-client-card-top">'+factClientLogoHTML({...c,nom},"fac-logo-lg")+'<div><strong>'+escapeHTML(nom)+'</strong>'+(adresse?'<span>'+escapeHTML(adresse)+'</span>':"")+'</div></div>'+
+    '<div class="fac-client-ids">'+row("N° Registre de commerce",rc)+row("N° Article d’imposition (AI)",ai)+row("N° Identifiant fiscal (NIF)",nif)+
+    (categorie?'<div><span>Catégorie</span><b><span class="fac-badge fac-badge-blue">'+escapeHTML(categorie)+'</span></b></div>':"")+'</div></div>';
 }
 
 function factureEditorMarkInvalid(el){
   if(!el)return;
-  el.style.borderColor="#ef4444";el.style.background="#fff7f7";
-  el.addEventListener("input",()=>{el.style.borderColor="";el.style.background=""},{once:true});
+  el.style.borderColor="#ef4444";el.style.background="#fff7f7";el.classList.add("fac-invalid");
+  el.addEventListener("input",()=>{el.style.borderColor="";el.style.background="";el.classList.remove("fac-invalid")},{once:true});
 }
 
-function factureEditorValidate(){
+function factureEditorValidate(options){
+  // skipLines : contrôle de l'étape « Client » seule (passage à l'étape « Prestations »).
+  const skipLines=options?.skipLines===true;
   const errors=[];
   const periodStart=document.getElementById("fact-periode-debut"),periodEnd=document.getElementById("fact-periode-fin");
   if(!periodStart?.value||!periodEnd?.value||periodStart.value>periodEnd.value){
@@ -869,8 +961,8 @@ function factureEditorValidate(){
   const objet=document.getElementById("fact-objet");
   if(!client?.value){errors.push("Recherchez puis sélectionnez un client.");factureEditorMarkInvalid(clientSearch);}
   if(!(objet?.value||"").trim()){errors.push("Renseignez l’objet de la facture.");factureEditorMarkInvalid(document.getElementById("fact-subject-summary")||objet);}
-  const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
-  if(!rows.length)errors.push("Ajoutez au moins un article.");
+  const rows=skipLines?[]:Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
+  if(!skipLines&&!rows.length)errors.push("Ajoutez au moins un article.");
   rows.forEach((tr,i)=>{
     const d=tr.querySelector(".fact-ligne-desig"),p=tr.querySelector(".fact-ligne-prix"),q=tr.querySelector(".fact-ligne-qte"),n=tr.querySelector(".fact-ligne-nbr");
     if(!(d?.value||"").trim()){errors.push("Article "+(i+1)+" : désignation obligatoire.");factureEditorMarkInvalid(d);}
@@ -890,15 +982,95 @@ function factureEditorScheduleDraft(){
   factureDraftTimer=setTimeout(()=>{factureDraftTimer=null;factureEditorSave({draft:true,silent:true})},1400);
 }
 
-function factureEditorUpdateWorkflow(){
-  const clientOk=!!document.getElementById("fact-clientId")?.value;
+// ---------- Assistant 3 étapes : navigation et état (affichage uniquement) ----------
+// Contrôles affichés à l'écran : mêmes règles que factureEditorValidate (le serveur reste
+// l'arbitre lors de la validation et de la numérotation).
+function factureEditorChecks(){
+  const v=id=>document.getElementById(id)?.value||"";
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
-  const linesOk=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0&&factureNbrValid(r.querySelector(".fact-ligne-nbr")?.value??1));
-  const objectOk=!!(document.getElementById("fact-objet")?.value||"").trim();
-  [["fact-step-client",clientOk],["fact-step-lines",linesOk],["fact-step-validation",clientOk&&linesOk&&objectOk&&factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0]].forEach(([id,ok])=>{const e=document.getElementById(id);if(e){e.style.background=ok?"#ecfdf5":"#eff6ff";e.style.color=ok?"#047857":"#1d4ed8";e.style.borderColor=ok?"#a7f3d0":"#bfdbfe"}});
-  const periodOk=factureEditorDayCount(document.getElementById("fact-periode-debut")?.value,document.getElementById("fact-periode-fin")?.value)>0;
-  const b=document.getElementById("fact-validate-btn");if(b){b.disabled=!(clientOk&&linesOk&&objectOk&&periodOk);b.style.opacity=b.disabled?".45":"1";b.title=b.disabled?"Sélectionnez un client, renseignez l’objet, la période de facturation et au moins un article complet":""}
+  const complete=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0&&factureNbrValid(r.querySelector(".fact-ligne-nbr")?.value??1)&&!!(r.querySelector(".fact-ligne-unite")?.value??"x"));
+  const ttc=parseDZD(document.getElementById("fact-r-ttc")?.textContent||"0");
+  const start=v("fact-periode-debut"),end=v("fact-periode-fin");
+  const c={client:!!v("fact-clientId"),objet:!!v("fact-objet").trim(),period:factureEditorDayCount(start,end)>0,mode:!!v("fact-mode"),date:!!v("fact-date"),
+    lines:rows.length,linesComplete:complete,amounts:complete&&ttc>0,start,end,ttc};
+  c.step1=c.client&&c.objet&&c.period&&c.mode&&c.date;
+  c.step2=c.linesComplete&&c.amounts;
+  c.ready=c.step1&&c.step2;
+  return c;
 }
+function facEditorEl(){return document.querySelector(".fac-editor")}
+function factureEditorGoStep(n){
+  const ed=facEditorEl();if(!ed)return;
+  const cur=Number(ed.dataset.step)||1;n=Math.min(3,Math.max(1,Number(n)||1));
+  if(n>cur&&ed.dataset.readonly!=="1"){
+    // Même contrôle que la validation finale, limité aux informations de l'étape 1 puis 2.
+    if(!factureEditorValidate({skipLines:true}))return;
+    if(n>2&&!factureEditorValidate())return;
+  }
+  facEditorShowStep(n);
+}
+function facEditorShowStep(n){
+  const ed=facEditorEl();if(!ed||String(ed.dataset.step)===String(n))return;
+  ed.dataset.step=String(n);
+  (window.__facEditorSteps=window.__facEditorSteps||{})[ed.dataset.factId]=n;
+  facEditorRefresh();
+  const scroller=document.getElementById("view");if(scroller&&typeof scroller.scrollTo==="function")scroller.scrollTo(0,0);
+}
+let facEditorPreviewTimer=null;
+function facEditorRenderPreview(){
+  const host=document.getElementById("fac-inline-preview");if(!host)return;
+  try{host.innerHTML=factureApercuParts().sheet(null)}catch(e){console.warn("Aperçu facture",e);host.innerHTML='<div class="fac-empty">Aperçu indisponible.</div>'}
+}
+function facEditorRefresh(){
+  const ed=facEditorEl();if(!ed)return;
+  const c=factureEditorChecks();const step=Number(ed.dataset.step)||1;const readonly=ed.dataset.readonly==="1";
+  const done=[readonly||c.step1,readonly||c.step2,readonly];
+  ed.querySelectorAll(".fac-step").forEach((b,i)=>{
+    const n=i+1;const state=n===step?"active":(n<step&&done[i])?"done":"todo";
+    b.dataset.state=state;b.dataset.reachable=n<step||readonly?"1":"0";
+    if(n===step)b.setAttribute("aria-current","step");else b.removeAttribute("aria-current");
+    const dot=b.querySelector(".fac-step-dot");if(dot)dot.innerHTML=state==="done"?facUiIcon("check",18):String(n);
+  });
+  const btn=document.getElementById("fact-validate-btn");
+  if(btn&&!factureValidationInFlight){btn.disabled=!c.ready;btn.title=btn.disabled?"Sélectionnez un client, renseignez l’objet, la période de facturation et au moins un article complet":""}
+  const text=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  text("fac-sum-ht",document.getElementById("fact-r-ht")?.textContent||"");
+  text("fac-sum-tva",document.getElementById("fact-r-tva")?.textContent||"");
+  text("fac-sum-ttc",document.getElementById("fact-r-ttc")?.textContent||"");
+  text("fac-sum-tva-pct",String(factureTvaPct(document.getElementById("fact-tva-global")?.value)).replace(".",",")+" %");
+  text("fac-sum-count",c.lines+" prestation"+(c.lines>1?"s":"")+" ajoutée"+(c.lines>1?"s":""));
+  text("fac-sum-count-text",c.lines?"Les montants sont automatiquement calculés depuis le catalogue client.":"Les montants se mettront à jour après ajout des prestations.");
+  const note=document.getElementById("fac-sum-note");
+  if(note){
+    const first=!c.client?"Sélectionnez un client.":!c.objet?"Renseignez le contrat / objet de la facture.":!c.period?"Renseignez une période de facturation complète.":!c.mode?"Choisissez le mode de paiement.":!c.date?"Renseignez la date de facture.":!c.lines?"Ajoutez au moins une prestation.":!c.linesComplete?"Complétez désignation, unité, NBR, prix et quantité de chaque ligne.":"";
+    const [tone,icon,h,p]=step===1?["blue","info","Vous êtes à l’étape 1 sur 3","Sélectionnez un client et une période pour continuer vers l’ajout des prestations."]:
+      step===2?(c.step2?["green","checkCircle","Calculs cohérents","Les totaux sont à jour et cohérents."]:["orange","alert","Calculs incomplets",first||"Ajoutez au moins une prestation."]):
+      (c.ready?["green","checkCircle","Prête à être validée","La facture est complète et peut être validée. Vous pouvez l’apercevoir en PDF ou l’enregistrer en brouillon avant validation."]:["orange","alert","Vérifications en attente",first]);
+    note.dataset.tone=tone;note.innerHTML='<i>'+facUiIcon(icon,20)+'</i><div><strong>'+h+'</strong><p>'+escapeHTML(p)+'</p></div>';
+  }
+  // Rappel du contexte (étapes 2 et 3)
+  const ctx=document.getElementById("fac-ctx");
+  if(ctx){
+    const nom=document.getElementById("fact-clientNom")?.value||"";
+    const client=(db.clients||[]).find(x=>String(x.id)===String(document.getElementById("fact-clientId")?.value));
+    const objet=document.getElementById("fact-objet")?.value||"";
+    ctx.innerHTML='<div class="fac-ctx-client">'+factClientLogoHTML(client||{nom},"fac-logo-lg")+'<div><strong>'+escapeHTML(nom||"Client non sélectionné")+'</strong><span>'+escapeHTML(client?.adresse||document.getElementById("fact-adresse")?.value||"")+'</span></div></div>'+
+      '<div class="fac-ctx-item"><span class="fac-icon-tile">'+facUiIcon("file",19)+'</span><div><small>Contrat / Objet</small><b>'+escapeHTML(objet||"—")+'</b></div></div>'+
+      '<div class="fac-ctx-item"><span class="fac-icon-tile">'+facUiIcon("calendar",19)+'</span><div><small>Période de facturation</small><b>'+escapeHTML(c.start?formatDate(c.start):"—")+' '+facUiIcon("arrowRight",15)+' '+escapeHTML(c.end?formatDate(c.end):"—")+'</b></div></div>';
+  }
+  const checks=document.getElementById("fac-checks");
+  if(checks){
+    const item=(ok,h,p)=>'<div class="fac-check" data-ok="'+(ok?1:0)+'"><i>'+facUiIcon(ok?"check":"alert",16)+'</i><div><strong>'+h+'</strong><span>'+escapeHTML(p)+'</span></div></div>';
+    checks.dataset.ok=c.ready?"1":"0";
+    checks.innerHTML=item(c.client,c.client?"Client vérifié":"Client à sélectionner",document.getElementById("fact-clientNom")?.value||"Aucun client")+
+      item(c.period,c.period?"Période définie":"Période à définir",c.period?formatDate(c.start)+" → "+formatDate(c.end):"Début et fin requis")+
+      item(c.linesComplete,c.lines+" prestation"+(c.lines>1?"s":"")+" ajoutée"+(c.lines>1?"s":""),c.linesComplete?"Articles et montants renseignés":"Lignes à compléter")+
+      item(c.amounts,c.amounts?"Montants cohérents":"Montants à vérifier",c.amounts?"Les totaux sont corrects":"Total TTC nul ou lignes incomplètes");
+  }
+  if(step===3){clearTimeout(facEditorPreviewTimer);facEditorPreviewTimer=setTimeout(facEditorRenderPreview,120)}
+}
+
+function factureEditorUpdateWorkflow(){facEditorRefresh()}
 
 let factureValidationInFlight=false;
 async function factureEditorSave(options){
@@ -1030,10 +1202,11 @@ async function factureValidateAndPrint(button){
   finally{if(button.isConnected){button.disabled=false;button.textContent="Valider et imprimer";}}
 }
 
-function factureVoirApercu(fId){
+// Feuille de facture (mêmes données et mêmes calculs que l'aperçu PDF), réutilisée par
+// l'aperçu modal et par l'aperçu intégré de l'étape « Validation ». Lecture seule.
+function factureApercuParts(fId){
   const id=fId||window.__factureEditId;
   let f=id&&id!=="new"?(db.factures||[]).find(x=>x.id===id):null;
-  if(document.getElementById("fact-clientId")&&(!f?.statut||f.statut==="brouillon")&&!factureEditorValidate())return;
 
   const gv=eid=>document.getElementById(eid)?.value||"";
   const numero=gv("fact-numero")||(f?.numero||"APERÇU");
@@ -1109,17 +1282,7 @@ function factureVoirApercu(fId){
     return value?'<img src="'+value+'" alt="'+(kind==="cachet"?"Cachet de la société":"Signature")+'" style="max-width:100%;flex:none;width:'+(kind==="cachet"?"172px;height:136px":"86px;height:68px")+';object-fit:contain">':"";
   }).join("");
   const qrPayload=["IRON GROUP — FACTURE","Société: "+companyName,"N°: "+numero,"Date: "+fmtD(date),"Client: "+clientNom,"Total TTC: "+DZD(totalTTC),"Statut: "+statusLabel,"Identifiant: "+(f?.id||"APERÇU")].join("\n");
-  const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
-    '<style>@media print{@page{size:A4 portrait;margin:9mm}body *{visibility:hidden!important}#fact-print-area,#fact-print-area *{visibility:visible!important}#fact-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}.modal-bg{position:static!important;background:#fff!important}.fact-pdf-sheet{box-shadow:none!important;border:0!important;min-height:277mm!important}.no-print{display:none!important}}</style>'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
-    '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
-    '<div style="display:flex;gap:8px">'+
-    '<button onclick="'+(statusLabel==="BROUILLON"?"factureValidateAndPrint(this)":"facturePrintApercu()")+'" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">'+(statusLabel==="BROUILLON"?"Valider et imprimer":"Imprimer")+'</button>'+
-    '<button onclick="factureTelechargerPDF()" style="background:#047857;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">📥 Télécharger PDF</button>'+
-    '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
-    '</div></div>'+
-    '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
-    '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:22px 30px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
+  const sheet=qrId=>'<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:22px 30px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
     // Issuer details belong to the active company, separately from the recipient.
     '<header style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:22px;align-items:center;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:12px;break-inside:avoid">'+
     '<div class="fact-issuer-identity" style="display:flex;gap:12px;align-items:center;min-width:0">'+
@@ -1131,7 +1294,7 @@ function factureVoirApercu(fId){
     [["RC",companyRC],["AI",companyAI],["NIF",companyNIF],["NIS",companyNIS]].map(([label,value])=>'<div><b style="color:#64748b">'+label+' :</b> '+escapeHTML(String(value||"À renseigner"))+'</div>').join("")+
     '</div></section></div></div>'+
     '<div><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0"><div><div style="font-size:24px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="display:inline-block;margin-top:6px;padding:4px 9px;border:1px solid '+statusColor+';color:'+statusColor+';border-radius:5px;font-size:9px;font-weight:800;letter-spacing:1px">'+statusLabel+'</div></div>'+
-    '<div style="flex-shrink:0"><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
+    '<div style="flex-shrink:0"><div '+(qrId?'id="'+qrId+'" ':'')+'style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
     '</div></header>'+
     // Destinataire + info
     '<div style="display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;margin-bottom:10px;break-inside:avoid">'+
@@ -1174,7 +1337,26 @@ function factureVoirApercu(fId){
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
     '<div style="display:grid;grid-template-columns:1fr 280px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="min-height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">La Direction Commerciale<div class="fact-invoice-signatures" style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin-top:6px">'+invoiceImages+'</div></div></div>'+
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
-    '</section></div></div>';
+    '</section>';
+  return {numero,statusLabel,qrPayload,sheet};
+}
+
+function factureVoirApercu(fId){
+  const id=fId||window.__factureEditId;
+  let f=id&&id!=="new"?(db.factures||[]).find(x=>x.id===id):null;
+  if(document.getElementById("fact-clientId")&&(!f?.statut||f.statut==="brouillon")&&!factureEditorValidate())return;
+  const {numero,statusLabel,qrPayload,sheet}=factureApercuParts(fId);
+  const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
+    '<style>@media print{@page{size:A4 portrait;margin:9mm}body *{visibility:hidden!important}#fact-print-area,#fact-print-area *{visibility:visible!important}#fact-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}.modal-bg{position:static!important;background:#fff!important}.fact-pdf-sheet{box-shadow:none!important;border:0!important;min-height:277mm!important}.no-print{display:none!important}}</style>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
+    '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button onclick="'+(statusLabel==="BROUILLON"?"factureValidateAndPrint(this)":"facturePrintApercu()")+'" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">'+(statusLabel==="BROUILLON"?"Valider et imprimer":"Imprimer")+'</button>'+
+    '<button onclick="factureTelechargerPDF()" style="background:#047857;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">📥 Télécharger PDF</button>'+
+    '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
+    '</div></div>'+
+    '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
+    sheet("fact-verification-qr")+'</div></div>';
   openModal(html);
   const qrDocument=document, qrTarget=qrDocument.getElementById("fact-verification-qr");
   Promise.resolve(typeof sgdiLoadQRLib==="function"?sgdiLoadQRLib():null).then(()=>{
@@ -1261,159 +1443,124 @@ function renderFactureEditor(view){
   const modes=["A terme","Virement bancaire","Chèque","Espèces","Carte bancaire","Traite","Prélèvement automatique","Mixte"];
   const modeOpts=modes.map(m=>'<option '+(f.modeReglement===m?"selected":"")+'>'+escapeHTML(m)+'</option>').join("");
   const lignesHTML=lignes.map(l=>factureEditorLigneHTML(l)).join("");
-  const lignesEmpty=lignes.length===0;
-  const thL="padding:10px;font-size:11px;font-weight:700;color:#6b7280;border-bottom:2px solid #e5e7eb;background:#f9fafb;text-align:left";
-  const LB="display:block;font-size:11px;color:#6b7280;margin-bottom:4px";
-  const INP="border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box;outline:none;background:#fff";
-  const sd=factStatutDisplay(f);
   const isDraft=!f.statut||String(f.statut).toLowerCase()==="brouillon";
   const billingPeriod=isDraft&&!f.periodeDebut&&!f.periodeFin?factureDefaultBillingPeriod(today()):f;
-  const FL='display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;align-items:center;margin-bottom:7px';
-  const FS='font-size:11px;color:#334155;font-weight:900;line-height:1.15';
-  const FI='height:25px;min-height:25px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;width:100%;box-sizing:border-box;outline:none;background:#fff;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)';
-  const fl=(lbl,inp)=>'<div style="'+FL+'"><span style="'+FS+'">'+lbl+'</span>'+inp+'</div>';
-  view.innerHTML=
-    // BREADCRUMB + TABS (sticky)
-    '<div style="position:sticky;top:0;z-index:50;background:#f1f5f9;padding-bottom:2px;margin-bottom:10px">'+
-    '<div class="fact-editor-summary"><div class="fact-editor-breadcrumb">'+
-    '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;text-decoration:none">Factures</a>'+
-    '<span>/</span><span style="color:#111827;font-weight:700">'+(isDraft?"Brouillon":escapeHTML(f.numero||"Facture"))+'</span>'+
-    (!isDraft?' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>':"")+
-    '</div><div class="fact-editor-live-total"><span>Total TTC</span><output id="fact-header-ttc" aria-live="polite" aria-atomic="true">'+formatDZD(0)+'</output></div>'+
-    '<button type="button" onclick="factureEditorOpen()" style="margin-left:auto;background:#043970;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(4,57,112,.2)">+ Nouvelle facture</button>'+
-    '</div>'+
-    factTabs("factures")+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">'+
-    ['1 · Client','2 · Articles et calculs','3 · Aperçu et validation'].map((x,i)=>'<div id="'+['fact-step-client','fact-step-lines','fact-step-validation'][i]+'" style="padding:7px 10px;border-radius:6px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;text-align:center;border:1px solid #bfdbfe">'+x+'</div>').join('')+
-    '</div><div id="fact-draft-state" style="font-size:10px;color:#64748b;text-align:right;padding-top:4px">'+(isDraft?'Brouillon sauvegardé automatiquement':'Facture validée')+'</div>'+
-    '</div>'+
-    // MAIN LAYOUT
-    '<div class="rh-op-layout" style="align-items:start">'+
-    // LEFT COLUMN
-    '<div>'+
-    // Client fieldset
-    '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
-    '<legend>Client</legend>'+
-    '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">'+
-    '<div style="position:relative;flex:1"><input type="hidden" id="fact-clientId" value="'+escapeHTML(f.clientId||selClient?.id||"")+'"><input id="fact-client-search" class="input" autocomplete="off" value="'+escapeHTML(selClient?.nom||f.client||f.clientNom||"")+'" placeholder="Rechercher par nom, RC ou NIF…" onfocus="factureEditorClientSearch(this)" oninput="factureEditorClientSearch(this)" onblur="factureEditorClientSearchClose()" style="width:100%;height:34px!important;font-size:12px!important;padding-right:34px"><span style="position:absolute;right:11px;top:8px;color:#64748b;pointer-events:none">⌕</span><div id="fact-client-results" style="display:none;position:absolute;top:38px;left:0;right:0;z-index:80;max-height:280px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:7px;box-shadow:0 12px 30px rgba(15,23,42,.16)"></div></div>'+
-    '<a onclick="factureEditorNewClient()" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap">+ NOUVEAU CLIENT</a>'+
-    '</div>'+
+  // Étape d'ouverture : facture émise → Validation ; brouillon avec articles → Prestations.
+  const remembered=(window.__facEditorSteps||{})[f.id];
+  const step=!isDraft?3:(remembered||(lignes.length?2:1));
+  const I=facUiIcon;
+  const title=(icon,h,p)=>'<div class="fac-section-title"><span class="fac-icon-tile">'+I(icon,21)+'</span><div><h2>'+h+'</h2>'+(p?'<p>'+p+'</p>':'')+'</div></div>';
+  const thL='style="width:';
+  const steps=[["fact-step-client","Client","Sélection du client et période"],["fact-step-lines","Prestations","Ajout des articles et calculs"],["fact-step-validation","Validation","Aperçu et confirmation"]];
+  const histTable=(rows,cols,color)=>'<div class="fac-table-wrap"><table class="fac-table"><thead><tr>'+cols.map((c,i)=>'<th'+(i===cols.length-1?' class="fac-num"':'')+'>'+c+'</th>').join("")+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  view.innerHTML=factTabs("factures")+
+    '<div class="fac-ui fac-editor" data-step="'+step+'" data-readonly="'+(isDraft?"0":"1")+'" data-fact-id="'+escapeHTML(f.id)+'">'+
+    // En-tête : titre, statut, fil d'Ariane
+    '<div class="fac-editor-head"><div class="fac-editor-title"><h1>'+(isDraft?'Nouvelle facture':'Facture '+escapeHTML(f.numero||""))+'</h1>'+(isDraft?'<span class="fac-badge fac-badge-draft">Brouillon</span>':factStatusBadge(f,sp))+
+    '<span id="fact-draft-state" class="fac-draft-state">'+(isDraft?'Brouillon sauvegardé automatiquement':'Facture validée')+'</span></div>'+
+    '<div style="display:flex;align-items:center;gap:14px">'+(!isDraft?'<button type="button" class="fac-btn fac-btn-green" onclick="factureEditorOpen()">'+I("plus",16)+' Nouvelle facture</button>':'')+
+    '<nav class="fac-crumbs" aria-label="Fil d’Ariane"><a onclick="factureEditorClose()">Factures</a>'+I("chevronRight",14)+'<b>'+(isDraft?'Nouvelle facture':escapeHTML(f.numero||"Facture"))+'</b></nav></div></div>'+
+    // Étapes
+    '<div class="fac-stepper" role="list">'+steps.map(([sid,h,s],i)=>'<button type="button" role="listitem" class="fac-step" id="'+sid+'" data-step-target="'+(i+1)+'" onclick="factureEditorGoStep('+(i+1)+')"><span class="fac-step-dot">'+(i+1)+'</span><span class="fac-step-text"><strong>'+h+'</strong><small>'+s+'</small></span></button>').join("")+'</div>'+
+    '<div class="fac-editor-grid"><div class="fac-editor-main">'+
+    // Rappel client / objet / période (étapes 2 et 3)
+    '<section class="fac-block fac-context-bar" id="fac-ctx" data-for-step="2 3"></section>'+
+    // ---------- Étape 1 : Client ----------
+    '<div class="fac-panel" data-panel="1">'+
+    '<section class="fac-block">'+title("user","Client","Recherchez et sélectionnez le client à facturer")+
+    '<div class="fac-field"><label for="fact-client-search">Rechercher un client <span class="fac-req">*</span></label>'+
+    '<div class="fac-client-search fac-input-icon">'+I("search",17)+'<input type="hidden" id="fact-clientId" value="'+escapeHTML(f.clientId||selClient?.id||"")+'"><input id="fact-client-search" class="fac-input" autocomplete="off" value="'+escapeHTML(selClient?.nom||f.client||f.clientNom||"")+'" placeholder="Rechercher par nom, RC ou NIF…" onfocus="factureEditorClientSearch(this)" oninput="factureEditorClientSearch(this)" onblur="factureEditorClientSearchClose()"><div id="fact-client-results" class="fac-client-results"></div></div></div>'+
+    (isDraft?'<div class="fac-new-client"><button type="button" class="fac-link" onclick="factureEditorNewClient()">'+I("plus",14)+' Nouveau client</button></div>':'')+
     '<input type="hidden" id="fact-clientNom" value="'+escapeHTML(f.client||f.clientNom||"")+'">'+
     '<input type="hidden" id="fact-adresse" value="'+escapeHTML(f.adresseClient||"")+'">'+
     '<input type="hidden" id="fact-nif" value="'+escapeHTML(f.nif||"")+'">'+
     '<input type="hidden" id="fact-rc" value="'+escapeHTML(f.rc||f.clientRc||"")+'">'+
     '<input type="hidden" id="fact-email" value="'+escapeHTML(f.email||"")+'">'+
     '<input type="hidden" id="fact-siteNom" value="'+escapeHTML(f.siteNom||"")+'">'+
-    '<div id="fact-site-selector"></div>'+
-    '<div id="fact-client-info"></div>'+
-    '</fieldset>'+
-    // Objet fieldset
-    '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
-    '<legend>Objet de la facture</legend>'+
-    '<div id="fact-subject-picker">'+factureSubjectHTML(selClient,f,isDraft)+'</div>'+
-    '</fieldset>'+
-    '<section id="fact-commercial-catalog" class="fact-commercial-catalog"'+(isDraft?'':' hidden')+'></section>'+
-    // Articles fieldset
-    '<fieldset class="rh-op-box" style="margin-bottom:10px;padding:0;overflow:hidden">'+
-    '<legend style="margin-left:12px;padding-top:2px">Articles</legend>'+
-    '<div style="overflow-x:auto"><table class="fact-editor-lines '+(isDraft?'':'fact-lines-readonly')+'" style="width:100%;border-collapse:collapse;min-width:900px">'+
-    '<thead><tr>'+
-    '<th style="'+thL+';min-width:180px">Désignation</th>'+
-    '<th style="'+thL+';width:90px">Unité</th>'+
-    '<th style="'+thL+';text-align:center;width:76px" title="Nombre d\'éléments facturés (agents, véhicules, équipements…)">NBR</th>'+
-    '<th style="'+thL+';text-align:right;width:140px">Prix unitaire</th>'+
-    '<th style="'+thL+';text-align:center;width:90px">Quantité</th>'+
-    '<th style="'+thL+';text-align:right;width:140px">Total</th>'+
-    '<th style="'+thL+';width:140px;text-align:center">Actions</th>'+
-    '</tr></thead>'+
-    '<tbody id="fact-lignes-body">'+
-    (lignesEmpty?'<tr id="fact-lignes-empty"><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+
-    '</tbody>'+
-    '</table></div>'+
-    '<div style="padding:10px 14px;border-top:1px solid #e5e7eb;background:#f9fafb">'+
-    '<a onclick="factureEditorLigneAdd()" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px">+ Ajouter / créer un article</a>'+
+    '<div id="fact-site-selector"></div><div id="fact-client-info"></div></section>'+
+    '<section class="fac-block">'+title("file","Contrat / Objet de la facture","Sélectionnez le contrat ou précisez l’objet de la facture")+
+    '<div class="fac-field"><span class="fac-label">Contrat / Objet <span class="fac-req">*</span></span><div id="fact-subject-picker">'+factureSubjectHTML(selClient,f,isDraft)+'</div></div></section>'+
+    '<section class="fac-block">'+title("calendar","Période de facturation","Définissez la période des prestations à facturer")+
+    '<div class="fac-grid-2"><div class="fac-field"><label for="fact-periode-debut">Du <span class="fac-req">*</span></label><input id="fact-periode-debut" class="fac-input" aria-label="Début de période de facturation" type="date" value="'+escapeHTML(billingPeriod.periodeDebut||"")+'" onchange="factureEditorPeriodChange()"></div>'+
+    '<div class="fac-field"><label for="fact-periode-fin">Au <span class="fac-req">*</span></label><input id="fact-periode-fin" class="fac-input" aria-label="Fin de période de facturation" type="date" value="'+escapeHTML(billingPeriod.periodeFin||"")+'" onchange="factureEditorPeriodChange()"></div></div></section>'+
+    '<section class="fac-block">'+title("card","Conditions de paiement","Les informations ci-dessous seront reprises sur la facture")+
+    '<div class="fac-grid-3">'+
+    '<div class="fac-field"><label for="fact-echeance">Délai paiement</label><select id="fact-echeance" class="fac-select" onchange="factureCalcEcheance()">'+
+      ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+'</select></div>'+
+    '<div class="fac-field"><label for="fact-mode">Mode paiement <span class="fac-req">*</span></label><select id="fact-mode" class="fac-select">'+modeOpts+'</select></div>'+
+    '<div class="fac-field"><label for="fact-echDate" title="Calculée à partir de la date de facture et du délai de paiement ; vide si aucun délai.">Date d’échéance '+I("info",13)+'</label><input id="fact-echDate" class="fac-input" type="date" value="'+escapeHTML(f.dateEcheance||"")+'" readonly></div>'+
+    '<div class="fac-field"><label for="fact-date">Date facture <span class="fac-req">*</span></label><input id="fact-date" class="fac-input" type="date" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()"></div>'+
+    '<div class="fac-field"><label for="fact-dateDepot">Dépôt client</label><input id="fact-dateDepot" class="fac-input" type="date" value="'+escapeHTML(f.dateDepot||"")+'"></div>'+
+    '<div class="fac-field"><label for="fact-numero">Référence</label><input id="fact-numero" class="fac-input" readonly style="font-weight:700" value="'+escapeHTML(f.numero||"BROUILLON")+'"></div>'+
+    '</div><div class="fac-field" style="margin-top:14px"><label for="fact-remarque">Remarque interne</label><textarea id="fact-remarque" class="fac-input" placeholder="SERVICE DE GARDIENNAGE - Période: Mars 2026">'+escapeHTML(f.remarque||f.objet||"")+'</textarea></div></section>'+
     '</div>'+
-    '<div style="border-top:1px solid #e5e7eb">'+
-    '<div style="display:flex;justify-content:space-between;padding:7px 14px;border-bottom:1px solid #f3f4f6"><span style="font-size:12px;font-weight:700;color:#334155">Total HT</span><span id="fact-r-ht" style="font-size:12px;font-weight:700;font-family:monospace">'+formatDZD(f.montantHT||f.totalHT||0)+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-bottom:1px solid #f3f4f6">'+
-    '<span style="font-size:12px;font-weight:700;color:#334155;display:flex;align-items:center;gap:6px">Total TVA'+
-    '<span style="display:inline-flex;align-items:center;gap:2px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;color:#0f2d5a">'+
-    '<input id="fact-tva-global" type="number" min="0" max="100" step="0.01" value="'+factureSavedTvaPct(f)+'" oninput="factureEditorCalcTotals()" style="width:34px;border:none;background:transparent;font-size:11px;font-weight:700;color:#0f2d5a;text-align:right;outline:none;padding:0">'+
-    '<span>%</span></span></span>'+
-    '<span id="fact-r-tva" style="font-size:12px;font-family:monospace;font-weight:600">'+formatDZD(f.tvaAmt||0)+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;padding:9px 14px;background:#eff6ff"><span style="font-size:13px;font-weight:800;color:#043970">Total TTC</span><span id="fact-r-ttc" style="font-size:14px;font-weight:900;font-family:monospace;color:#043970">'+formatDZD(f.ttc||f.montantTTC||0)+'</span></div>'+
+    // ---------- Étape 2 : Prestations ----------
+    '<div class="fac-panel" data-panel="2">'+
+    '<section class="fac-block">'+title("file","Prestations à facturer","")+
+    '<section id="fact-commercial-catalog" class="fact-commercial-catalog fac-catalog"'+(isDraft?'':' hidden')+'></section>'+
+    (isDraft?'':'<p class="fac-muted" style="margin:0">Facture validée : les prestations sont figées.</p>')+'</section>'+
+    '<section class="fac-block">'+title("file","Articles de la facture","")+
+    '<div class="fac-lines"><div class="fac-table-wrap"><table class="fact-editor-lines '+(isDraft?'':'fact-lines-readonly')+'">'+
+    '<thead><tr><th '+thL+'auto">Désignation</th><th '+thL+'86px" class="mid">Unité</th><th '+thL+'64px" class="mid" title="Nombre d\'éléments facturés (agents, véhicules, équipements…)">NBR</th><th '+thL+'116px" class="num">Prix unitaire</th><th '+thL+'78px" class="mid">Quantité</th><th '+thL+'124px" class="num">Total</th><th '+thL+'128px" class="mid">Actions</th></tr></thead>'+
+    '<tbody id="fact-lignes-body">'+(lignes.length===0?'<tr id="fact-lignes-empty"><td colspan="7" class="fac-empty">Choisissez les prestations à facturer dans le catalogue ci-dessus</td></tr>':lignesHTML)+'</tbody></table></div>'+
+    (isDraft?'<div class="fac-add-line"><button type="button" class="fac-link" onclick="factureToggleAddMenu(this)">'+I("plus",16)+' Ajouter une ligne</button></div>':'')+
+    '<div class="fac-totals"><div><span>Total HT</span><span id="fact-r-ht">'+formatDZD(f.montantHT||f.totalHT||0)+'</span></div>'+
+    '<div><span>TVA<span class="fac-tva-chip"><input id="fact-tva-global" type="number" min="0" max="100" step="0.01" value="'+factureSavedTvaPct(f)+'" oninput="factureEditorCalcTotals()" aria-label="Taux de TVA"><span>%</span></span></span><span id="fact-r-tva">'+formatDZD(f.tvaAmt||0)+'</span></div>'+
+    '<div class="fac-total-ttc"><span>Total TTC</span><span id="fact-r-ttc">'+formatDZD(f.ttc||f.montantTTC||0)+'</span></div></div></div></section>'+
     '</div>'+
-    '<div style="padding:9px 14px;border-top:1px solid #e5e7eb;text-align:right">'+
-    '<a onclick="factureToggleAddMenu(this)" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:11px;text-decoration:underline">AJOUTER ▾</a>'+
+    // ---------- Étape 3 : Validation ----------
+    '<div class="fac-panel" data-panel="3">'+
+    '<section class="fac-block">'+title("checkSquare","Vérification avant émission","Veuillez vérifier les éléments ci-dessous avant de valider la facture.")+'<div id="fac-checks" class="fac-checks"></div></section>'+
+    '<section class="fac-block"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px">'+title("file","Aperçu de la facture","Vérifiez le contenu de la facture avant validation.")+
+    '<button type="button" class="fac-btn" onclick="factureVoirApercu()">'+I("expand",16)+' Plein écran</button></div><div id="fac-inline-preview" class="fac-preview" aria-label="Aperçu de la facture"></div></section>'+
+    '<div class="fac-grid-2">'+
+    '<section class="fac-block">'+title("file","Observations","")+'<textarea id="fact-texteSupp" class="fac-input" placeholder="Ajouter des observations sur la facture (facultatif)…" aria-label="Observations">'+escapeHTML(f.texteSupp||"")+'</textarea></section>'+
+    '<section class="fac-block">'+title("clip","Pièces et cachet","Ajoutez le cachet et la signature qui apparaîtront sur la facture.")+'<div class="fac-attach-grid">'+factureImageField("cachet","Cachet de la société",f,isDraft)+factureImageField("signature","Signature",f,isDraft)+'</div>'+(isDraft?'<p class="fac-muted" style="margin:8px 0 0;font-size:11.5px">PNG, JPEG ou WebP · 1 Mo par image · Enregistrés avec cette facture</p>':"")+'</section>'+
     '</div>'+
-    '</fieldset>'+
-    // Texte supplémentaire
-    '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
-    '<legend>Observations</legend>'+
-    '<textarea id="fact-texteSupp" class="input" style="width:100%;resize:vertical;min-height:60px;font-size:12px;line-height:1.6;height:auto!important" placeholder="Texte libre (apparaîtra sur la facture)...">'+escapeHTML(f.texteSupp||"")+'</textarea>'+
-    '</fieldset>'+
-    // Paiements history
-    (paiements.length>0?
-    '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
-    '<legend style="color:#059669">Historique des paiements</legend>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
-    '<thead><tr style="background:#f0fdf4"><th style="padding:5px 8px;text-align:left;color:#059669;font-size:11px">Date</th><th style="padding:5px 8px;text-align:left;color:#059669;font-size:11px">Mode</th><th style="padding:5px 8px;text-align:left;color:#059669;font-size:11px">Référence</th><th style="padding:5px 8px;text-align:right;color:#059669;font-size:11px">Montant</th></tr></thead>'+
-    '<tbody>'+paiements.map(p=>'<tr style="border-bottom:1px solid #f0fdf4"><td style="padding:5px 8px">'+formatDate(p.date)+'</td><td style="padding:5px 8px">'+escapeHTML(p.mode||"")+'</td><td style="padding:5px 8px;font-size:11px;color:#6b7280">'+escapeHTML(p.reference||"—")+'</td><td style="padding:5px 8px;text-align:right;font-weight:700;color:#059669;font-family:monospace">'+money(p.montant)+'</td></tr>').join("")+
-    '</tbody></table></fieldset>':"" )+
-    (avoirs.length>0?
-    '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
-    '<legend style="color:#7c3aed">Avoirs</legend>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
-    '<thead><tr style="background:#fdf4ff"><th style="padding:5px 8px;text-align:left;color:#7c3aed;font-size:11px">Date</th><th style="padding:5px 8px;text-align:left;color:#7c3aed;font-size:11px">N° Avoir</th><th style="padding:5px 8px;text-align:left;color:#7c3aed;font-size:11px">Motif</th><th style="padding:5px 8px;text-align:right;color:#7c3aed;font-size:11px">Montant</th></tr></thead>'+
-    '<tbody>'+avoirs.map(a=>'<tr style="border-bottom:1px solid #fdf4ff"><td style="padding:5px 8px">'+formatDate(a.date)+'</td><td style="padding:5px 8px;font-family:monospace">'+escapeHTML(a.numero||"")+'</td><td style="padding:5px 8px;font-size:11px">'+escapeHTML(a.motif||"")+'</td><td style="padding:5px 8px;text-align:right;font-weight:700;color:#7c3aed;font-family:monospace">'+money(a.montant)+'</td></tr>').join("")+
-    '</tbody></table></fieldset>':"" )+
+    (paiements.length?'<section class="fac-block fac-history">'+title("check","Historique des paiements","")+histTable(paiements.map(p=>'<tr><td>'+formatDate(p.date)+'</td><td>'+escapeHTML(p.mode||"")+'</td><td class="fac-muted">'+escapeHTML(p.reference||"—")+'</td><td class="fac-num fac-amount-green">'+money(p.montant)+'</td></tr>').join(""),["Date","Mode","Référence","Montant"])+'</section>':"")+
+    (avoirs.length?'<section class="fac-block fac-history">'+title("fileMinus","Avoirs","")+histTable(avoirs.map(a=>'<tr><td>'+formatDate(a.date)+'</td><td class="fac-strong">'+escapeHTML(a.numero||"")+'</td><td>'+escapeHTML(a.motif||"")+'</td><td class="fac-num">'+money(a.montant)+'</td></tr>').join(""),["Date","N° Avoir","Motif","Montant"])+'</section>':"")+
     '</div>'+
-    // RIGHT SIDEBAR
-    '<div>'+
-    '<fieldset class="rh-op-box" style="position:sticky;top:10px">'+
-    '<legend>Informations</legend>'+
-    fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
-    fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
-    '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="padding:0 4px;font-size:11px;font-weight:800;color:#334155">Période de facturation</legend>'+
-    fl('Du','<input id="fact-periode-debut" aria-label="Début de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeDebut||"")+'" onchange="factureEditorPeriodChange()">')+
-    fl('Au','<input id="fact-periode-fin" aria-label="Fin de période de facturation" type="date" style="'+FI+'" value="'+escapeHTML(billingPeriod.periodeFin||"")+'" onchange="factureEditorPeriodChange()">')+'</fieldset>'+
-    fl('Délai paiement',
-      '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
-      ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+
-      '</select>') +
-    fl('Mode paiement','<select id="fact-mode" style="'+FI+'">'+modeOpts+'</select>') +
-    fl('Dépôt client','<input id="fact-dateDepot" type="date" style="'+FI+'" value="'+escapeHTML(f.dateDepot||"")+'">') +
-    fl('Date échéance','<input id="fact-echDate" type="date" style="'+FI+';background:#f9fafb;color:#6b7280" value="'+escapeHTML(f.dateEcheance||"")+'" readonly>') +
-    '<div style="margin-top:6px"><span style="'+FS+'">Remarque</span><textarea id="fact-remarque" class="input" style="width:100%;resize:vertical;min-height:60px;font-size:11px;line-height:1.5;height:auto!important;margin-top:4px" placeholder="SERVICE DE GARDIENNAGE - Période: Mars 2026">'+escapeHTML(f.remarque||f.objet||"")+'</textarea></div>'+
-    '<fieldset style="margin:10px 0;padding:9px;border:1px solid #cbd5e1;border-radius:6px"><legend style="font-size:11px;font-weight:700">Cachet et signature</legend><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+factureImageField("cachet","Cachet de la société",f,isDraft)+factureImageField("signature","Signature",f,isDraft)+'</div>'+(isDraft?'<p style="margin:6px 0 0;font-size:10px;color:#64748b">PNG, JPEG ou WebP · 1 Mo par image · Enregistrés avec cette facture</p>':"")+'</fieldset>'+
-    (!isDraft?
-    '<div style="border-top:1px solid #bfdbfe;margin-top:10px;padding-top:8px">'+
-    '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#6b7280;font-weight:700">Montant TTC</span><span style="font-weight:700;font-family:monospace">'+money(f.ttc||f.montantTTC||0)+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#059669;font-weight:700">Encaissé</span><span style="font-weight:700;color:#059669;font-family:monospace">'+money(sp.paye)+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-top:1px solid #e2e8f0;margin-top:4px"><span style="font-weight:800;color:#0f172a">Reste dû</span><span style="font-weight:900;color:'+(sp.reste>0?"#f97316":"#059669")+'">'+money(sp.reste)+'</span></div>'+
-    '</div>':"" )+
-    '<div style="display:grid;gap:6px;margin-top:12px">'+
-    '<button onclick="factureVoirApercu()" style="background:#f8fafc;border:1.5px solid #bfdbfe;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;color:#1d4ed8;width:100%">Aperçu et imprimer PDF</button>'+
-    (isDraft?'<button onclick="factureEditorSave({draft:true})" style="background:#fff;color:#043970;border:1.5px solid #043970;border-radius:5px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Enregistrer le brouillon</button><button id="fact-validate-btn" onclick="factureEditorSave({validate:true})" style="background:#047857;color:#fff;border:none;border-radius:5px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;width:100%">Valider et numéroter</button>':'<div style="padding:8px;border-radius:6px;background:#f1f5f9;color:#475569;font-size:11px;font-weight:700;text-align:center">Facture validée — lecture seule</div><button onclick="factureDuplicateDraft(\''+f.id+'\')" style="background:#fff;border:1px solid #cbd5e1;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer">Dupliquer en brouillon</button>')+
-    (!isDraft&&sp.reste>0?'<button onclick="openPaiementModal(\''+f.id+'\')" style="background:#22c55e;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Encaisser</button>':"")+
-    (!isDraft?'<button onclick="openAvoirModal(\''+f.id+'\')" style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;color:#7c3aed;width:100%">Émettre un avoir</button>':"")+
     '</div>'+
-    '</fieldset>'+
-    '</div>'+
-    '</div>';
+    // ---------- Résumé (colonne droite) ----------
+    '<aside class="fac-block fac-summary" aria-label="Résumé de la facture">'+
+    '<div class="fac-section-title"><span class="fac-icon-tile">'+I("file",21)+'</span><h2>Résumé de la facture</h2></div>'+
+    '<div class="fac-summary-ttc"><span>Montant TTC</span><output id="fact-header-ttc" aria-live="polite" aria-atomic="true">'+formatDZD(0)+'</output></div>'+
+    '<div class="fac-summary-lines"><div><span>Total HT</span><output id="fac-sum-ht">'+formatDZD(0)+'</output></div><div><span>TVA <span class="fac-tva-chip" id="fac-sum-tva-pct">'+escapeHTML(String(factureSavedTvaPct(f)).replace(".",","))+' %</span></span><output id="fac-sum-tva">'+formatDZD(0)+'</output></div>'+
+    '<div class="fac-sum-ttc-row" data-for-step="2"><strong>Total TTC</strong><output id="fac-sum-ttc">'+formatDZD(0)+'</output></div></div>'+
+    (isDraft?'<div class="fac-summary-info" data-for-step="1 2"><span class="fac-icon-tile">'+I("list",21)+'</span><div><strong id="fac-sum-count">0 prestation ajoutée</strong><p id="fac-sum-count-text"></p></div></div>'+
+    '<div class="fac-summary-note" id="fac-sum-note"></div>':
+    '<div class="fac-paid-lines"><div><span class="fac-muted">Encaissé</span><b class="fac-amount-green">'+money(sp.paye)+'</b></div><div><span class="fac-muted">Avoirs</span><b>'+money(sp.avoir)+'</b></div><div style="border-top:1px solid #e3e9f2;padding-top:6px"><strong>Reste dû</strong><b style="color:'+(sp.reste>0?"#e98a09":"#11804c")+'">'+money(sp.reste)+'</b></div></div>'+
+    '<div class="fac-readonly-note">Facture validée — lecture seule</div>')+
+    '<div class="fac-summary-actions">'+
+    (isDraft?
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-outline" data-for-step="2" onclick="factureEditorGoStep(1)">'+I("arrowLeft",18)+' Retour au client</button>'+
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-outline" data-for-step="3" onclick="factureVoirApercu()">'+I("pdf",18)+' Aperçu PDF</button>'+
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-outline" onclick="factureEditorSave({draft:true})">'+I("save",18)+' Enregistrer le brouillon</button>'+
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-green" data-for-step="1" onclick="factureEditorGoStep(2)">'+I("arrowRight",18)+' Continuer vers les prestations</button>'+
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-green" data-for-step="2" onclick="factureEditorGoStep(3)">'+I("arrowRight",18)+' Continuer vers la validation</button>'+
+      '<button type="button" id="fact-validate-btn" class="fac-btn fac-btn-lg fac-btn-green" data-for-step="3" onclick="factureEditorSave({validate:true})">Valider et numéroter</button>'
+    :
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-outline" onclick="factureVoirApercu()">'+I("pdf",18)+' Aperçu PDF</button>'+
+      (sp.reste>0?'<button type="button" class="fac-btn fac-btn-lg fac-btn-green" onclick="openPaiementModal(\''+escapeHTML(jsString(f.id))+'\')">'+I("coins",18)+' Encaisser</button>':"")+
+      '<button type="button" class="fac-btn fac-btn-lg fac-btn-outline" onclick="openAvoirModal(\''+escapeHTML(jsString(f.id))+'\')">'+I("fileMinus",18)+' Émettre un avoir</button>'+
+      '<button type="button" class="fac-btn fac-btn-lg" onclick="factureDuplicateDraft(\''+escapeHTML(jsString(f.id))+'\')">Dupliquer en brouillon</button>'
+    )+
+    '</div></aside>'+
+    '</div></div>';
   factureEditorCalcTotals();
   if(isDraft){
     facturationBindEditor(view);
   }else{
-    view.querySelectorAll("input:not([type=hidden]),select,textarea").forEach(el=>{el.disabled=true;el.setAttribute("aria-disabled","true")});
+    view.querySelectorAll(".fac-panel input:not([type=hidden]),.fac-panel select,.fac-panel textarea").forEach(el=>{el.disabled=true;el.setAttribute("aria-disabled","true")});
   }
+  facEditorRefresh();
   facturationModuleTimeout(()=>{
     factureEditorCalcTotals();
     factureEditorUpdateWorkflow();
     renderFacStandaloneNav();
     document.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
     if(selClient)factureEditorRenderClientInfo(selClient);
-    else if(f.client||f.clientNom){factureEditorRenderClientInfo({nom:f.client||f.clientNom,rc:f.rc||f.clientRc||"",nif:f.nif||""});}
+    else if(f.client||f.clientNom){factureEditorRenderClientInfo({nom:f.client||f.clientNom,rc:f.rc||f.clientRc||"",nif:f.nif||"",adresse:f.adresseClient||""});}
     if(isDraft)factureEditorCatalogRender();
   },0);
 }
@@ -1549,6 +1696,7 @@ function facturationModuleTimeout(callback,delay){
   facturationModuleTimeouts.add(id);return id;
 }
 function facturationEditorInput(event){
+  if(event.target.closest("[data-no-draft]"))return;
   if(facturationEditorHost?.querySelector("#fact-lignes-body")&&event.target.matches("input,select,textarea")){factureEditorUpdateWorkflow();factureEditorScheduleDraft()}
 }
 function facturationBindEditor(view){

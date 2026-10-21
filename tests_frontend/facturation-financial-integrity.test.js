@@ -351,7 +351,14 @@ test('tableau de bord : aucune facture sans échéance comptée en retard', () =
       { id: 'o1', numero: 'F3', statut: 'emise', client: 'B', ttc: 700, date: '2026-01-01', dateEcheance: '2026-02-01', societe: S },
     ] });
     t.renderFactDashboard(d.getElementById('view'));
-    assert.match(d.getElementById('view').textContent.replace(/\s+/g, ' '), /3 factures non payées dont 1 où le délais est dépassé/);
+    const kpi = (tone) => d.querySelector(`.fac-kpi[data-tone="${tone}"]`).textContent.replace(/\s+/g, ' ');
+    // Seule F3 (échéance 01/02/2026 dépassée) est en retard ; F1 et F2 sans échéance restent en cours.
+    assert.match(kpi('red'), /700,00 DA/);
+    assert.match(kpi('red'), /1 facture à échéance dépassée/);
+    assert.match(kpi('orange'), /1 500,00 DA/);
+    assert.match(kpi('orange'), /2 factures à échoir ou sans échéance/);
+    const status = (n) => [...d.querySelectorAll('.fac-dashboard tbody tr')].find((tr) => tr.cells[0].textContent === n).cells[7].textContent;
+    assert.deepStrictEqual(['F1', 'F2', 'F3'].map(status), ['Non payée', 'Non payée', 'En retard']);
   } finally { env.window.close(); }
 });
 
