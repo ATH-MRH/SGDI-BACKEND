@@ -10,6 +10,7 @@
   const NAV = [
     { key: "dashboard", label: "Tableau de bord", icon: "◆" },
     { key: "personnel", label: "Personnel", icon: "☺" },
+    { key: "position", label: "Fiche de position", icon: "▥" },
     { key: "pointage", label: "Pointage", icon: "▤" },
     { key: "absences", label: "Absences", icon: "↘" },
     { key: "justificatifs", label: "Justificatifs", icon: "▣" },
@@ -25,10 +26,12 @@
   let currentCleanup = null;
   let renderToken = 0; // rendu courant : un rendu dépassé n'écrit plus jamais dans #view
 
-  function currentRouteKey() {
-    const h = (location.hash || "").replace(/^#\/?/, "");
-    return VALID_KEYS.has(h) ? h : DEFAULT_ROUTE;
+  // « #/position/123 » : premier segment = écran, la suite = paramètre de l'écran (fiche).
+  function routeParts() {
+    const [head, ...rest] = (location.hash || "").replace(/^#\/?/, "").split("/");
+    return VALID_KEYS.has(head) ? { key: head, param: rest.join("/") } : { key: DEFAULT_ROUTE, param: "" };
   }
+  function currentRouteKey() { return routeParts().key; }
 
   function renderNav() {
     return NAV.map((i) => `<button class="nav-link" data-nav="${i.key}"><span class="nav-link-icon">${i.icon}</span>${esc(i.label)}</button>`).join("");
@@ -179,6 +182,7 @@
     const view = window.SiteWorkforceViews && window.SiteWorkforceViews[key];
     if (!view) { container.innerHTML = window.SW.emptyState("Écran non disponible."); return; }
     const ctx = {
+      param: routeParts().param,
       navigate: (k) => { location.hash = "#/" + k; },
       // Ligne « Répartition par site » cliquable : consulte ce site (toujours dans le périmètre).
       selectSite: (siteId) => { const site = window.SW.scopeSites("").find((x) => String(x.id) === String(siteId)); if (site) changeScope({ society: site.society || "", site_id: String(site.id) }); },

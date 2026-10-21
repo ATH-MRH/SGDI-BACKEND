@@ -112,4 +112,3 @@ def summarize(db: Session, rows: Iterable[DailyPresence]) -> dict[str, Any]:
     for value in states.values():
         counts[value] += 1
     return counts
-

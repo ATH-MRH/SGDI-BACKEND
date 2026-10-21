@@ -29,7 +29,7 @@
         const data = await SW.guardedApi("personnel", "/site-workforce/employees", { params: { q, page, page_size: 20 } });
         if (!data.items.length) { el.innerHTML = SW.emptyState("Aucun employé ne correspond."); return; }
         el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-          <th>Code</th><th>Nom</th>${SW.siteHeaders()}<th>Poste</th><th>Groupe</th><th>Statut</th>
+          <th>Code</th><th>Nom</th>${SW.siteHeaders()}<th>Poste</th><th>Groupe</th><th>Statut</th><th></th>
         </tr></thead><tbody>
           ${data.items.map((r) => `<tr>
             <td class="mono">${SW.esc(r.code)}</td>
@@ -37,6 +37,7 @@
             <td>${SW.esc(r.position || "—")}</td>
             <td>${SW.esc(r.group_code || "—")}</td>
             <td>${SW.statusBadge(r.presence_status, SW.ATTENDANCE_STATUS)}</td>
+            <td class="actions"><a class="btn btn-sm" href="#/position/${encodeURIComponent(r.id)}" data-position-link="${SW.esc(r.id)}">Voir la fiche de position</a></td>
           </tr>`).join("")}
         </tbody></table></div>`;
         el.appendChild(SW.paginationBar(data, (p) => { page = p; load(); }));

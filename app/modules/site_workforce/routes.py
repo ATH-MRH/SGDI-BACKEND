@@ -255,6 +255,47 @@ def employees(q: str | None = None, page: int = 1, page_size: int = 25,
     return {"items": items, "total": total, "page": safe_page, "page_size": safe_size, "pages": pages}
 
 
+# ── Fiche de position (lecture seule) : projection filtrée par champ, voir position_file.py ──
+# Aucune route d'écriture : la fiche se corrige chez DRH/OPS (signalement via Réclamations).
+@router.get("/positions")
+def positions(q: str | None = None, position: str | None = None, employee_status: str | None = Query(None, alias="status"),
+              page: int = 1, page_size: int = 25, db: Session = Depends(get_db),
+              scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.site_workforce import position_file
+    allowed = position_file.allowed_fields(db, user.id)
+    return position_file.list_positions(db, scope, allowed, q=q, position=position, status=employee_status,
+                                        page=page, page_size=page_size)
+
+
+def _position_target(db: Session, scope: BeoScope, employee_id: int):
+    from app.modules.site_workforce import position_file
+    placement = position_file.current_placement(db, scope, employee_id, date.today())
+    employee = db.get(Employee, employee_id) if placement else None
+    if not placement or not employee:
+        # 403 et jamais 404 : ne pas laisser deviner qu'un employé existe hors périmètre.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Employé hors du périmètre de ce compte")
+    return employee, *placement
+
+
+@router.get("/positions/{employee_id}")
+def position_detail(employee_id: int, db: Session = Depends(get_db),
+                    scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.site_workforce import position_file
+    employee, assignment, site = _position_target(db, scope, employee_id)
+    return position_file.build_position_file(db, employee, assignment, site, position_file.allowed_fields(db, user.id))
+
+
+@router.get("/positions/{employee_id}/photo")
+def position_photo(employee_id: int, request: Request, db: Session = Depends(get_db),
+                   scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.ops.employee_photos import canonical_photo_response
+    from app.modules.site_workforce import position_file
+    _position_target(db, scope, employee_id)
+    if "identity.photo" not in position_file.allowed_fields(db, user.id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Photo introuvable")
+    return canonical_photo_response(db, employee_id, request)
+
+
 # Monthly UI adapter: shared central read model, same scope and existing write API.
 @router.get("/attendance/workspace")
 def attendance_workspace(month: str = Query(pattern=r"^\d{4}-\d{2}$"), q: str = "", employee_status: str | None = None,

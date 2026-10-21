@@ -288,6 +288,12 @@ def employee_photo_response(db, user, employee_id: int, request: Request):
     conditions, _ = employee_scope_conditions(db, user)
     if db.scalar(select(Employee.id).where(Employee.id == employee_id, *conditions)) is None:
         raise HTTPException(status_code=404, detail="Photo introuvable")
+    return canonical_photo_response(db, employee_id, request)
+
+
+def canonical_photo_response(db, employee_id: int, request: Request):
+    """Livraison de la photo canonique SANS contrôle de périmètre : l'appelant a déjà vérifié
+    que le compte peut voir cet employé (OPS ci-dessus, Fiche de position BEO)."""
     reference = canonical_photos(db, [employee_id], content=True).get(employee_id)
     if not isinstance(reference, str) or not reference.strip():
         raise HTTPException(status_code=404, detail="Photo introuvable")

@@ -38,7 +38,8 @@ def seed_badges(engine):
 
 def test_graph_preserves_every_parent_and_qualifies_facial_rollback():
     script = ScriptDirectory.from_config(Config(str(REPO / 'alembic.ini')))
-    assert script.get_heads() == ['20261023_0001']
+    assert script.get_heads() == ['20261024_0001']
+    assert script.get_revision('20261024_0001').down_revision == '20261023_0001'
     assert set(script.get_revision('20261023_0001').down_revision) == {'20261022_0001', '20261017_0003'}
     assert set(script.get_revision('20261022_0001').down_revision) == {'20261021_0001', '20261017_0002'}
     assert set(script.get_revision('20261021_0001').down_revision) == {'20261020_0001', '20261016_0002'}

@@ -222,3 +222,28 @@ table.data td.actions{text-align:right;white-space:nowrap}
 .progress-fill{height:100%;background:var(--primary);border-radius:999px}
 .hidden{display:none!important}
 #login-screen{max-width:360px;margin:90px auto;padding:0 16px}
+
+/* ── Fiche de position (lecture seule) ────────────────────────────────────────────────── */
+.pf-back{margin-bottom:10px}
+.pf-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.pf-avatar{width:72px;height:72px;border-radius:10px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;overflow:hidden;flex:none}
+.pf-avatar img{width:100%;height:100%;object-fit:cover}
+.pf-head-text{flex:1;min-width:0}
+.pf-head-kicker{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint)}
+.pf-name{font-size:20px;font-weight:900;color:var(--navy);margin:2px 0 6px;overflow-wrap:anywhere}
+.pf-head-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pf-code{font-size:12.5px;font-weight:800;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.pf-head-actions{display:flex;gap:8px}
+.pf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;align-items:start}
+.pf-section-wide{grid-column:1/-1}
+.pf-section .card-head h2{color:var(--navy)}
+.pf-kv{margin:0;display:flex;flex-direction:column}
+.pf-kv-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border-soft)}
+.pf-kv-row:last-child{border-bottom:none}
+.pf-kv dt{color:var(--text-faint);font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+.pf-kv dd{margin:0;text-align:right;font-weight:700;color:var(--text);overflow-wrap:anywhere;min-width:0}
+.pf-table+.pf-table{margin-top:14px}
+.pf-table h3{font-size:12px;font-weight:800;color:var(--text-muted);margin:0 0 6px}
+.pf-footnote{font-size:12px}
+@media(max-width:900px){.pf-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:480px){.pf-head-actions{width:100%}.pf-head-actions .btn{width:100%;justify-content:center}}
