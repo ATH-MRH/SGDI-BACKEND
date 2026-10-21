@@ -79,6 +79,20 @@ function loadSgdiApp(names = [], options = {}) {
     { url: options.url || 'https://drh.irongs.com/', runScripts: options.lazyModules ? 'dangerously' : 'outside-only', pretendToBeVisual: true }
   );
   const { window } = dom;
+  // jsdom détruit document dans close(), mais peut encore livrer les mutations
+  // en attente. Déconnecter les observateurs avant cette destruction, comme la
+  // fin du contexte navigateur ; conserver les vrais rappels pendant le test.
+  const observers = new Set();
+  const NativeMutationObserver = window.MutationObserver;
+  window.MutationObserver = class extends NativeMutationObserver {
+    constructor(callback) { super(callback); observers.add(this); }
+  };
+  const closeWindow = window.close.bind(window);
+  window.close = () => {
+    for (const observer of observers) observer.disconnect();
+    observers.clear();
+    closeWindow();
+  };
   if (options.trackTimers) trackSettleTimers(window);
 
   window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}), text: () => Promise.resolve('') });
@@ -90,8 +104,11 @@ function loadSgdiApp(names = [], options = {}) {
     this.destination = {}; this.currentTime = 0; this.state = 'running'; this.resume = () => Promise.resolve();
   };
   window.webkitAudioContext = window.AudioContext;
-  // Avec suivi : le rAF passe par le minuteur de la fenêtre (suivi, et annulé par window.close()).
-  window.requestAnimationFrame = options.trackTimers ? (cb) => window.setTimeout(cb, 0) : (cb) => setTimeout(cb, 0);
+  // Toujours utiliser les minuteurs jsdom : les minuteurs Node survivaient à
+  // window.close() et rendaient encore dans un document déjà détruit.
+  const frameTimer = window.setTimeout.bind(window), cancelFrameTimer = window.clearTimeout.bind(window);
+  window.requestAnimationFrame = cb => frameTimer(cb, 0);
+  window.cancelAnimationFrame = id => cancelFrameTimer(id);
   window.scrollTo = () => {};
   // CSS.escape est disponible dans les navigateurs, absent de cette version de jsdom.
   window.CSS = window.CSS || {};

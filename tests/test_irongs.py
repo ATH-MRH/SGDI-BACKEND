@@ -61,21 +61,28 @@ def test_roundtrip_client(client, auth_headers):
     assert cli["champCustom"] == "X"
 
 
+# Facture émise d'un import historique (« en-tête seul ») : seul cas où un numéro est reçu
+# du navigateur ; règlements et avoirs du round-trip s'y rattachent.
+_RT_INVOICE = {"id": "fa1", "numero": "F-2026-001", "statut": "emise", "date": "2026-01-10", "societe": SOC,
+               "client": "ACME", "ttc": 119000, "totalHT": 100000, "objet": "Prestation", "sourceImport": "excel",
+               "lignes": []}
+
+
 @pytest.mark.parametrize("name,payload,check", [
-    ("factures", {"id": "fa1", "numero": "F-2026-001", "date": "2026-01-10", "societe": SOC,
-                  "client": "ACME", "ttc": 119000, "totalHT": 100000, "objet": "Prestation"},
-     ("numero", "F-2026-001")),
-    ("paiements", {"id": "pa1", "montant": 50000, "date": "2026-01-15", "societe": SOC, "mode": "virement"},
-     ("montant", 50000)),
+    ("factures", _RT_INVOICE, ("numero", "F-2026-001")),
+    ("paiements", {"id": "pa1", "factureId": "fa1", "montant": 50000, "date": "2026-01-15", "societe": SOC, "mode": "virement"},
+     ("montant", 50000.0)),  # montant normalisé au centime par le serveur
     ("avances", {"id": "av1", "montant": 20000, "societe": SOC, "beneficiaire": "K01"},
      ("beneficiaire", "K01")),
-    ("avoirs", {"id": "avo1", "montant": 8000, "societe": SOC, "motif": "retour"},
+    ("avoirs", {"id": "avo1", "factureId": "fa1", "montant": 8000, "societe": SOC, "motif": "retour"},
      ("motif", "retour")),
     ("caisse", {"id": "ca1", "montant": 3000, "sens": "entree", "societe": SOC, "libelle": "vente"},
      ("libelle", "vente")),
 ])
 def test_roundtrip_finance(client, auth_headers, name, payload, check):
     """Les collections finance stockent le legacy complet : tout champ survit au round-trip."""
+    if name in ("paiements", "avoirs"):
+        _post_item(client, auth_headers, "factures", _RT_INVOICE)
     _post_item(client, auth_headers, name, payload)
     rows = _collection(client, auth_headers, name)
     key, val = check

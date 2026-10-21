@@ -246,6 +246,7 @@ def create_item(name: str, payload: ItemPayload, request: Request, db: Session =
         data = dict(payload.data)
         if name == "echanges" and data.get("type") == "message":
             data["from"] = user.username
+        data = service.prepare_finance_scope(db, name, data, user)
         service.ensure_item_allowed_for_user(data, user, name)
         service.ensure_item_refs_allowed_for_user(db, data, user, name)
         result = service.create_item(db, name, data)
@@ -270,11 +271,12 @@ def replace_item(name: str, item_id: str, payload: ItemPayload, request: Request
     _legacy_gate(db, request, user, name, write=True)
     with _legacy_operation(db, request, user, name, write=True, resource_id=item_id):
         existing = service.get_item(db, name, item_id)
+        data = service.prepare_finance_scope(db, name, dict(payload.data), user)
         service.ensure_item_allowed_for_user(existing, user, name)
-        service.ensure_item_allowed_for_user(payload.data, user, name)
+        service.ensure_item_allowed_for_user(data, user, name)
         service.ensure_item_refs_allowed_for_user(db, existing, user, name)
-        service.ensure_item_refs_allowed_for_user(db, payload.data, user, name)
-        result = service.update_item(db, name, item_id, payload.data, partial=False)
+        service.ensure_item_refs_allowed_for_user(db, data, user, name)
+        result = service.update_item(db, name, item_id, data, partial=False)
     _legacy_success(db, request, user, name, write=True, resource_id=item_id, old_state=existing, new_state=result)
     return result
 
@@ -285,7 +287,7 @@ def patch_item(name: str, item_id: str, payload: ItemPayload, request: Request, 
     with _legacy_operation(db, request, user, name, write=True, resource_id=item_id):
         existing = service.get_item(db, name, item_id)
         service.ensure_item_allowed_for_user(existing, user, name)
-        merged = {**existing, **payload.data}
+        merged = service.prepare_finance_scope(db, name, {**existing, **payload.data}, user)
         service.ensure_item_allowed_for_user(merged, user, name)
         service.ensure_item_refs_allowed_for_user(db, existing, user, name)
         service.ensure_item_refs_allowed_for_user(db, merged, user, name)
@@ -357,6 +359,29 @@ def valider_facture(item_id: str, request: Request, db: Session = Depends(get_db
     # société autorisée et action « validate » (déduite du chemin /valider).
     _legacy_gate(db, request, user, "factures", write=True)
     return service.valider_facture(db, item_id, user)
+
+
+@router.get("/facturation/regles")
+def facturation_rules(request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    _legacy_gate(db, request, user, "avoirs")
+    from app.core.config import get_settings
+    return {"annulationAvoirs": bool(get_settings().facturation_credit_note_cancel_enabled)}
+
+
+@router.post("/avoirs/{item_id}/annuler")
+def annuler_avoir(item_id: str, payload: dict[str, Any], request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    # Action « validate » (déduite de /annuler), module Facturation et société de l'avoir.
+    _legacy_gate(db, request, user, "avoirs", write=True)
+    with _legacy_operation(db, request, user, "avoirs", write=True, resource_id=item_id):
+        return service.cancel_credit_note(db, item_id, payload.get("motif"), user)
+
+
+@router.patch("/paiements/{item_id}/suivi")
+def suivi_paiement(item_id: str, payload: dict[str, Any], request: Request, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    # Action « update » : encaissement ou impayé d'un chèque/traite, rapprochement d'un virement.
+    _legacy_gate(db, request, user, "paiements", write=True)
+    with _legacy_operation(db, request, user, "paiements", write=True, resource_id=item_id):
+        return service.payment_followup(db, item_id, payload, user)
 
 
 @router.post("/actions/{action}")

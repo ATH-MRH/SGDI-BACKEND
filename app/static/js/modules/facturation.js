@@ -476,6 +476,18 @@ function factureEditorCalcRow(tr){
   if(t)t.textContent=formatDZD(factureLineAmount(n,q,p));
 }
 
+// Taux global de TVA (0 à 100 %) : 0 % est un taux valide ; 19 % seulement à défaut de saisie.
+function factureTvaPct(value){
+  const raw=String(value??"").trim().replace(",",".");if(raw==="")return 19;
+  const n=Number(raw);return Number.isFinite(n)&&n>=0&&n<=100?n:19;
+}
+// Taux enregistré d'une facture : tvaPct, sinon celui des lignes article (ancien format), sinon 19 %.
+function factureSavedTvaPct(f){
+  if(f&&f.tvaPct!==undefined&&f.tvaPct!==null&&f.tvaPct!=="")return factureTvaPct(f.tvaPct);
+  const line=(f?.lignes||[]).find(l=>(l.type||"article")==="article"&&l.tva!==undefined&&l.tva!==null&&l.tva!=="");
+  return line?factureTvaPct(line.tva):factureTvaPct(f?.tva);
+}
+
 function factureEditorCalcTotals(){
   const body=document.getElementById("fact-lignes-body");
   if(body)body.querySelectorAll(".fact-ligne-row").forEach(row=>{
@@ -502,7 +514,7 @@ function factureEditorCalcTotals(){
       sectionHT=0;
     }
   });
-  const tvaPct=parseFloat(document.getElementById("fact-tva-global")?.value)||19;
+  const tvaPct=factureTvaPct(document.getElementById("fact-tva-global")?.value);
   totalHT=factureRoundCents(totalHT);
   const totalTVA=factureRoundCents(totalHT*tvaPct/100);
   const ttc=factureRoundCents(totalHT+totalTVA);
@@ -888,8 +900,21 @@ function factureEditorUpdateWorkflow(){
   const b=document.getElementById("fact-validate-btn");if(b){b.disabled=!(clientOk&&linesOk&&objectOk&&periodOk);b.style.opacity=b.disabled?".45":"1";b.title=b.disabled?"Sélectionnez un client, renseignez l’objet, la période de facturation et au moins un article complet":""}
 }
 
+let factureValidationInFlight=false;
 async function factureEditorSave(options){
   options=options||{};
+  if(options.validate===true){
+    if(factureValidationInFlight)return null;
+    factureValidationInFlight=true;
+    const button=document.getElementById("fact-validate-btn");const label=button?.textContent;
+    if(button){button.disabled=true;button.textContent="Validation en cours…"}
+    try{return await factureEditorSaveNow(options)}
+    finally{factureValidationInFlight=false;if(button&&button.isConnected){button.textContent=label;factureEditorUpdateWorkflow()}}
+  }
+  return factureEditorSaveNow(options);
+}
+
+async function factureEditorSaveNow(options){
   const saveState=document.getElementById("fact-draft-state");
   clearTimeout(factureDraftTimer);factureDraftTimer=null;
   const gv=id=>document.getElementById(id)?.value||"";
@@ -922,7 +947,7 @@ async function factureEditorSave(options){
   const adresseClient=gv("fact-adresse");
   const nif=gv("fact-nif"),rc=gv("fact-rc"),email=gv("fact-email");
   const lignes=[];
-  const tvaPct=parseFloat(document.getElementById("fact-tva-global")?.value)||19;
+  const tvaPct=factureTvaPct(document.getElementById("fact-tva-global")?.value);
   document.querySelectorAll(".fact-ligne-row").forEach(tr=>{
     const type=tr.dataset.type||"article";
     if(type==="commentaire"){
@@ -950,7 +975,7 @@ async function factureEditorSave(options){
   const tvaAmt=totals.totalTVA;
   const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
-  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,periodeDebut,periodeFin,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
+  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,periodeDebut,periodeFin,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,tvaPct,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
   ["cachet","signature"].forEach(kind=>{data[kind+"Image"]=factureImageValue(document.getElementById("fact-"+kind+"-image")?.value??existing?.[kind+"Image"]??"")});
   if(document.getElementById("fact-subject-picker"))data.objetServices=objet?objet.split(" ; "):[];
   else if(Array.isArray(existing?.objetServices))data.objetServices=existing.objetServices;
@@ -1042,7 +1067,8 @@ function factureVoirApercu(fId){
   });
   const useLines=lignes.length?lignes:(f?.lignes||[]);
   if(!useLines.length&&(f?.designation||f?.prixUnitaire)){useLines.push({designation:f.designation||"",qte:f.quantite||1,prixUnitHT:f.prixUnitaire||0,prixUnitaire:f.prixUnitaire||0,tva:f.tva||19,totalHT:(f.quantite||1)*(f.prixUnitaire||0)});}
-  const tvaPct=parseFloat(document.getElementById("fact-tva-global")?.value)||19;
+  const tvaField=document.getElementById("fact-tva-global");
+  const tvaPct=tvaField?factureTvaPct(tvaField.value):factureSavedTvaPct(f);
   const previewTotals=factureComputeLinesTotals(useLines,tvaPct);
   const totalHT=previewTotals.totalHT;
   const totalTVA=previewTotals.totalTVA;
@@ -1150,9 +1176,11 @@ function factureVoirApercu(fId){
     '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
     '</section></div></div>';
   openModal(html);
+  const qrDocument=document, qrTarget=qrDocument.getElementById("fact-verification-qr");
   Promise.resolve(typeof sgdiLoadQRLib==="function"?sgdiLoadQRLib():null).then(()=>{
-    const target=document.getElementById("fact-verification-qr");if(!target||!window.QRCode)return;
-    target.innerHTML="";new QRCode(target,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+    // La bibliothèque peut arriver après fermeture/remplacement de l'aperçu.
+    if(!qrTarget?.isConnected||qrDocument.getElementById("fact-verification-qr")!==qrTarget||!window.QRCode)return;
+    qrTarget.innerHTML="";new QRCode(qrTarget,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   }).catch(e=>console.warn("QR facture indisponible",e));
 }
 
@@ -1310,7 +1338,7 @@ function renderFactureEditor(view){
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-bottom:1px solid #f3f4f6">'+
     '<span style="font-size:12px;font-weight:700;color:#334155;display:flex;align-items:center;gap:6px">Total TVA'+
     '<span style="display:inline-flex;align-items:center;gap:2px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;color:#0f2d5a">'+
-    '<input id="fact-tva-global" type="number" min="0" max="100" step="0.01" value="'+(f.tva||19)+'" oninput="factureEditorCalcTotals()" style="width:34px;border:none;background:transparent;font-size:11px;font-weight:700;color:#0f2d5a;text-align:right;outline:none;padding:0">'+
+    '<input id="fact-tva-global" type="number" min="0" max="100" step="0.01" value="'+factureSavedTvaPct(f)+'" oninput="factureEditorCalcTotals()" style="width:34px;border:none;background:transparent;font-size:11px;font-weight:700;color:#0f2d5a;text-align:right;outline:none;padding:0">'+
     '<span>%</span></span></span>'+
     '<span id="fact-r-tva" style="font-size:12px;font-family:monospace;font-weight:600">'+formatDZD(f.tvaAmt||0)+'</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:9px 14px;background:#eff6ff"><span style="font-size:13px;font-weight:800;color:#043970">Total TTC</span><span id="fact-r-ttc" style="font-size:14px;font-weight:900;font-family:monospace;color:#043970">'+formatDZD(f.ttc||f.montantTTC||0)+'</span></div>'+
@@ -1390,35 +1418,49 @@ function renderFactureEditor(view){
   },0);
 }
 
+// Échéance d'une facture : règle unique factureEcheance ("" = échéance non renseignée).
+function factureDueDate(f){return factureEcheance(f)}
+// Jours de retard à une date donnée (0 ou négatif : pas encore échue ; null : échéance non renseignée).
+function factureOverdueDays(f,onDate){
+  const due=factureDueDate(f);
+  return due?daysBetween(due,onDate):null;
+}
+
 function renderFactBalance(view){
-  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
+  // Factures émises seulement : ni brouillons, ni factures annulées.
+  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon"&&f.statut!=="annulee");
   const byClient={};
   list.forEach(f=>{
     const client=f.client||f.clientNom||"—";
-    if(!byClient[client])byClient[client]={client,total:0,encaisse:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,nb:0};
+    if(!byClient[client])byClient[client]={client,total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,sansEcheance:0,nbSansEcheance:0,nb:0};
     const sp=factureStatutPaye(f);const ttc=f.ttc||f.montantTTC||0;
     byClient[client].total+=ttc;byClient[client].encaisse+=sp.paye;byClient[client].nb++;
     if(sp.reste<=0.01)return;
-    const echD=f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"";
-    const age=echD?Math.max(0,daysBetween(echD,today())):0;
-    if(age<=30)byClient[client].j0_30+=sp.reste;
+    // Sans échéance valide : ni « non échu », ni tranche de retard (aucune date supposée).
+    const age=factureOverdueDays(f,today());
+    if(age===null){byClient[client].sansEcheance+=sp.reste;byClient[client].nbSansEcheance++;}
+    else if(age<=0)byClient[client].nonEchu+=sp.reste;
+    else if(age<=30)byClient[client].j0_30+=sp.reste;
     else if(age<=60)byClient[client].j31_60+=sp.reste;
     else if(age<=90)byClient[client].j61_90+=sp.reste;
     else byClient[client].j90plus+=sp.reste;
   });
-  const rows=Object.values(byClient).sort((a,b)=>(b.j90plus+b.j61_90+b.j31_60+b.j0_30)-(a.j90plus+a.j61_90+a.j31_60+a.j0_30));
-  const totRow={client:"TOTAL",total:0,encaisse:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,nb:list.length};
-  rows.forEach(r=>{totRow.total+=r.total;totRow.encaisse+=r.encaisse;totRow.j0_30+=r.j0_30;totRow.j31_60+=r.j31_60;totRow.j61_90+=r.j61_90;totRow.j90plus+=r.j90plus;});
+  const due=r=>r.j90plus+r.j61_90+r.j31_60+r.j0_30+r.nonEchu+r.sansEcheance;
+  const rows=Object.values(byClient).sort((a,b)=>due(b)-due(a));
+  const totRow={client:"TOTAL",total:0,encaisse:0,nonEchu:0,j0_30:0,j31_60:0,j61_90:0,j90plus:0,sansEcheance:0,nbSansEcheance:0,nb:list.length};
+  rows.forEach(r=>{totRow.total+=r.total;totRow.encaisse+=r.encaisse;totRow.nonEchu+=r.nonEchu;totRow.sansEcheance+=r.sansEcheance;totRow.nbSansEcheance+=r.nbSansEcheance;totRow.j0_30+=r.j0_30;totRow.j31_60+=r.j31_60;totRow.j61_90+=r.j61_90;totRow.j90plus+=r.j90plus;});
   const thS="padding:9px 10px;font-size:10px;font-weight:800;color:#fff;text-transform:uppercase;white-space:nowrap;border-bottom:2px solid #1e3a5f;text-align:right";
-  const td=(v,c)=>'<td style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(c||"#1e293b")+'">'+(v>0.01?money(v):"—")+'</td>';
+  const td=(v,c)=>'<td style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(c||"#1e293b")+'">'+(Math.abs(v)>0.01?money(v):"—")+'</td>'; // montant négatif (facture à TTC négatif) affiché, pas masqué
   const renderRow=(r,isTot)=>'<tr style="border-bottom:1px solid #f1f5f9;'+(isTot?"background:#f8fafc;font-weight:800;":"")+'">'+
     '<td style="padding:7px 10px;font-size:12px;font-weight:700;color:#0f2d5a">'+escapeHTML(r.client)+'</td>'+
     '<td style="padding:7px 10px;text-align:center;font-size:11px;color:#64748b">'+r.nb+'</td>'+
     td(r.total,"#0f2d5a")+td(r.encaisse,"#059669")+
+    td(r.nonEchu,r.nonEchu>0?"#047857":"#94a3b8")+
     td(r.j0_30,r.j0_30>0?"#1d4ed8":"#94a3b8")+
     td(r.j31_60,r.j31_60>0?"#d97706":"#94a3b8")+
     td(r.j61_90,r.j61_90>0?"#ea580c":"#94a3b8")+
     td(r.j90plus,r.j90plus>0?"#dc2626":"#94a3b8")+
+    '<td data-sans-echeance="'+r.nbSansEcheance+'" style="padding:7px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:700;color:'+(r.sansEcheance>0.01?"#7c3aed":"#94a3b8")+'">'+(r.sansEcheance>0.01?money(r.sansEcheance)+'<div style="font-size:10px;font-weight:600;color:#64748b">'+r.nbSansEcheance+' facture'+(r.nbSansEcheance>1?"s":"")+'</div>':"—")+'</td>'+
     '</tr>';
   view.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'+
@@ -1432,10 +1474,12 @@ function renderFactBalance(view){
     '<th style="'+thS+';text-align:center">Factures</th>'+
     '<th style="'+thS+'">Total facturé</th>'+
     '<th style="'+thS+'">Encaissé</th>'+
+    '<th style="'+thS+';background:#065f46">Non échu</th>'+
     '<th style="'+thS+';background:#1e40af">0–30 jours</th>'+
     '<th style="'+thS+';background:#92400e">31–60 jours</th>'+
     '<th style="'+thS+';background:#9a3412">61–90 jours</th>'+
     '<th style="'+thS+';background:#7f1d1d">> 90 jours</th>'+
+    '<th style="'+thS+';background:#5b21b6">Échéance non renseignée</th>'+
     '</tr></thead>'+
     '<tbody>'+rows.map(r=>renderRow(r,false)).join("")+renderRow(totRow,true)+'</tbody>'+
     '</table></div>';

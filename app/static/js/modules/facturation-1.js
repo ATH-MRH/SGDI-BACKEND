@@ -17,7 +17,7 @@ function renderFactDashboard(view){
   factures.forEach(f=>{
     const sp=factureStatutPaye(f);if(sp.reste<=0.01)return;
     unpaid.push({...f,_sp:sp});
-    const echD=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");
+    const echD=factureEcheance(f);
     if(echD&&echD<now)lateCr+=sp.reste;else curCr+=sp.reste;
   });
   const barTotal=totalEncaisse+curCr+lateCr||1;
@@ -26,10 +26,10 @@ function renderFactDashboard(view){
   const yearInvoices=factures.filter(f=>new Date(f.date||"").getFullYear()===curYear);
   const yearInvoiceIds=new Set(yearInvoices.map(f=>f.id));
   const yearCollected=myPaiements.filter(p=>yearInvoiceIds.has(p.factureId)&&new Date(p.date||"").getFullYear()===curYear).reduce((s,p)=>s+(Number(p.montant)||0),0);
-  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
+  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=factureEcheance(f);return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
   const pct=v=>totalVentes>0?Math.round(v/totalVentes*1000)/10:0;
   const unpaidSorted=unpaid.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,10);
-  const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return e&&e<now;}).length;
+  const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=factureEcheance(f);return e&&e<now;}).length;
   view.innerHTML=
     factTabs("dashboard")+
     '<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">'+
@@ -73,7 +73,7 @@ function renderFactDashboard(view){
     '</div>'+
     (unpaidSorted.length===0?'<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">Aucune facture impayée</div>':
     unpaidSorted.map(f=>{
-      const echD=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");
+      const echD=factureEcheance(f);
       const isLate=echD&&echD<now;
       const sd=factStatutDisplay(f);
       return '<div onclick="factureEditorOpen(\''+f.id+'\')" style="padding:12px;border-radius:6px;cursor:pointer;border:1px solid #f3f4f6;margin-bottom:8px;background:#fff" onmouseover="this.style.background=\'#f9fafb\'" onmouseout="this.style.background=\'#fff\'">'+
@@ -134,17 +134,43 @@ async function factureDuplicateDraft(id){
   try{const saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data:copy},legacy:false});Object.assign(copy,saved||{});db.factures.push(copy);window.__factureEditId=copy.id;navigate("facturation/factures/edit");toast("Copie créée en brouillon","success")}catch(e){toast("Duplication impossible : "+(e.message||e),"error")}
 }
 
+// Règlements, avoirs, avances et caisse : enregistrés par l'API (le serveur contrôle montant,
+// reste à encaisser, société, numéro d'avoir et écriture de caisse liée), puis relus depuis
+// PostgreSQL. L'identifiant est fixé à l'ouverture du formulaire : un nouvel essai réseau
+// renvoie la pièce déjà enregistrée au lieu d'en créer une seconde.
+let factureFinanceWriteInFlight=false;
+async function factureFinanceReload(){
+  try{await syncFacturationFromPostgres({})}catch(e){console.warn("Rechargement Facturation",e)}
+}
+async function factureFinanceRequest(url,method,body,errorLabel){
+  if(factureFinanceWriteInFlight)return null;
+  factureFinanceWriteInFlight=true;
+  const button=document.querySelector(".modal-bg form button:not([type=button])");if(button)button.disabled=true;
+  try{
+    const saved=await sgdiApi(url,body?{method,body,legacy:false}:{method,legacy:false});
+    await factureFinanceReload();
+    return saved||{};
+  }catch(e){toast(errorLabel+" : "+(e.message||e),"error");return null}
+  finally{factureFinanceWriteInFlight=false;if(button)button.disabled=false}
+}
+function factureFinanceWrite(collection,method,id,data,errorLabel){
+  const url="/api/irongs/collections/"+collection+"/items"+(method==="DELETE"?"/"+encodeURIComponent(id):"");
+  return factureFinanceRequest(url,method,method==="DELETE"?null:{data},errorLabel);
+}
+function factureFinanceIdField(prefix){return `<input type="hidden" name="id" value="${uid(prefix)}">`}
+
 function openPaiementModal(factureId){
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;const sp=factureStatutPaye(f);
   openModal(`<h3 class="font-bold text-lg mb-3">💳 Encaisser un paiement</h3>
     <p class="text-sm text-slate-600 mb-4">Facture <span class="font-mono text-blue-600">${safe(f.numero)}</span> · ${escapeHTML(f.client||"")} · TTC <b>${money(f.ttc)}</b> · Reste <b class="text-amber-600">${money(sp.reste)}</b></p>
-    <form onsubmit="event.preventDefault();confirmPaiement('${factureId}')">
+    <form onsubmit="event.preventDefault();confirmPaiement('${factureId}')">${factureFinanceIdField("pa")}
       <div class="grid grid-2 gap-3">
         <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
         <div><label class="label">Montant (DA) *</label><input class="input" type="number" step="0.01" min="0.01" name="montant" value="${sp.reste.toFixed(2)}" max="${sp.reste.toFixed(2)}" /></div>
         <div><label class="label">Mode *</label><select class="select" name="mode" >${MODES_PAIEMENT.map(m=>`<option>${m}</option>`).join("")}</select></div>
         <div><label class="label">Référence</label><input class="input" name="reference" placeholder="N° chèque, virement..."/></div>
         <div class="col-span-2"><label class="label">Notes</label><textarea class="input" name="notes" rows="2"></textarea></div>
+        <p class="col-span-2 text-xs text-slate-500">Espèces : mouvement de caisse. Chèque et traite : à encaisser. Virement, carte, prélèvement : à rapprocher.</p>
       </div>
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-success">💾 Encaisser</button></div>
     </form>`);
@@ -154,18 +180,17 @@ async function confirmPaiement(factureId){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   if(m<=0){toast("Montant invalide","error");return}
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;
-  db.paiements=db.paiements||[];
-  db.paiements.push({id:uid("pa"),factureId,date:fd.get("date"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  db.caisse=db.caisse||[];db.caisse.push({id:uid("cs"),date:fd.get("date"),type:"entree",montant:m,categorie:"Encaissement facture",libelle:"Paiement facture "+(f.numero||""),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:f.societe||"",factureId,createdAt:new Date().toISOString()});
-  if(!(await saveDBAndWaitToast("Paiement non confirmé")))return;
-  closeModal();toast("Paiement enregistré : "+money(m),"success");renderView();
+  // L'écriture de caisse « Encaissement facture » est créée par le serveur avec le paiement.
+  const saved=await factureFinanceWrite("paiements","POST",null,{id:fd.get("id")||uid("pa"),factureId,date:fd.get("date"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()},"Paiement non enregistré");
+  if(!saved)return;
+  closeModal();toast("Paiement enregistré : "+money(saved.montant??m),"success");renderView();
 }
 
 function openAvoirModal(factureId){
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;const sp=factureStatutPaye(f);
   openModal(`<h3 class="font-bold text-lg mb-3">↩️ Émettre un avoir</h3>
     <p class="text-sm text-slate-600 mb-4">Facture <span class="font-mono text-blue-600">${safe(f.numero)}</span> · TTC <b>${money(f.ttc)}</b></p>
-    <form onsubmit="event.preventDefault();confirmAvoir('${factureId}')">
+    <form onsubmit="event.preventDefault();confirmAvoir('${factureId}')">${factureFinanceIdField("av")}
       <div class="grid grid-2 gap-3">
         <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
         <div><label class="label">Montant *</label><input class="input" type="number" step="0.01" name="montant" max="${f.ttc}" /></div>
@@ -178,23 +203,54 @@ function openAvoirModal(factureId){
 async function confirmAvoir(factureId){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   if(m<=0){toast("Montant invalide","error");return}
-  const f=db.factures.find(x=>x.id===factureId);
-  db.avoirs=db.avoirs||[];const num="AV-"+new Date().getFullYear()+"-"+String((db.avoirs.length+1)).padStart(4,"0");
-  db.avoirs.push({id:uid("av"),numero:num,factureId,date:fd.get("date"),montant:m,motif:fd.get("motif"),client:f?.client||"",societe:f?.societe||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  if(!(await saveDBAndWaitToast("Avoir non confirmé")))return;
-  closeModal();toast("Avoir "+num+" émis ("+money(m)+")","success");renderView();
+  // Numéro d'avoir attribué par le serveur (séquence annuelle AV-AAAA-NNNN).
+  const saved=await factureFinanceWrite("avoirs","POST",null,{id:fd.get("id")||uid("av"),factureId,date:fd.get("date"),montant:m,motif:fd.get("motif"),createdBy:session.username,createdAt:new Date().toISOString()},"Avoir non enregistré");
+  if(!saved)return;
+  closeModal();toast("Avoir "+(saved.numero||"")+" émis ("+money(saved.montant??m)+")","success");renderView();
 }
 
 function renderFactPaiements(view){
   const factIds=new Set(bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon").map(f=>f.id));
   const list=(db.paiements||[]).filter(p=>factIds.has(p.factureId)).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  const total=list.reduce((s,p)=>s+(p.montant||0),0);
-  view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💳 Paiements reçus</h1><p class="text-slate-500 text-sm">${list.length} paiements · Total ${money(total)}</p></div></div>
+  const total=list.filter(p=>p.suivi?.statut!=="impaye").reduce((s,p)=>s+(p.montant||0),0);
+  view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💳 Paiements reçus</h1><p class="text-slate-500 text-sm">${list.length} paiements · Total ${money(total)}${list.some(p=>p.suivi?.statut==="impaye")?" (impayés exclus)":""}</p></div></div>
     ${factTabs("paiements")}
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun paiement.</div>`:`<table><thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Mode</th><th>Réf.</th><th>Montant</th><th>Notes</th><th></th></tr></thead><tbody>${list.map(p=>{const f=db.factures.find(x=>x.id===p.factureId);return`<tr data-searchable><td class="text-xs">${formatDate(p.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(f?.client||"")}</td><td><span class="pill pill-blue">${safe(p.mode)}</span></td><td class="text-xs font-mono">${safe(p.reference)}</td><td class="font-bold text-emerald-600">${money(p.montant)}</td><td class="text-xs">${escapeHTML((p.notes||"").slice(0,40))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deletePaiement('${p.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun paiement.</div>`:`<table><thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Mode</th><th>Réf.</th><th>Montant</th><th>Suivi</th><th>Notes</th><th></th></tr></thead><tbody>${list.map(p=>{const f=db.factures.find(x=>x.id===p.factureId);return`<tr data-searchable data-paiement-id="${escapeHTML(p.id)}"><td class="text-xs">${formatDate(p.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(f?.client||"")}</td><td><span class="pill pill-blue">${safe(p.mode)}</span></td><td class="text-xs font-mono">${safe(p.reference)}</td><td class="font-bold ${p.suivi?.statut==="impaye"?"text-red-600 line-through":"text-emerald-600"}">${money(p.montant)}</td><td>${paiementSuiviHTML(p)}</td><td class="text-xs">${escapeHTML((p.notes||"").slice(0,40))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deletePaiement('${p.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
 }
 
-async function deletePaiement(id){if(!confirm("Supprimer ce paiement ?"))return;db.paiements=db.paiements.filter(p=>p.id!==id);db.caisse=(db.caisse||[]).filter(c=>!(c.factureId&&c.categorie==="Encaissement facture"&&c.id&&db.paiements.find(pp=>pp.id===id)));if(!(await saveDBAndWaitToast("Suppression paiement non confirmée")))return;renderView();toast("Supprimé","success")}
+// Suivi d'un règlement (serveur : PATCH /paiements/{id}/suivi, historisé et audité) :
+// chèque/traite à encaisser → encaissé ou impayé ; virement et autres moyens bancaires à
+// rapprocher → rapproché ; espèces encaissées immédiatement (caisse).
+const PAIEMENT_SUIVI_LIBELLES={encaisse:["Encaissé","pill-green"],a_encaisser:["À encaisser","pill-amber"],impaye:["Impayé","pill-red"],a_rapprocher:["À rapprocher","pill-amber"],rapproche:["Rapproché","pill-green"]};
+const PAIEMENT_SUIVI_ETAPES={a_encaisser:[["encaisse","Encaissé"],["impaye","Impayé"]],a_rapprocher:[["rapproche","Rapproché"]]};
+function paiementSuiviHTML(p){
+  const statut=p.suivi?.statut;if(!statut)return'<span class="text-xs text-slate-400">—</span>';
+  const [label,pill]=PAIEMENT_SUIVI_LIBELLES[statut]||[statut,"pill-gray"];
+  const actions=(PAIEMENT_SUIVI_ETAPES[statut]||[]).map(([to,txt])=>`<button class="btn btn-ghost text-xs" data-suivi="${to}" onclick="openPaiementSuiviModal('${p.id}','${to}')">${txt}</button>`).join("");
+  return `<span class="pill ${pill}">${label}</span>${actions}`;
+}
+function openPaiementSuiviModal(id,statut){
+  const label=(PAIEMENT_SUIVI_LIBELLES[statut]||[statut])[0];
+  openModal(`<h3 class="font-bold text-lg mb-4">Suivi du paiement : ${escapeHTML(label)}</h3>
+    <form onsubmit="event.preventDefault();confirmPaiementSuivi('${id}','${statut}')">
+      <div class="grid grid-2 gap-3">
+        <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
+        <div><label class="label">Référence ${statut==="rapproche"?"(relevé bancaire)":""}</label><input class="input" name="reference"/></div>
+        <div class="col-span-2"><label class="label">Motif${statut==="impaye"?" *":""}</label><textarea class="input" name="motif" rows="2"></textarea></div>
+      </div>
+      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
+    </form>`);
+}
+async function confirmPaiementSuivi(id,statut){
+  const fd=new FormData(document.querySelector(".modal-bg form"));
+  if(statut==="impaye"&&String(fd.get("motif")||"").trim().length<5){toast("Motif de l'impayé obligatoire","error");return}
+  const saved=await factureFinanceRequest("/api/irongs/paiements/"+encodeURIComponent(id)+"/suivi","PATCH",{statut,date:fd.get("date"),reference:fd.get("reference")||"",motif:fd.get("motif")||""},"Suivi du paiement non enregistré");
+  if(!saved)return;
+  closeModal();toast("Suivi enregistré","success");renderView();
+}
+
+// Le serveur supprime aussi l'écriture de caisse liée au paiement.
+async function deletePaiement(id){if(!confirm("Supprimer ce paiement ?"))return;if(!(await factureFinanceWrite("paiements","DELETE",id,null,"Suppression du paiement impossible")))return;renderView();toast("Supprimé","success")}
 
 function renderFactAvances(view){
   const list=bySoc(db.avances||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
@@ -206,7 +262,7 @@ function renderFactAvances(view){
 
 function openAvanceModal(){
   openModal(`<h3 class="font-bold text-lg mb-4">💰 Nouvelle avance client</h3>
-    <form onsubmit="event.preventDefault();confirmAvance()">
+    <form onsubmit="event.preventDefault();confirmAvance()">${factureFinanceIdField("avc")}
       <div class="grid grid-2 gap-3">
         <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
         <div><label class="label">Société émettrice *</label><select class="select" name="societe" >${SOCIETES.map(s=>`<option ${mySoc()===s?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -222,14 +278,15 @@ function openAvanceModal(){
 
 async function confirmAvance(){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
-  db.avances=db.avances||[];
-  db.avances.push({id:uid("av"),date:fd.get("date"),societe:fd.get("societe"),client:fd.get("client"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",statut:"disponible",createdBy:session.username,createdAt:new Date().toISOString()});
-  db.caisse=db.caisse||[];db.caisse.push({id:uid("cs"),date:fd.get("date"),type:"entree",montant:m,categorie:"Avance client",libelle:"Avance "+fd.get("client"),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:fd.get("societe"),createdAt:new Date().toISOString()});
-  if(!(await saveDBAndWaitToast("Avance non confirmée")))return;
-  closeModal();toast("Avance enregistrée : "+money(m),"success");renderView();
+  if(m<=0){toast("Montant invalide","error");return}
+  if(!String(fd.get("client")||"").trim()){toast("Client obligatoire","error");return}
+  // L'écriture de caisse « Avance client » est créée par le serveur avec l'avance.
+  const saved=await factureFinanceWrite("avances","POST",null,{id:fd.get("id")||uid("avc"),date:fd.get("date"),societe:fd.get("societe"),client:fd.get("client"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",statut:"disponible",createdBy:session.username,createdAt:new Date().toISOString()},"Avance non enregistrée");
+  if(!saved)return;
+  closeModal();toast("Avance enregistrée : "+money(saved.montant??m),"success");renderView();
 }
 
-async function deleteAvance(id){if(!confirm("Supprimer ?"))return;db.avances=db.avances.filter(a=>a.id!==id);if(!(await saveDBAndWaitToast("Suppression avance non confirmée")))return;renderView()}
+async function deleteAvance(id){if(!confirm("Supprimer ?"))return;if(!(await factureFinanceWrite("avances","DELETE",id,null,"Suppression de l'avance impossible")))return;renderView()}
 
 function renderFactAvoirs(view){
   const factIds=new Set(bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon").map(f=>f.id));
@@ -237,10 +294,30 @@ function renderFactAvoirs(view){
   const total=list.reduce((s,a)=>s+(a.montant||0),0);
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">↩️ Avoirs</h1><p class="text-slate-500 text-sm">${list.length} avoirs · Total ${money(total)}</p></div></div>
     ${factTabs("avoirs")}
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun avoir.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Facture</th><th>Client</th><th>Montant</th><th>Motif</th><th></th></tr></thead><tbody>${list.map(a=>{const f=db.factures.find(x=>x.id===a.factureId);return`<tr data-searchable><td class="font-mono text-xs">${safe(a.numero)}</td><td class="text-xs">${formatDate(a.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(a.client||f?.client||"")}</td><td class="font-bold text-purple-600">${money(a.montant)}</td><td class="text-xs">${escapeHTML((a.motif||"").slice(0,50))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deleteAvoir('${a.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun avoir.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Facture</th><th>Client</th><th>Montant</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>{const f=db.factures.find(x=>x.id===a.factureId);const cancelled=a.statut==="annule";return`<tr data-searchable data-avoir-id="${escapeHTML(a.id)}"><td class="font-mono text-xs">${safe(a.numero)}</td><td class="text-xs">${formatDate(a.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(a.client||f?.client||"")}</td><td class="font-bold ${cancelled?"text-slate-400 line-through":"text-purple-600"}">${money(a.montant)}</td><td class="text-xs">${escapeHTML((a.motif||"").slice(0,50))}${cancelled?`<div class="text-red-600">Annulé : ${escapeHTML(a.annulation?.motif||"")}</div>`:""}</td><td><span class="pill ${cancelled?"pill-gray":"pill-green"}">${cancelled?"Annulé":"Émis"}</span></td><td>${!cancelled&&window.__factRegles?.annulationAvoirs?`<button class="btn btn-ghost text-xs text-red-600" onclick="openAvoirAnnulationModal('${a.id}')">Annuler</button>`:""}</td></tr>`}).join("")}</tbody></table>`}</div>`;
+  // Règle serveur : l'annulation d'un avoir n'est proposée qu'une fois activée.
+  if(window.__factRegles===undefined){window.__factRegles=null;sgdiApi("/api/irongs/facturation/regles",{method:"GET",legacy:false}).then(r=>{window.__factRegles=r||{};if(String(location.hash).includes("facturation/avoirs"))renderView()}).catch(()=>{window.__factRegles={}})}
 }
 
-async function deleteAvoir(id){if(!confirm("Supprimer ?"))return;db.avoirs=db.avoirs.filter(a=>a.id!==id);if(!(await saveDBAndWaitToast("Suppression avoir non confirmée")))return;renderView()}
+// Un avoir numéroté n'est jamais supprimé : il est annulé (motif obligatoire, numéro conservé).
+function openAvoirAnnulationModal(id){
+  const a=(db.avoirs||[]).find(x=>x.id===id);if(!a)return;
+  openModal(`<h3 class="font-bold text-lg mb-3">Annuler l'avoir ${safe(a.numero)}</h3>
+    <p class="text-sm text-slate-600 mb-4">Le numéro reste attribué à cet avoir ; le montant ${money(a.montant)} n'est plus déduit de la facture.</p>
+    <form onsubmit="event.preventDefault();confirmAvoirAnnulation('${id}')">
+      <label class="label">Motif *</label><textarea class="input" name="motif" rows="3"></textarea>
+      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-warn">Annuler l'avoir</button></div>
+    </form>`);
+}
+async function confirmAvoirAnnulation(id){
+  const motif=String(new FormData(document.querySelector(".modal-bg form")).get("motif")||"").trim();
+  if(motif.length<5){toast("Motif d'annulation obligatoire","error");return}
+  const saved=await factureFinanceRequest("/api/irongs/avoirs/"+encodeURIComponent(id)+"/annuler","POST",{motif},"Annulation de l'avoir impossible");
+  if(!saved)return;
+  closeModal();toast("Avoir "+(saved.numero||"")+" annulé","success");renderView();
+}
+
+async function deleteAvoir(id){if(!confirm("Supprimer ?"))return;if(!(await factureFinanceWrite("avoirs","DELETE",id,null,"Suppression de l'avoir impossible")))return;renderView()}
 
 function renderFactCaisse(view){
   const list=bySoc(db.caisse||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
@@ -254,13 +331,13 @@ function renderFactCaisse(view){
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Sorties</div><div class="text-2xl font-bold mt-1 text-red-600">${money(sorties)}</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Solde</div><div class="text-2xl font-bold mt-1 ${solde>=0?"text-emerald-600":"text-red-600"}">${money(solde)}</div></div>
     </div>
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun mouvement.</div>`:`<table><thead><tr><th>Date</th><th>Type</th><th>Catégorie</th><th>Libellé</th><th>Mode</th><th>Réf.</th><th>Montant</th><th></th></tr></thead><tbody>${list.map(c=>`<tr data-searchable><td class="text-xs">${formatDate(c.date)}</td><td><span class="pill ${c.type==="entree"?"pill-green":"pill-red"}">${c.type==="entree"?"↗ Entrée":"↘ Sortie"}</span></td><td class="text-xs">${escapeHTML(c.categorie||"")}</td><td class="text-xs">${escapeHTML(c.libelle||"")}</td><td><span class="pill pill-gray">${safe(c.mode)}</span></td><td class="text-xs font-mono">${safe(c.reference)}</td><td class="font-bold ${c.type==="entree"?"text-emerald-600":"text-red-600"}">${c.type==="entree"?"+":"-"}${money(c.montant)}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deleteCaisse('${c.id}')">✕</button></td></tr>`).join("")}</tbody></table>`}</div>`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun mouvement.</div>`:`<table><thead><tr><th>Date</th><th>Type</th><th>Catégorie</th><th>Libellé</th><th>Mode</th><th>Réf.</th><th>Montant</th><th></th></tr></thead><tbody>${list.map(c=>`<tr data-searchable><td class="text-xs">${formatDate(c.date)}</td><td><span class="pill ${c.type==="entree"?"pill-green":"pill-red"}">${c.type==="entree"?"↗ Entrée":"↘ Sortie"}</span></td><td class="text-xs">${escapeHTML(c.categorie||"")}</td><td class="text-xs">${escapeHTML(c.libelle||"")}</td><td><span class="pill pill-gray">${safe(c.mode)}</span></td><td class="text-xs font-mono">${safe(c.reference)}</td><td class="font-bold ${c.type==="entree"?"text-emerald-600":"text-red-600"}">${c.type==="entree"?"+":"-"}${money(c.montant)}</td><td>${c.paiementId||c.avanceId?`<span class="text-xs text-slate-400" title="Écriture liée : supprimez le paiement ou l'avance d'origine">lié</span>`:`<button class="btn btn-ghost text-xs text-red-600" onclick="deleteCaisse('${c.id}')">✕</button>`}</td></tr>`).join("")}</tbody></table>`}</div>`;
 }
 
 function openCaisseModal(type){
   const cats=type==="entree"?["Encaissement facture","Avance client","Apport","Remboursement","Autre entrée"]:["Achat fourniture","Salaire/Avance personnel","Frais bancaires","Loyer","Carburant","Maintenance","Autre sortie"];
   openModal(`<h3 class="font-bold text-lg mb-4">${type==="entree"?"➕ Entrée":"➖ Sortie"} de caisse</h3>
-    <form onsubmit="event.preventDefault();confirmCaisse('${type}')">
+    <form onsubmit="event.preventDefault();confirmCaisse('${type}')">${factureFinanceIdField("cs")}
       <div class="grid grid-2 gap-3">
         <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
         <div><label class="label">Société *</label><select class="select" name="societe" >${SOCIETES.map(s=>`<option ${mySoc()===s?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -276,13 +353,13 @@ function openCaisseModal(type){
 
 async function confirmCaisse(type){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
-  db.caisse=db.caisse||[];
-  db.caisse.push({id:uid("cs"),date:fd.get("date"),type,montant:m,categorie:fd.get("categorie"),libelle:fd.get("libelle"),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:fd.get("societe"),createdBy:session.username,createdAt:new Date().toISOString()});
-  if(!(await saveDBAndWaitToast("Mouvement caisse non confirmé")))return;
+  if(m<=0){toast("Montant invalide","error");return}
+  const saved=await factureFinanceWrite("caisse","POST",null,{id:fd.get("id")||uid("cs"),date:fd.get("date"),type,montant:m,categorie:fd.get("categorie"),libelle:fd.get("libelle"),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:fd.get("societe"),createdBy:session.username,createdAt:new Date().toISOString()},"Mouvement de caisse non enregistré");
+  if(!saved)return;
   closeModal();toast("Mouvement enregistré","success");renderView();
 }
 
-async function deleteCaisse(id){if(!confirm("Supprimer ?"))return;db.caisse=db.caisse.filter(c=>c.id!==id);if(!(await saveDBAndWaitToast("Suppression caisse non confirmée")))return;renderView()}
+async function deleteCaisse(id){if(!confirm("Supprimer ?"))return;if(!(await factureFinanceWrite("caisse","DELETE",id,null,"Suppression du mouvement impossible")))return;renderView()}
 
 function renderFactStock(view){
   // Filtrer par société courante (mySoc) ou la société sélectionnée dans le module stock (mtSociete) si module transverse
