@@ -1,92 +1,159 @@
 /* Phase 2 — facturation-1. Fonctions déplacées sans changement métier.
  * État et helpers synchrones partagés conservés dans sgdi-app.js.
  * Inventaire : docs/frontend-phase2h-inventory.json. */
-function renderFactDashboard(view){
-  const factures=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
-  const paiements=db.paiements||[];const avoirs=db.avoirs||[];
-  const factIds=new Set(factures.map(f=>f.id));
-  const myPaiements=paiements.filter(p=>factIds.has(p.factureId));
-  const myAvoirs=avoirs.filter(a=>factIds.has(a.factureId));
-  const curYear=new Date().getFullYear();
-  const totalFact=factures.filter(f=>new Date(f.date||"").getFullYear()===curYear).reduce((s,f)=>s+(f.ttc||f.montantTTC||0),0);
-  const totalEncaisse=myPaiements.reduce((s,p)=>s+(p.montant||0),0);
-  const totalAvoirs=myAvoirs.reduce((s,a)=>s+(a.montant||0),0);
+// Période du tableau de bord : année de l'en-tête par défaut, ou bornes saisies puis « Filtrer ».
+function factDashboardPeriod(){
+  const p=window.__facDashPeriod;
+  if(p&&/^\d{4}-\d{2}-\d{2}$/.test(p.from||"")&&/^\d{4}-\d{2}-\d{2}$/.test(p.to||"")&&p.from<=p.to)return p;
+  const y=typeof facSelectedYear==="function"?facSelectedYear():new Date().getFullYear();
+  return {from:y+"-01-01",to:y+"-12-31"};
+}
+function factDashboardApplyFilter(){
+  const from=document.getElementById("fac-dash-from")?.value||"",to=document.getElementById("fac-dash-to")?.value||"";
+  if(!from||!to||from>to){toast("Renseignez une période valide (début avant fin).","error");return}
+  window.__facDashPeriod={from,to};renderView();
+}
+// Agrégats du tableau de bord, calculés à partir des factures, paiements et avoirs synchronisés
+// (mêmes règles que le reste du module : factureStatutPaye, factureEcheance). Lecture seule.
+function factDashboardData(from,to){
   const now=today();
-  let curCr=0,lateCr=0;
-  const unpaid=[];
+  const day=v=>String(v||"").slice(0,10);
+  const inRange=(d,a,b)=>{d=day(d);return !!d&&d>=a&&d<=b};
+  const factures=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
+  const ids=new Set(factures.map(f=>f.id));
+  const pays=(db.paiements||[]).filter(p=>ids.has(p.factureId)&&p.suivi?.statut!=="impaye");
+  const ttc=f=>Number(f.ttc||f.montantTTC)||0;
+  const billed=(a,b)=>factures.filter(f=>inRange(f.date,a,b)).reduce((s,f)=>s+ttc(f),0);
+  const collected=(a,b)=>pays.filter(p=>inRange(p.date,a,b)).reduce((s,p)=>s+(Number(p.montant)||0),0);
+  const prevYear=d=>(parseInt(d.slice(0,4),10)-1)+d.slice(4);
+  const pFrom=prevYear(from),pTo=prevYear(to);
+  let current=0,late=0,nbCurrent=0,nbLate=0;
+  const status=new Map();
   factures.forEach(f=>{
-    const sp=factureStatutPaye(f);if(sp.reste<=0.01)return;
-    unpaid.push({...f,_sp:sp});
-    const echD=factureEcheance(f);
-    if(echD&&echD<now)lateCr+=sp.reste;else curCr+=sp.reste;
+    const sp=factureStatutPaye(f);status.set(f.id,sp);
+    if(sp.reste<=0.01)return;
+    const due=factureEcheance(f);
+    if(due&&due<now){late+=sp.reste;nbLate++}else{current+=sp.reste;nbCurrent++}
   });
-  const barTotal=totalEncaisse+curCr+lateCr||1;
-  const pEnc=Math.round(totalEncaisse/barTotal*100),pCur=Math.round(curCr/barTotal*100),pLate=Math.round(lateCr/barTotal*100);
-  const totalVentes=totalFact;
-  const yearInvoices=factures.filter(f=>new Date(f.date||"").getFullYear()===curYear);
-  const yearInvoiceIds=new Set(yearInvoices.map(f=>f.id));
-  const yearCollected=myPaiements.filter(p=>yearInvoiceIds.has(p.factureId)&&new Date(p.date||"").getFullYear()===curYear).reduce((s,p)=>s+(Number(p.montant)||0),0);
-  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=factureEcheance(f);return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
-  const pct=v=>totalVentes>0?Math.round(v/totalVentes*1000)/10:0;
-  const unpaidSorted=unpaid.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,10);
-  const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=factureEcheance(f);return e&&e<now;}).length;
-  view.innerHTML=
-    factTabs("dashboard")+
-    '<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start">'+
-    // LEFT
-    '<div>'+
-    '<div class="card" style="padding:20px;margin-bottom:12px">'+
-    '<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:12px">Vue d\'ensemble</div>'+
-    '<div style="font-size:12px;color:#374151;margin-bottom:8px">Total facturé '+money(totalFact)+'. Dont '+money(totalEncaisse)+' encaissé, et '+money(curCr+lateCr)+' est en créance</div>'+
-    '<div style="height:12px;border-radius:6px;overflow:hidden;background:#e5e7eb;display:flex;margin-bottom:16px">'+
-    '<div style="background:#3b82f6;width:'+pEnc+'%;transition:.3s"></div>'+
-    '<div style="background:#f97316;width:'+pCur+'%;transition:.3s"></div>'+
-    '<div style="background:#ef4444;width:'+pLate+'%;transition:.3s"></div>'+
+  const year=parseInt(from.slice(0,4),10);
+  const months=Array.from({length:12},()=>({billed:0,collected:0,receivable:0}));
+  const monthOf=d=>{d=day(d);return d.slice(0,4)===String(year)?parseInt(d.slice(5,7),10)-1:-1};
+  factures.forEach(f=>{const m=monthOf(f.date);if(m<0)return;months[m].billed+=ttc(f);months[m].receivable+=status.get(f.id).reste});
+  pays.forEach(p=>{const m=monthOf(p.date);if(m>=0)months[m].collected+=Number(p.montant)||0});
+  const split={paid:0,partial:0,unpaid:0};
+  factures.filter(f=>f.statut!=="annulee"&&inRange(f.date,from,to)).forEach(f=>{
+    const st=status.get(f.id).statut;
+    if(st==="payee")split.paid++;else if(st==="partielle")split.partial++;else split.unpaid++;
+  });
+  const latest=factures.slice().sort((a,b)=>day(b.date).localeCompare(day(a.date))||String(b.numero||"").localeCompare(String(a.numero||""))).slice(0,6)
+    .map(f=>({f,sp:status.get(f.id),due:factureEcheance(f)}));
+  return {from,to,year,
+    billed:billed(from,to),billedPrev:billed(pFrom,pTo),
+    collected:collected(from,to),collectedPrev:collected(pFrom,pTo),
+    current,late,nbCurrent,nbLate,months,split,latest};
+}
+function factTrendHTML(cur,prev,label){
+  if(!(prev>0))return '<span class="fac-trend flat">—</span> <span>'+escapeHTML(label)+'</span>';
+  const pct=Math.round((cur-prev)/prev*1000)/10;
+  const dir=pct>0?"up":pct<0?"down":"flat";
+  return '<span class="fac-trend '+dir+'">'+(dir==="up"?facUiIcon("arrowUp",12):dir==="down"?facUiIcon("arrowDown",12):"")+(pct>0?"+ ":"")+String(pct).replace(".",",")+' %</span> <span>'+escapeHTML(label)+'</span>';
+}
+function factNiceMax(v){
+  if(!(v>0))return 1;
+  const mag=Math.pow(10,Math.floor(Math.log10(v)));const n=v/mag;
+  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*mag;
+}
+function factMonthlyChartSVG(months,year){
+  const W=640,H=230,L=64,R=8,T=12,B=26,cw=W-L-R,ch=H-T-B;
+  const series=[["billed","Facturé","#3b82f6"],["collected","Encaissé","#16a34a"],["receivable","Créances","#f59e0b"]];
+  const max=factNiceMax(Math.max(0,...months.flatMap(m=>series.map(([k])=>m[k]))));
+  const label=v=>Math.round(v).toLocaleString("fr-FR").replace(/[  ]/g," ");
+  const names=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+  let out='<svg class="fac-bar-chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Évolution mensuelle des ventes '+year+'">';
+  for(let i=0;i<=4;i++){const y=T+ch-ch*i/4;out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="#e6ebf2" stroke-dasharray="'+(i?"3 3":"0")+'"/><text x="'+(L-8)+'" y="'+(y+3.5)+'" text-anchor="end">'+label(max*i/4)+'</text>'}
+  const gw=cw/12,bw=Math.min(10,gw/4.2);
+  months.forEach((m,i)=>{
+    const x0=L+gw*i+(gw-bw*3-4)/2;
+    series.forEach(([k,lab,color],j)=>{
+      const v=m[k],h=v>0?Math.max(1.5,ch*v/max):0;
+      if(h)out+='<rect x="'+(x0+j*(bw+2)).toFixed(1)+'" y="'+(T+ch-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="1.5" fill="'+color+'"><title>'+lab+' — '+names[i]+' '+year+' : '+escapeHTML(money(v))+'</title></rect>';
+    });
+    out+='<text x="'+(L+gw*i+gw/2).toFixed(1)+'" y="'+(H-7)+'" text-anchor="middle">'+names[i]+'</text>';
+  });
+  return out+'</svg>';
+}
+function factDonutSVG(split){
+  const parts=[["paid","#3b82f6"],["partial","#16a34a"],["unpaid","#f59e0b"]];
+  const total=parts.reduce((s,[k])=>s+split[k],0);
+  const r=58,c=2*Math.PI*r;let offset=0;
+  let out='<svg viewBox="0 0 150 150" width="150" height="150" aria-hidden="true"><circle cx="75" cy="75" r="'+r+'" fill="none" stroke="#edf1f6" stroke-width="22"/>';
+  if(total)parts.forEach(([k,color])=>{const len=c*split[k]/total;if(len>0)out+='<circle cx="75" cy="75" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="22" stroke-dasharray="'+len.toFixed(2)+' '+(c-len).toFixed(2)+'" stroke-dashoffset="'+(-offset).toFixed(2)+'" transform="rotate(-90 75 75)"/>';offset+=len});
+  return out+'</svg>';
+}
+function factStatusBadge(f,sp){
+  if(String(f.statut||"").toLowerCase()==="brouillon")return '<span class="fac-badge fac-badge-draft">Brouillon</span>';
+  const st=f.statut==="annulee"?"annulee":sp.statut;
+  const map={payee:["fac-badge-green","Payée"],partielle:["fac-badge-orange","Partiellement payée"],echue:["fac-badge-red","En retard"],annulee:["fac-badge-gray","Annulée"],emise:["fac-badge-red","Non payée"]};
+  const [cls,label]=map[st]||map.emise;
+  return '<span class="fac-badge '+cls+'">'+label+'</span>';
+}
+function renderFactDashboard(view){
+  const period=factDashboardPeriod();
+  const d=factDashboardData(period.from,period.to);
+  const sameYear=period.from.slice(0,4)===period.to.slice(0,4);
+  const vs="vs "+(sameYear?String(d.year-1):"N-1");
+  const kpi=(tone,icon,label,value,sub)=>'<div class="fac-kpi" data-tone="'+tone+'"><div class="fac-kpi-icon">'+facUiIcon(icon,24)+'</div><div style="min-width:0"><div class="fac-kpi-label">'+label+'</div><div class="fac-kpi-value" title="'+escapeHTML(money(value))+'">'+escapeHTML(money(value))+'</div><div class="fac-kpi-sub">'+sub+'</div></div></div>';
+  const totalSplit=d.split.paid+d.split.partial+d.split.unpaid;
+  const pct=n=>totalSplit?Math.round(n/totalSplit*100):0;
+  const legend=[["Payées",d.split.paid,"blue"],["Partiellement payées",d.split.partial,"green"],["Non payées",d.split.unpaid,"orange"]]
+    .map(([l,n,c])=>'<div><i class="fac-dot-'+c+'"></i><span>'+l+'</span><b>'+n+'</b><em>'+pct(n)+' %</em></div>').join("");
+  const rows=d.latest.map(({f,sp,due})=>'<tr class="fac-row-link" data-fact-id="'+escapeHTML(f.id)+'" onclick="factureEditorOpen(\''+escapeHTML(jsString(f.id))+'\')">'+
+    '<td class="fac-strong">'+escapeHTML(f.numero||"—")+'</td><td>'+formatDate(f.date)+'</td><td>'+escapeHTML(f.client||f.clientNom||"")+'</td>'+
+    '<td class="fac-num">'+escapeHTML(money(f.ttc||f.montantTTC||0))+'</td><td class="fac-num">'+escapeHTML(money(sp.paye))+'</td><td class="fac-num">'+escapeHTML(money(sp.reste))+'</td>'+
+    '<td>'+(due?formatDate(due):'<span class="fac-muted" title="Échéance non renseignée">—</span>')+'</td><td>'+factStatusBadge(f,sp)+'</td>'+
+    '<td onclick="event.stopPropagation()"><div class="fac-row-actions"><button type="button" class="fac-icon-btn" title="Consulter" aria-label="Consulter la facture '+escapeHTML(f.numero||"")+'" onclick="factureEditorOpen(\''+escapeHTML(jsString(f.id))+'\')">'+facUiIcon("eye",16)+'</button><button type="button" class="fac-icon-btn pdf" title="Aperçu PDF" aria-label="Aperçu PDF de la facture '+escapeHTML(f.numero||"")+'" onclick="factureVoirApercu(\''+escapeHTML(jsString(f.id))+'\')">'+facUiIcon("pdf",16)+'</button></div></td></tr>').join("");
+  view.innerHTML=factTabs("dashboard")+
+    '<div class="fac-ui fac-dashboard">'+
+    '<div class="fac-page-head"><div><h1>Tableau de bord</h1><p>Suivi de votre activité de facturation en temps réel</p></div>'+
+    '<div class="fac-dash-filters"><div class="fac-period">'+facUiIcon("calendar",17)+'<input id="fac-dash-from" type="date" aria-label="Début de période" value="'+period.from+'">'+facUiIcon("arrowRight",15)+'<input id="fac-dash-to" type="date" aria-label="Fin de période" value="'+period.to+'"></div>'+
+    '<button type="button" class="fac-btn fac-btn-navy" onclick="factDashboardApplyFilter()">'+facUiIcon("filter",16)+' Filtrer</button>'+
+    '<button type="button" class="fac-btn fac-btn-green" onclick="factureEditorOpen()">'+facUiIcon("plus",16)+' Nouvelle facture</button>'+
+    '<button type="button" class="fac-btn fac-btn-blue" onclick="facOpenPaymentPicker()">'+facUiIcon("plus",16)+' Enregistrer un paiement</button></div></div>'+
+    '<div class="fac-kpis">'+
+    kpi("blue","file","Total facturé (TTC)",d.billed,factTrendHTML(d.billed,d.billedPrev,vs))+
+    kpi("green","coins","Total encaissé",d.collected,factTrendHTML(d.collected,d.collectedPrev,vs))+
+    kpi("orange","clock","Créances en cours",d.current,'<span>'+d.nbCurrent+' facture'+(d.nbCurrent>1?"s":"")+' à échoir ou sans échéance</span>')+
+    kpi("red","alert","Créances en retard",d.late,'<span>'+d.nbLate+' facture'+(d.nbLate>1?"s":"")+' à échéance dépassée</span>')+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+
-    '<div><div style="font-size:11px;font-weight:700;color:#3b82f6;text-transform:uppercase;margin-bottom:4px">Encaissé</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(totalEncaisse)+'</div></div>'+
-    '<div><div style="font-size:11px;font-weight:700;color:#f97316;text-transform:uppercase;margin-bottom:4px">Créances courantes</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(curCr)+'</div></div>'+
-    '<div><div style="font-size:11px;font-weight:700;color:#ef4444;text-transform:uppercase;margin-bottom:4px">Créances en retard</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(lateCr)+'</div></div>'+
-    '</div></div>'+
-    '<div class="card" style="padding:20px">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-    '<div style="font-size:14px;font-weight:700;color:#111827">Ventes</div>'+
-    '<div style="font-size:12px;color:#6b7280">Année fiscale <strong>'+curYear+'</strong></div>'+
-    '</div>'+
-    '<div style="display:flex;gap:24px;margin-bottom:12px">'+
-    '<div><div style="font-size:11px;color:#3b82f6;font-weight:700">Total des ventes</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(totalVentes)+'</div></div>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start">'+
-    '<div>'+factChartSVG(factures,myPaiements,curYear)+'</div>'+
-    '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-top:24px"><div style="padding:9px 11px;background:#f8fafc;font-size:11px;font-weight:800;color:#334155">Répartition annuelle</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="padding:7px;text-align:left;color:#64748b">Indicateur</th><th style="padding:7px;text-align:right;color:#64748b">Montant</th><th style="padding:7px;text-align:right;color:#64748b">%</th></tr></thead><tbody>'+
-    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#3b82f6;font-weight:700">Facturé</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(totalVentes)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+(totalVentes>0?'100':'0')+' %</td></tr>'+
-    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#059669;font-weight:700">Encaissé</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(yearCollected)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+pct(yearCollected)+' %</td></tr>'+
-    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#d97706;font-weight:700">Créances courantes</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(yearCurrent)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+pct(yearCurrent)+' %</td></tr>'+
-    '</tbody></table></div></div>'+
-    '</div>'+
-    '</div>'+
-    // RIGHT
-    '<div>'+
-    '<div class="card" style="padding:16px">'+
-    '<div style="font-size:13px;font-weight:700;color:#111827;margin-bottom:12px">'+
-    'Vous avez <strong style="color:#ef4444">'+nbTotal+'</strong> factures non payées dont <strong style="color:#ef4444">'+nbLate+'</strong> où le délais est dépassé'+
-    '</div>'+
-    (unpaidSorted.length===0?'<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">Aucune facture impayée</div>':
-    unpaidSorted.map(f=>{
-      const echD=factureEcheance(f);
-      const isLate=echD&&echD<now;
-      const sd=factStatutDisplay(f);
-      return '<div onclick="factureEditorOpen(\''+f.id+'\')" style="padding:12px;border-radius:6px;cursor:pointer;border:1px solid #f3f4f6;margin-bottom:8px;background:#fff" onmouseover="this.style.background=\'#f9fafb\'" onmouseout="this.style.background=\'#fff\'">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
-        '<div style="font-family:monospace;font-size:12px;font-weight:700;color:#111827">'+escapeHTML(f.numero||"")+'</div>'+
-        '<div style="font-weight:700;font-size:12px;font-family:monospace">'+money(f._sp.reste)+'</div>'+
-        '</div>'+
-        '<div style="font-size:11px;color:#374151;margin-top:2px;font-weight:600">'+escapeHTML(f.client||f.clientNom||"")+'</div>'+
-        '<div style="margin-top:4px"><span style="font-size:10px;font-weight:700;color:'+sd.bg+';text-transform:uppercase">'+escapeHTML(sd.label)+'</span></div>'+
-        '</div>';
-    }).join(""))+
-    '</div></div>'+
+    '<div class="fac-dash-grid">'+
+    '<section class="fac-card fac-dash-chart"><div class="fac-card-head"><h2>Évolution mensuelle des ventes (TTC)</h2><div class="fac-chart-legend"><span><i class="fac-dot-blue"></i>Facturé</span><span><i class="fac-dot-green"></i>Encaissé</span><span><i class="fac-dot-orange"></i>Créances</span></div></div><div class="fac-card-body">'+factMonthlyChartSVG(d.months,d.year)+'</div></section>'+
+    '<section class="fac-card"><div class="fac-card-head"><h2>Répartition des factures</h2></div><div class="fac-card-body"><div class="fac-donut-wrap"><div class="fac-donut">'+factDonutSVG(d.split)+'<div class="fac-donut-center"><strong>'+totalSplit+'</strong><span>facture'+(totalSplit>1?"s":"")+'</span></div></div><div class="fac-donut-legend">'+legend+'</div></div></div></section>'+
+    '<section class="fac-card"><div class="fac-card-head"><h2>Accès rapides</h2></div><div class="fac-card-body"><div class="fac-quick">'+
+    '<button type="button" onclick="factureEditorOpen()">'+facUiIcon("plus",16)+'Nouvelle facture</button>'+
+    '<button type="button" onclick="facOpenPaymentPicker()">'+facUiIcon("plus",16)+'Enregistrer un paiement</button>'+
+    '<button type="button" onclick="facShowLateInvoices()">'+facUiIcon("clock",16)+'Voir les factures en retard</button>'+
+    '<button type="button" onclick="navigate(\'facturation/clients\')">'+facUiIcon("users",16)+'Liste des clients</button>'+
+    '<button type="button" onclick="navigate(\'facturation/missions\')">'+facUiIcon("diamond",16)+'Prestations à facturer</button>'+
+    '</div></div></section></div>'+
+    '<section class="fac-card"><div class="fac-card-head"><h2>Dernières factures</h2><button type="button" class="fac-link" onclick="window.__factureEditId=null;navigate(\'facturation/factures\')">Voir toutes les factures '+facUiIcon("arrowRight",14)+'</button></div>'+
+    '<div class="fac-card-body"><div class="fac-table-wrap">'+(rows?'<table class="fac-table"><thead><tr><th>N° facture</th><th>Date</th><th>Client</th><th class="fac-num">Montant TTC</th><th class="fac-num">Montant encaissé</th><th class="fac-num">Reliquat</th><th>Échéance</th><th>Statut</th><th class="fac-num">Actions</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="fac-empty">Aucune facture émise.</div>')+'</div></div></section>'+
     '</div>';
+}
+// « Enregistrer un paiement » : choix de la facture, puis la modale d'encaissement existante
+// (openPaiementModal → confirmPaiement, écriture et contrôles côté serveur inchangés).
+function facOpenPaymentPicker(){
+  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon"&&f.statut!=="annulee").map(f=>({f,sp:factureStatutPaye(f)})).filter(x=>x.sp.reste>0.01)
+    .sort((a,b)=>String(b.f.date||"").localeCompare(String(a.f.date||"")));
+  openModal('<div class="fac-ui"><h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:#0b2447">Enregistrer un paiement</h3><p style="margin:0 0 12px;font-size:12.5px;color:#64748b">Choisissez la facture à encaisser ('+list.length+' avec un reste à payer).</p>'+
+    (list.length?'<div class="fac-input-icon" style="margin-bottom:10px">'+facUiIcon("search",16)+'<input class="fac-input" type="search" placeholder="Rechercher par numéro ou client…" oninput="facFilterPaymentPicker(this.value)" aria-label="Rechercher une facture"></div>'+
+    '<div class="fac-table-wrap" style="max-height:52vh;overflow:auto"><table class="fac-table"><thead><tr><th>N° facture</th><th>Client</th><th>Date</th><th class="fac-num">Reste</th><th></th></tr></thead><tbody id="fac-pay-pick">'+
+    list.map(({f,sp})=>'<tr data-search="'+escapeHTML((String(f.numero||"")+" "+(f.client||f.clientNom||"")).toLowerCase())+'"><td class="fac-strong">'+escapeHTML(f.numero||"—")+'</td><td>'+escapeHTML(f.client||f.clientNom||"")+'</td><td>'+formatDate(f.date)+'</td><td class="fac-num">'+escapeHTML(money(sp.reste))+'</td><td class="fac-num"><button type="button" class="fac-btn fac-btn-blue" style="height:32px" onclick="openPaiementModal(\''+escapeHTML(jsString(f.id))+'\')">Encaisser</button></td></tr>').join("")+
+    '</tbody></table></div>':'<div class="fac-empty">Aucune facture émise avec un reste à encaisser.</div>')+
+    '<div style="display:flex;justify-content:flex-end;margin-top:14px"><button type="button" class="fac-btn" onclick="closeModal()">Fermer</button></div></div>');
+}
+function facFilterPaymentPicker(q){
+  const v=String(q||"").trim().toLowerCase();
+  document.querySelectorAll("#fac-pay-pick tr").forEach(tr=>{tr.hidden=!!v&&!tr.dataset.search.includes(v)});
 }
 
 function renderFactDevis(view){

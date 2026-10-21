@@ -231,6 +231,9 @@ test('Facturation — NBR dans Chrome réel', { timeout: 240000, skip: !CHROME ?
     await page.waitForSelector('.fact-catalog-card button:not([disabled])');
     assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /Effectif contrat : 30/);
     assert.match(await page.$eval('#fact-commercial-catalog', (el) => el.textContent), /3\s070,32\sDZD HT \/ Jour/);
+    // Assistant 3 étapes : client, objet et période valides ⇒ passage à l'étape « Prestations ».
+    await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Continuer vers les prestations').click());
+    await page.waitForSelector('.fac-editor[data-step="2"] .fact-catalog-card button:not([disabled])', { visible: true });
     await page.click('.fact-catalog-card button:not([disabled])');
     const row = '#fact-lignes-body .fact-ligne-row[data-type="article"]';
     await page.waitForSelector(row + '[data-catalog-key]');

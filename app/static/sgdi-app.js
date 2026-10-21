@@ -5160,33 +5160,132 @@ function sgdiModuleHostDefaultRoute(){
   return cfg.key==="admin"?"#/module-portal":"#/select-societe";
 }
 function sgdiModuleHostRequiresSociete(cfg){return !!cfg&&cfg.key!=="admin"}
+// Pictogrammes du module Facturation (traits simples, couleur héritée).
+const FAC_UI_ICONS={
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14a6.5 6.5 0 0 1 3.5 6"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  diamond:'<path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>',
+  fileCheck:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>',
+  fileMinus:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/>',
+  pdf:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 17v-4h1.5a1.25 1.25 0 0 1 0 2.5H8M13 13v4h1a2 2 0 0 0 0-4z"/>',
+  check:'<path d="m4 12.5 5 5L20 6.5"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9.5"/><path d="m7.5 12.5 3 3 6-6.5"/>',
+  checkSquare:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/>',
+  stack:'<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/><path d="M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+  register:'<rect x="3" y="10" width="18" height="11" rx="2"/><path d="M6 10V6a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4"/><path d="M8 5V3h5v2"/><path d="M7 14h2M11 14h2M15 14h2M7 17.5h10"/>',
+  clock:'<circle cx="12" cy="12" r="9.5"/><path d="M12 6.5V12l3.5 2.5"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
+  bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  chevronDown:'<path d="m6 9 6 6 6-6"/>',
+  chevronRight:'<path d="m9 6 6 6-6 6"/>',
+  building:'<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h1.5M13.5 7H15M9 11h1.5M13.5 11H15M9 15h1.5M13.5 15H15M10 21v-3h4v3"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  filter:'<path d="M3 5h18l-7 8.5V20l-4-2v-4.5z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  alert:'<path d="M12 3 2 20.5h20z"/><path d="M12 10v4.5M12 17.5v.5"/>',
+  coins:'<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v4c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6"/><path d="M5 10v4c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-4"/><path d="M5 14v4c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-4"/>',
+  card:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  info:'<circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.5"/>',
+  arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  arrowLeft:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  arrowUp:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  arrowDown:'<path d="M12 5v14M6 13l6 6 6-6"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  expand:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  clip:'<path d="m21 11.5-8.5 8.5a5 5 0 0 1-7-7L14 4.5a3.4 3.4 0 0 1 4.8 4.8L10.4 17.7a1.7 1.7 0 0 1-2.4-2.4L15.5 7.8"/>',
+  upload:'<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  pencil:'<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  logout:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
+  mapPin:'<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  usersGroup:'<circle cx="12" cy="7.5" r="3"/><circle cx="5" cy="10" r="2.3"/><circle cx="19" cy="10" r="2.3"/><path d="M6.5 20a5.5 5.5 0 0 1 11 0M1.5 19a4 4 0 0 1 5-3.6M22.5 19a4 4 0 0 0-5-3.6"/>',
+  wallet:'<path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2z"/><path d="M16 14.5h.01"/>'
+};
+function facUiIcon(name,size){const s=size||18;return '<svg viewBox="0 0 24 24" width="'+s+'" height="'+s+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+(FAC_UI_ICONS[name]||"")+'</svg>'}
+// Ordre de la navigation Facturation ; null = séparateur visuel.
 function facStandaloneNavItems(){return[
-  ["⌂","Tableau de bord","facturation/dashboard"],["♙","Clients","facturation/clients"],
-  ["◇","Prestations à facturer","facturation/missions"],
-  ["▧","Factures","facturation/factures"],
-  ["✓","Paiements","facturation/paiements"],["↗","Avances","facturation/avances"],
-  ["↩","Avoirs","facturation/avoirs"],["◫","Caisse","facturation/caisse"],
-  ["◷","Balance âgée","facturation/balance"],["≡","Situation","facturation/situation"]
+  ["home","Tableau de bord","facturation/dashboard"],["users","Clients","facturation/clients"],
+  ["diamond","Prestations à facturer","facturation/missions"],
+  ["file","Factures","facturation/factures"],
+  ["check","Paiements","facturation/paiements"],["stack","Avances","facturation/avances"],
+  ["fileMinus","Avoirs","facturation/avoirs"],null,["register","Caisse","facturation/caisse"],
+  ["clock","Balance âgée","facturation/balance"],["chart","Situation","facturation/situation"]
 ]}
+// Année de travail du portail Facturation (en-tête) : simple préférence d'affichage par onglet.
+function facSelectedYear(){
+  let y=null;try{y=parseInt(sessionStorage.getItem("facYear"),10)}catch(e){}
+  return Number.isInteger(y)&&y>2000&&y<2200?y:new Date().getFullYear();
+}
+function facSetYear(value){
+  const y=parseInt(value,10);if(!Number.isInteger(y))return;
+  try{sessionStorage.setItem("facYear",String(y))}catch(e){}
+  window.__facDashPeriod=null;renderView();
+}
+function facYearOptions(){
+  const years=new Set([new Date().getFullYear(),facSelectedYear()]);
+  bySoc(db.factures||[]).forEach(f=>{const y=parseInt(String(f.date||"").slice(0,4),10);if(y>2000&&y<2200)years.add(y)});
+  return [...years].sort((a,b)=>b-a);
+}
+// Factures émises dont l'échéance est dépassée (une facture sans échéance n'est jamais en retard).
+function facLateInvoices(){
+  const now=today();
+  return bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon"&&factureStatutPaye(f).statut==="echue"&&(factureEcheance(f)||"")<now);
+}
+function facToggleUserMenu(ev){
+  ev?.stopPropagation();
+  const box=document.querySelector(".fac-user");if(!box)return;
+  const open=!box.classList.contains("open");box.classList.toggle("open",open);
+  box.querySelector(".fac-user-btn")?.setAttribute("aria-expanded",open?"true":"false");
+  if(open)setTimeout(()=>document.addEventListener("click",()=>{box.classList.remove("open");box.querySelector(".fac-user-btn")?.setAttribute("aria-expanded","false")},{once:true}),0);
+}
+function facShowLateInvoices(){window.__factureEditId=null;window.__factListStatusFilter="echue";navigate("facturation/factures")}
+function renderFacStandaloneHeaderState(){
+  const late=facLateInvoices().length;
+  const bell=document.querySelector(".fac-bell");
+  if(bell){bell.title=late?late+" facture(s) en retard":"Aucune facture en retard";bell.setAttribute("aria-label",bell.title);const c=bell.querySelector(".fac-bell-count");if(c){c.textContent=late>99?"99+":String(late);c.hidden=!late}}
+  const year=document.getElementById("fac-year-select");
+  if(year){const cur=facSelectedYear();year.innerHTML=facYearOptions().map(y=>'<option value="'+y+'"'+(y===cur?" selected":"")+'>'+y+'</option>').join("")}
+}
 function renderFacStandaloneNav(){
   const nav=document.getElementById("sidebar-nav");if(!nav)return;
   const path=(location.hash||"#/facturation/dashboard").slice(2);
-  nav.innerHTML=`<div class="fac-nav-title">Navigation Facturation</div>`+facStandaloneNavItems().map(([icon,label,route])=>`<button type="button" class="fac-nav-link ${sidebarRouteActive(path,route)?"active":""}" data-route="${route}" onclick="sidebarNavigate(event,'${route}')"><span class="fac-nav-icon">${icon}</span><span>${label}</span></button>`).join("");
+  nav.innerHTML=`<div class="fac-nav-title">Navigation Facturation</div>`+facStandaloneNavItems().map(item=>{
+    if(!item)return '<div class="fac-nav-sep" role="separator"></div>';
+    const [icon,label,route]=item;const on=sidebarRouteActive(path,route);
+    return `<button type="button" class="fac-nav-link ${on?"active":""}" data-route="${route}"${on?' aria-current="page"':""} onclick="sidebarNavigate(event,'${route}')"><span class="fac-nav-icon">${facUiIcon(icon,19)}</span><span>${label}</span></button>`;
+  }).join("");
+  renderFacStandaloneHeaderState();
 }
 function renderFacStandaloneShell(){
   const app=document.getElementById("app");
   const soc=session?.societe||"Société non sélectionnée";
   const user=session?.nom||session?.username||"Utilisateur";
+  const initial=(String(user).trim().charAt(0)||"U").toUpperCase();
   document.body.dataset.soc="";
   app.innerHTML=`<div class="fac-standalone-shell">
     ${connectedAccountHeadingHTML()}
     <header class="fac-standalone-header no-print">
       <div class="fac-brand"><div class="fac-brand-mark">FAC</div><div><h1>FACTURATION</h1><small>Gestion autonome des ventes et règlements</small></div></div>
-      <div class="fac-header-context"><strong>${escapeHTML(soc)}</strong><div class="fac-header-actions"><button type="button" onclick="changeSociete()" title="Changer de société"><span>⌂</span> Société</button><button type="button" onclick="logout()" title="Déconnexion"><span>⏻</span> Déconnexion</button></div></div>
+      <div class="fac-header-tools">
+        <button type="button" class="fac-header-field fac-header-society" onclick="changeSociete()" title="Changer de société"><span>Société</span><strong>${escapeHTML(soc)} ${facUiIcon("chevronDown",14)}</strong></button>
+        <label class="fac-header-field"><span>Année</span><select id="fac-year-select" aria-label="Année" onchange="facSetYear(this.value)"></select></label>
+        <button type="button" class="fac-bell" onclick="facShowLateInvoices()">${facUiIcon("bell",21)}<span class="fac-bell-count" hidden></span></button>
+        <div class="fac-user"><button type="button" class="fac-user-btn" aria-haspopup="menu" aria-expanded="false" onclick="facToggleUserMenu(event)"><span class="fac-avatar">${escapeHTML(initial)}</span><span class="fac-user-name">${escapeHTML(user)}</span>${facUiIcon("chevronDown",15)}</button>
+          <div class="fac-user-menu" role="menu"><div class="fac-user-menu-head"><strong>${escapeHTML(user)}</strong><small>${escapeHTML(soc)}</small></div>
+            <button type="button" role="menuitem" onclick="changeSociete()">${facUiIcon("building",16)} Changer de société</button>
+            <button type="button" role="menuitem" onclick="logout()">${facUiIcon("logout",16)} Déconnexion</button></div></div>
+      </div>
     </header>
     <div class="fac-standalone-body">
-      <nav class="fac-nav no-print" id="sidebar-nav"></nav>
-      <main class="fac-main"><div class="fac-main-head"><h2>Espace Facturation</h2><span>${escapeHTML(user)} · Synchronisé avec le serveur</span></div><div id="view"></div></main>
+      <nav class="fac-nav no-print" id="sidebar-nav" aria-label="Navigation Facturation"></nav>
+      <main class="fac-main"><div id="view"></div></main>
     </div>
   </div>`;
   renderFacStandaloneNav();
@@ -8898,6 +8997,8 @@ function normalizeCentralPage(view){
   // font partie des KPI et son bandeau possède déjà son propre habillage. Ne pas
   // lui appliquer le nettoyage générique des emojis/titres des anciennes vues.
   if(view.querySelector(".dp-clean-page"))return;
+  // Écrans Facturation de référence (.fac-ui) : titres, en-têtes et pictogrammes déjà maîtrisés.
+  if(view.querySelector(".fac-ui"))return;
   // OPS → Sites (command center) possède tout son DOM : sa racine contient le h1, donc le
   // normalisateur d'en-tête la prenait pour un bandeau de page (classe .module-page-header :
   // fond blanc, flex) et rangeait ses KPI en « actions » — la grille cassait au premier

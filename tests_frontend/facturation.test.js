@@ -369,13 +369,13 @@ test('Facturation affiche le même TTC contractuel que Commercial depuis les cli
   await t.renderFactClients(view);
   assert.strictEqual(requestedScope,client.societe);
   assert.strictEqual(t.clientMontantTTC(client),19000*1.19);
-  const cells=view.querySelectorAll('tbody tr td');
-  assert.strictEqual(cells[7].textContent,t.formatDZD(19000*1.19));
-  assert.notStrictEqual(cells[7].textContent,t.formatDZD(3000*1.19));
+  const ttcCell=()=>view.querySelector('tbody tr td[data-col="ttc"]').textContent;
+  assert.strictEqual(ttcCell(),t.formatDZD(19000*1.19));
+  assert.notStrictEqual(ttcCell(),t.formatDZD(3000*1.19));
   // Ancien contrat : les quantités globales restent prises en compte par le calcul partagé.
   client.lignesFacturation=[{prixUnitaire:500,qte:3}];client.tech_sites=[];
   await t.renderFactClients(view);
-  assert.strictEqual(view.querySelectorAll('tbody tr td')[7].textContent,t.formatDZD(1500*1.19));
+  assert.strictEqual(ttcCell(),t.formatDZD(1500*1.19));
   w.close();
 });
 
