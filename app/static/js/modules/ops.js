@@ -110,7 +110,10 @@ function opsFilterMovementAgentSelect(query){
   sel.innerHTML=`<option value="">${agents.length?"— Choisir employé —":"— Aucun résultat —"}</option>${agents.map(a=>opsMovementAgentOptionHTML(a,currentId)).join("")}`;
 }
 
-function opsMovementEditorHTML(date,agentId,agents){
+// opt.initialAgent : employé sans affectation venu de « Effectif sans affectation ». Même
+// formulaire, limité à cet employé, avec date d'effet ; la validation crée l'ordre et
+// l'affectation dans une seule transaction serveur (opsValiderAffectationInitiale).
+function opsMovementEditorHTML(date,agentId,agents,opt={}){
   if(isOpsSupervisorReadOnlySession()){
     return `<div class="card p-4 mb-5" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur OPS : les mouvements sont consultables uniquement. La création et la modification d'ordres de mouvement sont desactivees.</div>`;
   }
@@ -121,6 +124,10 @@ function opsMovementEditorHTML(date,agentId,agents){
   const sites=movementSitesForSociete(siteSociete);
   const remplacementAgents=(db.agents||[]).filter(x=>!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete)).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
   const numeroOrdre=nextOrdreMouvementNumero();
+  const initial=opt.initialAgent||null;
+  // Le clic « Affecter » est une demande de saisie explicite (comme l'ouverture d'une fenêtre) :
+  // les champs de cet ordre échappent au verrou de consultation (convention data-no-lock).
+  const lock=initial?" data-no-lock":"";
   const _affMap=new Map();
   agents.forEach(a=>{
     _affMap.set(a.id,agentLiveAffectation(a)||a?.affectationCourante||{});
@@ -147,17 +154,19 @@ function opsMovementEditorHTML(date,agentId,agents){
       +'</label>';
   };
   const initCount=agentId?1:0;
-  return `<form class="card p-5 mb-5" data-ops-movement-form onsubmit="event.preventDefault()">
-    <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-      <div>
-        <h2 class="text-lg font-black uppercase">Ordre de mouvement</h2>
-        <div class="text-xs text-slate-500">${siteSociete?`Société : ${escapeHTML(siteSociete)}`:"Configurez un filtre société pour afficher les sites disponibles."}</div>
-      </div>
-      <input type="hidden" name="date" value="${escapeHTML(date)}"/>
-      <input class="input font-mono font-bold" name="ordreMouvementNumero" value="${escapeHTML(numeroOrdre)}" readonly style="max-width:220px;background:#f8fafc;color:#043970"/>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div class="md:col-span-3">
+  const initialName=initial?((initial.nom||"")+" "+(initial.prenom||"")).trim():"";
+  const initialFonction=initial?(initial.fonction||initial.position||initial.posteContrat||""):"";
+  const agentPicker=initial?`<div class="md:col-span-3 ops-mvt-initial" data-ops-mvt-initial>
+        <div class="ops-mvt-initial-grid">
+          <div><span>Employé</span><b>${escapeHTML(initialName||"—")}</b></div>
+          <div><span>Code</span><b class="font-mono">${escapeHTML(initial.matricule||"—")}</b></div>
+          <div><span>Situation actuelle</span><b>Sans affectation</b></div>
+          <div><span>Société</span><b>${escapeHTML(initial.societe||siteSociete||"—")}</b></div>
+          <div><span>Poste / fonction</span><b>${escapeHTML(initialFonction||"—")}</b></div>
+        </div>
+        <div id="ops-mvt-agent-list" hidden><input type="checkbox" class="ops-mvt-agent-cb" value="${escapeHTML(initial.id)}" checked/></div>
+        <input type="hidden" name="positionActuelle" value="Sans affectation"/>
+      </div>`:`<div class="md:col-span-3">
         <div style="display:flex;justify-content:center;margin-bottom:10px">
           <div style="position:relative;width:100%;max-width:480px">
             <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none">🔍</span>
@@ -183,19 +192,35 @@ function opsMovementEditorHTML(date,agentId,agents){
           </div>
           ${!agents.length?`<div class="p-3 text-slate-500 text-sm text-center">Aucun employé disponible</div>`:""}
         </div>
+      </div>`;
+  // Affectation initiale : seul un site enregistré porte une affectation (pas « Autres »).
+  const siteOptions=sites.filter(s=>!initial||s.backendId);
+  return `<form class="card p-5 mb-5" data-ops-movement-form${initial?` data-ops-initial-assignment="${escapeHTML(initial.id)}" onkeydown="if(event.key==='Escape'){event.preventDefault();opsCancelInitialMovement()}"`:""} onsubmit="event.preventDefault()">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+      <div>
+        <h2 class="text-lg font-black uppercase">Ordre de mouvement</h2>
+        <div class="text-xs text-slate-500">${initial?"Affectation d'un employé sans affectation · ":""}${siteSociete?`Société : ${escapeHTML(siteSociete)}`:"Configurez un filtre société pour afficher les sites disponibles."}</div>
       </div>
-      <div><label class="label">Nouvelle affectation *</label><select class="select" name="siteId" onchange="const o=this.form.querySelector('[data-autres-affectation]');if(o)o.style.display=this.value==='autres'?'block':'none'"><option value="">${sites.length?"— Choisir un site actif —":"— Aucun site actif pour cette société —"}</option>${sites.map(s=>`<option value="${s.id}">${escapeHTML(s.nom||s.intitule||"Site "+s.id)}${s.indicatif?` · ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}<option value="autres">Autres</option></select></div>
+      ${initial?"":`<input type="hidden" name="date" value="${escapeHTML(date)}"/>`}
+      <input class="input font-mono font-bold" name="ordreMouvementNumero" value="${escapeHTML(numeroOrdre)}" readonly aria-label="N° d'ordre de mouvement" style="max-width:220px;background:#f8fafc;color:#043970"/>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      ${agentPicker}
+      <div><label class="label" for="ops-mvt-site">Nouvelle affectation *</label><select class="select" id="ops-mvt-site" name="siteId"${lock} onchange="const o=this.form.querySelector('[data-autres-affectation]');if(o)o.style.display=this.value==='autres'?'block':'none'"><option value="">${siteOptions.length?"— Choisir un site actif —":"— Aucun site actif pour cette société —"}</option>${siteOptions.map(s=>`<option value="${s.id}">${escapeHTML(s.nom||s.intitule||"Site "+s.id)}${s.indicatif?` · ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}${initial?"":`<option value="autres">Autres</option>`}</select></div>
+      ${initial?`<div><label class="label" for="ops-mvt-date">Date d'effet *</label><input class="input" id="ops-mvt-date" type="date" name="date" data-no-lock value="${escapeHTML(date)}" min="${escapeHTML(today())}" required/></div>`:""}
       <div data-autres-affectation style="display:none"><label class="label">Préciser autre affectation</label><input class="input" name="autreAffectation" value="" placeholder="Préciser l'affectation"/></div>
-      <div><label class="label">Motif du mouvement</label><select class="select" name="mouvementMotif" onchange="const box=this.form.querySelector('[data-remplace-agent]');const lbl=this.form.querySelector('[data-remplace-label]');const show=['Remplacement Absence','Remplacement Malade','Remplacement Abandon de poste'].includes(this.value);if(box)box.style.display=show?'block':'none';if(lbl)lbl.textContent=this.value==='Remplacement Malade'?'Employé malade':(this.value==='Remplacement Abandon de poste'?'Employé en abandon de poste':'Employé absent')">${motifs.map(x=>`<option>${x}</option>`).join("")}</select></div>
-      <div><label class="label">Durée du mouvement</label><select class="select" name="mouvementDuree">${durees.map(x=>`<option>${x}</option>`).join("")}</select></div>
-      <div><label class="label">Groupe</label><select class="select" name="groupe"><option value="">— Groupe —</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+      <div><label class="label">Motif du mouvement</label><select class="select" name="mouvementMotif"${lock} onchange="const box=this.form.querySelector('[data-remplace-agent]');const lbl=this.form.querySelector('[data-remplace-label]');const show=['Remplacement Absence','Remplacement Malade','Remplacement Abandon de poste'].includes(this.value);if(box)box.style.display=show?'block':'none';if(lbl)lbl.textContent=this.value==='Remplacement Malade'?'Employé malade':(this.value==='Remplacement Abandon de poste'?'Employé en abandon de poste':'Employé absent')">${motifs.filter(x=>!initial||!fpqNeedsRemplaceAgent(x)).map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div><label class="label">Durée du mouvement</label><select class="select" name="mouvementDuree"${lock}>${durees.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div><label class="label">Groupe</label><select class="select" name="groupe"${lock}><option value="">— Groupe —</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
       <div data-remplace-agent style="display:none"><label class="label" data-remplace-label>Employé absent</label><select class="select" name="remplaceAgentId"><option value="">— Choisir l'employé concerné —</option>${remplacementAgents.map(x=>`<option value="${x.id}">${escapeHTML((x.matricule?x.matricule+" · ":"")+(x.nom||"")+" "+(x.prenom||""))}</option>`).join("")}</select></div>
-      <div class="md:col-span-3"><label class="label">Observation</label><textarea class="input" name="mouvementObs" rows="3" placeholder="Observation du mouvement..."></textarea></div>
+      <div class="md:col-span-3"><label class="label">Observation</label><textarea class="input" name="mouvementObs"${lock} rows="3" placeholder="Observation du mouvement..."></textarea></div>
     </div>
     <div class="flex gap-2 justify-end mt-4 flex-wrap">
-      <button type="button" class="btn btn-secondary" onclick="opsEditerOrdreMouvementCentral(this)">Editer OM</button>
+      ${initial?`<button type="button" class="btn btn-ghost" onclick="opsCancelInitialMovement()">Annuler</button>
+      <button type="button" class="btn btn-primary" data-om-submit onclick="opsValiderAffectationInitiale(this,false)">Valider OM</button>
+      <button type="button" class="btn btn-secondary" data-om-submit onclick="opsValiderAffectationInitiale(this,true)">Valider &amp; Imprimer</button>`:`<button type="button" class="btn btn-secondary" onclick="opsEditerOrdreMouvementCentral(this)">Editer OM</button>
       <button type="button" class="btn btn-primary" onclick="opsValiderOrdreMouvementCentral(this)">Valider OM</button>
-      <button type="button" class="btn btn-ghost" onclick="opsImprimerOrdreMouvementCentral(this)">Imprimer OM</button>
+      <button type="button" class="btn btn-ghost" onclick="opsImprimerOrdreMouvementCentral(this)">Imprimer OM</button>`}
     </div>
   </form>`;
 }
@@ -340,9 +365,10 @@ function _renderOpsMouvementsHTML(view){
     .filter(f=>{if(!searchQ)return true;const a=f._agent;const hay=[opsMovementAgentLabel(a),(a?.nom||"")+" "+(a?.prenom||""),a?.matricule||a?.code||"",a?.affectationCourante?.structure||a?.structure||"",a?.societe||"",f.ordreMouvementNumero||f.mouvementNumero||"",f.mouvementMotif||f.mouvementType||"",opsMovementSiteLabel(f),opsMovementClientLabel(f),f.groupe||"",f.date||""].join(" ").toLowerCase();return hay.includes(searchQ)})
     .sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||"")));
   const agents=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!ficheAgentIsSortantArchive(a)&&a.statut!=="suspendu").sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
+  const initialAgent=opsInitialMovementAgent(selectedMovementAgent);
   const count=p=>baseRows.filter(f=>opsMovementInPeriod(f,p)).length;
   view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Mouvement</h1><div class="ops-dash-hero-sub"><span>Ordres de mouvement OPS · ${soc?escapeHTML(soc):"Toutes sociétés"} · ${baseRows.length} mouvement(s)</span></div></div></div></div>
-  ${opsMovementEditorHTML(today(),selectedMovementAgent,agents)}
+  ${opsMovementEditorHTML(today(),selectedMovementAgent,agents,{initialAgent})}
   <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">${opsMovementSitesReferenceHTML(soc,rows)}${opsMovementGroupHTML("Par client",rows,opsMovementClientLabel)}</div>
   <div class="ops-dash-card">
     <div class="ops-dash-card-head">
@@ -357,6 +383,104 @@ function _renderOpsMouvementsHTML(view){
     </tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun mouvement enregistré.</div>`}</div>
   </div>`;
   if(presetAgent)sessionStorage.removeItem("opsMovementAgentId");
+  if(initialAgent)setTimeout(()=>{const a=document.activeElement;if(!a||a===document.body||!view.contains(a))view.querySelector("#ops-mvt-site")?.focus({preventScroll:true})},0);
+}
+
+// Employé venu de « Effectif sans affectation » (bouton Affecter), tant qu'il est toujours
+// sans affectation courante. Sinon l'éditeur reprend son mode habituel.
+function opsInitialMovementAgent(selectedId){
+  const id=sessionStorage.getItem("opsMovementInitialAgent")||"";
+  if(!id||String(id)!==String(selectedId||""))return null;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(id));
+  if(!a||agentHasLiveAffectation(a)){sessionStorage.removeItem("opsMovementInitialAgent");return null}
+  return a;
+}
+
+function opsClearInitialMovement(){
+  ["opsMovementInitialAgent","opsMovementAgentId","opsMovementSelectedAgent"].forEach(k=>sessionStorage.removeItem(k));
+}
+
+function opsCancelInitialMovement(){
+  opsClearInitialMovement();
+  navigate("effectif/preparation_affectation");
+}
+
+// Valide l'ordre de mouvement ET crée l'affectation dans une seule transaction serveur : le
+// succès n'est affiché qu'après la réponse (jamais d'OM « validé » sans affectation).
+async function opsValiderAffectationInitiale(btn,print){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return false;
+  const form=btn?.closest?.("form[data-ops-initial-assignment]");
+  if(!form||form.dataset.busy==="1")return false;
+  const ctx=opsMovementCentralContext(btn);if(!ctx)return false;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(form.dataset.opsInitialAssignment));
+  if(!a||ctx.agentIds.length!==1||String(ctx.agentId)!==String(a.id)){toast("Ordre de mouvement limité à l'employé sélectionné","error");return false}
+  const siteBackendId=sqlBackendId(ctx.patch.siteBackendId);
+  if(!siteBackendId){toast("Choisissez un site actif enregistré","error");return false}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(ctx.date)||ctx.date<today()){toast("La date d'effet ne peut pas être antérieure à aujourd'hui","error");return false}
+  if(!a.backendId){toast("Employé introuvable sur le serveur : actualisez la liste","error");return false}
+  const win=print?window.open("","_blank","width=1100,height=760"):null;
+  const buttons=[...form.querySelectorAll("button")];
+  form.dataset.busy="1";
+  buttons.forEach(b=>{b.disabled=true});
+  btn.setAttribute("aria-busy","true");
+  showOmSaveOverlay();
+  let res;
+  try{
+    res=await SGDI.movements.initialAssignment({
+      employee_id:Number(a.backendId),site_id:Number(siteBackendId),effective_date:ctx.date,agent_ref:String(a.id),
+      movement_number:ctx.patch.ordreMouvementNumero||"",group_code:ctx.patch.groupe||"",motif:ctx.patch.mouvementMotif||"Affectation",
+      duree:ctx.patch.mouvementDuree||"",observation:ctx.patch.mouvementObs||"",site_ref:String(ctx.patch.siteId||"")
+    });
+  }catch(e){
+    closeOmSaveOverlay();
+    if(win)win.close();
+    delete form.dataset.busy;
+    buttons.forEach(b=>{b.disabled=false});
+    btn.removeAttribute("aria-busy");
+    toast(e?.status===409?"Cet employé possède déjà une affectation active. Actualisez la liste.":"Ordre de mouvement non validé : "+(e?.message||e),"error");
+    return false;
+  }
+  const movement=res.movement||{};
+  const assignment=assignmentFromApi(res.assignment||{});
+  fpqUpsertLocalPresenceLine(res.line||{...movement});
+  const saved=opsUpsertMovementHistory(movement)||movement;
+  sgdiUpsertServerItem("assignments",assignment);
+  if(res.effective_today)applyAssignmentsToEmployees([assignment]);
+  addEmployeeCareerEvent(a,"Affectation",{date:ctx.date,motif:`${movement.mouvementMotif||"Affectation"} vers ${movement.siteName||assignment.siteName||"site"}`,source:"ordre-mouvement",sourceId:movement.ordreMouvementNumero||"",details:{siteId:assignment.siteId,siteName:movement.siteName||assignment.siteName,groupe:assignment.groupe}});
+  opsClearInitialMovement();
+  window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+  updateOmSaveOverlay("Ordre de mouvement validé",true);
+  setTimeout(closeOmSaveOverlay,1800);
+  toast(`Ordre de mouvement ${movement.ordreMouvementNumero||""} validé · affectation créée`,"success");
+  // Page reconstruite (historique et compteurs à jour), confirmation à la place de l'éditeur.
+  const view=document.getElementById("view");
+  const done=opsInitialMovementDoneHTML(saved,a,res.effective_today);
+  if(view&&view.contains(form)&&/ops\/mouvements/.test(location.hash)){
+    _renderOpsMouvementsHTML(view);
+    const editor=view.querySelector("form[data-ops-movement-form]");
+    if(editor)editor.outerHTML=done;else view.insertAdjacentHTML("afterbegin",done);
+  }else if(form.isConnected)form.outerHTML=done;
+  if(win)opsPrintMovementDocument(saved,true,{win});
+  // Archive du document dans la fiche (comme la validation habituelle), sans bloquer l'écran.
+  opsArchiveMovementDocument(saved).catch(e=>console.warn("Archivage OM",e));
+  sgdiRefreshCountersNow({reason:"initial-om"});
+  return true;
+}
+
+function opsInitialMovementDoneHTML(f,a,effectiveToday){
+  const ref=f.ordreMouvementNumero||f.mouvementNumero||"";
+  const rowId=f.backendId||f.id||"";
+  const name=((a?.nom||"")+" "+(a?.prenom||"")).trim();
+  return `<section class="card p-5 mb-5 ops-mvt-done" data-ops-initial-done role="status">
+    <div class="ops-mvt-done-head"><span aria-hidden="true">✓</span><div><h2 class="text-lg font-black uppercase">Ordre de mouvement validé</h2>
+    <p>Affectation ${effectiveToday?"créée":`planifiée au ${escapeHTML(formatDate(f.dateEffet||f.date||""))}`} · ${escapeHTML(name)} → ${escapeHTML(f.siteName||"—")}</p>
+    <p>N° OM : <b class="font-mono">${escapeHTML(ref)}</b></p></div></div>
+    <div class="flex gap-2 justify-end mt-4 flex-wrap">
+      <button type="button" class="btn btn-secondary" onclick="opsOpenMovementDocumentByRow('${escapeHTML(jsString(rowId))}')">Voir l'ordre</button>
+      <button type="button" class="btn btn-ghost" onclick="opsOpenMovementDocumentByRow('${escapeHTML(jsString(rowId))}',true)">Imprimer</button>
+      <button type="button" class="btn btn-primary" onclick="navigate('effectif/preparation_affectation')">Retour à Sans affectation</button>
+    </div>
+  </section>`;
 }
 
 function opsDashboardRefreshFeuillePresence(){

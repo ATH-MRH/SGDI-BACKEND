@@ -12240,3 +12240,19 @@ body #view .drh-cand-page .drh-cand-card table tbody td{padding:14px 20px!import
 .nc-client-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:#64748b}
 .nc-client-status:empty{display:none}
 .nc-client-status[data-state="error"]{color:#b91c1c;font-weight:600}
+
+/* OPS — Effectif sans affectation : « Affecter → » ouvre l'ordre de mouvement de l'employé. */
+#view .ops-assign-btn{white-space:nowrap}
+#view .ops-assign-btn:not(:disabled) .ops-btn__label::after{content:" →"}
+@media (max-width:600px){#view .ops-assign-btn:not(:disabled) .ops-btn__label::after{content:none}}
+#view .ops-mvt-initial{border:1px solid #dbe3ef;border-radius:10px;background:#f8fafc;padding:12px 14px}
+#view .ops-mvt-initial-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px}
+#view .ops-mvt-initial-grid span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:#64748b}
+#view .ops-mvt-initial-grid b{display:block;font-size:14px;color:#0f172a;overflow-wrap:anywhere}
+#view .ops-mvt-done{border-left:4px solid var(--atlas-success,#117647)}
+#view .ops-mvt-done-head{display:flex;gap:12px;align-items:flex-start}
+#view .ops-mvt-done-head>span{flex:0 0 auto;width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:var(--atlas-success-soft,#e7f6ef);color:var(--atlas-success,#117647);font-weight:900}
+#view .ops-mvt-done-head p{margin:4px 0 0;font-size:13px;color:#334155;overflow-wrap:anywhere}
+/* Tableau trop large (tablette étroite, mobile) : défilement horizontal, colonne Action toujours visible. */
+#view .ops-prep-assign-card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#view .ops-prep-assign-card th:last-child,#view .ops-prep-assign-card td:last-child{position:sticky;right:0;background:#fff;box-shadow:-8px 0 8px -8px rgba(15,23,42,.18)}

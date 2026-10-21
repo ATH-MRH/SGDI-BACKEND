@@ -215,6 +215,8 @@ class DailyPresenceOut(DailyPresenceCreate):
     id: int
     generated: int = 0
     closed_at: datetime | None = None
+    # Lot 0 : PLANIFIE / A_VERIFIER / POINTE / JUSTIFIE / VALIDE (app/modules/attendance/presence_state.py).
+    presence_state: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -249,6 +251,21 @@ class OpsMovementCreate(BaseModel):
     movement_reason: str | None = None
     society: str | None = None
     data: dict[str, Any] | None = None
+
+
+class InitialAssignmentCreate(BaseModel):
+    """Ordre de mouvement d'un employé sans affectation, validé avec son affectation."""
+    employee_id: int
+    site_id: int
+    effective_date: date
+    # Référence de l'employé côté écran (clé de la ligne de présence), sinon son matricule.
+    agent_ref: str | None = None
+    movement_number: str | None = None
+    group_code: str | None = None
+    motif: str = "Affectation"
+    duree: str | None = None
+    observation: str | None = None
+    site_ref: str | None = None
 
 
 class OpsMovementOut(OpsMovementCreate):
