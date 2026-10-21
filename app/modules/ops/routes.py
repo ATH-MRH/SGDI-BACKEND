@@ -22,6 +22,7 @@ from app.modules.ops.schemas import (
     DailyPresenceCreate,
     DailyPresenceOut,
     DailyPresenceUpdate,
+    InitialAssignmentCreate,
     OpsMovementCreate,
     OpsMovementOut,
     RotationGenerateRequest,
@@ -550,7 +551,18 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
         _ensure_site_allowed(db, user, site_id)
     rows = service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
     allowed = None if site_id else _allowed_assignment_site_ids(db, user)
-    return rows if allowed is None else [row for row in rows if row.site_id in set(allowed)]
+    rows = rows if allowed is None else [row for row in rows if row.site_id in set(allowed)]
+    return _with_presence_state(db, rows)
+
+
+def _with_presence_state(db: Session, rows: list[DailyPresence]) -> list[DailyPresence]:
+    """État calculé de chaque journée (lot 0), exposé sans être stocké."""
+    from app.modules.attendance import presence_state
+
+    states = presence_state.states_for(db, rows)
+    for row in rows:
+        row.presence_state = states.get(row.id)
+    return rows
 
 
 _PLANNING_FIELDS = ("group_code", "relief_time", "rotation_system", "rotation_group", "rotation_period",
@@ -601,7 +613,7 @@ def create_daily_presence(payload: DailyPresenceCreate, request: Request, db: Se
             setattr(row, field, value)
     db.commit()
     db.refresh(row)
-    return row
+    return _with_presence_state(db, [row])[0]
 
 
 @router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut)
@@ -630,7 +642,7 @@ def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, reques
             setattr(row, field, value)
     db.commit()
     db.refresh(row)
-    return row
+    return _with_presence_state(db, [row])[0]
 
 
 @router.get("/events/page")
@@ -676,6 +688,29 @@ def list_movements(
     if response is not None:
         response.headers["X-Total-Count"] = str(total)
     return service.list_movements(db, society=society, limit=limit)
+
+
+@router.post("/movements/initial-assignment")
+def assign_unassigned_employee(payload: InitialAssignmentCreate, request: Request, background_tasks: BackgroundTasks,
+                               db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Effectif sans affectation → ordre de mouvement validé → affectation (une transaction)."""
+    from app.modules.ops import initial_assignment
+    from app.modules.ops.employee_photos import employee_scope_conditions
+
+    employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    # Même périmètre que la liste des employés OPS : un compte limité à des sites ne voit pas
+    # les employés sans affectation, il ne peut donc pas en affecter.
+    conditions, _sites = employee_scope_conditions(db, user)
+    if not db.execute(select(Employee.id).where(Employee.id == employee.id, *conditions)).first():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employé hors périmètre")
+    site = _ensure_site_allowed(db, user, payload.site_id)
+    if not _site_society(site) or not employee.society or _normalize_society(_site_society(site)) != _normalize_society(employee.society):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société employé/site incohérente")
+    result = initial_assignment.assign(db, user, employee, site, payload, request=request)
+    assignment = result["assignment"]
+    if _normalize_society(employee.society) == "IRON GLOBAL SECURITE":
+        background_tasks.add_task(iron_sync.push_payload, iron_sync.build_payload(employee, site, assignment))
+    return {**result, "assignment": AssignmentOut.model_validate(assignment).model_dump(mode="json")}
 
 
 @router.post("/movements", response_model=OpsMovementOut)

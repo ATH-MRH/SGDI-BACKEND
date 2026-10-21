@@ -1,4 +1,4 @@
-// OPS → Sites en Command Center — contrôle en Chrome RÉEL (carte MapLibre/OSM, thème, responsive).
+// OPS → Sites en Command Center (thème clair) — contrôle en Chrome RÉEL (carte MapLibre/OSM, thème, responsive).
 // node --test tests_frontend/ops-sites-command-center-chrome.test.js
 // Serveur uvicorn isolé + SQLite temporaire + fixtures synthétiques. Les tuiles OpenStreetMap
 // viennent d'Internet : leur chargement est relevé (tilesLoaded) mais n'est pas une assertion.
@@ -36,7 +36,7 @@ test('OPS → Sites Command Center — Chrome réel', {
   await page.waitForFunction(() => document.querySelectorAll('.ops-sites-cc .ops-sites-cc-marker').length > 0, { timeout: 20000 });
   await atlas.delay(2500); // laisse aux tuiles distantes le temps d'arriver (relevé, non bloquant)
 
-  await t.test('command center sombre, données réelles du périmètre, pas de maquette', async () => {
+  await t.test('command center clair, données réelles du périmètre, pas de maquette', async () => {
     const state = await page.evaluate(() => {
       const root = document.querySelector('.ops-sites-cc');
       const text = selector => [...root.querySelectorAll(selector)].map(el => el.textContent.replace(/\s+/g, ' ').trim());
@@ -54,9 +54,9 @@ test('OPS → Sites Command Center — Chrome réel', {
       };
     });
     report.state = state;
-    const [r, g, b] = rgb(state.background);
-    assert.ok(r < 40 && g < 50 && b < 80 && b > r, 'fond bleu nuit: ' + state.background);
-    assert.ok(rgb(state.cardColor).slice(0, 3).every(n => n > 220), 'texte clair sur carte sombre');
+    assert.ok(state.background === 'rgba(0, 0, 0, 0)' || rgb(state.background).slice(0, 3).every(n => n >= 240), 'fond clair: ' + state.background);
+    const [r, g, b] = rgb(state.cardColor);
+    assert.ok(r < 60 && g < 70 && b < 110 && b > r, 'texte bleu marine sur carte blanche: ' + state.cardColor);
     assert.ok(rgb(state.body).slice(0, 3).every(n => n >= 240), 'le shell global reste clair');
     assert.equal(state.shell.sidebars, 1, 'pas de seconde sidebar');
     assert.equal(state.shell.topbars, 1, 'pas de second header global');
@@ -108,7 +108,7 @@ test('OPS → Sites Command Center — Chrome réel', {
     assert.ok(map.interactive, 'carte interactive');
     assert.deepEqual(map.markers, ['alerte', 'inactif', 'operationnel', 'operationnel'], 'un marqueur par site positionné, coloré par statut réel');
     assert.deepEqual(map.positions, [[-0.631, 35.697], [3.059, 36.754], [6.615, 36.365], [7.767, 36.9]], 'coordonnées réelles');
-    assert.equal(map.osmPaint, 0, 'rendu sombre appliqué à la couche OSM');
+    assert.equal(map.osmPaint, undefined, 'tuiles OSM non inversées (thème clair)');
   });
 
   await t.test('filtres, détail conservé et vues', async () => {
@@ -137,7 +137,7 @@ test('OPS → Sites Command Center — Chrome réel', {
     await page.click('[data-cc-view-btn="carte"]');
     await page.click('[data-cc-layout-btn="grille"]');
     await page.select('#sites-map-select', '__all__'); // recadre la carte sur tous les sites positionnés
-    assert.match(await page.$eval('#ops-sites-cc-search', el => getComputedStyle(el).backgroundColor), /rgb\(10, 23, 48\)/, 'champ de recherche sombre');
+    assert.match(await page.$eval('#ops-sites-cc-search', el => getComputedStyle(el).backgroundColor), /rgb\(255, 255, 255\)/, 'champ de recherche blanc');
   });
 
   await t.test('responsive : aucune barre horizontale globale, colonnes de cartes par largeur', async () => {

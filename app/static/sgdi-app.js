@@ -676,7 +676,9 @@ async function sgdiApi(path,options){
     const message=sgdiApiErrorMessage(res.status,raw,out,"Erreur API "+res.status);
     console.error("Erreur API",res.status,url,out);
     if(requestToken===sgdiAuthToken()&&sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
-    throw new Error(message);
+    const error=new Error(message);
+    error.status=res.status;
+    throw error;
   }
   if(requestToken===sgdiAuthToken()&&sgdiIsMutatingMethod(opts.method))sgdiPublishDataChange(path);
   if(out.data!==undefined&&Object.keys(out).every(k=>k==='data'||k==='ok'))return out.data;
@@ -1827,7 +1829,7 @@ window.SGDI_API={
   sites:{list:(params)=>sgdiApi("/ops/sites"+(params?sgdiQuery(params):""),{legacy:false}),page:(params)=>sgdiApi("/ops/sites/page"+sgdiQuery(params),{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:(params)=>sgdiApi("/ops/sites/situation-generale"+(params?sgdiQuery(params):""),{legacy:false})},
   pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),dailyPage:(params)=>sgdiApi("/ops/pointage/daily/page"+sgdiQuery(params),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
   events:{list:()=>sgdiApi("/ops/events",{legacy:false}),page:(params)=>sgdiApi("/ops/events/page"+sgdiQuery(params),{legacy:false})},
-  movements:{list:(params)=>sgdiApi("/ops/movements"+(params?sgdiQuery(params):""),{legacy:false}),upsert:(payload)=>sgdiApi("/ops/movements",{method:"POST",body:payload,legacy:false})},
+  movements:{list:(params)=>sgdiApi("/ops/movements"+(params?sgdiQuery(params):""),{legacy:false}),upsert:(payload)=>sgdiApi("/ops/movements",{method:"POST",body:payload,legacy:false}),initialAssignment:(payload)=>sgdiApi("/ops/movements/initial-assignment",{method:"POST",body:payload,legacy:false})},
   assignments:{
     page:(params)=>sgdiApi("/ops/assignments/page"+sgdiQuery(params),{legacy:false}),
     list:(params)=>sgdiApi("/ops/assignments"+sgdiQuery(params),{legacy:false}),
@@ -2427,7 +2429,9 @@ function assignmentFromApi(row){
   };
 }
 function applyAssignmentsToEmployees(assignments){
-  const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0);
+  // Une affectation à date d'effet future (ordre de mouvement planifié) n'est pas l'affectation
+  // courante : même règle que /ops/employees (start_date <= aujourd'hui).
+  const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0&&!(String(x.dateDebut||"").slice(0,10)>today()));
   // On NE vide plus l'affectation en se basant sur db.assignments (souvent incomplet côté client) :
   // c'est ce qui faisait perdre l'affectation à des employés pourtant affectés (50/19 au lieu de 71/0).
   // La vérité de l'affectation vient désormais du serveur (endpoint /drh/employees). Ici on se contente
@@ -2794,11 +2798,17 @@ async function sgdiBackgroundSqlSync(options){
     if(cancelled||token!==sgdiAuthToken())return;
     // Données complètes chargées : on lève l'écran de chargement et on affiche les vrais chiffres.
     sgdiFullDataReady=true;
+    // Le filet de 20 s n'a plus lieu d'être : sans cette annulation, il reconstruisait la vue
+    // courante 20 s après chaque chargement, hors des gardes d'édition.
+    if(window.__sgdiDataReadySafety){clearTimeout(window.__sgdiDataReadySafety);window.__sgdiDataReadySafety=null;}
     requestAnimationFrame(()=>{
       if(token!==sgdiAuthToken())return;
       try{renderSidebar()}catch(_e){}
       try{refreshModuleCountersRibbon()}catch(_e){}
-      try{if(opt.render!==false&&document.getElementById("view")&&typeof renderView==="function")renderView()}catch(_e){}
+      // Une vue restée sur « Chargement des données… » est rendue dès l'arrivée des données, même
+      // lors d'une synchronisation silencieuse : elle attendait jusqu'ici le filet de 20 s.
+      const awaitingData=!!document.querySelector("#view [data-sgdi-awaiting-data]");
+      try{if(opt.render!==false&&document.getElementById("view")&&typeof renderView==="function")renderView();else if(awaitingData&&typeof renderView==="function")renderView()}catch(_e){}
     });
   });
   sgdiSqlSyncInProgress=pending;
@@ -8894,6 +8904,8 @@ function normalizeCentralPage(view){
   // renderView suivant le chargement. Le premier rendu, asynchrone, n'est jamais normalisé :
   // les rendus suivants doivent produire exactement le même DOM.
   if(view.querySelector(".ops-sites-cc"))return;
+  // Idem pour la fiche technique site (.stf) : rendu asynchrone, en-tête propre.
+  if(view.querySelector(".stf"))return;
   const iconPattern=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
   const walker=document.createTreeWalker(view,NodeFilter.SHOW_TEXT,{acceptNode(node){
     const parent=node.parentElement;
@@ -9121,11 +9133,11 @@ function renderView(){
   // contrats...). Le login et la sélection de société passent avant renderView -> non concernés.
   if(session&&typeof sgdiBackendShouldUse==="function"&&sgdiBackendShouldUse()&&!sgdiFullDataReady){
     const _v=document.getElementById("view");
-    if(_v)_v.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement des données…</div><div class="text-sm">Récupération des chiffres réels depuis le serveur.</div></div>`;
+    if(_v)_v.innerHTML=`<div class="card p-12 text-center text-slate-500" data-sgdi-awaiting-data="1"><div class="text-lg font-black mb-2">Chargement des données…</div><div class="text-sm">Récupération des chiffres réels depuis le serveur.</div></div>`;
     if(typeof uiProgressDone==="function")uiProgressDone();
     // Filet anti-blocage : si le serveur ne répond jamais, on affiche au pire ce qu'on a après 20s.
     if(!window.__sgdiDataReadySafety){
-      window.__sgdiDataReadySafety=setTimeout(()=>{sgdiFullDataReady=true;try{if(typeof renderView==="function")renderView()}catch(e){}},20000);
+      window.__sgdiDataReadySafety=setTimeout(()=>{window.__sgdiDataReadySafety=null;if(sgdiFullDataReady)return;sgdiFullDataReady=true;try{if(typeof renderView==="function")renderView()}catch(e){}},20000);
     }
     return;
   }
@@ -9281,7 +9293,15 @@ function sgdiGuardUncontrolledUrlChange(){
   if(typeof toast==="function")toast("Modifications non enregistrées — enregistrez avant de quitter cette fiche.","error");
   return true;
 }
+// Un même changement de # déclenche popstate puis hashchange : sans ce marqueur, chaque retour
+// arrière ou lien direct rendait la page deux fois (deux rendus asynchrones concurrents).
+let _sgdiUrlEventHandled=null;
+function sgdiUrlEventAlreadyHandled(){
+  return !!_sgdiUrlEventHandled&&_sgdiUrlEventHandled.href===location.href&&Date.now()-_sgdiUrlEventHandled.at<1000;
+}
+function sgdiMarkUrlEventHandled(){_sgdiUrlEventHandled={href:location.href,at:Date.now()};}
 window.addEventListener("hashchange",()=>{
+  if(sgdiUrlEventAlreadyHandled())return;
   if(sgdiGuardUncontrolledUrlChange())return;
   sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;
   if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){
@@ -9289,11 +9309,14 @@ window.addEventListener("hashchange",()=>{
   }else sgdiEnterViewMode(true);
   render();
   sgdiLastKnownHref=location.href;
+  sgdiMarkUrlEventHandled();
 });
 window.addEventListener("popstate",()=>{
+  if(sgdiUrlEventAlreadyHandled())return;
   if(sgdiGuardUncontrolledUrlChange())return;
   sgdiMarkUserNavigation();uiProgressStart();render();
   sgdiLastKnownHref=location.href;
+  sgdiMarkUrlEventHandled();
 });
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
@@ -15371,9 +15394,10 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
   const full=((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase();
   const employeeCode=a.matricule||a.code||draft.matricule||draft.employeeCode||"";
   const poste=a.affectationCourante?.poste||a.fonction||a.position||"";
-  const isFirst=/premi[eè]re installation/i.test(draft.natureMouvement);
-  const isTemp=/provisoire/i.test(draft.natureMouvement);
-  const isDef=/d[eé]finitif/i.test(draft.natureMouvement)||!isTemp;
+  // Employé sans affectation (origine « Sans affectation ») : première affectation.
+  const isFirst=/premi[eè]re installation/i.test(draft.natureMouvement)||/^sans affectation$/i.test(String(draft.currentPosition||"").trim());
+  const isTemp=/provisoire/i.test(draft.natureMouvement)||/provisoire/i.test(draft.duree||"");
+  const isDef=/d[eé]finitif/i.test(draft.natureMouvement)||/d[eé]finitif/i.test(draft.duree||"")||!isTemp;
   const reference=draft.reference||ref;
   const meta={agentId:a.id,title,category:"OPS",type,reference,date:draft.dateDebut||today()};
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title><style>
@@ -15386,7 +15410,7 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
     <div class="op-row">${opsAssignmentLine("Affectation actuelle",draft.currentPosition,true)}${opsAssignmentLine("Indicatif",draft.currentIndicatif)}</div>
     <div class="op-row">${opsAssignmentLine("Nouvelle Affectation",draft.newPosition,true)}${opsAssignmentLine("Indicatif",draft.newIndicatif)}</div>
     <div class="op-motif"><div class="op-motif-box">Motif du Mouvement : &nbsp; Premiere Affectation ${opsAssignmentCheckbox(isFirst)} &nbsp;&nbsp; Remp Absence ${opsAssignmentCheckbox(false)} &nbsp;&nbsp; Nouvelle Affectation ${opsAssignmentCheckbox(!isFirst)}</div><div class="op-motif-box">Définitif ${opsAssignmentCheckbox(isDef)} &nbsp;&nbsp; Provisoir ${opsAssignmentCheckbox(isTemp)}</div></div>
-    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : <span class="op-dots" style="display:inline-block;width:45mm"></span></div><div>Signature<span class="op-dots" style="display:inline-block;width:54mm"></span></div></div></div></div>
+    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : ${draft.auteur?`<b>${escapeHTML(draft.auteur)}</b>`:`<span class="op-dots" style="display:inline-block;width:45mm"></span>`}</div><div>Signature<span class="op-dots" style="display:inline-block;width:54mm"></span></div></div></div></div>
     <div class="op-sign-grid"><div class="op-sign">En cas de Refus<br/><br/>Signature<br/><br/>............................</div><div class="op-sign">En cas d'Acceptation<br/><br/>Signature<br/><br/>............................</div></div>
     <div class="op-bottom"></div>
   </main></body></html>`;
@@ -20184,6 +20208,8 @@ function opsMovementDraftFromPresence(f){
     groupe:f.groupe||current.groupe||"",
     dateDebut:opsMovementDateValue(f)||today(),
     motifChangement:f.mouvementObs||"",
+    duree:f.mouvementDuree||"",
+    auteur:f.validatedBy||"",
     reference:f.ordreMouvementNumero||f.mouvementNumero||nextOrdreMouvementNumero()
   };
 }
@@ -20218,7 +20244,8 @@ function opsPrintMovementDocument(f,autoPrint=true,opt={}){
   if(!draft.a?.id){toast("Employé introuvable pour l'ordre de mouvement","error");return}
   let html=opsAssignmentDocumentHTML(draft,"ordre_mouvement",{controls:false});
   if(opt.actions)html=html.replace("<body>","<body>"+opsMovementDocumentActionsHTML(f));
-  const w=window.open("","_blank","width=1100,height=760");
+  // opt.win : fenêtre ouverte au clic, avant l'attente du serveur (sinon bloquée comme pop-up).
+  const w=opt.win||window.open("","_blank","width=1100,height=760");
   if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}
   w.document.write(autoPrint?html.replace("</body>","<script>setTimeout(()=>window.print(),350)<\\/script></body>"):html);
   w.document.close();
@@ -20229,10 +20256,10 @@ async function opsArchiveMovementDocument(f){
   const html=opsAssignmentDocumentHTML(draft,"ordre_mouvement",{controls:false});
   return archiveEmployeeGeneratedDocument(draft.a.id,{html,title:"Ordre de mouvement",category:"OPS",type:"ordre_mouvement",reference:draft.reference,date:draft.dateDebut,name:employeeDocumentFileName("Ordre de mouvement",draft.reference)});
 }
-function opsOpenMovementDocumentByRow(rowId){
+function opsOpenMovementDocumentByRow(rowId,autoPrint=false){
   const f=opsMovementRows().find(x=>String(x.id)===String(rowId)||String(x.backendId||"")===String(rowId)||opsMovementKey(x)===String(rowId));
   if(!f)return toast("Mouvement introuvable","error");
-  opsPrintMovementDocument(f,false);
+  opsPrintMovementDocument(f,autoPrint);
 }
 
 
@@ -21648,6 +21675,9 @@ bootApp();
 try{
   let stripTimer=null;
   new MutationObserver(()=>{
+    // OPS : habiller les nouveaux boutons avant la peinture (rappel en microtâche). Le passage
+    // différé de 30 ms laissait apparaître une image à l'ancien style, puis changeait leur taille.
+    if(document.body.hasAttribute("data-ops-ui"))syncOpsPresentation();
     clearTimeout(stripTimer);
     stripTimer=setTimeout(()=>{stripCryptogrammes(document.getElementById("app")||document.body);syncOpsPresentation()},30);
   }).observe(document.body,{childList:true,subtree:true,characterData:true});
