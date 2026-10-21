@@ -53,6 +53,9 @@ _FINANCE = {
     "missionExpenseRequests", "paieBulletins", "paieClotures", "paieConfig", "paieElements",
     "paieGrilles", "paieRubriques",
 }
+# Facturation (fac.irongs.com) : ses pièces seulement. La paie reste au module Finances
+# (finances / compta) : un compte Facturation n'y accède plus par le pont legacy.
+_FACTURATION = {"factures", "paiements", "avances", "avoirs", "caisse", "missionBillables", "missionExpenseRequests"}
 _COMMERCIAL = {"clients", "prospects", "opportunites", "visites", "devis", "catalogue", "categoriesPrest"}
 _MATERIEL = {
     "magasins", "fournisseurs", "stockArticles", "stockMouvements", "magasinArticles", "materiel",
@@ -85,10 +88,10 @@ POINTAGE_WRITE_ACTIONS = frozenset({
 
 def _collection_modules(name: str) -> frozenset[str]:
     if name in {"alertes", "dialogue", "echanges", "messages", "notificationLog", "notifications"}:
-        return frozenset({"rh", "ops", "finance", "commercial", "materiel", "secretariat"})
+        return frozenset({"rh", "ops", "finance", "facturation", "commercial", "materiel", "secretariat"})
     modules: set[str] = set()
     for module, names in (
-        ("rh", _RH), ("ops", _OPS), ("finance", _FINANCE), ("commercial", _COMMERCIAL),
+        ("rh", _RH), ("ops", _OPS), ("finance", _FINANCE), ("facturation", _FACTURATION), ("commercial", _COMMERCIAL),
         ("materiel", _MATERIEL), ("secretariat", _SECRETARIAT),
     ):
         if name in names:
@@ -123,7 +126,7 @@ def user_legacy_modules(user, *, write: bool = False) -> frozenset[str]:
     aliases = {
         "drh": "rh", "recruteur": "rh", "gestionnaire_rh": "rh",
         "dispatch": "ops", "superviseur": "ops", "supervisor": "ops", "pointeur": "ops",
-        "fac": "finance", "facturation": "finance", "finances": "finance", "compta": "finance",
+        "fac": "facturation", "finances": "finance", "compta": "finance",
         "dc": "commercial", "achats": "materiel", "stock": "materiel",
         "sg": "secretariat", "secretariat_general": "secretariat",
     }

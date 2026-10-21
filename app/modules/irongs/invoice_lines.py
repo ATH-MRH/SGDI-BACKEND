@@ -125,15 +125,21 @@ def line_total(nbr: int, quantity: Decimal, price: Decimal) -> Decimal:
 
 
 def _tva_rate(invoice: dict[str, Any], lines: list[dict[str, Any]]) -> Decimal:
-    """Même règle que l'éditeur existant : le taux global est porté par chaque ligne article
-    (champ « tva ») ; 19 % par défaut. Aucune règle fiscale n'est ajoutée ni modifiée."""
-    for candidate in [invoice.get("tvaPct"), *[l.get("tva") for l in lines if (l.get("type") or "article") == "article"]]:
+    """Taux global de la facture, de 0 à 100 % : « tvaPct » de la facture s'il est renseigné
+    (invalide = refusé), sinon le taux porté par les lignes article (ancien format), sinon 19 %.
+    0 % est un taux valide (exonération) : il n'est plus remplacé par 19 %."""
+    if invoice.get("tvaPct") not in (None, ""):
+        rate = _decimal(invoice.get("tvaPct"), "Taux de TVA", default=DEFAULT_TVA)
+        if rate > 100:
+            raise HTTPException(422, detail="Le taux de TVA ne peut pas dépasser 100 %")
+        return rate
+    for candidate in [l.get("tva") for l in lines if (l.get("type") or "article") == "article"]:
         if candidate not in (None, ""):
             try:
                 rate = Decimal(str(candidate).replace(",", "."))
             except InvalidOperation:
                 continue
-            if rate.is_finite() and rate > 0:
+            if rate.is_finite() and 0 <= rate <= 100:
                 return rate
     return DEFAULT_TVA
 
@@ -206,5 +212,5 @@ def compute_invoice(invoice: dict[str, Any], *, for_validation: bool = False) ->
     ttc = total_ht + tva
     out = dict(invoice)
     out.update({"lignes": lines_out, "totalHT": float(total_ht), "montantHT": float(total_ht), "tvaAmt": float(tva),
-                "montantTTC": float(ttc), "ttc": float(ttc)})
+                "montantTTC": float(ttc), "ttc": float(ttc), "tvaPct": float(rate)})
     return out

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     public_employee_pages_require_token: bool = True
     # Studio Badges DRH : false coupe toute l'API /api/drh/badges (503) sans toucher aux données.
     badge_studio_enabled: bool = True
+    # Facturation : annulation d'un avoir numéroté. Désactivée tant que les règles comptables
+    # d'annulation des avoirs émis ne sont pas validées (décision DG du 2026-10-19).
+    facturation_credit_note_cancel_enabled: bool = False
     max_photo_upload_bytes: int = 5_000_000
     # Attendance Core — anti-rebond : un nouvel événement du même employé moins de N secondes
     # après le précédent (double scan, visage resté devant la caméra, retry réseau) est rendu
