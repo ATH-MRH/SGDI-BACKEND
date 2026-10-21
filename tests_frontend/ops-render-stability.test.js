@@ -19,8 +19,21 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 // appelle syncOpsPresentation à chaque mutation de document.body, et son minuteur de 30 ms).
 // window.close() vide le document : sans arrêt préalable, cet observateur est rappelé en microtâche
 // sur une fenêtre détruite (TypeError … reading 'body') — activité asynchrone après la fin du test.
+// Le post-rendu de renderView passe par requestAnimationFrame, que load-app confie au setTimeout de
+// Node : window.close() ne l'annule pas, d'où filterDomBySearch sur une fenêtre détruite
+// (TypeError … reading 'querySelectorAll') quand la machine est chargée.
 function trackAppHandles(window) {
-  const observers = new Set(), timeouts = new Set(), intervals = new Set();
+  const observers = new Set(), timeouts = new Set(), intervals = new Set(), frames = new Set();
+  const raf = window.requestAnimationFrame, caf = window.cancelAnimationFrame;
+  window.requestAnimationFrame = cb => {
+    const id = raf(typeof cb === 'function' ? (...a) => { frames.delete(id); cb(...a); } : cb);
+    frames.add(id);
+    return id;
+  };
+  window.cancelAnimationFrame = id => {
+    if (frames.delete(id)) return clearTimeout(id);
+    return caf && caf.call(window, id);
+  };
   const Native = window.MutationObserver;
   window.MutationObserver = class extends Native {
     constructor(callback) { super(callback); observers.add(this); }
@@ -38,7 +51,8 @@ function trackAppHandles(window) {
     for (const observer of observers) observer.disconnect();
     for (const id of timeouts) clearT.call(window, id);
     for (const id of intervals) clearI.call(window, id);
-    observers.clear(); timeouts.clear(); intervals.clear();
+    for (const id of frames) clearTimeout(id);
+    observers.clear(); timeouts.clear(); intervals.clear(); frames.clear();
     // Laisse s'écouler les microtâches déjà en file (promesses, rappels d'observateur) avant close().
     await new Promise(resolve => setImmediate(resolve));
     window.close();
