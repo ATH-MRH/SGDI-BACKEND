@@ -343,7 +343,7 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id,
       socs: [...document.querySelectorAll("#society-select option")].map((o) => o.textContent),
       sites: [...document.querySelectorAll("#site-select option")].map((o) => o.textContent),
     }));
-    assert.strictEqual(options.socs[0], "Toutes mes sociétés");
+    assert.strictEqual(options.socs[0], "Toutes mes structures");
     assert.ok(options.socs.includes(SOC) && options.socs.includes(SOC_B) && !options.socs.includes(SOC_C), options.socs.join(","));
     assert.deepStrictEqual([...options.sites].sort(), ["Site E2E A", "Site E2E A2", "Site E2E B", "Tous mes sites"]);
     const badge = await page.evaluate(() => document.querySelector(".shell-role-badge").innerText);
@@ -360,12 +360,12 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id,
       await page.select(selector, String(value));
       await new Promise((r) => setTimeout(r, 400));
     };
-    const chip = () => page.evaluate(() => document.querySelector(".scope-chip")?.innerText || "");
+    const chip = () => page.evaluate(() => document.querySelector("#view-sub")?.innerText || ""); // périmètre consulté (bandeau)
 
     let text = await personnel();                                          // tous les sites
     for (const name of ["Terrain", "Deuxieme", "Autre"]) assert.match(text, new RegExp(name));
     assert.doesNotMatch(text, /Interdit/);
-    assert.match(text, /Société/i);                                        // colonnes société/site en vue agrégée
+    assert.match(text, /Structure/i);                                      // colonnes structure/site
     await pick("#site-select", siteAId);
     text = await personnel();
     assert.match(text, /Terrain/); assert.doesNotMatch(text, /Deuxieme|Autre|Interdit/);
@@ -382,16 +382,23 @@ print("seeded", site_a.id, site_b.id, emp_a.id, emp_b.id, site_a2.id, site_c.id,
     await pick("#society-select", "");
     text = await personnel();
     for (const name of ["Terrain", "Deuxieme", "Autre"]) assert.match(text, new RegExp(name));
-    assert.match(await chip(), /Toutes mes sociétés — tous mes sites \(3\)/);
+    assert.match(await chip(), /Toutes mes structures — Tous mes sites \(3\)/);
 
     // Dashboard agrégé + répartition par site cliquable.
     await page.evaluate(() => { location.hash = "#/dashboard"; });
     await page.waitForSelector("[data-site-row]", { timeout: 10000 });
     const rows = await page.evaluate(() => [...document.querySelectorAll("[data-site-row]")].map((r) => r.dataset.siteRow));
     assert.deepStrictEqual(rows.map(Number).sort((a, b) => a - b), [siteAId, siteA2Id, siteBId].sort((a, b) => a - b));
+    // Ligne cliquable : EFFECTIF filtré sur ce site (filtre local) ; le bandeau reste sur « Tous mes sites ».
     await page.click(`[data-site-row="${siteA2Id}"]`);
-    await new Promise((r) => setTimeout(r, 400));
-    assert.strictEqual(await page.evaluate(() => document.querySelector("#site-select").value), String(siteA2Id));
+    await page.waitForFunction(() => document.querySelector("#pers-list") && !document.querySelector("#pers-list .skeleton"), { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.strictEqual(await page.evaluate(() => location.hash), `#/personnel?site=${siteA2Id}`);
+    text = await page.evaluate(() => document.querySelector("#pers-list").innerText);
+    assert.match(text, /Deuxieme/); assert.doesNotMatch(text, /Terrain|Autre|Interdit/);
+    assert.strictEqual(await page.evaluate(() => document.querySelector("#site-select").value), "");
+    // Un site d'une autre société forcé dans l'URL est refusé côté serveur, sans fuite.
+    assert.strictEqual(await page.evaluate(async (id) => (await fetch(`/api/site-workforce/employees?site=${id}`, { headers: { Authorization: "Bearer " + localStorage.getItem("sw_token") } })).status, siteCId), 403);
 
     // Forgé : C / C1 — toutes les routes refusent, rien ne fuit.
     const forged = await page.evaluate(async ({ siteCId, empCId, SOC_C }) => {
