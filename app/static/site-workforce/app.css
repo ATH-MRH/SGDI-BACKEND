@@ -247,3 +247,272 @@ table.data td.actions{text-align:right;white-space:nowrap}
 .pf-footnote{font-size:12px}
 @media(max-width:900px){.pf-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:480px){.pf-head-actions{width:100%}.pf-head-actions .btn{width:100%;justify-content:center}}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════
+   Refonte BEO v2 (maquettes DG) — Tableau de bord, EFFECTIF, Fiches de position, navigation.
+   Feuille propre au portail beo.irongs.com (chargée par site-workforce/index.html seulement) ;
+   nouvelles classes préfixées « beo- », jamais ciblées par le design system ATLAS partagé.
+   ════════════════════════════════════════════════════════════════════════════════════════ */
+:root{
+  --beo-navy:#0b2a5c; --beo-navy-2:#0d3271; --beo-blue:#1f5fd1; --beo-blue-strong:#174bb0; --beo-blue-soft:#e9f0fd;
+  --beo-bg:#eef2f8; --beo-line:#e3e9f2; --beo-ink:#0f1f3d; --beo-ink-2:#4a5a75; --beo-ink-3:#7686a0;
+  --beo-radius:12px; --beo-shadow:0 1px 2px rgba(15,31,61,.05),0 4px 14px rgba(15,31,61,.05);
+  --beo-raise:inset 0 1px 0 rgba(255,255,255,.9),0 2px 0 #dbe3ef,0 6px 14px rgba(15,31,61,.06);
+  --beo-topbar-h:56px;
+  --t-blue:#2563eb; --t-blue-bg:#e8f0fe; --t-green:#16a34a; --t-green-bg:#e6f6ec; --t-red:#dc2626; --t-red-bg:#fde8e8;
+  --t-orange:#e8740c; --t-orange-bg:#fff0e1; --t-violet:#7c3aed; --t-violet-bg:#f1eafe; --t-rose:#e11d48; --t-rose-bg:#ffe5eb;
+  --t-cyan:#0e7490; --t-cyan-bg:#dff4f8; --t-neutral:#64748b; --t-neutral-bg:#eef1f5;
+}
+body[data-atlas-surface="beo"]{background:var(--beo-bg)}
+.beo-ic{width:18px;height:18px;flex:none;display:inline-block;vertical-align:middle}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Coque à plat (maquettes) : le design system partagé pose sidebar et en-tête en cartes flottantes
+   sur la surface « beo » ; #root (propre à ce portail) reprend la main sans toucher aux autres. */
+#root .beo-app.shell{padding:0;gap:0;background:var(--beo-bg)}
+#root .beo-app .shell-sidebar{top:0;height:100vh;height:100dvh;border:0;border-radius:0;width:var(--sidebar-w);flex:0 0 var(--sidebar-w)}
+#root .beo-app :is(.shell-brand,.shell-role-badge){border-color:rgba(255,255,255,.08);color:#fff}
+#root .beo-app :is(.shell-brand-text b,.shell-role-badge b){color:#fff}
+#root .beo-app :is(.shell-brand-text span,.shell-role-badge span){color:#a9bcda}
+#root .beo-app .beo-topbar{top:0;border:0;border-radius:0;position:sticky}
+#root .beo-app .shell-content{padding:14px 20px 28px}
+@media(max-width:900px){
+  #root .beo-app.shell{padding:0}
+  #root .beo-app .shell-sidebar{left:0;top:0;max-width:86vw;height:100dvh;transform:translateX(-100%)}
+  #root .beo-app.shell.sidebar-open .shell-sidebar{transform:translateX(0)}
+  #root .beo-app .shell-content{padding:12px}
+}
+
+/* ── Sidebar fixe bleu ATLAS ───────────────────────────────────────────────────────────── */
+#root .beo-app .shell-sidebar{background:linear-gradient(180deg,var(--beo-navy-2) 0%,var(--beo-navy) 100%);color:#dbe6f7;box-shadow:2px 0 12px rgba(11,42,92,.18)}
+#root .beo-app .shell-brand{border-bottom-color:rgba(255,255,255,.08);padding:14px 18px}
+#root .beo-app .shell-brand-mark{background:var(--beo-blue);color:#fff;border-radius:7px;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+#root .beo-app .shell-role-badge{background:rgba(255,255,255,.04);border-bottom-color:rgba(255,255,255,.08)}
+#root .beo-app .shell-role-badge span{color:#a9bcda}
+#root .beo-app .shell-nav{padding:12px 10px 20px}
+#root .beo-app .nav-link{gap:12px;padding:10px 12px;margin-bottom:3px;border-radius:9px;color:#d3def0;font-size:13.5px;font-weight:650;min-height:42px}
+#root .beo-app .nav-link:hover{background:rgba(255,255,255,.08);color:#fff}
+#root .beo-app .nav-link.active{background:linear-gradient(180deg,#2a6ae0,var(--beo-blue));color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 10px rgba(16,58,140,.45)}
+#root .beo-app .nav-link:focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
+#root .beo-app .nav-link-icon{width:20px;display:inline-flex;justify-content:center}
+
+/* ── Barre supérieure bleue fixe ───────────────────────────────────────────────────────── */
+#root .beo-app .beo-topbar{background:linear-gradient(90deg,var(--beo-navy-2),#0a2a63);border-bottom:0;color:#fff;min-height:var(--beo-topbar-h);padding:6px 18px;z-index:30;box-shadow:0 2px 10px rgba(11,42,92,.25)}
+#root .beo-app .beo-topbar .shell-header-right{gap:12px}
+#root .beo-app .sidebar-toggle{display:inline-flex;background:transparent;border:1px solid transparent;color:#fff;width:36px;height:36px}
+#root .beo-app .sidebar-toggle:hover{background:rgba(255,255,255,.1)}
+@media(min-width:901px){#root .beo-app .sidebar-toggle{visibility:hidden}}
+#root .beo-app #beo-quick-search{display:none}
+body[data-sw-route="pointage"] #root .beo-app #beo-quick-search{display:block;width:min(320px,40vw);border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:7px 10px}
+body[data-sw-route="pointage"] #root .beo-app #beo-quick-search::placeholder{color:#c9d7ee}
+.beo-top-date{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:650;color:#eaf1fc;white-space:nowrap}
+.beo-top-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:9px;border:0;background:transparent;color:#fff;cursor:pointer}
+.beo-top-btn:hover{background:rgba(255,255,255,.1)}
+#notif-count:empty{display:none}
+#notif-count.beo-notif-dot{position:absolute;top:3px;right:2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:16px;box-shadow:0 0 0 2px #0b2c66}
+#root .beo-app .beo-topbar .user-chip,#root .beo-app .beo-topbar .user-chip span{color:#fff;font-weight:700;font-size:12.5px}
+#root .beo-app .beo-topbar .user-avatar{background:#fff;color:var(--beo-navy);font-size:12px}
+.beo-top-logout{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.06);color:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.beo-top-logout:hover{background:rgba(255,255,255,.16)}
+#root .beo-app .beo-topbar :focus-visible{outline:2px solid #9cc0ff;outline-offset:2px}
+
+/* ── Bandeau de page (titre + Structure / Site), collé sous la barre ───────────────────── */
+.beo-pagebar{position:sticky;top:var(--beo-topbar-h);z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:14px 20px 0;padding:12px 16px;background:#fff;border:1px solid var(--beo-line);border-radius:var(--beo-radius);box-shadow:var(--beo-shadow);max-width:1400px}
+@media(min-width:1460px){.beo-pagebar{margin-inline:auto;width:calc(100% - 40px)}}
+.beo-pagebar-icon{width:42px;height:42px;border-radius:11px;background:var(--beo-blue-soft);color:var(--beo-blue);display:flex;align-items:center;justify-content:center;flex:none}
+.beo-pagebar-icon .beo-ic{width:22px;height:22px}
+.beo-pagebar-text{flex:1;min-width:200px}
+.beo-pagebar-title{margin:0;font-size:20px;font-weight:800;color:var(--beo-ink);letter-spacing:-.01em;line-height:1.2}
+.beo-pagebar-sub{margin:2px 0 0;font-size:12.5px;color:var(--beo-ink-2)}
+.beo-pagebar-scope{display:flex;justify-content:flex-end;min-width:0}
+.beo-pagebar .scope-field{font-size:11px;font-weight:800;color:var(--beo-ink);letter-spacing:.04em;gap:8px}
+body[data-atlas-surface="beo"] .beo-pagebar .scope-field select{min-width:180px;max-width:260px;padding:8px 30px 8px 11px;border:1px solid #cfd9e8;border-radius:8px;font-size:12.5px;font-weight:650;background-color:#fff;box-shadow:var(--beo-raise)}
+body[data-atlas-surface="beo"] .beo-pagebar .scope-field select:disabled{background:var(--beo-blue-soft);color:var(--beo-navy)}
+body[data-sw-route="pointage"] .beo-pagebar{display:none}
+/* Écrans non refondus : le bandeau porte déjà leur titre (plus de doublon). */
+body[data-sw-route] #view>h1.section-title:first-child{display:none}
+#root .beo-app .shell-content{padding:14px 20px 28px;max-width:1440px}
+
+/* ── Panneaux ─────────────────────────────────────────────────────────────────────────── */
+.beo-panel{background:#fff;border:1px solid var(--beo-line);border-radius:var(--beo-radius);box-shadow:var(--beo-shadow);padding:16px 18px;margin-bottom:14px}
+.beo-panel-title{display:flex;align-items:center;gap:9px;margin:0 0 12px;font-size:16px;font-weight:800;color:var(--beo-ink)}
+.beo-panel-title .beo-ic{color:var(--beo-blue);width:20px;height:20px}
+.beo-hello-title{margin:0;font-size:20px;font-weight:800;color:var(--beo-ink)}
+.beo-hello-sub{margin:2px 0 12px;font-size:12.5px;color:var(--beo-ink-2)}
+
+/* ── Compteurs (boutons à léger relief) ───────────────────────────────────────────────── */
+.beo-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.beo-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.beo-kpi,.beo-quick{--tc:var(--t-blue);--tb:var(--t-blue-bg);display:flex;align-items:center;gap:12px;min-width:0;width:100%;text-align:left;
+  padding:10px 12px;background:#fff;border:1px solid var(--beo-line);border-radius:11px;box-shadow:var(--beo-raise);cursor:pointer;font:inherit;color:var(--beo-ink);transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.beo-kpi:hover,.beo-quick:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--tc) 40%,var(--beo-line));box-shadow:inset 0 1px 0 #fff,0 3px 0 #d5deeb,0 10px 18px rgba(15,31,61,.09)}
+.beo-kpi:active,.beo-quick:active{transform:translateY(1px);box-shadow:inset 0 1px 0 #fff,0 1px 0 #d5deeb}
+.beo-kpi:focus-visible,.beo-quick:focus-visible{outline:3px solid color-mix(in srgb,var(--tc) 45%,transparent);outline-offset:2px}
+.beo-kpi-icon{width:40px;height:40px;border-radius:999px;background:var(--tb);color:var(--tc);display:flex;align-items:center;justify-content:center;flex:none}
+.beo-kpi-icon .beo-ic{width:20px;height:20px}
+.beo-kpi-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.beo-kpi-label{font-size:12px;font-weight:650;color:var(--beo-ink-2);line-height:1.25;overflow-wrap:anywhere}
+.beo-kpi-value{font-size:21px;font-weight:800;color:var(--beo-ink);font-variant-numeric:tabular-nums;line-height:1.15}
+.beo-quick-count{font-size:21px;font-weight:800;color:var(--beo-navy-2);font-variant-numeric:tabular-nums;line-height:1.15}
+.beo-kpi-go{color:var(--t-blue);display:flex}
+.tone-blue{--tc:var(--t-blue);--tb:var(--t-blue-bg)} .tone-green{--tc:var(--t-green);--tb:var(--t-green-bg)}
+.tone-red{--tc:var(--t-red);--tb:var(--t-red-bg)} .tone-orange{--tc:var(--t-orange);--tb:var(--t-orange-bg)}
+.tone-violet{--tc:var(--t-violet);--tb:var(--t-violet-bg)} .tone-rose{--tc:var(--t-rose);--tb:var(--t-rose-bg)}
+.tone-cyan{--tc:var(--t-cyan);--tb:var(--t-cyan-bg)}
+.beo-count-alert{display:inline-block;min-width:24px;padding:1px 7px;border-radius:999px;background:var(--t-red-bg);color:var(--t-red);font-weight:800}
+
+/* ── Tableaux ─────────────────────────────────────────────────────────────────────────── */
+.beo-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;color:var(--beo-ink)}
+.beo-table th{background:#f3f6fb;color:var(--beo-ink-2);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:9px 12px;border-bottom:1px solid var(--beo-line);white-space:nowrap}
+.beo-table th:first-child{border-top-left-radius:8px} .beo-table th:last-child{border-top-right-radius:8px}
+.beo-table td{padding:9px 12px;border-bottom:1px solid #edf1f7;vertical-align:middle}
+.beo-table tbody tr:hover td{background:#f6f9ff}
+.beo-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.beo-table .actions{text-align:right;white-space:nowrap}
+.beo-site-table td:first-child b{font-weight:800;color:var(--beo-ink)}
+.beo-site-table tr.site-row-link{cursor:pointer}
+.beo-site-table tr.site-row-link:focus-visible td{background:var(--beo-blue-soft);outline:none}
+.beo-site-table tr.site-row-link:focus-visible td:first-child{box-shadow:inset 3px 0 0 var(--beo-blue)}
+.beo-name-cell{font-weight:700}
+.beo-group-row td{background:#f3f6fb!important;font-weight:800;color:var(--beo-navy-2);font-size:12px;letter-spacing:.02em}
+
+/* ── Badges statut / groupe ───────────────────────────────────────────────────────────── */
+.beo-status{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;background:var(--tb);color:var(--tc)}
+.beo-status::before{content:"";width:7px;height:7px;border-radius:999px;background:currentColor}
+.beo-status.tone-success{--tc:var(--t-green);--tb:var(--t-green-bg)} .beo-status.tone-warn{--tc:var(--t-orange);--tb:var(--t-orange-bg)}
+.beo-status.tone-danger{--tc:var(--t-red);--tb:var(--t-red-bg)} .beo-status.tone-info{--tc:var(--t-blue);--tb:var(--t-blue-bg)}
+.beo-status.tone-violet{--tc:var(--t-violet);--tb:var(--t-violet-bg)} .beo-status.tone-rose{--tc:var(--t-rose);--tb:var(--t-rose-bg)}
+.beo-status.tone-neutral{--tc:var(--t-neutral);--tb:var(--t-neutral-bg)}
+.beo-dot{display:inline-block;width:9px;height:9px;border-radius:999px;background:var(--t-neutral)}
+.beo-dot.tone-success{background:var(--t-green)} .beo-dot.tone-warn{background:var(--t-orange)} .beo-dot.tone-danger{background:var(--t-red)}
+.beo-dot.tone-info{background:var(--t-blue)} .beo-dot.tone-violet{background:var(--t-violet)} .beo-dot.tone-rose{background:var(--t-rose)}
+.beo-group{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 7px;border-radius:6px;font-size:11.5px;font-weight:800;background:var(--t-blue-bg);color:var(--t-blue)}
+.beo-group.g-b{background:var(--t-violet-bg);color:var(--t-violet)} .beo-group.g-c{background:var(--t-green-bg);color:var(--t-green)}
+.beo-group.g-d{background:var(--t-orange-bg);color:var(--t-orange)}
+
+/* ── Boutons d'action (bleus) ─────────────────────────────────────────────────────────── */
+.beo-btn-fiche{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:7px;background:linear-gradient(180deg,#2c6ee6,var(--beo-blue));color:#fff!important;font-size:11.5px;font-weight:750;text-decoration:none;white-space:nowrap;
+  border:1px solid var(--beo-blue-strong);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 2px 0 #123f95,0 4px 10px rgba(31,95,209,.22)}
+.beo-btn-fiche:hover{background:linear-gradient(180deg,#2a66d6,var(--beo-blue-strong))}
+.beo-btn-fiche:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 0 #123f95}
+.beo-btn-fiche:focus-visible,.beo-btn-open:focus-visible{outline:3px solid #93b7f5;outline-offset:2px}
+.beo-btn-open{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:8px 12px;border-radius:8px;background:var(--beo-blue-soft);color:var(--beo-blue-strong);font-size:12.5px;font-weight:800;text-decoration:none;border:1px solid #d3e1fa;box-shadow:var(--beo-raise)}
+.beo-btn-open:hover{background:#dfe9fc}
+.beo-btn-open .beo-ic{width:16px;height:16px;margin-left:auto}
+
+/* ── Barre de contrôle (recherche, tri, modes, regroupements) ─────────────────────────── */
+.beo-controls{padding:14px 16px}
+.beo-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.beo-search{flex:1 1 280px;display:flex;align-items:center;gap:8px;padding:0 12px;min-height:40px;border:1px solid #cfd9e8;border-radius:9px;background:#fff;color:var(--beo-ink-3)}
+.beo-search:focus-within{border-color:var(--beo-blue);box-shadow:0 0 0 3px rgba(31,95,209,.15)}
+body[data-atlas-surface="beo"] .beo-search input{flex:1;min-width:0;border:0!important;outline:0;box-shadow:none!important;background:transparent;font-size:13px;padding:9px 0;color:var(--beo-ink)}
+.beo-sort{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:var(--beo-ink);text-transform:uppercase;letter-spacing:.04em}
+.beo-sort>span{display:inline-flex;align-items:center;gap:5px}
+body[data-atlas-surface="beo"] .beo-sort select,body[data-atlas-surface="beo"] .beo-select select,body[data-atlas-surface="beo"] .beo-field-inline input{min-height:40px;padding:8px 30px 8px 11px;border:1px solid #cfd9e8;border-radius:9px;background-color:#fff;font-size:12.5px;font-weight:650;color:var(--beo-ink);text-transform:none;letter-spacing:0;box-shadow:var(--beo-raise)}
+body[data-atlas-surface="beo"] .beo-field-inline input{padding-right:11px;min-width:160px}
+.beo-select{display:inline-flex;align-items:center;gap:7px;color:var(--beo-blue)}
+.beo-seg{display:inline-flex;gap:6px}
+.beo-seg-btn,.beo-reset{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:8px 14px;border:1px solid #cfd9e8;border-radius:9px;background:#fff;color:var(--beo-ink);font:inherit;font-size:12.5px;font-weight:750;cursor:pointer;box-shadow:var(--beo-raise);white-space:nowrap}
+.beo-seg-btn:hover,.beo-reset:hover{border-color:#a9bcd8}
+.beo-seg-btn[aria-pressed="true"]{background:linear-gradient(180deg,#2c6ee6,var(--beo-blue));border-color:var(--beo-blue-strong);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 2px 0 #123f95}
+.beo-seg-btn:focus-visible,.beo-reset:focus-visible,.beo-chip:focus-visible{outline:3px solid #93b7f5;outline-offset:2px}
+.beo-reset{color:var(--t-red);border-color:#f2c9c9}
+
+/* ── Raccourcis Groupe / Site / Statut ────────────────────────────────────────────────── */
+.beo-facets{display:flex;flex-wrap:wrap;gap:14px 28px;margin-top:14px;padding-top:14px;border-top:1px solid #edf1f7}
+.beo-facet{flex:1 1 320px;min-width:0}
+.beo-facet:first-child{flex:0 1 auto}
+.beo-chip-text{display:inline-block;max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+.beo-facet h3{margin:0 0 8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--beo-ink-2)}
+.beo-chips{display:flex;flex-wrap:wrap;gap:8px}
+.beo-chip{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 11px;border:1px solid var(--beo-line);border-radius:10px;background:#fff;color:var(--beo-ink);font:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:var(--beo-raise);text-align:left}
+.beo-chip:hover{border-color:#a9bcd8}
+.beo-chip .beo-ic{width:16px;height:16px;color:var(--beo-blue)}
+.beo-chip-label{display:inline-flex;align-items:center;gap:6px}
+.beo-chip-count{font-size:15px;font-weight:800;color:var(--beo-ink);font-variant-numeric:tabular-nums}
+.beo-chip[aria-pressed="true"],.beo-chip[data-on="true"]{border-color:var(--beo-blue);background:var(--beo-blue-soft);box-shadow:inset 0 0 0 1px var(--beo-blue),0 2px 0 #c9d8f4}
+.beo-chip.g-a .beo-ic{color:var(--t-blue)} .beo-chip.g-b .beo-ic{color:var(--t-violet)} .beo-chip.g-c .beo-ic{color:var(--t-green)} .beo-chip.g-d .beo-ic{color:var(--t-orange)}
+.beo-chip-select{padding-right:4px}
+body[data-atlas-surface="beo"] .beo-chip-select select{border:0!important;background:transparent;box-shadow:none!important;font:inherit;font-weight:700;color:var(--beo-ink);padding:4px 22px 4px 0;min-height:0;max-width:200px}
+
+/* ── En-tête de liste / filtres actifs ────────────────────────────────────────────────── */
+.beo-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.beo-list-count{margin:0;font-size:16px;font-weight:800;color:var(--beo-ink)}
+.beo-active-filters{display:flex;gap:6px;flex-wrap:wrap}
+.beo-pill{border:1px solid #c9d8f4;background:var(--beo-blue-soft);color:var(--beo-blue-strong);border-radius:999px;padding:5px 11px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.beo-lamp-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--beo-ink-2);font-weight:650}
+.beo-lamp-legend>span{display:inline-flex;align-items:center;gap:6px}
+
+/* ── Fichettes / cartes employés ──────────────────────────────────────────────────────── */
+.beo-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.beo-cards-section{grid-column:1/-1;margin:6px 0 0;font-size:12.5px;font-weight:800;color:var(--beo-navy-2);padding:6px 10px;background:#f3f6fb;border-radius:8px}
+.beo-card{display:flex;flex-direction:column;background:#fff;border:1px solid var(--beo-line);border-radius:var(--beo-radius);padding:12px;box-shadow:var(--beo-shadow);min-width:0;transition:box-shadow .12s ease,border-color .12s ease,transform .12s ease}
+.beo-card:hover{border-color:#c5d4ec;box-shadow:0 2px 4px rgba(15,31,61,.06),0 10px 22px rgba(15,31,61,.08)}
+.beo-fiche{cursor:pointer}
+.beo-card-head{display:flex;align-items:flex-start;gap:11px;padding-bottom:10px;border-bottom:1px solid #edf1f7}
+.beo-card-id{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.beo-card-id b{font-size:13px;font-weight:800;text-transform:uppercase;color:var(--beo-ink);overflow-wrap:anywhere}
+.beo-card-id span{font-size:12.5px;font-weight:700;text-transform:uppercase;color:var(--beo-ink);overflow-wrap:anywhere}
+.beo-card-id small{font-size:11.5px;font-weight:700;color:var(--beo-ink-3);margin-top:2px}
+.beo-avatar{position:relative;width:46px;height:46px;flex:none;border-radius:10px;overflow:hidden;background:linear-gradient(160deg,#dfe8f8,#c8d6ef);color:var(--beo-navy-2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.beo-avatar-lg{width:60px;height:64px;font-size:18px}
+.beo-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.beo-avatar.has-photo>span{visibility:hidden}
+.beo-card-rows{margin:8px 0 0;display:flex;flex-direction:column}
+.beo-card-rows>div{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.3fr);gap:8px;padding:5px 0;border-bottom:1px dashed #edf1f7;font-size:11.5px}
+.beo-card-rows>div:last-child{border-bottom:0}
+.beo-card-rows dt{display:flex;align-items:center;gap:6px;color:var(--beo-ink-2);font-weight:650}
+.beo-card-rows dt .beo-ic{width:15px;height:15px;color:var(--beo-blue)}
+.beo-card-rows dd{margin:0;font-weight:750;color:var(--beo-ink);overflow-wrap:anywhere;text-transform:uppercase;font-size:11px}
+.beo-card .beo-btn-fiche{margin-top:10px;justify-content:center}
+
+/* ── Lampes rouge / orange / vert ─────────────────────────────────────────────────────── */
+.beo-lamps{display:inline-flex;gap:5px;align-items:center;padding:4px 6px;border-radius:999px;background:#f4f6fa;flex:none}
+.beo-lamp{width:11px;height:11px;border-radius:999px;background:#d5dbe5;box-shadow:inset 0 1px 1px rgba(0,0,0,.12);display:inline-block}
+.beo-lamp.lamp-red.on{background:#e02424;box-shadow:0 0 0 3px rgba(224,36,36,.18),0 0 8px rgba(224,36,36,.55)}
+.beo-lamp.lamp-orange.on{background:#f08a12;box-shadow:0 0 0 3px rgba(240,138,18,.2),0 0 8px rgba(240,138,18,.55)}
+.beo-lamp.lamp-green.on{background:#1aa34a;box-shadow:0 0 0 3px rgba(26,163,74,.18),0 0 8px rgba(26,163,74,.5)}
+.beo-lamps[data-level="unknown"]{outline:1px dashed #c3ccd9}
+
+/* ── Fiche détaillée : en-tête hors h1 (le bandeau porte le titre) ───────────────────── */
+#root .beo-app .pf-name{font-size:20px}
+
+/* ── Responsive ───────────────────────────────────────────────────────────────────────── */
+@media(max-width:1280px){.beo-kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1100px){.beo-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.beo-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){
+  .beo-pagebar{position:static;margin:10px 12px 0}
+  .beo-pagebar-scope{width:100%;justify-content:stretch}
+  #root .beo-app .shell-content{padding:12px}
+  .beo-top-date span,#root .beo-app .beo-topbar .user-chip span{display:none}
+  #root .beo-app .scope-bar{width:100%}
+  #root .beo-app .beo-pagebar .scope-field{flex:1 1 220px;min-width:0}
+  body[data-atlas-surface="beo"] .beo-pagebar .scope-field select{min-width:0;max-width:none;width:100%}
+}
+@media(max-width:834px){
+  .beo-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .beo-effectif-table th:nth-child(3),.beo-effectif-table td:nth-child(3){display:none}
+}
+@media(max-width:560px){
+  .beo-kpi-grid,.beo-quick-grid{grid-template-columns:minmax(0,1fr)}
+  .beo-top-logout span{display:none}
+  .beo-seg-btn{padding:8px 10px}
+  .beo-search{flex-basis:100%}
+  .beo-pagebar-title{font-size:18px}
+}
+/* Mobile : une ligne d'EFFECTIF = une carte empilée (aucun défilement horizontal). */
+@media(max-width:600px){
+  .beo-effectif-table thead{display:none}
+  .beo-effectif-table,.beo-effectif-table tbody{display:block}
+  .beo-effectif-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:4px 10px;padding:10px 4px;border-bottom:1px solid var(--beo-line)}
+  .beo-effectif-table td{display:contents}
+  .beo-effectif-table td[data-label]::before{content:attr(data-label);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--beo-ink-3);align-self:center}
+  .beo-effectif-table td.actions{display:block;grid-column:1/-1;text-align:left;margin-top:4px}
+  .beo-effectif-table tr.beo-group-row{display:block}
+  .beo-effectif-table tr.beo-group-row td{display:block}
+  .beo-effectif-table th:nth-child(3),.beo-effectif-table td:nth-child(3){display:contents}
+  .beo-site-table th:nth-child(2),.beo-site-table td:nth-child(2){display:none}
+}
+#root .beo-app [hidden],.beo-reset[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){.beo-kpi,.beo-quick,.beo-card{transition:none}.beo-kpi:hover,.beo-quick:hover{transform:none}}
