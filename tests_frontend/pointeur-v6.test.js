@@ -208,12 +208,12 @@ test('tous les sites : fonctions fusionnées et site indiqué', async () => {
 test('tableau des pointages : colonnes demandées dans l’onglet Aujourd’hui', async () => {
   const t = await boot();
   await t.T().loadHistory(); await tick();
-  assert.deepEqual([...t.d.querySelectorAll('#trackingHead th')].map((th) => th.textContent), ['Nom et prénom', 'Matricule', 'Fonction', 'Heure arrivée', 'Heure départ', 'Statut']);
+  assert.deepEqual([...t.d.querySelectorAll('#trackingHead th')].map((th) => th.textContent), ['Nom et prénom', 'Matricule', 'Fonction', 'Heure arrivée', 'Heure départ', 'Statut', 'Site']);
   assert.deepEqual([...t.d.querySelectorAll('[data-tracking-tab]')].map((b) => b.textContent), ['Aujourd’hui', 'Entrées', 'Sorties', 'Anomalies']);
   // Le tableau est dans la colonne gauche, sous la zone de pointage — plus sous les panneaux de droite.
   const left = t.d.querySelector('.v6-left');
   assert.deepEqual([...left.children].map((c) => c.id), ['scannerCard', 'movementsCard']);
-  assert.deepEqual([...t.d.getElementById('sideCol').children].slice(0, 3).map((c) => c.id), ['presentNowCard', 'panelSplit', 'functionsCard']);
+  assert.deepEqual([...t.d.getElementById('sideCol').children].slice(0, 3).map((c) => c.id), ['presentNowCard', 'panelSplit', 'eventsCard']);
 });
 
 test('séparateur : clavier, boutons, bornes, mémorisation sur le poste et réinitialisation', async () => {

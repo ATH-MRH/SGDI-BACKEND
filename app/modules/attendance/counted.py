@@ -12,8 +12,8 @@ ce cas (LEGACY, NORMAL, ROTATION_NOT_CONFIGURED, OFF, pointage après la fin de 
 module ne renvoie rien et les règles historiques s'appliquent sans changement.
 
 Règles (vacation T → TFIN) :
-- entrée avant T-30 min       : EARLY_OUTSIDE_WINDOW — refusée, aucun mouvement, aucune présence ;
-- entrée de T-30 min à T      : acceptée, comptabilisée à partir de T ;
+- entrée avant T-45 min       : EARLY_OUTSIDE_WINDOW — refusée, aucun mouvement, aucune présence ;
+- entrée de T-45 min à T      : acceptée, comptabilisée à partir de T ;
 - entrée après T              : comptabilisée à partir de l'heure réelle ;
 - sortie avant TFIN           : comptabilisée jusqu'à l'heure réelle ;
 - sortie après TFIN           : comptabilisée jusqu'à TFIN ;
@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.attendance import official
 
-EARLY_WINDOW = timedelta(minutes=30)
+EARLY_WINDOW = timedelta(minutes=45)
 
 EXTRA_NO_ENTRY = timedelta(minutes=30)             # TFIN → TFIN+30 : nouvelle entrée interdite
 EXTRA_WINDOW_END = timedelta(minutes=45)           # TFIN+30 → TFIN+45 : nouvelle entrée autonome
@@ -53,16 +53,18 @@ KIND_LABELS = {KIND_NORMAL: "Vacation normale", KIND_EXTRA: "Vacation supplémen
 INTENT_REENTRY = "REENTRY"                         # saisie manuelle motivée : reprise de poste après une sortie erronée
 INTENT_EXTRA_ENTRY = "EXTRA_SHIFT_ENTRY"           # saisie manuelle : entrée explicite, jamais une sortie
 
-ENTRY_IN_WINDOW = "IN_WINDOW"                      # T-30 ≤ entrée ≤ T
+ENTRY_IN_WINDOW = "IN_WINDOW"                      # T-45 ≤ entrée ≤ T
 ENTRY_AFTER_START = "AFTER_START"                  # entrée > T
-EARLY_OUTSIDE_WINDOW = "EARLY_OUTSIDE_WINDOW"      # entrée < T-30 : aucun mouvement
+EARLY_OUTSIDE_WINDOW = "EARLY_OUTSIDE_WINDOW"      # entrée < T-45 : aucun mouvement
 ENTRY_EXTRA_IN_WINDOW = "EXTRA_IN_WINDOW"          # TFIN+30 ≤ entrée ≤ TFIN+45
 ENTRY_EXTRA_MANUAL = "EXTRA_MANUAL"                # après TFIN+45, saisie par le pointeur habilité
 EXTRA_BEFORE_WINDOW = "EXTRA_BEFORE_WINDOW"        # TFIN ≤ entrée < TFIN+30 : aucun mouvement
 PREVIOUS_SHIFT_NOT_CLOSED = "PREVIOUS_SHIFT_NOT_CLOSED"
 MANUAL_ENTRY_REQUIRED = "MANUAL_ENTRY_REQUIRED"    # entrée > TFIN+45 : aucun mouvement autonome
-REFUSALS = frozenset({EARLY_OUTSIDE_WINDOW, EXTRA_BEFORE_WINDOW, PREVIOUS_SHIFT_NOT_CLOSED, MANUAL_ENTRY_REQUIRED})
+LATE_ENTRY_REFUSED = "LATE_ENTRY_REFUSED"
+REFUSALS = frozenset({LATE_ENTRY_REFUSED, EARLY_OUTSIDE_WINDOW, EXTRA_BEFORE_WINDOW, PREVIOUS_SHIFT_NOT_CLOSED, MANUAL_ENTRY_REQUIRED})
 ENTRY_STATUS_LABELS = {
+    LATE_ENTRY_REFUSED: "Retard ≥ 30 minutes — poste de sécurité requis",
     ENTRY_IN_WINDOW: "Arrivée dans la fenêtre",
     ENTRY_AFTER_START: "Arrivée après le début de vacation",
     EARLY_OUTSIDE_WINDOW: "Arrivée avant l'ouverture de la fenêtre",
@@ -86,7 +88,8 @@ LABELS = {
 def classify_entry(plan: dict[str, Any], at: datetime) -> dict[str, Any]:
     """Instantané d'une entrée à `at` sur la vacation officielle `plan` (travaillée)."""
     start = plan["scheduled_start"]
-    opens = start - EARLY_WINDOW
+    policy_v7 = (plan.get("model") or {}).get("code") == official.FIXED_MODEL_CODE
+    opens = start - (EARLY_WINDOW if policy_v7 else timedelta(minutes=30))
     if at < opens:
         status, counted_start = EARLY_OUTSIDE_WINDOW, None
     elif at <= start:
@@ -94,11 +97,13 @@ def classify_entry(plan: dict[str, Any], at: datetime) -> dict[str, Any]:
     else:
         status, counted_start = ENTRY_AFTER_START, at
     return {
+        "policy_version": 7 if policy_v7 else 1,
         "kind": KIND_NORMAL, "regime": plan["regime"], "group": plan["group"], "shift": plan["shift"],
         "work_date": plan["work_date"].isoformat(), "cycle_day": plan["cycle_day"],
         "model_version": (plan["model"] or {}).get("version"),
         "scheduled_start": start.isoformat(), "scheduled_end": plan["scheduled_end"].isoformat(),
         "normal_minutes": plan["normal_minutes"], "window_opens_at": opens.isoformat(),
+        "late_minutes": max(0, int((at - start).total_seconds() // 60)),
         "entry_status": status, "actual_entry": at.isoformat(),
         "counted_start": counted_start.isoformat() if counted_start else None,
         "actual_exit": None, "counted_end": None, "counted_minutes": None,
@@ -114,6 +119,8 @@ def close(entry: dict[str, Any] | None, at: datetime) -> dict[str, Any] | None:
     end = min(at, datetime.fromisoformat(entry["scheduled_end"]))
     minutes = max(0, int((end - start).total_seconds() // 60))
     return {**entry, "actual_exit": at.isoformat(), "counted_end": end.isoformat(),
+            "maintained_minutes": max(0, int((at - datetime.fromisoformat(entry["scheduled_end"])).total_seconds() // 60)),
+            "exit_kind": "AFTER_MAINTENANCE" if at > datetime.fromisoformat(entry["scheduled_end"]) + timedelta(minutes=45) else "NORMAL",
             "counted_minutes": min(int(entry["normal_minutes"]), minutes)}
 
 
@@ -188,7 +195,9 @@ def entry(db: Session, *, employee_id: int, site_id: int, at: datetime) -> dict[
         ahead = official.official_shift(db, employee_id=employee_id, site_id=site_id, at=at + EARLY_WINDOW)
         if ahead["official"] and ahead["working"] and ahead["scheduled_start"] - EARLY_WINDOW <= at < ahead["scheduled_start"]:
             plan = ahead
-    if not plan["working"] or at >= plan["scheduled_end"]:
+    if not plan["working"]:
+        return None
+    if at >= plan["scheduled_end"] and (plan.get("model") or {}).get("code") != official.FIXED_MODEL_CODE:
         return None
     return classify_entry(plan, at)
 

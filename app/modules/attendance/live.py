@@ -23,7 +23,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.attendance import core
@@ -37,13 +37,16 @@ REFUSAL_WINDOW = timedelta(minutes=10)
 REFUSAL_ACTIONS = ("biometrics.terminal.recognize", "biometrics.terminal.qr")
 # Refus décidés par Attendance Core (travail posté) : toutes sources (QR, facial, manuel, terminal).
 CORE_REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted_time.REFUSALS))
+CORE_REFUSAL_ACTIONS += ("attendance.early_exit_refused", "attendance.off_schedule_refused")
 ALL_REFUSAL_ACTIONS = REFUSAL_ACTIONS + CORE_REFUSAL_ACTIONS
 # Alertes poussées dans le flux live du Pointeur (codes canoniques).
-ALERT_ANOMALY_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA, "MANUAL_POINTAGE")
+ALERT_ANOMALY_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA, "MANUAL_POINTAGE", "CORRECTION", "REENTRY", "EXIT_REGULARIZED", "ABSENT", "LATE", counted_time.LATE_ENTRY_REFUSED, "ABANDON_POSTE", "MAINTENANCE", "EARLY_EXIT_REFUSED", "OFF_SCHEDULE_REFUSED") + tuple(sorted(counted_time.REFUSALS))
 ALERT_WINDOW = timedelta(hours=48)
 ALERT_LABELS = {
     counted_time.ANOMALY_UNCLOSED: "Vacation non clôturée", counted_time.KIND_EXTRA: "Vacation supplémentaire (maintien)",
-    "MANUAL_POINTAGE": "Pointage manuel",
+    "EARLY_EXIT_REFUSED": "Fin de service non atteinte", "OFF_SCHEDULE_REFUSED": "Groupe en récupération / OFF",
+    "CORRECTION":"Correction", "REENTRY":"Reprise de poste", "EXIT_REGULARIZED":"Sortie régularisée",
+    "ABSENT": "Absent / non pointé", "MANUAL_POINTAGE": "Pointage manuel", "LATE": "Retard", "ABANDON_POSTE": "Abandon de poste", "MAINTENANCE": "Maintien au poste",
     **{code: counted_time.ENTRY_STATUS_LABELS[code] for code in counted_time.REFUSALS},
 }
 SOURCE_LABELS = {"FACIAL": "Reconnaissance faciale", "QR": "QR", "MANUAL": "Saisie manuelle", "PORTAL_GPS": "Portail (GPS)",
@@ -54,29 +57,36 @@ def _site_filter(stmt, column, site_ids):
     return stmt.where(column.in_(site_ids or [-1])) if site_ids is not None else stmt
 
 
+def _latest_scans(db: Session, *, employee_ids=None, site_ids=None, since=None):
+    """Une ligne par employé, calculée en SQL : aucun chargement de l'historique en Python.
+    Le dernier passage est global avant le filtre de site, pour éviter les faux présents.
+    Les arrivées V7 restent visibles jusqu'au départ, quelle que soit la durée du maintien.
+    """
+    stmt = select(AttendanceEvent.id.label("event_id"), func.row_number().over(
+        partition_by=AttendanceEvent.employee_id,
+        order_by=(AttendanceEvent.occurred_at.desc(), AttendanceEvent.id.desc())).label("position")).where(
+            AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)))
+    if employee_ids is not None:
+        stmt = stmt.where(AttendanceEvent.employee_id.in_(employee_ids or {-1}))
+    ranked = stmt.subquery()
+    query = select(AttendanceEvent).join(ranked,ranked.c.event_id == AttendanceEvent.id).where(ranked.c.position == 1)
+    if site_ids is not None:
+        query = query.where(AttendanceEvent.site_id.in_(site_ids or {-1}))
+    if since is not None:
+        query = query.where(or_(AttendanceEvent.occurred_at >= since,
+                               AttendanceEvent.data["counted"]["policy_version"].as_integer() == 7))
+    return {row.employee_id:row for row in db.scalars(query)}
+
+
 def _last_scan_by_employee(db: Session, employee_ids: set[int], since: datetime) -> dict[int, AttendanceEvent]:
-    """Dernier ARRIVÉE / DÉPART de chaque employé (toutes sources, tous sites) depuis `since`
-    (UTC naïf). Chaque appelant choisit ses employés parmi ceux qui ont un passage depuis
-    `since` : leur dernier passage est donc toujours dans cette fenêtre, et le résultat est
-    identique à une lecture complète. Sans cette borne, tout l'historique de chaque employé
-    était relu à chaque relève (toutes les 2 s par poste)."""
-    if not employee_ids:
-        return {}
-    rows = db.execute(select(AttendanceEvent).where(
-        AttendanceEvent.employee_id.in_(employee_ids), AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)),
-        AttendanceEvent.occurred_at >= since,
-    ).order_by(AttendanceEvent.employee_id, AttendanceEvent.occurred_at, AttendanceEvent.id)).scalars().all()
-    last: dict[int, AttendanceEvent] = {}
-    for row in rows:
-        last[row.employee_id] = row
-    return last
+    return _latest_scans(db,employee_ids=employee_ids) if employee_ids else {}
 
 
 def _is_present(event: AttendanceEvent | None, now_local: datetime, sites: dict[int, Site]) -> bool:
     if event is None or event.event_type != EVENT_ARRIVAL:
         return False
     elapsed = now_local - core.to_local(event.occurred_at)
-    return timedelta(0) <= elapsed <= core.open_cycle_window(sites.get(event.site_id))
+    return timedelta(0) <= elapsed <= core.open_cycle_window(sites.get(event.site_id), event)
 
 
 def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None) -> dict[str, int]:
@@ -89,8 +99,7 @@ def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None)
         AttendanceEvent.occurred_at >= min(window, start_utc)), AttendanceEvent.site_id, site_ids)).scalars().all()
     entries = sum(1 for e in events if e.event_type == EVENT_ARRIVAL and e.presence_date == today)
     exits = sum(1 for e in events if e.event_type == EVENT_DEPARTURE and e.occurred_at >= start_utc)
-    candidate_ids = {e.employee_id for e in events if e.event_type == EVENT_ARRIVAL}
-    last = _last_scan_by_employee(db, candidate_ids, min(window, start_utc))
+    last = _latest_scans(db,site_ids=site_ids,since=min(window,start_utc))
     sites = {s.id: s for s in db.execute(select(Site).where(Site.id.in_({e.site_id for e in last.values() if e.site_id}))).scalars()} if last else {}
     present = sum(1 for emp_id, e in last.items() if _is_present(e, now_local, sites)
                   and (site_ids is None or e.site_id in site_ids))
@@ -157,7 +166,7 @@ def refusals(db: Session, site_ids: set[int] | None, after_id: int, now: datetim
         local = core.to_local(row.created_at)
         core_row = row.action in CORE_REFUSAL_ACTIONS
         out.append({"id": row.id, "heure": local.strftime("%H:%M:%S"),
-                    "label": ALERT_LABELS[state["code"]] if core_row else _refusal_label(employee, str(state.get("reason") or "")),
+                    "label": ALERT_LABELS.get(state["code"], state["code"]) if core_row else _refusal_label(employee, str(state.get("reason") or "")),
                     "code": state.get("code") if core_row else None, "message": state.get("message") if core_row else None,
                     "source": state.get("source") if core_row else None, "recorded": False,
                     "counted": counted_time.view({"counted": {**state, "entry_status": state["code"]}}) if core_row else None,
@@ -186,7 +195,7 @@ def alerts(db: Session, site_ids: set[int] | None, now: datetime) -> list[dict[s
 
 
 # ── Poste de contrôle (Pointeur V5) ──────────────────────────────────────────────────────
-TODO_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA)
+TODO_TYPES = ALERT_ANOMALY_TYPES
 TODO_LABELS = {counted_time.ANOMALY_UNCLOSED: "Vacation non clôturée", counted_time.KIND_EXTRA: "Maintien à qualifier",
                counted_time.MANUAL_ENTRY_REQUIRED: "Saisie manuelle requise"}
 EXCUSED_STATUSES = ("conge", "maladie", "mission", "repos")
@@ -245,10 +254,7 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
 
     # Présents : dernier passage = ARRIVÉE encore dans son cycle ouvert — UNE ligne par employé.
     recent_since = core.to_utc_naive(local - core.OPEN_24H_CYCLE_MAX)
-    recent = db.execute(select(AttendanceEvent).where(
-        AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)), AttendanceEvent.site_id == site_id,
-        AttendanceEvent.occurred_at >= recent_since)).scalars().all()
-    last = _last_scan_by_employee(db, {e.employee_id for e in recent if e.event_type == EVENT_ARRIVAL}, recent_since)
+    last = _latest_scans(db,site_ids={site_id},since=recent_since)
     present = {emp_id: e for emp_id, e in last.items() if e.site_id == site_id and _is_present(e, local, sites)}
 
     expected_ids: set[int] = set()
@@ -277,13 +283,16 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
     present_rows = []
     for employee_id, event in present.items():
         snapshot = counted_time.view(event.data) or {}
-        maintained = snapshot.get("kind") == counted_time.KIND_EXTRA
+        maintained = snapshot.get("kind") == counted_time.KIND_EXTRA or bool(snapshot.get("scheduled_end") and local > datetime.fromisoformat(snapshot["scheduled_end"]))
         present_rows.append({
             "employee": {**card(employee_id), "group": snapshot.get("group") or groups.get(employee_id)}, "event_id": event.id,
             "entry": core.to_local(event.occurred_at).strftime("%H:%M"), "entry_at": core.to_local(event.occurred_at).isoformat(timespec="seconds"),
             "shift_start": _hm(snapshot.get("scheduled_start")), "shift_end": _hm(snapshot.get("scheduled_end")),
             "shift_label": snapshot.get("shift_label"), "kind": snapshot.get("kind"),
-            "badge": "EN_MAINTIEN" if maintained else "EN_POSTE", "badge_label": "EN MAINTIEN" if maintained else "EN POSTE"})
+            "late_minutes": snapshot.get("late_minutes", 0),
+            "maintained_minutes": max(0, int((local - datetime.fromisoformat(snapshot["scheduled_end"])).total_seconds() // 60)) if snapshot.get("scheduled_end") else 0,
+            "badge": "EN_MAINTIEN" if maintained else ("EN_RETARD" if snapshot.get("late_minutes",0) else "EN_POSTE"),
+            "badge_label": "EN MAINTIEN" if maintained else (f"RETARD {snapshot['late_minutes']} MIN" if snapshot.get("late_minutes",0) else "EN POSTE")})
     present_rows.sort(key=lambda row: row["entry_at"], reverse=True)
 
     # À traiter : anomalies OUVERTES qui appellent une intervention, puis saisies manuelles requises.
@@ -303,7 +312,7 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
                      "severity": row.severity, "message": row.message, "employee": card(row.employee_id) if row.employee_id else None,
                      "scheduled_end": _hm(end) if end else None,
                      "overdue_since": _hm(datetime.fromisoformat(end) + grace) if end and row.anomaly_type == counted_time.ANOMALY_UNCLOSED else None,
-                     "action": None})
+                     "at": core.to_local(row.created_at).isoformat(), "action": None})
     refusal_rows = _core_refusals(db, site_id, local - MOVEMENTS_WINDOW)
     seen: set[str] = set()
     codes = {e.code: e for e in employees.values()}
@@ -326,19 +335,33 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
 
     # Derniers mouvements : passages acceptés ET tentatives refusées (qui ne comptent jamais comme présence).
     movement_events = db.execute(select(AttendanceEvent).where(
-        AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)), AttendanceEvent.site_id == site_id,
+        AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE, "ABANDON_POSTE")), AttendanceEvent.site_id == site_id,
         AttendanceEvent.occurred_at >= core.to_utc_naive(local - MOVEMENTS_WINDOW),
     ).order_by(AttendanceEvent.occurred_at.desc(), AttendanceEvent.id.desc()).limit(MOVEMENTS_LIMIT)).scalars().all()
+    abandoned = {(event.data or {}).get("departure_event_id") for event in movement_events if event.event_type == "ABANDON_POSTE"}
     movements = []
     for event in movement_events:
+        if event.id in abandoned:
+            continue
         data = event.data if isinstance(event.data, dict) else {}
-        kind = (data.get("counted") or {}).get("kind") if isinstance(data.get("counted"), dict) else None
+        snapshot = data.get("counted") if isinstance(data.get("counted"), dict) else {}
         entry = event.event_type == EVENT_ARRIVAL
-        kind_code = "MAINTIEN" if entry and kind == counted_time.KIND_EXTRA else ("ENTREE" if entry else "SORTIE")
+        code = "MAINTIEN" if entry and snapshot.get("kind") == counted_time.KIND_EXTRA else ("ENTREE" if entry else "SORTIE")
+        detail = None
+        if event.event_type == "ABANDON_POSTE":
+            code, detail = "ABANDON", event.observation
+        elif snapshot.get("policy_version") == 7:
+            if event.source == "MANUAL":
+                code, detail = "POINTAGE_MANUEL", event.observation
+            elif entry and snapshot.get("late_minutes",0):
+                code, detail = "RETARD", f"Retard {snapshot['late_minutes']} min"
+            elif not entry and snapshot.get("exit_kind") == "AFTER_MAINTENANCE":
+                detail = f"Sortie après maintien de {snapshot.get('maintained_minutes',0)} min"
         at = core.to_local(event.occurred_at)
-        movements.append({"key": f"e{event.id}", "type": kind_code, "label": {"MAINTIEN": "MAINTIEN", "ENTREE": "ENTRÉE", "SORTIE": "SORTIE"}[kind_code],
-                          "heure": at.strftime("%H:%M:%S"), "at": at.isoformat(timespec="seconds"), "matricule": data.get("matricule") or "",
-                          "name": data.get("agentName") or "", "source": event.source, "detail": None})
+        labels = {"MAINTIEN":"MAINTIEN","ENTREE":"ENTRÉE","SORTIE":"SORTIE","ABANDON":"ABANDON DE POSTE","POINTAGE_MANUEL":"POINTAGE MANUEL","RETARD":"RETARD"}
+        movements.append({"key":f"e{event.id}", "type":code, "label":labels[code], "heure":at.strftime("%H:%M:%S"),
+            "at":at.isoformat(timespec="seconds"), "matricule":data.get("matricule") or "",
+            "name":data.get("agentName") or data.get("employee_name") or "", "source":event.source,"detail":detail})
     def attempted_at(row: Any, state: dict[str, Any]) -> datetime:
         # Heure RÉELLE de la tentative, figée dans l'audit.
         return datetime.fromisoformat(state["actual_entry"]) if state.get("actual_entry") else core.to_local(row.created_at)
@@ -405,7 +428,8 @@ def overview_post(db: Session, site_ids: set[int], now: datetime, manual_entry: 
     kpi.update(present=len(present), maintien=sum(r["badge"] == "EN_MAINTIEN" for r in present.values()), anomalies=len(todo))
     return {"site": "Sites sélectionnés", "status": "OVERVIEW", "current": None, "next": None,
             "maintien": None, "kpi": kpi, "present": list(present.values()), "expected": expected, "todo": todo,
-            "movements": [], "activity": {"refused_today": sum(p["activity"]["refused_today"] for p in posts)},
+            "movements": sorted([{**r, "site": p["site"]} for p in posts for r in p["movements"]], key=lambda r:r["at"], reverse=True)[:MOVEMENTS_LIMIT],
+            "activity": {"refused_today": sum(p["activity"]["refused_today"] for p in posts)},
             "permissions": {"manual_entry": manual_entry}}
 
 
@@ -416,8 +440,11 @@ def live(db: Session, site_ids: set[int] | None, *, after_id: int | None, after_
     now = now or core._now_local()
     now_local = now.astimezone(core.TZ)
     # Rattrapage idempotent (aucun cron requis) : une anomalie par vacation restée sans sortie.
-    if counted_time.detect_unclosed(db, site_ids, now_local):
-        db.commit()
+    from app.modules.attendance import situations
+    situations.detect_missing(db, site_ids, now_local)
+    situations.detect_maintenance(db, site_ids, now_local)
+    counted_time.detect_unclosed(db, site_ids, now_local)
+    db.commit()
     stmt = _site_filter(select(AttendanceEvent).where(AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE))),
                         AttendanceEvent.site_id, site_ids)
     latest = db.execute(stmt.order_by(AttendanceEvent.id.desc()).limit(1)).scalar_one_or_none()

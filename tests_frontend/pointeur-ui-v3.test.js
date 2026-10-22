@@ -57,16 +57,16 @@ test('structure V3 : header conservé, barre KPI aux 4 valeurs réelles, aucune 
   assert.equal(kpi.querySelectorAll('canvas,.spark,.chart,[class*="chart"]').length, 0);
   // Aucune sidebar ni menu repris de la maquette.
   assert.equal(d.querySelector('aside.sidebar,nav.sidebar,.atlas-sidebar,#sidebar-nav'), null);
-  assert.doesNotMatch(d.getElementById('appView').textContent, /Historique|Terminaux|Rapports|Paramètres/);
+  assert.doesNotMatch(d.querySelector('#appView > .top').textContent, /Historique|Terminaux|Rapports|Paramètres/);
 });
 
 test('modes de pointage : trois cartes, chacune branchée sur le mécanisme EXISTANT', async () => {
   const t = boot(); await ready(t);
   const d = t.d, cards = [...d.querySelectorAll('.mode-grid .mode-card')];
   assert.deepEqual(cards.map((c) => [c.id, c.querySelector('b').textContent, c.querySelector('small').textContent, c.getAttribute('onclick')]), [
-    ['qrModeBtn', 'QR Code', 'Présentez votre badge', 'selectQrMode()'],
-    ['faceModeBtn', 'Reconnaissance faciale', 'Détection automatique', "showPointerSection('facial')"],
-    ['manualModeBtn', 'Saisie manuelle', 'Code employé', 'toggleManualPanel()'],
+    ['qrModeBtn', 'QR Code', 'Scanner un badge', 'selectQrMode()'],
+    ['faceModeBtn', 'Reconnaissance faciale', 'Caméra du poste', "showPointerSection('facial')"],
+    ['manualModeBtn', 'Saisie manuelle', 'Code, matricule ou nom', 'toggleManualPanel()'],
   ]);
   assert.equal(d.getElementById('faceModeBtn').getAttribute('onclick'), d.getElementById('faceNav').getAttribute('onclick'), 'même entrée que le bouton Facial du header');
   // Saisie manuelle : le panneau existant s'ouvre, la carte reflète l'état, QR Code y revient.

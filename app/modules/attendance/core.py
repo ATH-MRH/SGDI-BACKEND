@@ -30,6 +30,7 @@ from app.core.audit import append_audit
 from app.core.config import settings
 from app.modules.attendance.models import (
     ANOMALY_OPEN,
+    ANOMALY_RESOLVED,
     EVENT_ARRIVAL,
     EVENT_DEPARTURE,
     SOURCE_MANUAL,
@@ -51,9 +52,11 @@ OPEN_24H_CYCLE_MAX = timedelta(hours=30)
 LEGACY_ACTION = {EVENT_ARRIVAL: "arrivee", EVENT_DEPARTURE: "depart"}
 
 
-def open_cycle_window(site: Site | None) -> timedelta:
+def open_cycle_window(site: Site | None, arrival: AttendanceEvent | None = None) -> timedelta:
     """Durée pendant laquelle une ARRIVÉE reste un cycle ouvert (présence en cours) : même règle
     pour la décision ENTRÉE/SORTIE et pour l'état « présent » affiché (traverse minuit)."""
+    if arrival is not None and ((arrival.data or {}).get("counted") or {}).get("policy_version") == 7:
+        return timedelta.max  # V7 : seul un départ enregistré referme la présence.
     rotation = str(getattr(site, "rotation_system", "") or "") if site else ""
     return OPEN_24H_CYCLE_MAX if "24" in rotation else OPEN_CYCLE_MAX
 
@@ -179,6 +182,8 @@ def raise_anomaly(db: Session, *, anomaly_type: str, message: str, severity: str
     except IntegrityError:
         # Même anomalie créée en parallèle : on garde l'existante.
         return db.execute(select(AttendanceAnomaly).where(AttendanceAnomaly.dedupe_key == key)).scalar_one()
+    from app.modules.attendance import situations
+    situations.publish(db,row)
     return row
 
 
@@ -301,7 +306,7 @@ def _duplicate_response(event: AttendanceEvent, employee: Employee, site_name: s
 
 
 def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source: str, counted: dict[str, Any],
-                  site_id: int | None = None, events: list[AttendanceEvent] | None = None, extra: dict[str, Any] | None = None) -> None:
+                  site_id: int | None = None, events: list[AttendanceEvent] | None = None, extra: dict[str, Any] | None = None, device_id: int | None = None) -> None:
     """Entrée refusée par les règles du travail posté (avant T-30, nouvelle entrée avant TFIN+30,
     vacation précédente non clôturée, saisie manuelle requise). Aucun événement ni présence n'est
     créé — aucun temps n'est fabriqué ; la tentative est tracée dans l'audit (qui, où, quand,
@@ -316,6 +321,8 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
         label = official.SHIFT_LABELS.get(counted["shift"], counted["shift"])
         detail = (f"Pointage hors fenêtre : vacation {label} à {hhmm['scheduled_start']}, "
                   f"pointage possible à partir de {hhmm['window_opens_at']}.")
+    elif code == counted_time.LATE_ENTRY_REFUSED:
+        detail = "POINTAGE REFUSÉ — RETARD ≥ 30 MINUTES — VEUILLEZ VOUS PRÉSENTER AU POSTE DE SÉCURITÉ"
     elif code == counted_time.EXTRA_BEFORE_WINDOW:
         detail = (f"Nouvelle entrée refusée : vacation terminée à {hhmm['scheduled_start']}, "
                   f"nouvelle entrée possible de {hhmm['window_opens_at']} à {hhmm['window_closes_at']}.")
@@ -332,8 +339,21 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
                  result="refused", user=actor, society=society,
                  new_state={"code": code, "state": "REFUSED", "recorded": False, "source": source, "message": detail,
                             "employee_id": employee_id, "matricule": matricule, "society": society, "site_id": site_id,
-                            "terminal": terminal, "last_entry": last[EVENT_ARRIVAL], "last_exit": last[EVENT_DEPARTURE],
+                            "terminal": terminal, "device_id": device_id, "last_entry": last[EVENT_ARRIVAL], "last_exit": last[EVENT_DEPARTURE],
                             **{key: value for key, value in counted.items() if value is not None and key != "entry_status"}})
+    if counted.get("policy_version") == 7:
+        at = datetime.fromisoformat(counted["actual_entry"])
+        attempt = AttendanceEvent(employee_id=employee_id, society=society, site_id=site_id,
+            presence_date=date.fromisoformat(counted["work_date"]), occurred_at=to_utc_naive(at),
+            event_type="REFUSED_ENTRY", source=source, device_id=device_id, actor_user_id=getattr(actor, "id", None),
+            actor_label=getattr(actor, "username", None), data={"counted": counted, "reason": code,
+                "matricule": matricule, "terminal": terminal})
+        db.add(attempt)
+        db.flush()
+        raise_anomaly(db, anomaly_type=code, severity="critical" if code == counted_time.LATE_ENTRY_REFUSED else "warning", employee=employee, site_id=site_id,
+            presence_date=attempt.presence_date, event=attempt, source=source, message=detail,
+            dedupe_key=f"{code}:{employee_id}:{site_id}:{counted['scheduled_start']}",
+            details={**counted, "terminal": terminal})
     db.commit()
     manual_denied = code == counted_time.MANUAL_ENTRY_REQUIRED and source == SOURCE_MANUAL
     # Motif structuré pour l'écran (ASCII : en-tête HTTP) ; `detail` reste le texte historique.
@@ -342,6 +362,49 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
                                                                "window_closes_at", "actual_entry", "previous")}}, ensure_ascii=True)
     raise HTTPException(status_code=403 if manual_denied else 409, detail=detail,
                         headers={"X-Attendance-Code": code, "X-Attendance-Refusal": refusal})
+
+
+def _refuse_off(db, *, employee, actor, source, site, now, device_id=None):
+    detail = "POINTAGE REFUSÉ — GROUPE EN RÉCUPÉRATION / OFF — PLANNING OFFICIEL OU REMPLACEMENT REQUIS"
+    data = {"code":"OFF_SCHEDULE_REFUSED", "state":"REFUSED", "recorded":False, "source":source,
+            "employee_id":employee.id,"matricule":employee.code,"site_id":site.id,"society":employee.society,
+            "actual_entry":now.isoformat(),"message":detail,"device_id":device_id}
+    event = AttendanceEvent(employee_id=employee.id,society=employee.society,site_id=site.id,
+        presence_date=now.date(),occurred_at=to_utc_naive(now),event_type="REFUSED_ENTRY",source=source,device_id=device_id,
+        actor_user_id=getattr(actor,"id",None),actor_label=getattr(actor,"username",None),data=data)
+    db.add(event);db.flush()
+    raise_anomaly(db,anomaly_type="OFF_SCHEDULE_REFUSED",employee=employee,site_id=site.id,
+        presence_date=now.date(),event=event,source=source,message=detail,
+        dedupe_key=f"OFF_SCHEDULE_REFUSED:{employee.id}:{site.id}:{now.date()}",details={"policy_version":7,"group":"D"})
+    append_audit(db,action="attendance.off_schedule_refused",resource="attendance_event",resource_id=employee.id,
+                 result="refused",user=actor,society=employee.society,new_state=data)
+    db.commit()
+    raise HTTPException(409,detail=detail,headers={"X-Attendance-Code":"OFF_SCHEDULE_REFUSED",
+        "X-Attendance-Refusal":json.dumps(data,ensure_ascii=True)})
+
+
+def _refuse_exit(db, *, employee, actor, source, snapshot, now, arrival, device_id=None):
+    """Un refus ne ferme jamais la présence. Le fait brut et la situation sont durables."""
+    detail = "POINTAGE REFUSÉ — FIN DE SERVICE NON ATTEINTE — VEUILLEZ VOUS PRÉSENTER AU POSTE DE SÉCURITÉ"
+    data = {"code": "EARLY_EXIT_REFUSED", "state": "REFUSED", "recorded": False,
+            "employee_id": employee.id, "matricule": employee.code, "society": employee.society,
+            "site_id": arrival.site_id, "source": source, "message": detail, "device_id":device_id,
+            "actual_entry": now.isoformat(), "scheduled_end": snapshot["scheduled_end"]}
+    attempt = AttendanceEvent(employee_id=employee.id, society=employee.society, site_id=arrival.site_id,
+        presence_date=arrival.presence_date, occurred_at=to_utc_naive(now), event_type="REFUSED_EXIT",
+        source=source, device_id=device_id, actor_user_id=getattr(actor, "id", None),
+        actor_label=getattr(actor, "username", None), data={"counted": snapshot, **data})
+    db.add(attempt)
+    db.flush()
+    raise_anomaly(db, anomaly_type="EARLY_EXIT_REFUSED", severity="critical", employee=employee,
+        site_id=arrival.site_id, presence_date=arrival.presence_date, event=attempt, source=source,
+        dedupe_key=f"EARLY_EXIT_REFUSED:{arrival.id}", message=detail,
+        details={"policy_version":7,"group": snapshot.get("group"), "scheduled_end": snapshot["scheduled_end"], "attempted_at": now.isoformat()})
+    append_audit(db, action="attendance.early_exit_refused", resource="attendance_event", resource_id=employee.id,
+                 result="refused", user=actor, society=employee.society, new_state=data)
+    db.commit()
+    raise HTTPException(409, detail=detail, headers={"X-Attendance-Code": "EARLY_EXIT_REFUSED",
+        "X-Attendance-Refusal": json.dumps(data, ensure_ascii=True)})
 
 
 def record_scan(
@@ -429,7 +492,7 @@ def record_scan(
 
     last_arrival = next((e for e in reversed(events) if e.event_type == EVENT_ARRIVAL), None)
     last_arrival_at = to_local(last_arrival.occurred_at) if last_arrival else None
-    open_cycle_max = open_cycle_window(site)
+    open_cycle_max = open_cycle_window(site, last_arrival)
     open_arrival = (
         last_arrival if last_event is last_arrival and last_arrival_at is not None
         and timedelta(0) <= now - last_arrival_at <= open_cycle_max else None
@@ -467,7 +530,7 @@ def record_scan(
         counted = counted_time.extra_entry(previous[0], now, previous_event_id=previous[1].id)
     elif event_type == EVENT_ARRIVAL and site is not None:
         counted = counted_time.entry(db, employee_id=employee.id, site_id=site.id, at=now)
-        normal_entry = counted is not None and counted["entry_status"] not in counted_time.REFUSALS
+        normal_entry = counted is not None and counted["entry_status"] not in counted_time.REFUSALS and now < datetime.fromisoformat(counted["scheduled_end"])
         if previous is not None and not normal_entry and counted_time.in_extra_slot(previous[0], now):
             # Maintien : nouvelle entrée sur le créneau qui suit la vacation normale. Deux
             # vacations distinctes, jamais une seule présence continue.
@@ -477,9 +540,32 @@ def record_scan(
             counted = counted_time.extra_entry(previous[0], now, previous_event_id=previous[1].id, manual_allowed=manual)
     elif event_type == EVENT_DEPARTURE and open_arrival is not None:
         counted = counted_time.close((open_arrival.data or {}).get("counted"), now)
+    if counted is not None and counted.get("policy_version") == 7 and source == SOURCE_MANUAL:
+        if not manual_entry_allowed:
+            raise HTTPException(403, "Saisie manuelle non autorisée")
+        if not observation:
+            raise HTTPException(422, "Motif obligatoire pour tout pointage manuel V7")
+    if (event_type == EVENT_ARRIVAL and counted is not None
+            and counted.get("policy_version") == 7
+            and counted.get("kind") == counted_time.KIND_NORMAL and counted.get("late_minutes", 0) >= 30):
+        if source == SOURCE_MANUAL and manual_entry_allowed:
+            if not observation:
+                raise HTTPException(422, "Motif obligatoire pour une entrée manuelle après 30 minutes de retard")
+        else:
+            counted = {**counted, "entry_status": counted_time.LATE_ENTRY_REFUSED, "counted_start": None}
+    if (event_type == EVENT_DEPARTURE and counted is not None and abandon_details is None
+            and counted.get("policy_version") == 7 and now < datetime.fromisoformat(counted["scheduled_end"])):
+        # Toute sortie avant la fin doit être explicitement qualifiée par l’opérateur.
+        _refuse_exit(db, employee=employee, actor=actor, source=source, snapshot=counted,
+                     now=now, arrival=open_arrival, device_id=device_id)
     if counted is not None and counted["entry_status"] in counted_time.REFUSALS:
         _refuse_entry(db, employee=employee, actor=actor, source=source, counted=counted,
-                      site_id=site.id if site is not None else None, events=events, extra=extra)
+                      site_id=site.id if site is not None else None, events=events, extra=extra, device_id=device_id)
+    if event_type == EVENT_ARRIVAL and counted is None and site is not None:
+        from app.modules.attendance import official
+        plan = official.official_shift(db, employee_id=employee.id, site_id=site.id, at=now)
+        if plan["official"] and (plan.get("model") or {}).get("code") == official.FIXED_MODEL_CODE and not plan["working"]:
+            _refuse_off(db, employee=employee, actor=actor, source=source, site=site, now=now, device_id=device_id)
     extra_shift = counted is not None and counted.get("kind") == counted_time.KIND_EXTRA
 
     # Journée de TRAVAIL : une arrivée de nuit après minuit appartient à la vacation commencée la
@@ -632,11 +718,34 @@ def record_scan(
                                "recorded_on": presence_day.isoformat(), "regularization": "correction post-clôture"})
 
     # Anomalies détectables à l'événement.
+    if counted is not None and counted.get("policy_version") == 7 and event_type == EVENT_DEPARTURE:
+        maintained_minutes = max(0, int((now - datetime.fromisoformat(counted["scheduled_end"])).total_seconds() // 60))
+        if maintained_minutes:
+            raise_anomaly(db, anomaly_type="MAINTENANCE", employee=employee, site_id=event.site_id,
+                presence_date=presence_day, event=open_arrival, source=source,
+                dedupe_key=f"MAINTENANCE:{open_arrival.id}", message=f"Sortie après maintien de {maintained_minutes} min",
+                details={"policy_version":7,"group": counted.get("group"), "scheduled_end": counted["scheduled_end"],
+                         "actual_exit": now.isoformat(), "maintained_minutes": maintained_minutes})
+        maintenance = db.scalar(select(AttendanceAnomaly).where(AttendanceAnomaly.dedupe_key == f"MAINTENANCE:{open_arrival.id}"))
+        if maintenance:
+            maintenance.status, maintenance.resolved_by, maintenance.resolved_at = ANOMALY_RESOLVED, actor_label or source, datetime.utcnow()
+            maintenance.resolution = f"Sortie enregistrée après {maintained_minutes} minutes de maintien"
+            maintenance.details = {**(maintenance.details or {}), "actual_exit": now.isoformat(), "maintained_minutes": maintained_minutes}
+            from app.modules.attendance import situations
+            situations.close_projections(db,maintenance)
+    if counted is not None and counted.get("policy_version") == 7 and event_type == EVENT_ARRIVAL:
+        missing = db.scalar(select(AttendanceAnomaly).where(AttendanceAnomaly.dedupe_key ==
+            f"ABSENT:{employee.id}:{event.site_id}:{counted['scheduled_start']}"))
+        if missing and missing.status == ANOMALY_OPEN:
+            missing.status, missing.resolved_at, missing.resolved_by = ANOMALY_RESOLVED, datetime.utcnow(), actor_label or source
+            missing.resolution = "Arrivée enregistrée ; le retard et la tentative éventuelle restent au dossier"
+            from app.modules.attendance import situations
+            situations.close_projections(db,missing)
     if source == SOURCE_MANUAL:
-        raise_anomaly(db, anomaly_type="MANUAL_POINTAGE", severity="info", employee=employee,
+        raise_anomaly(db, anomaly_type="MANUAL_POINTAGE", severity="warning" if counted and counted.get("policy_version")==7 else "info", employee=employee,
                       site_id=event.site_id, presence_date=presence_day, event=event, source=source,
                       message=f"Pointage manuel ({legacy_action}) par {actor_label or 'opérateur'}",
-                      details={"observation": observation} if observation else None)
+                      details={"observation": observation, "policy_version": counted.get("policy_version") if counted else None})
     if overtime_minutes:
         raise_anomaly(db, anomaly_type="OVERTIME", employee=employee, site_id=event.site_id,
                       presence_date=presence_day, event=event, source=source,
@@ -675,11 +784,12 @@ def record_scan(
             expected_label = plan["start_time"]
         else:
             late = None
-        if late is not None and late > max(0, settings.attendance_late_tolerance_minutes) and late < 12 * 60:
+        if late is not None and late > (0 if counted is not None and counted.get("policy_version") == 7 else max(0, settings.attendance_late_tolerance_minutes)) and late < 12 * 60:
             raise_anomaly(db, anomaly_type="LATE", employee=employee, site_id=event.site_id,
                           presence_date=presence_day, event=event, source=source,
                           message=f"Arrivée à {now.strftime('%H:%M')} pour {expected_label} prévu ({late} min de retard)",
-                          details={"expected": expected_label, "late_minutes": late})
+                          details={"expected": expected_label, "late_minutes": late,
+                                   **({key: counted.get(key) for key in ("policy_version", "group", "scheduled_start", "scheduled_end")} if counted else {})})
 
     # Feuille de présence de la rotation (lot 1) : reflet opérationnel du FAIT ci-dessus. Le fait
     # est déjà écrit ; ce rattachement est isolé dans son point de sauvegarde et ne peut ni le
@@ -693,7 +803,8 @@ def record_scan(
 
     append_audit(db, action="attendance.event", resource="attendance_event", resource_id=event.id,
                  result="success", user=actor, society=employee.society,
-                 new_state={"type": event_type, "source": source, "site_id": event.site_id,
+                 old_state={"last_event_id":last_event.id,"type":last_event.event_type} if last_event else None,
+                 new_state={"type": event_type, "source": source, "site_id": event.site_id, "observation":observation,
                             "presence_date": presence_day.isoformat(), "device_id": device_id,
                             **({"shift_kind": counted.get("kind", counted_time.KIND_NORMAL), "entry_status": counted["entry_status"]} if counted is not None else {})})
     if abandon_details is not None:
@@ -763,7 +874,7 @@ def regularize_departure(db: Session, *, arrival_event_id: int, exit_at: datetim
         raise HTTPException(422, detail="La sortie doit être postérieure à l'arrivée")
     if exit_local > _now_local():
         raise HTTPException(422, detail="La sortie ne peut pas être dans le futur")
-    if exit_local - arrival_at > open_cycle_window(site):
+    if exit_local - arrival_at > open_cycle_window(site, arrival):
         raise HTTPException(422, detail="Sortie trop éloignée de l'arrivée pour une seule vacation")
     if following is not None and exit_local >= to_local(following.occurred_at):
         raise HTTPException(422, detail="La sortie doit précéder le passage suivant de l'employé")

@@ -315,7 +315,7 @@ body.modal-open{overflow:hidden}
         </div>
       </section>
       <section id="view-anomalies" class="hidden">
-        <div class="page-head"><div><h2>Anomalies</h2><p>Chaque anomalie reste ouverte jusqu'à sa résolution tracée. Une clôture ne les masque jamais.</p></div>
+        <div class="page-head"><div><h2>Points critiques &amp; situations</h2><p>Chaque anomalie reste ouverte jusqu'à sa résolution tracée. Une clôture ne les masque jamais.</p></div>
           <select id="a-status" aria-label="Statut des anomalies" style="width:auto"><option value="OPEN">Ouvertes</option><option value="RESOLVED">Résolues</option><option value="DISMISSED">Classées</option><option value="">Toutes</option></select></div>
         <div class="card"><div id="anomaly-state"></div>
           <div class="table-wrap"><table><thead><tr><th>Date</th><th>Employé</th><th>Site</th><th>Type</th><th>Détail</th><th>Statut</th><th></th></tr></thead><tbody id="anomaly-rows"></tbody></table></div>
@@ -721,13 +721,31 @@ if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
       $("anomaly-rows").innerHTML = data.items.length ? data.items.map((a) => `<tr>
         <td>${esc(a.date)}</td><td class="who"><b>${esc(a.nom) || "—"}</b><small>${esc(a.matricule)}</small></td><td>${esc(a.site) || "—"}</td>
         <td><span class="pill sev-${esc(a.severity)}">${esc(ANOMALY_LABEL[a.type] || a.type)}</span></td><td>${esc(a.message)}${a.resolution ? `<br><small>↳ ${esc(a.resolution)} — ${esc(a.resolved_by)}</small>` : ""}</td>
-        <td>${a.status === "OPEN" ? "Ouverte" : a.status === "RESOLVED" ? "Résolue" : "Classée"}</td>
-        <td><div class="row-actions">${a.status === "OPEN" && canWrite("resolve_anomaly") ? `<button class="link" type="button" data-resolve="${a.id}">Traiter</button>` : ""}</div></td></tr>`).join("")
+        <td>${esc(a.situation?.status_label || (a.status === "OPEN" ? "Ouverte" : a.status === "RESOLVED" ? "Résolue" : "Classée"))}</td>
+        <td><div class="row-actions">${a.status === "OPEN" && a.severity !== "critical" && !a.details?.workflow && canWrite("resolve_anomaly") ? `<button class="link" type="button" data-resolve="${a.id}">Traiter</button>` : ""}${a.situation?.status !== "ARCHIVED" && canWrite("resolve_anomaly") ? `<button class="link" type="button" data-workflow="${a.id}">Suivre / valider</button>` : ""}</div></td></tr>`).join("")
         : '<tr><td colspan="7" class="empty">Aucune anomalie.</td></tr>';
       $("anomaly-rows").querySelectorAll("[data-resolve]").forEach((b) => b.addEventListener("click", () => openResolve(data.items.find((a) => String(a.id) === b.dataset.resolve))));
+      $("anomaly-rows").querySelectorAll("[data-workflow]").forEach(b => b.addEventListener("click", () => openSituation(data.items.find(a => String(a.id) === b.dataset.workflow))));
       $("anomaly-total").textContent = `${data.total} anomalie(s) · page ${data.page}/${data.pages}`;
       $("a-prev").disabled = data.page <= 1; $("a-next").disabled = data.page >= data.pages;
     } catch (ex) { $("anomaly-state").innerHTML = `<div class="state error" role="alert">${esc(ex.message)}</div>`; }
+  }
+
+  function openSituation(a) {
+    const states=["DETECTED","TO_PROCESS","IN_PROGRESS","TO_VALIDATE","VALIDATED","ARCHIVED"];
+    const labels=["Détecté","À traiter","En cours","À valider","Validé","Archivé"];
+    const next=states.indexOf(a.situation?.status||"DETECTED")+1;
+    if(next>=states.length||!canWrite("resolve_anomaly"))return;
+    const m=modal(`<h3>Points critiques &amp; situations</h3><p>${esc(a.nom)} · ${esc(a.message)}</p><p>Prochaine étape : <b>${labels[next]}</b></p>
+      <form id="s-form"><label for="s-responsible">Responsable</label><input id="s-responsible" required maxlength="120" value="${esc(a.situation?.responsible||"")}">
+      <label for="s-reason">Motif / traitement</label><textarea id="s-reason" required minlength="3" maxlength="2000"></textarea><div id="s-error" role="alert"></div>
+      <div class="modal-actions"><button type="button" id="s-cancel">Annuler</button><button type="submit" class="primary">${labels[next]}</button></div></form>`);
+    m.querySelector('#s-cancel').addEventListener('click',closeModal);
+    m.querySelector('#s-form').addEventListener('submit',async event=>{
+      event.preventDefault();const button=m.querySelector('[type=submit]');button.disabled=true;
+      try {await api('/attendance/anomalies/'+a.id+'/workflow',{method:'PATCH',body:{status:states[next],reason:m.querySelector('#s-reason').value.trim(),responsible:m.querySelector('#s-responsible').value.trim()}});closeModal();loadAnomalies()}
+      catch(error){m.querySelector('#s-error').textContent=error.message;button.disabled=false}
+    });
   }
 
   function openResolve(a) {

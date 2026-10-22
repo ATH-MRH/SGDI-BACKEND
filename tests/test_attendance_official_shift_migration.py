@@ -13,7 +13,7 @@ REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
 # Jonction Pointeur / IRON Emploi / Studio Badges / lot d'import des contrats / circuit et
 # convocations du recrutement / code officiel des sites, sans réécriture des parents ; puis
 # champs autorisés de la Fiche de position BEO (20261024_0001).
-HEAD = "20261024_0001"
+HEAD = "20261025_0001"
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 
@@ -54,7 +54,7 @@ def test_upgrade_downgrade_upgrade_preserves_existing_assignments(tmp_path):
     with sqlite3.connect(database) as c:
         # Aucune affectation existante ne devient postée, même groupe A/B/C/D sur un site « 3x8 ».
         assert c.execute("SELECT COUNT(*) FROM assignments WHERE work_regime IS NOT NULL").fetchone()[0] == 0
-        assert c.execute("SELECT code, official, version, cycle_length FROM rotation_templates WHERE official = 1").fetchall() == [("3X8-CONTINU-2222", 1, 1, 8)]
+        assert c.execute("SELECT code, official, version, cycle_length FROM rotation_templates WHERE official = 1 ORDER BY code").fetchall() == [("3X8-CONTINU-2222", 1, 1, 8), ("3X8-FIXED-ABCD-V7", 1, 7, 4)]
         with pytest.raises(sqlite3.IntegrityError):
             c.execute("UPDATE assignments SET work_regime = 'POSTE_CONTINU' WHERE id = 1")     # sans modèle : refusé en base
     assert rows() == before
@@ -82,7 +82,7 @@ def test_downgrade_refuses_to_destroy_posted_regime(tmp_path):
     con.execute("INSERT INTO sites (id, name, contractual_staff, day_staff, night_staff, weekend_staff, holiday_staff, groups_count, active, created_at) "
                 "VALUES (3, 'Site REG', 0, 0, 0, 0, 0, 0, 1, '2026-09-01')")
     con.execute("INSERT INTO assignments (employee_id, site_id, group_code, rotation_id, work_regime, start_date, active, created_at) "
-                "SELECT 7, 3, 'B', id, 'POSTE_CONTINU', '2026-10-01', 1, '2026-10-01' FROM rotation_templates WHERE official = 1")
+                "SELECT 7, 3, 'B', id, 'POSTE_CONTINU', '2026-10-01', 1, '2026-10-01' FROM rotation_templates WHERE code = '3X8-CONTINU-2222'")
     con.commit(); con.close()
     refused = _alembic(url, "downgrade", PREVIOUS)
     assert refused.returncode != 0 and "Downgrade refusé" in refused.stderr
@@ -106,7 +106,7 @@ def test_postgresql_upgrade_downgrade_upgrade():
         _ok(_alembic(url, "upgrade", "head"))
         with engine.connect() as con:
             assert con.execute(text("SELECT COUNT(*) FROM assignments WHERE work_regime IS NOT NULL")).scalar() == 0
-            assert con.execute(text("SELECT code FROM rotation_templates WHERE official = 1")).scalars().all() == ["3X8-CONTINU-2222"]
+            assert con.execute(text("SELECT code FROM rotation_templates WHERE official = 1 ORDER BY code")).scalars().all() == ["3X8-CONTINU-2222", "3X8-FIXED-ABCD-V7"]
             checks = set(con.execute(text("SELECT conname FROM pg_constraint WHERE conname LIKE 'ck_assignments%'")).scalars())
             assert checks == {"ck_assignments_work_regime", "ck_assignments_posted_explicit"}
         _ok(_alembic(url, "downgrade", PREVIOUS))

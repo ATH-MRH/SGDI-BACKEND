@@ -57,7 +57,7 @@ const sys = (r, id) => [r.d.querySelector(`#${id} dd`).textContent, r.d.getEleme
 test('clic sur « Reconnaissance faciale » : la liste des terminaux s\'ouvre dans la zone centrale, sans redirection ; l\'activation lance la détection', async () => {
   const r = await boot();
   const card = r.d.getElementById('faceModeBtn');
-  assert.match(card.textContent, /Reconnaissance faciale\s*Détection automatique/);
+  assert.match(card.textContent, /Reconnaissance faciale\s*Caméra du poste/);
   card.click();
   await wait(200);
   assert.equal(r.T.getFacialMode(), true);

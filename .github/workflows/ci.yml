@@ -51,7 +51,17 @@ jobs:
         run: npm install
 
       - name: Lancer les tests frontend
+        env:
+          ATLAS_V7_ARTIFACTS: ${{ runner.temp }}/pointeur-v7-captures
         run: npm test
+
+      - name: Conserver les captures Pointeur V7 (données fictives)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pointeur-v7-captures
+          path: ${{ runner.temp }}/pointeur-v7-captures
+          if-no-files-found: error
 
   mobile:
     name: Application mobile IRON Emploi (tests, typecheck, lint)
