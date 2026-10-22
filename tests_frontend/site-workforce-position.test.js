@@ -83,34 +83,79 @@ function shellWindow(fetchImpl, hash) {
 const tick = () => new Promise((r) => setTimeout(r, 0));
 async function settle() { for (let i = 0; i < 6; i += 1) await tick(); }
 
-test("menu : « Fiche de position » juste après Personnel, routes existantes conservées", async () => {
+test("menu : EFFECTIF puis « Fiche de position », routes existantes conservées", async () => {
   const w = shellWindow(makeFetch([]));
   await w.SiteWorkforceShell.renderShell();
   const nav = [...w.document.querySelectorAll("[data-nav]")].map((b) => [b.dataset.nav, b.lastChild.textContent.trim()]);
   assert.deepStrictEqual(nav.map(([k]) => k), ["dashboard", "personnel", "position", "pointage", "absences", "justificatifs", "conges", "maladies", "discipline", "reclamations"]);
+  assert.strictEqual(nav[1][1], "EFFECTIF");
   assert.strictEqual(nav[2][1], "Fiche de position");
+  assert.ok(!nav.some(([, label]) => /Personnel/.test(label)), "libellé « Personnel » encore présent");
 });
 
-test("liste : colonnes fournies par l'API, Consulter ouvre #/position/<id>, filtres envoyés au serveur", async () => {
+test("annuaire : fichettes (champs de l'API seulement, lampe serveur), clic → fiche, mode Liste, filtres envoyés au serveur", async () => {
   const calls = [];
-  const w = shellWindow(makeFetch(calls), "#/position");
+  const list = {
+    ...LIST,
+    columns: [...LIST.columns, { key: "assignment.group", label: "Groupe", kind: "text" }, { key: "contract.end_date", label: "Date de fin", kind: "date" }],
+    items: [{ ...LIST.items[0], fields: { ...LIST.items[0].fields, "assignment.group": "B", "contract.end_date": null }, indicator: { level: "orange", label: "Sanction / discipline à signaler" } }],
+    filters: { ...LIST.filters, groups: [{ key: "A", count: 3 }, { key: "B", count: 1 }],
+      sites: [{ site_id: 1, site_name: "DHL FORWARDING / HAMOUL 01", count: 1 }, { site_id: 2, site_name: "SITE B", count: 3 }] },
+  };
+  const w = shellWindow(makeFetch(calls, { "/api/site-workforce/positions": () => list }), "#/position");
   await w.SiteWorkforceShell.renderShell();
   await settle();
-  const view = w.document.querySelector("#view");
-  assert.match(view.querySelector("h1").textContent, /Fiches de position/);
-  assert.match(view.textContent, /Consultation des positions des employés de votre périmètre/);
-  const heads = [...view.querySelectorAll("thead th")].map((th) => th.textContent);
-  assert.deepStrictEqual(heads, ["Employé", "Code employé", "Poste (affectation)", "Site", "Date d'affectation", "Statut", ""]);
-  assert.match(view.querySelector("tbody").textContent, /ABDELLAHI HABIB/);
-  assert.strictEqual(view.querySelector("tbody a").getAttribute("href"), "#/position/7");
-  const q = view.querySelector("#pf-q");
+  const doc = w.document;
+  assert.strictEqual(doc.querySelector("#view-title").textContent, "Fiches de position");
+  assert.match(doc.querySelector("#view-sub").textContent, /Accueil → Lecture seule → Structure : IRON GLOBAL SOLUTION → Tous mes sites \(2\)/);
+  // Mosaïque par défaut : une fichette, sans la ligne « Structure » (champ non renvoyé = non autorisé).
+  const card = doc.querySelector(".beo-fiche");
+  assert.ok(card, "fichette absente");
+  assert.match(card.textContent, /ABDELLAHI/);
+  assert.match(card.textContent, /K01/);
+  const rows = [...card.querySelectorAll(".beo-card-rows dt")].map((dt) => dt.textContent.trim());
+  assert.deepStrictEqual(rows, ["Site", "Groupe", "Poste", "Fin de contrat"]);
+  assert.match(card.textContent, /Fin de contrat\s*—/, "champ autorisé mais vide : tiret");
+  // Une seule lampe allumée, libellée (pas seulement une couleur).
+  const lamps = card.querySelector(".beo-lamps");
+  assert.strictEqual(lamps.getAttribute("aria-label"), "Indicateur : Sanction / discipline à signaler");
+  assert.deepStrictEqual([...lamps.querySelectorAll(".on")].map((l) => l.className.match(/lamp-(\w+)/)[1]), ["orange"]);
+  assert.strictEqual(card.querySelector("a.beo-btn-open").getAttribute("href"), "#/position/7");
+  card.querySelector(".beo-card-rows").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+  assert.strictEqual(w.location.hash, "#/position/7", "fichette entière cliquable");
+  w.location.hash = "#/position"; w.dispatchEvent(new w.HashChangeEvent("hashchange")); await settle();
+  // Mode Liste : colonnes de l'API (photo exclue), lampe en tête, action « Ouvrir la fiche ».
+  doc.querySelector('[data-view="list"]').click();
+  const heads = [...doc.querySelectorAll("#pf-list thead th")].map((th) => th.textContent);
+  assert.deepStrictEqual(heads, ["Indicateur", "Employé", "Code employé", "Poste (affectation)", "Site", "Date d'affectation", "Statut", "Groupe", "Date de fin", "Action"]);
+  assert.strictEqual(doc.querySelector("#pf-list tbody a").getAttribute("href"), "#/position/7");
+  doc.querySelector('[data-view="mosaic"]').click();
+  // Filtres : recherche, groupe, site → serveur ; puis le sélecteur SITE du bandeau.
+  const q = doc.querySelector("#pf-q");
   q.value = "K01"; q.dispatchEvent(new w.Event("input"));
   await new Promise((r) => setTimeout(r, 300)); await settle();
   assert.ok(calls.some((c) => c.url.includes("/positions?") && c.url.includes("q=K01")), calls.map((c) => c.url).join("\n"));
-  const site = w.document.querySelector("#site-select");
+  const group = doc.querySelector("#pf-group");
+  assert.deepStrictEqual([...group.options].map((o) => o.textContent), ["Tous les groupes", "Groupe A (3)", "Groupe B (1)"]);
+  group.value = "B"; group.dispatchEvent(new w.Event("change")); await settle();
+  assert.ok(calls.at(-1).url.includes("group=B") && calls.at(-1).url.includes("q=K01"), "filtres combinés : " + calls.at(-1).url);
+  const pfSite = doc.querySelector("#pf-site");
+  pfSite.value = "2"; pfSite.dispatchEvent(new w.Event("change")); await settle();
+  assert.ok(calls.at(-1).url.includes("site=2") && calls.at(-1).url.includes("group=B"), calls.at(-1).url);
+  const site = doc.querySelector("#site-select");
   site.value = "1"; site.dispatchEvent(new w.Event("change"));
   await settle();
   assert.ok(calls.at(-1).url.includes("/positions?") && calls.at(-1).url.includes("site_id=1"), calls.at(-1).url);
+});
+
+test("annuaire : indicateur incomplet → aucune lampe allumée (jamais un vert par défaut)", async () => {
+  const list = { ...LIST, items: [{ ...LIST.items[0], indicator: { level: "unknown", label: "Indicateur incomplet (champs non autorisés pour ce compte)" } }] };
+  const w = shellWindow(makeFetch([], { "/api/site-workforce/positions": () => list }), "#/position");
+  await w.SiteWorkforceShell.renderShell();
+  await settle();
+  const lamps = w.document.querySelector(".beo-fiche .beo-lamps");
+  assert.strictEqual(lamps.querySelectorAll(".on").length, 0);
+  assert.match(lamps.getAttribute("aria-label"), /incomplet/);
 });
 
 test("liste : aucune colonne autorisée → message explicite, aucune donnée", async () => {
@@ -121,7 +166,7 @@ test("liste : aucune colonne autorisée → message explicite, aucune donnée", 
   assert.strictEqual(w.document.querySelector("#view table"), null);
 });
 
-test("Personnel : chaque employé a « Voir la fiche de position » qui ouvre sa fiche", async () => {
+test("EFFECTIF : chaque employé a « Voir la fiche de position » qui ouvre sa fiche", async () => {
   const w = shellWindow(makeFetch([]), "#/personnel");
   await w.SiteWorkforceShell.renderShell();
   await settle();
