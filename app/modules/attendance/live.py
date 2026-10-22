@@ -79,14 +79,16 @@ def _is_present(event: AttendanceEvent | None, now_local: datetime, sites: dict[
     return timedelta(0) <= elapsed <= core.open_cycle_window(sites.get(event.site_id))
 
 
-def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None) -> dict[str, int]:
+def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None, *, employee_ids: set[int] | None = None, event_clause=None, presence_clause=None) -> dict[str, int]:
     now_local = (now or core._now_local()).astimezone(core.TZ)
     today = now_local.date()
     start_utc = core.to_utc_naive(datetime.combine(today, datetime.min.time(), core.TZ))
     window = core.to_utc_naive(now_local - core.OPEN_24H_CYCLE_MAX)
     events = db.execute(_site_filter(select(AttendanceEvent).where(
         AttendanceEvent.event_type.in_((EVENT_ARRIVAL, EVENT_DEPARTURE)),
-        AttendanceEvent.occurred_at >= min(window, start_utc)), AttendanceEvent.site_id, site_ids)).scalars().all()
+        AttendanceEvent.occurred_at >= min(window, start_utc),
+        *([AttendanceEvent.employee_id.in_(employee_ids or {-1})] if employee_ids is not None else []),
+        *([event_clause] if event_clause is not None else [])), AttendanceEvent.site_id, site_ids)).scalars().all()
     entries = sum(1 for e in events if e.event_type == EVENT_ARRIVAL and e.presence_date == today)
     exits = sum(1 for e in events if e.event_type == EVENT_DEPARTURE and e.occurred_at >= start_utc)
     candidate_ids = {e.employee_id for e in events if e.event_type == EVENT_ARRIVAL}
@@ -95,7 +97,9 @@ def summary(db: Session, site_ids: set[int] | None, now: datetime | None = None)
     present = sum(1 for emp_id, e in last.items() if _is_present(e, now_local, sites)
                   and (site_ids is None or e.site_id in site_ids))
     absents = len(db.execute(_site_filter(select(DailyPresence.id).where(
-        DailyPresence.presence_date == today, DailyPresence.status == "absent"), DailyPresence.site_id, site_ids)).all())
+        DailyPresence.presence_date == today, DailyPresence.status == "absent",
+        *([DailyPresence.employee_id.in_(employee_ids or {-1})] if employee_ids is not None else []),
+        *([presence_clause] if presence_clause is not None else [])), DailyPresence.site_id, site_ids)).all())
     return {"entries_today": entries, "exits_today": exits, "present_now": present, "absent_today": absents}
 
 

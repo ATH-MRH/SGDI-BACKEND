@@ -5,7 +5,7 @@
   window.SiteWorkforceViews.pointage = function (container) {
     const SW = window.SW;
     if (!window.AttendanceWorkspace) { container.innerHTML = SW.errorState(new Error("Composant Pointage indisponible")); return; }
-    return window.AttendanceWorkspace.mount(container, {
+    const stopWorkspace = window.AttendanceWorkspace.mount(container, {
       office: SW.state.user?.full_name || "Chargé des effectifs",
       registerLeave: callback => { SW.attendanceCanLeave = callback; },
       quickSearch: document.getElementById("beo-quick-search"),
@@ -17,5 +17,10 @@
       correct: (id, body) => SW.api(`/site-workforce/attendance/${id}/correct`, { method: "POST", body }),
       close: day => SW.api("/site-workforce/attendance/close", { method: "POST", params: { presence_date: day } }),
     });
+    container.querySelector(".aw-heading > div > p:last-child").firstChild.nodeValue = "Suivi en temps réel et gestion des pointages ";
+    const slot = document.createElement("div");
+    container.querySelector(".aw-heading").after(slot);
+    const stopLive = window.BeoAttendanceLive?.mount(slot, SW);
+    return () => { stopLive?.(); stopWorkspace?.(); };
   };
 })();
