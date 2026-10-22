@@ -17,7 +17,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import append_audit
-from app.core.pagination import normalize_page
 from app.core.photo_storage import save_base64_document
 from app.db.session import get_db
 from app.modules.auth.dependencies import AUTHORIZED_ACTIONS, current_user
@@ -220,51 +219,31 @@ def dashboard(db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_s
     }
 
 
-# ── Personnel (§8) : pagination SQL, colonnes société/site ──────────────────────────────
+# ── EFFECTIF (§8) : annuaire paginé SQL — statut métier, filtres, tri, compteurs ─────────
+# Voir directory.py. `site` est un filtre LOCAL dans le périmètre consulté (≠ ?site_id=, qui
+# réduit le périmètre lui-même) : les compteurs par site restent ainsi visibles.
 @router.get("/employees")
-def employees(q: str | None = None, page: int = 1, page_size: int = 25,
-              db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope)):
-    today = date.today()
-    stmt = select(Employee, Assignment.site_id, Assignment.group_code).join(
-        Assignment, Assignment.employee_id == Employee.id,
-    ).where(Assignment.site_id.in_(scope.selected), *_active_assignment_filter(today))
-    needle = str(q or "").strip()
-    if needle:
-        pattern = f"%{needle}%"
-        stmt = stmt.where(or_(Employee.code.ilike(pattern), Employee.first_name.ilike(pattern),
-                              Employee.last_name.ilike(pattern), Employee.position.ilike(pattern)))
-    safe_page, safe_size = normalize_page(page, page_size)
-    total = int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
-    pages = max((total + safe_size - 1) // safe_size, 1)
-    safe_page = min(safe_page, pages)
-    rows = db.execute(stmt.order_by(Employee.last_name, Employee.first_name, Employee.id, Assignment.site_id)
-                      .offset((safe_page - 1) * safe_size).limit(safe_size)).all()
-    ids = [emp.id for emp, _, _ in rows]
-    presences = {
-        (p.employee_id, p.site_id): p.status for p in db.execute(select(DailyPresence).where(
-            DailyPresence.employee_id.in_(ids or [-1]), DailyPresence.presence_date == today,
-        )).scalars()
-    }
-    # Périmètre strict (§B15) : jamais salaire/RIB/paie/IRG/CNAS/données privées non
-    # nécessaires — uniquement ce qu'un chargé d'effectifs terrain a besoin de voir.
-    items = [{
-        "id": emp.id, "code": emp.code, "first_name": emp.first_name, "last_name": emp.last_name,
-        "position": emp.position, "group_code": group_code, **scope.label(site_id),
-        "presence_status": presences.get((emp.id, site_id), "non_pointe"),
-    } for emp, site_id, group_code in rows]
-    return {"items": items, "total": total, "page": safe_page, "page_size": safe_size, "pages": pages}
+def employees(q: str | None = None, page: int = 1, page_size: int = 25, site: int | None = None,
+              group: str | None = Query(None, max_length=20), employee_status: str | None = Query(None, alias="status"),
+              presence: str | None = None, sort: str | None = Query(None, max_length=20),
+              db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.site_workforce import directory, position_file
+    return directory.list_directory(db, scope, position_file.allowed_fields(db, user.id), q=q, site=site, group=group,
+                                    employee_status=employee_status, presence=presence, sort=sort,
+                                    page=page, page_size=page_size)
 
 
 # ── Fiche de position (lecture seule) : projection filtrée par champ, voir position_file.py ──
 # Aucune route d'écriture : la fiche se corrige chez DRH/OPS (signalement via Réclamations).
 @router.get("/positions")
 def positions(q: str | None = None, position: str | None = None, employee_status: str | None = Query(None, alias="status"),
+              group: str | None = Query(None, max_length=20), site: int | None = None,
               page: int = 1, page_size: int = 25, db: Session = Depends(get_db),
               scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
     from app.modules.site_workforce import position_file
     allowed = position_file.allowed_fields(db, user.id)
     return position_file.list_positions(db, scope, allowed, q=q, position=position, status=employee_status,
-                                        page=page, page_size=page_size)
+                                        group=group, site=site, page=page, page_size=page_size)
 
 
 def _position_target(db: Session, scope: BeoScope, employee_id: int):
@@ -282,7 +261,8 @@ def position_detail(employee_id: int, db: Session = Depends(get_db),
                     scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
     from app.modules.site_workforce import position_file
     employee, assignment, site = _position_target(db, scope, employee_id)
-    return position_file.build_position_file(db, employee, assignment, site, position_file.allowed_fields(db, user.id))
+    return position_file.build_position_file(db, employee, assignment, site, position_file.allowed_fields(db, user.id),
+                                             incident_sites=list(scope.sites))
 
 
 @router.get("/positions/{employee_id}/photo")
