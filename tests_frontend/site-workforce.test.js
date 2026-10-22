@@ -79,10 +79,14 @@ test("shell.js définit les 10 entrées de navigation, et des sélecteurs limit�
   for (const key of NAV_KEYS) assert.ok(rendered.includes(key), `navigation manquante : ${key}`);
   assert.strictEqual(new Set(rendered).size, rendered.length, "clés de navigation dupliquées");
   const socs = [...w.document.querySelectorAll("#society-select option")].map((o) => [o.value, o.textContent]);
-  assert.deepStrictEqual(socs, [["", "Toutes mes sociétés"], ["SocA", "SocA"], ["SocB", "SocB"]]);
+  assert.deepStrictEqual(socs, [["", "Toutes mes structures"], ["SocA", "SocA"], ["SocB", "SocB"]]);
+  // Libellé STRUCTURE (plus « Société ») et aucune capsule « Toutes mes sociétés » dans la barre.
+  assert.strictEqual(w.document.querySelector(".scope-field span").textContent, "Structure");
+  assert.strictEqual(w.document.querySelector(".scope-chip"), null);
+  assert.doesNotMatch(w.document.querySelector(".beo-topbar").textContent, /sociétés/i);
   const sites = [...w.document.querySelectorAll("#site-select option")].map((o) => o.textContent);
   assert.deepStrictEqual(sites, ["Tous mes sites", "A1", "A2", "B1"]);
-  assert.match(w.document.querySelector(".scope-chip").textContent, /Toutes mes sociétés — tous mes sites \(3\)/);
+  assert.match(w.document.querySelector("#view-sub").textContent, /Toutes mes structures — Tous mes sites \(3\)/);
 });
 
 test("sélecteurs : société → sites de la société ; site → requêtes filtrées ; retour à tous les sites", async () => {
@@ -98,7 +102,7 @@ test("sélecteurs : société → sites de la société ; site → requêtes fil
   site.value = "2"; site.dispatchEvent(new w.Event("change"));
   await tick();
   assert.ok(calls.at(-1).includes("site_id=2"), calls.at(-1));
-  assert.match(w.document.querySelector(".scope-chip").textContent, /Site : A2 — SocA/);
+  assert.match(w.document.querySelector("#view-sub").textContent, /Site : A2 — SocA/);
   // Sidebar : périmètre AUTORISÉ (3 sites), indépendant de la sélection ; jamais « Site : — ».
   assert.match(w.document.querySelector(".shell-role-badge").textContent, /Périmètre : 3 sites/);
   assert.doesNotMatch(w.document.querySelector(".shell-role-badge").textContent, /Site : —/);
@@ -106,7 +110,7 @@ test("sélecteurs : société → sites de la société ; site → requêtes fil
   soc2.value = ""; soc2.dispatchEvent(new w.Event("change"));
   await tick();
   assert.ok(!calls.at(-1).includes("site_id") && !calls.at(-1).includes("society"), calls.at(-1));
-  assert.match(w.document.querySelector(".scope-chip").textContent, /tous mes sites \(3\)/);
+  assert.match(w.document.querySelector("#view-sub").textContent, /Tous mes sites \(3\)/);
 });
 
 test("une valeur mémorisée hors périmètre n'est jamais envoyée (retour à tout le périmètre autorisé)", async () => {
@@ -206,7 +210,7 @@ test("la cloche agrège tout le périmètre autorisé et affiche société/site 
   assert.match(w.document.querySelector("#sw-drawer-scrim").textContent, /SocB · B1/);
 });
 
-test("vue agrégée « Tous mes sites » : colonnes Société et Site dans Personnel", async () => {
+test("EFFECTIF : colonnes Structure et Site toujours présentes (contexte de chaque ligne)", async () => {
   const w = shellWindow(scopedFetch([], { "/api/site-workforce/employees": () => ({ items: [
     { id: 1, code: "E1", first_name: "A", last_name: "Un", society: "SocA", site_name: "A1", presence_status: "present" },
   ], total: 1, page: 1, pages: 1 }) }));
@@ -214,7 +218,7 @@ test("vue agrégée « Tous mes sites » : colonnes Société et Site dans Perso
   await w.SiteWorkforceShell.renderShell();
   await tick(); await tick();
   const heads = [...w.document.querySelectorAll("#pers-list th")].map((t) => t.textContent);
-  assert.ok(heads.includes("Société") && heads.includes("Site"), heads.join(","));
+  assert.ok(heads.includes("Structure") && heads.includes("Site"), heads.join(","));
   assert.match(w.document.querySelector("#pers-list").textContent, /SocA/);
 });
 

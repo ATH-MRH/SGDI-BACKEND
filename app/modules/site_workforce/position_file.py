@@ -18,16 +18,17 @@ Administration système et le portail BEO l'affichent tous deux depuis l'API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import cached_property
 from typing import Any, Callable
 
+from fastapi import HTTPException, status as http_status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.granular_permissions import load_field_permissions
-from app.modules.drh.models import Contract, Employee, Sanction
-from app.modules.ops.models import Assignment, RotationTemplate, Site
+from app.modules.drh.models import Contract, Employee, EmployeeBlacklistEntry, Sanction
+from app.modules.ops.models import Assignment, Incident, RotationTemplate, Site
 from app.modules.site_workforce.security import BeoScope, _active_assignment_filter, _site_society
 
 MODULE_KEY = "site_workforce"
@@ -58,6 +59,10 @@ CATALOG: tuple[SectionDef, ...] = (
         FieldDef("identity.employee_code", "Code employé", default=True),
         FieldDef("identity.photo", "Photo professionnelle", kind="photo", default=True),
         FieldDef("identity.status", "Statut", kind="badge", default=True),
+        # Hors profil « BEO Standard » (figé par la migration 20261024_0001) : l'administrateur
+        # l'active compte par compte — jamais d'ouverture automatique d'une donnée disciplinaire.
+        FieldDef("identity.discipline_flag", "Indicateur disciplinaire (à signaler / rien à signaler, sans détail)",
+                 kind="badge"),
         FieldDef("identity.birth_date", "Date de naissance", kind="date"),
         FieldDef("identity.phone", "Téléphone personnel", sensitive=True),
         FieldDef("identity.nin", "NIN", sensitive=True),
@@ -102,9 +107,20 @@ FIELDS: dict[str, FieldDef] = {f.key: f for s in CATALOG for f in s.fields}
 STANDARD_PROFILE: frozenset[str] = frozenset(f.key for f in FIELDS.values() if f.default)
 assert not any(FIELDS[k].sensitive for k in STANDARD_PROFILE), "BEO Standard ne coche jamais un champ sensible"
 
-# Colonnes de la LISTE « Fiches de position » (même filtrage que la fiche).
-LIST_FIELDS = ("identity.last_name", "identity.first_name", "identity.employee_code", "assignment.position",
-               "assignment.function", "assignment.society", "assignment.site", "assignment.start_date", "identity.status")
+# Colonnes de la LISTE « Fiches de position » (même filtrage que la fiche) — aussi les lignes des
+# fichettes de l'annuaire (photo, groupe, date de recrutement, fin de contrat).
+LIST_FIELDS = ("identity.photo", "identity.last_name", "identity.first_name", "identity.employee_code", "assignment.position",
+               "assignment.function", "assignment.society", "assignment.site", "assignment.group", "assignment.start_date",
+               "contract.recruit_date", "contract.end_date", "identity.status")
+
+# Lampes des fichettes (rouge / orange / vert). « À signaler » : sanction DRH dont l'infraction date
+# de moins de SANCTION_SIGNAL_DAYS jours ou dont la mise à pied couvre aujourd'hui, ou incident
+# BEO non clôturé sur un site du périmètre. Vert seulement si TOUT est connu : sans les champs
+# Statut et Indicateur disciplinaire, l'indicateur reste « incomplet » (jamais un faux vert).
+SANCTION_SIGNAL_DAYS = 365
+BLACKLIST_VALUES = ("blacklist", "blackliste", "blacklisté", "blacklisted")
+INDICATOR_LABELS = {"red": "Blacklist", "orange": "Sanction / discipline à signaler", "green": "Rien à signaler",
+                    "unknown": "Indicateur incomplet (champs non autorisés pour ce compte)"}
 
 REGIME_LABELS = {"NORMAL": "Horaire normal", "POSTE_CONTINU": "Travail posté (poste continu)"}
 
@@ -161,8 +177,14 @@ class _Source:
     """Valeurs d'UN employé, calculées paresseusement : un champ non autorisé n'est jamais lu
     (aucune requête pour les contrats, sanctions ou le blob extra si rien ne les demande)."""
 
-    def __init__(self, db: Session, employee: Employee, site: Site, assignment: Assignment, today: date):
+    def __init__(self, db: Session, employee: Employee, site: Site, assignment: Assignment, today: date,
+                 incident_sites: tuple[int, ...] = ()):
         self.db, self.employee, self.site, self.assignment, self.today = db, employee, site, assignment, today
+        self.incident_sites = incident_sites or (site.id,)
+
+    @cached_property
+    def to_signal(self) -> bool:
+        return self.employee.id in flagged_employees(self.db, [self.employee.id], self.incident_sites, self.today)
 
     @cached_property
     def extra(self) -> dict:
@@ -263,6 +285,8 @@ GETTERS: dict[str, Callable[[_Source], Any]] = {
     "identity.employee_code": lambda s: s.employee.code,
     "identity.photo": _photo,
     "identity.status": lambda s: s.employee.status,
+    "identity.discipline_flag": lambda s: ({"label": INDICATOR_LABELS["orange"], "tone": "warn"} if s.to_signal
+                                           else {"label": INDICATOR_LABELS["green"], "tone": "success"}),
     "identity.birth_date": lambda s: _iso(s.employee.birth_date),
     "identity.phone": lambda s: _clean(s.employee.phone),
     "identity.nin": lambda s: _clean(s.employee.nin),
@@ -313,8 +337,8 @@ def current_placement(db: Session, scope: BeoScope, employee_id: int, today: dat
 
 
 def build_position_file(db: Session, employee: Employee, assignment: Assignment, site: Site,
-                        allowed: frozenset[str], *, today: date | None = None) -> dict:
-    src = _Source(db, employee, site, assignment, today or date.today())
+                        allowed: frozenset[str], *, today: date | None = None, incident_sites=()) -> dict:
+    src = _Source(db, employee, site, assignment, today or date.today(), tuple(incident_sites))
     sections = []
     for section in CATALOG:
         fields = [_field_out(f, GETTERS[f.key](src)) for f in section.fields if f.key in allowed]
@@ -325,10 +349,67 @@ def build_position_file(db: Session, employee: Employee, assignment: Assignment,
             "allowed_count": len(allowed), "read_only": True}
 
 
+def flagged_employees(db: Session, employee_ids, incident_sites, today: date) -> set[int]:
+    """Employés « à signaler » (sanction récente ou en cours, incident BEO ouvert) — 2 requêtes."""
+    ids = [i for i in employee_ids if i]
+    if not ids:
+        return set()
+    since = today - timedelta(days=SANCTION_SIGNAL_DAYS)
+    flagged = set(db.scalars(select(Sanction.employee_id).where(Sanction.employee_id.in_(ids), or_(
+        Sanction.infraction_date >= since,
+        (Sanction.sanction_start <= today) & (Sanction.next_return_date > today),
+    )).distinct()))
+    sites = [s for s in (incident_sites or ()) if s is not None]
+    if sites:
+        flagged |= set(db.scalars(select(Incident.employee_id).where(
+            Incident.employee_id.in_(ids), Incident.site_id.in_(sites), Incident.status != "cloture").distinct()))
+    return flagged
+
+
+def blacklisted_employees(db: Session, employees) -> set[int]:
+    """Source canonique : EmployeeBlacklistEntry active ; valeurs miroir de Employee.status en appoint."""
+    by_status = {e.id for e in employees if str(e.status or "").strip().lower() in BLACKLIST_VALUES}
+    ids = [e.id for e in employees]
+    if not ids:
+        return by_status
+    return by_status | set(db.scalars(select(EmployeeBlacklistEntry.employee_id).where(
+        EmployeeBlacklistEntry.employee_id.in_(ids), EmployeeBlacklistEntry.status == "active").distinct()))
+
+
+def indicator(allowed: frozenset[str], *, blacklisted: bool, to_signal: bool) -> dict:
+    """Lampe unique d'une fichette. Rouge et orange ne s'allument que sur une donnée autorisée ;
+    vert exige de connaître les deux (sinon « incomplet », jamais un vert par défaut)."""
+    status_known = "identity.status" in allowed
+    discipline_known = "identity.discipline_flag" in allowed
+    if status_known and blacklisted:
+        level = "red"
+    elif discipline_known and to_signal:
+        level = "orange"
+    elif status_known and discipline_known:
+        level = "green"
+    else:
+        level = "unknown"
+    return {"level": level, "label": INDICATOR_LABELS[level]}
+
+
+def _preload_contracts(db: Session, ids: list[int]) -> dict[int, list[Contract]]:
+    out: dict[int, list[Contract]] = {i: [] for i in ids}
+    if not ids:
+        return out
+    for contract in db.execute(select(Contract).where(Contract.employee_id.in_(ids)).order_by(
+            Contract.employee_id, Contract.start_date.desc().nullslast(), Contract.id.desc())).scalars():
+        if len(out[contract.employee_id]) < 50:
+            out[contract.employee_id].append(contract)
+    return out
+
+
 def list_positions(db: Session, scope: BeoScope, allowed: frozenset[str], *, q: str | None, position: str | None,
-                   status: str | None, page: int, page_size: int, today: date | None = None) -> dict:
-    """Liste paginée en SQL (3 requêtes quel que soit le volume). Un filtre ou une recherche ne
-    porte QUE sur des champs autorisés : sinon il servirait d'oracle sur une donnée masquée."""
+                   status: str | None, page: int, page_size: int, group: str | None = None, site: int | None = None,
+                   today: date | None = None) -> dict:
+    """Liste paginée en SQL (nombre de requêtes fixe quel que soit le volume : contrats, photos,
+    blacklist et discipline sont chargés pour la page en une requête chacun). Un filtre ou une
+    recherche ne porte QUE sur des champs autorisés : sinon il servirait d'oracle sur une donnée
+    masquée — d'où le 403 sur un filtre groupe/site non autorisé."""
     from app.core.pagination import normalize_page
 
     today = today or date.today()
@@ -348,6 +429,33 @@ def list_positions(db: Session, scope: BeoScope, allowed: frozenset[str], *, q: 
     if wanted_status and "identity.status" in allowed:
         stmt = stmt.where(Employee.status == wanted_status)
 
+    # Compteurs des sélecteurs Groupe / Site : avant ces deux filtres locaux.
+    facet_from = stmt.subquery()
+    groups, sites = [], []
+    if "assignment.group" in allowed:
+        counts: dict[str, int] = {}
+        for code, n in db.execute(select(facet_from.c.group_code, func.count()).group_by(facet_from.c.group_code)):
+            key = str(code or "").strip().upper()
+            if key:
+                counts[key] = counts.get(key, 0) + n
+        groups = [{"key": k, "count": counts[k]} for k in sorted(counts)]
+    if "assignment.site" in allowed:
+        sites = sorted(({**scope.label(sid), "count": n} for sid, n in db.execute(
+            select(facet_from.c.site_id, func.count()).group_by(facet_from.c.site_id))),
+            key=lambda s: (s["site_name"] or "", s["site_id"]))
+
+    wanted_group = str(group or "").strip()
+    if wanted_group:
+        if "assignment.group" not in allowed:
+            raise HTTPException(http_status.HTTP_403_FORBIDDEN, detail="Filtre Groupe non autorisé pour ce compte")
+        stmt = stmt.where(func.upper(func.trim(Assignment.group_code)) == wanted_group.upper())
+    if site is not None:
+        if "assignment.site" not in allowed:
+            raise HTTPException(http_status.HTTP_403_FORBIDDEN, detail="Filtre Site non autorisé pour ce compte")
+        if site not in scope.selected:
+            raise HTTPException(http_status.HTTP_403_FORBIDDEN, detail="Site hors du périmètre consulté")
+        stmt = stmt.where(Assignment.site_id == site)
+
     safe_page, safe_size = normalize_page(page, page_size)
     total = int(db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
     pages = max((total + safe_size - 1) // safe_size, 1)
@@ -356,15 +464,35 @@ def list_positions(db: Session, scope: BeoScope, allowed: frozenset[str], *, q: 
                       .offset((safe_page - 1) * safe_size).limit(safe_size)).all()
 
     keys = [k for k in LIST_FIELDS if k in allowed]
+    employees = [employee for employee, _ in rows]
+    ids = [e.id for e in employees]
+    contracts = _preload_contracts(db, ids) if {"contract.end_date"} & set(keys) else {}
+    photos = {}
+    if "identity.photo" in keys and ids:
+        from app.modules.ops.employee_photos import canonical_photos
+        photos = canonical_photos(db, ids)
+    blacklisted = blacklisted_employees(db, employees) if "identity.status" in allowed else set()
+    flagged = flagged_employees(db, ids, list(scope.sites), today) if "identity.discipline_flag" in allowed else set()
+
     items = []
     for employee, assignment in rows:
-        src = _Source(db, employee, scope.sites[assignment.site_id], assignment, today)
-        items.append({"employee_id": employee.id, "site_id": assignment.site_id,
-                      "fields": {k: GETTERS[k](src) for k in keys}})
+        src = _Source(db, employee, scope.sites[assignment.site_id], assignment, today, tuple(scope.sites))
+        if employee.id in contracts:
+            src.__dict__["contracts"] = contracts[employee.id]  # cached_property préchargée
+        fields = {}
+        for k in keys:
+            if k == "identity.photo":
+                stamp = employee.updated_at.isoformat() if employee.updated_at else "0"
+                fields[k] = {"url": f"/api/site-workforce/positions/{employee.id}/photo?v={stamp}"} if photos.get(employee.id) else None
+            else:
+                fields[k] = GETTERS[k](src)
+        items.append({"employee_id": employee.id, "site_id": assignment.site_id, "fields": fields,
+                      "indicator": indicator(allowed, blacklisted=employee.id in blacklisted, to_signal=employee.id in flagged)})
     statuses = []
     if "identity.status" in allowed:
         statuses = sorted(v for v in db.scalars(select(Employee.status).join(Assignment, Assignment.employee_id == Employee.id).where(
             Assignment.site_id.in_(scope.selected), *_active_assignment_filter(today)).distinct()) if v)
     return {"columns": [{"key": k, "label": FIELDS[k].label, "kind": FIELDS[k].kind} for k in keys],
             "items": items, "total": total, "page": safe_page, "page_size": safe_size, "pages": pages,
-            "filters": {"search": bool(searchable), "position": bool(position_cols), "statuses": statuses}}
+            "filters": {"search": bool(searchable), "position": bool(position_cols), "statuses": statuses,
+                        "groups": groups, "sites": sites}}

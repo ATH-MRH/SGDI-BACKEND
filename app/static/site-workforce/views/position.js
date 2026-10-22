@@ -43,68 +43,153 @@
 
   // La photo exige le jeton : chargée par fetch authentifié puis affichée en blob (jamais
   // d'URL publique). 404 = pas de photo, ou champ Photo non autorisé.
-  async function loadPhoto(img, url) {
-    try {
-      const res = await fetch(url, { headers: SW.state.token ? { Authorization: "Bearer " + SW.state.token } : {} });
-      if (!res.ok) return;
-      const blobUrl = URL.createObjectURL(await res.blob());
-      img.src = blobUrl;
-      img.hidden = false;
-      img.addEventListener("load", () => URL.revokeObjectURL(blobUrl), { once: true });
-    } catch (e) { /* sans photo : initiales conservées */ }
+  const loadPhoto = (img, url) => SW.loadPhoto(img, url);
+
+  // ── Annuaire des fiches (fichettes ou liste) ────────────────────────────────────────
+  // Une fichette n'affiche QUE les champs autorisés renvoyés par l'API (une ligne absente =
+  // champ non autorisé ; « — » = champ autorisé mais vide). Lampe unique calculée serveur
+  // (indicator) : rouge Blacklist, orange sanction/discipline, vert rien à signaler ; éteinte
+  // (« incomplet ») si le compte n'a pas les champs nécessaires — jamais un faux vert.
+  const CARD_ROWS = [
+    { keys: ["assignment.society"], label: "Structure", icon: "building" },
+    { keys: ["assignment.site"], label: "Site", icon: "pin" },
+    { keys: ["assignment.group"], label: "Groupe", icon: "users", group: true },
+    { keys: ["assignment.position", "assignment.function"], label: "Poste", icon: "briefcase" },
+    { keys: ["contract.recruit_date"], label: "Date de recrutement", icon: "calendar", date: true },
+    { keys: ["contract.end_date"], label: "Fin de contrat", icon: "calendarx", date: true },
+  ];
+  const LAMPS = [["red", "Blacklist"], ["orange", "Sanction / discipline à signaler"], ["green", "Rien à signaler"]];
+
+  function lampsHTML(ind) {
+    const level = (ind && ind.level) || "unknown";
+    const label = (ind && ind.label) || "Indicateur indisponible";
+    return `<span class="beo-lamps" role="img" aria-label="Indicateur : ${SW.esc(label)}" title="${SW.esc(label)}" data-level="${level}">
+      ${LAMPS.map(([key, text]) => `<span class="beo-lamp lamp-${key}${level === key ? " on" : ""}" title="${SW.esc(text)}"></span>`).join("")}</span>`;
   }
 
-  // ── Liste ───────────────────────────────────────────────────────────────────────────
+  function cardHTML(r, allowed) {
+    const f = r.fields || {};
+    const name = [f["identity.last_name"], f["identity.first_name"]];
+    const label = name.filter(Boolean).join(" ") || "Employé #" + r.employee_id;
+    const photo = f["identity.photo"];
+    const rows = CARD_ROWS.filter((row) => row.keys.some((k) => allowed.has(k))).map((row) => {
+      const value = row.keys.map((k) => f[k]).find((v) => v !== null && v !== undefined && v !== "");
+      const shown = value === undefined ? "—" : row.date ? SW.dateFr(value)
+        : row.group ? `<span class="beo-group g-${SW.esc(String(value).toLowerCase())}">${SW.esc(value)}</span>` : SW.esc(value);
+      return `<div><dt>${SW.icon(row.icon)}${SW.esc(row.label)}</dt><dd>${shown}</dd></div>`;
+    }).join("");
+    return `<article class="beo-card beo-fiche" data-fiche="${SW.esc(r.employee_id)}">
+      <div class="beo-card-head">
+        <span class="beo-avatar beo-avatar-lg">${photo && photo.url ? `<img alt="" hidden data-photo-src="${SW.esc(photo.url)}">` : ""}<span>${SW.esc(SW.initials(...name))}</span></span>
+        <div class="beo-card-id">${allowed.has("identity.last_name") ? `<b>${SW.esc(f["identity.last_name"] || "—")}</b>` : ""}
+          ${allowed.has("identity.first_name") ? `<span>${SW.esc(f["identity.first_name"] || "")}</span>` : ""}
+          ${allowed.has("identity.employee_code") ? `<small>${SW.esc(f["identity.employee_code"] || "")}</small>` : ""}</div>
+        ${lampsHTML(r.indicator)}
+      </div>
+      ${rows ? `<dl class="beo-card-rows">${rows}</dl>` : ""}
+      <a class="beo-btn-open" href="#/position/${encodeURIComponent(r.employee_id)}" aria-label="Ouvrir la fiche de ${SW.esc(label)}">Ouvrir la fiche ${SW.icon("chevron")}</a>
+    </article>`;
+  }
+
+  function tableListHTML(data) {
+    const cols = data.columns.filter((c) => c.kind !== "photo");
+    const nameKeys = cols.filter((c) => c.key === "identity.last_name" || c.key === "identity.first_name").map((c) => c.key);
+    const others = cols.filter((c) => !nameKeys.includes(c.key));
+    return `<div class="table-wrap"><table class="beo-table beo-fiche-table"><thead><tr>
+        <th><span class="sr-only">Indicateur</span></th>${nameKeys.length ? "<th>Employé</th>" : ""}${others.map((c) => `<th>${SW.esc(c.label)}</th>`).join("")}<th class="actions">Action</th>
+      </tr></thead><tbody>
+      ${data.items.map((r) => `<tr data-fiche="${SW.esc(r.employee_id)}">
+        <td>${lampsHTML(r.indicator)}</td>
+        ${nameKeys.length ? `<td><b>${SW.esc(nameKeys.map((k) => r.fields[k] || "").join(" ").trim() || "—")}</b></td>` : ""}
+        ${others.map((c) => `<td>${valueHTML(c, r.fields[c.key])}</td>`).join("")}
+        <td class="actions"><a class="beo-btn-fiche" href="#/position/${encodeURIComponent(r.employee_id)}">Ouvrir la fiche</a></td>
+      </tr>`).join("")}
+    </tbody></table></div>`;
+  }
+
   async function renderList(container) {
     let page = 1;
-    const filters = { q: "", position: "", status: "" };
+    const filters = { q: "", position: "", status: "", group: "", site: "" };
+    let view = SW.storedPref("fiches_view", "mosaic") === "list" ? "list" : "mosaic";
+    let lastData = null;
+    let stopPhotos = () => {};
     container.innerHTML = `
-      <h1 class="section-title">Fiches de position</h1>
-      <p class="section-sub">Consultation des positions des employés de votre périmètre · <span data-scope-label>${SW.esc(SW.scopeLabel())}</span></p>
-      <div class="filters-row" id="pf-filters"></div>
-      <div class="card"><div id="pf-list">${SW.skeletonRows(6)}</div></div>`;
+      <p class="sr-only">Consultation des positions des employés de votre périmètre · <span data-scope-label>${SW.esc(SW.scopeLabel())}</span></p>
+      <section class="beo-panel beo-controls" aria-label="Recherche et filtres">
+        <div class="beo-toolbar" id="pf-filters">
+          <div class="beo-seg" role="group" aria-label="Mode d'affichage">
+            <button type="button" class="beo-seg-btn" data-view="mosaic" aria-pressed="false">${SW.icon("grid")}Mosaïque</button>
+            <button type="button" class="beo-seg-btn" data-view="list" aria-pressed="false">${SW.icon("rows")}Liste</button>
+          </div>
+        </div>
+      </section>
+      <section class="beo-panel">
+        <div class="beo-list-head"><h2 class="beo-list-count" id="pf-count">Fiches de position</h2>
+          <div class="beo-lamp-legend" aria-hidden="true">${LAMPS.map(([k, l]) => `<span><span class="beo-lamp lamp-${k} on"></span>${SW.esc(l)}</span>`).join("")}</div></div>
+        <div id="pf-list">${SW.skeletonRows(6)}</div>
+      </section>`;
     let filtersBuilt = false;
     let debounce;
+    const listEl = container.querySelector("#pf-list");
+    const toolbar = container.querySelector("#pf-filters");
+
+    function syncView() { container.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === view))); }
 
     function buildFilters(meta) {
       if (filtersBuilt) return;
       filtersBuilt = true;
-      const el = document.querySelector("#pf-filters");
-      el.innerHTML = [
-        meta.search ? `<div class="field search-input"><label>Recherche</label><input id="pf-q" type="search" placeholder="Nom, prénom, code…"></div>` : "",
-        meta.position ? `<div class="field"><label>Poste / fonction</label><input id="pf-position" type="search" placeholder="Ex. CARISTE"></div>` : "",
-        meta.statuses && meta.statuses.length ? `<div class="field"><label>Statut</label><select id="pf-status"><option value="">Tous</option>
-          ${meta.statuses.map((s) => `<option value="${SW.esc(s)}">${SW.esc(s)}</option>`).join("")}</select></div>` : "",
-      ].join("") || `<span class="muted">Société et site : sélecteurs du bandeau.</span>`;
-      const onInput = (key) => (e) => { clearTimeout(debounce); debounce = setTimeout(() => { filters[key] = e.target.value; page = 1; load(); }, 250); };
-      document.querySelector("#pf-q")?.addEventListener("input", onInput("q"));
-      document.querySelector("#pf-position")?.addEventListener("input", onInput("position"));
-      document.querySelector("#pf-status")?.addEventListener("change", (e) => { filters.status = e.target.value; page = 1; load(); });
+      const groups = meta.groups || [];
+      const sites = meta.sites || [];
+      toolbar.insertAdjacentHTML("afterbegin", [
+        meta.search ? `<label class="beo-search">${SW.icon("search")}<input id="pf-q" type="search" placeholder="Rechercher un nom, un code ou un poste..." aria-label="Rechercher un nom, un code ou un poste"></label>` : "",
+      ].join(""));
+      toolbar.insertAdjacentHTML("beforeend", [
+        meta.position ? `<label class="beo-field-inline"><span class="sr-only">Poste / fonction</span><input id="pf-position" type="search" placeholder="Poste / fonction" aria-label="Poste / fonction"></label>` : "",
+        groups.length ? `<label class="beo-select">${SW.icon("users")}<select id="pf-group" aria-label="Groupe"><option value="">Tous les groupes</option>
+          ${groups.map((g) => `<option value="${SW.esc(g.key)}">Groupe ${SW.esc(g.key)} (${g.count})</option>`).join("")}</select></label>` : "",
+        sites.length > 1 ? `<label class="beo-select">${SW.icon("pin")}<select id="pf-site" aria-label="Site"><option value="">Tous les sites</option>
+          ${sites.map((s) => `<option value="${s.site_id}">${SW.esc(s.site_name || "—")} (${s.count})</option>`).join("")}</select></label>` : "",
+        meta.statuses && meta.statuses.length ? `<label class="beo-select"><select id="pf-status" aria-label="Statut"><option value="">Tous les statuts</option>
+          ${meta.statuses.map((s) => `<option value="${SW.esc(s)}">${SW.esc(s)}</option>`).join("")}</select></label>` : "",
+      ].join(""));
+      const onInput = (key) => (e) => { clearTimeout(debounce); debounce = setTimeout(() => { filters[key] = e.target.value.trim(); page = 1; load(); }, 250); };
+      container.querySelector("#pf-q")?.addEventListener("input", onInput("q"));
+      container.querySelector("#pf-position")?.addEventListener("input", onInput("position"));
+      ["group", "site", "status"].forEach((key) => container.querySelector("#pf-" + key)?.addEventListener("change", (e) => { filters[key] = e.target.value; page = 1; load(); }));
+    }
+
+    function render() {
+      stopPhotos();
+      const data = lastData;
+      if (!data) return;
+      if (!data.columns.length) { listEl.innerHTML = SW.emptyState("Aucun champ de la fiche de position n'est autorisé pour ce compte. Contactez l'administrateur."); return; }
+      container.querySelector("#pf-count").textContent = `${data.total} fiche${data.total > 1 ? "s" : ""} de position`;
+      if (!data.items.length) { listEl.innerHTML = SW.emptyState("Aucun employé ne correspond."); return; }
+      const allowed = new Set(data.columns.map((c) => c.key));
+      listEl.innerHTML = view === "mosaic" ? `<div class="beo-cards">${data.items.map((r) => cardHTML(r, allowed)).join("")}</div>` : tableListHTML(data);
+      // Fichette (et ligne) cliquable en entier ; le lien « Ouvrir la fiche » reste la cible clavier.
+      listEl.querySelectorAll("[data-fiche]").forEach((el) => el.addEventListener("click", (e) => {
+        if (e.target.closest("a,button,select,input")) return;
+        location.hash = "#/position/" + encodeURIComponent(el.dataset.fiche);
+      }));
+      listEl.appendChild(SW.paginationBar(data, (p) => { page = p; load(); }));
+      stopPhotos = SW.lazyPhotos(listEl);
     }
 
     async function load() {
-      const el = document.querySelector("#pf-list");
+      syncView();
       try {
-        const data = await SW.guardedApi("positions", "/site-workforce/positions", { params: { ...filters, page, page_size: 20 } });
+        const data = await SW.guardedApi("positions", "/site-workforce/positions", { params: { ...filters, page, page_size: 24 } });
         buildFilters(data.filters || {});
-        if (!data.columns.length) { el.innerHTML = SW.emptyState("Aucun champ de la fiche de position n'est autorisé pour ce compte. Contactez l'administrateur."); return; }
-        if (!data.items.length) { el.innerHTML = SW.emptyState("Aucun employé ne correspond."); return; }
-        const cols = data.columns;
-        const nameKeys = cols.filter((c) => c.key === "identity.last_name" || c.key === "identity.first_name").map((c) => c.key);
-        const others = cols.filter((c) => !nameKeys.includes(c.key));
-        el.innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-            ${nameKeys.length ? "<th>Employé</th>" : ""}${others.map((c) => `<th>${SW.esc(c.label)}</th>`).join("")}<th></th>
-          </tr></thead><tbody>
-          ${data.items.map((r) => `<tr>
-            ${nameKeys.length ? `<td><b>${SW.esc(nameKeys.map((k) => r.fields[k] || "").join(" ").trim() || "—")}</b></td>` : ""}
-            ${others.map((c) => `<td>${valueHTML(c, r.fields[c.key])}</td>`).join("")}
-            <td class="actions"><a class="btn btn-sm" href="#/position/${encodeURIComponent(r.employee_id)}">Consulter</a></td>
-          </tr>`).join("")}
-        </tbody></table></div>`;
-        el.appendChild(SW.paginationBar(data, (p) => { page = p; load(); }));
-      } catch (err) { if (err.name !== "AbortError") el.innerHTML = SW.errorState(err); }
+        lastData = data;
+        render();
+      } catch (err) { if (err.name !== "AbortError") listEl.innerHTML = SW.errorState(err); }
     }
+    container.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => {
+      view = b.dataset.view; SW.storePref("fiches_view", view); syncView(); render();
+    }));
     load();
+    return () => { clearTimeout(debounce); stopPhotos(); };
   }
 
   // ── Fiche individuelle ──────────────────────────────────────────────────────────────
@@ -142,7 +227,7 @@
         <div class="pf-avatar">${photo ? `<img alt="Photo professionnelle" hidden data-pf-photo>` : ""}<span>${SW.esc(initials)}</span></div>
         <div class="pf-head-text">
           <div class="pf-head-kicker">Fiche de position · lecture seule</div>
-          <h1 class="pf-name">${SW.esc(name || "Employé #" + data.employee_id)}</h1>
+          <h2 class="pf-name">${SW.esc(name || "Employé #" + data.employee_id)}</h2>
           <div class="pf-head-meta">
             ${v("identity.employee_code") ? `<span class="pf-code">Code ${SW.esc(v("identity.employee_code"))}</span>` : ""}
             ${status ? valueHTML(status, status.value) : ""}

@@ -56,11 +56,12 @@
     storeScope();
     return changed;
   }
+  // « Structure » = société au sens BEO (libellé validé DG) ; la donnée reste la société.
   function scopeLabel() {
     const { society, site_id: siteId } = state.scope;
     if (siteId && state.site) return `Site : ${state.site.name}${state.site.society ? " — " + state.site.society : ""}`;
     const n = scopeSites(society).length;
-    return society ? `Société : ${society} — tous mes sites (${n})` : `Toutes mes sociétés — tous mes sites (${n})`;
+    return society ? `Structure : ${society} — Tous mes sites (${n})` : `Toutes mes structures — Tous mes sites (${n})`;
   }
   // Libellé du périmètre AUTORISÉ (sidebar) : le site s'il est unique, sinon le nombre de
   // sites — jamais « Site : — ». La sélection en cours est affichée dans le header.
@@ -205,6 +206,93 @@
     cloturee: { tone: "neutral", label: "clôturée" },
   };
 
+  // Statut métier EFFECTIF (calculé serveur, directory.py) -> ton du badge.
+  const BUSINESS_STATUS = {
+    actif: { tone: "success", label: "Actif" }, suspendu: { tone: "warn", label: "Suspendu" },
+    blacklist: { tone: "danger", label: "Blacklist" }, non_pointe: { tone: "neutral", label: "Non pointé" },
+    conge: { tone: "info", label: "Congé" }, maladie: { tone: "violet", label: "Malade" },
+    absent: { tone: "rose", label: "Absent" },
+  };
+
+  // Icônes SVG en ligne (trait, 24 px) : aucune police d'icônes ni ressource externe.
+  const ICONS = {
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9v11.5h13V9"/><path d="M10 20.5v-6h4v6"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18 14.3c2.1.7 3.5 2.8 3.5 5.7"/>',
+    idcard: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="9" cy="11" r="2.3"/><path d="M5.6 16.5c.6-1.7 1.9-2.6 3.4-2.6s2.8.9 3.4 2.6"/><path d="M14.5 9.5h4M14.5 13h4"/>',
+    list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    userx: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="m16.5 8.5 4 4m0-4-4 4"/>',
+    usercheck: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="m16 11 2 2 4-4"/>',
+    filecheck: '<path d="M14 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V9z"/><path d="M14 3v6h6"/><path d="m9 15 2 2 4-4"/>',
+    filetext: '<path d="M14 3H6.5A2.5 2.5 0 0 0 4 5.5v13A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V9z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h5"/>',
+    calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+    calendarx: '<rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="m10 13 4 4m0-4-4 4"/>',
+    medical: '<rect x="3" y="7" width="18" height="13.5" rx="2"/><path d="M9 7V4.5h6V7"/><path d="M12 10.5v6.5M8.75 13.75h6.5"/>',
+    cross: '<path d="M9.5 3.5h5v6h6v5h-6v6h-5v-6h-6v-5h6z"/>',
+    scale: '<path d="M12 3v18M7.5 21h9M5 7h14"/><path d="m5 7-3 6.5a3 3 0 0 0 6 0zM19 7l-3 6.5a3 3 0 0 0 6 0z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>',
+    message: '<path d="M20.5 15a2 2 0 0 1-2 2H8l-4.5 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/><path d="M8 8.5h8M8 12h5"/>',
+    bell: '<path d="M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8.5 2.5 8.5h-17S6 15.5 6 9"/><path d="M10.2 21a2 2 0 0 0 3.6 0"/>',
+    logout: '<path d="M9 21H5.5A2.5 2.5 0 0 1 3 18.5v-13A2.5 2.5 0 0 1 5.5 3H9"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+    menu: '<path d="M4 6.5h16M4 12h16M4 17.5h16"/>',
+    chart: '<path d="M3.5 3.5v17h17"/><path d="M8 16v-3.5M12.5 16V8M17 16v-6"/>',
+    chevron: '<path d="m9 5.5 6.5 6.5L9 18.5"/>',
+    back: '<path d="M19 12H5.5M12 18.5 5.5 12 12 5.5"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+    grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    rows: '<path d="M8.5 6h12M8.5 12h12M8.5 18h12"/><rect x="3" y="4.5" width="3" height="3" rx=".6"/><rect x="3" y="10.5" width="3" height="3" rx=".6"/><rect x="3" y="16.5" width="3" height="3" rx=".6"/>',
+    pin: '<path d="M12 21.5s7-6.3 7-12a7 7 0 0 0-14 0c0 5.7 7 12 7 12z"/><circle cx="12" cy="9.5" r="2.5"/>',
+    building: '<rect x="4.5" y="3" width="15" height="18" rx="1.5"/><path d="M9 7h1.5M13.5 7H15M9 11h1.5M13.5 11H15M9 15h1.5M13.5 15H15M10.5 21v-3h3v3"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5.5A2 2 0 0 1 11 3.5h2a2 2 0 0 1 2 2V7M3 12.5h18"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    alert: '<path d="M10.3 4 2 18.2A2 2 0 0 0 3.7 21h16.6a2 2 0 0 0 1.7-2.8L13.7 4a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4M12 17h.01"/>',
+    layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12.5 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
+    sort: '<path d="M7 4.5v15M3.5 8 7 4.5 10.5 8M17 19.5v-15M13.5 16l3.5 3.5 3.5-3.5"/>',
+    reset: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/>',
+    plane: '<path d="M10.5 13.5 3 11l1.5-1.5 8 .5 4.5-4.5a2.1 2.1 0 0 1 3 3L15.5 13l.5 8L14.5 22.5 12 15l-3 3v2.5L7.5 22 6 18l-4-1.5L3.5 15H6z"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5"/>',
+  };
+  function icon(name, cls) {
+    return `<svg class="beo-ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ""}</svg>`;
+  }
+
+  // Photos : l'API exige le jeton -> fetch authentifié puis blob (jamais d'URL publique).
+  // Chargement paresseux (IntersectionObserver) : seules les fichettes visibles sont demandées.
+  async function loadPhoto(img, url) {
+    try {
+      const res = await fetch(url, { headers: state.token ? { Authorization: "Bearer " + state.token } : {} });
+      if (!res.ok) return false;
+      const blobUrl = URL.createObjectURL(await res.blob());
+      img.src = blobUrl;
+      img.hidden = false;
+      img.addEventListener("load", () => URL.revokeObjectURL(blobUrl), { once: true });
+      return true;
+    } catch (e) { return false; /* sans photo : initiales conservées */ }
+  }
+  function lazyPhotos(root) {
+    const imgs = [...root.querySelectorAll("img[data-photo-src]")];
+    const show = (img) => {
+      const src = img.dataset.photoSrc;
+      delete img.dataset.photoSrc;
+      loadPhoto(img, src).then((ok) => { if (ok) img.parentElement?.classList.add("has-photo"); });
+    };
+    if (typeof IntersectionObserver !== "function") { imgs.forEach(show); return () => {}; }
+    // On observe l'avatar visible : l'image reste [hidden] (display:none) jusqu'au chargement,
+    // et un élément non affiché n'intersecte jamais.
+    const byHost = new Map(imgs.map((img) => [img.parentElement, img]));
+    const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+      const img = byHost.get(e.target);
+      if (e.isIntersecting && img) { io.unobserve(e.target); show(img); }
+    }), { rootMargin: "200px" });
+    byHost.forEach((_, host) => io.observe(host));
+    return () => io.disconnect();
+  }
+  function initials(...parts) {
+    return parts.filter(Boolean).join(" ").split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "?";
+  }
+  // Vue (liste / mosaïque) mémorisée par écran — confort local, jamais une donnée métier.
+  function storedPref(key, fallback) { try { return localStorage.getItem("sw_pref_" + key) || fallback; } catch (e) { return fallback; } }
+  function storePref(key, value) { try { localStorage.setItem("sw_pref_" + key, value); } catch (e) { /* sans effet */ } }
+
   function skeletonKpis(n) { return `<div class="skeleton-kpis">${Array.from({ length: n || 5 }).map(() => '<div class="skeleton skeleton-kpi"></div>').join("")}</div>`; }
   function skeletonRows(n) { return Array.from({ length: n || 5 }).map(() => '<div class="skeleton skeleton-row"></div>').join(""); }
   function emptyState(text) { return `<div class="empty-state">${esc(text)}</div>`; }
@@ -294,7 +382,7 @@
     state, api, guardedApi, esc, dateFr, ApiError,
     loadScope, setScope, scopeSites, scopeLabel, perimeterLabel, scopeParams, multiSite, siteHeaders, siteCells, employeeLabel, siteSelectHTML,
     login, logout, hasModule, hasSiteWorkforceAccess,
-    statusBadge, ATTENDANCE_STATUS, ABSENCE_DECISION_STATUS, DOCUMENT_STATUS, LEAVE_STATUS, DISCIPLINE_STATUS, RECLAMATION_STATUS,
+    statusBadge, BUSINESS_STATUS, icon, loadPhoto, lazyPhotos, initials, storedPref, storePref, ATTENDANCE_STATUS, ABSENCE_DECISION_STATUS, DOCUMENT_STATUS, LEAVE_STATUS, DISCIPLINE_STATUS, RECLAMATION_STATUS,
     skeletonKpis, skeletonRows, emptyState, errorState,
     openDrawer, closeDrawer, kvRow, confirmAction, paginationBar, readFileAsDataUrl,
   };
