@@ -4,6 +4,7 @@ from app.modules.auth.routes import router as auth_router
 from app.modules.drh.routes import router as drh_router
 from app.modules.drh.contract_import_routes import router as contract_import_router
 from app.modules.drh.candidate_import_routes import router as candidate_import_router
+from app.modules.drh.employee_import_routes import router as employee_import_router
 from app.modules.drh.badge_routes import router as badge_router
 from app.modules.ops.routes import router as ops_router
 from app.modules.materiel.routes import router as materiel_router
@@ -96,3 +97,4 @@ api_router.include_router(biometrics_router, prefix="/biometrics", tags=["Biomé
 api_router.include_router(brq_router, prefix="/brq", tags=["BRQ"])
 
 api_router.include_router(contract_import_router, prefix="/drh", tags=["DRH — contractualisation Excel"])
+api_router.include_router(employee_import_router, prefix="/drh", tags=["DRH — import Excel des employés"])

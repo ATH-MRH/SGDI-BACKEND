@@ -426,25 +426,17 @@ def _sync_facial_reference_after_save(db: Session, employee: Employee, user: Use
 
 
 @router.post("/employees", response_model=EmployeeOut)
-def create_employee(payload: EmployeeCreate, background_tasks: BackgroundTasks, photo_source: str | None = Query(None, max_length=30),
+def create_employee(payload: EmployeeCreate, request: Request, background_tasks: BackgroundTasks,
+                    photo_source: str | None = Query(None, max_length=30),
                     db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     sync, _ = _photo_fingerprint_before(None, photo_source)
-    code = (payload.code or "").strip().upper() or service.next_employee_code(db, payload.society)
-    for attempt in range(200):
-        values = payload.model_dump()
-        values["code"] = code
-        try:
-            created = service.create_row(db, Employee, EmployeeCreate(**values))
-            if sync:
-                _sync_facial_reference_after_save(db, created, user, photo_source, None, background_tasks)
-                db.refresh(created)
-            return created
-        except HTTPException as exc:
-            if "ix_employees_code" not in str(exc.detail) or attempt >= 199:
-                raise
-            code = service.next_employee_code_after_conflict(db, payload.society, code)
-    raise HTTPException(status_code=409, detail="Code employé indisponible")
+    # Même fonction que l'import Excel des employés (employee_import.py).
+    created = service.create_employee_direct(db, payload.model_dump(), actor=user, request=request, audit_state={"source": "fiche"})
+    if sync:
+        _sync_facial_reference_after_save(db, created, user, photo_source, None, background_tasks)
+        db.refresh(created)
+    return created
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeOut)

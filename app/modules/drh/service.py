@@ -1748,6 +1748,68 @@ def next_employee_code_after_conflict(db: Session, society: Any, current_code: A
     raise HTTPException(status_code=409, detail="Code employé indisponible")
 
 
+EMPLOYEE_CODE_TAKEN = "MATRICULE_DEJA_UTILISE"
+
+
+def _is_employee_code_conflict(exc: SQLAlchemyError) -> bool:
+    detail = _postgres_error_detail(exc)
+    return "ix_employees_code" in detail or "employees.code" in detail
+
+
+def create_employee_direct(
+    db: Session, values: dict[str, Any], *, strict_code: bool = False, initial_contract: dict[str, Any] | None = None,
+    actor: Any | None = None, request: Any | None = None, audit_action: str = "drh.employee.created",
+    audit_state: dict[str, Any] | None = None, commit: bool = True,
+) -> Employee:
+    """Création directe d'un employé : fiche DRH (POST /employees) et import Excel en masse.
+
+    Matricule saisi : conservé. Avec `strict_code` (import), un matricule déjà pris est refusé
+    (409) ; sinon, comme la fiche DRH l'a toujours fait, il est remplacé par le prochain code
+    libre. Matricule vide : série de la société (`next_employee_code`, sous verrou). Le contrat
+    initial éventuel et l'audit sont écrits dans la même transaction que l'employé. `values` :
+    colonnes déjà validées par `EmployeeCreate` (le matricule peut y être vide)."""
+    from app.core.audit import append_audit
+
+    requested = str(values.get("code") or "").strip().upper()
+    society = values.get("society")
+    if requested and strict_code:
+        if db.bind.dialect.name == "postgresql":
+            db.execute(text("SELECT pg_advisory_xact_lock(20260610)"))   # même verrou que next_employee_code
+        if db.scalar(select(Employee.id).where(func.upper(Employee.code) == requested).limit(1)) is not None:
+            raise _business_error(409, EMPLOYEE_CODE_TAKEN, f"Matricule {requested} déjà utilisé")
+    code = requested or next_employee_code(db, society)
+    for attempt in range(200):
+        row = {**values, "code": code}
+        if isinstance(row.get("extra"), dict):
+            row["extra"] = _prepare_employee_extra(row["extra"], fallback=code)
+        try:
+            with db.begin_nested():
+                employee = Employee(**row)
+                db.add(employee)
+                db.flush()
+                if initial_contract is not None:
+                    db.add(Contract(employee_id=employee.id, **initial_contract))
+                    db.flush()
+        except SQLAlchemyError as exc:
+            if _is_employee_code_conflict(exc) and requested and strict_code:
+                raise _business_error(409, EMPLOYEE_CODE_TAKEN, f"Matricule {requested} déjà utilisé") from exc
+            if not _is_employee_code_conflict(exc) or attempt >= 199:
+                raise HTTPException(status_code=400, detail=f"Enregistrement PostgreSQL refusé : {_postgres_error_detail(exc)}") from exc
+            code = next_employee_code_after_conflict(db, society, code)
+            continue
+        append_audit(db, action=audit_action, resource="employee", resource_id=employee.id, result="success", user=actor,
+                     request=request, society=employee.society, new_state={"code": employee.code, **(audit_state or {})})
+        if commit:
+            try:
+                db.commit()
+            except SQLAlchemyError as exc:
+                db.rollback()
+                raise HTTPException(status_code=400, detail=f"Enregistrement PostgreSQL refusé : {_postgres_error_detail(exc)}") from exc
+            db.refresh(employee)
+        return employee
+    raise HTTPException(status_code=409, detail="Code employé indisponible")
+
+
 def contract_values(employee: Employee, request: Any | None = None) -> dict[str, str]:
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     request_values = getattr(request, "values", None) if request is not None else None
