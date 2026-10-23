@@ -5,19 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bureau des Effectifs Ouest — ATLAS</title>
 <link rel="stylesheet" href="/static/site-workforce/app.css?v=20261022-beo-v2">
-<link rel="stylesheet" href="/static/site-workforce/attendance-v4.css?v=20261004-v4">
+<link rel="stylesheet" href="/static/site-workforce/attendance-v4.css?v=20261022-live-1">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
 <body class="atlas-ui" data-atlas-surface="beo">
 <div id="root"></div>
 <!-- Pas de build, pas de framework — chaque vue s'enregistre dans window.SiteWorkforceViews.
      api.js/shell.js doivent se charger avant les vues (ordre respecté ci-dessous). -->
-<script src="/static/site-workforce/api.js?v=20261022-beo-v2"></script>
+<script src="/static/site-workforce/api.js?v=20261022-live-1"></script>
 <script src="/static/site-workforce/views/dashboard.js?v=20261022-beo-v2"></script>
 <script src="/static/site-workforce/views/personnel.js?v=20261022-beo-v2"></script>
 <script src="/static/site-workforce/views/position.js?v=20261022-beo-v2"></script>
 <script src="/static/js/shared/attendance-workspace.js?v=20261004-v4"></script>
-<script src="/static/site-workforce/views/pointage.js?v=20261004-v4"></script>
+<script src="/static/site-workforce/attendance-live.js?v=20261022-live-1"></script>
+<script src="/static/site-workforce/views/pointage.js?v=20261022-live-1"></script>
 <script src="/static/site-workforce/views/absences.js?v=2"></script>
 <script src="/static/site-workforce/views/justificatifs.js?v=2"></script>
 <script src="/static/site-workforce/views/conges.js?v=2"></script>

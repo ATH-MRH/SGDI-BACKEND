@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -289,6 +289,27 @@ def attendance_workspace(month: str = Query(pattern=r"^\d{4}-\d{2}$"), q: str = 
                             employee_id=employee_id, page=page, page_size=page_size)
     result["permissions"] = {a: a in actions or "admin" in actions for a in ("create", "update", "validate", "unlock", "export")}
     return result
+
+
+# Read-only BEO projection: no anomaly detection, consolidation, or writes on GET.
+@router.get("/attendance/live")
+def attendance_live(response: Response,
+                    q: str = Query("", max_length=180), group: str = Query("", max_length=30),
+                    movement: str = Query("", pattern="^(|ARRIVAL|DEPARTURE)$"),
+                    method: str = Query("", max_length=30), event_status: str = Query("", pattern="^(|recorded|anomaly)$"),
+                    population: str = Query("", pattern="^(|present_now|absent_today|late|not_clocked)$"),
+                    employee_id: int | None = None, before_id: int | None = Query(None, ge=1),
+                    limit: int = Query(50, ge=1, le=100), db: Session = Depends(get_db),
+                    scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.site_workforce.attendance_live import read_live
+    from app.modules.site_workforce import position_file
+    if not {"read", "admin"}.intersection(user.authorized_actions or []):
+        raise HTTPException(403, "Lecture du pointage non autorisée")
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["Pragma"] = "no-cache"
+    return read_live(db, scope, q=q, group=group, movement=movement, method=method,
+                     event_status=event_status, population=population, employee_id=employee_id,
+                     before_id=before_id, limit=limit, photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
 
 
 # ── Pointage (§9) ────────────────────────────────────────────────────────────────────────

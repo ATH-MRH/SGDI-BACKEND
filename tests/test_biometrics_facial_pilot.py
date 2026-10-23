@@ -118,13 +118,27 @@ def _active(db, emp):
 
 
 def _pilot_enrolled(client, h, db, who=None):
+    generated = who is None
     who = who or f"W-{_tag()}"
     site = _site(db); emp = _employee(db, site); _photo(db, emp, face(who)); _consent(client, h, emp)
     cam = _camera(client, h, site)
-    _sees(face(who))
-    preview = _preview(client, h, emp, {"camera_id": cam}).json()
-    assert preview["comparison"]["result"] == "MATCH", preview
-    assert _confirm(client, h, emp, preview["token"]).status_code == 200
+    # Random synthetic identities can exceed the real duplicate threshold against
+    # templates retained by this module. HTTP 200 may then mean PENDING_REVIEW,
+    # which is not a valid precondition for tests requiring an enrolled employee.
+    for _ in range(20):
+        _sees(face(who))
+        preview = _preview(client, h, emp, {"camera_id": cam}).json()
+        assert preview["comparison"]["result"] == "MATCH", preview
+        if not preview["duplicate"]["suspected"]:
+            break
+        assert generated, "Explicit synthetic identity is already suspected as a duplicate"
+        who = f"W-{_tag()}"
+        _photo(db, emp, face(who))
+    else:
+        pytest.fail("Could not prepare a distinct synthetic identity for the pilot")
+    confirmed = _confirm(client, h, emp, preview["token"])
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "ACTIVE", confirmed.text
     return site, emp, cam, who
 
 
@@ -445,3 +459,35 @@ def test_recognition_and_preview_are_rate_limited_per_account_and_camera(client,
     rate_limit.clear(f"camera-recognize:{admin_id}:{cam}")
     codes = [_recognize(client, auth_headers, cam, who).status_code for _ in range(4)]
     assert codes[:2] == [200, 200] and codes[-1] == 429
+
+
+def test_pilot_fixture_retries_a_similar_synthetic_identity_before_confirmation(client, auth_headers, db, monkeypatch):
+    """Real duplicate decisions stay intact; a positive fixture must actually be ACTIVE."""
+    import sys
+
+    _, _, _, enrolled_who = _pilot_enrolled(client, auth_headers, db)
+    module = sys.modules[__name__]
+    original_tag, original_preview = _tag, _preview
+    first = True
+    duplicates = []
+
+    def tag():
+        nonlocal first
+        if first:
+            first = False
+            # Force a real duplicate in the initial generated fixture, without
+            # mocking recognition, thresholds or the server response.
+            return enrolled_who.removeprefix("W-")
+        return original_tag()
+
+    def preview(*args, **kwargs):
+        response = original_preview(*args, **kwargs)
+        duplicates.append(response.json()["duplicate"]["suspected"])
+        return response
+
+    monkeypatch.setattr(module, "_tag", tag)
+    monkeypatch.setattr(module, "_preview", preview)
+    _, employee, _, who = _pilot_enrolled(client, auth_headers, db)
+    assert duplicates[0] is True and duplicates[-1] is False and len(duplicates) >= 2
+    assert who != enrolled_who
+    assert len(_active(db, employee)) == 1

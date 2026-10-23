@@ -110,7 +110,7 @@
       const s = qs.toString();
       if (s) url += (url.includes("?") ? "&" : "?") + s;
     }
-    const res = await fetch(url, { method, headers, body: payload, signal });
+    const res = await fetch(url, { method, headers, body: payload, signal, ...(path === "/site-workforce/attendance/live" ? {cache: "no-store"} : {}) });
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON */ }
