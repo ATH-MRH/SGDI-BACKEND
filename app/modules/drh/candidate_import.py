@@ -17,7 +17,7 @@ import re
 import secrets
 import zipfile
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import HTTPException
 from sqlalchemy import delete, select, text, update
@@ -275,10 +275,10 @@ def _row_empty(row: list[Any]) -> bool:
     return not any(cell_display(cell) for cell in row)
 
 
-def sheet_layout(sheet: dict[str, Any]) -> dict[str, Any]:
+def sheet_layout(sheet: dict[str, Any], recognize: Callable[[object], str | None] = field_for_header) -> dict[str, Any]:
     """Ligne d'en-têtes (la plus riche en libellés reconnus parmi les premières lignes), colonnes
     et lignes de données. Une feuille marquée « ne pas importer » (feuilles d'aide du modèle)
-    n'est jamais proposée."""
+    n'est jamais proposée. `recognize` : dictionnaire d'en-têtes de l'import (candidats par défaut)."""
     rows = sheet["rows"]
     first_text = next((cell_display(cell) for row in rows for cell in row if cell_display(cell)), "")
     if NOT_IMPORTABLE_MARKER in norm_key(first_text):
@@ -287,7 +287,7 @@ def sheet_layout(sheet: dict[str, Any]) -> dict[str, Any]:
     for index, row in enumerate(rows[:HEADER_SCAN_ROWS]):
         if _row_empty(row):
             continue
-        score = sum(1 for cell in row if isinstance(cell, str) and field_for_header(cell))
+        score = sum(1 for cell in row if isinstance(cell, str) and recognize(cell))
         if score > best_score:
             best_index, best_score = index, score
     if best_index is None:
@@ -314,12 +314,12 @@ def sheet_layout(sheet: dict[str, Any]) -> dict[str, Any]:
             "data_rows": data_rows, "empty_rows": empty_rows, "recognized": best_score}
 
 
-def suggest_mapping(columns: list[dict[str, Any]]) -> dict[str, str | None]:
+def suggest_mapping(columns: list[dict[str, Any]], recognize: Callable[[object], str | None] = field_for_header) -> dict[str, str | None]:
     """Correspondance automatique : un champ n'est proposé qu'une fois (première colonne)."""
     mapping: dict[str, str | None] = {}
     used: set[str] = set()
     for column in columns:
-        key = field_for_header(column["header"])
+        key = recognize(column["header"])
         if key and key not in used:
             mapping[str(column["index"])] = key
             used.add(key)
@@ -328,34 +328,38 @@ def suggest_mapping(columns: list[dict[str, Any]]) -> dict[str, str | None]:
     return mapping
 
 
-def describe_workbook(workbook: dict[str, Any]) -> dict[str, Any]:
+def describe_workbook(workbook: dict[str, Any], recognize: Callable[[object], str | None] = field_for_header) -> dict[str, Any]:
     sheets = []
     for index, sheet in enumerate(workbook["sheets"]):
-        layout = sheet_layout(sheet)
-        mapping = suggest_mapping(layout["columns"])
+        layout = sheet_layout(sheet, recognize)
+        mapping = suggest_mapping(layout["columns"], recognize)
         sheets.append({
             "index": index, "name": sheet["name"], "importable": layout["importable"], "reason": layout["reason"],
             "header_row": layout["header_row"], "row_count": len(layout["data_rows"]),
             "columns": [{**column, "suggested": mapping.get(str(column["index"])),
-                         "duplicate_of": _duplicate_header(column, layout["columns"], mapping)} for column in layout["columns"]],
+                         "duplicate_of": _duplicate_header(column, layout["columns"], mapping, recognize)} for column in layout["columns"]],
         })
     importable = [sheet for sheet in sheets if sheet["importable"]]
     default = max(importable, key=lambda sheet: sum(1 for column in sheet["columns"] if column["suggested"]), default=None)
     return {"sheets": sheets, "default_sheet": default["index"] if default else None}
 
 
-def _duplicate_header(column: dict[str, Any], columns: list[dict[str, Any]], mapping: dict[str, str | None]) -> str | None:
-    key = field_for_header(column["header"])
+def _duplicate_header(column: dict[str, Any], columns: list[dict[str, Any]], mapping: dict[str, str | None],
+                      recognize: Callable[[object], str | None] = field_for_header) -> str | None:
+    key = recognize(column["header"])
     if not key or mapping.get(str(column["index"])):
         return None
     owner = next((other for other in columns if mapping.get(str(other["index"])) == key), None)
     return owner["letter"] if owner else None
 
 
-def validate_mapping(layout: dict[str, Any], mapping: dict[str, Any]) -> dict[int, str]:
+def validate_mapping(layout: dict[str, Any], mapping: dict[str, Any], *, fields: dict[str, ImportField] | None = None,
+                     required: tuple[str, ...] | None = None) -> dict[int, str]:
     """Correspondance choisie par l'utilisateur → {index de colonne: champ}. Refuse les
     correspondances contradictoires (un champ sur plusieurs colonnes) et l'absence d'un champ
-    obligatoire."""
+    obligatoire. `fields` / `required` : champs de l'import (candidats par défaut)."""
+    fields = FIELD_BY_KEY if fields is None else fields
+    required = REQUIRED_KEYS if required is None else required
     known = {column["index"]: column for column in layout["columns"]}
     resolved: dict[int, str] = {}
     owners: dict[str, int] = {}
@@ -368,15 +372,15 @@ def validate_mapping(layout: dict[str, Any], mapping: dict[str, Any]) -> dict[in
             raise HTTPException(status_code=422, detail="Correspondance invalide : colonne inconnue.")
         if index not in known:
             raise HTTPException(status_code=422, detail="Correspondance invalide : colonne inconnue.")
-        if key not in FIELD_BY_KEY:
+        if key not in fields:
             raise HTTPException(status_code=422, detail="Correspondance invalide : champ inconnu.")
         if key in owners:
             raise HTTPException(status_code=422, detail=(
-                f"Correspondance contradictoire : le champ « {FIELD_BY_KEY[key].label} » est associé aux colonnes "
+                f"Correspondance contradictoire : le champ « {fields[key].label} » est associé aux colonnes "
                 f"{known[owners[key]]['letter']} et {known[index]['letter']}."))
         owners[key] = index
         resolved[index] = key
-    missing = [FIELD_BY_KEY[key].label for key in REQUIRED_KEYS if key not in owners]
+    missing = [fields[key].label for key in required if key not in owners]
     if missing:
         raise HTTPException(status_code=422, detail="Champs obligatoires sans colonne associée : " + ", ".join(missing) + ".")
     return resolved
@@ -535,6 +539,56 @@ def position_reference(db: Session) -> dict[str, str]:
     return reference
 
 
+def convert_cell(item: ImportField, cell: Any, values: dict[str, Any], positions: dict[str, str]) -> tuple[Any, str | None]:
+    """Cellule non vide → (valeur normalisée, avertissement éventuel). Lève _FieldError.
+    Partagée par les imports candidats et employés : mêmes règles de lecture des cellules."""
+    if item.kind == "date":
+        return _parse_date(cell, birth_date=item.key == "birth_date")
+    if item.kind == "phone":
+        return _parse_phone(cell)
+    if item.kind == "email":
+        return _parse_email(cell), None
+    if item.kind == "int":
+        return _parse_int(item, cell), None
+    if item.kind == "money":
+        return _parse_money(cell), None
+    if item.kind in ("nin", "digits"):
+        return _parse_digits(item, cell), None
+    if item.kind == "choice":
+        resolved = resolve_choice(item, _text_of(cell))
+        if resolved is None:
+            raise _FieldError(f"Valeur non reconnue : « {_text_of(cell)} » (attendu : {', '.join(item.choice_values())})")
+        return resolved, None
+    if item.kind == "position":
+        resolved = positions.get(norm_key(_text_of(cell)))
+        if resolved is None:
+            raise _FieldError(f"Poste absent du référentiel : « {_text_of(cell)} » (liste des postes dans le modèle Excel)")
+        return resolved, None
+    if item.kind == "wilaya":
+        resolved_wilaya = resolve_wilaya(_text_of(cell))
+        if resolved_wilaya is None:
+            raise _FieldError(f"Wilaya non reconnue : « {_text_of(cell)} »")
+        return resolved_wilaya[1], None
+    if item.kind == "commune":
+        wilaya = resolve_wilaya(values["wilaya"]) if values.get("wilaya") else None
+        resolved = resolve_commune(_text_of(cell), wilaya[0] if wilaya else None)
+        if resolved is None:
+            where = f" dans la wilaya {values['wilaya']}" if wilaya else ""
+            raise _FieldError(f"Commune non reconnue{where} : « {_text_of(cell)} »")
+        return resolved, None
+    if item.kind == "list":
+        entries = [part.strip() for part in re.split(r"[,;/]", _text_of(cell)) if part.strip()]
+        if len(entries) > 12 or any(len(entry) > 60 for entry in entries):
+            raise _FieldError(f"{item.label} : liste trop longue")
+        return entries, None
+    value = _text_of(cell)
+    if len(value) > item.max_len:
+        raise _FieldError(f"{item.label} : texte trop long ({len(value)} caractères, maximum {item.max_len})")
+    if item.kind == "name" and len(value) < 2:
+        raise _FieldError(f"{item.label} : au moins 2 caractères")
+    return value, None
+
+
 def convert_row(row: list[Any], mapping: dict[int, str], positions: dict[str, str]) -> tuple[dict[str, Any], list[dict], list[dict]]:
     """Ligne Excel → valeurs normalisées par champ, erreurs et avertissements."""
     values: dict[str, Any] = {}
@@ -554,56 +608,9 @@ def convert_row(row: list[Any], mapping: dict[int, str], positions: dict[str, st
                 raise _FieldError(f"Cellule inexploitable ({cell['e']})")
             if not cell_display(cell):
                 continue
-            if item.kind == "date":
-                values[item.key], warning = _parse_date(cell)
-                if warning:
-                    issue(warnings, item, warning)
-            elif item.kind == "phone":
-                values[item.key], warning = _parse_phone(cell)
-                if warning:
-                    issue(warnings, item, warning)
-            elif item.kind == "email":
-                values[item.key] = _parse_email(cell)
-            elif item.kind == "int":
-                values[item.key] = _parse_int(item, cell)
-            elif item.kind == "money":
-                values[item.key] = _parse_money(cell)
-            elif item.kind in ("nin", "digits"):
-                values[item.key] = _parse_digits(item, cell)
-            elif item.kind == "choice":
-                resolved = resolve_choice(item, _text_of(cell))
-                if resolved is None:
-                    raise _FieldError(f"Valeur non reconnue : « {_text_of(cell)} » (attendu : {', '.join(item.choice_values())})")
-                values[item.key] = resolved
-            elif item.kind == "position":
-                resolved = positions.get(norm_key(_text_of(cell)))
-                if resolved is None:
-                    raise _FieldError(f"Poste absent du référentiel : « {_text_of(cell)} » (liste des postes dans le modèle Excel)")
-                values[item.key] = resolved
-            elif item.kind == "wilaya":
-                resolved_wilaya = resolve_wilaya(_text_of(cell))
-                if resolved_wilaya is None:
-                    raise _FieldError(f"Wilaya non reconnue : « {_text_of(cell)} »")
-                values[item.key] = resolved_wilaya[1]
-            elif item.kind == "commune":
-                wilaya = resolve_wilaya(values["wilaya"]) if values.get("wilaya") else None
-                resolved = resolve_commune(_text_of(cell), wilaya[0] if wilaya else None)
-                if resolved is None:
-                    where = f" dans la wilaya {values['wilaya']}" if wilaya else ""
-                    raise _FieldError(f"Commune non reconnue{where} : « {_text_of(cell)} »")
-                values[item.key] = resolved
-            elif item.kind == "list":
-                entries = [part.strip() for part in re.split(r"[,;/]", _text_of(cell)) if part.strip()]
-                if len(entries) > 12 or any(len(entry) > 60 for entry in entries):
-                    raise _FieldError(f"{item.label} : liste trop longue")
-                values[item.key] = entries
-            else:
-                value = _text_of(cell)
-                if len(value) > item.max_len:
-                    raise _FieldError(f"{item.label} : texte trop long ({len(value)} caractères, maximum {item.max_len})")
-                if item.kind == "name" and len(value) < 2:
-                    raise _FieldError(f"{item.label} : au moins 2 caractères")
-                values[item.key] = value
+            values[item.key], warning = convert_cell(item, cell, values, positions)
+            if warning:
+                issue(warnings, item, warning)
         except _FieldError as exc:
             issue(errors, item, str(exc))
     failed = {error["field"] for error in errors}
@@ -876,6 +883,14 @@ def public_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── Sessions ────────────────────────────────────────────────────────────────────────────────
+# Une table, plusieurs imports : le préfixe de l'identifiant public sépare les sessions.
+SESSION_PREFIXES = {"contracts": "contract-", "employees": "employees-"}
+
+
+def session_purpose(public_id: str) -> str:
+    return next((purpose for purpose, prefix in SESSION_PREFIXES.items() if str(public_id).startswith(prefix)), "candidates")
+
+
 def scope_fingerprint(user: Any) -> tuple[str, str]:
     scope = society_scope(user)
     if scope.kind is ScopeKind.GLOBAL:
@@ -891,7 +906,7 @@ def purge_sessions(db: Session, *, now: datetime | None = None) -> None:
                .where(CandidateImportSession.status.in_(("uploaded", "previewed")), CandidateImportSession.expires_at < now)
                .values(status="expired", workbook=None, plan=None))
     # Une confirmation interrompue est close. Les imports candidats sont atomiques ;
-    # les imports contract-… gardent le résultat des transactions déjà validées.
+    # les imports contract-… et employees-… gardent le résultat des transactions déjà validées.
     db.execute(update(CandidateImportSession)
                .where(CandidateImportSession.status == "processing", CandidateImportSession.updated_at < now - timedelta(minutes=SESSION_TTL_MINUTES))
                .values(status="failed", workbook=None, plan=None))
@@ -912,7 +927,7 @@ def create_session(db: Session, user: Any, *, file_name: str, content: bytes, re
     # Une seule analyse en attente par utilisateur : la précédente est abandonnée et vidée.
     db.execute(update(CandidateImportSession)
                .where(CandidateImportSession.user_id == user.id, CandidateImportSession.status.in_(("uploaded", "previewed")),
-                      ~CandidateImportSession.public_id.startswith("contract-"))
+                      *(~CandidateImportSession.public_id.startswith(prefix) for prefix in SESSION_PREFIXES.values()))
                .values(status="cancelled", workbook=None, plan=None))
     session = CandidateImportSession(
         public_id=secrets.token_hex(24), user_id=user.id, username=user.username, scope_key=scope_key, scope_label=scope_label,
@@ -930,7 +945,7 @@ def create_session(db: Session, user: Any, *, file_name: str, content: bytes, re
 def get_session(db: Session, user: Any, public_id: str, *, statuses: tuple[str, ...] | None = None, purpose: str = "candidates") -> CandidateImportSession:
     """Session de l'utilisateur courant uniquement, dans le périmètre de son analyse."""
     session = db.execute(select(CandidateImportSession).where(CandidateImportSession.public_id == str(public_id))).scalar_one_or_none()
-    if session is None or session.user_id != user.id or (str(public_id).startswith("contract-") != (purpose == "contracts")):
+    if session is None or session.user_id != user.id or session_purpose(public_id) != purpose:
         raise HTTPException(status_code=404, detail="Session d'import introuvable.")
     if session.scope_key != scope_fingerprint(user)[0]:
         raise HTTPException(status_code=409, detail="Votre périmètre a changé depuis l'analyse : relancez l'import.")

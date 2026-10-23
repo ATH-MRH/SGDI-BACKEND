@@ -1360,7 +1360,8 @@ function employeeFromApi(emp){
   const extra=emp&&emp.extra&&typeof emp.extra==="object"?emp.extra:{};
   const legacy=extra&&extra._legacy&&typeof extra._legacy==="object"?extra._legacy:{};
   const data={...legacy,...extra};
-  const canonicalCode=normalizeEmployeeCodeFormat(emp?.code||data.matricule||data.code||emp?.id||"");
+  // Matricule affiché exactement tel qu'enregistré : aucune normalisation silencieuse (A001 reste A001).
+  const canonicalCode=String(emp?.code||data.matricule||data.code||emp?.id||"").trim();
   // /drh/employees renvoie désormais l'affectation active courante déjà jointe côté serveur
   // (current_assignment_id/current_site_*) : source de vérité unique, on ne reconstruit plus
   // ce lien nous-mêmes à partir d'une synchro séparée de db.assignments. Si le serveur confirme
@@ -1422,13 +1423,16 @@ function normalizeEmployeeCodeFormat(value){
   if(!Number.isFinite(number)||number<=0)return raw;
   return match[1]+String(number).padStart(2,"0");
 }
+// Aligne les champs code / matricule d'une fiche sur le matricule enregistré, SANS en changer la
+// forme : un matricule officiel n'est jamais réécrit (normalizeEmployeeCodeFormat ne sert qu'aux
+// comparaisons et au calcul du prochain code libre).
 function normalizeEmployeeCodesInDB(options){
   const opt=options||{};
   if(!db||!Array.isArray(db.agents))return 0;
   let changed=0;
   db.agents.forEach(a=>{
     if(!a||typeof a!=="object")return;
-    const canonical=normalizeEmployeeCodeFormat(a.code||a.matricule||"");
+    const canonical=String(a.code||a.matricule||"").trim();
     if(!canonical)return;
     if(a.code!==canonical){a.code=canonical;changed++}
     if(a.matricule!==canonical){a.matricule=canonical;changed++}
@@ -1552,7 +1556,7 @@ function employeeApiPayload(a){
   }
   const existingBackendId=sqlBackendId(a.backendId);
   const code=existingBackendId
-    ? (normalizeEmployeeCodeFormat(a.matricule||a.code||"")||nextMatricule(db.agents,a.societe))
+    ? (String(a.code||a.matricule||"").trim()||nextMatricule(db.agents,a.societe))   // matricule enregistré, jamais transformé
     : nextMatricule(db.agents,a.societe);
   return {
     code,
@@ -14170,7 +14174,7 @@ function renderAgentForm(view,id){
         ${photoEditable?`<div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`:""}
       </div>
       <div class="rh-erp-fields">
-        <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
+        <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;white-space:normal;overflow:visible">${safe(a.matricule)||"—"}${employeeCodeIsOfficial(a)?` <span class="pill pill-blue text-[10px]" title="Matricule officiel : jamais renuméroté automatiquement">Officiel</span>`:""}${(adminFicheContext||isDrhFicheContext())&&!opsFicheReadOnly&&a.backendId?` <button type="button" class="employee-code-change-link" style="font-size:11px;font-weight:800;line-height:18px;padding:1px 8px;border:1px solid #93c5fd;border-radius:6px;background:#fff;color:#043970;cursor:pointer" title="Modifier le matricule (motif obligatoire, audité)" onclick="openEmployeeCodeChange('${jsString(a.id)}')">Modifier</button>`:""}</span></div>
         <div class="rh-erp-field"><b>Recrutement</b><span>${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` (${anciennete})`:""}</span></div>
         <div class="rh-erp-field"><b>Prénom</b><span>${escapeHTML(a.prenom||"—")}</span></div>
         <div class="rh-erp-field"><b>Téléphone</b><span>${safe(a.telephone)||"—"}</span></div>
@@ -15234,6 +15238,38 @@ function applyAgentExcelRow(agentId,rows){
   renderView();
 }
 
+// Matricule : seule cette action le modifie (confirmation, motif, unicité et audit côté serveur).
+function employeeCodeIsOfficial(a){
+  const mark=a?.matriculeOfficiel;
+  return !!(mark&&mark.fige===true&&String(mark.valeur||"")===String(a.matricule||a.code||""));
+}
+function openEmployeeCodeChange(id){
+  const a=(db.agents||[]).find(x=>x.id===id);if(!a?.backendId)return;
+  openModal(`<form id="employee-code-change" onsubmit="event.preventDefault();submitEmployeeCodeChange('${jsString(id)}')">
+    <h2 class="text-xl font-black">Modifier le matricule</h2>
+    <p class="text-sm text-slate-600 mt-1">${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} · matricule actuel <b>${escapeHTML(a.matricule||a.code||"—")}</b>${employeeCodeIsOfficial(a)?" (officiel)":""}</p>
+    <label class="label mt-3" for="employee-code-new">Nouveau matricule</label><input id="employee-code-new" class="input" maxlength="30" required autocomplete="off">
+    <label class="label mt-3" for="employee-code-reason">Motif (obligatoire)</label><textarea id="employee-code-reason" class="input" rows="3" minlength="5" maxlength="500" required></textarea>
+    <label class="flex gap-2 items-start text-sm mt-3"><input type="checkbox" id="employee-code-confirm" required> Je confirme la modification du matricule. L'ancien et le nouveau matricule, le motif, mon compte et l'heure seront enregistrés dans l'audit.</label>
+    <p id="employee-code-error" role="alert" class="text-sm text-red-700 font-bold mt-2"></p>
+    <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="submit" class="btn btn-danger">Modifier le matricule</button></div></form>`);
+}
+async function submitEmployeeCodeChange(id){
+  const a=(db.agents||[]).find(x=>x.id===id);if(!a?.backendId)return;
+  const value=k=>document.getElementById("employee-code-"+k);
+  const newCode=String(value("new").value||"").trim().toUpperCase(),reason=String(value("reason").value||"").trim();
+  const error=msg=>{value("error").textContent=msg};
+  if(!newCode)return error("Saisissez le nouveau matricule.");
+  if(newCode===String(a.matricule||a.code||""))return error("Le nouveau matricule est identique au matricule actuel.");
+  if(reason.length<5)return error("Le motif est obligatoire (5 caractères minimum).");
+  if(!value("confirm").checked)return error("Cochez la confirmation.");
+  const submit=document.querySelector("#employee-code-change button[type=submit]");if(submit)submit.disabled=true;
+  try{
+    const saved=await sgdiApi("/drh/employees/"+encodeURIComponent(a.backendId)+"/matricule",{method:"PATCH",body:{new_code:newCode,reason,confirm:true},legacy:false});
+    Object.assign(a,employeeFromApi(saved),{backendId:saved?.id||a.backendId});
+    closeModal();toast(`Matricule modifié : ${newCode}`,"success");renderView();
+  }catch(e){error(e.message||String(e));if(submit)submit.disabled=false}
+}
 async function saveAgent(id,options){
   const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
