@@ -823,7 +823,7 @@ function renderOPS(view,sub,arg){
     opsModuleTimeout(ptStartQrTabletTimer,100);
     return;
   }
-  if(sub==="rotations"){renderCentralRotations(view);return}
+  if(sub==="rotations"){renderCentralRotations(view,arg);return}
   if(sub==="missions"){renderOpsMissions(view,arg);return}
   if(sub==="mouvements"){renderOpsMouvements(view);return}
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
@@ -1626,7 +1626,7 @@ function openInspectionScan(id){
   openModal(`<h3 class="font-bold text-lg mb-3">Scan QR - Inspection</h3><div class="text-sm text-slate-600 mb-3">${escapeHTML(inspectionSupervisorName(i.supervisorId))} · ${formatDate(i.date)}</div>${(i.siteIds||[]).map(siteId=>{const sc=(i.scans||{})[siteId]||{};return`<div class="card p-3 mb-2"><div class="font-bold mb-2">${escapeHTML(inspectionSiteName(siteId))}</div><div class="text-xs text-slate-500 mb-2">Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"} · Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inspectionScan('${i.id}','${siteId}','entree')">Scanner entrée</button><button class="btn btn-primary text-xs" onclick="inspectionScan('${i.id}','${siteId}','sortie')">Scanner sortie</button></div></div>`}).join("")}<div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
-SGDIModules.registerModule({key: "ops", routes: ["ops","superviseur"], dependencies: ["ops-1"], init: function(){}, destroy: opsModuleDestroy});
+SGDIModules.registerModule({key: "ops", routes: ["ops","superviseur"], dependencies: ["ops-1","ops-rotations"], init: function(){}, destroy: opsModuleDestroy});
 
 const opsModuleTimeouts=new Set();
 function opsModuleTimeout(callback,delay){
@@ -1643,90 +1643,4 @@ function opsModuleDestroy(){
   ptStopQrTabletTimer();
   opsModuleTimeouts.forEach(clearTimeout);opsModuleTimeouts.clear();
   document.removeEventListener("click",opsMissionDismiss);opsMissionDismiss();
-}
-
-/* OPS owns official planning. This view only edits parameters and renders backend results. */
-async function renderCentralRotations(view){
-  const escape=value=>escapeHTML(String(value??""));
-  view.innerHTML=`<section class="card p-5"><h1 class="text-2xl font-black">Configuration du régime du site</h1><p>Chargement des sites autorisés…</p></section>`;
-  try{
-    const response=await sgdiApi('/api/ops/sites',{method:'GET',legacy:false});
-    if(!view.isConnected)return;
-    const sites=Array.isArray(response)?response:(response.items||[]);
-    view.innerHTML=`<section class="card p-5" id="centralRotations"><h1 class="text-2xl font-black">Configuration du régime du site</h1>
-      <p class="text-sm text-slate-500">Brouillon → simulation → publication OPS à date future. Les pointages historiques restent conservés.</p>
-      <form id="centralForm" class="grid gap-4 mt-4" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))">
-        <label>Structure<select name="structure"><option value="">Toutes les structures autorisées</option></select></label>
-        <label>Client<select name="client"><option value="">Tous les clients autorisés</option></select></label>
-        <label>Site<select name="site" required><option value="">Choisir un site</option></select></label>
-        <label>Régime<select name="regime"><option value="3X8">3×8</option><option value="24H48">24h/48</option><option value="1/2">1/2</option><option value="1/3">1/3</option><option disabled>Horaire normal — extension prévue</option><option disabled>Personnalisé — extension prévue</option></select></label>
-        <label>Date d’effet<input name="effective" type="date" required></label><label>Ancre du cycle<input name="anchor" type="date" required></label>
-        <label>Fuseau<input name="timezone" value="Africa/Algiers" required></label>
-        <label>Repos minimum (minutes)<input name="rest" type="number" min="0" max="10080" required></label>
-        <label>Avance autorisée (minutes)<input name="early" type="number" min="0" required></label>
-        <label>Refus automatique à partir de (minutes)<input name="late" type="number" min="1" required></label>
-        <label>Travail de nuit — début<input name="nightStart" type="time" required></label><label>Travail de nuit — fin<input name="nightEnd" type="time" required></label>
-        <div data-regimes="3X8"><label>Jours par position<input name="daysPerPosition" type="number" min="1" max="31"></label></div>
-        ${[0,1,2].map(i=>`<div data-regimes="3X8"><label>Vacation ${i+1} — début<input name="shift${i}Start" type="time"></label><label>Fin<input name="shift${i}End" type="time"></label></div>`).join('')}
-        <div data-regimes="24H48 1/3"><label>Jour — début<input name="dayStart" type="time"></label><label>Jour — fin<input name="dayEnd" type="time"></label></div>
-        <div data-regimes="24H48 1/3"><label>Nuit — début<input name="nightShiftStart" type="time"></label><label>Nuit — fin<input name="nightShiftEnd" type="time"></label></div>
-        <div data-regimes="1/2"><label>Première vacation de 12h — début<input name="firstStart" type="time"></label></div>
-        ${['A','B','C','D'].map((g,i)=>`<label style="border-left:4px solid ${['#2563eb','#16a34a','#ea580c','#9333ea'][i]};padding-left:8px">Phase ${g}<input name="phase${g}" type="number" required><span class="text-xs">${g==='A'?'1/3 : jour ouvré uniquement, jamais nuit/week-end/férié':'1/3 : rotation nocturne continue et remplacement compatible'}</span></label>`).join('')}
-        <fieldset><legend>Jours ouvrés</legend>${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map((d,i)=>`<label class="mr-2"><input type="checkbox" name="workday" value="${i}">${d}</label>`).join('')}</fieldset>
-        <label>Jours fériés validés (une date AAAA-MM-JJ par ligne)<textarea name="holidays" rows="3"></textarea></label>
-        <label>Référence du calendrier<input name="calendarSource" required></label><label>Version du calendrier<input name="calendarVersion" required></label><label>Calendrier confirmé depuis<input name="calendarFrom" type="date" required></label><label>Calendrier confirmé jusqu’au<input name="calendarUntil" type="date" required></label>
-        <label>Effectif requis par vacation de jour<input name="dayStaff" type="number" min="1" required></label><label>Effectif requis par vacation de nuit<input name="nightStaff" type="number" min="1" required></label>
-        <label>Motif<input name="reason" minlength="3" required></label>
-        <div><button class="btn btn-secondary" type="submit">Enregistrer brouillon</button><button class="btn btn-ghost" type="button" data-cancel>Annuler</button></div>
-      </form>
-      <div class="flex flex-wrap gap-3 mt-4"><label>Simulation<select id="centralHorizon"><option>30</option><option>60</option><option>90</option></select> jours</label><button class="btn btn-secondary" data-simulate disabled>Simuler</button><button class="btn btn-primary" data-publish disabled>Publier</button><button class="btn btn-secondary" data-history>Historique</button></div>
-      <p id="centralStatus" role="status" class="mt-3"></p><div id="centralResult" class="mt-4" style="overflow:auto;max-width:100%"></div></section>`;
-    const form=view.querySelector('#centralForm'), fields=form.elements, status=view.querySelector('#centralStatus'), result=view.querySelector('#centralResult');
-    let draft=null,receipt=null,busy=false;
-    const structure=s=>(s.equipment_plan?.societe||s.equipment_plan?.society||'');
-    const choices=(name,values)=>{fields[name].innerHTML='<option value="">Tous</option>'+[...new Set(values.filter(Boolean))].map(v=>`<option value="${escape(v)}">${escape(v)}</option>`).join('')};
-    choices('structure',sites.map(structure));choices('client',sites.map(s=>s.client_id==null?'':String(s.client_id)));
-    const filterSites=()=>{const selected=fields.site.value;fields.site.innerHTML='<option value="">Choisir un site</option>'+sites.filter(s=>(!fields.structure.value||structure(s)===fields.structure.value)&&(!fields.client.value||String(s.client_id)===fields.client.value)).map(s=>`<option value="${escape(s.id)}">${escape(s.name)}${s.indicatif?' · '+escape(s.indicatif):''}</option>`).join('');if([...fields.site.options].some(o=>o.value===selected))fields.site.value=selected;};filterSites();
-    const invalidate=()=>{draft=null;receipt=null;view.querySelector('[data-simulate]').disabled=true;view.querySelector('[data-publish]').disabled=true;};
-    const toggle=()=>view.querySelectorAll('[data-regimes]').forEach(el=>{el.hidden=!el.dataset.regimes.split(' ').includes(fields.regime.value);el.querySelectorAll('input').forEach(i=>{i.disabled=el.hidden;i.required=!el.hidden;});});toggle();
-    form.addEventListener('input',invalidate);form.addEventListener('change',()=>{invalidate();filterSites();toggle();});
-    view.querySelector('[data-cancel]').onclick=()=>{form.reset();invalidate();toggle();result.textContent='';status.textContent='Brouillon local annulé ; aucune publication.';};
-    const perform=async action=>{if(busy)return;busy=true;view.querySelector('#centralRotations').inert=true;status.textContent='Traitement en cours…';try{await action();}catch(e){status.textContent=e.message||'Opération refusée';}finally{busy=false;view.querySelector('#centralRotations').inert=false;}};
-    form.onsubmit=event=>{event.preventDefault();if(!form.reportValidity())return;perform(async()=>{
-      const value=n=>fields[n].value, number=n=>Number(value(n));
-      const workdays=[...form.querySelectorAll('[name="workday"]:checked')].map(i=>Number(i.value));
-      const config={regime:value('regime'),timezone:value('timezone'),anchor:value('anchor'),minimum_rest_minutes:number('rest'),early_minutes:number('early'),late_refusal_minutes:number('late'),workdays,weekend:[0,1,2,3,4,5,6].filter(i=>!workdays.includes(i)),holidays:value('holidays').split(/\s+/).filter(Boolean),calendar_source:value('calendarSource'),calendar_version:value('calendarVersion'),calendar_valid_from:value('calendarFrom'),calendar_valid_until:value('calendarUntil'),night_start:value('nightStart'),night_end:value('nightEnd'),phases:Object.fromEntries(['A','B','C','D'].map(g=>[g,number('phase'+g)])),required_staff:{JOUR:number('dayStaff'),NUIT:number('nightStaff'),MATIN:number('dayStaff'),APRES_MIDI:number('dayStaff')}};
-      if(config.regime==='3X8'){config.days_per_position=number('daysPerPosition');config.shifts=[0,1,2].map(i=>({start:value('shift'+i+'Start'),end:value('shift'+i+'End')}));}
-      if(['24H48','1/3'].includes(config.regime))Object.assign(config,{day_start:value('dayStart'),day_end:value('dayEnd'),night_shift_start:value('nightShiftStart'),night_shift_end:value('nightShiftEnd')});
-      if(config.regime==='1/2')config.first_start=value('firstStart');
-      draft=await sgdiApi(`/api/ops/central-rotations/sites/${encodeURIComponent(value('site'))}/drafts`,{method:'POST',legacy:false,body:{config,effective_from:value('effective'),reason:value('reason')}});
-      view.querySelector('[data-simulate]').disabled=false;status.textContent='Brouillon enregistré. Une simulation valide est obligatoire avant publication.';
-    });};
-    view.querySelector('[data-simulate]').onclick=()=>perform(async()=>{
-      if(!draft)throw Error('Enregistrer le brouillon.');
-      const simulation=await sgdiApi(`/api/ops/central-rotations/drafts/${draft.id}/simulate`,{method:'POST',legacy:false,body:{days:Number(view.querySelector('#centralHorizon').value)}});
-      receipt=simulation.context_hash;view.querySelector('[data-publish]').disabled=!simulation.valid;
-      status.textContent=simulation.valid?'Simulation valide. Publication autorisée selon vos habilitations.':`${simulation.errors.length} erreur(s) bloquante(s) : publication interdite.`;
-      result.innerHTML=`<h2 class="text-xl font-black">Planning des rotations</h2><p>${simulation.slots.length} vacations · ${simulation.errors.length} points à traiter</p><ul>${simulation.errors.map(e=>`<li>${escape(e.label||e.code)} · ${escape(e.slot?.work_date||e.date||'')}</li>`).join('')}</ul><table><thead><tr><th>Date métier</th><th>Vacation</th><th>Groupe</th><th>Début</th><th>Fin</th><th>Effectif</th></tr></thead><tbody>${simulation.slots.map(s=>`<tr><td>${escape(s.work_date)}</td><td>${escape(s.shift)}</td><td>${escape(s.group||'NON COUVERTE')}</td><td>${escape(s.start)}</td><td>${escape(s.end)}</td><td>${escape(s.planned_staff)} / ${escape(s.required_staff)}</td></tr>`).join('')}</tbody></table>`;
-    });
-    view.querySelector('#centralHorizon').onchange=()=>{receipt=null;view.querySelector('[data-publish]').disabled=true;};
-    view.querySelector('[data-publish]').onclick=()=>perform(async()=>{if(!draft||!receipt)throw Error('Simulation valide requise.');const published=await sgdiApi(`/api/ops/central-rotations/drafts/${draft.id}/publish`,{method:'POST',legacy:false,body:{context_hash:receipt}});invalidate();status.textContent=`Planning officiel version ${published.version} publié à compter du ${published.effective_from}.`;});
-    view.querySelector('[data-history]').onclick=()=>perform(async()=>{
-      if(!fields.site.value)throw Error('Choisir un site.');
-      const root=`/api/ops/central-rotations/sites/${encodeURIComponent(fields.site.value)}`;
-      const [history,drafts]=await Promise.all([sgdiApi(root+'/history',{method:'GET',legacy:false}),sgdiApi(root+'/drafts',{method:'GET',legacy:false})]);
-      result.innerHTML='<h2 class="text-xl font-black">Historique des publications</h2>'+history.items.map(p=>`<article class="card p-3"><b>Version ${escape(p.version)} · ${escape(p.config.regime)}</b><p>${escape(p.effective_from)} → ${escape(p.effective_to||'sans fin')} · ${escape(p.published_by)}</p><p>${escape(p.reason)}</p></article>`).join('')+'<h2 class="text-xl font-black">Brouillons</h2>'+drafts.items.map(d=>`<article class="card p-3"><b>${escape(d.config.regime)} · ${escape(d.effective_from)}</b><p>${escape(d.reason)}</p><button class="btn btn-secondary" data-resume="${escape(d.id)}">Reprendre</button></article>`).join('');
-      result.querySelectorAll('[data-resume]').forEach(button=>button.onclick=()=>{
-        const saved=drafts.items.find(d=>String(d.id)===button.dataset.resume),c=saved.config;
-        invalidate();
-        const values={regime:c.regime,effective:saved.effective_from,anchor:c.anchor,timezone:c.timezone,rest:c.minimum_rest_minutes,early:c.early_minutes,late:c.late_refusal_minutes,nightStart:c.night_start,nightEnd:c.night_end,calendarSource:c.calendar_source,calendarVersion:c.calendar_version,calendarFrom:c.calendar_valid_from,calendarUntil:c.calendar_valid_until,holidays:c.holidays.join('\n'),reason:saved.reason,dayStaff:c.required_staff.JOUR??c.required_staff.MATIN,nightStaff:c.required_staff.NUIT,daysPerPosition:c.days_per_position??'',firstStart:c.first_start??'',dayStart:c.day_start??'',dayEnd:c.day_end??'',nightShiftStart:c.night_shift_start??'',nightShiftEnd:c.night_shift_end??''};
-        for(const g of ['A','B','C','D'])values['phase'+g]=c.phases[g];
-        (c.shifts||[]).forEach((s,i)=>{values['shift'+i+'Start']=s.start;values['shift'+i+'End']=s.end;});
-        for(const [key,value] of Object.entries(values))fields[key].value=String(value);
-        form.querySelectorAll('[name="workday"]').forEach(input=>input.checked=c.workdays.includes(Number(input.value)));
-        toggle();draft={id:saved.id};view.querySelector('[data-simulate]').disabled=false;status.textContent='Brouillon repris ; simuler avant publication. Toute modification exigera un nouvel enregistrement.';
-      });
-      status.textContent='Historique et brouillons chargés.';
-    });
-  }catch(error){view.innerHTML=`<section class="card p-5" role="alert">${escape(error.message||'Chargement impossible')}</section>`;}
 }

@@ -337,7 +337,7 @@ def coverage(db, site_ids, day, *, now, shift_kind='', group='', sites=None, pho
                  'site_id': a.site_id, 'site': sites[a.site_id].name if a.site_id in sites else None,
                  'employee': ({'id': a.employee_id, 'name': f"{people[a.employee_id].last_name}, {people[a.employee_id].first_name}",
                                'matricule': people[a.employee_id].code} if a.employee_id in people else None),
-                 'detail': a.message, 'severity': a.severity,
+                 'detail': _critical_detail(a), 'severity': a.severity,
                  'status_label': 'Critique' if a.severity == 'critical' else 'Investigation' if a.anomaly_type in ('REENTRY', 'CORRECTION', 'OFF_SCHEDULE') else 'Ouvert'}
                 for a in anomalies]
     return {'date': day.isoformat(), 'shift': shift_kind or None, 'group': group or None, 'rows': rows,
@@ -348,6 +348,19 @@ def coverage(db, site_ids, day, *, now, shift_kind='', group='', sites=None, pho
                       'gap': sum(r['gap'] or 0 for r in rows if r['gap'] is not None),
                       'status_label': COVERAGE_STATUS['UNDERSTAFFED'] if any(r['status'] in ('UNDERSTAFFED', 'CRITICAL', 'UNCOVERED') for r in rows)
                       else COVERAGE_STATUS['ATTENTION'] if any(r['status'] == 'ATTENTION' for r in rows) else COVERAGE_STATUS['COVERED']}}
+
+
+def _critical_detail(anomaly):
+    """Détail lisible d'un point critique de couverture : vacation et effectif planifié/requis."""
+    details = anomaly.details if isinstance(anomaly.details, dict) else {}
+    slot = details.get('slot') if isinstance(details.get('slot'), dict) else None
+    if anomaly.anomaly_type in ('UNDERSTAFFED', 'UNCOVERED_SHIFT') and slot:
+        label = f"Service {SHIFT_LABELS.get(slot.get('shift'), slot.get('shift'))} {hm(slot['start'])} – {hm(slot['end'])}"
+        if anomaly.anomaly_type == 'UNCOVERED_SHIFT':
+            return f'{label} : aucun groupe admissible'
+        missing = int(details.get('required_staff') or 0) - int(details.get('planned_staff') or 0)
+        return f"{label} : {missing} poste(s) non couvert(s) ({details.get('planned_staff')}/{details.get('required_staff')} planifiés)"
+    return anomaly.message
 
 
 def watch_list(db, site_ids, day, *, sites, photo_allowed=False):

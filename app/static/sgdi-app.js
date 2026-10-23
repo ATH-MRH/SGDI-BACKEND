@@ -7811,6 +7811,7 @@ function renderSidebar(){
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
         {label:"ROTATIONS",route:"ops/rotations",group:"PILOTAGE"},
+        {label:"PLANNING ROTATIONS",route:"ops/rotations/planning",group:"PILOTAGE"},
         {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif","fiches","agents"],group:"PERSONNEL"},
         {label:"CONGÉS",route:"conges",aliases:["conges"],group:"PERSONNEL"},
         {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],group:"PERSONNEL",count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length})()},
