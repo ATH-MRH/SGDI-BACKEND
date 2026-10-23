@@ -24,6 +24,7 @@ from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import User
 from app.core.security import verify_password
 from app.modules.drh import dc_client_sites, service
+from app.modules.drh import employee_code_policy as code_policy
 from app.modules.drh.convocation_email import send_candidate_convocation_email
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
@@ -362,12 +363,34 @@ def employees(
     return Response(content=raw, media_type="application/json")
 
 
-@router.post("/employees/repair-codes")
-def repair_employee_codes(db: Session = Depends(get_db), user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
+class EmployeeCodeRepairConfirm(BaseModel):
+    plan_id: str = Field(min_length=8, max_length=64)
+
+
+class EmployeeCodeChange(BaseModel):
+    new_code: str = Field(min_length=1, max_length=30)
+    reason: str = Field(min_length=5, max_length=500)
+    confirm: bool = False
+
+
+# repair-codes en deux temps (employee_code_policy.py) : aperçu en lecture seule, puis
+# confirmation de cet aperçu. Les matricules officiels protégés ne sont jamais renumérotés.
+@router.get("/employees/repair-codes/plan")
+def repair_employee_codes_plan(db: Session = Depends(get_db), user: User = Depends(current_user),
+                               token_payload: dict = Depends(current_token_payload)):
     if not _is_admin_system_user(user, token_payload):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
-    updated = service.repair_employee_codes_if_needed(db)
-    return {"updated": updated}
+    return code_policy.repair_plan(db)
+
+
+@router.post("/employees/repair-codes")
+def repair_employee_codes(request: Request, payload: EmployeeCodeRepairConfirm | None = Body(None), db: Session = Depends(get_db),
+                          user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
+    if not _is_admin_system_user(user, token_payload):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
+    if payload is None:
+        raise HTTPException(status_code=422, detail="Confirmation sans aperçu refusée : affichez d'abord l'aperçu (plan_id requis)")
+    return code_policy.apply_repair(db, payload.plan_id, actor=user, request=request)
 
 
 @router.post("/employees/flatten-extra")
@@ -555,18 +578,36 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, background_tasks:
     existing = _ensure_employee_allowed(db, user, employee_id)
     sync, previous_fingerprint = _photo_fingerprint_before(existing, photo_source)
     _ensure_society_allowed(user, payload.society or existing.society)
-    if payload.code:
-        new_code = payload.code.strip().upper()
-        if new_code != existing.code:
-            conflict = db.query(Employee).filter(Employee.code == new_code, Employee.id != employee_id).first()
-            if conflict:
-                raise HTTPException(status_code=409, detail=f"ix_employees_code: Code {new_code} déjà utilisé par l'employé #{conflict.id}")
-        payload = payload.model_copy(update={"code": new_code})
+    if payload.code is not None and payload.code.strip().upper() != str(existing.code or "").upper():
+        # Un matricule ne change jamais en passant : seule l'action dédiée (motif, audit) le modifie.
+        raise HTTPException(status_code=409, detail=(
+            f"Le matricule {existing.code} ne peut pas être modifié par l'enregistrement de la fiche : "
+            "utilisez « Modifier le matricule » (motif obligatoire). Rechargez la page si ce message apparaît sans action de votre part."))
+    if payload.code is not None:
+        payload = payload.model_copy(update={"code": existing.code})     # valeur enregistrée, telle quelle
     updated = service.update_row(db, Employee, employee_id, payload)
     if sync:
         _sync_facial_reference_after_save(db, updated, user, photo_source, previous_fingerprint, background_tasks)
         db.refresh(updated)
     return updated
+
+
+@router.patch("/employees/{employee_id}/matricule", response_model=EmployeeOut)
+def change_employee_code(employee_id: int, payload: EmployeeCodeChange, request: Request, db: Session = Depends(get_db),
+                         user: User = Depends(current_user)):
+    """Seule action qui modifie un matricule (y compris un matricule officiel protégé) :
+    confirmation explicite, motif, unicité et audit ancien → nouveau."""
+    from app.modules.auth.routes import is_admin_role
+
+    employee = _ensure_employee_allowed(db, user, employee_id)
+    if not (is_admin_role(user.role) or str(user.role or "").strip().lower() in {"rh", "drh"}):
+        append_audit(db, action="authorization.drh.employee.code_change", resource="employee", resource_id=employee_id,
+                     result="refused", user=user, request=request)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Modification du matricule réservée à la DRH et à l'administration")
+    if not payload.confirm:
+        raise HTTPException(status_code=422, detail="Confirmez explicitement la modification du matricule")
+    return code_policy.change_code(db, employee, payload.new_code, payload.reason, actor=user, request=request)
 
 
 @router.delete("/employees/{employee_id}")

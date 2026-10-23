@@ -140,3 +140,21 @@ test('assistant responsive dans Chrome réel aux quatre étapes',{skip:!chrome||
     }
   }finally{await browser.close()}
 });
+
+test('matricule Excel non conforme : forme proposée visible, choix explicite, rien de remplacé',async()=>{
+  const h=harness();await h.run('openEmployeeExcelImport()');
+  h.run("uploadEmployeeImportFile(new document.defaultView.File(['x'],'employes.xlsx'))");await flush();await flush();
+  h.run('previewEmployeeImport()');await flush();await flush();
+  h.run(`employeeImport.preview.mapping={'0':'code','1':'full_name'};employeeImport.preview.rows=[{row:2,status:'review',excluded:false,accepted:[],incomplete:[],dropped:[],
+    cells:{code:'A001',full_name:'BENALI Ahmed'},client_site:null,code_preview:'A001',values:{code:'A001',last_name:'BENALI',first_name:'Ahmed'},
+    name:{original:'BENALI Ahmed',last_name:'BENALI',first_name:'Ahmed',source:'auto',confidence:'certain'},
+    issues:[{level:'review',field:'code',label:'Matricule',message:'Matricule Excel « A001 » ; forme proposée par ATLAS : « A01 »',accept:'code_keep:1234abcd',
+      accept_label:'Conserver « A001 » tel quel comme matricule officiel',suggestions:['A01']}]}];employeeImport.editing=2;renderEmployeeExcelImport()`);
+  const text=h.doc.body.textContent;
+  assert.match(text,/Matricule Excel : A001 · Forme proposée : A01/);
+  assert.match(text,/Rien n'est remplacé automatiquement/);
+  assert.match(text,/Conserver « A001 » tel quel comme matricule officiel/);
+  assert.equal(h.doc.getElementById('emp-fix-code').value,'A001');              // valeur Excel conservée tant que rien n'est choisi
+  h.run("useEmployeeImportSuggestion('code',2,0)");
+  assert.equal(h.doc.getElementById('emp-fix-code').value,'A01');               // forme proposée seulement sur action explicite
+});

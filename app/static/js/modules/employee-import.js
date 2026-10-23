@@ -77,11 +77,12 @@ function employeeImportEditorHTML(r){
   const mapped=new Set(Object.values(employeeImport.preview.mapping));
   const fields=[...(mapped.has("full_name")?["last_name","first_name"]:[]),...[...mapped].filter(k=>k!=="full_name")];
   const value=key=>key==="last_name"||key==="first_name"?(r.name?.[key]??r.values[key]??""):(r.cells[key]??"");
+  const codeIssue=r.issues.find(i=>i.field==="code"&&i.accept);
   const inputs=fields.map(key=>{const k=employeeImportSafeKey(key);if(!k)return"";const suggestions=r.issues.filter(i=>i.field===k||(i.field==="client_site"&&k==="site")).flatMap(i=>i.suggestions||[]);
     return `<label class="text-xs font-bold">${escapeHTML(employeeImportFieldLabel(k))}<input class="input" id="emp-fix-${k}" value="${escapeHTML(value(k))}" data-initial="${escapeHTML(value(k))}">${suggestions.map((sug,idx)=>`<button type="button" class="btn btn-ghost text-[11px] mt-1" onclick="useEmployeeImportSuggestion('${k}',${r.row},${idx})">Utiliser « ${escapeHTML(sug)} »</button>`).join("")}</label>`}).join("");
   const acceptable=r.issues.filter(i=>i.accept);
-  return `<div class="emp-import-editor"><div class="emp-import-grid">${inputs}</div>
-  ${acceptable.length?`<fieldset class="mt-2"><legend class="text-xs font-black">Validation explicite (la valeur concernée est écartée, la fiche sera à compléter)</legend>${acceptable.map((i,idx)=>`<label class="text-xs flex gap-2 items-start mt-1"><input type="checkbox" class="emp-fix-accept" value="${idx}"> Valider : ${escapeHTML(i.message)}</label>`).join("")}</fieldset>`:""}
+  return `<div class="emp-import-editor">${codeIssue?`<p class="text-xs mb-2" role="note">Matricule Excel : <b>${escapeHTML(r.cells.code||"")}</b>${codeIssue.suggestions?.length?` · Forme proposée : <b>${escapeHTML(codeIssue.suggestions[0])}</b>`:""}. Choisissez : conserver la valeur Excel (case ci-dessous) ou utiliser la forme proposée. Rien n'est remplacé automatiquement.</p>`:""}<div class="emp-import-grid">${inputs}</div>
+  ${acceptable.length?`<fieldset class="mt-2"><legend class="text-xs font-black">Validation explicite</legend>${acceptable.map((i,idx)=>`<label class="text-xs flex gap-2 items-start mt-1"><input type="checkbox" class="emp-fix-accept" value="${idx}"> <span><b>${escapeHTML(i.accept_label||"Valider")}</b> — ${escapeHTML(i.message)}</span></label>`).join("")}</fieldset>`:""}
   <div class="flex gap-2 flex-wrap mt-3"><button type="button" class="btn btn-success text-xs" onclick="saveEmployeeImportCorrection(${r.row})" ${employeeImport.busy?"disabled":""}>Enregistrer et revérifier</button>
   <button type="button" class="btn btn-ghost text-xs" onclick="excludeEmployeeImportRow(${r.row},${r.excluded?"false":"true"})">${r.excluded?"Réintégrer la ligne":"Écarter la ligne"}</button>
   ${r.accepted?.length?`<button type="button" class="btn btn-ghost text-xs" onclick="resetEmployeeImportAccepts(${r.row})">Annuler les validations (${r.accepted.length})</button>`:""}

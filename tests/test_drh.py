@@ -1065,25 +1065,30 @@ def test_matching_clauses_groups_by_placeholder(client, auth_headers, db):
 
 
 def test_repair_employee_codes_renumbers_alphabetically(client, auth_headers, db):
-    """repair_employee_codes_if_needed renumérote par société, ordre alphabétique,
-    sans doublon, et est idempotent (2e appel = 0 correction)."""
-    from app.modules.drh.service import repair_employee_codes_if_needed
+    """Aperçu puis confirmation : renumérotation par société, ordre alphabétique, sans
+    doublon ; les matricules protégés sont exclus ; l'aperçu suivant est vide."""
+    from types import SimpleNamespace
+    from app.modules.drh import employee_code_policy as policy
     from app.modules.drh.models import Employee
+    from app.modules.drh.service import employee_code_prefixes_for_society, _employee_code_extra_matches
 
-    changed = repair_employee_codes_if_needed(db)
-    assert isinstance(changed, int)
+    plan = policy.repair_plan(db)
+    result = policy.apply_repair(db, plan["plan_id"], actor=SimpleNamespace(id=None, username="test"))
+    assert result["counts"]["changed"] == plan["counts"]["code_changes"]
 
+    db.expire_all()
     rows = db.query(Employee).all()
     codes = [str(e.code or "") for e in rows]
     assert len(codes) == len(set(codes)), "Codes employés en double après réparation"
-    # Chaque code est dans la série de sa société, et extra est synchronisé
-    from app.modules.drh.service import employee_code_prefixes_for_society, _employee_code_extra_matches
+    # Chaque code non protégé est dans la série de sa société, et extra est synchronisé
     for e in rows:
+        if policy.is_protected(e):
+            continue
         assert e.code[0] in employee_code_prefixes_for_society(e.society), f"{e.code} hors série pour {e.society}"
         assert _employee_code_extra_matches(e.extra, e.code), f"extra désynchronisé pour {e.code}"
 
-    # Idempotence
-    assert repair_employee_codes_if_needed(db) == 0
+    # Plus rien à corriger
+    assert policy.repair_plan(db)["counts"]["changes"] == 0
 
 
 def test_drh_pending_candidates_and_counter_use_active_society(client, auth_headers):

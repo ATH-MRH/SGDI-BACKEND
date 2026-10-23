@@ -92,7 +92,7 @@ function exportContratsCSV(){
   const rows=[["Employé","Code","Société","Type","Date de recrutement","Fin de période d'essai","Fin de contrat","Salaire net","Statut"]];
   (db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).forEach(a=>rows.push([
     `${a.nom||""} ${a.prenom||""}`.trim(),
-    normalizeEmployeeCodeFormat(a.matricule||a.code||""),
+    String(a.matricule||a.code||""),
     a.societe||"",
     cleanContractType(a.typeContrat)||"",
     a.dateRecrutement||"",
@@ -167,7 +167,7 @@ function contractSituationHeadersHTML(){
 }
 
 function contractSituationEmployeeCode(a){
-  return normalizeEmployeeCodeFormat(a?.matricule||a?.code||"");
+  return String(a?.matricule||a?.code||"");
 }
 
 function sortContractSituationAgents(agents){

@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 from app.core.audit import append_audit
 from app.core.scope_policy import ScopeKind, authorized_society_values, society_key, society_scope
 from app.modules.drh import candidate_import as excel, dc_client_sites, service
+from app.modules.drh import employee_code_policy as code_policy
 from app.modules.drh.candidate_import_models import CandidateImportSession
 from app.modules.drh.candidate_import_reference import FIELD_BY_KEY as CANDIDATE_FIELDS, ImportField, norm_key
 from app.modules.drh.models import Employee
@@ -277,11 +278,17 @@ def _suggest(value: str, labels: list[str], limit: int = 3) -> list[str]:
     return [by_key[key] for key in difflib.get_close_matches(norm_key(value), list(by_key), n=limit, cutoff=0.6)]
 
 
-def _issue(level: str, field: str, message: str, *, accept: str | None = None, suggestions: list[str] | None = None) -> dict[str, Any]:
+ACCEPT_LABELS = {"name": "Valider la séparation proposée", "duplicate": "Créer malgré ce doublon possible"}
+DROP_LABEL = "Valider sans cette valeur : la fiche sera à compléter"
+
+
+def _issue(level: str, field: str, message: str, *, accept: str | None = None, suggestions: list[str] | None = None,
+           accept_label: str | None = None) -> dict[str, Any]:
     issue = {"level": level, "field": field, "label": label(field), "message": message}
     if accept:
         # La validation explicite vise CE constat : un autre constat sur la même ligne en exige une nouvelle.
         issue["accept"] = f"{accept}:{hashlib.sha1(message.encode()).hexdigest()[:8]}"
+        issue["accept_label"] = accept_label or ACCEPT_LABELS.get(accept, DROP_LABEL)
     if suggestions:
         issue["suggestions"] = suggestions
     return issue
@@ -443,16 +450,38 @@ def _analyze_row(ctx: _Context, row_number: int, cells: dict[str, Any], override
     if "client_site" in dropped:
         link = None
 
-    # 8. Matricule : conservé s'il est libre, sinon ligne bloquée.
+    # 8. Matricule : conservé s'il est libre, sinon ligne bloquée. Une forme non conforme à la
+    # convention ATLAS (A001, A1) n'est jamais réécrite : l'utilisateur choisit explicitement.
+    code_meta = None
     if values.get("code"):
         code = values["code"].strip().upper()
         values["code"] = code
+        excel_code = _display(cells.get("code")).strip().upper() or None
+        proposed = code_policy.canonical_code(excel_code) if excel_code else None
+        if overrides.get("code") not in (None, ""):
+            choice = "forme_proposee" if proposed and code == proposed and proposed != excel_code else "corrige_apercu"
+        else:
+            choice = "excel"
         if not _CODE_PATTERN.fullmatch(code):
             issues.append(_issue("blocked", "code", f"Matricule invalide : « {code} » (lettres, chiffres, . _ / -)"))
         elif code in ctx.codes:
-            issues.append(_issue("blocked", "code", f"Matricule {code} déjà utilisé", accept=None))
-        elif society and code[:1] not in service.employee_code_prefixes_for_society(society):
-            issues.append(_issue("warning", "code", f"Matricule {code} hors de la série de la société {society}"))
+            issues.append(_issue("blocked", "code", f"Matricule {code} déjà utilisé"))
+        else:
+            canonical = code_policy.canonical_code(code)
+            if canonical != code:
+                taken = canonical in ctx.codes
+                issue = _issue("review", "code", f"Matricule Excel « {code} » ; forme proposée par ATLAS : « {canonical} »"
+                               + (" (déjà utilisée par un autre employé)" if taken else ""),
+                               accept="code_keep", accept_label=f"Conserver « {code} » tel quel comme matricule officiel",
+                               suggestions=None if taken else [canonical])
+                if issue["accept"] in accepted:
+                    choice = "conserve_excel"
+                else:
+                    issues.append(issue)
+            if society and code[:1] not in service.employee_code_prefixes_for_society(society):
+                issues.append(_issue("warning", "code", f"Matricule {code} hors de la série de la société {society}"))
+        code_meta = {"valeur": code, "valeurExcel": excel_code, "formeProposee": proposed if proposed and proposed != excel_code else None,
+                     "choix": choice}
 
     # 9. Employé déjà existant (dans ATLAS).
     duplicate_reasons: list[str] = []
@@ -487,7 +516,7 @@ def _analyze_row(ctx: _Context, row_number: int, cells: dict[str, Any], override
         values.pop(field, None)
     incomplete = [label(field) for field in COMPLETION_FIELDS if not values.get(field)]
     incomplete += [label(field) for field in dropped if label(field) not in incomplete]
-    return {"row": row_number, "values": values, "link": link, "name": name, "issues": issues, "dropped": dropped,
+    return {"row": row_number, "values": values, "link": link, "name": name, "code_meta": code_meta, "issues": issues, "dropped": dropped,
             "incomplete": incomplete, "cells": {key: _display(cell) for key, cell in effective.items()},
             "duplicate_keys": {"nin": str(values.get("nin") or ""), "identity": f"{name_key}|{phone_key}" if name_key and phone_key else "",
                                "name": name_key}}
@@ -521,7 +550,7 @@ def _employee_payload(row: dict[str, Any]) -> dict[str, Any]:
         contract = {"contract_type": contract_type, "position": values.get("position"), "start_date": start,
                     "end_date": values.get("contract_end"), "trial_end_date": trial_end, "salary_net": values.get("salary_net") or 0,
                     "status": "a_venir" if start and start > date.today().isoformat() else "actif", "link": row["link"]}
-    return {"employee": employee, "contract": contract, "group": values.get("group"), "incomplete": row["incomplete"],
+    return {"employee": employee, "contract": contract, "group": values.get("group"), "incomplete": row["incomplete"], "code_meta": row["code_meta"],
             "name": {key: row["name"].get(key) for key in ("original", "last_name", "first_name", "source", "confidence")}}
 
 
@@ -890,8 +919,14 @@ def _extra(payload: dict[str, Any], meta: dict[str, Any], row: dict[str, Any], u
         origin["propositionOps"] = {"groupe": payload["group"], "statut": "à traiter par OPS"}
     if row["dropped"]:
         origin["champsEcartes"] = [label(field) for field in row["dropped"]]
-    return {"ficheACompleter": bool(payload["incomplete"]), "recruitmentIncompleteFields": list(payload["incomplete"]),
-            "importOrigin": origin}
+    extra = {"ficheACompleter": bool(payload["incomplete"]), "recruitmentIncompleteFields": list(payload["incomplete"]), "importOrigin": origin}
+    if payload["code_meta"]:
+        # Matricule fourni par le fichier et validé : officiel, exclu de toute renumérotation.
+        origin["matricule"] = payload["code_meta"]
+        extra[code_policy.PROTECTION_KEY] = code_policy.protection_record(
+            payload["code_meta"]["valeur"], source="import_excel", by=user.username, sessionId=meta["session_id"], ligne=row["row"],
+            valeurExcel=payload["code_meta"]["valeurExcel"], formeProposee=payload["code_meta"]["formeProposee"], choix=payload["code_meta"]["choix"])
+    return extra
 
 
 def result_of(session: CandidateImportSession) -> dict[str, Any]:

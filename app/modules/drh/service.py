@@ -1657,58 +1657,6 @@ def _employee_code_sequence(prefixes: list[str], count: int, used: set[str]) -> 
     )
 
 
-def repair_employee_codes_if_needed(db: Session) -> int:
-    if db.bind.dialect.name == "postgresql":
-        db.execute(text("SELECT pg_advisory_xact_lock(20260612)"))
-    employees = db.execute(select(Employee).order_by(Employee.id.asc())).scalars().all()
-    grouped: dict[str, tuple[str, list[Employee]]] = {}
-    for employee in employees:
-        society = str(employee.society or "").strip()
-        key = _society_code_key(society)
-        if key not in grouped:
-            grouped[key] = (society, [])
-        grouped[key][1].append(employee)
-
-    desired: dict[int, str] = {}
-    used: set[str] = set()
-    for key in sorted(grouped, key=_employee_code_society_priority):
-        society, rows = grouped[key]
-        ordered = sorted(rows, key=_employee_code_sort_key)
-        for employee, code in zip(
-            ordered,
-            _employee_code_sequence(employee_code_prefixes_for_society(society), len(ordered), used),
-        ):
-            if code in used:
-                raise HTTPException(status_code=409, detail=f"Code employé généré en double: {code}")
-            used.add(code)
-            desired[int(employee.id)] = code
-
-    updates = [
-        employee for employee in employees
-        if str(employee.code or "").strip().upper() != desired.get(int(employee.id), "")
-        or not _employee_code_extra_matches(employee.extra, desired.get(int(employee.id), ""))
-    ]
-    if not updates:
-        return 0
-
-    for employee in employees:
-        if int(employee.id) in desired:
-            employee.code = f"TMP-RESET-{employee.id}"
-    db.flush()
-    for employee in employees:
-        code = desired.get(int(employee.id))
-        if not code:
-            continue
-        employee.code = code
-        employee.extra = _employee_code_extra(employee.extra, code)
-    try:
-        db.commit()
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=f"Correction codes employés refusée : {_postgres_error_detail(exc)}") from exc
-    return len(updates)
-
-
 def next_employee_code(db: Session, society: Any = None) -> str:
     if db.bind.dialect.name == "postgresql":
         db.execute(text("SELECT pg_advisory_xact_lock(20260610)"))
@@ -2142,10 +2090,13 @@ def generate_contract_from_form(
         db.add(employee)
         db.flush()
     else:
+        if code and code.upper() != str(employee.code or "").upper():
+            # Un matricule ne change jamais en passant : seule l'action dédiée (motif, audit) le modifie.
+            raise HTTPException(status_code=409, detail=(
+                f"Le formulaire indique le matricule {code}, mais l'employé existant porte le matricule {employee.code} : "
+                "corrigez le formulaire ou utilisez « Modifier le matricule » dans la fiche employé."))
         employee.first_name = first_name
         employee.last_name = last_name
-        if code:
-            employee.code = code
         employee.father_name = request.father_name
         employee.mother_name = request.mother_name
         employee.birth_date = request.birth_date

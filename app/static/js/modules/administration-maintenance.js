@@ -60,6 +60,11 @@ function renderAdminStorage(view){
           <div class="text-xs text-slate-600 mb-2">Aplatit l'historique interne accumulé dans chaque fiche employé (sans perte de données) — cause principale de lenteur au chargement du module DRH quand des lignes n'ont pas été ré-enregistrées depuis longtemps.</div>
           <button class="btn btn-success text-sm" onclick="cleanupActionFlattenEmployeeExtra(this)">Alléger maintenant</button>
         </div>
+        <div class="card p-4" style="background:#eff6ff;border:1px solid #93c5fd">
+          <div class="font-bold mb-1">🔢 Contrôle des matricules employés</div>
+          <div class="text-xs text-slate-600 mb-2">Aperçu en lecture seule de la renumérotation par société, puis confirmation explicite. Les matricules officiels (importés ou modifiés avec motif) sont toujours exclus ; chaque changement est audité.</div>
+          <button class="btn btn-secondary text-sm" onclick="previewEmployeeCodeRepair(this)">Afficher l'aperçu</button>
+        </div>
         <div class="card p-4" style="background:#043970;border:1px solid #043970">
           <div class="font-bold mb-1">📅 Anciens pointages</div>
           <div class="text-xs text-slate-600 mb-2">${pointagesCount} pointage(s) · supprimer ceux > 12 mois</div>
@@ -113,6 +118,43 @@ async function cleanupActionFlattenEmployeeExtra(btn){
   }finally{
     if(btn){btn.disabled=false;btn.textContent=original}
   }
+}
+
+// repair-codes en deux temps : l'aperçu ne modifie rien ; la confirmation porte sur CET aperçu
+// (plan_id) et le serveur la refuse si la base a changé entre-temps.
+let employeeCodeRepairPlan=null;
+async function previewEmployeeCodeRepair(btn){
+  if(!isAdminSystemSession()){toast("Action réservée à l'administrateur système","error");return}
+  if(!(await ensureAdminSystemApiToken("afficher l'aperçu des matricules")))return;
+  if(btn)btn.disabled=true;
+  try{employeeCodeRepairPlan=await sgdiApi("/drh/employees/repair-codes/plan",{legacy:false});renderEmployeeCodeRepair()}
+  catch(e){toast("Aperçu impossible : "+(e.message||e),"error")}
+  finally{if(btn)btn.disabled=false}
+}
+function renderEmployeeCodeRepair(result){
+  const plan=employeeCodeRepairPlan;if(!plan)return;
+  const c=plan.counts;
+  const row=x=>`<tr><td>${escapeHTML(x.name||"—")}</td><td class="text-xs">${escapeHTML(x.society||"—")}</td><td><b>${escapeHTML(x.current||"—")}</b></td><td><b>${escapeHTML(x.proposed||"—")}</b></td><td class="text-xs">${escapeHTML(x.reason)}</td><td>${x.protected?'<span class="pill pill-blue">Oui</span>':'<span class="pill pill-gray">Non</span>'}</td><td class="text-xs text-red-700">${escapeHTML(x.conflict||"")}</td></tr>`;
+  const table=rows=>`<div style="overflow:auto;max-height:42vh;border:1px solid #e2e8f0;border-radius:10px"><table style="min-width:760px"><thead><tr><th>Employé</th><th>Société</th><th>Matricule actuel</th><th>Matricule proposé</th><th>Raison</th><th>Protégé</th><th>Conflit</th></tr></thead><tbody>${rows.map(row).join("")||'<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucun</td></tr>'}</tbody></table></div>`;
+  const body=result
+    ?`<p role="status" class="text-sm font-bold text-green-700">${result.already_processed?"Cet aperçu avait déjà été confirmé : aucune nouvelle modification.":"Renumérotation terminée."} ${result.counts.changed} matricule(s) modifié(s), ${result.counts.synchronized} fiche(s) synchronisée(s), ${result.counts.protected_skipped} matricule(s) protégé(s) exclu(s).</p>`
+    :`<p class="text-sm text-slate-600">${c.employees} employé(s) · <b>${c.code_changes}</b> matricule(s) à modifier · ${c.changes-c.code_changes} fiche(s) à synchroniser (matricule inchangé) · ${c.protected} matricule(s) protégé(s) exclu(s)${c.conflicts?` · <b class="text-red-700">${c.conflicts} conflit(s)</b>`:""}. Rien n'a été modifié.</p>
+      <h3 class="font-black mt-3 mb-1">Changements prévus</h3>${table(plan.changes)}
+      <h3 class="font-black mt-3 mb-1">Matricules protégés (exclus)</h3>${table(plan.protected)}
+      ${plan.changes.length&&!c.conflicts?`<label class="flex gap-2 items-start text-sm mt-3"><input type="checkbox" id="employee-code-repair-confirm"> Je confirme exactement ces ${plan.changes.length} changement(s). Si la base a changé depuis cet aperçu, la confirmation sera refusée.</label>`:""}`;
+  openModal(`<section aria-labelledby="employee-code-repair-title"><h2 id="employee-code-repair-title" class="text-xl font-black">Contrôle des matricules employés</h2>${body}
+    <div class="flex gap-2 justify-end mt-4">${!result&&plan.changes.length&&!c.conflicts?`<button type="button" class="btn btn-danger" onclick="confirmEmployeeCodeRepair(this)">Confirmer ${plan.changes.length} changement(s)</button>`:""}<button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div></section>`);
+}
+async function confirmEmployeeCodeRepair(btn){
+  const plan=employeeCodeRepairPlan;if(!plan)return;
+  if(!document.getElementById("employee-code-repair-confirm")?.checked){toast("Cochez la confirmation","error");return}
+  if(!(await ensureAdminSystemApiToken("confirmer la renumérotation")))return;
+  if(btn)btn.disabled=true;
+  try{
+    const result=await sgdiApi("/drh/employees/repair-codes",{method:"POST",body:{plan_id:plan.plan_id},legacy:false});
+    renderEmployeeCodeRepair(result);
+    try{if(typeof sgdiPullEmployees==="function")await sgdiPullEmployees()}catch(e){}
+  }catch(e){toast(e.message||String(e),"error");if(btn)btn.disabled=false}
 }
 
 function cleanupActionTrimLog(){
