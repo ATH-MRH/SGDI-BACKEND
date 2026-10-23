@@ -224,7 +224,10 @@ def _slot_out(slot: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     return {"shift": slot["shift"], "shift_label": slot["shift_label"], "group": slot["group"], "work_date": slot["work_date"].isoformat(),
             "start": _hm(slot["scheduled_start"]), "end": _hm(slot["scheduled_end"]),
-            "scheduled_start": slot["scheduled_start"].isoformat(), "scheduled_end": slot["scheduled_end"].isoformat()}
+            "scheduled_start": slot["scheduled_start"].isoformat(), "scheduled_end": slot["scheduled_end"].isoformat(),
+            "occurrence_id": slot.get("occurrence_id"), "configuration_id": slot.get("configuration_id"),
+            "configuration_version": slot.get("configuration_version"), "regime": slot.get("regime"),
+            "required_staff": slot.get("required_staff")}
 
 
 def _core_refusals(db: Session, site_id: int, since: datetime) -> list[tuple[Any, dict[str, Any]]]:
@@ -266,15 +269,24 @@ def control_post(db: Session, site_id: int, now: datetime, *, manual_entry: bool
 
     expected_ids: set[int] = set()
     groups: dict[int, str] = {}
-    posted = db.execute(select(Assignment).where(
-        Assignment.site_id == site_id, Assignment.active == 1, Assignment.work_regime == official.REGIME_POSTE_CONTINU,
-        Assignment.start_date <= local.date(), (Assignment.end_date.is_(None)) | (Assignment.end_date >= local.date()))).scalars().all()
-    for assignment in posted:
-        groups[assignment.employee_id] = assignment.group_code
-        if current is not None and assignment.group_code == current["group"]:
-            expected_ids.add(assignment.employee_id)
-    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(expected_ids | set(present) or {0}))).scalars()}
-    expected_ids = {i for i in expected_ids if str(getattr(employees.get(i), "status", "") or "").strip().lower() in ("actif", "active")}
+    if current is not None and current.get("configuration_id"):
+        # Site publié par le moteur central : MÊME population canonique que la simulation OPS,
+        # les points critiques et le BEO (date de travail de la vacation, groupe, employé actif).
+        from app.modules.rotations.service import assignment_on, expected_population
+        site_rows = db.execute(select(Assignment).where(Assignment.site_id == site_id)).scalars().all()
+        groups = {a.employee_id: a.group_code for a in site_rows if assignment_on(a, current["work_date"])}
+        expected_ids = expected_population(db, site_id, current, assignments=site_rows)
+        employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(expected_ids | set(present) or {0}))).scalars()}
+    else:
+        posted = db.execute(select(Assignment).where(
+            Assignment.site_id == site_id, Assignment.active == 1, Assignment.work_regime == official.REGIME_POSTE_CONTINU,
+            Assignment.start_date <= local.date(), (Assignment.end_date.is_(None)) | (Assignment.end_date >= local.date()))).scalars().all()
+        for assignment in posted:
+            groups[assignment.employee_id] = assignment.group_code
+            if current is not None and assignment.group_code == current["group"]:
+                expected_ids.add(assignment.employee_id)
+        employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(expected_ids | set(present) or {0}))).scalars()}
+        expected_ids = {i for i in expected_ids if str(getattr(employees.get(i), "status", "") or "").strip().lower() in ("actif", "active")}
     excused_status: dict[int, str] = {}
     if current is not None and expected_ids:
         excused_status = dict(db.execute(select(DailyPresence.employee_id, DailyPresence.status).where(

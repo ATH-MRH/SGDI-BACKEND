@@ -44,18 +44,42 @@ def assignment_on(a,day):
     return a.start_date<=day and (a.end_date is None or a.end_date>=day) and (a.active==1 or a.end_date is not None)
 
 
+ACTIVE_EMPLOYEE_STATUSES=('actif','active')
+
+
+def occurrence_key(site_id,slot):
+    """Identifiant canonique d'une occurrence, identique pour OPS, Pointeur, BEO et Core."""
+    start=slot['start'] if isinstance(slot.get('start'),str) else (slot.get('start') or slot['scheduled_start']).isoformat()
+    return f"{site_id}:{slot.get('configuration_id') or 'legacy'}:{start}"
+
+
+def expected_population(db,site_id,slot,*,assignments=None,employees=None):
+    """Population attendue CANONIQUE d'une occurrence publiée : affectations du site valides à la
+    date de travail de l'occurrence (une nuit reste rattachée au jour où elle commence), du groupe
+    de l'occurrence, employés actifs. Le régime de l'affectation n'intervient pas : c'est la
+    configuration publiée du site qui fait foi. Seule source des attendus pour la simulation, les
+    points critiques, le Pointeur et le BEO."""
+    if slot.get('group') is None:return set()
+    day=slot['work_date'];day=day if isinstance(day,date) else date.fromisoformat(str(day))
+    rows=assignments if assignments is not None else list(db.scalars(select(Assignment).where(Assignment.site_id==site_id)))
+    ids={a.employee_id for a in rows if a.site_id==site_id and assignment_on(a,day) and a.group_code==slot['group']}
+    if employees is None:
+        from app.modules.drh.models import Employee
+        employees={e.id:e for e in db.scalars(select(Employee).where(Employee.id.in_(ids or {-1})))}
+    return {i for i in ids if i in employees and str(employees[i].status or '').strip().lower() in ACTIVE_EMPLOYEE_STATUSES}
+
+
 def simulate(db,draft,days=30):
     if days not in (30,60,90):raise HTTPException(422,'Simulation 30/60/90 jours requise')
     result=occurrences(draft.config,draft.effective_from,days)
     rows=list(db.scalars(select(Assignment).where(Assignment.site_id==draft.site_id)))
     employee_ids={a.employee_id for a in rows}
     from app.modules.drh.models import Employee
-    eligible={e.id for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids or {-1})))
-              if str(e.status or '').strip().lower() in ('actif','active')}
+    staff={e.id:e for e in db.scalars(select(Employee).where(Employee.id.in_(employee_ids or {-1})))}
     others=list(db.scalars(select(Assignment).where(Assignment.employee_id.in_(employee_ids or {-1}),Assignment.site_id!=draft.site_id)))
     for slot in result['slots']:
         day=date.fromisoformat(slot['work_date'])
-        members={a.employee_id for a in rows if a.employee_id in eligible and assignment_on(a,day) and a.group_code==slot['group']}
+        members=expected_population(db,draft.site_id,slot,assignments=rows,employees=staff)
         slot['employee_ids']=sorted(members);slot['planned_staff']=len(members)
         required=draft.config.get('required_staff',{}).get(slot['shift'],0)
         if type(required) is not int or required<0:raise HTTPException(422,'Effectif requis invalide')
@@ -239,10 +263,10 @@ def sync_critical_points(db,site_ids,now):
             for expected in occurrences(active_cfg.config,work_day,1)['slots']:
                 start,end=datetime.fromisoformat(expected['start']),datetime.fromisoformat(expected['end'])
                 if not start+timedelta(minutes=active_cfg.config['late_refusal_minutes'])<=now<end:continue
-                members={a.employee_id for a in rows if assignment_on(a,work_day) and a.group_code==expected['group']}
+                members=expected_population(db,sid,expected,assignments=rows,employees=employees)
                 for eid in members:
-                    employee=employees.get(eid)
-                    if employee is None or str(employee.status or '').lower() not in ('actif','active') or (eid,work_day) in excused:continue
+                    employee=employees[eid]
+                    if (eid,work_day) in excused:continue
                     event=last.get(eid)
                     snapshot=((event.data or {}).get('counted') or {}) if event else {}
                     if event and event.site_id==sid and snapshot.get('scheduled_start')==expected['start']:continue
@@ -252,7 +276,7 @@ def sync_critical_points(db,site_ids,now):
                         details={'policy_version':7,'configuration_id':active_cfg.id,'group':expected['group'],
                                  'scheduled_start':expected['start'],'scheduled_end':expected['end']})
         for slot in occurrences(cfg.config,now.date(),1)['slots']:
-            members={a.employee_id for a in rows if a.employee_id in employees and str(employees[a.employee_id].status or '').strip().lower() in ('actif','active') and assignment_on(a,now.date()) and a.group_code==slot['group']}
+            members=expected_population(db,sid,slot,assignments=rows,employees=employees)
             required=cfg.config.get('required_staff',{}).get(slot['shift'],0)
             code='UNCOVERED_SHIFT' if slot['group'] is None else ('UNDERSTAFFED' if len(members)<required else None)
             if code is None:continue

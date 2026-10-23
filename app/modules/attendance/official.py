@@ -316,10 +316,14 @@ def site_shift(db: Session, *, site_id: int, at: datetime) -> dict[str, Any]:
             if day==today and any(e['code']=='CALENDAR_UNCONFIRMED' for e in computed['errors']):
                 return {'status':STATUS_NOT_CONFIGURED,'official':False,'site_id':site_id,
                     'reason':'Calendrier non confirmé','current':None,'previous':None,'next':None}
-            central_slots += [{**s, 'configuration_id':cfg.id} for s in computed['slots']]
+            central_slots += [{**s, 'configuration_id':cfg.id, 'configuration_version':cfg.version,
+                               'regime':cfg.config['regime'], 'required_staff':cfg.config.get('required_staff',{}).get(s['shift'])}
+                              for s in computed['slots']]
     if central_slots:
+        from app.modules.rotations.service import occurrence_key
+
         def central_out(s):
-            return None if s is None else {**s, 'scheduled_start':datetime.fromisoformat(s['start']),
+            return None if s is None else {**s, 'occurrence_id':occurrence_key(site_id,s), 'scheduled_start':datetime.fromisoformat(s['start']),
                 'scheduled_end':datetime.fromisoformat(s['end']), 'work_date':date.fromisoformat(s['work_date']),
                 'shift_label':s['shift'], 'normal_minutes':int((datetime.fromisoformat(s['end'])-datetime.fromisoformat(s['start'])).total_seconds()//60)}
         current = next((s for s in central_slots if datetime.fromisoformat(s['start']) <= local < datetime.fromisoformat(s['end'])), None)
@@ -353,7 +357,10 @@ def site_shift(db: Session, *, site_id: int, at: datetime) -> dict[str, Any]:
                 "reason": "Rotation non configurée : cycle officiel non ancré sur ce site à cette date" if posted else None}
 
     def out(slot: dict[str, Any] | None) -> dict[str, Any] | None:
-        return None if slot is None else {**slot, "shift_label": SHIFT_LABELS[slot["shift"]], "normal_minutes": NORMAL_SHIFT_MINUTES}
+        from app.modules.rotations.service import occurrence_key
+
+        return None if slot is None else {**slot, "shift_label": SHIFT_LABELS[slot["shift"]], "normal_minutes": NORMAL_SHIFT_MINUTES,
+                                          "occurrence_id": occurrence_key(site_id, slot)}
 
     return {"status": STATUS_OFFICIAL, "official": True, "site_id": site_id, "reason": None, "current": out(current),
             "previous": out(next((s for s in slots if s["scheduled_end"] == current["scheduled_start"]), None)),
