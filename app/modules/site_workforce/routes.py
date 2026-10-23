@@ -312,6 +312,22 @@ def attendance_live(response: Response,
                      before_id=before_id, limit=limit, photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
 
 
+# Couverture terrain : attendus canoniques du planning officiel (moteur central ou V7), lecture seule.
+@router.get("/attendance/coverage")
+def attendance_coverage(response: Response, day: date | None = Query(None, alias="date"),
+                        shift: str = Query("", pattern="^(|JOUR|NUIT)$"), group: str = Query("", pattern="^(|A|B|C|D)$"),
+                        db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.rotations.views import coverage
+    from app.modules.site_workforce import position_file
+    if not {"read", "admin"}.intersection(user.authorized_actions or []):
+        raise HTTPException(403, "Lecture du pointage non autorisée")
+    response.headers["Cache-Control"] = "no-store, private"
+    now = attendance_core._now_local()
+    result = coverage(db, set(scope.selected), day or now.date(), now=now, shift_kind=shift, group=group,
+                      sites=dict(scope.sites), photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
+    return {**result, "sites": [scope.label(sid) for sid in scope.selected]}
+
+
 # ── Pointage (§9) ────────────────────────────────────────────────────────────────────────
 @router.get("/attendance")
 def attendance(presence_date: date, db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope)):

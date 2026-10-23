@@ -1,6 +1,6 @@
 """OPS authoring; shared read service stays independent of HTTP and UI."""
 from datetime import date,datetime
-from fastapi import APIRouter,Depends,HTTPException,Request
+from fastapi import APIRouter,Depends,HTTPException,Query,Request
 from pydantic import BaseModel,Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -161,3 +161,40 @@ def list_drafts(site_id:int,db:Session=Depends(get_db),user:User=Depends(current
     return {'items':[{'id':d.id,'version':d.version,'config':d.config,'effective_from':d.effective_from,
         'reason':d.reason,'created_by':d.created_by,'created_at':d.created_at}
         for d in db.scalars(select(RotationDraft).where(RotationDraft.site_id==site_id,~RotationDraft.id.in_(published)).order_by(RotationDraft.id.desc()).limit(100))]}
+
+
+# ── Lecture des écrans OPS (configuration et planning) ─────────────────────────────────────
+from app.modules.rotations import views
+
+
+@router.get('/sites')
+def site_list(db:Session=Depends(get_db),user:User=Depends(current_user)):
+    if not user_holds_action(user,'read'):raise HTTPException(403,'Action OPS non autorisée')
+    return {'items':views.site_options(db,user)}
+
+
+@router.get('/overview')
+def overview(db:Session=Depends(get_db),user:User=Depends(current_user)):
+    if not user_holds_action(user,'read'):raise HTTPException(403,'Action OPS non autorisée')
+    return views.overview(db,user,[s['id'] for s in views.site_options(db,user)])
+
+
+class PreviewIn(BaseModel):
+    site_id:int|None=None
+    month:str=Field(pattern=r'^\d{4}-(0[1-9]|1[0-2])$')
+    config:dict
+
+
+@router.post('/preview')
+def preview(payload:PreviewIn,db:Session=Depends(get_db),user:User=Depends(current_user)):
+    """Aperçu d'un brouillon non enregistré : aucune écriture."""
+    if payload.site_id is not None:scope(db,user,payload.site_id)
+    elif not user_holds_action(user,'read'):raise HTTPException(403,'Action OPS non autorisée')
+    try:return views.preview(db,payload.site_id,payload.config,payload.month)
+    except (ValueError,KeyError,TypeError) as e:raise HTTPException(422,str(e)) from e
+
+
+@router.get('/sites/{site_id}/month')
+def month(site_id:int,month:str=Query(pattern=r'^\d{4}-(0[1-9]|1[0-2])$'),db:Session=Depends(get_db),user:User=Depends(current_user)):
+    site=scope(db,user,site_id)
+    return {**views.month_view(db,site_id,month),'site':{'id':site.id,'name':site.name}}
