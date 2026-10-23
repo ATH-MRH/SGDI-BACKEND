@@ -400,6 +400,10 @@ def upsert_employee(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     code = str(item.get("matricule") or item.get("code") or item.get("id") or "").strip()[:30]
     if not row and code:
         row = db.execute(select(Employee).where(Employee.code == code)).scalar_one_or_none()
+    if row is not None and row.id is not None and code and code != row.code:
+        # Un matricule ne change jamais en passant : seule l'action dédiée (motif, audit) le modifie.
+        raise HTTPException(status_code=409, detail=f"Le matricule {row.code} ne peut pas être modifié par synchronisation : "
+                                                    "utilisez « Modifier le matricule » dans la fiche employé.")
     if not row:
         row = Employee(code=code or legacy_id(item)[:30], first_name=" ", last_name=" ")
         db.add(row)
