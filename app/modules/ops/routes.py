@@ -427,6 +427,11 @@ def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("group_code") is None:
         changes.pop("group_code", None)
+    from app.modules.rotations.models import OfficialRotation
+    if {"group_code", "rotation_id", "work_regime", "start_date", "end_date"} & set(changes):
+        central = db.scalar(select(OfficialRotation.id).where(OfficialRotation.site_id == assignment.site_id).limit(1))
+        if central:
+            raise HTTPException(409, "Planning officiel publié : utiliser un changement daté et contrôlé")
     previous_regime = {"work_regime": assignment.work_regime, "group_code": assignment.group_code, "rotation_id": assignment.rotation_id}
     regime_fields = {"work_regime", "group_code", "rotation_id"} & set(changes)
     resulting = {**previous_regime, **{key: changes[key] for key in regime_fields}}

@@ -1,9 +1,8 @@
-"""Pointeur V7 : modèle officiel à groupes fixes, adoption explicite du modèle.
+"""V7 catalog only: no implicit adoption or assignment rewrite on upgrade.
 
-Les modèles et événements historiques ne sont jamais réécrits. Les affectations actives et
-les liens actifs des modèles officiels antérieurs sont datés et remplacés à la date explicite
-validée par le précontrôle, sans enchaînement nocturne dangereux.
-Aucun régime LEGACY/NORMAL ni modèle non officiel n'est converti. Cette migration n'est pas un déploiement.
+Already-applied adoptions are never replayed or reverted. New adoption requires
+explicit dated OPS publication through the central engine. The retired preflight
+helper remains for the read-only historical inspection script only.
 """
 import os
 from datetime import date, datetime, timedelta
@@ -103,9 +102,6 @@ def upgrade():
     bind = op.get_bind()
     metadata = sa.MetaData()
     models = sa.Table('rotation_templates', metadata, autoload_with=bind)
-    assignments = sa.Table('assignments', metadata, autoload_with=bind)
-    links = sa.Table('site_rotations', metadata, autoload_with=bind)
-    effective = _adoption_date(bind, models, assignments, links)
     new_id = bind.scalar(sa.select(models.c.id).where(models.c.code == CODE))
     if new_id is None:
         bind.execute(models.insert().values(code=CODE, name='3x8 fixe — A matin / B après-midi / C nuit / D repos',
@@ -115,23 +111,6 @@ def upgrade():
                 ('nuit','NUIT','22:00','06:00'),('repos','OFF','',''))],
             group_offsets={'A':0,'B':1,'C':2,'D':3},active=1,official=1,version=7,created_at=datetime.utcnow()))
         new_id = bind.scalar(sa.select(models.c.id).where(models.c.code == CODE))
-    old_ids = list(bind.scalars(sa.select(models.c.id).where(models.c.official == 1, models.c.id != new_id)))
-    if old_ids:
-        for table, condition in ((assignments, assignments.c.work_regime == 'POSTE_CONTINU'), (links, sa.true())):
-            rows = bind.execute(sa.select(table).where(table.c.rotation_id.in_(old_ids), table.c.active == 1,
-                condition, sa.or_(table.c.end_date.is_(None), table.c.end_date >= effective))).mappings().all()
-            for row in rows:
-                if row['start_date'] >= effective:
-                    bind.execute(table.update().where(table.c.id == row['id']).values(rotation_id=new_id))
-                    continue
-                # Clôture de l'intervalle historique, puis nouveau lien. Aucun historique n'est
-                # recalculé avec le nouveau modèle et aucun événement n'est modifié.
-                values = {key:value for key,value in row.items() if key != 'id'}
-                values.update(rotation_id=new_id, start_date=effective, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
-                if table.name == 'assignments':
-                    values['change_reason'] = 'Adoption du planning fixe V7 (migration 20261025_0001). ' + (row.get('change_reason') or '')
-                bind.execute(table.update().where(table.c.id == row['id']).values(end_date=effective-timedelta(days=1), active=0 if table.name == 'assignments' else 1))
-                bind.execute(table.insert().values(**values))
 
 
 def downgrade():

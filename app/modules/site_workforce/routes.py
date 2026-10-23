@@ -779,6 +779,7 @@ def attendance_situations(db: Session = Depends(get_db), scope: BeoScope = Depen
     from app.modules.attendance import situations
     rows = db.scalars(select(AttendanceAnomaly).where(
         AttendanceAnomaly.site_id.in_(scope.selected or [-1]),
-        AttendanceAnomaly.employee_id.in_(assigned_employees_subquery(scope.selected)),
+        or_(AttendanceAnomaly.employee_id.is_(None),
+            AttendanceAnomaly.employee_id.in_(assigned_employees_subquery(scope.selected))),
     ).order_by(AttendanceAnomaly.id.desc()).limit(100)).all()
     return {"items": [{**situations.view(row), **scope.label(row.site_id)} for row in rows]}

@@ -1,0 +1,100 @@
+{
+  "status": "DRAFT / NO-GO MERGE",
+  "base_main": "c1468e7394dcbb6de026e52348a2a765487d3d9d",
+  "branch": "feat/central-rotations-local",
+  "tests": {
+    "backend": {
+      "passed": 2951,
+      "skipped": 205
+    },
+    "frontend_pretest": {
+      "passed": 24,
+      "skipped": 0
+    },
+    "frontend": {
+      "passed": 1352,
+      "skipped": 0
+    },
+    "beo_chrome": {
+      "passed": 1,
+      "skipped": 0
+    },
+    "migration_matrix_and_postgresql": {
+      "passed": 40,
+      "skipped": 0
+    },
+    "mobile": {
+      "passed": 41,
+      "skipped": 0
+    },
+    "mobile_typecheck": "passed",
+    "mobile_lint": "passed",
+    "diff_check": "passed"
+  },
+  "test_commands": [
+    "python -m pytest -q",
+    "node validation/run-frontend.cjs (pretest + test, sequential, force-exit/timeouts)",
+    "node --test --test-force-exit tests_frontend/beo-attendance-v4-e2e.test.js",
+    "TEST_POSTGRES_ADMIN_URL=<disposable-local> python -m pytest -q tests/test_pointeur_v7_migration.py tests/test_pointeur_v7_postgresql.py tests/test_central_rotation_postgresql.py",
+    "cd mobile/recruitment: npm test; npm run typecheck; npm run lint"
+  ],
+  "raw_log_sha256": {
+    "backend-publication.log": "2059c97854e3bd2814f9cf21693621e4dcca06aa0fae5e7a756234d5d13b23ee",
+    "frontend-publication.log": "0e8b7ce7d5a6fbbe334d1e5dc6222b9b534fb73e8b6ea6c0427b6b37f477f10c",
+    "beo-chrome-publication.log": "04914a2d99ed1727e592a1f29168c807bc72334fa9167e313c9dd5e2b6588fcb",
+    "migration-two-paths.log": "61c6c8faed22d99e39779f98e0688a967be2369bd1010ca2a8b878d518819f55",
+    "mobile-publication-tests.log": "f05294d556b3555958b7b79a8193d9d408f13f02cf71e144716433bda44d51c3",
+    "mobile-publication-typecheck.log": "e727b3f23530329eb104e9e8706adce74bf8c7388ccd8bf70b2d37c65ab8d263",
+    "mobile-publication-lint.log": "eb35145336114d5fe6c976bec489c65abbea91e5a5a3963a069ee77a83d5e0bf"
+  },
+  "visual_acceptance": "NOT ACCEPTED: component OPS only; complete four-screen reference comparison and central coverage scenario still required",
+  "safety": {
+    "production_migration": false,
+    "real_site_activation": false,
+    "merge": false,
+    "deployment": false,
+    "coolify_auto_deploy_observed": false,
+    "coolify_preview_deploy_observed": false
+  },
+  "proof_location": "Complete local logs in isolated clone validation/. Selected synthetic captures committed beside this report.",
+  "candidate_file_sha256": {
+    ".github/workflows/ci.yml": "bde3b1ebb3ba164face3c88f9292ceba8b5c03ff0ce4bc597ae894300eacc1a8",
+    "app/api/router.py": "669bc1e53e3b1c7a576e68e95bb0a5b9d1c66f57c92f6fb5ce16491dfd743422",
+    "app/modules/attendance/core.py": "db94e84e7221cb4ba2974c1fb637bd6f21b11d5e4af885b5edd99df953e1721a",
+    "app/modules/attendance/counted.py": "e097c840722ac93892306d130c6b4415963130f5ccd9a3e10019dba8042d56c3",
+    "app/modules/attendance/live.py": "e335cbe1d11e3c487d05acb56662952505e173e02f9e210a50815a40c98c6a16",
+    "app/modules/attendance/official.py": "2a843f1d494f2a33022eb46e647e3d9f8922d811050c27d81f425b5c1301fc88",
+    "app/modules/attendance/recap.py": "16cb4dd53934cb4fff7da7d731edba61de678536f91aff193ee2aea702175d8c",
+    "app/modules/attendance/sheets.py": "9d1a948758518767dff28f6fc2933e5d61ad1bfd0903770bf56d404f82bac432",
+    "app/modules/attendance/situations.py": "ec9022c5496e9895c4725881bfdc09cb1193e4f3f4a9dc57ab4fcb14767f8bea",
+    "app/modules/brq/service.py": "5257d0de8ddf5c75a429822573bc5789a767efd87702eebbb4fd5f4f6b39878e",
+    "app/modules/ops/routes.py": "2f904aa4a84130f9c11cddba9d4beef3c0eb62376991fed5119c444c5ef6c14e",
+    "app/modules/rotations/__init__.py": "30a52377784ed8fa2558344d907ceb6405663709f4b5c53970bf3e6e3efb2147",
+    "app/modules/rotations/engine.py": "e36899a0c5a7edb3403b2494205d0f00b34228815a0157f30b568d6d06e47393",
+    "app/modules/rotations/models.py": "b4ca698f84946df4f7c42dcb2b4712b2a732639d8eb12a0d1207fe1f7630c8c7",
+    "app/modules/rotations/routes.py": "c1e82f6fdbb4fedda3feb946361b78ea23e072d75682dc9546c2cb8ce79576d1",
+    "app/modules/rotations/service.py": "fc894049f62243c8029b2c9b96d889165423a573c2746a80fc866f7c9b24ee5f",
+    "app/modules/site_workforce/routes.py": "d6ee27df0d655002ce1bacb435434c7639ecd016d8adf83b6349c7fab9dd1f52",
+    "app/static/js/modules/ops.js": "858c3afaeb13dd3a765a9371f3e2864ffe68b0fa40d671c75172f2747a31c862",
+    "app/static/sgdi-app.js": "55021a7d2a173494af2fb46710610a0949f5c536514d17c6c1da705747c9fad2",
+    "docs/central-rotations-local.md": "ed713db8965b793ce3ec5ae1aafca511a57c6406401fa37825c7571dc6f8b8f8",
+    "docs/central-rotations-validation.md": "1ded65a1aeacb52b25121d58db7c6ef0f96ad62b659a3b86b65b7f4873b5582d",
+    "docs/migration-central-rotations.md": "c032616785f5a9cdfb608d76d2ef7292c42dd4037ac663e51f516eb122d868b2",
+    "migrations/versions/20261025_0001_pointeur_fixed_groups.py": "b6f2118f8b810a755194c09d6e71b83570f1fe182ea7045669b9d84c94a8dab2",
+    "migrations/versions/20261026_0001_central_rotations.py": "40af7ad14abb094f09c9f67339ee8b3a92a4e57782e43c38cf3faa5d5998cb2e",
+    "package.json": "74c2a678faf5ac29dffc86279601f78dbdb7b04ba13ff56b58be87268f9255d8",
+    "tests/fixtures/rotations/20261025_original.py": "752282f4550bbd04a234d7b3b9722d6a4fbd08a976813d3938cb169779592f6d",
+    "tests/test_attendance_official_shift_migration.py": "b1f2de9b15141da67fb687622c9654b87f0e0c9430cebcf2ca6f164f74b429a7",
+    "tests/test_central_rotation_engine.py": "c8cb77863884459e3c154abe140825f2c524221d715dd1d02fef31d23bf6216d",
+    "tests/test_central_rotation_integration.py": "5c9680e61541bc0d5297ca584379adb47ce5f1684ec1590d2a782fd4e8587c8a",
+    "tests/test_central_rotation_postgresql.py": "bce7f4fd7114cb9750f2884f694b1bc61ea448339f4c343e2a5958a9cd9b5d6f",
+    "tests/test_facial_device_authorizations_migration.py": "af7539f238b9ff0513b3cddb56fd6030082a4d3d0b9691342414bea8a66a739f",
+    "tests/test_pointeur_badges_merge_pg.py": "0e06ddf6699ceb96346d451be987998f301efea2f5fe4974d1fc75ac81a46b30",
+    "tests/test_pointeur_final_delivery_join_pg.py": "2bb917b8043aec102beb88e289ec759624d5f0840e9f842d3cae4f9cde46806f",
+    "tests/test_pointeur_iron_emploi_merge_pg.py": "f663197735bfe50e391b61a4c6cb8663e271c2488b0f6452e2289584fce3d83c",
+    "tests/test_pointeur_v7_migration.py": "7b5f146c5353c57d281d3fd67c1c265a548c0fbd1a3de2d8fb3826794148e8ea",
+    "tests/test_pointeur_v7_postgresql.py": "d877c7d6f324706e6d246007d314f13a4b32f686b5b3db00eb2853bd88d1d73e",
+    "tests_frontend/central-rotations-chrome.test.js": "bb218a4971f387c2e315eeb782f030f7f946ed1a9af83f6683fc0355cd10690e",
+    "tests_frontend/central-rotations.test.js": "99887601f8bbb8d5c93b78f3bc3b392b8a474f623764ccef91e1efe7d7f4b497"
+  }
+}

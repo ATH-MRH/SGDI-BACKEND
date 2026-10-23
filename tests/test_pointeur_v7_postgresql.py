@@ -55,7 +55,7 @@ def seed(db,phase):
     return employee,site,cutoff
 
 
-def test_unsafe_night_upgrade_is_atomic_and_keeps_old_head(pg_database,monkeypatch):
+def test_pre_v7_upgrade_preserves_night_without_implicit_adoption(pg_database,monkeypatch):
     url,engine=pg_database;ok(alembic(url,'upgrade','20261024_0001'))
     with Session(engine) as db:
         employee,site,cutoff=seed(db,4)
@@ -68,10 +68,14 @@ def test_unsafe_night_upgrade_is_atomic_and_keeps_old_head(pg_database,monkeypat
     assert preview.returncode==1 and 'BLOCKED' in preview.stdout
     assert snapshot(engine)==before
     result=alembic(url,'upgrade','head')
-    assert result.returncode!=0 and 'repos de transition inférieur à 8h' in result.stderr
-    assert snapshot(engine)==before
+    ok(result)
+    after=snapshot(engine)
+    assert {name for name in before if before[name]!=after[name]}=={'rotation_templates'}
     with engine.connect() as conn:
-        assert conn.scalar(text('select version_num from alembic_version'))=='20261024_0001'
+        assert conn.scalar(text('select version_num from alembic_version'))=='20261026_0001'
+        assert conn.scalar(text('select count(*) from official_rotation_configurations'))==0
+    with Session(engine) as db:
+        assert official.official_shift(db,employee_id=employee.id,site_id=site.id,at=_ts(cutoff-timedelta(days=1),'22:00'))==night
 
 
 def test_safe_adoption_preserves_events_and_beo_and_restores_exactly(pg_database,monkeypatch,tmp_path):
@@ -104,8 +108,22 @@ def test_safe_adoption_preserves_events_and_beo_and_restores_exactly(pg_database
         env={**os.environ,'DATABASE_URL':url},capture_output=True,text=True)
     assert future.returncode==0 and 'READY' in future.stdout
     assert snapshot(engine)==before
+    import importlib.util
+    from pathlib import Path
+    from alembic.operations import Operations
+    from alembic.migration import MigrationContext
+    fixture=Path(__file__).parent/'fixtures/rotations/20261025_original.py'
+    spec=importlib.util.spec_from_file_location('original_v7',fixture)
+    migration=importlib.util.module_from_spec(spec);spec.loader.exec_module(migration)
+    with engine.begin() as conn:
+        with Operations.context(MigrationContext.configure(conn)):migration.upgrade()
+        conn.execute(text("UPDATE alembic_version SET version_num='20261025_0001'"))
+    adopted=snapshot(engine)
     ok(alembic(url,'upgrade','head'))
     after=snapshot(engine)
+    assert all(after[name]==fingerprint for name,fingerprint in adopted.items())
+    with engine.connect() as conn:
+        assert conn.scalar(text('select count(*) from official_rotation_configurations'))==0
     changed={name for name in before if before[name]!=after[name]}
     assert changed=={'rotation_templates','assignments','site_rotations'}
     assert before['attendance_events']==after['attendance_events']

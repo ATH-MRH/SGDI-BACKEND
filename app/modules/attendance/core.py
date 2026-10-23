@@ -107,7 +107,8 @@ def planned_day(db: Session, assignment: Assignment | None, site: Site | None, w
     if posted is not None:
         # Travail posté explicite : la vérité attendue est le planning OFFICIEL.
         return {"known": posted["known"], "on": posted["on"], "period": posted["period"],
-                "start_time": posted["start_time"], "end_time": posted["end_time"]}
+                "start_time": posted["start_time"], "end_time": posted["end_time"],
+                **({"configuration_id":posted["configuration_id"], "configuration_version":posted["configuration_version"], "policy":posted["policy"]} if posted.get("configuration_id") else {})}
     rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
     if rotation and rotation.active:
         rot = configured_rotation_for_date(rotation, assignment.group_code, work_date, assignment.start_date)
@@ -127,7 +128,7 @@ def authorized_work_minutes(db: Session, assignment: Assignment | None, site: Si
 
     posted = official.legacy_rotation(db, assignment, work_date) if assignment else None
     if posted is not None and posted["known"]:
-        return official.NORMAL_SHIFT_MINUTES
+        return posted.get("normal_minutes", official.NORMAL_SHIFT_MINUTES)
     # Travail posté dont la rotation n'est pas configurée : aucun calcul posté (le cycle officiel
     # n'est pas lu sans ancrage) ; seule la règle historique du site s'applique.
     if assignment and assignment.rotation_id and posted is None:
@@ -322,7 +323,7 @@ def _refuse_entry(db: Session, *, employee: Employee, actor: Any | None, source:
         detail = (f"Pointage hors fenêtre : vacation {label} à {hhmm['scheduled_start']}, "
                   f"pointage possible à partir de {hhmm['window_opens_at']}.")
     elif code == counted_time.LATE_ENTRY_REFUSED:
-        detail = "POINTAGE REFUSÉ — RETARD ≥ 30 MINUTES — VEUILLEZ VOUS PRÉSENTER AU POSTE DE SÉCURITÉ"
+        detail = f"POINTAGE REFUSÉ — RETARD ≥ {counted.get('policy', {}).get('late_refusal_minutes', 30)} MINUTES — VEUILLEZ VOUS PRÉSENTER AU POSTE DE SÉCURITÉ"
     elif code == counted_time.EXTRA_BEFORE_WINDOW:
         detail = (f"Nouvelle entrée refusée : vacation terminée à {hhmm['scheduled_start']}, "
                   f"nouvelle entrée possible de {hhmm['window_opens_at']} à {hhmm['window_closes_at']}.")
@@ -463,7 +464,10 @@ def record_scan(
             not isinstance(observation, str) or not observation.strip() or len(observation) > 500):
         raise HTTPException(422, "Motif / observation obligatoire (500 caractères maximum)")
     observation = str(observation or "").strip()[:500]
-    assignment = active_assignment(db, employee.id)
+    scan_day = (now or _now_local()).astimezone(TZ).date()
+    assignment = db.scalar(select(Assignment).where(Assignment.employee_id == employee.id,
+        Assignment.active == 1, Assignment.start_date <= scan_day,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= scan_day)).order_by(Assignment.id.desc()))
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
     site_name = (site.name or site.indicatif or "") if site else ""
 
@@ -547,6 +551,9 @@ def record_scan(
 
     # Resolve the CURRENT operating policy before the extra-shift fallback. A past
     # snapshot is historical evidence, not authority to bypass today's V7/OFF plan.
+    from app.modules.rotations.service import configuration_at
+    central_configuration = configuration_at(db, site.id, now.date()) if site else None
+    central_entry = central_configuration is not None and event_type == EVENT_ARRIVAL
     v7_entry = False
     if site is not None and (event_type == EVENT_ARRIVAL or intent == counted_time.INTENT_EXTRA_ENTRY):
         from app.modules.attendance import official
@@ -556,9 +563,9 @@ def record_scan(
             and fixed_model is not None and official.site_anchor(db, site.id, fixed_model.id, now.date()) is not None)
         v7_entry = bool(assignment and assignment.work_regime == official.REGIME_POSTE_CONTINU
             and ((model and model.code == official.FIXED_MODEL_CODE) or adopted_site))
-        if v7_entry:
+        if v7_entry or central_entry:
             plan = official.official_shift(db, employee_id=employee.id, site_id=site.id, at=now)
-            if not plan["official"] or (adopted_site and (model is None or model.code != official.FIXED_MODEL_CODE)):
+            if not plan["official"] or (central_configuration is None and adopted_site and (model is None or model.code != official.FIXED_MODEL_CODE)):
                 _refuse_v7_configuration(db, employee=employee, actor=actor, source=source,
                     site=site, now=now, device_id=device_id, group=assignment.group_code)
             if not plan["working"]:
@@ -573,7 +580,7 @@ def record_scan(
     elif event_type == EVENT_ARRIVAL and site is not None:
         counted = counted_time.entry(db, employee_id=employee.id, site_id=site.id, at=now)
         normal_entry = counted is not None and counted["entry_status"] not in counted_time.REFUSALS and now < datetime.fromisoformat(counted["scheduled_end"])
-        if previous is not None and not normal_entry and counted_time.in_extra_slot(previous[0], now):
+        if central_configuration is None and previous is not None and not normal_entry and counted_time.in_extra_slot(previous[0], now):
             # Maintien : nouvelle entrée sur le créneau qui suit la vacation normale. Deux
             # vacations distinctes, jamais une seule présence continue.
             manual = source == SOURCE_MANUAL and manual_entry_allowed
@@ -592,11 +599,16 @@ def record_scan(
             and last_arrival is not None and site is not None):
         old_snapshot = (last_arrival.data or {}).get("counted") or {}
         if old_snapshot and old_snapshot.get("policy_version", 1) != 7:
-            if last_event.event_type == EVENT_ARRIVAL or now - to_local(last_event.occurred_at) < timedelta(hours=8):
+            if last_event.event_type == EVENT_ARRIVAL or now - to_local(last_event.occurred_at) < (timedelta(minutes=counted["policy"]["minimum_rest_minutes"]) if counted.get("configuration_id") else timedelta(hours=8)):
                 _refuse_v7_configuration(db, employee=employee, actor=actor, source=source,
                     site=site, now=now, device_id=device_id, group=counted.get("group"),
                     code="V7_TRANSITION_REST_REQUIRED",
-                    detail="POINTAGE REFUSÉ — TRANSITION V7 : SORTIE HISTORIQUE ET 8H DE REPOS RÉEL REQUISES")
+                    detail=(f"POINTAGE REFUSÉ — SORTIE HISTORIQUE ET {counted['policy']['minimum_rest_minutes']} MINUTES DE REPOS RÉEL REQUISES" if counted.get("configuration_id") else "POINTAGE REFUSÉ — TRANSITION V7 : SORTIE HISTORIQUE ET 8H DE REPOS RÉEL REQUISES"))
+    if event_type == EVENT_ARRIVAL and counted is not None and counted.get("configuration_id") and last_event is not None:
+        if last_event.event_type == EVENT_ARRIVAL or now - to_local(last_event.occurred_at) < timedelta(minutes=max(counted["policy"]["minimum_rest_minutes"], (((last_arrival.data or {}).get("counted") or {}).get("policy") or {}).get("minimum_rest_minutes", 0) if last_arrival else 0)):
+            _refuse_v7_configuration(db, employee=employee, actor=actor, source=source, site=site, now=now,
+                device_id=device_id, group=counted.get("group"), code="V7_TRANSITION_REST_REQUIRED",
+                detail="POINTAGE REFUSÉ — VACATION NON CLÔTURÉE OU REPOS CONFIGURÉ NON ATTEINT")
     if counted is not None and counted.get("policy_version") == 7 and source == SOURCE_MANUAL:
         if not manual_entry_allowed:
             raise HTTPException(403, "Saisie manuelle non autorisée")
@@ -604,7 +616,7 @@ def record_scan(
             raise HTTPException(422, "Motif obligatoire pour tout pointage manuel V7")
     if (event_type == EVENT_ARRIVAL and counted is not None
             and counted.get("policy_version") == 7
-            and counted.get("late_minutes", 0) >= 30
+            and counted.get("late_minutes", 0) >= counted.get("policy", {}).get("late_refusal_minutes", 30)
             and (counted["entry_status"] not in counted_time.REFUSALS
                  or counted["entry_status"] == counted_time.MANUAL_ENTRY_REQUIRED)):
         if source == SOURCE_MANUAL and manual_entry_allowed:

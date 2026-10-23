@@ -206,6 +206,8 @@ def summarize(planned: list[dict], shifts: list[dict], anomalies: list[dict], re
 def period(db: Session, employee: Employee, start: date, end: date, *, site_ids: set[int] | None = None) -> dict[str, Any]:
     """Historique + synthèse d'un salarié sur [start, end]. `site_ids` restreint au périmètre de
     l'appelant (None = compte global)."""
+    # Scope the central lookup memo to this report, never to a preceding report.
+    db.info.pop("central_rotation_cache", None)
     if end < start or (end - start).days > MAX_PERIOD_DAYS:
         raise ValueError("Période invalide")
     planned, unconfigured = _planned(db, employee.id, start, end, site_ids)

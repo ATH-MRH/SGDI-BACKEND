@@ -110,6 +110,8 @@ def detect_maintenance(db, site_ids, now):
 
 def detect_missing(db, site_ids, now):
     """Absences V7 à T+30 : uniquement les attendus officiels, hors congé/maladie/mission."""
+    from app.modules.rotations.service import sync_critical_points
+    sync_critical_points(db,site_ids,now)
     from sqlalchemy import select
     from app.modules.attendance import core, official, live
     from app.modules.attendance.models import AttendanceAnomaly, EVENT_ARRIVAL
@@ -123,6 +125,8 @@ def detect_missing(db, site_ids, now):
         stmt = stmt.where(Assignment.site_id.in_(list(site_ids) or [-1]))
     assignments = list(db.scalars(stmt))
     boards = {site:official.site_shift(db,site_id=site,at=now)['current'] for site in {a.site_id for a in assignments}}
+    from app.modules.rotations.service import configuration_at
+    assignments = [a for a in assignments if configuration_at(db,a.site_id,now.date()) is None]
     expected = [(a,boards[a.site_id]) for a in assignments if boards[a.site_id]
         and a.group_code == boards[a.site_id]['group'] and now-boards[a.site_id]['scheduled_start'] >= timedelta(minutes=30)]
     if not expected:
@@ -163,7 +167,7 @@ def publish(db, row):
         key=f'ATTENDANCE_SITUATION:{row.id}:{audience}'
         if db.scalar(select(Alert.id).where(Alert.dedup_key==key)):
             continue
-        alert=Alert(rule_key=rule,rule_version=1,source_type='employee',source_id=str(row.employee_id),
+        alert=Alert(rule_key=rule,rule_version=1,source_type='employee' if row.employee_id is not None else 'site',source_id=str(row.employee_id if row.employee_id is not None else row.site_id),
             society=row.society or '',site_id=row.site_id,status='open',severity=row.severity,
             score=90 if row.severity=='critical' else 50,confidence=100,
             title=f'{row.anomaly_type} · {audience}'[:240],summary=row.message,dedup_key=key,
