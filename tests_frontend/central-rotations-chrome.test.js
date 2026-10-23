@@ -1,21 +1,44 @@
+// OPS — rotations centrales dans Chrome réel : configuration et planning sans débordement, de 1920 à 390 px.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const puppeteer=require('puppeteer-core');
+let puppeteer;try{puppeteer=require('puppeteer-core')}catch(e){}
 const chrome=[process.env.PUPPETEER_EXECUTABLE_PATH,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/usr/bin/google-chrome'].filter(Boolean).find(fs.existsSync);
-const fragment='/* OPS owns official planning.'+fs.readFileSync('app/static/js/modules/ops.js','utf8').split('/* OPS owns official planning.')[1];
-test('OPS central rotations — responsive form and dynamic regimes in real Chrome',{skip:!chrome,timeout:120000},async t=>{
+const source=fs.readFileSync('app/static/js/modules/ops-rotations.js','utf8');
+const day=(d,wd,groups)=>({date:`2027-01-${String(d).padStart(2,'0')}`,weekday:wd,configured:true,weekend:wd>=4&&wd<=5,holiday:false,off_groups:['A','B','C','D'].filter(g=>!groups.includes(g)),critical:[],
+ slots:[{shift:'JOUR',label:'Jour',group:groups[0],start:'07:00',end:'19:00',planned_staff:3,required_staff:3},{shift:'NUIT',label:'Nuit',group:groups[1],start:'19:00',end:'07:00',planned_staff:3,required_staff:3}]});
+const MONTH={month:'2027-01',configured:true,regime:'1/3',regime_label:'1/3',versions:[1],period:{start:'2027-01-01',end:'2027-01-31'},
+ kpis:{planned_staff:96,day_average:46,night_average:46,day_slots:31,night_slots:31,critical_points:0},
+ days:Array.from({length:31},(_,i)=>day(i+1,(i+4)%7,[['A','B'],['D','C'],['B','D'],['A','C']][i%4])),
+ summary:{roles:{A:'Jours ouvrés uniquement (jour, 07:00 – 19:00)',B:'Nuits / week-ends / jours fériés',C:'Nuits / week-ends / jours fériés',D:'Nuits / week-ends / jours fériés'},
+   timings:[{shift:'Jour',start:'07:00',end:'19:00'},{shift:'Nuit',start:'19:00',end:'07:00'}],minimum_rest_minutes:480,
+   coverage:{day_staff_total:1012,night_staff_total:1012,a_days:[21,21],weekends:[8,8],holidays:[0,0]},conflicts:0,rules:[{label:'Aucun groupe A en nuit',ok:true}]}};
+
+test('OPS rotations — configuration et planning responsives dans Chrome réel',{skip:!chrome||!puppeteer?'Chrome ou puppeteer-core indisponible':false,timeout:180000},async t=>{
  const browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox']});t.after(()=>browser.close());
  const output=process.env.ATLAS_CENTRAL_ARTIFACTS||path.join(os.tmpdir(),'atlas-central-chrome');fs.mkdirSync(output,{recursive:true});
- for(const width of [1920,1440,1024,820,390]){
-  const page=await browser.newPage();await page.setViewport({width,height:900});
-  await page.setContent('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:16px;font:14px sans-serif}*{box-sizing:border-box}label{display:block}input,select,textarea{display:block;width:100%;max-width:100%}input[type=checkbox]{display:inline;width:auto}[hidden]{display:none!important}table{border-collapse:collapse}td,th{padding:8px}</style><main id="view"></main>');
-  await page.evaluate(()=>{window.escapeHTML=s=>String(s).replace(/[<>]/g,'');window.sgdiApi=async()=>[{id:100,name:'Site synthétique',equipment_plan:{societe:'Structure test'},client_id:1}];});
-  await page.addScriptTag({content:fragment});await page.evaluate(()=>renderCentralRotations(document.getElementById('view')));
-  await page.waitForSelector('#centralForm');
-  for(const regime of ['3X8','24H48','1/2','1/3']){
-   await page.select('#centralForm [name=regime]',regime);
-   const state=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,publish:document.querySelector('[data-publish]').disabled,visible:[...document.querySelectorAll('[data-regimes]')].filter(e=>!e.hidden).map(e=>e.dataset.regimes)}));
-   assert.ok(state.overflow<=1,`${width}: overflow ${state.overflow}`);assert.equal(state.publish,true);assert.ok(state.visible.length>0);
+ for(const width of [1920,1440,1280,1024,768,390]){
+  for(const mode of ['configuration','planning']){
+   const page=await browser.newPage();await page.setViewport({width,height:900});
+   await page.setContent('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:16px;font:14px system-ui,sans-serif}</style><main id="view"></main>');
+   await page.evaluate(month=>{window.SGDIModules={registerModule:()=>{}};window.escapeHTML=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));window.toast=()=>{};
+    window.sgdiApi=async url=>url.endsWith('/sites')?{items:[{id:7,name:'Mine du Nord',structure:'IRON Global',client:'Client A',regime:'1/3',version:1}]}
+     :url.endsWith('/overview')?{active_sites:12,active_regimes:8,critical_points:3,drafts_to_validate:5}
+     :url.endsWith('/history')?{items:[]}:month;},MONTH);
+   await page.addScriptTag({content:source});
+   await page.evaluate(m=>renderCentralRotations(document.getElementById('view'),m==='planning'?'planning':undefined),mode);
+   await page.waitForSelector('.rot-cal',{timeout:10000});
+   if(mode==='configuration'){
+    for(const regime of ['3X8','24H48','1/2','1/3']){
+     await page.click(`[data-regime="${regime}"]`);await page.waitForSelector('.rot-cal');
+     const state=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,publish:document.querySelector('[data-publish]').disabled,
+      clipped:[...document.querySelectorAll('.rot-seg button,.rot-kpi strong,.rot-title')].filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.textContent)}));
+     assert.ok(state.overflow<=1,`${width} ${regime}: débordement ${state.overflow}`);assert.equal(state.publish,true);
+     assert.deepEqual(state.clipped,[],`${width} ${regime}: texte coupé`);
+    }
+   }else{
+    const state=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,days:document.querySelectorAll('.rot-day:not(.is-empty)').length,summary:!!document.querySelector('.rot-summary')}));
+    assert.ok(state.overflow<=1,`${width} planning: débordement ${state.overflow}`);assert.equal(state.days,31);assert.equal(state.summary,true);
+   }
+   await page.screenshot({path:path.join(output,`ops-${mode}-${width}.png`),fullPage:true});await page.close();
   }
-  await page.screenshot({path:path.join(output,`ops-central-${width}.png`),fullPage:true});await page.close();
  }
 });

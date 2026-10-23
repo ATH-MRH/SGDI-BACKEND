@@ -37,6 +37,36 @@ def staff(db, site, group, *, regime=None, start=date(2026, 1, 1), end=None, sta
     return employee
 
 
+def purge(db, site_id):
+    """Supprime le site, ses employés et toutes les lignes qui en dépendent (clés étrangères suivies
+    jusqu'au point fixe) : la base SQLite des tests est partagée et les tests DRH (tableau de bord,
+    volume de /api/drh/employees) ne doivent pas hériter de ces sites synthétiques."""
+    from app.db.base import Base
+    db.rollback()
+    doomed = {"sites": {site_id},
+              "employees": set(db.scalars(select(Assignment.employee_id).where(Assignment.site_id == site_id)))}
+    tables = Base.metadata.sorted_tables
+    changed = True
+    while changed:
+        changed = False
+        for table in tables:
+            pk = list(table.primary_key.columns)
+            if len(pk) != 1:
+                continue
+            for fk in table.foreign_keys:
+                ids = doomed.get(fk.column.table.name)
+                if not ids:
+                    continue
+                found = set(db.scalars(select(pk[0]).where(fk.parent.in_(ids))))
+                if found - doomed.setdefault(table.name, set()):
+                    doomed[table.name] |= found; changed = True
+    for table in reversed(tables):
+        ids = doomed.get(table.name)
+        if ids:
+            db.execute(table.delete().where(list(table.primary_key.columns)[0].in_(ids)))
+    db.commit()
+
+
 @pytest.fixture
 def central_site(db):
     """Site 1/3 publié ; deux agents B (régimes NORMAL et sans régime), plus A, C, D."""
@@ -45,7 +75,9 @@ def central_site(db):
     others = {g: staff(db, site, g) for g in "CD"}
     db.commit()
     published = adopt(db, anchor_employee, site, config("1/3", anchor=str(ANCHOR)))
-    return {"site": site, "B": [b1, b2], "A": anchor_employee, **others, "published": published}
+    site_id = site.id
+    yield {"site": site, "B": [b1, b2], "A": anchor_employee, **others, "published": published}
+    purge(db, site_id)
 
 
 def engine_slot(published, at):
