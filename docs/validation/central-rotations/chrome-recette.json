@@ -1,0 +1,293 @@
+[
+ {
+  "screen": "config",
+  "w": 1920,
+  "vw": 1920,
+  "sw": 1920,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "w": 1440,
+  "vw": 1440,
+  "sw": 1440,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "w": 1280,
+  "vw": 1280,
+  "sw": 1280,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "w": 1024,
+  "vw": 1024,
+  "sw": 1024,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "w": 768,
+  "vw": 768,
+  "sw": 768,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "w": 390,
+  "vw": 390,
+  "sw": 390,
+  "overflow": false,
+  "over": [
+   "A.module-counter-item drh-workforce-item i r=450",
+   "I.module-counter-dot r=397",
+   "STRONG.module-counter-value drh-workforce-value r=434",
+   "SPAN.module-counter-label drh-workforce-label r=440"
+  ],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "config",
+  "errors": []
+ },
+ {
+  "screen": "planning",
+  "w": 1920,
+  "vw": 1920,
+  "sw": 1920,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "w": 1440,
+  "vw": 1440,
+  "sw": 1440,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "w": 1280,
+  "vw": 1280,
+  "sw": 1280,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "w": 1024,
+  "vw": 1024,
+  "sw": 1024,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "w": 768,
+  "vw": 768,
+  "sw": 768,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "w": 390,
+  "vw": 390,
+  "sw": 390,
+  "overflow": false,
+  "over": [
+   "A.module-counter-item drh-workforce-item i r=450",
+   "I.module-counter-dot r=397",
+   "STRONG.module-counter-value drh-workforce-value r=434",
+   "SPAN.module-counter-label drh-workforce-label r=440"
+  ],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "planning",
+  "errors": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 1920,
+  "vw": 1920,
+  "sw": 1920,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 1440,
+  "vw": 1440,
+  "sw": 1440,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 1280,
+  "vw": 1280,
+  "sw": 1280,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 1024,
+  "vw": 1024,
+  "sw": 1024,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 768,
+  "vw": 768,
+  "sw": 768,
+  "overflow": false,
+  "over": [
+   "TABLE. r=832",
+   "THEAD. r=832",
+   "TR. r=832",
+   "TH. r=832",
+   "TBODY. r=832"
+  ],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur",
+  "w": 390,
+  "vw": 390,
+  "sw": 390,
+  "overflow": false,
+  "over": [
+   "TABLE. r=820",
+   "THEAD. r=820",
+   "TR. r=820",
+   "TH. r=408",
+   "TH. r=509"
+  ],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "pointeur-facial",
+  "stage_h": 0,
+  "stage_w": 0,
+  "status": "AUCUN ÉQUIPEMENT AFFECTÉAucun équipement affecté à votre compte. Contactez l'Adm",
+  "visible": true
+ },
+ {
+  "screen": "pointeur-facial-390",
+  "stage_h": 0,
+  "sw": 390,
+  "vw": 390
+ },
+ {
+  "screen": "pointeur",
+  "errors": []
+ },
+ {
+  "screen": "beo",
+  "w": 1920,
+  "vw": 1920,
+  "sw": 1920,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "w": 1440,
+  "vw": 1440,
+  "sw": 1440,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "w": 1280,
+  "vw": 1280,
+  "sw": 1280,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "w": 1024,
+  "vw": 1024,
+  "sw": 1024,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "w": 768,
+  "vw": 768,
+  "sw": 768,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "w": 390,
+  "vw": 390,
+  "sw": 390,
+  "overflow": false,
+  "over": [],
+  "clipped": [],
+  "scrolled": []
+ },
+ {
+  "screen": "beo",
+  "errors": []
+ }
+]
