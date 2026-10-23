@@ -7,7 +7,7 @@ Branche : `feat/pointeur-v7-operational-dashboard`. Base : `bfefcbb550eb8fe4a508
 Les groupes sont permanents : A 06:00–14:00, B 14:00–22:00, C 22:00–06:00 le lendemain, D OFF.
 Toute sortie avant la fin prévue est refusée, y compris dans les 29 dernières minutes. Ces deux décisions ont été explicitement confirmées par le demandeur.
 
-Le modèle officiel `3X8-FIXED-ABCD-V7` porte ces règles. Les instantanés des passages portent `policy_version=7` ; les anciens modèles et instantanés conservent leur contrat historique. L'interface et les consommateurs lisent les mêmes sources Attendance Core.
+Le modèle officiel `3X8-FIXED-ABCD-V7` porte ces règles. Les instantanés des passages, y compris les vacations supplémentaires, portent `policy_version=7` ; les anciens modèles et instantanés conservent leur contrat historique. L'interface et les consommateurs lisent les mêmes sources Attendance Core.
 
 | Passage V7 | Résultat |
 |---|---|
@@ -26,15 +26,17 @@ Un remplacement ou mouvement officiel doit modifier l'affectation/planning autor
 
 ## Adoption et historique
 
-La migration `20261025_0001` étend la tête `20261024_0001`. Elle crée le modèle fixe et date l'adoption à la journée locale Africa/Algiers où la migration sera exécutée. Pour les affectations actives explicitement POSTE_CONTINU sur un modèle officiel antérieur, elle clôt l'ancienne période et crée une nouvelle période V7 ; les liens site/modèle suivent la même séparation datée. Les affectations futures peuvent changer de modèle directement. LEGACY, NORMAL et modèles non officiels restent exclus.
+La migration `20261025_0001` étend la tête `20261024_0001`. Elle crée le modèle fixe. Sur une base peuplée, l'adoption exige `ATLAS_V7_EFFECTIVE_DATE` explicite égale au jour local d'exécution et un précontrôle de transition sûr ; sans cela elle refuse avant écriture. Voir [le plan de transition et de restauration](pointeur-v7-transition-restauration.md). Pour les affectations actives explicitement POSTE_CONTINU sur un modèle officiel antérieur, elle clôt l'ancienne période et crée une nouvelle période V7 ; les liens site/modèle suivent la même séparation datée. Les affectations futures peuvent changer de modèle directement ; elles n'autorisent aucun pointage sans ancrage V7 valide. LEGACY, NORMAL et modèles non officiels restent exclus.
 
-Les anciens modèles, événements et périodes historiques ne sont pas supprimés. Une migration rejouée ne crée pas d'autres périodes. Un downgrade est refusé lorsque le modèle V7 est utilisé : un retour métier doit être préparé explicitement. Aucune migration n'a été exécutée en production pendant cette mission.
+Les anciens modèles, événements et périodes historiques ne sont pas supprimés. Une migration rejouée ne crée pas d'autres périodes. Un downgrade est refusé lorsque le modèle V7 est utilisé par une affectation, un lien ou un fait figé : un retour métier doit être préparé explicitement. Aucune migration n'a été exécutée en production pendant cette mission.
 
 ## Faits, situations et projections
 
 `AttendanceEvent` reste le journal append-only. ARRIVAL/DEPARTURE + source MANUAL réutilisent les types existants ; ABANDON_POSTE et CORRECTION restent les faits existants. REFUSED_ENTRY/REFUSED_EXIT distinguent les nouvelles tentatives refusées sans créer de DailyPresence. Les refus historiques conservent leur audit existant.
 
 `AttendanceAnomaly` reste le registre des points critiques ; aucun registre de présence parallèle. Déduplication par employé/site/vacation/type ; maintien par identifiant d'entrée ; non-pointé après T+30 hors congé/maladie/mission/repos. Le workflow versionné dans les détails suit : Détecté → À traiter → En cours → À valider → Validé → Archivé. Toute transition nécessite validation, responsable et motif, avec audit avant/après et verrou de concurrence. Les cas simples gardent leur résolution existante ; les situations critiques ne peuvent pas contourner le workflow par l'ancienne résolution directe.
+
+Une résolution automatique archive le workflow avec une transition explicitement automatique et un audit avant/après, sans fabriquer de validation humaine.
 
 Les situations V7 alimentent des alertes durables OPS et DRH, dédoublonnées par point et audience. Une validation ou une résolution automatique (arrivée après non-pointé, sortie après maintien) clôt aussi ces projections. L'abandon conserve sa transmission existante et sa preuve dédiée ; sa gravité V7 est critique. Il n'y a aucun envoi de mail ou message externe.
 

@@ -17,7 +17,7 @@ from tests.test_pointeur_iron_emploi_merge_pg import alembic, ok, revisions, see
 pytestmark = pytest.mark.skipif(not os.getenv('TEST_POSTGRES_ADMIN_URL'), reason='PostgreSQL jetable requis')
 
 # FINAL : tête actuelle (jonction 20261023_0001 puis champs Fiche de position BEO 20261024_0001).
-PRODUCTION, FINAL = '20261017_0003', '20261024_0001'
+PRODUCTION, FINAL = '20261017_0003', '20261025_0001'
 
 
 def seed_contract_import_grant(engine):
@@ -37,12 +37,17 @@ def test_production_state_joins_the_pointeur_delivery_without_loss(pg_database):
     seed_badges(engine)
     seed_contract_import_grant(engine)
     before = snapshot(engine)
+    with engine.connect() as db:
+        old_models = db.execute(sa.text('SELECT row_to_json(r)::text FROM rotation_templates r ORDER BY id')).scalars().all()
 
     ok(alembic(url, 'upgrade', 'head'))
     after = snapshot(engine)
     assert revisions(engine) == {FINAL}
     assert set(after) == set(before) | {'facial_device_authorizations', 'user_field_permissions'}  # tables ajoutées, vides
-    assert {table: after[table] for table in before} == before                # aucune ligne existante touchée
+    assert {table: after[table] for table in before if table != 'rotation_templates'} == {table:value for table,value in before.items() if table != 'rotation_templates'}
+    with engine.connect() as db:
+        assert db.execute(sa.text("SELECT row_to_json(r)::text FROM rotation_templates r WHERE code != '3X8-FIXED-ABCD-V7' ORDER BY id")).scalars().all() == old_models
+        assert db.scalar(sa.text("SELECT COUNT(*) FROM rotation_templates WHERE code='3X8-FIXED-ABCD-V7'")) == 1
     ok(alembic(url, 'upgrade', 'head'))                                        # rejouable
     assert snapshot(engine) == after
 

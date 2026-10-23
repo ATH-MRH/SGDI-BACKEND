@@ -37,14 +37,16 @@ REFUSAL_WINDOW = timedelta(minutes=10)
 REFUSAL_ACTIONS = ("biometrics.terminal.recognize", "biometrics.terminal.qr")
 # Refus décidés par Attendance Core (travail posté) : toutes sources (QR, facial, manuel, terminal).
 CORE_REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted_time.REFUSALS))
-CORE_REFUSAL_ACTIONS += ("attendance.early_exit_refused", "attendance.off_schedule_refused")
+CORE_REFUSAL_ACTIONS += ("attendance.early_exit_refused", "attendance.off_schedule_refused",
+                         "attendance.rotation_not_configured", "attendance.v7_transition_rest_required")
 ALL_REFUSAL_ACTIONS = REFUSAL_ACTIONS + CORE_REFUSAL_ACTIONS
 # Alertes poussées dans le flux live du Pointeur (codes canoniques).
-ALERT_ANOMALY_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA, "MANUAL_POINTAGE", "CORRECTION", "REENTRY", "EXIT_REGULARIZED", "ABSENT", "LATE", counted_time.LATE_ENTRY_REFUSED, "ABANDON_POSTE", "MAINTENANCE", "EARLY_EXIT_REFUSED", "OFF_SCHEDULE_REFUSED") + tuple(sorted(counted_time.REFUSALS))
+ALERT_ANOMALY_TYPES = (counted_time.ANOMALY_UNCLOSED, counted_time.KIND_EXTRA, "MANUAL_POINTAGE", "CORRECTION", "REENTRY", "EXIT_REGULARIZED", "ABSENT", "LATE", counted_time.LATE_ENTRY_REFUSED, "ABANDON_POSTE", "MAINTENANCE", "EARLY_EXIT_REFUSED", "OFF_SCHEDULE_REFUSED", "ROTATION_NOT_CONFIGURED", "V7_TRANSITION_REST_REQUIRED") + tuple(sorted(counted_time.REFUSALS))
 ALERT_WINDOW = timedelta(hours=48)
 ALERT_LABELS = {
     counted_time.ANOMALY_UNCLOSED: "Vacation non clôturée", counted_time.KIND_EXTRA: "Vacation supplémentaire (maintien)",
     "EARLY_EXIT_REFUSED": "Fin de service non atteinte", "OFF_SCHEDULE_REFUSED": "Groupe en récupération / OFF",
+    "ROTATION_NOT_CONFIGURED":"Planning V7 non configuré", "V7_TRANSITION_REST_REQUIRED":"Repos de transition requis",
     "CORRECTION":"Correction", "REENTRY":"Reprise de poste", "EXIT_REGULARIZED":"Sortie régularisée",
     "ABSENT": "Absent / non pointé", "MANUAL_POINTAGE": "Pointage manuel", "LATE": "Retard", "ABANDON_POSTE": "Abandon de poste", "MAINTENANCE": "Maintien au poste",
     **{code: counted_time.ENTRY_STATUS_LABELS[code] for code in counted_time.REFUSALS},

@@ -132,7 +132,7 @@ test('Pointeur V7 — tableau de bord opérationnel, Chrome réel', { timeout: 2
     await page.waitForFunction(() => /MAGASINIER/.test(document.getElementById('functionsList').textContent), { timeout: 10000 });
     assert.equal(await page.$eval('#postKpis [data-kpi="present"] b', (e) => e.textContent), String(presentBefore + 1));
     // Scan suivant (après le verrou existant de 1,8 s entre deux badges) : une seule fenêtre, mise à jour.
-    await delay(2000);
+    await page.waitForFunction(() => scanBusy === false, { timeout: 10000 });
     await scan('eyJhbGciOiJIUzI1NiJ9.eyJiYWRnZSI6IlQxMTEifQ.T111-signature_A1');
     await page.waitForFunction(() => /LARBI/.test(document.querySelector('#lastScanCard .last-scan-float')?.innerText || ''), { timeout: 10000 });
     const second = await check();

@@ -38,7 +38,7 @@ from app.modules.ops.models import Assignment, RotationTemplate, Site
 
 TREATMENT_TO_QUALIFY = "A_QUALIFIER"               # récupération / paiement : décision humaine à venir
 TREATMENT_LABELS = {TREATMENT_TO_QUALIFY: "À qualifier (récupération ou paiement)"}
-REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted.REFUSALS)) + ("attendance.early_exit_refused", "attendance.off_schedule_refused")
+REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted.REFUSALS)) + ("attendance.early_exit_refused", "attendance.off_schedule_refused", "attendance.rotation_not_configured", "attendance.v7_transition_rest_required")
 RELIEF_ANOMALIES = (counted.ANOMALY_UNCLOSED,)     # anomalies de relève : vacation restée sans sortie
 MAX_PERIOD_DAYS = 366 * 6
 

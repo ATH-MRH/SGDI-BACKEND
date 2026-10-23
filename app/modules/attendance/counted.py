@@ -64,6 +64,8 @@ MANUAL_ENTRY_REQUIRED = "MANUAL_ENTRY_REQUIRED"    # entrée > TFIN+45 : aucun m
 LATE_ENTRY_REFUSED = "LATE_ENTRY_REFUSED"
 REFUSALS = frozenset({LATE_ENTRY_REFUSED, EARLY_OUTSIDE_WINDOW, EXTRA_BEFORE_WINDOW, PREVIOUS_SHIFT_NOT_CLOSED, MANUAL_ENTRY_REQUIRED})
 ENTRY_STATUS_LABELS = {
+    "ROTATION_NOT_CONFIGURED": "Planning V7 non configuré",
+    "V7_TRANSITION_REST_REQUIRED": "Repos de transition V7 requis",
     LATE_ENTRY_REFUSED: "Retard ≥ 30 minutes — poste de sécurité requis",
     ENTRY_IN_WINDOW: "Arrivée dans la fenêtre",
     ENTRY_AFTER_START: "Arrivée après le début de vacation",
@@ -160,6 +162,8 @@ def extra_entry(previous: dict[str, Any], at: datetime, *, previous_event_id: in
         status = ENTRY_EXTRA_MANUAL if manual_allowed else MANUAL_ENTRY_REQUIRED
     shift = next((code for code, (start, _end) in official.SHIFT_TIMES.items() if start == end.strftime("%H:%M")), None)
     return {
+        "policy_version": previous.get("policy_version", 1),
+        "late_minutes": max(0, int((at - end).total_seconds() // 60)),
         "kind": KIND_EXTRA, "regime": previous["regime"], "group": previous["group"], "shift": shift,
         "work_date": end.date().isoformat(), "cycle_day": None, "model_version": previous.get("model_version"),
         "scheduled_start": end.isoformat(), "scheduled_end": (end + timedelta(minutes=int(previous["normal_minutes"]))).isoformat(),

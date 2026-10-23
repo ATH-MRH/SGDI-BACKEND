@@ -52,6 +52,31 @@ def transition(db, row, *, target, reason, responsible, actor, request=None):
     return view(row)
 
 
+def auto_resolve(db, row, *, actor, reason, details=None):
+    """Archive a factual resolution, distinct from human validation, in the same transaction.
+
+    No fake intermediate validations: retain the former workflow and append the actual
+    automatic transition with its trigger, responsible actor and before/after audit.
+    """
+    before = view(row)
+    if row.status == ANOMALY_RESOLVED and before["status"] == "ARCHIVED":
+        if details:
+            row.details = {**(row.details or {}), **details}
+        return
+    now = datetime.utcnow()
+    responsible = getattr(actor, "username", None) or "system"
+    history = [*before["history"], {"from":before["status"], "to":"ARCHIVED",
+        "reason":reason, "by":responsible, "at":now.isoformat(), "automatic":True}]
+    row.details = {**(row.details or {}), **(details or {}), "workflow": {
+        "status":"ARCHIVED", "responsible":responsible, "history":history}}
+    row.status, row.resolved_by, row.resolved_at = ANOMALY_RESOLVED, responsible, now
+    row.resolution = reason
+    close_projections(db, row)
+    append_audit(db, action="attendance.situation.auto_resolve", resource="attendance_anomaly",
+        resource_id=row.id, result="success", user=actor, society=row.society,
+        old_state=before, new_state=view(row))
+
+
 def detect_maintenance(db, site_ids, now):
     """Rattrapage idempotent des vacations toujours ouvertes après la fin officielle."""
     from sqlalchemy import select
