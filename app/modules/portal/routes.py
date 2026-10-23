@@ -1286,6 +1286,8 @@ def attendance_feed(
             "scanned_by": row.get("scannedBy") or "",
             "source": row.get("source") or "",
             "duration_minutes": row.get("workedMinutes"),
+            "late_minutes": (row.get("counted") or {}).get("late_minutes",0),
+            "counted": row.get("counted"),
             "exit_type": ("Abandon poste" if row.get("eventId") in abandon_departures else "Sortie") if row.get("action") == "depart" else "",
             "observation": row.get("observation") or "",
         }
@@ -1327,7 +1329,7 @@ def attendance_feed(
             if event["action"] == "arrivee":
                 row["arrival"] = row["arrival"] or at
                 row["departure"] = ""
-                row["status"] = "En poste"
+                row["status"] = f"Retard {event['late_minutes']} min" if event.get("late_minutes") else "En poste"
             elif event["action"] == "depart":
                 row["departure"] = at
                 row["status"] = "Sorti"
@@ -1823,19 +1825,24 @@ def manual_attendance_context(employee_id: int, site_id: int | None = None, db: 
     events = attendance_core._last_scan_events(db, employee.id)
     allowed = _manual_entry_granted(db, scanner)
     extra = counted_time.extra_context(events, site.id if site else None, now, manual_allowed=allowed)
+    normal = counted_time.entry(db, employee_id=employee.id, site_id=site.id, at=now) if site else None
+    v7_manual = bool((normal or {}).get("policy_version") == 7 or (events and ((events[-1].data or {}).get("counted") or {}).get("policy_version") == 7))
+    late_manual = bool(normal and normal.get("policy_version") == 7 and normal.get("late_minutes", 0) >= 30
+                       and (not events or events[-1].event_type != "ARRIVAL"))
     reentry = bool(allowed and not extra and attendance_core._reentry_possible(events[-1] if events else None, site, now))
     return {
         "employee": {"id": employee.id, "matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name,
                      "poste": employee.position or ""},
         "site": {"id": site.id, "name": site.name} if site else None, "group": assignment.group_code if assignment else None,
         "extra_shift": counted_time.view({"counted": extra}) if extra else None,
+        "normal_entry": normal if late_manual else None, "manual_policy_version": 7 if v7_manual else None,
         "abandon_threshold_minutes": attendance_core.settings.attendance_abandon_threshold_minutes,
         "manual_entry_allowed": allowed,
         "intent": counted_time.INTENT_EXTRA_ENTRY if extra else (counted_time.INTENT_REENTRY if reentry else None),
         # Reprise de poste : la dernière sortie appartient à une vacation encore en cours (double
         # scan, sortie ou abandon saisi par erreur). Motif obligatoire, opération signalée.
         "reentry": {"available": True, "previous_exit": attendance_core.to_local(events[-1].occurred_at).strftime("%H:%M")} if reentry else None,
-        "reason_required": bool(reentry or (extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL)),
+        "reason_required": bool(v7_manual or late_manual or reentry or (extra and extra["entry_status"] == counted_time.ENTRY_EXTRA_MANUAL)),
         "audited": True, **attendance_core.operational_clock(now),
     }
 

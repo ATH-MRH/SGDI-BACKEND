@@ -43,11 +43,11 @@ def context(db, employee, *, now=None):
     if presence is None or presence.closed_at is not None:
         raise HTTPException(409, "Abandon de poste refusé : présence inexistante ou journée clôturée")
     remaining = (end - now).total_seconds() / 60
-    threshold = core.settings.attendance_abandon_threshold_minutes
+    threshold = 1 if snapshot.get("policy_version") == 7 else core.settings.attendance_abandon_threshold_minutes
     return {
-        "shift_id": arrival.id, "scheduled_start_at": start.isoformat(), "scheduled_end_at": end.isoformat(),
+        "policy_version": snapshot.get("policy_version",1), "shift_id": arrival.id, "scheduled_start_at": start.isoformat(), "scheduled_end_at": end.isoformat(),
         "actual_departure_at": now.isoformat(), "remaining_minutes": remaining,
-        "threshold_minutes": threshold, "applicable": end - now >= timedelta(minutes=threshold),
+        "threshold_minutes": threshold, "applicable": (now < end if snapshot.get("policy_version") == 7 else end - now >= timedelta(minutes=threshold)),
         "employee_id": employee.id, "matricule": employee.code,
         "employee_name": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
         "society": employee.society, "site_id": site.id, "site_name": site.name or site.indicatif or "",
@@ -90,7 +90,7 @@ def record(db, *, departure, employee, actor, details):
     db.add(event); db.flush()
     for audience, rule in ABANDON_RULES.items():
         alert = Alert(rule_key=rule, rule_version=1, source_type="employee", source_id=str(employee.id),
-            society=employee.society or "", site_id=departure.site_id, status="open", severity="warning",
+            society=employee.society or "", site_id=departure.site_id, status="open", severity="critical" if details.get("policy_version")==7 else "warning",
             score=80, confidence=100, title=f"ABANDON DE POSTE · {audience} · {details['employee_name']}"[:240],
             summary=(f"Matricule : {employee.code} · Société : {employee.society} · Site : {details['site_name']}\n"
                      f"Départ : {details['actual_departure_at']} · Fin prévue : {details['scheduled_end_at']} · "
@@ -107,7 +107,7 @@ def record(db, *, departure, employee, actor, details):
                             actor_user_id=departure.actor_user_id))
         data["notifications"][audience] = {"status": "CREATED", "alert_id": alert.id}
     event.data = dict(data)
-    core.raise_anomaly(db, anomaly_type=EVENT_ABANDON, employee=employee, site_id=departure.site_id,
+    core.raise_anomaly(db, anomaly_type=EVENT_ABANDON, severity="critical" if details.get("policy_version")==7 else "warning", employee=employee, site_id=departure.site_id,
         presence_date=departure.presence_date, event=event, source=SOURCE_POINTER,
         message="Abandon de poste", details=details, dedupe_key=event.idempotency_key)
     append_audit(db, action="attendance.abandon_poste", resource="attendance_event", resource_id=event.id,

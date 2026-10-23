@@ -44,9 +44,12 @@ def read_workspace(db, *, site_ids, month, q="", employee_status=None, employee_
     ids = list(site_ids or [])
     sites = {s.id: s for s in db.scalars(select(Site).where(Site.id.in_(ids or [-1])))}
     assignments = list(db.scalars(select(Assignment).where(
-        Assignment.site_id.in_(ids or [-1]), Assignment.active == 1,
+        Assignment.site_id.in_(ids or [-1]),
+        # A closed, dated assignment remains historical evidence. An inactive undated
+        # draft is not an assignment interval and must not grant historical visibility.
+        (Assignment.active == 1) | (Assignment.end_date.is_not(None)),
         Assignment.start_date <= last, (Assignment.end_date.is_(None)) | (Assignment.end_date >= first)
-    ).order_by(Assignment.id)))
+    ).order_by(Assignment.active, Assignment.id)))
     emp_ids = {a.employee_id for a in assignments}
     if employee_id is not None and employee_id not in emp_ids:
         raise HTTPException(404, "Employé hors du périmètre")

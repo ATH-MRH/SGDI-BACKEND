@@ -57,7 +57,7 @@ const sys = (r, id) => [r.d.querySelector(`#${id} dd`).textContent, r.d.getEleme
 test('clic sur « Reconnaissance faciale » : la liste des terminaux s\'ouvre dans la zone centrale, sans redirection ; l\'activation lance la détection', async () => {
   const r = await boot();
   const card = r.d.getElementById('faceModeBtn');
-  assert.match(card.textContent, /Reconnaissance faciale\s*Détection automatique/);
+  assert.match(card.textContent, /Reconnaissance faciale\s*Caméra du poste/);
   card.click();
   await wait(200);
   assert.equal(r.T.getFacialMode(), true);
@@ -186,7 +186,10 @@ test('anti-rebond : 10 déclenchements en rafale ⇒ UNE reconnaissance par cam�
   for (let i = 0; i < 10; i++) { r.d.getElementById('faceModeBtn').click(); r.F().start(); r.d.querySelector('#faceTerminals [data-ft="activate"]').click(); await wait(40); }
   assert.equal(r.of('/recognize').length, 1, 'verrou pendant reconnaissance + affichage');
   assert.match(r.text('faceStatus'), /AGENT1 Test/);
-  await wait(3900);                                                    // fin de l'affichage : la personne suivante
+  // The second request can be in flight when the hold timer expires. Await its
+  // rendered response, retaining both the single-request lock and identity assertions.
+  const deadline = Date.now() + 6000;
+  while (!/AGENT2 Test/.test(r.text('faceStatus')) && Date.now() < deadline) await wait(20);
   assert.equal(r.of('/recognize').length, 2); assert.match(r.text('faceStatus'), /AGENT2 Test/);
   assert.notEqual(r.of('/recognize')[0].body.burst_id, r.of('/recognize')[1].body.burst_id, 'une clé d\'idempotence par rafale');
   r.close();

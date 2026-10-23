@@ -807,9 +807,10 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
 <!-- Poste V6 : disposition en deux colonnes (pointage + tableau à gauche ; présents + effectifs par
      fonction à droite, hauteurs ajustables). Chargée après les couches qu'elle remplace. -->
 <link rel="stylesheet" href="/static/pointeur-v6.css?v=20261018-v6b">
+<link rel="stylesheet" href="/static/pointeur-v7.css?v=20261022-v7">
 <link rel="stylesheet" href="/static/design-system/atlas.css?v=20260927-atlas-ds-v1" media="screen">
 </head>
-<body class="atlas-ui ptr-v3 ptr-v5" data-atlas-surface="pointeur">
+<body class="atlas-ui ptr-v3 ptr-v5 ptr-v7" data-atlas-surface="pointeur">
 <section id="loginView" class="login">
   <div class="atlas-login-layout"><aside class="atlas-login-visual"><div class="atlas-login-brand">ATLA<span>S</span></div><div class="atlas-login-story"><span class="atlas-login-eyebrow">ESPACE POINTAGE</span><h2>Vos présences.<br>Un suivi terrain.</h2><div class="atlas-login-flow"><div><b>01</b><strong>Pointage</strong><small>Enregistrez les présences</small></div><div><b>02</b><strong>Sites</strong><small>Retrouvez vos affectations</small></div><div><b>03</b><strong>Planning</strong><small>Consultez votre organisation</small></div></div><p>Votre activité, réunie dans un seul espace.</p></div></aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
@@ -829,14 +830,14 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
 <section id="appView" class="app hidden">
   <header class="top">
     <div class="top-row">
-      <div class="brand"><img class="brand-logo-img" src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><div><div class="brand-title">POSTE DE POINTAGE</div><div class="brand-sub">Contrôle des présences en temps réel</div><div class="brand-user" id="userLabel">—</div></div></div>
+      <div class="brand"><span class="v7-wordmark"><i aria-hidden="true">Λ</i> ATLAS</span><img class="brand-logo-img" src="/static/iron-securite-logo.png" alt="IRON GLOBAL SÉCURITÉ"><div><div class="brand-title">POSTE DE POINTAGE</div><div class="brand-sub">IRON GLOBAL SOLUTION</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div id="headerClock" class="header-clock" aria-live="off"></div>
       <div class="top-actions">
         <div class="site-control society-control"><span class="site-control-label">SOCIÉTÉ</span><select id="societySelector" class="site-selector" aria-label="Sélectionner la société" onchange="changeAttendanceSociety(this.value)"></select></div><div class="site-control"><span class="site-control-label">SITE</span><select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select></div>
         <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button><button id="faceNav" onclick="showPointerSection('facial')">Facial</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> Scanner actif</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
-        <button class="fullscreen" onclick="togglePointerFullscreen()" title="Plein écran">⛶</button><button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
+        <span id="v7User" class="v7-user" aria-label="Utilisateur connecté">—</span><button class="fullscreen" onclick="togglePointerFullscreen()" title="Plein écran">⛶</button><button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
       </div>
     </div>
   </header>
@@ -911,13 +912,13 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
         <!-- Modes de pointage : chaque carte déclenche le mécanisme EXISTANT (aucune fonction nouvelle). -->
         <div class="mode-grid" role="group" aria-label="Modes de pointage">
-          <button id="qrModeBtn" type="button" class="mode-card active" aria-pressed="true" onclick="selectQrMode()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span><b>QR Code</b><small>Présentez votre badge</small><i class="mode-dot" aria-hidden="true"></i></button>
-          <button id="faceModeBtn" type="button" class="mode-card" onclick="showPointerSection('facial')"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="10" r="2.6"/><path d="M7.6 17c.8-2.8 8-2.8 8.8 0"/></svg></span><b>Reconnaissance faciale</b><small>Détection automatique</small></button>
-          <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code employé</small></button>
+          <button id="qrModeBtn" type="button" class="mode-card active" aria-pressed="true" onclick="selectQrMode()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM18 14h2.5M14 18v2.5"/></svg></span><b>QR Code</b><small>Scanner un badge</small><i class="mode-dot" aria-hidden="true"></i></button>
+          <button id="faceModeBtn" type="button" class="mode-card" onclick="showPointerSection('facial')"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="10" r="2.6"/><path d="M7.6 17c.8-2.8 8-2.8 8.8 0"/></svg></span><b>Reconnaissance faciale</b><small>Caméra du poste</small></button>
+          <button id="manualModeBtn" type="button" class="mode-card" aria-pressed="false" onclick="toggleManualPanel()"><span class="mode-ico" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="2"/><path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M6.5 13h.01M17.5 13h.01M9 14.5h6"/></svg></span><b>Saisie manuelle</b><small>Code, matricule ou nom</small></button>
         </div>
         <div class="pointer-search">
-            <input id="manualQuery" autocomplete="off" aria-label="Rechercher un employé par code, nom ou prénom" placeholder="Code, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
-            <button type="button" class="manual-search-button" onclick="activateInlineManualSearch();runManualSearch(document.getElementById('manualQuery').value.trim())">Rechercher</button></div>
+            <input id="manualQuery" autocomplete="off" aria-label="Rechercher un employé par code, nom ou prénom" placeholder="Code, matricule, nom ou prénom de l’employé…" onfocus="activateInlineManualSearch()" oninput="onManualQueryInput()">
+            <button type="button" class="manual-search-button" onclick="activateInlineManualSearch();runManualSearch(document.getElementById('manualQuery').value.trim())">⌕ &nbsp; Scanner / Rechercher</button><button class="v7-reset" type="button" onclick="resetManualPanel();selectQrMode()">⟳ &nbsp; Réinitialiser</button></div>
         <div class="action-row">
           <button id="manualToggleBtn" class="secondary ptr-legacy" onclick="toggleManualPanel()" tabindex="-1" aria-hidden="true">⌨ SAISIE MANUELLE</button>
           <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ LIRE LE QR AVEC LA CAMÉRA</button>
@@ -947,7 +948,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
           </div>
         </div>
       </section>
-      <section id="movementsCard" class="v5-card" aria-label="Derniers mouvements">
+      <section id="movementsCard" class="v5-card" aria-label="Historique des pointages"><h2 class="v7-history-title">◷ &nbsp; Historique des pointages</h2>
       <div class="tracking-toolbar"><div class="tracking-tabs" role="tablist" aria-label="Suivi des pointages">
         <button role="tab" aria-selected="true" data-tracking-tab="today" onclick="setTrackingTab('today')">Aujourd’hui</button><button role="tab" aria-selected="false" data-tracking-tab="entries" onclick="setTrackingTab('entries')">Entrées</button><button role="tab" aria-selected="false" data-tracking-tab="exits" onclick="setTrackingTab('exits')">Sorties</button><button role="tab" aria-selected="false" data-tracking-tab="anomalies" onclick="setTrackingTab('anomalies')">Anomalies</button></div>
         <div class="tracking-controls"><input id="trackingSearch" aria-label="Recherche employé dans le suivi" placeholder="Recherche employé" oninput="renderTracking()"><select id="trackingSite" aria-label="Site du suivi" onchange="changeAttendanceSite(this.value)"></select><input id="trackingDate" type="date" aria-label="Date du suivi" onchange="loadHistory();loadAttendanceAnomalies()"><button onclick="refreshPointeurData()">Actualiser</button><button id="detachTracking" onclick="openTrackingWindow()">Ouvrir dans une nouvelle fenêtre ↗</button></div></div>
@@ -964,6 +965,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
         <div id="panelSplitter" class="v6-splitter" role="separator" tabindex="0" aria-orientation="horizontal" aria-controls="presentNowCard functionsCard" aria-valuemin="10" aria-valuemax="90" aria-valuenow="55" aria-label="Hauteur des panneaux Présents actuellement et Effectifs par fonction (flèches haut et bas)"><i aria-hidden="true"></i></div>
         <button type="button" class="v6-split-btn" data-split="-1" aria-label="Agrandir les effectifs par fonction" title="Agrandir les effectifs par fonction">▲</button><button type="button" class="v6-split-btn" data-split="1" aria-label="Agrandir la liste des présents" title="Agrandir la liste des présents">▼</button><button type="button" class="v6-split-btn" data-split="reset" aria-label="Réinitialiser les dimensions des panneaux" title="Réinitialiser les dimensions">⟲</button>
       </div>
+      <section id="eventsCard" class="v5-card" aria-labelledby="eventsTitle"><h2 class="v5-title" id="eventsTitle">ϟ &nbsp; Événements en direct <span id="eventsCount" class="v5-count">—</span></h2><div id="eventsList" aria-live="polite"></div><button type="button" class="v7-critical-link" onclick="setPostDetail('anomalies')">Points critiques · Voir les situations à traiter →</button></section>
       <section id="functionsCard" class="v5-card" aria-labelledby="functionsTitle">
         <h2 class="v5-title" id="functionsTitle">Effectifs présents par fonction</h2>
         <div id="functionsList" class="v6-functions"></div>
@@ -996,6 +998,7 @@ body.lsf-sheet #lastScanCard .lsf-close{width:36px;height:36px;top:8px;right:10p
       </div>
     </div>
   </main>
+  <footer class="v7-footer"><span>♟ &nbsp; Total en poste</span><strong id="v7Present">—</strong><span id="v7Expected">/ — attendus</span><span class="v7-footer-right">◷ &nbsp; Dernière mise à jour : <time id="v7Updated">—</time> &nbsp; <span id="v7System">Connexion en cours…</span></span></footer>
   <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
 </section>
 
@@ -1193,10 +1196,12 @@ function opsStamp(d){const p=opsParts(d);return opsDate(d)+"T"+p.hour+":"+p.minu
 function updateHeaderClock(){
   const el=document.getElementById("headerClock");
   if(!el)return;
+  const user=document.getElementById("v7User"),userName=pointerSession?.user?.full_name||pointerSession?.user?.username||pointerSession?.username||"";
+  if(user){user.textContent=userName?userName.slice(0,1).toUpperCase():"—";user.title=userName}
   const now=opsNow();
   const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",timeZone:opsTimeZone});
   const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit",timeZone:opsTimeZone});
-  el.innerHTML='<span class="seg-date">'+esc(date)+'</span><span class="seg-clock">'+segClockHTML(time)+'</span>';
+  el.innerHTML='<time class="v7-clock">'+esc(time)+'</time><span class="seg-date">'+esc(now.toLocaleDateString('fr-FR',{weekday:'long',timeZone:opsTimeZone}))+'<br>'+esc(date)+'</span>';
   syncTrackingDate();
   el.dataset.time=time;el.dataset.date=opsDate(now);
   tickPost();
@@ -1451,7 +1456,7 @@ function renderPost(){
   const post=postState;
   document.body.classList.toggle("has-post",!!post);
   // Sans flux du poste (relève impossible, périmètre sans poste) : compteurs « — », jamais 0.
-  if(!post){setHTML("postKpis",[["expected","Attendus"],["present","Présents"],["absent","Absents / non pointés"],["maintien","En maintien"],["anomalies","Anomalies"]].map(([key,label])=>'<button type="button" class="v5-card v5-kpi" data-kpi="'+key+'" data-tone="muted" aria-pressed="false" disabled aria-label="'+label+' : donnée indisponible"><small>'+label+'</small><b>—</b></button>').join(""));renderSidePanels();return}
+  if(!post){setHTML("postKpis",[["expected","Attendus"],["present","Présents"],["absent","Absents / non pointés"],["maintien","En maintien"],["anomalies","Anomalies"]].map(([key,label])=>'<button type="button" class="v5-card v5-kpi" data-kpi="'+key+'" data-tone="muted" aria-pressed="false" disabled aria-label="'+label+' : donnée indisponible"><small>'+label+'</small><b>—</b></button>').join(""));renderSidePanels();renderOperationalDashboard();return}
 
   const m=post.maintien,mEl=document.getElementById("maintienBanner");
   if(mEl){
@@ -1469,6 +1474,7 @@ function renderPost(){
   setHTML("todoList",todo.length?todo.map(todoItemHTML).join(""):'<div class="v5-empty">Rien à traiter.</div>');
   renderSidePanels();
   renderMovements();
+  renderOperationalDashboard();
   tickPost();
   const idle=document.getElementById("lastScanCard");
   if(idle&&idle.classList.contains("is-idle")){const html=lastScanIdleHTML();if(idle.__idle!==html){idle.__idle=html;idle.innerHTML=html}}
@@ -1528,7 +1534,7 @@ function setPostDetail(kind,key=""){
 }
 function presentRowHTML(row,index){
   const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",overview=postState&&postState.status==="OVERVIEW";
-  return '<div class="v5-person" role="button" tabindex="0" data-pick="'+index+'" data-employee="'+esc(e.id)+'" aria-label="'+esc("Ouvrir la fiche de "+name)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:"",overview?row.site:""].filter(Boolean).join(" · "))+'</div><div class="v5-person-meta">Entrée réelle '+esc(row.entry)+(row.shift_start?' · Vacation '+esc(row.shift_start)+' → '+esc(row.shift_end):'')+'</div></div><span class="v5-badge'+(row.badge==="EN_MAINTIEN"?" is-maintien":"")+'">'+esc(row.badge_label)+'</span></div>';
+  return '<div class="v5-person" role="button" tabindex="0" data-pick="'+index+'" data-employee="'+esc(e.id)+'" aria-label="'+esc("Ouvrir la fiche de "+name)+'">'+personAvatarHTML(e)+'<div class="v5-person-main"><div class="v5-person-name">'+esc(name)+'</div><div class="v5-person-meta">'+esc([e.matricule,e.fonction||e.poste,e.group?"Groupe "+e.group:"",overview?row.site:""].filter(Boolean).join(" · "))+'</div><div class="v5-person-meta">Entrée réelle '+esc(row.entry)+(row.shift_start?' · Vacation '+esc(row.shift_start)+' → '+esc(row.shift_end):'')+(row.late_minutes?' · RETARD '+esc(row.late_minutes)+' MIN':'')+(row.maintained_minutes?' · Maintien '+esc(row.maintained_minutes)+' min':'')+'</div></div><span class="v5-badge'+(row.badge==="EN_MAINTIEN"?" is-maintien":row.badge==="EN_RETARD"?" is-late":"")+'">'+esc(row.badge_label)+'</span></div>';
 }
 function expectedRowHTML(row,index){
   const e=row.employee||{},name=[e.nom,e.prenom].filter(Boolean).join(" ")||"Employé",tone=row.state==="PRESENT"?"":row.state==="ABSENT"?" is-absent":" is-excused";
@@ -1716,10 +1722,17 @@ function renderSystemState(){
   const pill=document.getElementById("stationState"),label=document.getElementById("stationStateLabel");
   if(pill&&label){
     const pf=window.PointeurFacial||{},noDevice=facialMode&&pf.listed&&!(pf.devices||[]).length;
-    const state=!online?["is-bad","HORS LIGNE"]:noDevice?["is-bad","AUCUN ÉQUIPEMENT UTILISABLE"]:liveState==="ok"?["is-ok","SYSTÈME OPÉRATIONNEL"]:liveState==="error"?["is-bad","RELÈVE INTERROMPUE"]:["is-pending","CONNEXION EN COURS…"];
+    const cameraUnavailable=!facialMode&&cameraMode&&reader[1]==="bad";
+    const facialUnavailable=facialMode&&(pf.engineState==="ERROR"||pf.cameraState==="UNAVAILABLE");
+    const state=!online?["is-bad","HORS LIGNE"]:cameraUnavailable?["is-bad","CAMÉRA INDISPONIBLE"]:facialUnavailable?["is-bad","RECONNAISSANCE INDISPONIBLE"]:noDevice?["is-bad","AUCUN ÉQUIPEMENT UTILISABLE"]:liveState==="ok"?["is-ok","SYSTÈME OPÉRATIONNEL"]:liveState==="error"?["is-bad","RELÈVE INTERROMPUE"]:["is-pending","CONNEXION EN COURS…"];
     if(pill.className!=="station-state "+state[0])pill.className="station-state "+state[0];
     if(label.textContent!==state[1])label.textContent=state[1];
   }
+  const updated=document.getElementById("v7Updated"),system=document.getElementById("v7System");
+  if(updated)updated.textContent=time||"—";
+  if(system){system.textContent=label?.textContent||"Connexion en cours…";system.classList.toggle("is-ok",online&&liveState==="ok"&&pill?.classList.contains("is-ok"))}
+  const scannerPill=document.querySelector(".header-scanner-status");
+  if(scannerPill){const ready=online&&liveState==="ok"&&(facialMode?face.engineState==="ACTIVE":reader[1]==="ok");scannerPill.classList.toggle("is-unavailable",!ready);scannerPill.innerHTML='<span class="dot"></span> '+(ready?"Scanner actif":"Scanner en attente")}
   document.getElementById("liveBadge")?.classList.toggle("hidden",!(online&&liveState==="ok"));
 }
 // Cartes de mode : reflet de l'état existant (panneau de saisie manuelle ouvert ou non).
@@ -2320,11 +2333,18 @@ async function loadManualContext(employee){
       note="Si cette sortie est une erreur (double scan, mauvaise saisie), enregistrez une reprise de poste. La sortie reste au journal et l’opération est signalée.";
       explicit=true;
     }
+    const lateEntry=ctx.normal_entry;
+    const manualReasonRequired=ctx.manual_policy_version===7;
+    if(manualReasonRequired&&!lateEntry&&!explicit)note="Pointage manuel : motif obligatoire. L’action et l’opérateur seront tracés.";
+    if(lateEntry){
+      rows.push(["Début officiel",hm(lateEntry.scheduled_start)],["Heure réelle",hms(lateEntry.actual_entry)],["Retard calculé",lateEntry.late_minutes+" min"]);
+      note="Entrée manuelle après refus automatique. Motif obligatoire ; le retard est recalculé par le serveur à la confirmation.";
+    }
     button.dataset.intent=reentry?"REENTRY":"EXTRA_SHIFT_ENTRY";
     button.textContent=reentry?"REPRISE DE POSTE":"NOUVELLE ENTRÉE DE MAINTIEN";
     box.innerHTML='<dl class="v5-facts">'+rows.filter(r=>r[1]).map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join("")+'</dl>'
       +(note?'<p class="v5-reason">'+esc(note)+'</p>':"")
-      +(explicit?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
+      +((explicit||lateEntry||manualReasonRequired)?'<label for="manualReason">Motif'+(ctx.reason_required?" (obligatoire)":"")+'</label><textarea id="manualReason" maxlength="500"></textarea>':"")
       +(explicit?'<p class="v5-audit-note">Cette opération sera auditée.</p>':"");
     box.classList.toggle("hidden",!rows.length&&!note&&!explicit);
     button.classList.toggle("hidden",!explicit);
@@ -2657,11 +2677,11 @@ function renderTracking(){
   const events=trackingEvents.filter(e=>String(e.scanned_at||'').slice(0,10)===date&&(!query||[e.nom,e.matricule,e.poste].join(' ').toLowerCase().includes(query)));
   let columns,rows;
   if(trackingTab==='today'){
-    columns=['Nom et prénom','Matricule','Fonction',...(detachedTracking?['Société','Site']:[]),'Heure arrivée','Heure départ','Statut',...(detachedTracking?['Observation','Actions']:[])];
+    columns=['Nom et prénom','Matricule','Fonction',...(detachedTracking?['Société']:[]),'Heure arrivée','Heure départ','Statut','Site',...(detachedTracking?['Observation','Actions']:[])];
     const presentRows=(postState?.present||[]).map(r=>{const e=r.employee||{};return {nom:[e.nom,e.prenom].filter(Boolean).join(' '),matricule:e.matricule,poste:e.fonction||e.poste,societe:e.societe,site:r.site||postState.site,arrival:r.entry_at?hms(r.entry_at):r.entry,departure:'',status:r.badge_label||'En poste'}}).filter(r=>!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query));
-    rows=(trackingOnlyPresent?presentRows:(trackingDailyServer?trackingDailyServer.filter(r=>r.date===date&&(!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query))):trackingDailyRows(events))).map(r=>[r.nom,r.matricule,r.poste,...(detachedTracking?[r.societe,r.site]:[]),r.arrival,r.departure,r.status,...(detachedTracking?[r.observation,'—']:[])]);
+    rows=(trackingOnlyPresent?presentRows:(trackingDailyServer?trackingDailyServer.filter(r=>r.date===date&&(!query||[r.nom,r.matricule,r.poste].join(' ').toLowerCase().includes(query))):trackingDailyRows(events))).map(r=>[r.nom,r.matricule,r.poste,...(detachedTracking?[r.societe]:[]),r.arrival,r.departure,(r.status==='Sorti'&&r.late_minutes?r.status+' · Retard '+r.late_minutes+' min':r.status),r.site,...(detachedTracking?[r.observation,'—']:[])]);
   }else if(trackingTab==='entries'){
-    columns=['Heure','Nom et prénom','Code','Fonction','Société','Site','Mode','Statut'];rows=events.filter(e=>e.action==='arrivee').map(e=>[hms(e.scanned_at),e.nom,e.matricule,e.poste,e.societe,e.site,e.source||'—','Enregistré']);
+    columns=['Heure','Nom et prénom','Code','Fonction','Société','Site','Mode','Statut'];rows=events.filter(e=>e.action==='arrivee').map(e=>[hms(e.scanned_at),e.nom,e.matricule,e.poste,e.societe,e.site,e.source||'—',e.late_minutes?'Retard '+e.late_minutes+' min':'Enregistré']);
   }else if(trackingTab==='exits'){
     columns=['Heure','Nom et prénom','Code','Fonction','Société','Site','Durée de présence','Type de sortie','Statut'];rows=events.filter(e=>e.action==='depart').map(e=>[hms(e.scanned_at),e.nom,e.matricule,e.poste,e.societe,e.site,e.duration_minutes==null?'—':minutesLabel(e.duration_minutes),e.exit_type||'Sortie','Enregistré']);
   }else{
@@ -2672,7 +2692,9 @@ function renderTracking(){
       Number.isInteger(r.manualIndex)&&!detachedTracking?{html:'<button type="button" onclick="openManualFor('+r.manualIndex+')">Saisie manuelle</button>'}:'—']});
   }
   setHTML('trackingHead','<tr>'+columns.map(c=>'<th scope="col">'+esc(c)+'</th>').join('')+'</tr>');
-  setHTML('trackingBody',rows.length?rows.map(r=>'<tr>'+r.map(v=>'<td>'+(v?.html||esc(v||'—'))+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+columns.length+'">Aucun résultat dans le périmètre sélectionné.</td></tr>');
+  const statusColumn=columns.indexOf('Statut');
+  const statusHTML=value=>{const text=String(value||'—'),tone=/retard|maintien/i.test(text)?'vigilance':/absent|abandon|refus/i.test(text)?'critical':/en poste|présent/i.test(text)?'present':'information';return '<span class="v7-status-pill" data-tone="'+tone+'">'+esc(text)+'</span>'};
+  setHTML('trackingBody',rows.length?rows.map(r=>'<tr>'+r.map((v,index)=>'<td>'+(v?.html||(index===statusColumn?statusHTML(v):esc(v||'—')))+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+columns.length+'">Aucun résultat dans le périmètre sélectionné.</td></tr>');
 }
 const originalRenderPost=renderPost;renderPost=function(){originalRenderPost();renderTracking()};
 const originalSetupScanMode=setupScanMode;setupScanMode=function(){if(!detachedTracking)originalSetupScanMode()};
@@ -2684,6 +2706,16 @@ const originalEnterApp=enterApp;enterApp=async function(){
   await originalEnterApp();if(detachedTracking){stopScanner();window.PointeurFacial?.stop?.()}
 };
 
+function renderOperationalDashboard(){
+  const post=postState,k=post?.kpi||{};
+  const total=document.getElementById('v7Present'),expected=document.getElementById('v7Expected');
+  if(total)total.textContent=k.present??'—';if(expected)expected.textContent='/ '+(k.expected??'—')+' attendus';
+  const movements=(post?.movements||[]).map(r=>({key:r.key,time:r.heure,label:r.label||r.type,name:[r.name,r.matricule?'('+r.matricule+')':''].filter(Boolean).join(' '),detail:r.detail,tone:['REFUS','ABANDON'].includes(r.type)?'critical':r.type==='SORTIE'?'information':'vigilance'}));
+  const situations=(post?.todo||[]).map(r=>({key:r.key,time:r.at?hms(r.at):'—',label:r.label||r.code,name:[r.employee?.nom,r.employee?.prenom].filter(Boolean).join(' '),detail:r.message,tone:r.severity==='critical'?'critical':'vigilance'}));
+  const rows=[...situations,...movements].slice(0,30);
+  const count=document.getElementById('eventsCount');if(count)count.textContent=post?rows.length:'—';
+  setHTML('eventsList',rows.length?rows.map(r=>'<div class="v7-event" data-tone="'+esc(r.tone)+'"><time>'+esc(r.time)+'</time><span class="v7-event-kind">'+esc(r.label||'ÉVÉNEMENT')+'</span><div><b>'+esc(r.name||'')+'</b><small>'+esc(r.detail||'')+'</small></div><span aria-hidden="true">›</span></div>').join(''):'<div class="v5-empty">'+(post?'Aucun événement récent.':'Événements indisponibles.')+'</div>');
+}
 </script>
 </body>
 </html>

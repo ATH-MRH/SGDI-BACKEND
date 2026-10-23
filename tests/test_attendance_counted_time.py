@@ -292,4 +292,4 @@ def test_api_projections_expose_real_and_counted_time(client, db, auth_headers):
     assert (last["heure"], last["counted"]["counted_end"]) == ("22:18:00", _iso(ANCHOR, "22:00"))
 
     labels = client.get("/api/attendance/work-regimes", headers=auth_headers).json()["time_labels"]
-    assert labels["early_window_minutes"] == 30 and labels["counted_start"] and labels["entry_status"]["EARLY_OUTSIDE_WINDOW"]
+    assert labels["early_window_minutes"] == 45 and labels["counted_start"] and labels["entry_status"]["EARLY_OUTSIDE_WINDOW"]

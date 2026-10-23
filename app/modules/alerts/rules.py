@@ -22,7 +22,14 @@ CONTRACT_RELEVANT_EMPLOYEE_STATUSES: frozenset[str] = frozenset({"actif", "activ
 
 ABANDON_RULES = {"OPS": "attendance.abandon_poste.ops", "DRH": "attendance.abandon_poste.drh"}
 
+SITUATION_RULES = {"OPS":"attendance.situation.ops", "DRH":"attendance.situation.drh"}
+
 RULE_CATALOG: tuple[dict, ...] = (
+    *({"rule_key":key,"rule_version":1,"label":"Situation de pointage · "+audience,
+       "description":"Projection d'une situation canonique Attendance Core V7","module_key":audience.lower(),
+       "feature_key":None,"enabled":True,"severity_base":"warning",
+       "configuration_json":{"source":"attendance_anomaly","audience":audience}}
+      for audience,key in SITUATION_RULES.items()),
     *({"rule_key": key, "rule_version": 1, "label": "Abandon de poste · " + audience,
        "description": "Abandon validé par le pointeur", "module_key": audience.lower(),
        "feature_key": None, "enabled": True, "severity_base": "warning",

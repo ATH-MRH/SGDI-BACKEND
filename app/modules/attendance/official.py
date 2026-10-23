@@ -47,6 +47,9 @@ SHIFT_TIMES = {SHIFT_MORNING: ("06:00", "14:00"), SHIFT_AFTERNOON: ("14:00", "22
 NORMAL_SHIFT_MINUTES = 480
 GROUPS = ("A", "B", "C", "D")
 
+FIXED_MODEL_CODE = "3X8-FIXED-ABCD-V7"
+FIXED_GROUP_SHIFTS = dict(zip(GROUPS, SHIFTS))
+
 OFFICIAL_MODEL_CODE = "3X8-CONTINU-2222"
 OFFICIAL_MODEL_NAME = "3x8 continu — 4 groupes — cycle 8 jours (2/2/2/2)"
 # `status` reste lisible par le moteur historique (ops.service.configured_rotation_for_date).
@@ -114,6 +117,10 @@ def validate_model(rotation: RotationTemplate | None) -> None:
     offsets = rotation.group_offsets if isinstance(rotation.group_offsets, dict) else {}
     if not days or len(days) != rotation.cycle_length or any(shift_of(day) is None for day in days):
         raise ValueError("Modèle officiel invalide : cycle incomplet")
+    if rotation.code == FIXED_MODEL_CODE and (
+            rotation.group_offsets != {group:index for index,group in enumerate(GROUPS)}
+            or days != [_cycle_day(shift) for shift in SHIFTS]):
+        raise ValueError("Modèle V7 invalide : horaires fixes A/B/C/D requis")
     for day in days:
         if shift_of(day) == SHIFT_OFF:
             continue
@@ -151,6 +158,19 @@ def ensure_official_model(db: Session) -> RotationTemplate:
                                description="Modèle officiel du travail posté 24h/24 : 2 Matin, 2 Après-midi, 2 Nuit, 2 OFF.",
                                cycle_days=[dict(day) for day in OFFICIAL_CYCLE_DAYS],
                                group_offsets=dict(OFFICIAL_GROUP_OFFSETS), active=1, official=1, version=1)
+        db.add(row)
+        db.flush()
+    return row
+
+
+def ensure_fixed_model(db: Session) -> RotationTemplate:
+    """Version V7 : groupes permanents. Le modèle 2/2/2/2 historique reste immuable."""
+    row = db.scalar(select(RotationTemplate).where(RotationTemplate.code == FIXED_MODEL_CODE))
+    if row is None:
+        row = RotationTemplate(code=FIXED_MODEL_CODE, name="3x8 fixe — A matin / B après-midi / C nuit / D repos",
+            cycle_length=4, cycle_days=[_cycle_day(shift) for shift in SHIFTS],
+            group_offsets={group:index for index,group in enumerate(GROUPS)},
+            active=1, official=1, version=7, description="Horaires permanents par groupe — politique Pointeur V7")
         db.add(row)
         db.flush()
     return row
@@ -262,7 +282,8 @@ def _cycle_slot(rotation: RotationTemplate, anchor: SiteRotation, group: str, wo
     (`site_shift`)."""
     from app.modules.attendance import core
 
-    index = ((work_date - anchor.start_date).days + int(rotation.group_offsets[group])) % rotation.cycle_length
+    index = (int(rotation.group_offsets[group]) if rotation.code == FIXED_MODEL_CODE else
+             ((work_date - anchor.start_date).days + int(rotation.group_offsets[group])) % rotation.cycle_length)
     day = rotation.cycle_days[index]
     shift = shift_of(day)
     out = {"group": group, "shift": shift, "cycle_day": index + 1, "work_date": work_date, "scheduled_start": None, "scheduled_end": None}
@@ -370,6 +391,7 @@ def catalog(db: Session) -> dict[str, Any]:
     models = db.execute(select(RotationTemplate).where(RotationTemplate.official == 1, RotationTemplate.active == 1)
                         .order_by(RotationTemplate.name)).scalars().all()
     from app.modules.attendance import counted
+    models.sort(key=lambda model: (model.code != FIXED_MODEL_CODE, model.name))
 
     return {
         "time_labels": {**counted.LABELS, "entry_status": dict(counted.ENTRY_STATUS_LABELS),

@@ -750,3 +750,14 @@ def audit(db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope
         "resource": r.resource, "resource_id": r.resource_id, "result": r.result,
         "old_state": r.old_state, "new_state": r.new_state,
     } for r in rows]
+
+
+@router.get("/attendance/situations")
+def attendance_situations(db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope)):
+    """Projection BEO des points critiques canoniques ; aucun calcul métier ni écriture."""
+    from app.modules.attendance import situations
+    rows = db.scalars(select(AttendanceAnomaly).where(
+        AttendanceAnomaly.site_id.in_(scope.selected or [-1]),
+        AttendanceAnomaly.employee_id.in_(assigned_employees_subquery(scope.selected)),
+    ).order_by(AttendanceAnomaly.id.desc()).limit(100)).all()
+    return {"items": [{**situations.view(row), **scope.label(row.site_id)} for row in rows]}

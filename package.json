@@ -44,11 +44,12 @@
     "test:beo-attendance-v4-e2e": "node --test tests_frontend/beo-attendance-v4-e2e.test.js",
     "test:pointeur-dual-screen-chrome": "node --test tests_frontend/pointeur-dual-screen-chrome.test.js",
     "test:pointeur-multi-facial-e2e": "node --test --test-force-exit tests_frontend/pointeur-multi-facial-e2e.test.js",
-    "pretest": "node --test tests_frontend/brq.test.js",
+    "pretest": "node --test tests_frontend/brq.test.js tests_frontend/pointeur-v7-chrome.test.js tests_frontend/pointeur-v7.test.js tests_frontend/pointeur-v7-integration.test.js",
     "test:drh-contract-excel-import": "node --test tests_frontend/drh-contract-excel-import.test.js",
     "test:borne-association-qr-chrome": "node --test --test-force-exit tests_frontend/borne-association-qr-chrome.test.js",
     "test:pointeur-badge-historique-chrome": "node --test --test-force-exit tests_frontend/pointeur-badge-historique-chrome.test.js",
     "test:pointeur-confirmation-chrome": "node --test --test-force-exit tests_frontend/pointeur-confirmation-chrome.test.js",
+    "test:pointeur-v7-chrome": "node --test --test-force-exit tests_frontend/pointeur-v7-chrome.test.js",
     "test:pointeur-v6-chrome": "node --test --test-force-exit tests_frontend/pointeur-v6-chrome.test.js"
   },
   "devDependencies": {

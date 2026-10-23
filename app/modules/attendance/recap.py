@@ -38,7 +38,7 @@ from app.modules.ops.models import Assignment, RotationTemplate, Site
 
 TREATMENT_TO_QUALIFY = "A_QUALIFIER"               # récupération / paiement : décision humaine à venir
 TREATMENT_LABELS = {TREATMENT_TO_QUALIFY: "À qualifier (récupération ou paiement)"}
-REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted.REFUSALS))
+REFUSAL_ACTIONS = tuple(f"attendance.{code.lower()}" for code in sorted(counted.REFUSALS)) + ("attendance.early_exit_refused", "attendance.off_schedule_refused", "attendance.rotation_not_configured", "attendance.v7_transition_rest_required")
 RELIEF_ANOMALIES = (counted.ANOMALY_UNCLOSED,)     # anomalies de relève : vacation restée sans sortie
 MAX_PERIOD_DAYS = 366 * 6
 
@@ -126,7 +126,8 @@ def _anomalies(db: Session, employee_id: int, start: date, end: date, site_ids: 
     rows = db.execute(select(AttendanceAnomaly).where(
         AttendanceAnomaly.employee_id == employee_id, AttendanceAnomaly.presence_date >= start, AttendanceAnomaly.presence_date <= end,
     ).order_by(AttendanceAnomaly.presence_date, AttendanceAnomaly.id)).scalars().all()
-    return [{"id": a.id, "date": a.presence_date.isoformat(), "type": a.anomaly_type, "severity": a.severity, "status": a.status,
+    from app.modules.attendance import situations
+    return [{"situation": situations.view(a), "id": a.id, "date": a.presence_date.isoformat(), "type": a.anomaly_type, "severity": a.severity, "status": a.status,
              "message": a.message, "site_id": a.site_id, "event_id": a.event_id, "source": a.source,
              "resolution": a.resolution, "resolved_by": a.resolved_by,
              "resolved_at": core.to_local(a.resolved_at).isoformat(timespec="seconds") if a.resolved_at else None}
@@ -227,7 +228,8 @@ def period(db: Session, employee: Employee, start: date, end: date, *, site_ids:
         shift["anomalies"] = [{"id": a["id"], "type": a["type"], "status": a["status"], "resolution": a["resolution"]} for a in linked]
     return {"employee_id": employee.id, "date_from": start.isoformat(), "date_to": end.isoformat(), "materialized": False,
             "summary": summarize(planned, shifts, anomalies, refusals, unconfigured),
-            "planned": planned, "history": shifts, "refusals": refusals, "anomalies": anomalies}
+            "planned": planned, "history": shifts, "refusals": refusals, "anomalies": anomalies,
+            "critical_points": anomalies}
 
 
 def monthly(db: Session, employee: Employee, month: str, *, site_ids: set[int] | None = None) -> dict[str, Any]:

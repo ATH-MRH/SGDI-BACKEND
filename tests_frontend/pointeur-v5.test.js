@@ -60,7 +60,7 @@ test('header : logo IRON GLOBAL SÉCURITÉ, POSTE DE POINTAGE, zone « Pointage 
   const t = await ready(boot({ live: [LIVE(POST())] }));
   const logo = t.d.querySelector('.brand-logo-img');
   assert.equal(logo.getAttribute('alt'), 'IRON GLOBAL SÉCURITÉ'); assert.match(logo.getAttribute('src'), /iron-securite-logo\.png$/);
-  assert.match(t.d.querySelector('.brand').textContent, /POSTE DE POINTAGE\s*Contrôle des présences en temps réel/);
+  assert.match(t.d.querySelector('.brand').textContent, /POSTE DE POINTAGE\s*IRON GLOBAL SOLUTION/);
   assert.equal(t.text('scannerTitle'), 'Pointage');
   assert.match(t.d.querySelector('.station-sub').textContent, /Reconnaissance faciale, QR ou saisie manuelle/);
   assert.equal(t.d.getElementById('headerClock').dataset.date, '2026-10-01');            // date métier du serveur

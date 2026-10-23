@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.attendance import core, deviations, learning, official, projection, sheets
 from app.modules.attendance import counted as counted_time
-from app.modules.attendance import recap
+from app.modules.attendance import recap, situations
 from app.modules.attendance.models import (
     ANOMALY_DISMISSED,
     ANOMALY_OPEN,
@@ -219,7 +219,8 @@ def board(
             # Travail posté : heure RÉELLE (arrival/departure) et temps COMPTABILISÉ sont distincts.
             "counted": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_NORMAL), None),
             "extra_shift": next((c for c in (counted_time.view(e.data) for e in reversed(evs)) if c and c["kind"] == counted_time.KIND_EXTRA), None),
-            "anomalies": [{"id": a.id, "type": a.anomaly_type, "severity": a.severity, "message": a.message} for a in anomalies],
+            "anomalies": [{"situation": situations.view(a),
+        "id": a.id, "type": a.anomaly_type, "severity": a.severity, "message": a.message} for a in anomalies],
         })
 
     expected = [r for r in rows if r["planning"]["working"] is not False]
@@ -330,6 +331,8 @@ def resolve_anomaly(anomaly_id: int, payload: AnomalyResolution, request: Reques
         raise HTTPException(status_code=404, detail="Anomalie introuvable")
     if row.status != ANOMALY_OPEN:
         raise HTTPException(status_code=409, detail="Anomalie déjà traitée")
+    if row.severity == "critical" or (row.details or {}).get("workflow"):
+        raise HTTPException(409, "Cette situation nécessite le workflow de traitement et de validation")
     row.status = payload.status
     row.resolution = payload.resolution.strip()
     row.resolved_by = user.username
@@ -340,6 +343,31 @@ def resolve_anomaly(anomaly_id: int, payload: AnomalyResolution, request: Reques
     db.commit()
     return _anomaly_out(row, db.get(Employee, row.employee_id) if row.employee_id else None,
                         db.get(Site, row.site_id) if row.site_id else None)
+
+
+class SituationTransition(BaseModel):
+    status: str
+    reason: str = Field(min_length=3, max_length=2000)
+    responsible: str = Field(min_length=1, max_length=120)
+
+
+@router.patch("/anomalies/{anomaly_id}/workflow")
+def transition_situation(anomaly_id: int, payload: SituationTransition, request: Request,
+                         db: Session = Depends(get_db), user: User = Depends(current_user)):
+    from app.modules.attendance import situations
+    _require_action(user, "validate")
+    if db.get_bind().dialect.name == "sqlite":
+        connection = db.connection()
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+    row = db.scalar(select(AttendanceAnomaly).where(AttendanceAnomaly.id == anomaly_id).with_for_update())
+    allowed = _allowed_assignment_site_ids(db, user)
+    if not row or (allowed is not None and row.site_id not in set(allowed)):
+        raise HTTPException(404, "Situation introuvable")
+    result = situations.transition(db, row, target=payload.status, reason=payload.reason,
+                                   responsible=payload.responsible, actor=user, request=request)
+    db.commit()
+    return result
 
 
 # ── Corrections, clôture, réouverture ────────────────────────────────────────────────────
