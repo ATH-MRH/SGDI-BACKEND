@@ -278,11 +278,23 @@ def _crop_marks(c, left: float, top: float, width: float, height: float) -> None
     c.restoreState()
 
 
+def _pick_tray_by_pdf_size(c) -> None:
+    """Préférence d'impression PDF 1.7 « PickTrayByPDFSize » : l'imprimante prend le papier à la
+    taille de la page (la carte), au lieu d'agrandir ou de centrer la carte sur un A4. reportlab ne
+    connaît pas encore cette clé : on l'ajoute à la seule liste de validation de ce document."""
+    from reportlab.pdfbase import pdfdoc
+    c.setViewerPreference("PrintScaling", "None")
+    prefs = c._doc.Catalog.ViewerPreferences
+    prefs.validate = {**prefs.validate, "PickTrayByPDFSize": pdfdoc.checkPDFBoolean}
+    prefs["PickTrayByPDFSize"] = "true"
+
+
 def render_cards(items: list[BadgeItem], *, title: str = "Badges") -> bytes:
     """Une page par face, au format exact de la carte."""
     buffer = io.BytesIO()
     c = pdf_canvas.Canvas(buffer, pageCompression=1)
     c.setViewerPreference("PrintScaling", "None")      # taille réelle : jamais « ajuster à la page »
+    _pick_tray_by_pdf_size(c)                           # papier choisi selon la taille de la carte, pas A4
     c.setTitle(title)
     c.setAuthor("IRON GLOBAL — Studio Badges DRH")
     for item in items:

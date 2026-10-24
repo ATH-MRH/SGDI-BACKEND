@@ -33,6 +33,8 @@ const SETTINGS = { society: null, data: { number_prefix: "BDG", validity_months:
 const ALL = { create: true, validate: true, export: true, admin: true };
 const NONE = { create: false, validate: false, export: false, admin: false };
 
+// PDF minimal à pages dimensionnées (MediaBox en points, comme ceux du serveur).
+const pdfText = pages => "%PDF-1.4\n" + pages.map(([w, h], i) => `${i + 1} 0 obj << /Type /Page /MediaBox [ 0 0 ${(w * 72 / 25.4).toFixed(3)} ${(h * 72 / 25.4).toFixed(3)} ] >> endobj`).join("\n");
 function setup(routes, rights) {
   routes = {
     "/permissions": { value: rights || ALL }, "/templates": { value: { items: [TEMPLATE], fields: { nom: "Nom" }, fonts: ["Helvetica"] } },
@@ -54,7 +56,25 @@ function setup(routes, rights) {
   };
   w.sgdiApiUrl = p => "/api" + p;
   w.sgdiAuthHeaders = () => ({});
-  w.fetch = async (url, options) => { calls.push(["fetch", url, options]); return { ok: true, headers: { get: () => 'attachment; filename="badge.pdf"' }, blob: async () => new w.Blob(["%PDF-1.4"]) }; };
+  // PDF renvoyé : w.__pdf = { pages: [[w, h]…], header } (A4 par défaut, comme une planche).
+  w.__pdf = { pages: [[210, 297]], header: "A4" };
+  w.fetch = async (url, options) => {
+    calls.push(["fetch", url, options]);
+    const pdf = w.__pdf;
+    return { ok: true, headers: { get: name => (name.toLowerCase() === "x-badge-page-size-mm" ? pdf.header : 'attachment; filename="badge.pdf"') },
+      blob: async () => new w.Blob([pdfText(pdf.pages)], { type: "application/pdf" }) };
+  };
+  w.TextDecoder = w.TextDecoder || TextDecoder;
+  // Cadre d'impression : chargement simulé, appel de print() espionné (w.__printBlocked : refus du navigateur).
+  const append = w.document.body.appendChild.bind(w.document.body);
+  w.document.body.appendChild = node => {
+    const out = append(node);
+    if (node.dataset && node.dataset.bsPrintFrame) {
+      node.contentWindow.print = () => { if (w.__printBlocked) throw new Error("blocked"); calls.push(["print", node.src]); };
+      setTimeout(() => node.dispatchEvent(new w.Event("load")), 0);
+    }
+    return out;
+  };
   w.URL.createObjectURL = () => "blob:pdf";
   w.URL.revokeObjectURL = () => {};
   w.HTMLAnchorElement.prototype.click = function () { calls.push(["download", this.href, this.download || "onglet"]); };
@@ -211,11 +231,12 @@ test("printing a badge: identical reprint, format choice, PDF requested from the
   assert.deepEqual([...layout.options].map(o => o.value), ["card", "a4"]);
   assert.match(layout.options[0].textContent, /54 × 86 mm/);
   layout.value = "a4";
-  modal.querySelector("[data-pv-print]").click(); await settle();
+  modal.querySelector("[data-pv-print]").click(); await settle(); await settle();
   const sent = env.calls.find(c => c[0] === "fetch");
   assert.equal(sent[1], "/api/drh/badges/print/pdf");
   assert.deepEqual(JSON.parse(sent[2].body), { badge_ids: [3], layout: "a4" });
-  assert.ok(env.calls.some(c => c[0] === "download"));
+  assert.ok(env.calls.some(c => c[0] === "print"), "fenêtre d'impression ouverte directement");
+  assert.ok(!env.calls.some(c => c[0] === "download"), "aucun téléchargement préalable");
   assert.equal(env.w.document.querySelector("[data-bs-pv]"), null);
   env.dom.window.close();
 });
@@ -406,4 +427,60 @@ test("the studio badges operator sees issue and print actions, refusals carry th
   assert.match(reader.view.textContent, /Impression : Votre compte est limité à la consultation/);
   assert.match(reader.view.textContent, /Émission : Votre compte est limité à la consultation/);
   reader.dom.window.close();
+});
+
+function printEnv(design) {
+  const detail = { ...BADGE, design, values: { nom_complet: "BENALI Karim", matricule: "K26" }, qr: ["1"], crop: {}, width_mm: design.width, height_mm: design.height, template_name: "Paysage" };
+  return setup({ "/employees/7": { value: { ...EMPLOYEE, badge: BADGE, badges: [BADGE] } }, "/3": { value: detail } }, ALL);
+}
+const LANDSCAPE = { ...DESIGN, width: 85.6, height: 54, pages: [DESIGN.pages[0], { ...DESIGN.pages[0], name: "Verso" }] };
+
+test("direct print: 85,6 × 54 mm card, recto and verso, checked against the model before the print dialog", async () => {
+  const env = printEnv(LANDSCAPE);
+  env.w.__pdf = { pages: [[85.6, 54], [85.6, 54]], header: "85.6x54" };
+  await show(env, "creer", "#/drh/badges/creer/7");
+  env.view.querySelector('[data-bs="print-dialog"]').click(); await settle();
+  const modal = env.w.document.querySelector("[data-bs-pv]");
+  assert.match(modal.querySelector("[data-pv-layout]").options[0].textContent, /85,6 × 54 mm/);
+  assert.match(modal.querySelector("[data-pv-print]").textContent, /^Imprimer$/);
+  modal.querySelector("[data-pv-print]").click(); await settle(); await settle();
+  assert.deepEqual(JSON.parse(env.calls.find(c => c[0] === "fetch")[2].body), { badge_ids: [3], layout: "card" });
+  assert.ok(env.calls.some(c => c[0] === "print"));
+  assert.ok(env.calls.some(c => c[0] === "toast" && /85,6 × 54 mm — 2 pages \(recto et verso\)/.test(c[1]) && c[2] === "success"));
+  assert.ok(!env.calls.some(c => c[0] === "download"));
+  env.dom.window.close();
+});
+
+test("direct print refuses a document whose size differs from the model (never a silent 54 × 86)", async () => {
+  const env = printEnv(LANDSCAPE);
+  env.w.__pdf = { pages: [[54, 86]], header: "54x86" };
+  await show(env, "creer", "#/drh/badges/creer/7");
+  env.view.querySelector('[data-bs="print-dialog"]').click(); await settle();
+  env.w.document.querySelector("[data-pv-print]").click(); await settle(); await settle();
+  assert.ok(!env.calls.some(c => c[0] === "print"));
+  assert.ok(env.calls.some(c => c[0] === "toast" && /Taille du document \(54 × 86 mm\) différente du modèle \(85,6 × 54 mm\)/.test(c[1]) && c[2] === "error"));
+  assert.ok(env.w.document.querySelector("[data-bs-pv]"), "la fenêtre reste ouverte pour corriger");
+  env.dom.window.close();
+});
+
+test("when the browser blocks the print dialog, an explicit message is shown and the PDF opens in a tab", async () => {
+  const env = printEnv(LANDSCAPE);
+  env.w.__pdf = { pages: [[85.6, 54], [85.6, 54]], header: "85.6x54" }; env.w.__printBlocked = true;
+  await show(env, "creer", "#/drh/badges/creer/7");
+  env.view.querySelector('[data-bs="print-dialog"]').click(); await settle();
+  env.w.document.querySelector("[data-pv-print]").click(); await settle(); await settle();
+  assert.ok(env.calls.some(c => c[0] === "download" && c[2] === "onglet"));
+  assert.ok(env.calls.some(c => c[0] === "toast" && /bloqué l'ouverture automatique de la fenêtre d'impression/.test(c[1]) && /85,6 × 54 mm/.test(c[1])));
+  env.dom.window.close();
+});
+
+test("the PDF can still be downloaded on purpose, without printing", async () => {
+  const env = printEnv(DESIGN);
+  env.w.__pdf = { pages: [[54, 86]], header: "54x86" };
+  await show(env, "creer", "#/drh/badges/creer/7");
+  env.view.querySelector('[data-bs="print-dialog"]').click(); await settle();
+  env.w.document.querySelector("[data-pv-download]").click(); await settle(); await settle();
+  assert.ok(env.calls.some(c => c[0] === "download" && c[2] === "badge.pdf"));
+  assert.ok(!env.calls.some(c => c[0] === "print"));
+  env.dom.window.close();
 });
