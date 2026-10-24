@@ -26,10 +26,14 @@ def test_published_month_respects_one_third_rules_and_kpis(db, central_site):
             assert slot["occurrence_id"].startswith(f"{site.id}:{central_site['published'].id}:")
         assert set(day["off_groups"]) | {s["group"] for s in day["slots"] if s["group"]} == set("ABCD")
     first = month["days"][0]
-    assert [(s["label"], s["group"], s["start"], s["end"]) for s in first["slots"]] == [("Jour", "A", "08:00", "17:00"), ("Nuit", "B", "17:00", "08:00")]
+    assert [(s["label"], s["group"], s["start"], s["end"]) for s in first["slots"]] == [("Jour", "A", "08:00", "16:30"), ("Nuit", "B", "16:30", "08:00")]
     assert first["slots"][1]["planned_staff"] == 2
     assert month["kpis"]["planned_staff"] == 5 and month["kpis"]["critical_points"] == 0
     assert all(rule["ok"] for rule in month["summary"]["rules"])
+    # Calendrier du site (arbitrage DG) : semaine dimanche → samedi, week-end vendredi-samedi couvert par B/C/D.
+    assert month["calendar"] == {"week_start": 6, "workdays": [6, 0, 1, 2, 3], "weekend": [4, 5]}
+    friday = next(d for d in month["days"] if d["date"] == "2026-10-02")
+    assert friday["weekend"] and friday["slots"][0]["shift"] == "JOUR" and friday["slots"][0]["group"] in "BCD"
     assert month["summary"]["coverage"]["weekends"][0] == month["summary"]["coverage"]["weekends"][1] > 0
     night = live.control_post(db, site.id, AT_NIGHT)["current"]
     assert first["slots"][1]["occurrence_id"] == night["occurrence_id"]       # OPS = Pointeur
@@ -70,6 +74,8 @@ def test_site_list_shows_labels_and_month_route(db, client, auth_headers, centra
     month = client.get(f"/api/ops/central-rotations/sites/{site.id}/month", params={"month": "2026-10"}, headers=auth_headers)
     assert month.status_code == 200 and month.json()["site"]["name"] == site.name
     assert client.get(f"/api/ops/central-rotations/sites/{site.id}/month", params={"month": "2026-13"}, headers=auth_headers).status_code == 422
+    history = client.get(f"/api/ops/central-rotations/sites/{site.id}/history", headers=auth_headers).json()["items"]
+    assert history[-1]["config"]["week_start"] == 6                       # versionné avec la configuration
     overview = client.get("/api/ops/central-rotations/overview", headers=auth_headers).json()
     assert overview["active_sites"] >= 1 and set(overview) == {"active_sites", "active_regimes", "critical_points", "drafts_to_validate"}
 
@@ -88,7 +94,7 @@ def beo_headers(client, db, site):
 def test_beo_coverage_matches_pointeur_and_engine(db, client, central_site, monkeypatch):
     site = central_site["site"]
     b1, _ = central_site["B"]
-    core.record_scan(db, employee=b1, source="QR", actor=ACTOR, idempotency_key=None, now=_ts(NIGHT_DAY, "17:20"))
+    core.record_scan(db, employee=b1, source="QR", actor=ACTOR, idempotency_key=None, now=_ts(NIGHT_DAY, "16:50"))
     monkeypatch.setattr(core, "_now_local", lambda: AT_NIGHT)
     headers = beo_headers(client, db, site)
     response = client.get("/api/site-workforce/attendance/coverage", params={"date": NIGHT_DAY.isoformat(), "shift": "NUIT"}, headers=headers)
@@ -99,6 +105,10 @@ def test_beo_coverage_matches_pointeur_and_engine(db, client, central_site, monk
     assert row["occurrence_id"] == pointeur["current"]["occurrence_id"]
     assert (row["expected"], row["present"], row["late"], row["group"], row["regime_label"]) == (2, 1, 1, "B", "1/3")
     assert row["expected"] == pointeur["kpi"]["expected"]
+    # Sans date ni vacation : la vacation EN COURS (nuit commencée la veille), celle du Pointeur.
+    current = client.get("/api/site-workforce/attendance/coverage", headers=headers).json()
+    assert (current["current"], current["date"], current["shift"]) == (True, NIGHT_DAY.isoformat(), "NUIT")
+    assert [(r["occurrence_id"], r["expected"], r["present"]) for r in current["rows"]] == [(pointeur["current"]["occurrence_id"], 2, 1)]
     assert row["absent"] == 1 and row["status_label"] == "Attention"        # 1 présent sur 2 attendus, requis 1
     assert body["kpis"]["expected"] == 2 and body["kpis"]["late"] == 1
     day = client.get("/api/site-workforce/attendance/coverage", params={"date": NIGHT_DAY.isoformat(), "shift": "JOUR"}, headers=headers).json()

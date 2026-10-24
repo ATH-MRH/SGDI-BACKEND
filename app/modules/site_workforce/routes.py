@@ -323,9 +323,14 @@ def attendance_coverage(response: Response, day: date | None = Query(None, alias
         raise HTTPException(403, "Lecture du pointage non autorisée")
     response.headers["Cache-Control"] = "no-store, private"
     now = attendance_core._now_local()
+    current = day is None and not shift
+    if current:
+        # Ni date ni vacation choisies : la vacation en cours, identique à celle du Pointeur.
+        from app.modules.rotations.views import current_vacation
+        day, shift = current_vacation(db, set(scope.selected), now)
     result = coverage(db, set(scope.selected), day or now.date(), now=now, shift_kind=shift, group=group,
                       sites=dict(scope.sites), photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
-    return {**result, "sites": [scope.label(sid) for sid in scope.selected]}
+    return {**result, "current": current, "sites": [scope.label(sid) for sid in scope.selected]}
 
 
 # ── Pointage (§9) ────────────────────────────────────────────────────────────────────────

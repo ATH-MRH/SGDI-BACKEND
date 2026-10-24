@@ -46,7 +46,10 @@
   window.SiteWorkforceViews.couverture = async function (container, ctx) {
     styles();
     const today = new Date().toISOString().slice(0, 10);
-    const f = { date: ctx.query.get("date") || today, shift: ctx.query.get("vacation") || "JOUR", group: ctx.query.get("groupe") || "" };
+    // Sans date ni vacation choisies, le serveur retient la vacation en cours (celle du Pointeur) ;
+    // l'écran reprend ensuite sa date et sa nature dans les filtres.
+    const chosen = ctx.query.get("date") || ctx.query.get("vacation");
+    const f = { date: ctx.query.get("date") || (chosen ? today : ""), shift: ctx.query.get("vacation") || "", group: ctx.query.get("groupe") || "" };
     container.innerHTML = `<div class="cov">
       <div class="cov-filters" role="search" aria-label="Filtres de couverture">
         <label class="cov-field">Groupe<select id="cov-group"><option value="">Tous les groupes</option>${["A", "B", "C", "D"].map((g) => `<option value="${g}" ${g === f.group ? "selected" : ""}>Groupe ${g}</option>`).join("")}</select></label>
@@ -65,7 +68,13 @@
     async function load() {
       const body = container.querySelector("#cov-body");
       try {
-        const data = await SW.guardedApi("coverage", "/site-workforce/attendance/coverage", { params: { date: f.date, shift: f.shift, group: f.group } });
+        const params = f.date || f.shift ? { date: f.date || today, shift: f.shift, group: f.group } : { group: f.group };
+        const data = await SW.guardedApi("coverage", "/site-workforce/attendance/coverage", { params });
+        if (!f.date) {
+          f.date = data.date; f.shift = data.shift || "";
+          container.querySelector("#cov-date").value = f.date;
+          container.querySelectorAll("[data-shift]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.shift === f.shift)));
+        }
         stopPhotos();
         const k = data.kpis;
         const rows = data.rows.map((r) => `<tr><td class="cov-site" data-label="Site"><b>${SW.esc(r.site || "—")}</b><div class="cov-muted">${SW.esc(r.shift_label)} ${SW.esc(r.start)} – ${SW.esc(r.end)}</div><div class="cov-muted">${SW.esc(r.regime_label)}${r.configuration_version ? " · v" + SW.esc(r.configuration_version) : ""}</div></td>

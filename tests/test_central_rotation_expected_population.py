@@ -17,7 +17,7 @@ from tests.test_attendance_counted_time import ACTOR, ANCHOR, SOC, _setup, _tag,
 from tests.test_central_rotation_engine import config
 from tests.test_central_rotation_integration import adopt
 
-NIGHT_DAY = ANCHOR                                 # 1/3 : Nuit B du 01/10 17:00 au 02/10 08:00
+NIGHT_DAY = ANCHOR                                 # 1/3 : Nuit B du 01/10 16:30 au 02/10 08:00
 AT_NIGHT = _ts(ANCHOR + timedelta(days=1), "02:00")
 
 
@@ -143,7 +143,7 @@ def test_absence_late_arrival_departure_and_maintien(db, central_site):
     site = central_site["site"]
     b1, b2 = central_site["B"]
     db.add(DailyPresence(employee_id=b2.id, site_id=site.id, presence_date=NIGHT_DAY, status="conge")); db.commit()
-    late = core.record_scan(db, employee=b1, source="QR", actor=ACTOR, idempotency_key=None, now=_ts(NIGHT_DAY, "17:20"))
+    late = core.record_scan(db, employee=b1, source="QR", actor=ACTOR, idempotency_key=None, now=_ts(NIGHT_DAY, "16:50"))
     assert late["counted"]["late_minutes"] == 20
     post = live.control_post(db, site.id, AT_NIGHT)
     assert (post["kpi"]["expected"], post["kpi"]["present"], post["kpi"]["excused"], post["kpi"]["absent"]) == (2, 1, 1, 0)

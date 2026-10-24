@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-ENGINE_VERSION = 'atlas-rotations-1'
+ENGINE_VERSION = 'atlas-rotations-2'
 REGIMES = ('3X8', '24H48', '1/2', '1/3', 'NORMAL', 'CUSTOM')
 GROUPS = tuple('ABCD')
 
@@ -22,6 +22,9 @@ def validate(config):
                 'required_staff','calendar_source','calendar_version','calendar_valid_from','calendar_valid_until')
     if any(k not in c for k in required):
         raise ValueError('Configuration explicite et complète requise')
+    # Calendrier propre au site (ex. dimanche → jeudi ouvrés) : jamais de lundi–vendredi implicite.
+    if type(c.get('week_start')) is not int or c['week_start'] not in range(7):
+        raise ValueError('Début de semaine requis (0 = lundi … 6 = dimanche)')
     if c['regime'] not in REGIMES:
         raise ValueError('Régime inconnu')
     ZoneInfo(c['timezone']); date.fromisoformat(c['anchor'])
@@ -34,6 +37,8 @@ def validate(config):
         raise ValueError('Jour de semaine invalide')
     if set(c['workdays']) & set(c['weekend']) or set(c['workdays']) | set(c['weekend']) != set(range(7)):
         raise ValueError('Jours ouvrés et week-end doivent partitionner la semaine')
+    if c['regime']=='1/3' and not c['workdays']:
+        raise ValueError('Jours ouvrés du groupe A requis')
     for d in c['holidays']: date.fromisoformat(d)
     if date.fromisoformat(c['calendar_valid_until']) < date.fromisoformat(c['calendar_valid_from']):
         raise ValueError('Période du calendrier invalide')
@@ -98,6 +103,11 @@ def night_minutes(start,end,c):
         total+=max(0,int((min(end,b)-max(start,a)).total_seconds()//60))
         d+=timedelta(days=1)
     return total
+
+
+def week_of(day,c):
+    """Premier jour de la semaine du site contenant ce jour de travail."""
+    return day-timedelta(days=(day.weekday()-c['week_start'])%7)
 
 
 def _slot(day,kind,group,start,end,c):
@@ -175,6 +185,8 @@ def occurrences(config,first,days):
                     slot['excluded'][g]='Conflit ou repos insuffisant'
             result.append(slot);d+=timedelta(days=1)
     selected=[s for s in result if first<=date.fromisoformat(s['work_date'])<first+timedelta(days=days)]
+    for s in selected:
+        s['week']=week_of(date.fromisoformat(s['work_date']),c).isoformat()
     selected.sort(key=lambda s:(s['start'],s['shift'],s['group'] or ''))
     errors=[]
     for day in sorted({s['work_date'] for s in selected}):

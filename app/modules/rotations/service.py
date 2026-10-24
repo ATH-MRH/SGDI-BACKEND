@@ -152,7 +152,10 @@ def simulate(db,draft,days=30):
                 if datetime.fromisoformat(slot['start'])-to_local(last.occurred_at)<timedelta(minutes=draft.config['minimum_rest_minutes']):
                     result['errors'].append({'code':'ACTUAL_REST_TRANSITION','employee_id':eid})
     result['valid']=not result['errors']
-    return {**result,'days':days,'context_hash':context_hash(db,draft)}
+    c=draft.config
+    calendar={'week_start':c['week_start'],'workdays':c['workdays'],'weekend':c['weekend'],
+              'holidays':c['holidays'],'source':c['calendar_source'],'version':c['calendar_version']}
+    return {**result,'days':days,'calendar':calendar,'context_hash':context_hash(db,draft)}
 
 
 def publish(db,draft,actor,receipt,request=None):

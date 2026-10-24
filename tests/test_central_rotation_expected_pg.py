@@ -60,16 +60,18 @@ def test_two_expected_agents_are_identical_across_engine_api_pointeur_and_beo(pg
         db.commit()
         site_id, published_id, draft_id = site.id, published.id, draft.id
 
-    at = datetime.combine(effective, datetime.min.time(), TZ) + timedelta(hours=23)      # Nuit B (17:00 → 08:00)
+    at = datetime.combine(effective, datetime.min.time(), TZ) + timedelta(hours=23)      # Nuit B (16:30 → 08:00)
     with Session(engine) as db:
         slot = next(s for s in views.site_occurrences(db, site_id, effective) if s['shift'] == 'NUIT')
         assert (slot['group'], slot['configuration_id']) == ('B', published_id)
         engine_ids = service.expected_population(db, site_id, slot)
         simulated = next(s for s in db.get(RotationDraft, draft_id).simulation['slots'] if s['start'] == slot['start'])
+        simulation_calendar = db.get(RotationDraft, draft_id).simulation['calendar']
         post = live.control_post(db, site_id, at)
         cover = views.coverage(db, {site_id}, effective, now=at, shift_kind='NUIT')['rows'][0]
     expected = set(staff['B'])
     assert engine_ids == expected and set(simulated['employee_ids']) == expected
+    assert simulation_calendar['week_start'] == 6 and simulation_calendar['workdays'] == [6, 0, 1, 2, 3]
     assert post['kpi']['expected'] == 2 and {r['employee']['id'] for r in post['expected']} == expected
     assert cover['expected'] == 2
     key = service.occurrence_key(site_id, slot)

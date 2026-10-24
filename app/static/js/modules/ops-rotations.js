@@ -7,6 +7,10 @@ const ROT_GROUPS=["A","B","C","D"];
 const ROT_COLORS={A:"#2563eb",B:"#16a34a",C:"#ea580c",D:"#9333ea"};
 const ROT_REGIMES=[["3X8","3×8"],["24H48","24h/48"],["1/2","1/2"],["1/3","1/3"],["NORMAL","Horaire normal"],["CUSTOM","Personnalisé"]];
 const ROT_DAYS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+const ROT_DAY_NAMES=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+// Jours dans l'ordre de la semaine du site (0 = lundi … 6 = dimanche, convention du serveur).
+function rotWeekOrder(start){const s=Number.isInteger(start)?start:0;return [0,1,2,3,4,5,6].map(i=>(s+i)%7)}
+function rotDaysLabel(days,start){const list=rotWeekOrder(start).filter(d=>days.map(Number).includes(d));return list.length?list.map(d=>ROT_DAYS[d].toLowerCase()).join(", "):"—"}
 const ROT_MONTHS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 let rotState=null;
 
@@ -81,6 +85,7 @@ async function renderCentralRotations(view,arg){
     if(!rotState.siteId&&rotState.sites.length===1)rotState.siteId=rotState.sites[0].id;
     if(mode==="planning")return rotLoadPlanning();
     if(!rotState.form)rotState.form=rotDefaultForm(rotState.sites.find(s=>s.id===rotState.siteId)?.regime||"1/3");
+    if(rotState.siteId&&!previous.form)return rotLoadSiteConfig();
     rotRenderConfig();rotRefreshPreview();
   }catch(e){view.innerHTML=`<section class="rot-page"><div class="rot-card" role="alert">${rotEsc(e.message||"Chargement impossible")}</div></section>`}
 }
@@ -108,17 +113,29 @@ function rotBindSiteSelects(root,onSite){
 
 // ── Configuration ──────────────────────────────────────────────────────────────────────────
 function rotNextMonthFirst(){const d=new Date();return new Date(Date.UTC(d.getFullYear(),d.getMonth()+1,1)).toISOString().slice(0,10)}
+// Nouvelle configuration : aucun horaire, aucun jour ouvré ni début de semaine pré-rempli. OPS les
+// saisit explicitement ; une publication ne repose jamais sur une valeur cachée.
 function rotDefaultForm(regime){
   const anchor=rotNextMonthFirst(),until=String(Number(anchor.slice(0,4))+1)+anchor.slice(4);
-  return {regime,anchor,effective:anchor,reason:"",timezone:"Africa/Algiers",rest:480,early:45,late:30,nightStart:"21:00",nightEnd:"05:00",
-    dayStart:"07:00",dayEnd:"19:00",nightShiftStart:"19:00",nightShiftEnd:"07:00",firstStart:"07:00",daysPerPosition:2,
-    shifts:[["06:00","14:00"],["14:00","22:00"],["22:00","06:00"]],staffDay:1,staffNight:1,staffMatin:1,staffAm:1,
-    workdays:[6,0,1,2,3],holidays:"",calendarSource:"Calendrier OPS",calendarVersion:"1",calendarFrom:anchor,calendarUntil:until,
+  return {regime,anchor,effective:anchor,reason:"",timezone:"Africa/Algiers",rest:480,early:45,late:30,nightStart:"",nightEnd:"",
+    dayStart:"",dayEnd:"",nightShiftStart:"",nightShiftEnd:"",firstStart:"",daysPerPosition:2,
+    shifts:[["",""],["",""],["",""]],staffDay:1,staffNight:1,staffMatin:1,staffAm:1,
+    weekStart:"",workdays:[],holidays:"",calendarSource:"Calendrier OPS",calendarVersion:"1",calendarFrom:anchor,calendarUntil:until,
     phases:regime==="1/3"?{A:0,B:0,C:2,D:1}:{A:0,B:1,C:2,D:3}};
+}
+function rotMissing(){
+  const f=rotState.form,r=f.regime,miss=[];
+  const need=(v,label)=>{if(v===""||v==null)miss.push(label)};
+  need(f.weekStart,"début de semaine");if(!f.workdays.length)miss.push("jours ouvrés");
+  need(f.nightStart,"début travail de nuit");need(f.nightEnd,"fin travail de nuit");
+  if(r==="3X8")f.shifts.forEach((x,i)=>{need(x[0],["matin","après-midi","nuit"][i]+" — début");need(x[1],["matin","après-midi","nuit"][i]+" — fin")});
+  else if(r==="1/2")need(f.firstStart,"début de la première vacation");
+  else{need(f.dayStart,"heure début service jour");need(f.dayEnd,"heure fin service jour");need(f.nightShiftStart,"heure début service nuit");need(f.nightShiftEnd,"heure fin service nuit")}
+  return miss;
 }
 function rotConfig(){
   const f=rotState.form,c={regime:f.regime,timezone:f.timezone,anchor:f.anchor,minimum_rest_minutes:Number(f.rest),early_minutes:Number(f.early),
-    late_refusal_minutes:Number(f.late),workdays:f.workdays.map(Number),weekend:[0,1,2,3,4,5,6].filter(i=>!f.workdays.map(Number).includes(i)),
+    late_refusal_minutes:Number(f.late),week_start:f.weekStart===""?null:Number(f.weekStart),workdays:f.workdays.map(Number),weekend:[0,1,2,3,4,5,6].filter(i=>!f.workdays.map(Number).includes(i)),
     holidays:String(f.holidays).split(/[\s,;]+/).filter(Boolean),calendar_source:f.calendarSource,calendar_version:f.calendarVersion,
     calendar_valid_from:f.calendarFrom,calendar_valid_until:f.calendarUntil,night_start:f.nightStart,night_end:f.nightEnd,
     phases:Object.fromEntries(ROT_GROUPS.map(g=>[g,Number(f.phases[g])])),
@@ -131,7 +148,7 @@ function rotConfig(){
 function rotFormFromConfig(c,effective,reason){
   const f=rotDefaultForm(c.regime);
   Object.assign(f,{regime:c.regime,anchor:c.anchor,effective:effective||f.effective,reason:reason||"",timezone:c.timezone,rest:c.minimum_rest_minutes,early:c.early_minutes,late:c.late_refusal_minutes,
-    nightStart:c.night_start,nightEnd:c.night_end,workdays:[...c.workdays],holidays:(c.holidays||[]).join("\n"),calendarSource:c.calendar_source,calendarVersion:c.calendar_version,
+    nightStart:c.night_start,nightEnd:c.night_end,weekStart:c.week_start??"",workdays:[...c.workdays],holidays:(c.holidays||[]).join("\n"),calendarSource:c.calendar_source,calendarVersion:c.calendar_version,
     calendarFrom:c.calendar_valid_from,calendarUntil:c.calendar_valid_until,phases:{...c.phases}});
   if(c.regime==="3X8"){f.daysPerPosition=c.days_per_position;f.shifts=c.shifts.map(s=>[s.start,s.end]);f.staffMatin=c.required_staff.MATIN;f.staffAm=c.required_staff.APRES_MIDI;f.staffNight=c.required_staff.NUIT}
   else{f.staffDay=c.required_staff.JOUR;f.staffNight=c.required_staff.NUIT}
@@ -141,9 +158,13 @@ function rotFormFromConfig(c,effective,reason){
 }
 function rotTime(key,label){return `<label class="rot-field">${rotEsc(label)}<input type="time" data-f="${key}" value="${rotEsc(rotState.form[key])}" required></label>`}
 function rotNum(key,label,min=0,max=10080){return `<label class="rot-field">${rotEsc(label)}<input type="number" min="${min}" max="${max}" data-f="${key}" value="${rotEsc(rotState.form[key])}" required></label>`}
+function rotWeekStartField(){
+  const f=rotState.form;
+  return `<label class="rot-field">Début de semaine<select data-f="weekStart" required><option value="" ${f.weekStart===""?"selected":""}>À définir</option>${ROT_DAY_NAMES.map((d,i)=>`<option value="${i}" ${String(f.weekStart)===String(i)?"selected":""}>${d}</option>`).join("")}</select></label>`;
+}
 function rotRegimeFields(){
   const f=rotState.form,r=f.regime;
-  const night=rotTime("nightStart","Début travail de nuit")+rotTime("nightEnd","Fin travail de nuit");
+  const night=rotWeekStartField()+rotTime("nightStart","Début travail de nuit")+rotTime("nightEnd","Fin travail de nuit");
   if(r==="3X8")return `<label class="rot-field">Date de début du cycle<input type="date" data-f="anchor" value="${rotEsc(f.anchor)}" required></label>
     ${["Matin","Après-midi","Nuit"].map((n,i)=>`<label class="rot-field">${n} — début<input type="time" data-shift="${i}:0" value="${rotEsc(f.shifts[i][0])}" required></label><label class="rot-field">${n} — fin<input type="time" data-shift="${i}:1" value="${rotEsc(f.shifts[i][1])}" required></label>`).join("")}
     ${rotNum("daysPerPosition","Jours par position",1,31)}${night}`;
@@ -152,9 +173,10 @@ function rotRegimeFields(){
     ${rotTime("dayStart","Heure début service jour")}${rotTime("dayEnd","Heure fin service jour")}${rotTime("nightShiftStart","Heure début service nuit")}${rotTime("nightShiftEnd","Heure fin service nuit")}${night}`;
 }
 function rotGroupCard(g){
-  const f=rotState.form,r=f.regime,day=`${f.dayStart} – ${f.dayEnd}`,night=`${f.nightShiftStart} – ${f.nightShiftEnd}`;
+  const f=rotState.form,r=f.regime,span=(a,b)=>a&&b?`${a} – ${b}`:"horaires à définir",day=span(f.dayStart,f.dayEnd),night=span(f.nightShiftStart,f.nightShiftEnd);
+  const ws=f.weekStart===""?null:Number(f.weekStart),workdays=f.workdays.length?rotDaysLabel(f.workdays,ws):"à définir";
   let items;
-  if(r==="1/3"&&g==="A")items=[["☀","Jours de semaine uniquement"],["✓",`Service de jour (${day})`],["✗","Aucun service de nuit"],["✗","Pas de week-end"],["✗","Pas de jours fériés"]];
+  if(r==="1/3"&&g==="A")items=[["☀",`Jours ouvrés uniquement (${workdays})`],["✓",`Service de jour (${day})`],["✗","Aucun service de nuit"],["✗","Pas de week-end"],["✗","Pas de jours fériés"]];
   else if(r==="1/3")items=[["⟳","Rotation de nuit continue"],["☾",`Nuit (${night})`],["▦","Inclut week-ends (remplacement de jour)"],["▦","Inclut jours fériés"],["⏱","Couverture de remplacement selon repos"]];
   else if(r==="24H48")items=[["☀",`Jour (${day})`],["☾",`Nuit (${night})`],["○","OFF puis OFF"],["⟳","Cycle de 4 jours"]];
   else if(r==="1/2")items=[["⟳","Vacations de 12 h en alternance"],["☀",`Début de cycle à ${f.firstStart}`],["▦","Inclut week-ends et jours fériés"]];
@@ -171,12 +193,13 @@ function rotRules(){
 }
 function rotPreviewGrid(month,data){
   if(!data)return `<p class="text-sm text-slate-500">Choisissez un site et complétez les paramètres : l'aperçu du cycle est calculé par le serveur.</p>`;
+  if(data.pending)return `<p class="text-sm text-slate-600" role="status">${rotEsc(data.pending)}</p>`;
   if(data.error)return `<p class="rot-status is-error" role="alert">${rotEsc(data.error)}</p>`;
   return rotCalendar(data,{compact:true});
 }
 function rotCalendar(data,{compact}={}){
   const days=data.days||[];if(!days.length)return "";
-  const first=(days[0].weekday+7)%7,today=new Date().toISOString().slice(0,10);
+  const start=Number.isInteger(data.calendar?.week_start)?data.calendar.week_start:0,first=(days[0].weekday-start+7)%7,today=new Date().toISOString().slice(0,10);
   const cells=Array.from({length:first},()=>`<div class="rot-day is-empty"></div>`);
   for(const d of days){
     const crit=d.critical.length?`<span class="rot-crit" title="${rotEsc(d.critical.map(c=>c.label).join(", "))}">⚠ ${d.critical.length}</span>`:"";
@@ -186,7 +209,7 @@ function rotCalendar(data,{compact}={}){
     cells.push(`<div class="rot-day${d.weekend?" is-weekend":""}${d.date===today?" is-today":""}"><div class="rot-day-num">${Number(d.date.slice(8))} ${tag}${crit}</div>${rows}</div>`);
   }
   while(cells.length%7)cells.push(`<div class="rot-day is-empty"></div>`);
-  return `<div class="rot-cal" role="grid" aria-label="Calendrier ${rotEsc(rotMonthLabel(data.month))}">${ROT_DAYS.map(d=>`<div class="rot-dow" role="columnheader">${d}</div>`).join("")}${cells.join("")}</div>`;
+  return `<div class="rot-cal" role="grid" aria-label="Calendrier ${rotEsc(rotMonthLabel(data.month))}">${rotWeekOrder(start).map(d=>`<div class="rot-dow" role="columnheader">${ROT_DAYS[d]}</div>`).join("")}${cells.join("")}</div>`;
 }
 function rotLegend(){return `<div class="rot-legend">${ROT_GROUPS.map(g=>`<span class="rot-${g}"><i></i>Groupe ${g}</span>`).join("")}<span style="--g:#cbd5e1"><i></i>Repos / Non planifié</span></div>`}
 function rotRenderConfig(){
@@ -205,7 +228,7 @@ function rotRenderConfig(){
   <details class="rot-card" ${s.advancedOpen?"open":""} data-advanced><summary style="cursor:pointer;font-weight:900;color:#0b1f44">Application, effectifs et calendrier officiel</summary>
     <div class="rot-fields" style="margin-top:14px"><label class="rot-field">Date d'effet de la publication<input type="date" data-f="effective" value="${rotEsc(f.effective)}" required></label>
     ${rotNum("rest","Repos minimal (minutes)")}${rotNum("early","Avance autorisée (minutes)")}${rotNum("late","Refus du retard après (minutes)",1)}${staff}
-    <fieldset class="rot-field rot-span2"><legend>Jours ouvrés</legend><div style="display:flex;flex-wrap:wrap;gap:10px">${ROT_DAYS.map((d,i)=>`<label style="display:inline-flex;gap:4px;align-items:center;font-weight:600"><input type="checkbox" data-workday="${i}" ${f.workdays.map(Number).includes(i)?"checked":""}>${d}</label>`).join("")}</div></fieldset>
+    <fieldset class="rot-field rot-span2"><legend>Jours ouvrés</legend><div style="display:flex;flex-wrap:wrap;gap:10px">${rotWeekOrder(f.weekStart===""?0:Number(f.weekStart)).map(i=>`<label style="display:inline-flex;gap:4px;align-items:center;font-weight:600"><input type="checkbox" data-workday="${i}" ${f.workdays.map(Number).includes(i)?"checked":""}>${ROT_DAYS[i]}</label>`).join("")}</div></fieldset>
     <label class="rot-field rot-span2">Jours fériés validés (AAAA-MM-JJ, un par ligne)<textarea rows="2" data-f="holidays">${rotEsc(f.holidays)}</textarea></label>
     <label class="rot-field">Référence du calendrier<input data-f="calendarSource" value="${rotEsc(f.calendarSource)}" required></label><label class="rot-field">Version du calendrier<input data-f="calendarVersion" value="${rotEsc(f.calendarVersion)}" required></label>
     <label class="rot-field">Calendrier confirmé du<input type="date" data-f="calendarFrom" value="${rotEsc(f.calendarFrom)}" required></label><label class="rot-field">au<input type="date" data-f="calendarUntil" value="${rotEsc(f.calendarUntil)}" required></label>
@@ -221,17 +244,19 @@ function rotRenderConfig(){
 function rotBindConfig(view){
   const s=rotState,root=view.querySelector("#rotConfig");
   rotBindSiteSelects(root,()=>{rotResetDraft();rotLoadSiteConfig()});
-  root.querySelectorAll("[data-regime]").forEach(b=>b.onclick=()=>{if(b.disabled)return;const keep=s.form;s.form={...rotDefaultForm(b.dataset.regime),effective:keep.effective,reason:keep.reason,anchor:keep.anchor};rotResetDraft();rotRenderConfig();rotRefreshPreview()});
+  root.querySelectorAll("[data-regime]").forEach(b=>b.onclick=()=>{if(b.disabled)return;const keep=s.form;s.form={...rotDefaultForm(b.dataset.regime),effective:keep.effective,reason:keep.reason,anchor:keep.anchor,weekStart:keep.weekStart,workdays:keep.workdays,
+    holidays:keep.holidays,calendarSource:keep.calendarSource,calendarVersion:keep.calendarVersion,calendarFrom:keep.calendarFrom,calendarUntil:keep.calendarUntil,nightStart:keep.nightStart,nightEnd:keep.nightEnd};rotResetDraft();rotRenderConfig();rotRefreshPreview()});
   // Toute modification invalide le brouillon et le reçu : Simuler et Publier redeviennent indisponibles.
   const change=()=>{const had=s.draft||s.receipt;rotResetDraft();root.querySelector("[data-simulate]").disabled=true;root.querySelector("[data-publish]").disabled=true;
     root.querySelector(".rot-errors")?.remove();if(had){const st=root.querySelector("#rotStatus");st.className="rot-status is-error";st.textContent="Paramètres modifiés : enregistrez un nouveau brouillon puis simulez avant publication."}rotRefreshPreview(true)};
-  root.querySelectorAll("[data-f]").forEach(i=>i.addEventListener("change",()=>{s.form[i.dataset.f]=i.value;change()}));
+  root.querySelectorAll("[data-f]").forEach(i=>i.addEventListener("change",()=>{s.form[i.dataset.f]=i.value;change();if(["weekStart","dayStart","dayEnd","nightShiftStart","nightShiftEnd"].includes(i.dataset.f))rotRenderConfig()}));
   root.querySelectorAll("[data-shift]").forEach(i=>i.addEventListener("change",()=>{const [a,b]=i.dataset.shift.split(":").map(Number);s.form.shifts[a][b]=i.value;change()}));
   root.querySelectorAll("[data-phase]").forEach(i=>i.addEventListener("change",()=>{s.form.phases[i.dataset.phase]=Number(i.value);change()}));
-  root.querySelectorAll("[data-workday]").forEach(i=>i.addEventListener("change",()=>{const n=Number(i.dataset.workday);s.form.workdays=i.checked?[...new Set([...s.form.workdays,n])]:s.form.workdays.filter(x=>Number(x)!==n);change()}));
+  root.querySelectorAll("[data-workday]").forEach(i=>i.addEventListener("change",()=>{const n=Number(i.dataset.workday);s.form.workdays=i.checked?[...new Set([...s.form.workdays,n])]:s.form.workdays.filter(x=>Number(x)!==n);change();rotRenderConfig()}));
   root.querySelector("[data-advanced]").addEventListener("toggle",e=>{s.advancedOpen=e.target.open});
   root.querySelectorAll("[data-month]").forEach(b=>b.onclick=()=>{s.month=rotShiftMonth(s.month,Number(b.dataset.month));rotRenderConfig();rotRefreshPreview()});
   root.querySelector("[data-save]").onclick=()=>rotPerform(async()=>{
+    const missing=rotMissing();if(missing.length){if(missing.includes("jours ouvrés"))s.advancedOpen=true;throw Error("À renseigner explicitement : "+missing.join(", ")+".")}
     if(String(s.form.reason||"").trim().length<3){s.advancedOpen=true;throw Error("Motif de la configuration obligatoire (section Application, effectifs et calendrier officiel).")}
     s.draft=await rotApi(`/sites/${encodeURIComponent(s.siteId)}/drafts`,{method:"POST",body:{config:rotConfig(),effective_from:s.form.effective,reason:s.form.reason}});
     s.status="Brouillon enregistré. Une simulation valide est obligatoire avant publication.";s.overview=await rotApi("/overview");
@@ -259,7 +284,8 @@ async function rotLoadSiteConfig(){
   if(s.siteId){
     try{const history=await rotApi(`/sites/${encodeURIComponent(s.siteId)}/history`);const last=(history.items||[]).slice(-1)[0];
       s.form=last?rotFormFromConfig(last.config,rotNextMonthFirst(),""):rotDefaultForm(s.form.regime);
-      s.status=last?`Paramètres de la version ${last.version} publiée chargés : toute modification crée un nouveau brouillon.`:"";}catch(e){s.status=e.message;s.error=true}
+      if(!last)s.advancedOpen=true;
+      s.status=last?`Paramètres de la version ${last.version} publiée chargés : toute modification crée un nouveau brouillon.`:"Nouvelle configuration : horaires, début de semaine et jours ouvrés à définir explicitement.";}catch(e){s.status=e.message;s.error=true}
   }
   rotRenderConfig();rotRefreshPreview();
 }
@@ -268,7 +294,9 @@ function rotRefreshPreview(debounce){
   clearTimeout(rotPreviewTimer);
   rotPreviewTimer=setTimeout(async()=>{
     const s=rotState,ticket=++rotPreviewTicket;if(!s||s.mode!=="configuration")return;
-    try{s.preview=await rotApi("/preview",{method:"POST",body:{site_id:s.siteId,month:s.month,config:rotConfig()}})}
+    const missing=rotMissing();
+    if(missing.length)s.preview={pending:"Aperçu calculé par le serveur dès que ces paramètres sont renseignés : "+missing.join(", ")+"."};
+    else try{s.preview=await rotApi("/preview",{method:"POST",body:{site_id:s.siteId,month:s.month,config:rotConfig()}})}
     catch(e){s.preview={error:e.message||"Aperçu indisponible"}}
     if(ticket!==rotPreviewTicket||!s.view.isConnected)return;
     const host=s.view.querySelector("#rotPreview");if(host)host.innerHTML=rotPreviewGrid(s.month,s.preview);
@@ -288,7 +316,7 @@ function rotRenderPlanning(){
   const sum=p&&!p.error?p.summary:null;
   const summary=sum?`<aside class="rot-card rot-summary" aria-label="Résumé du cycle"><h2>Résumé du cycle</h2>
     <h3>Légende des groupes</h3><ul>${ROT_GROUPS.map(g=>`<li style="justify-content:flex-start">${rotChip(g)}<span>Groupe ${g} — ${rotEsc(sum.roles[g]||"")}</span></li>`).join("")}<li style="justify-content:flex-start"><span class="rot-chip rot-off">OFF</span><span>Repos / Non planifié</span></li></ul>
-    <h3>Cycle</h3><ul><li><span>Régime</span><b>${rotEsc(p.regime_label||"—")}</b></li><li><span>Version publiée</span><b>${rotEsc(p.versions.map(v=>"v"+v).join(", ")||"—")}</b></li><li><span>Période</span><b>${rotEsc(p.period.start.split("-").reverse().join("/"))} – ${rotEsc(p.period.end.split("-").reverse().join("/"))}</b></li>${(sum.timings||[]).map(t=>`<li><span>${rotEsc(t.shift)}</span><b>${rotEsc(t.start)} – ${rotEsc(t.end)}</b></li>`).join("")}<li><span>Repos minimal</span><b>${sum.minimum_rest_minutes!=null?Math.round(sum.minimum_rest_minutes/60*10)/10+" h":"—"}</b></li><li><span>Conflits de repos</span><b>${rotEsc(sum.conflicts)}</b></li></ul>
+    <h3>Cycle</h3><ul><li><span>Régime</span><b>${rotEsc(p.regime_label||"—")}</b></li><li><span>Version publiée</span><b>${rotEsc(p.versions.map(v=>"v"+v).join(", ")||"—")}</b></li><li><span>Période</span><b>${rotEsc(p.period.start.split("-").reverse().join("/"))} – ${rotEsc(p.period.end.split("-").reverse().join("/"))}</b></li>${p.calendar?`<li><span>Début de semaine</span><b>${rotEsc(ROT_DAY_NAMES[p.calendar.week_start])}</b></li><li><span>Jours ouvrés</span><b>${rotEsc(rotDaysLabel(p.calendar.workdays,p.calendar.week_start))}</b></li>`:""}${(sum.timings||[]).map(t=>`<li><span>${rotEsc(t.shift)}</span><b>${rotEsc(t.start)} – ${rotEsc(t.end)}</b></li>`).join("")}<li><span>Repos minimal</span><b>${sum.minimum_rest_minutes!=null?Math.round(sum.minimum_rest_minutes/60*10)/10+" h":"—"}</b></li><li><span>Conflits de repos</span><b>${rotEsc(sum.conflicts)}</b></li></ul>
     <h3>Couverture du mois</h3><ul><li><span>Vacations jour (total)</span><b>${rotEsc(sum.coverage.day_staff_total)}</b></li><li><span>Vacations nuit (total)</span><b>${rotEsc(sum.coverage.night_staff_total)}</b></li>${sum.coverage.a_days?`<li><span>Jours avec présence A (jours ouvrés)</span><b>${sum.coverage.a_days[0]} / ${sum.coverage.a_days[1]}</b></li>`:""}<li><span>Jours de week-end couverts</span><b>${sum.coverage.weekends[0]} / ${sum.coverage.weekends[1]}</b></li><li><span>Jours fériés couverts</span><b>${sum.coverage.holidays[0]} / ${sum.coverage.holidays[1]}</b></li></ul>
     <h3>Règles et contrôles</h3><ul>${sum.rules.map(r=>`<li style="justify-content:flex-start"><span class="${r.ok?"ok":"ko"}"></span>${rotEsc(r.label)}</li>`).join("")}</ul></aside>`:"";
   const body=!s.siteId?`<p class="text-sm text-slate-500">Choisissez un site pour afficher son planning officiel.</p>`:p?.error?`<p class="rot-status is-error" role="alert">${rotEsc(p.error)}</p>`:!p?.configured?`<p class="text-sm text-slate-600">Aucun régime publié pour ce site sur ce mois : le planning historique reste en vigueur. Configurez puis publiez un régime depuis « Configuration du régime ».</p>`:rotCalendar(p);
@@ -309,7 +337,7 @@ function rotRenderPlanning(){
   root.querySelectorAll("[data-go-config]").forEach(b=>b.onclick=()=>{location.hash="#/ops/rotations"});
   root.querySelector("[data-history]").onclick=async()=>{
     try{const h=await rotApi(`/sites/${encodeURIComponent(s.siteId)}/history`);
-      root.querySelector("#rotHistory").innerHTML=`<div class="rot-card"><h2>Historique des publications — ${rotEsc(site?.name||"")}</h2>${(h.items||[]).length?`<div class="rot-table"><table><thead><tr><th>Version</th><th>Régime</th><th>Période</th><th>Publié par</th><th>Motif</th></tr></thead><tbody>${h.items.map(x=>`<tr><td>v${rotEsc(x.version)}</td><td>${rotEsc(x.config.regime)}</td><td>${rotEsc(x.effective_from)} → ${rotEsc(x.effective_to||"sans fin")}</td><td>${rotEsc(x.published_by)}</td><td>${rotEsc(x.reason)}</td></tr>`).join("")}</tbody></table></div>`:"<p class='text-sm text-slate-500'>Aucune publication pour ce site.</p>"}</div>`;}
+      root.querySelector("#rotHistory").innerHTML=`<div class="rot-card"><h2>Historique des publications — ${rotEsc(site?.name||"")}</h2>${(h.items||[]).length?`<div class="rot-table"><table><thead><tr><th>Version</th><th>Régime</th><th>Semaine du site</th><th>Période</th><th>Publié par</th><th>Motif</th></tr></thead><tbody>${h.items.map(x=>`<tr><td>v${rotEsc(x.version)}</td><td>${rotEsc(x.config.regime)}</td><td>${Number.isInteger(x.config.week_start)?`Début ${rotEsc(ROT_DAY_NAMES[x.config.week_start].toLowerCase())} · ouvrés ${rotEsc(rotDaysLabel(x.config.workdays||[],x.config.week_start))}`:"—"}</td><td>${rotEsc(x.effective_from)} → ${rotEsc(x.effective_to||"sans fin")}</td><td>${rotEsc(x.published_by)}</td><td>${rotEsc(x.reason)}</td></tr>`).join("")}</tbody></table></div>`:"<p class='text-sm text-slate-500'>Aucune publication pour ce site.</p>"}</div>`;}
     catch(e){toast(e.message||String(e),"error")}
   };
 }

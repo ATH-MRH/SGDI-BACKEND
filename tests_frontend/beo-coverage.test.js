@@ -5,21 +5,21 @@ const {JSDOM}=require('jsdom');
 const api=fs.readFileSync('app/static/site-workforce/api.js','utf8');
 const view=fs.readFileSync('app/static/site-workforce/views/couverture.js','utf8');
 const until=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,5))}throw Error('délai')};
-const row=(site,group,status,label,expected,present)=>({site_id:1,site,occurrence_id:`1:5:${site}`,shift:'NUIT',shift_label:'Nuit',group,work_date:'2027-01-01',start:'19:00',end:'07:00',
+const row=(site,group,status,label,expected,present)=>({site_id:1,site,occurrence_id:`1:5:${site}`,shift:'NUIT',shift_label:'Nuit',group,work_date:'2027-01-01',start:'16:30',end:'08:00',
  regime:'1/3',regime_label:'1/3',configuration_version:2,expected,required:3,present,gap:present==null?null:present-expected,late:1,maintained:0,absent:1,status,status_label:label,started:true});
-function payload(){return {date:'2027-01-01',rows:[row('Mine du Nord','A','UNDERSTAFFED','Sous-effectif',3,2),row('Concasseur Est','B','ATTENTION','Attention',4,3),
+function payload(){return {date:'2027-01-01',shift:'NUIT',current:false,rows:[row('Mine du Nord','A','UNDERSTAFFED','Sous-effectif',3,2),row('Concasseur Est','B','ATTENTION','Attention',4,3),
    row('Usine','C','COVERED','Couvert',3,3),row('Campement',null,'UNCOVERED','Non couvert',0,0),row('Atelier','D','CRITICAL','Critique',3,0)],
  unplanned_sites:[{site_id:9,site:'Dépôt sans planning'}],
  critical_points:Array.from({length:8},(_,i)=>({id:i,type:i?'LATE':'UNDERSTAFFED',label:i?'Retard':'Sous-effectif',site:'Mine du Nord',employee:i?{id:i,name:'<b>KONE</b>, Moussa',matricule:'EMP-1'}:null,
-   detail:i?'Retard de 45 min':'Service Nuit 19:00 – 07:00 : 1 poste(s) non couvert(s) (2/3 planifiés)',severity:i?'warning':'critical',status_label:i?'Ouvert':'Critique'})),
+   detail:i?'Retard de 45 min':'Service Nuit 16:30 – 08:00 : 1 poste(s) non couvert(s) (2/3 planifiés)',severity:i?'warning':'critical',status_label:i?'Ouvert':'Critique'})),
  watch:[{id:1,name:'DIALLO, Fatou',matricule:'EMP-2',group:'B',site:'Concasseur Est',kind:'abandon',label:'Abandon de poste (01/01)',photo_url:null}],
  kpis:{expected:13,present:8,late:3,maintained:1,absent:4,critical_points:8},total:{expected:13,present:8,gap:-5,status_label:'Sous-effectif'},sites:[]};}
-function boot(){
+function boot(query='vacation=NUIT'){
  const dom=new JSDOM('<div id="c"></div>',{url:'http://localhost/site-workforce#/couverture',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window,calls=[];
  w.eval(api);w.SW.state.scopeInfo={societies:['SOC'],sites:[{id:1,name:'Mine du Nord',society:'SOC'}]};
  w.SW.guardedApi=async(slot,path,opts)=>{calls.push({path,params:{...opts.params}});return payload()};
  w.eval(view);
- const ctx={query:new w.URLSearchParams('vacation=NUIT'),navigate:k=>calls.push({navigate:k}),changeScope:()=>{}};
+ const ctx={query:new w.URLSearchParams(query),navigate:k=>calls.push({navigate:k}),changeScope:()=>{}};
  const c=w.document.getElementById('c');
  return {w,c,calls,ctx,start:()=>w.SiteWorkforceViews.couverture(c,ctx)};
 }
@@ -43,7 +43,7 @@ test('points critiques limités puis dépliés, échappement, employés à surve
  const b=boot();await b.start();
  assert.equal(b.c.querySelectorAll('.cov-crit-table tbody tr').length,6);
  assert.equal(b.c.querySelector('b b'),null);                          // nom échappé
- assert.match(b.c.textContent,/Service Nuit 19:00 – 07:00 : 1 poste\(s\) non couvert\(s\)/);
+ assert.match(b.c.textContent,/Service Nuit 16:30 – 08:00 : 1 poste\(s\) non couvert\(s\)/);
  b.c.querySelector('[data-crit-all]').click();await until(()=>b.c.querySelectorAll('.cov-crit-table tbody tr').length===8);
  assert.match(b.c.querySelector('.cov-watch').textContent,/DIALLO, Fatou.*Groupe B.*Abandon de poste/s);
  b.c.querySelector('[data-go="position"]').click();assert.ok(b.calls.some(c=>c.navigate==='position'));
@@ -57,5 +57,15 @@ test('filtres groupe, vacation et date transmis au serveur',async()=>{
  b.c.querySelector('[data-shift="JOUR"]').click();await until(()=>b.calls.length===3);
  const d=b.c.querySelector('#cov-date');d.value='2027-02-03';d.dispatchEvent(new b.w.Event('change'));await until(()=>b.calls.length===4);
  assert.deepEqual(JSON.parse(JSON.stringify(b.calls[3].params)),{date:'2027-02-03',shift:'JOUR',group:'C'});
+ b.w.close();
+});
+
+test('sans filtre choisi : le serveur retient la vacation en cours et l’écran reprend sa date et sa nature',async()=>{
+ const b=boot('');await b.start();
+ assert.deepEqual(JSON.parse(JSON.stringify(b.calls[0].params)),{group:''});        // ni date ni vacation imposées
+ assert.equal(b.c.querySelector('#cov-date').value,'2027-01-01');
+ assert.equal(b.c.querySelector('[data-shift="NUIT"]').getAttribute('aria-pressed'),'true');
+ b.c.querySelector('#cov-group').value='B';b.c.querySelector('#cov-group').dispatchEvent(new b.w.Event('change'));await until(()=>b.calls.length===2);
+ assert.deepEqual(JSON.parse(JSON.stringify(b.calls[1].params)),{date:'2027-01-01',shift:'NUIT',group:'B'});
  b.w.close();
 });

@@ -4,13 +4,13 @@
   "branch": "feat/central-rotations-local",
   "tests": {
     "backend_with_postgresql": {
-      "passed": 3096,
+      "passed": 3099,
       "skipped": 127,
       "xfailed": 1,
       "failed": 0
     },
     "migration_matrix_and_postgresql": {
-      "passed": 35,
+      "passed": 41,
       "failed": 0,
       "scenarios": [
         "pré-V7 (production actuelle)",
@@ -18,7 +18,7 @@
       ]
     },
     "frontend_pretest": {
-      "passed": 39,
+      "passed": 41,
       "failed": 0
     },
     "frontend": {
@@ -34,7 +34,8 @@
         768,
         390
       ],
-      "page_overflow": 0,
+      "measures": 24,
+      "defects": 0,
       "js_errors": 0
     },
     "mobile": {
@@ -52,12 +53,13 @@
     "node shots.js (recette Chrome locale, données synthétiques) — résultats : chrome-recette.json",
     "cd mobile/recruitment: npm test; npm run typecheck; npm run lint"
   ],
-  "consistency": "Vacation publiée à 2 agents attendus : moteur = simulation = Pointeur = API Pointeur = BEO = API BEO = 2, même identifiant d'occurrence (tests/test_central_rotation_expected_pg.py, PostgreSQL réel)",
+  "consistency": "Recette : OPS = Pointeur = BEO pour la vacation en cours de chaque site (coherence-ops-pointeur-beo.txt) ; PostgreSQL réel : moteur = simulation = Pointeur = BEO = 2 (tests/test_central_rotation_expected_pg.py)",
   "visual_acceptance": "Quatre écrans recettés contre les références DG ; écarts documentés dans central-rotations-validation.md",
   "safety": {
     "production_migration": false,
     "real_site_activation": false,
     "merge": false,
     "deployment": false
-  }
+  },
+  "arbitrage_dg": "24/10/2026 : Jour du week-end et des fériés couvert par B/C/D, occurrences quotidiennes, horaires explicites par site (démo 08:00 → 16:30), début de semaine versionné, variations masquées"
 }

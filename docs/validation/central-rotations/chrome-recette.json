@@ -183,13 +183,7 @@
   "vw": 768,
   "sw": 768,
   "overflow": false,
-  "over": [
-   "TABLE. r=832",
-   "THEAD. r=832",
-   "TR. r=832",
-   "TH. r=832",
-   "TBODY. r=832"
-  ],
+  "over": [],
   "clipped": [],
   "scrolled": []
  },
@@ -200,11 +194,11 @@
   "sw": 390,
   "overflow": false,
   "over": [
-   "TABLE. r=820",
-   "THEAD. r=820",
-   "TR. r=820",
-   "TH. r=408",
-   "TH. r=509"
+   "TABLE. r=596",
+   "THEAD. r=596",
+   "TR. r=596",
+   "TH. r=490",
+   "TH. r=549"
   ],
   "clipped": [],
   "scrolled": []

@@ -65,7 +65,10 @@ def test_custom_refusal_threshold_and_zero_global_eight_hour_rule(db):
 
 
 def test_api_publication_requires_validate_scope_and_fresh_simulation(client,db):
-    employee,site=_setup(db,group='A')
+    # Horaire normal : aucune vacation historique posté avant la date d'effet. Le test porte sur les
+    # droits et la fraîcheur du reçu, pas sur la transition historique (testée ailleurs), et ne
+    # dépend donc pas de la date du jour.
+    employee,site=_setup(db,group='A',regime='NORMAL')
     headers=_user(client,db,sites=[site.id],modules=('ops',),actions=('read','create','validate'))
     from app.modules.drh.models import Employee
     import uuid

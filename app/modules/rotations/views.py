@@ -184,8 +184,9 @@ def month_view(db, site_id, month, *, draft_config=None):
             timings = [{'shift': 'Jour', 'start': config['day_start'], 'end': config['day_end']},
                        {'shift': 'Nuit', 'start': config['night_shift_start'], 'end': config['night_shift_end']}]
     day_count = max(1, totals['day_slots']); night_count = max(1, totals['night_slots'])
+    calendar = {'week_start': config['week_start'], 'workdays': config['workdays'], 'weekend': config['weekend']} if config else None
     return {'month': month, 'site_id': site_id, 'configured': bool(configs), 'regime': regime,
-            'regime_label': REGIME_LABELS.get(regime), 'versions': sorted(versions), 'days': out_days,
+            'regime_label': REGIME_LABELS.get(regime), 'versions': sorted(versions), 'days': out_days, 'calendar': calendar,
             'period': {'start': first.isoformat(), 'end': (first + timedelta(days=days - 1)).isoformat()},
             'kpis': {'planned_staff': len(planned) if site_id else None,
                      'day_average': round(totals['day_staff'] / day_count) if site_id else None,
@@ -255,6 +256,24 @@ def site_occurrences(db, site_id, day):
     return [{**slot, 'configuration_id': cfg.id, 'configuration_version': cfg.version, 'regime': cfg.config['regime'],
              'required_staff': cfg.config['required_staff'].get(slot['shift']), 'late_minutes': cfg.config['late_refusal_minutes']}
             for slot in occurrences(cfg.config, day, 1)['slots']]
+
+
+def current_vacation(db, site_ids, now):
+    """Vacation EN COURS sur le périmètre : date de travail et nature (JOUR/NUIT) de l'occurrence
+    officielle qui contient `now` — une nuit commencée la veille reste rattachée à la veille, comme
+    au Pointeur. Sites aux horaires différents : l'occurrence la plus fréquente. Aucune en cours
+    (entre deux vacations) : la date du jour, sans filtre de vacation."""
+    from collections import Counter
+    found = Counter()
+    for sid in site_ids:
+        for day in (now.date() - timedelta(days=1), now.date()):
+            for slot in site_occurrences(db, sid, day):
+                if datetime.fromisoformat(slot['start']) <= now < datetime.fromisoformat(slot['end']):
+                    found[(slot['work_date'], 'NUIT' if is_night(slot['shift']) else 'JOUR')] += 1
+    if not found:
+        return now.date(), ''
+    (work_date, kind), _ = max(found.items(), key=lambda item: (item[1], item[0]))
+    return date.fromisoformat(work_date), kind
 
 
 def coverage(db, site_ids, day, *, now, shift_kind='', group='', sites=None, photo_allowed=False):

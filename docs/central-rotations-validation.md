@@ -16,6 +16,15 @@ Correction : une seule population attendue canonique, `rotations.service.expecte
 
 Preuve : sur PostgreSQL réel, publication par le parcours OPS (brouillon, simulation, publication), puis moteur = simulation = Pointeur = API Pointeur = BEO = API BEO = 2, avec le même identifiant d'occurrence (`tests/test_central_rotation_expected_pg.py`).
 
+## Arbitrage DG du 24/10/2026
+
+- **Week-end et jours fériés (1/3) :** la vacation de jour existe ; A ne travaille jamais la nuit, le week-end ni les jours fériés ; le Jour revient au groupe B, C ou D libre selon le cycle et le repos, sans décaler le cycle de nuit B → C → D. Sans groupe admissible : VACATION NON COUVERTE ; effectif insuffisant : SOUS-EFFECTIF.
+- **Rythme :** occurrences quotidiennes Jour / Nuit / repos ; l'aperçu de configuration les montre telles que le moteur les calcule.
+- **Horaires :** aucun horaire global. Une nouvelle configuration ne pré-remplit ni horaire, ni début de semaine, ni jours ouvrés ; l'enregistrement est refusé tant qu'ils ne sont pas saisis. Une configuration versionnée existante est reprise. Référence de démonstration des tests et maquettes : Jour A 08:00 → 16:30.
+- **Début de semaine :** champ obligatoire (`week_start`), persisté et versionné avec la configuration, validé et utilisé par le moteur (semaine du site sur chaque occurrence), repris dans la simulation (`calendar`), affiché dans le planning (ordre des colonnes, résumé) et dans l'historique. Exemple : ouvrés dimanche → jeudi, week-end vendredi-samedi.
+- **Variations « vs mois dernier / vs hier » :** non affichées faute de données comparatives ; aucune valeur fictive.
+- **BEO :** sans date ni vacation choisies, la Couverture terrain ouvre sur la vacation en cours, celle du Pointeur (une nuit commencée la veille reste rattachée à la veille).
+
 ## Recette des quatre écrans
 
 Recette dans Chrome réel par le vrai routeur de l'application, avec des données synthétiques sur une base jetable, à 1920, 1440, 1280, 1024, 768 et 390 px. Aucun débordement horizontal de page, aucune erreur JavaScript. Les mesures sont dans `validation/central-rotations/chrome-recette.json`, les captures (1440 et 390) à côté.
@@ -27,23 +36,22 @@ Recette dans Chrome réel par le vrai routeur de l'application, avec des donnée
 | Pointeur — Pointage temps réel | Contexte du poste (site, vacation, groupe, régime et version), indicateurs avec proportions, badges « En poste » / « Maintenu » |
 | BEO — Couverture terrain | Filtres groupe/vacation/date, six indicateurs, couverture par site avec statuts Couvert / Attention / Sous-effectif / Non couvert / Critique, points critiques, employés à surveiller |
 
-Écarts acceptés et documentés :
-- pas de variation « vs mois précédent » sur les indicateurs, faute d'historique comparable ;
-- le week-end affiche le groupe de remplacement plutôt qu'« OFF » (règle métier 1/3 : B/C/D couvrent les week-ends) ;
-- Structure et Site du BEO restent dans la barre du portail ;
-- le Pointeur garde sa barre supérieure intégrée V7.
+Les maquettes font foi pour la composition, la hiérarchie, les couleurs et la densité ; les règles métier de l'arbitrage priment (Jour du week-end couvert par B/C/D, occurrences quotidiennes, horaires du site). Autres écarts de présentation : Structure et Site du BEO restent dans la barre du portail ; le Pointeur garde sa barre supérieure intégrée V7.
+
+Cohérence vérifiée sur la recette : pour la vacation en cours de chaque site, même occurrence, même groupe, mêmes attendus et mêmes présents dans OPS, le Pointeur et BEO (`validation/central-rotations/coherence-ops-pointeur-beo.txt`). Capture « nouvelle configuration » : `ops-configuration-nouvelle-*.png`.
 
 ## Tests
 
 | Suite | Résultat |
 |---|---|
-| Backend complet, PostgreSQL compris | 3096 réussis, 127 ignorés, 0 échec |
-| Migrations : pré-V7 (état de production) et ancienne V7 appliquée, restauration | 35 réussis |
-| Frontend (pretest + suite) | 39 + 1352 réussis |
+| Backend complet, PostgreSQL compris | 3099 réussis, 127 ignorés, 0 échec |
+| Migrations (pré-V7 = état de production, ancienne V7 appliquée, restauration) et parcours PostgreSQL des rotations | 41 réussis |
+| Frontend (pretest + suite) | 41 + 1352 réussis |
 | Mobile (tests, typecheck, lint) | 41 réussis, typecheck et lint OK |
+| Recette Chrome des quatre écrans, six largeurs | 24 mesures, 0 défaut, 0 erreur JavaScript |
 | `git diff --check` | OK |
 
-Les tests de rotations centrales suppriment désormais les sites synthétiques qu'ils créent : la base SQLite des tests est partagée, et ces sites faussaient le tableau de bord DRH et le volume de `/api/drh/employees` dans les tests suivants.
+Les tests de rotations centrales suppriment désormais les sites synthétiques qu'ils créent : la base SQLite des tests est partagée, et ces sites faussaient le tableau de bord DRH et le volume de `/api/drh/employees` dans les tests suivants. Le test de publication par l'API ne dépend plus de la date du jour (il échouait certains jours sur une transition historique sans rapport avec son objet).
 
 ## Conditions avant mise en production
 
