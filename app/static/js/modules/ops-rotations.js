@@ -7,6 +7,7 @@ const ROT_GROUPS=["A","B","C","D"];
 const ROT_COLORS={A:"#2563eb",B:"#16a34a",C:"#ea580c",D:"#9333ea"};
 const ROT_REGIMES=[["3X8","3×8"],["24H48","24h/48"],["1/2","1/2"],["1/3","1/3"],["NORMAL","Horaire normal"],["CUSTOM","Personnalisé"]];
 const ROT_DAYS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+const ROT_SHORT_LABELS={"Après-midi":"A.-midi"};
 const ROT_DAY_NAMES=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
 // Jours dans l'ordre de la semaine du site (0 = lundi … 6 = dimanche, convention du serveur).
 function rotWeekOrder(start){const s=Number.isInteger(start)?start:0;return [0,1,2,3,4,5,6].map(i=>(s+i)%7)}
@@ -59,7 +60,7 @@ function rotStyles(){
 .rot-dow{background:#f8fafc;text-align:center;font-size:12px;font-weight:800;color:#475569;padding:8px 2px}
 .rot-day{padding:7px;min-height:84px;display:grid;align-content:start;gap:5px;font-size:12px}.rot-day.is-empty{background:#fafafa}.rot-day.is-weekend{background:#fbfdff}.rot-day.is-today{box-shadow:inset 0 0 0 2px #1d4ed8}
 .rot-day-num{display:flex;justify-content:space-between;align-items:center;font-weight:900;font-size:14px;color:#0f172a}.rot-day-num em{font-style:normal;font-size:10px;font-weight:800;color:#b45309}
-.rot-day-row{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:6px;align-items:center;color:#64748b}.rot-day-row .rot-chip{width:100%}
+.rot-day-row{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:6px;align-items:center;color:#64748b}.rot-day-row .rot-chip{width:100%;min-width:0}.rot-day-row>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rot-crit{color:#dc2626;font-weight:800;font-size:11px}
 .rot-plan{display:grid;grid-template-columns:minmax(0,2.4fr) minmax(min(100%,300px),1fr);gap:16px}@media(max-width:1180px){.rot-plan{grid-template-columns:1fr}}
 .rot-summary h3{font-size:14px;font-weight:800;margin:14px 0 8px;color:#0b1f44}.rot-summary ul{list-style:none;margin:0;padding:0;display:grid;gap:7px;font-size:13px}.rot-summary li{display:flex;justify-content:space-between;gap:10px;align-items:center}.rot-summary .ok::before{content:"✓";color:#fff;background:#16a34a;border-radius:50%;width:18px;height:18px;display:inline-grid;place-items:center;font-size:11px;margin-right:6px}.rot-summary .ko::before{content:"!";color:#fff;background:#dc2626;border-radius:50%;width:18px;height:18px;display:inline-grid;place-items:center;font-size:11px;margin-right:6px}
@@ -126,15 +127,18 @@ function rotDefaultForm(regime){
 function rotMissing(){
   const f=rotState.form,r=f.regime,miss=[];
   const need=(v,label)=>{if(v===""||v==null)miss.push(label)};
+  // 3×8 : date de début du cycle et six horaires suffisent ; le planning intelligent calcule le reste.
+  if(r==="3X8"){need(f.anchor,"date de début du cycle");f.shifts.forEach((x,i)=>{need(x[0],["matin","après-midi","nuit"][i]+" — début");need(x[1],["matin","après-midi","nuit"][i]+" — fin")});return miss}
   need(f.weekStart,"début de semaine");if(!f.workdays.length)miss.push("jours ouvrés");
   need(f.nightStart,"début travail de nuit");need(f.nightEnd,"fin travail de nuit");
-  if(r==="3X8")f.shifts.forEach((x,i)=>{need(x[0],["matin","après-midi","nuit"][i]+" — début");need(x[1],["matin","après-midi","nuit"][i]+" — fin")});
-  else if(r==="1/2")need(f.firstStart,"début de la première vacation");
+  if(r==="1/2")need(f.firstStart,"début de la première vacation");
   else{need(f.dayStart,"heure début service jour");need(f.dayEnd,"heure fin service jour");need(f.nightShiftStart,"heure début service nuit");need(f.nightShiftEnd,"heure fin service nuit")}
   return miss;
 }
 function rotConfig(){
-  const f=rotState.form,c={regime:f.regime,timezone:f.timezone,anchor:f.anchor,minimum_rest_minutes:Number(f.rest),early_minutes:Number(f.early),
+  const f=rotState.form;
+  if(f.regime==="3X8")return {...(f.base3x8||{}),regime:"3X8",timezone:f.timezone,anchor:f.anchor,shifts:f.shifts.map(([start,end])=>({start,end}))};
+  const c={regime:f.regime,timezone:f.timezone,anchor:f.anchor,minimum_rest_minutes:Number(f.rest),early_minutes:Number(f.early),
     late_refusal_minutes:Number(f.late),week_start:f.weekStart===""?null:Number(f.weekStart),workdays:f.workdays.map(Number),weekend:[0,1,2,3,4,5,6].filter(i=>!f.workdays.map(Number).includes(i)),
     holidays:String(f.holidays).split(/[\s,;]+/).filter(Boolean),calendar_source:f.calendarSource,calendar_version:f.calendarVersion,
     calendar_valid_from:f.calendarFrom,calendar_valid_until:f.calendarUntil,night_start:f.nightStart,night_end:f.nightEnd,
@@ -150,7 +154,11 @@ function rotFormFromConfig(c,effective,reason){
   Object.assign(f,{regime:c.regime,anchor:c.anchor,effective:effective||f.effective,reason:reason||"",timezone:c.timezone,rest:c.minimum_rest_minutes,early:c.early_minutes,late:c.late_refusal_minutes,
     nightStart:c.night_start,nightEnd:c.night_end,weekStart:c.week_start??"",workdays:[...c.workdays],holidays:(c.holidays||[]).join("\n"),calendarSource:c.calendar_source,calendarVersion:c.calendar_version,
     calendarFrom:c.calendar_valid_from,calendarUntil:c.calendar_valid_until,phases:{...c.phases}});
-  if(c.regime==="3X8"){f.daysPerPosition=c.days_per_position;f.shifts=c.shifts.map(s=>[s.start,s.end]);f.staffMatin=c.required_staff.MATIN;f.staffAm=c.required_staff.APRES_MIDI;f.staffNight=c.required_staff.NUIT}
+  if(c.regime==="3X8"){
+    // Valeurs explicites d'une version 3×8 existante conservées ; celles calculées par ATLAS sont recalculées.
+    const derived=new Set([...(c.derived||[]),"derived","shifts","anchor","regime","timezone"]);
+    f.base3x8=Object.fromEntries(Object.entries(c).filter(([k])=>!derived.has(k)));
+    f.daysPerPosition=c.days_per_position;f.shifts=c.shifts.map(s=>[s.start,s.end]);f.staffMatin=c.required_staff.MATIN;f.staffAm=c.required_staff.APRES_MIDI;f.staffNight=c.required_staff.NUIT}
   else{f.staffDay=c.required_staff.JOUR;f.staffNight=c.required_staff.NUIT}
   if(c.day_start)Object.assign(f,{dayStart:c.day_start,dayEnd:c.day_end,nightShiftStart:c.night_shift_start,nightShiftEnd:c.night_shift_end});
   if(c.first_start)f.firstStart=c.first_start;
@@ -166,8 +174,7 @@ function rotRegimeFields(){
   const f=rotState.form,r=f.regime;
   const night=rotWeekStartField()+rotTime("nightStart","Début travail de nuit")+rotTime("nightEnd","Fin travail de nuit");
   if(r==="3X8")return `<label class="rot-field">Date de début du cycle<input type="date" data-f="anchor" value="${rotEsc(f.anchor)}" required></label>
-    ${["Matin","Après-midi","Nuit"].map((n,i)=>`<label class="rot-field">${n} — début<input type="time" data-shift="${i}:0" value="${rotEsc(f.shifts[i][0])}" required></label><label class="rot-field">${n} — fin<input type="time" data-shift="${i}:1" value="${rotEsc(f.shifts[i][1])}" required></label>`).join("")}
-    ${rotNum("daysPerPosition","Jours par position",1,31)}${night}`;
+    ${["Matin","Après-midi","Nuit"].map((n,i)=>`<label class="rot-field">${n} — début<input type="time" data-shift="${i}:0" value="${rotEsc(f.shifts[i][0])}" required></label><label class="rot-field">${n} — fin<input type="time" data-shift="${i}:1" value="${rotEsc(f.shifts[i][1])}" required></label>`).join("")}`;
   if(r==="1/2")return `<label class="rot-field">Date de début du cycle<input type="date" data-f="anchor" value="${rotEsc(f.anchor)}" required></label>${rotTime("firstStart","Début de la première vacation (12 h)")}${night}`;
   return `<label class="rot-field">Date de début du cycle<input type="date" data-f="anchor" value="${rotEsc(f.anchor)}" required></label>
     ${rotTime("dayStart","Heure début service jour")}${rotTime("dayEnd","Heure fin service jour")}${rotTime("nightShiftStart","Heure début service nuit")}${rotTime("nightShiftEnd","Heure fin service nuit")}${night}`;
@@ -180,15 +187,30 @@ function rotGroupCard(g){
   else if(r==="1/3")items=[["⟳","Rotation de nuit continue"],["☾",`Nuit (${night})`],["▦","Inclut week-ends (remplacement de jour)"],["▦","Inclut jours fériés"],["⏱","Couverture de remplacement selon repos"]];
   else if(r==="24H48")items=[["☀",`Jour (${day})`],["☾",`Nuit (${night})`],["○","OFF puis OFF"],["⟳","Cycle de 4 jours"]];
   else if(r==="1/2")items=[["⟳","Vacations de 12 h en alternance"],["☀",`Début de cycle à ${f.firstStart}`],["▦","Inclut week-ends et jours fériés"]];
-  else items=[["☀",`Matin (${f.shifts[0][0]} – ${f.shifts[0][1]})`],["☀",`Après-midi (${f.shifts[1][0]} – ${f.shifts[1][1]})`],["☾",`Nuit (${f.shifts[2][0]} – ${f.shifts[2][1]})`],["○",`OFF · ${f.daysPerPosition} jour(s) par position`]];
+  else{const pos=rotPositions(),at=pos&&pos.groups[g];
+    items=[["⟳","Matin → Après-midi → Nuit → OFF"],["◉",!pos?"Position calculée dès la saisie des horaires":at?`Au ${pos.label} : ${at.label} (${at.start} – ${at.end})`:`Au ${pos.label} : OFF (repos)`],
+      ["▦","7 j/7, jours fériés compris"],["○","Une position par jour ; le groupe OFF change chaque jour"]]}
   return `<div class="rot-group rot-${g}"><h3><span class="rot-badge">${g}</span>Groupe ${g}</h3><ul>${items.map(([i,t])=>`<li><i style="color:${i==="✗"?"#dc2626":i==="✓"?"#16a34a":"var(--g)"}">${i}</i><span>${rotEsc(t)}</span></li>`).join("")}</ul>
-    <label>Position dans le cycle<input type="number" data-phase="${g}" value="${rotEsc(f.phases[g])}" required></label></div>`;
+    ${r==="3X8"?"":`<label>Position dans le cycle<input type="number" data-phase="${g}" value="${rotEsc(f.phases[g])}" required></label>`}</div>`;
+}
+// Position de chaque groupe calculée par le serveur (aperçu) : aujourd'hui si le mois affiché le contient, sinon le 1er jour.
+function rotPositions(){
+  const p=rotState.preview;if(!p||p.pending||p.error||!p.days)return null;
+  const today=new Date().toISOString().slice(0,10),days=p.days.filter(d=>d.configured);if(!days.length)return null;
+  const day=days.find(d=>d.date===today)||days[0];
+  return {label:day.date.split("-").reverse().slice(0,2).join("/"),groups:Object.fromEntries(day.slots.filter(x=>x.group).map(x=>[x.group,x]))};
+}
+function rot3x8Computed(){
+  const c=rotState.preview?.config;
+  if(!c||c.regime!=="3X8")return "Paramètres complétés par ATLAS à l'enregistrement";
+  const staff=c.required_staff||{},n=Math.min(staff.MATIN,staff.APRES_MIDI,staff.NUIT);
+  return `Calculé par ATLAS : repos minimal ${Math.round(c.minimum_rest_minutes/60*10)/10} h, avance ${c.early_minutes} min, refus du retard après ${c.late_refusal_minutes} min, ${n} agent(s) requis par vacation`;
 }
 function rotRules(){
   const r=rotState.form.regime;
   const common=["Retard calculé automatiquement","Pointage manuel conserve le retard","Maintenu = présent (Maintenu)","Sortie anticipée et abandon de poste traités séparément"];
   const specific={"1/3":["Groupe A : jour ouvré seulement, jamais nuit, week-end ni férié","B/C/D : nuit continue, sans remise à zéro mensuelle","Remplacement de A selon disponibilité et repos","Aucun groupe disponible : VACATION NON COUVERTE","Effectif insuffisant : SOUS-EFFECTIF"],
-    "3X8":["Trois vacations de 8 h contiguës","Matin → Après-midi → Nuit → OFF"],"24H48":["Jour puis Nuit, suivis de deux jours OFF","Jour et Nuit couvrent 24 h sans trou"],"1/2":["Vacations de 12 h en alternance des groupes"]}[r]||[];
+    "3X8":["4 groupes, 3 vacations, 1 groupe OFF","Trois vacations de 8 h contiguës, nuit à cheval sur minuit","Positions A/B/C/D calculées depuis la date de début du cycle",rot3x8Computed()],"24H48":["Jour puis Nuit, suivis de deux jours OFF","Jour et Nuit couvrent 24 h sans trou"],"1/2":["Vacations de 12 h en alternance des groupes"]}[r]||[];
   return `<aside class="rot-rules" aria-label="Règles"><h3><span style="color:#1d4ed8">${rotIcon("info")}</span>Règles</h3><ul>${[...common,...specific].map(t=>`<li>${rotEsc(t)}</li>`).join("")}</ul></aside>`;
 }
 function rotPreviewGrid(month,data){
@@ -204,7 +226,8 @@ function rotCalendar(data,{compact}={}){
   for(const d of days){
     const crit=d.critical.length?`<span class="rot-crit" title="${rotEsc(d.critical.map(c=>c.label).join(", "))}">⚠ ${d.critical.length}</span>`:"";
     const tag=d.holiday?"<em>Férié</em>":d.weekend?"<em>WE</em>":"";
-    const rows=d.configured?d.slots.map(s=>`<div class="rot-day-row"><span>${rotEsc(s.label)} :</span>${s.group?rotChip(s.group):'<span class="rot-chip rot-off" style="color:#b91c1c">—</span>'}</div>`).join("")
+    // Libellé court dans la case (trois vacations en 3×8) ; libellé complet en info-bulle.
+    const rows=d.configured?d.slots.map(s=>`<div class="rot-day-row" title="${rotEsc(s.label)} ${rotEsc(s.start||"")} – ${rotEsc(s.end||"")}"><span>${rotEsc(ROT_SHORT_LABELS[s.label]||s.label)} :</span>${s.group?rotChip(s.group):'<span class="rot-chip rot-off" style="color:#b91c1c">—</span>'}</div>`).join("")
       +(d.off_groups.length&&!compact?`<div class="rot-day-off" title="Groupes au repos">OFF ${d.off_groups.join(" · ")}</div>`:""):`<span class="text-xs text-slate-400">Non planifié</span>`;
     cells.push(`<div class="rot-day${d.weekend?" is-weekend":""}${d.date===today?" is-today":""}"><div class="rot-day-num">${Number(d.date.slice(8))} ${tag}${crit}</div>${rows}</div>`);
   }
@@ -225,18 +248,18 @@ function rotRenderConfig(){
     <div class="rot-fields" style="margin-top:14px">${rotRegimeFields()}</div>
   </div>
   <div class="rot-groups-wrap"><div class="rot-card"><h2>Groupes et logique de rotation</h2><div class="rot-groups">${ROT_GROUPS.map(rotGroupCard).join("")}</div></div>${rotRules()}</div>
-  <details class="rot-card" ${s.advancedOpen?"open":""} data-advanced><summary style="cursor:pointer;font-weight:900;color:#0b1f44">Application, effectifs et calendrier officiel</summary>
+  <details class="rot-card" ${s.advancedOpen?"open":""} data-advanced><summary style="cursor:pointer;font-weight:900;color:#0b1f44">${f.regime==="3X8"?"Date d'effet et motif":"Application, effectifs et calendrier officiel"}</summary>
     <div class="rot-fields" style="margin-top:14px"><label class="rot-field">Date d'effet de la publication<input type="date" data-f="effective" value="${rotEsc(f.effective)}" required></label>
-    ${rotNum("rest","Repos minimal (minutes)")}${rotNum("early","Avance autorisée (minutes)")}${rotNum("late","Refus du retard après (minutes)",1)}${staff}
+    ${f.regime==="3X8"?"":`${rotNum("rest","Repos minimal (minutes)")}${rotNum("early","Avance autorisée (minutes)")}${rotNum("late","Refus du retard après (minutes)",1)}${staff}
     <fieldset class="rot-field rot-span2"><legend>Jours ouvrés</legend><div style="display:flex;flex-wrap:wrap;gap:10px">${rotWeekOrder(f.weekStart===""?0:Number(f.weekStart)).map(i=>`<label style="display:inline-flex;gap:4px;align-items:center;font-weight:600"><input type="checkbox" data-workday="${i}" ${f.workdays.map(Number).includes(i)?"checked":""}>${ROT_DAYS[i]}</label>`).join("")}</div></fieldset>
     <label class="rot-field rot-span2">Jours fériés validés (AAAA-MM-JJ, un par ligne)<textarea rows="2" data-f="holidays">${rotEsc(f.holidays)}</textarea></label>
     <label class="rot-field">Référence du calendrier<input data-f="calendarSource" value="${rotEsc(f.calendarSource)}" required></label><label class="rot-field">Version du calendrier<input data-f="calendarVersion" value="${rotEsc(f.calendarVersion)}" required></label>
     <label class="rot-field">Calendrier confirmé du<input type="date" data-f="calendarFrom" value="${rotEsc(f.calendarFrom)}" required></label><label class="rot-field">au<input type="date" data-f="calendarUntil" value="${rotEsc(f.calendarUntil)}" required></label>
-    <label class="rot-field rot-span2">Motif de la configuration<input data-f="reason" value="${rotEsc(f.reason)}" minlength="3" placeholder="Obligatoire pour enregistrer"></label></div></details>
+    `}<label class="rot-field rot-span2">${f.regime==="3X8"?"Motif (facultatif)":"Motif de la configuration"}<input data-f="reason" value="${rotEsc(f.reason)}" minlength="3" placeholder="${f.regime==="3X8"?"Par défaut : configuration 3×8 — planning intelligent ATLAS":"Obligatoire pour enregistrer"}"></label></div></details>
   <div class="rot-card"><div class="rot-cal-head"><h2>Aperçu du cycle — ${rotEsc(rotMonthLabel(s.month))}</h2>${rotLegend()}<div class="rot-nav"><button type="button" data-month="-1" aria-label="Mois précédent">‹</button><span>${rotEsc(rotMonthLabel(s.month))}</span><button type="button" data-month="1" aria-label="Mois suivant">›</button></div></div>
     <div id="rotPreview">${rotPreviewGrid(s.month,s.preview)}</div></div>
   <div class="rot-card" style="display:grid;gap:10px"><p id="rotStatus" class="rot-status ${s.error?"is-error":"is-ok"}" role="status">${rotEsc(s.status|| (site?`Site : ${site.name}${site.regime?` — régime publié ${site.regime} v${site.version}`:" — aucun régime publié"}`:"Choisissez un site."))}</p>
-    ${s.simulation?`<ul class="rot-errors">${(s.simulation.errors||[]).slice(0,12).map(e=>`<li>${rotEsc(e.label||e.code)} ${rotEsc(e.slot?.work_date||e.date||"")}</li>`).join("")}</ul>`:""}
+    ${s.simulation?`<ul class="rot-errors">${(s.simulation.errors||[]).slice(0,12).map(e=>`<li>${rotEsc(e.label||e.code)}${e.employee?` — ${rotEsc(e.employee)}`:""} ${rotEsc(e.slot?.work_date||e.date||"")}</li>`).join("")}</ul>`:""}
     <div class="rot-actions"><button type="button" class="rot-btn" data-save ${s.busy||!s.siteId?"disabled":""}>Enregistrer</button><button type="button" class="rot-btn is-ghost" data-simulate ${s.busy||!s.draft?"disabled":""}>Simuler</button><button type="button" class="rot-btn" data-publish ${s.busy||!s.receipt?"disabled":""}>Publier</button><button type="button" class="rot-btn is-muted" data-cancel ${s.busy?"disabled":""}>Annuler</button></div></div>
   </section>`;
   rotBindConfig(view);
@@ -245,11 +268,17 @@ function rotBindConfig(view){
   const s=rotState,root=view.querySelector("#rotConfig");
   rotBindSiteSelects(root,()=>{rotResetDraft();rotLoadSiteConfig()});
   root.querySelectorAll("[data-regime]").forEach(b=>b.onclick=()=>{if(b.disabled)return;const keep=s.form;s.form={...rotDefaultForm(b.dataset.regime),effective:keep.effective,reason:keep.reason,anchor:keep.anchor,weekStart:keep.weekStart,workdays:keep.workdays,
-    holidays:keep.holidays,calendarSource:keep.calendarSource,calendarVersion:keep.calendarVersion,calendarFrom:keep.calendarFrom,calendarUntil:keep.calendarUntil,nightStart:keep.nightStart,nightEnd:keep.nightEnd};rotResetDraft();rotRenderConfig();rotRefreshPreview()});
+    holidays:keep.holidays,calendarSource:keep.calendarSource,calendarVersion:keep.calendarVersion,calendarFrom:keep.calendarFrom,calendarUntil:keep.calendarUntil,nightStart:keep.nightStart,nightEnd:keep.nightEnd};if(b.dataset.regime==="3X8"&&s.form.anchor)s.month=s.form.anchor.slice(0,7);rotResetDraft();rotRenderConfig();rotRefreshPreview()});
   // Toute modification invalide le brouillon et le reçu : Simuler et Publier redeviennent indisponibles.
   const change=()=>{const had=s.draft||s.receipt;rotResetDraft();root.querySelector("[data-simulate]").disabled=true;root.querySelector("[data-publish]").disabled=true;
     root.querySelector(".rot-errors")?.remove();if(had){const st=root.querySelector("#rotStatus");st.className="rot-status is-error";st.textContent="Paramètres modifiés : enregistrez un nouveau brouillon puis simulez avant publication."}rotRefreshPreview(true)};
-  root.querySelectorAll("[data-f]").forEach(i=>i.addEventListener("change",()=>{s.form[i.dataset.f]=i.value;change();if(["weekStart","dayStart","dayEnd","nightShiftStart","nightShiftEnd"].includes(i.dataset.f))rotRenderConfig()}));
+  root.querySelectorAll("[data-f]").forEach(i=>i.addEventListener("change",()=>{s.form[i.dataset.f]=i.value;
+    // 3×8 : la date d'effet suit la date de début du cycle tant qu'OPS ne l'a pas changée.
+    if(i.dataset.f==="effective")s.form.effectiveTouched=true;
+    if(i.dataset.f==="anchor"&&s.form.regime==="3X8"&&!s.form.effectiveTouched){s.form.effective=i.value;const e=root.querySelector('[data-f="effective"]');if(e)e.value=i.value}
+    // 3×8 : l'aperçu s'ouvre sur le mois de début du cycle.
+    if(i.dataset.f==="anchor"&&s.form.regime==="3X8"&&i.value){s.month=i.value.slice(0,7);change();rotRenderConfig();return}
+    change();if(["weekStart","dayStart","dayEnd","nightShiftStart","nightShiftEnd"].includes(i.dataset.f))rotRenderConfig()}));
   root.querySelectorAll("[data-shift]").forEach(i=>i.addEventListener("change",()=>{const [a,b]=i.dataset.shift.split(":").map(Number);s.form.shifts[a][b]=i.value;change()}));
   root.querySelectorAll("[data-phase]").forEach(i=>i.addEventListener("change",()=>{s.form.phases[i.dataset.phase]=Number(i.value);change()}));
   root.querySelectorAll("[data-workday]").forEach(i=>i.addEventListener("change",()=>{const n=Number(i.dataset.workday);s.form.workdays=i.checked?[...new Set([...s.form.workdays,n])]:s.form.workdays.filter(x=>Number(x)!==n);change();rotRenderConfig()}));
@@ -257,6 +286,7 @@ function rotBindConfig(view){
   root.querySelectorAll("[data-month]").forEach(b=>b.onclick=()=>{s.month=rotShiftMonth(s.month,Number(b.dataset.month));rotRenderConfig();rotRefreshPreview()});
   root.querySelector("[data-save]").onclick=()=>rotPerform(async()=>{
     const missing=rotMissing();if(missing.length){if(missing.includes("jours ouvrés"))s.advancedOpen=true;throw Error("À renseigner explicitement : "+missing.join(", ")+".")}
+    if(s.form.regime==="3X8"&&!String(s.form.reason||"").trim())s.form.reason="Configuration 3×8 — planning intelligent ATLAS";
     if(String(s.form.reason||"").trim().length<3){s.advancedOpen=true;throw Error("Motif de la configuration obligatoire (section Application, effectifs et calendrier officiel).")}
     s.draft=await rotApi(`/sites/${encodeURIComponent(s.siteId)}/drafts`,{method:"POST",body:{config:rotConfig(),effective_from:s.form.effective,reason:s.form.reason}});
     s.status="Brouillon enregistré. Une simulation valide est obligatoire avant publication.";s.overview=await rotApi("/overview");
@@ -264,7 +294,7 @@ function rotBindConfig(view){
   root.querySelector("[data-simulate]").onclick=()=>rotPerform(async()=>{
     const result=await rotApi(`/drafts/${s.draft.id}/simulate`,{method:"POST",body:{days:30}});
     s.simulation=result;s.receipt=result.valid?result.context_hash:null;
-    s.status=result.valid?"Simulation valide sur 30 jours : publication autorisée selon vos habilitations.":`${result.errors.length} point(s) bloquant(s) : publication interdite.`;s.error=!result.valid;
+    s.status=result.valid?(s.form.regime==="3X8"?"Planning généré par ATLAS et simulé sur 30 jours : contrôlez le calendrier, puis publiez.":"Simulation valide sur 30 jours : publication autorisée selon vos habilitations."):`${result.errors.length} point(s) bloquant(s) : publication interdite.`;s.error=!result.valid;
   });
   root.querySelector("[data-publish]").onclick=()=>rotPerform(async()=>{
     if(!confirm(`Publier ce régime à compter du ${s.form.effective} ? Le planning officiel du site changera à cette date.`))return;
@@ -300,6 +330,8 @@ function rotRefreshPreview(debounce){
     catch(e){s.preview={error:e.message||"Aperçu indisponible"}}
     if(ticket!==rotPreviewTicket||!s.view.isConnected)return;
     const host=s.view.querySelector("#rotPreview");if(host)host.innerHTML=rotPreviewGrid(s.month,s.preview);
+    if(s.form.regime==="3X8"){const groups=s.view.querySelector(".rot-groups"),rules=s.view.querySelector(".rot-rules");
+      if(groups)groups.innerHTML=ROT_GROUPS.map(rotGroupCard).join("");if(rules)rules.outerHTML=rotRules()}
   },debounce?350:0);
 }
 
@@ -316,8 +348,8 @@ function rotRenderPlanning(){
   const sum=p&&!p.error?p.summary:null;
   const summary=sum?`<aside class="rot-card rot-summary" aria-label="Résumé du cycle"><h2>Résumé du cycle</h2>
     <h3>Légende des groupes</h3><ul>${ROT_GROUPS.map(g=>`<li style="justify-content:flex-start">${rotChip(g)}<span>Groupe ${g} — ${rotEsc(sum.roles[g]||"")}</span></li>`).join("")}<li style="justify-content:flex-start"><span class="rot-chip rot-off">OFF</span><span>Repos / Non planifié</span></li></ul>
-    <h3>Cycle</h3><ul><li><span>Régime</span><b>${rotEsc(p.regime_label||"—")}</b></li><li><span>Version publiée</span><b>${rotEsc(p.versions.map(v=>"v"+v).join(", ")||"—")}</b></li><li><span>Période</span><b>${rotEsc(p.period.start.split("-").reverse().join("/"))} – ${rotEsc(p.period.end.split("-").reverse().join("/"))}</b></li>${p.calendar?`<li><span>Début de semaine</span><b>${rotEsc(ROT_DAY_NAMES[p.calendar.week_start])}</b></li><li><span>Jours ouvrés</span><b>${rotEsc(rotDaysLabel(p.calendar.workdays,p.calendar.week_start))}</b></li>`:""}${(sum.timings||[]).map(t=>`<li><span>${rotEsc(t.shift)}</span><b>${rotEsc(t.start)} – ${rotEsc(t.end)}</b></li>`).join("")}<li><span>Repos minimal</span><b>${sum.minimum_rest_minutes!=null?Math.round(sum.minimum_rest_minutes/60*10)/10+" h":"—"}</b></li><li><span>Conflits de repos</span><b>${rotEsc(sum.conflicts)}</b></li></ul>
-    <h3>Couverture du mois</h3><ul><li><span>Vacations jour (total)</span><b>${rotEsc(sum.coverage.day_staff_total)}</b></li><li><span>Vacations nuit (total)</span><b>${rotEsc(sum.coverage.night_staff_total)}</b></li>${sum.coverage.a_days?`<li><span>Jours avec présence A (jours ouvrés)</span><b>${sum.coverage.a_days[0]} / ${sum.coverage.a_days[1]}</b></li>`:""}<li><span>Jours de week-end couverts</span><b>${sum.coverage.weekends[0]} / ${sum.coverage.weekends[1]}</b></li><li><span>Jours fériés couverts</span><b>${sum.coverage.holidays[0]} / ${sum.coverage.holidays[1]}</b></li></ul>
+    <h3>Cycle</h3><ul><li><span>Régime</span><b>${rotEsc(p.regime_label||"—")}</b></li><li><span>Version publiée</span><b>${rotEsc(p.versions.map(v=>"v"+v).join(", ")||"—")}</b></li><li><span>Période</span><b>${rotEsc(p.period.start.split("-").reverse().join("/"))} – ${rotEsc(p.period.end.split("-").reverse().join("/"))}</b></li>${p.regime==="3X8"?`<li><span>Exploitation</span><b>7 j/7, jours fériés compris</b></li>`:p.calendar?`<li><span>Début de semaine</span><b>${rotEsc(ROT_DAY_NAMES[p.calendar.week_start])}</b></li><li><span>Jours ouvrés</span><b>${rotEsc(rotDaysLabel(p.calendar.workdays,p.calendar.week_start))}</b></li>`:""}${(sum.timings||[]).map(t=>`<li><span>${rotEsc(t.shift)}</span><b>${rotEsc(t.start)} – ${rotEsc(t.end)}</b></li>`).join("")}<li><span>Repos minimal</span><b>${sum.minimum_rest_minutes!=null?Math.round(sum.minimum_rest_minutes/60*10)/10+" h":"—"}</b></li><li><span>Conflits de repos</span><b>${rotEsc(sum.conflicts)}</b></li></ul>
+    <h3>Couverture du mois</h3><ul><li><span>Vacations jour (total)</span><b>${rotEsc(sum.coverage.day_staff_total)}</b></li><li><span>Vacations nuit (total)</span><b>${rotEsc(sum.coverage.night_staff_total)}</b></li>${sum.coverage.a_days?`<li><span>Jours avec présence A (jours ouvrés)</span><b>${sum.coverage.a_days[0]} / ${sum.coverage.a_days[1]}</b></li>`:""}${p.regime==="3X8"?"":`<li><span>Jours de week-end couverts</span><b>${sum.coverage.weekends[0]} / ${sum.coverage.weekends[1]}</b></li><li><span>Jours fériés couverts</span><b>${sum.coverage.holidays[0]} / ${sum.coverage.holidays[1]}</b></li>`}</ul>
     <h3>Règles et contrôles</h3><ul>${sum.rules.map(r=>`<li style="justify-content:flex-start"><span class="${r.ok?"ok":"ko"}"></span>${rotEsc(r.label)}</li>`).join("")}</ul></aside>`:"";
   const body=!s.siteId?`<p class="text-sm text-slate-500">Choisissez un site pour afficher son planning officiel.</p>`:p?.error?`<p class="rot-status is-error" role="alert">${rotEsc(p.error)}</p>`:!p?.configured?`<p class="text-sm text-slate-600">Aucun régime publié pour ce site sur ce mois : le planning historique reste en vigueur. Configurez puis publiez un régime depuis « Configuration du régime ».</p>`:rotCalendar(p);
   const table=p&&p.configured&&s.showTable?`<div class="rot-table" style="margin-top:12px"><table><thead><tr><th>Date</th><th>Vacation</th><th>Groupe</th><th>Horaires</th><th>Effectif planifié / requis</th><th>Points critiques</th></tr></thead><tbody>${p.days.flatMap(d=>d.slots.map(x=>`<tr><td>${rotEsc(d.date.split("-").reverse().join("/"))}</td><td>${rotEsc(x.label)}</td><td>${x.group?rotChip(x.group):"NON COUVERTE"}</td><td>${rotEsc(x.start)} – ${rotEsc(x.end)}</td><td>${rotEsc(x.planned_staff)} / ${rotEsc(x.required_staff)}</td><td>${rotEsc(d.critical.filter(c=>!c.shift||c.shift===x.shift).map(c=>c.label).join(", "))}</td></tr>`)).join("")}</tbody></table></div>`:"";

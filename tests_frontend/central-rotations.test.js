@@ -25,6 +25,13 @@ const MONTH={month:'2027-01',configured:true,regime:'1/3',regime_label:'1/3',ver
    timings:[{shift:'Jour',start:'08:00',end:'16:30'},{shift:'Nuit',start:'16:30',end:'08:00'}],minimum_rest_minutes:480,
    coverage:{day_staff_total:93,night_staff_total:93,a_days:[21,21],weekends:[10,10],holidays:[0,0]},conflicts:0,
    rules:[{label:'Aucun groupe A en nuit',ok:true},{label:'Effectifs requis atteints',ok:false}]}};
+// Aperçu 3×8 renvoyé par le serveur : positions calculées (A Matin, B Après-midi, C Nuit, D OFF) et configuration complétée.
+const MONTH_3X8={...MONTH,regime:'3X8',regime_label:'3×8',calendar:{week_start:0,workdays:[0,1,2,3,4,5,6],weekend:[]},
+ days:[{date:'2027-01-01',weekday:4,configured:true,weekend:false,holiday:false,off_groups:['D'],critical:[],slots:[
+  {shift:'MATIN',label:'Matin',group:'A',start:'05:00',end:'13:00',planned_staff:2,required_staff:1},
+  {shift:'APRES_MIDI',label:'Après-midi',group:'B',start:'13:00',end:'21:00',planned_staff:2,required_staff:1},
+  {shift:'NUIT',label:'Nuit',group:'C',start:'21:00',end:'05:00',planned_staff:2,required_staff:1}]}],
+ config:{regime:'3X8',minimum_rest_minutes:480,early_minutes:45,late_refusal_minutes:30,required_staff:{MATIN:1,APRES_MIDI:1,NUIT:1},derived:['phases','workdays']}};
 const PUBLISHED=[{version:2,config:CONFIG,effective_from:'2027-01-01',effective_to:null,published_by:'OPS',reason:'Publication <b>test</b>'}];
 
 async function setup({valid=true,hash='#/ops/rotations',history=PUBLISHED}={}){
@@ -37,7 +44,7 @@ async function setup({valid=true,hash='#/ops/rotations',history=PUBLISHED}={}){
    calls.push({url,options});
    if(url.endsWith('/sites'))return {items:SITES};
    if(url.endsWith('/overview'))return {active_sites:1,active_regimes:0,critical_points:2,drafts_to_validate:1};
-   if(url.endsWith('/preview'))return {...MONTH,versions:[]};
+   if(url.endsWith('/preview'))return options.body.config.regime==='3X8'?MONTH_3X8:{...MONTH,versions:[]};
    if(url.endsWith('/history'))return {items:history};
    if(url.endsWith('/drafts'))return {id:8};
    if(url.endsWith('/simulate'))return {valid,context_hash:'a'.repeat(64),errors:valid?[]:[{code:'UNCOVERED_SHIFT',label:'VACATION NON COUVERTE',slot:{work_date:'2027-01-02'}}],slots:[]};
@@ -101,9 +108,10 @@ test('aides contextuelles : règles 1/3 seulement en 1/3 ; changer de régime ga
  $('[data-regime="3X8"]').click();await delay(10);
  assert.doesNotMatch(view.textContent,/jour ouvré seulement|Aucun service de nuit|VACATION NON COUVERTE/);
  assert.match(view.textContent,/Trois vacations de 8 h contiguës/);assert.equal($('[data-shift="0:0"]').value,'');assert.equal($('[data-f="dayStart"]'),null);
- assert.equal($('[data-f="weekStart"]').value,'6');                                  // calendrier du site conservé
+ assert.equal($('[data-f="weekStart"]'),null);                                       // 3×8 : aucun calendrier à saisir
  $('[data-regime="24H48"]').click();await delay(10);
  assert.match(view.textContent,/Jour puis Nuit, suivis de deux jours OFF/);assert.equal($('[data-f="dayStart"]').value,'');assert.equal($('[data-shift="0:0"]'),null);
+ assert.equal($('[data-f="weekStart"]').value,'6');                                  // calendrier du site conservé
  $('[data-regime="1/2"]').click();await delay(10);
  assert.equal($('[data-f="firstStart"]').value,'');assert.doesNotMatch(view.textContent,/Groupe A : jour ouvré/);
  assert.equal($('[data-regime="NORMAL"]').disabled,true);assert.equal($('[data-regime="CUSTOM"]').disabled,true);
@@ -167,5 +175,53 @@ test('planning mensuel : semaine du site, OFF, week-end couvert, point critique,
  assert.match(view.querySelector('#rotHistory').textContent,/v2.*Début dimanche · ouvrés dim, lun, mar, mer, jeu/s);
  assert.equal(view.querySelector('#rotHistory b'),null);                              // motif échappé
  $('[data-today]').click();await delay(10);
+ dom.window.close();
+});
+
+async function choose3x8(dom,$,view,hours=[['05:00','13:00'],['13:00','21:00'],['21:00','05:00']]){
+ $('[data-regime="3X8"]').click();await delay(10);
+ setValue(dom,$('[data-f="anchor"]'),'2027-01-01');
+ hours.forEach(([a,b],i)=>{setValue(dom,$(`[data-shift="${i}:0"]`),a);setValue(dom,$(`[data-shift="${i}:1"]`),b)});
+}
+
+test('3×8 : formulaire minimal — date de début du cycle et six horaires, rien d’autre à saisir',async()=>{
+ const {dom,view,$}=await setup({history:[]});
+ $('[data-regime="3X8"]').click();await delay(10);
+ const params=[...view.querySelectorAll('#rotConfig > .rot-card')][0];
+ assert.deepEqual([...params.querySelectorAll('.rot-fields label.rot-field')].map(l=>l.childNodes[0].textContent.trim()),
+  ['Date de début du cycle','Matin — début','Matin — fin','Après-midi — début','Après-midi — fin','Nuit — début','Nuit — fin']);
+ for(const key of ['daysPerPosition','weekStart','nightStart','nightEnd','rest','early','late','staffMatin','calendarSource','calendarFrom','holidays'])assert.equal($(`[data-f="${key}"]`),null,key);
+ assert.equal(view.querySelectorAll('[data-workday]').length,0);assert.equal(view.querySelectorAll('[data-phase]').length,0);
+ assert.match($('[data-advanced] summary').textContent,/Date d'effet et motif/);assert.match(view.textContent,/Motif \(facultatif\)/);
+ dom.window.close();
+});
+
+test('3×8 : enregistrement avec les seuls horaires — aucun blocage jours ouvrés / travail de nuit, motif et date d’effet par défaut',async()=>{
+ const {dom,view,calls,$}=await setup({history:[]});
+ await choose3x8(dom,$,view);
+ await until(()=>calls.some(c=>c.url.endsWith('/preview')&&c.options.body.config.regime==='3X8'),'aperçu 3×8');
+ assert.doesNotMatch(view.textContent,/À renseigner explicitement|jours ouvrés, début travail de nuit/);
+ $('[data-save]').click();await until(()=>calls.some(c=>c.url.endsWith('/sites/101/drafts')),'brouillon');
+ const body=calls.find(c=>c.url.endsWith('/sites/101/drafts')).options.body;
+ assert.deepEqual(Object.keys(body.config).sort(),['anchor','regime','shifts','timezone']);
+ assert.equal(JSON.stringify(body.config.shifts),JSON.stringify([{start:'05:00',end:'13:00'},{start:'13:00',end:'21:00'},{start:'21:00',end:'05:00'}]));
+ assert.equal(body.effective_from,'2027-01-01');assert.equal(body.reason,'Configuration 3×8 — planning intelligent ATLAS');
+ await until(()=>!$('[data-simulate]').disabled,'Simuler disponible');
+ $('[data-simulate]').click();await until(()=>!$('[data-publish]').disabled,'simulation');
+ assert.match($('#rotStatus').textContent,/Planning généré par ATLAS et simulé sur 30 jours/);
+ $('[data-publish]').click();await until(()=>/version 3 publié/.test($('#rotStatus').textContent),'publication');
+ dom.window.close();
+});
+
+test('3×8 : cartes A/B/C/D calculées par le serveur (position du jour, groupe OFF) et paramètres ATLAS affichés',async()=>{
+ const {dom,view,$}=await setup({history:[]});
+ await choose3x8(dom,$,view);
+ await until(()=>/Au 01\/01 : Matin/.test($('.rot-group.rot-A').textContent),'positions');
+ assert.match($('.rot-group.rot-A').textContent,/Au 01\/01 : Matin \(05:00 – 13:00\)/);
+ assert.match($('.rot-group.rot-B').textContent,/Au 01\/01 : Après-midi \(13:00 – 21:00\)/);
+ assert.match($('.rot-group.rot-C').textContent,/Au 01\/01 : Nuit \(21:00 – 05:00\)/);
+ assert.match($('.rot-group.rot-D').textContent,/Au 01\/01 : OFF \(repos\)/);
+ assert.match($('.rot-rules').textContent,/Calculé par ATLAS : repos minimal 8 h, avance 45 min, refus du retard après 30 min, 1 agent\(s\) requis par vacation/);
+ assert.match($('#rotPreview').textContent,/A\.-midi :B/);                              // libellé court dans la case
  dom.window.close();
 });
