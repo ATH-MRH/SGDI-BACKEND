@@ -202,8 +202,11 @@ def month_view(db, site_id, month, *, draft_config=None):
 
 
 def preview(db, site_id, config, month):
-    """Aperçu d'un brouillon (aucune écriture) : validation du moteur puis vue mensuelle."""
-    return month_view(db, site_id, month, draft_config=validate(config))
+    """Aperçu d'un brouillon (aucune écriture) : validation du moteur puis vue mensuelle. La
+    configuration complétée (paramètres calculés par ATLAS en 3×8) est renvoyée telle qu'elle
+    serait enregistrée."""
+    config = validate(config)
+    return {**month_view(db, site_id, month, draft_config=config), 'config': config}
 
 
 # ── Couverture terrain (BEO) ────────────────────────────────────────────────────────────────

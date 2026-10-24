@@ -41,3 +41,11 @@ Le chemin sûr est décrit dans [migration-central-rotations.md](migration-centr
 Avant toute production : obtenir GO DG distinct, confirmer auto-deploy désactivé, inventorier les versions et configurations réelles en lecture autorisée, restaurer une sauvegarde réelle dans une base isolée, faire valider calendriers et repos par OPS/DRH, préparer relèves et date d’effet par site, simuler puis publier explicitement. Les sites 22/27 et leur éventuel doublon ne sont ni corrigés ni codés en dur.
 
 Le downgrade refuse toute publication existante. Après écritures, retour par restauration sans rejeu ferait perdre des faits : conserver une sauvegarde de l’état incident et préparer une correction en avant ou un rejeu autorisé dans une copie. Aucun retour de production n’a été exécuté.
+
+3×8 simplifié (GO DG du 24/10/2026) : OPS saisit uniquement la date de début du cycle et les six horaires (Matin, Après-midi, Nuit). Le planning intelligent ATLAS (`engine.complete_3x8`) calcule le reste et l'écrit dans la configuration du brouillon, donc dans la version datée, avec la liste `derived` des paramètres calculés :
+- positions A/B/C/D = 0/1/2/3 à la date de début, une position par jour ; chaque groupe enchaîne Matin → Après-midi → Nuit → OFF, et le groupe OFF change chaque jour ;
+- exploitation continue 7 j/7, jours fériés compris ; plage de nuit = vacation Nuit ;
+- repos minimal 8 h, avance 45 min, refus du retard après 30 min, 1 agent requis par vacation ;
+- calendrier « Planning intelligent ATLAS — 3×8 continu » confirmé dix ans à partir de la date de début.
+
+Une valeur explicite d'une version existante n'est jamais remplacée. Les horaires sont libres (par exemple 05:00 → 13:00 → 21:00 → 05:00) ; le moteur exige trois vacations de 8 h contiguës et explique chaque erreur : trou, chevauchement, durée, vacation vide ou incomplète. La simulation libelle chaque blocage pour OPS. Les régimes 24h/48, 1/2 et 1/3 gardent leurs propres paramètres obligatoires.

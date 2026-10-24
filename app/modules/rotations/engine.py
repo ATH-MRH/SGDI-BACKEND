@@ -15,8 +15,70 @@ def minutes(value):
     return parsed.hour * 60 + parsed.minute
 
 
-def validate(config):
+SHIFT_NAMES_3X8 = ('Matin', 'Après-midi', 'Nuit')
+
+
+def _hm_label(value):
+    return f"{value//60:02d}:{value%60:02d}"
+
+
+def check_3x8_shifts(slots):
+    """Contrôle des trois vacations 3×8 (Matin → Après-midi → Nuit) avec un message explicite pour
+    OPS : chacune dure 8 h, la suivante commence à la fin de la précédente (aucun trou, aucun
+    chevauchement), la nuit peut traverser minuit. Les horaires eux-mêmes sont libres."""
+    if not isinstance(slots, list) or len(slots) != 3 or any(not isinstance(s, dict) or not s.get('start') or not s.get('end') for s in slots):
+        raise ValueError('Horaires des trois vacations requis : Matin, Après-midi et Nuit (début et fin)')
+    starts = [minutes(s['start']) for s in slots]; ends = [minutes(s['end']) for s in slots]
+    for name, a, b in zip(SHIFT_NAMES_3X8, starts, ends):
+        length = (b - a) % 1440
+        if length == 0:
+            raise ValueError(f'La vacation {name} est vide : son début et sa fin sont identiques ({_hm_label(a)})')
+        if length != 480:
+            raise ValueError(f'La vacation {name} ({_hm_label(a)} → {_hm_label(b)}) dure {length//60} h {length%60:02d} : une vacation 3×8 dure 8 h')
+    for i in range(3):
+        nxt = (i + 1) % 3; gap = (starts[nxt] - ends[i]) % 1440
+        if gap:
+            if gap < 720:
+                raise ValueError(f'Trou de {gap} min entre la fin de la vacation {SHIFT_NAMES_3X8[i]} ({_hm_label(ends[i])}) '
+                                 f'et le début de la vacation {SHIFT_NAMES_3X8[nxt]} ({_hm_label(starts[nxt])})')
+            raise ValueError(f'Chevauchement de {1440-gap} min entre la vacation {SHIFT_NAMES_3X8[i]} (fin {_hm_label(ends[i])}) '
+                             f'et la vacation {SHIFT_NAMES_3X8[nxt]} (début {_hm_label(starts[nxt])})')
+
+
+def complete_3x8(config):
+    """Planning intelligent 3×8 : OPS saisit la date de début du cycle et les six horaires ; ATLAS
+    calcule le reste et l'écrit dans la configuration, donc dans la version datée et son historique
+    (liste `derived`). Principe : 4 groupes, 3 vacations, 1 groupe OFF ; chaque groupe enchaîne
+    Matin → Après-midi → Nuit → OFF, une position par jour, et le groupe OFF change chaque jour
+    (A/B/C/D en positions 0/1/2/3 à la date de début). Exploitation continue 7 j/7, jours fériés
+    compris. Une valeur fournie explicitement n'est jamais remplacée."""
     c = deepcopy(config)
+    if c.get('regime') != '3X8':
+        return c
+    check_3x8_shifts(c.get('shifts'))
+    anchor = date.fromisoformat(c['anchor']) if c.get('anchor') else None
+    if anchor is None:
+        raise ValueError('Date de début du cycle requise')
+    night = c['shifts'][2]
+    defaults = {
+        'phases': {'A': 0, 'B': 1, 'C': 2, 'D': 3}, 'days_per_position': 1,
+        'week_start': 0, 'workdays': list(range(7)), 'weekend': [], 'holidays': [],
+        'night_start': night['start'], 'night_end': night['end'],
+        'minimum_rest_minutes': 480, 'early_minutes': 45, 'late_refusal_minutes': 30,
+        'required_staff': {'MATIN': 1, 'APRES_MIDI': 1, 'NUIT': 1},
+        'calendar_source': 'Planning intelligent ATLAS — 3×8 continu (7 j/7, jours fériés compris)', 'calendar_version': '1',
+        'calendar_valid_from': anchor.isoformat(), 'calendar_valid_until': date(anchor.year + 10, anchor.month, min(anchor.day, 28)).isoformat(),
+    }
+    derived = [k for k in defaults if k not in c or c[k] in (None, '')]
+    for k in derived:
+        c[k] = deepcopy(defaults[k])
+    if derived:
+        c['derived'] = sorted(set(c.get('derived') or []) | set(derived))
+    return c
+
+
+def validate(config):
+    c = complete_3x8(config)
     required = ('regime','timezone','anchor','phases','minimum_rest_minutes','early_minutes',
                 'late_refusal_minutes','workdays','weekend','holidays','night_start','night_end',
                 'required_staff','calendar_source','calendar_version','calendar_valid_from','calendar_valid_until')
@@ -55,12 +117,7 @@ def validate(config):
     if regime == '3X8':
         if type(c.get('days_per_position')) is not int or c['days_per_position'] not in range(1,32):
             raise ValueError('Durée des positions 3×8 requise')
-        slots=c.get('shifts',[])
-        if len(slots)!=3: raise ValueError('Trois vacations requises')
-        starts=[minutes(s['start']) for s in slots]
-        ends=[minutes(s['end']) for s in slots]
-        if any((b-a)%1440!=480 for a,b in zip(starts,ends)) or any(ends[i]!=starts[(i+1)%3] for i in range(3)):
-            raise ValueError('Les vacations 3×8 doivent couvrir 24h sans trou')
+        check_3x8_shifts(c.get('shifts'))
         n=c['days_per_position']
         if any(sorted(((day+v)%(4*n))//n for v in phases.values())!=[0,1,2,3] for day in range(4*n)):
             raise ValueError('Phases 3×8 sans couverture continue')

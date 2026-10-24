@@ -69,6 +69,20 @@ def expected_population(db,site_id,slot,*,assignments=None,employees=None):
     return {i for i in ids if i in employees and str(employees[i].status or '').strip().lower() in ACTIVE_EMPLOYEE_STATUSES}
 
 
+SIMULATION_LABELS={
+    'UNCOVERED_SHIFT':'VACATION NON COUVERTE : aucun groupe admissible',
+    'UNDERSTAFFED':'SOUS-EFFECTIF : groupe planifié avec moins d’agents que requis',
+    'REST_OR_OVERLAP':'Chevauchement ou repos insuffisant entre deux vacations du même groupe',
+    'CALENDAR_UNCONFIRMED':'Calendrier non confirmé à cette date',
+    'UNKNOWN_GROUP':'Affectation hors des groupes A/B/C/D',
+    'EMPLOYEE_CONFLICT':'Employé attendu sur deux vacations incompatibles (autre site ou repos insuffisant)',
+    'UNSAFE_TRANSITION':'Passage depuis la version précédente : repos insuffisant',
+    'UNSAFE_LEGACY_TRANSITION':'Passage depuis l’ancien planning : repos insuffisant',
+    'OPEN_SHIFT_TRANSITION':'Vacation encore ouverte : la nouvelle date d’effet ne respecte pas le repos',
+    'ACTUAL_REST_TRANSITION':'Repos réel insuffisant depuis la dernière sortie',
+}
+
+
 def simulate(db,draft,days=30):
     if days not in (30,60,90):raise HTTPException(422,'Simulation 30/60/90 jours requise')
     result=occurrences(draft.config,draft.effective_from,days)
@@ -151,6 +165,11 @@ def simulate(db,draft,days=30):
                 from app.modules.attendance.core import to_local
                 if datetime.fromisoformat(slot['start'])-to_local(last.occurred_at)<timedelta(minutes=draft.config['minimum_rest_minutes']):
                     result['errors'].append({'code':'ACTUAL_REST_TRANSITION','employee_id':eid})
+    for error in result['errors']:
+        # Message explicite pour OPS : nature du blocage et, le cas échéant, l'employé concerné.
+        error.setdefault('label',SIMULATION_LABELS.get(error['code'],error['code']))
+        employee=staff.get(error.get('employee_id'))
+        if employee is not None:error.setdefault('employee',f"{employee.last_name} {employee.first_name} ({employee.code})")
     result['valid']=not result['errors']
     c=draft.config
     calendar={'week_start':c['week_start'],'workdays':c['workdays'],'weekend':c['weekend'],
