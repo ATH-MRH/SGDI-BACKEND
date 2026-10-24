@@ -243,6 +243,66 @@ test("the studio edits a copy of the reference: add, move, undo, arrange, save",
   dom.window.close();
 });
 
+test("studio card size: 54 × 86 → 85,6 × 54 applied while typing, rulers and zoom follow, saved and reloaded identical", async () => {
+  const saved = [];
+  let stored = null;
+  const { dom, w, view, calls } = setup({
+    "/templates": { value: () => ({ items: stored ? [TEMPLATE, stored] : [TEMPLATE], fields: { nom: "Nom" }, fonts: ["Helvetica"] }) },
+  }, "#/drh/badges/studio/1");
+  const original = w.sgdiApi;
+  w.sgdiApi = async (url, options) => {
+    if (options && options.method === "POST" && url === "/drh/badges/templates") {
+      saved.push(options.body); stored = { ...TEMPLATE, id: 5, is_system: false, is_default: false, name: options.body.name, design: options.body.design, width_mm: options.body.design.width, height_mm: options.body.design.height };
+      return stored;
+    }
+    return original(url, options);
+  };
+  w.renderBadgeStudio(view, "studio"); await settle();
+  const ed = w.BadgeStudioEditor.state;
+  const fire = (el, type) => el.dispatchEvent(new w.Event(type, { bubbles: true }));
+  const canvas = () => view.querySelector("[data-st-canvas]");
+  const before = JSON.stringify(ed.design.pages[0].elements.map(e => [e.x, e.y, e.w, e.h]));
+  const width = view.querySelector('[data-pp="width"]'), height = view.querySelector('[data-pp="height"]');
+  assert.equal(width.value, "54"); assert.equal(height.value, "86");
+  assert.equal(width.getAttribute("inputmode"), "decimal");
+  // Largeur saisie avec une virgule : appliquée à chaque frappe, sans quitter le champ.
+  width.value = "85,6"; fire(width, "input");
+  assert.equal(ed.design.width, 85.6);
+  assert.equal(canvas().style.width, `${85.6 * ed.zoom}px`);
+  assert.equal(Number(view.querySelector('[data-st-ruler="h"]').getAttribute("width")), 85.6 * ed.zoom);
+  assert.match(view.querySelector('[data-st-ruler="h"]').getAttribute("aria-label"), /\(85\.6 mm\)/);
+  assert.equal(view.querySelector("[data-st-overlay]").getAttribute("viewBox"), "0 0 85.6 86");
+  assert.equal(view.querySelector("[data-st-dirty]").hidden, false);       // « Non enregistré »
+  // Sortie du champ : le panneau n'est PAS reconstruit, le champ Hauteur cliqué garde la saisie.
+  fire(width, "change");
+  assert.equal(view.querySelector('[data-pp="height"]'), height, "même champ Hauteur");
+  height.value = "54"; fire(height, "input"); fire(height, "change");
+  assert.equal(ed.design.height, 54);
+  assert.equal(canvas().style.height, `${54 * ed.zoom}px`);
+  assert.equal(Number(view.querySelector('[data-st-ruler="v"]').getAttribute("height")), 54 * ed.zoom);
+  assert.match(view.querySelector("[data-st-format]").textContent, /85,6 × 54 mm/);
+  assert.equal(width.value, "85,6");
+  assert.equal(JSON.stringify(ed.design.pages[0].elements.map(e => [e.x, e.y, e.w, e.h])), before);   // coordonnées en mm conservées
+  assert.match(view.querySelector('[data-st="zoom-fit"]').textContent, /%$/);
+  // Valeur invalide : refusée, message, champ remis à la taille en vigueur.
+  height.value = "12"; fire(height, "input"); fire(height, "change");
+  assert.equal(ed.design.height, 54); assert.equal(height.value, "54");
+  assert.ok(calls.some(c => c[0] === "toast" && /Hauteur invalide : entre 20 et 300 mm/.test(c[1])));
+  // Enregistrement puis rechargement : taille identique.
+  const name = view.querySelector('[data-st="name"]'); name.value = "Paysage CR80"; fire(name, "input");
+  view.querySelector('[data-st="save"]').click(); await settle();
+  assert.equal(saved[0].design.width, 85.6); assert.equal(saved[0].design.height, 54);
+  assert.equal(w.location.hash, "#/drh/badges/studio/5");
+  w.renderBadgeStudio(view, "studio"); await settle();
+  const again = w.BadgeStudioEditor.state;
+  assert.equal(again.id, 5);
+  assert.deepEqual([again.design.width, again.design.height], [85.6, 54]);
+  assert.equal(view.querySelector('[data-pp="width"]').value, "85,6");
+  assert.equal(canvas().style.width, `${85.6 * again.zoom}px`);
+  w.badgeStudioDestroy();
+  dom.window.close();
+});
+
 test("without explicit badge permissions the screens stay read-only", async () => {
   const badge = { id: 3, number: "BDG-2026-000003", status: "ACTIF", issued_at: "2026-10-01T08:00:00", print_count: 0, employee_id: 7 };
   const { dom, w, view } = setup({

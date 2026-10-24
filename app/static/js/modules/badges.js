@@ -54,6 +54,8 @@
     return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
   }
   function num(value, fallback) { const n = Number(value); return Number.isFinite(n) ? Math.round(n * 1000) / 1000 : (fallback || 0); }
+  /** Millimètres affichés à la française (85,6). */
+  function mmFr(value) { return String(num(value)).replace(".", ","); }
   function color(value, fallback) { return /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : (fallback || "none"); }
   function imageSrc(value) { return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(String(value || "")) ? value : ""; }
   function notify(message, type) { if (typeof toast === "function") toast(message, type || "info"); }
@@ -81,7 +83,69 @@
       throw new Error(typeof sgdiApiErrorMessage === "function" ? sgdiApiErrorMessage(res.status, raw, out) : "Erreur " + res.status);
     }
     const name = (/filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "") || [])[1] || "badge.pdf";
-    return { blob: await res.blob(), name };
+    return { blob: await res.blob(), name, pageSize: res.headers.get("x-badge-page-size-mm") || "" };
+  }
+  /** Tailles des pages d'un PDF, en millimètres (boîtes MediaBox, non compressées dans nos PDF). */
+  async function pdfPageSizes(blob) {
+    const buffer = await (blob.arrayBuffer ? blob.arrayBuffer() : new Response(blob).arrayBuffer());
+    const text = new TextDecoder("latin1").decode(buffer);
+    const mm = pt => Math.round(pt * 25.4 / 72 * 10) / 10;
+    return [...text.matchAll(/\/MediaBox\s*\[\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*\]/g)]
+      .map(m => [mm(Number(m[3]) - Number(m[1])), mm(Number(m[4]) - Number(m[2]))]);
+  }
+  const A4_MM = [210, 297];
+  const sizeText = ([w, h]) => `${mmFr(w)} × ${mmFr(h)} mm`;
+  /** Tailles attendues annoncées par le serveur : « 54x86;85.6x54 » ou « A4 ». */
+  function expectedSizes(header) {
+    if (!header) return [];
+    if (header === "A4") return [A4_MM];
+    return header.split(";").map(part => part.split("x").map(Number)).filter(pair => pair.length === 2 && pair.every(Number.isFinite));
+  }
+  /** Impression directe d'un PDF généré par le serveur : vérifications (document chargé, PDF non vide,
+      chaque page à la taille du modèle — jamais une carte convertie sur A4), puis fenêtre d'impression
+      du navigateur. Rien n'est imprimé sans la validation finale de l'utilisateur dans cette fenêtre.
+      Si le navigateur refuse l'impression automatique, un message l'explique et le PDF s'ouvre dans
+      un onglet. `expected` : tailles attendues en mm ([[54, 86]], [A4_MM]…). */
+  async function printPdf(file, expected) {
+    if (!file || !file.blob || !file.blob.size) throw new Error("Document d'impression vide : impression annulée.");
+    if (file.blob.type && !/pdf/i.test(file.blob.type)) throw new Error("Le serveur n'a pas renvoyé un PDF : impression annulée.");
+    const pages = await pdfPageSizes(file.blob);
+    if (!pages.length) throw new Error("PDF illisible (aucune page) : impression annulée.");
+    const wanted = (expected && expected.length ? expected : expectedSizes(file.pageSize));
+    const fits = ([w, h]) => wanted.some(([ew, eh]) => Math.abs(w - ew) <= 0.2 && Math.abs(h - eh) <= 0.2);
+    const wrong = wanted.length ? pages.find(page => !fits(page)) : null;
+    if (wrong) throw new Error(`Taille du document (${sizeText(wrong)}) différente du modèle (${wanted.map(sizeText).join(", ")}) : impression annulée.`);
+    const url = URL.createObjectURL(file.blob);
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true"); frame.tabIndex = -1; frame.title = "Document d'impression du badge";
+    frame.dataset.bsPrintFrame = "1";
+    frame.dataset.bsPrintState = "loading";              // loading → printing → dialog-closed | fallback (observable en recette)
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    const cleanup = () => { frame.remove(); URL.revokeObjectURL(url); };
+    const loaded = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout")), 20000);
+      frame.addEventListener("load", () => { clearTimeout(timer); resolve(); }, { once: true });
+    });
+    frame.src = url;
+    document.body.appendChild(frame);
+    const format = sizeText(pages[0]) + (pages.length > 1 ? ` — ${pages.length} pages (recto et verso)` : "");
+    try {
+      await loaded;                                        // jamais d'impression avant le chargement complet
+      const target = frame.contentWindow;
+      if (!target || typeof target.print !== "function") throw new Error("no-print");
+      target.focus();
+      frame.dataset.bsPrintState = "printing";
+      target.print();                                      // la fenêtre d'impression est ouverte tant que print() n'a pas rendu la main
+      frame.dataset.bsPrintState = "dialog-closed";
+      setTimeout(cleanup, 120000);                         // le cadre reste le temps de la fenêtre d'impression
+      return { pages, format, mode: "dialog" };
+    } catch (error) {
+      frame.dataset.bsPrintState = "fallback";
+      cleanup();
+      saveBlob(file, true);
+      notify(`Le navigateur a bloqué l'ouverture automatique de la fenêtre d'impression. Le PDF du badge (${format}) s'ouvre dans un nouvel onglet : imprimez-le à 100 % (taille réelle). Si rien ne s'ouvre, autorisez les fenêtres de ce site ou utilisez « Télécharger le PDF ».`, "error");
+      return { pages, format, mode: "fallback" };
+    }
   }
   function saveBlob(file, open) {
     const url = URL.createObjectURL(file.blob);
@@ -319,7 +383,7 @@
     const first = items[0].design;
     openModal(`<div class="bs-pv" data-bs-pv>
       <div class="bs-pv-head"><h2 class="text-xl font-bold">${esc(options.title || "Aperçu du badge")}</h2>
-        <span class="bs-pill is-muted">${num(first.width)} × ${num(first.height)} mm${items.length > 1 ? ` · ${items.length} badges` : ""}</span></div>
+        <span class="bs-pill is-muted">${mmFr(first.width)} × ${mmFr(first.height)} mm${items.length > 1 ? ` · ${items.length} badges` : ""}</span></div>
       <div class="bs-pv-bar">
         <div class="bs-chips" role="group" aria-label="Présentation"><button data-pv="flat">Badge seul</button><button data-pv="real">Réaliste</button></div>
         ${twoFaces ? `<div class="bs-chips" role="group" aria-label="Faces"><button data-pv="front">Recto</button><button data-pv="back">Verso</button><button data-pv="both">Recto et verso</button></div>` : ""}
@@ -532,8 +596,10 @@
         badgeIds = ids.filter(id => withBadge.has(id)).map(id => withBadge.get(id));
         skipped = ids.filter(id => !withBadge.has(id)).map(id => ({ employee_id: id, reason: "Aucun badge émis" }));
       }
-      if (badgeIds.length) saveBlob(await apiBlob("/print/pdf", { badge_ids: badgeIds, layout: listState.layout || null }));
-      notify(badgeIds.length ? `${badgeIds.length} badge(s) envoyé(s) à l'impression.` : "Aucun badge à imprimer.", badgeIds.length ? "success" : "error");
+      let printed = null;
+      if (badgeIds.length) printed = await printPdf(await apiBlob("/print/pdf", { badge_ids: badgeIds, layout: listState.layout || null }));
+      if (!badgeIds.length) notify("Aucun badge à imprimer.", "error");
+      else if (printed.mode === "dialog") notify(`${badgeIds.length} badge(s) : fenêtre d'impression ouverte (${printed.format}). Imprimez à 100 % (taille réelle).`, "success");
       if (report) report.innerHTML = skipped.length ? `<div class="bs-report"><strong>${skipped.length} employé(s) non traité(s)</strong><ul>${skipped.map(s => `<li><a href="#/drh/badges/creer/${esc(s.employee_id)}">Employé n° ${esc(s.employee_id)}</a> — ${esc(s.reason)}</li>`).join("")}</ul></div>` : "";
     } catch (error) { notify(error.message || String(error), "error"); }
     buttons.forEach(b => { b.disabled = false; });
@@ -580,18 +646,31 @@
         Modèle « ${esc(d.template_name || "—")} », figé à l'émission : la réimpression est identique au badge remis.${twoFaces ? " Recto et verso : une page par face (carte) ou une planche de versos à la suite (A4, retournement bord long)." : ""}
         <br><strong>Imprimez à 100 % (taille réelle)</strong> : désactivez « Ajuster à la page » dans la fenêtre d'impression.`,
       actionsHTML: `<label class="bs-pv-format">Format<select class="select" data-pv-layout data-no-lock>
-          <option value="card">Carte au format exact (${num(d.width_mm)} × ${num(d.height_mm)} mm)</option><option value="a4">Planche A4 (marges et traits de coupe)</option></select></label>
-        <button class="btn btn-primary" data-pv-print>Télécharger le PDF d'impression</button>`,
+          <option value="card">Carte au format exact (${mmFr(d.width_mm)} × ${mmFr(d.height_mm)} mm)</option><option value="a4">Planche A4 (marges et traits de coupe)</option></select></label>
+        <button class="btn btn-ghost" data-pv-download>Télécharger le PDF</button>
+        <button class="btn btn-primary" data-pv-print>Imprimer</button>`,
       onReady: root => {
-        root.querySelector("[data-pv-print]").addEventListener("click", async event => {
-          event.target.disabled = true;
+        const run = async (event, direct) => {
+          const buttons = root.querySelectorAll("[data-pv-print],[data-pv-download]");
+          buttons.forEach(b => { b.disabled = true; });
           try {
-            saveBlob(await apiBlob("/print/pdf", { badge_ids: [d.id], layout: root.querySelector("[data-pv-layout]").value }));
-            notify("Badge envoyé à l'impression : réimpression inscrite dans l'historique.", "success");
+            const layout = root.querySelector("[data-pv-layout]").value;
+            const file = await apiBlob("/print/pdf", { badge_ids: [d.id], layout });
+            // Taille attendue = modèle figé à l'émission (carte) ou A4 (planche) : contrôlée avant l'impression.
+            const expected = layout === "a4" ? [A4_MM] : [[Number(d.design.width || d.width_mm), Number(d.design.height || d.height_mm)]];
+            if (direct) {
+              const printed = await printPdf(file, expected);
+              if (printed.mode === "dialog") notify(`Fenêtre d'impression ouverte : badge ${printed.format}. Imprimez à 100 % (taille réelle). Impression inscrite dans l'historique.`, "success");
+            } else {
+              saveBlob(file);
+              notify("PDF d'impression téléchargé : impression inscrite dans l'historique.", "success");
+            }
             closeModal();
             rerender();
-          } catch (error) { notify(error.message || String(error), "error"); event.target.disabled = false; }
-        });
+          } catch (error) { notify(error.message || String(error), "error"); buttons.forEach(b => { b.disabled = false; }); }
+        };
+        root.querySelector("[data-pv-print]").addEventListener("click", event => run(event, true));
+        root.querySelector("[data-pv-download]").addEventListener("click", event => run(event, false));
       },
     });
   }
@@ -780,7 +859,7 @@
         <div class="bs-template-thumb">${previewHTML(t.design, { values: SAMPLE }, { width: 150 })}</div>
         <div class="bs-template-body"><h3>${esc(t.name)}</h3>
           <p>${t.is_system ? `<span class="bs-pill is-muted">Référence</span>` : ""}${t.is_default ? `<span class="bs-pill is-ok">Par défaut</span>` : ""}<span class="bs-pill is-none">${esc(t.society || "Toutes sociétés")}</span></p>
-          <small>${num(t.width_mm)} × ${num(t.height_mm)} mm · ${t.design.pages.length > 1 ? "recto verso" : "recto"} · version ${esc(t.version)}</small>
+          <small>${mmFr(t.width_mm)} × ${mmFr(t.height_mm)} mm · ${t.design.pages.length > 1 ? "recto verso" : "recto"} · version ${esc(t.version)}</small>
           <div class="bs-actions">
             ${t.is_system || !can("admin") ? "" : `<a class="btn btn-primary" href="#/drh/badges/studio/${t.id}">Modifier</a>`}
             ${can("admin") ? `<button class="btn btn-secondary" data-bs="tpl-duplicate" data-id="${t.id}">Dupliquer</button>` : ""}
@@ -813,7 +892,7 @@
     const d = out.data;
     const lock = free(can("admin"));
     shell(view, "parametres", `<form class="card bs-panel bs-settings" data-bs-form="settings">
-      <p class="bs-muted">Réglages ${society() ? "de la société " + esc(society()) : "communs à toutes les sociétés"}. Format de carte : ${num(out.card.width_mm)} × ${num(out.card.height_mm)} mm (CR80), modifiable par modèle dans le studio.</p>
+      <p class="bs-muted">Réglages ${society() ? "de la société " + esc(society()) : "communs à toutes les sociétés"}. Format des nouveaux modèles : ${mmFr(out.card.width_mm)} × ${mmFr(out.card.height_mm)} mm (CR80). La taille de chaque modèle se règle dans le studio et fait foi pour l'aperçu, le PDF et l'impression.</p>
       <label>Préfixe des numéros de badge<input class="input" name="number_prefix" maxlength="8" value="${esc(d.number_prefix)}" ${lock}></label>
       <label>Durée de validité (mois, 0 = sans date de fin)<input class="input" type="number" min="0" max="120" name="validity_months" value="${esc(d.validity_months)}" ${lock}></label>
       <label>Photo utilisée<select class="select" name="photo_source" ${lock}><option value="portrait" ${d.photo_source === "portrait" ? "selected" : ""}>Portrait recadré sur le visage, fond blanc</option><option value="original" ${d.photo_source === "original" ? "selected" : ""}>Photo de la fiche telle quelle</option></select></label>
@@ -901,7 +980,7 @@
         if (template) openPreview({ title: `Aperçu du modèle « ${esc(template.name)} »`, items: [{ design: template.design, ctx: { values: SAMPLE } }], note: "Données d'exemple (dont le groupe sanguin « O+ »), sans rapport avec un employé." });
       });
       else if (action === "proof" && emp) guard(async () => saveBlob(await apiBlob("/preview/pdf", { employee_id: emp.id, template_id: Number(create.templateId) || null, crop: create.crop }), true));
-      else if (action === "print" && emp && emp.badge) guard(async () => { saveBlob(await apiBlob("/print/pdf", { badge_ids: [emp.badge.id], layout: target.dataset.layout })); rerender(); });
+      else if (action === "print" && emp && emp.badge) guard(async () => { await printPdf(await apiBlob("/print/pdf", { badge_ids: [emp.badge.id], layout: target.dataset.layout })); rerender(); });
       else if (action === "revoke" && emp && emp.badge) revokeDialog(emp.badge);
       else if (action === "show-issued" && emp && emp.badge) guard(() => showIssued(emp.badge));
       else if (action === "tpl-duplicate") guard(async () => { const copy = await api(`/templates/${target.dataset.id}/duplicate` + query({ society: society() }), { method: "POST" }); state.templates = null; location.hash = "#/drh/badges/studio/" + copy.id; });
@@ -1047,7 +1126,7 @@
   function destroyAll() { state.seq++; clearTimeout(searchTimer); forgetPhotos(); if (window.BadgeStudioEditor) window.BadgeStudioEditor.destroy(); }
   window.renderBadgeStudio = renderBadgeStudio;
   window.badgeStudioDestroy = destroyAll;
-  window.BadgeStudio = { isLatin, loadUnicodeFont, can, NO_RIGHT, reason, api, apiBlob, saveBlob, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos, openPreview, free, query };
+  window.BadgeStudio = { isLatin, loadUnicodeFont, can, NO_RIGHT, reason, api, apiBlob, saveBlob, printPdf, pdfPageSizes, badgeSvg, previewHTML, coverBox, fillFields, esc, num, color, notify, society, loadTemplates, resizeImage, shell, state, SAMPLE, PT, forgetPhotos, openPreview, free, query };
 
   SGDIModules.registerModule({
     key: "badges", routes: [], dependencies: ["badges-studio"], init: function () {},

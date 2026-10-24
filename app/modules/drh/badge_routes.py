@@ -1114,8 +1114,11 @@ def print_pdf(payload: PrintIn, request: Request, db: Session = Depends(get_db),
              details={"layout": layout, "batch": len(badges), "print_count": badge.print_count})
     db.commit()
     name = f"badge-{badges[0].number}.pdf" if len(badges) == 1 else f"badges-{now:%Y%m%d-%H%M}.pdf"
+    # Taille des pages annoncée au navigateur, qui la vérifie avant d'ouvrir l'impression :
+    # format exact du modèle figé à l'émission (carte) ou A4 (planche).
+    size = "A4" if layout == "a4" else ";".join(dict.fromkeys(f"{item.design['width']:g}x{item.design['height']:g}" for item in items))
     return Response(content=content, media_type="application/pdf",
-                    headers={**PDF_HEADERS, "Content-Disposition": f'attachment; filename="{name}"'})
+                    headers={**PDF_HEADERS, "Content-Disposition": f'attachment; filename="{name}"', "X-Badge-Page-Size-Mm": size})
 
 
 @router.get("/{badge_id}")

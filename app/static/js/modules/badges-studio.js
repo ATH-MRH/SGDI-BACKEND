@@ -40,6 +40,9 @@
   const selected = () => ed.sel.map(byId).filter(Boolean);
   const snap = value => Math.round(value / GRID) * GRID;
   const round = value => Math.round(value * 100) / 100;
+  const mmText = value => String(round(Number(value))).replace(".", ",");
+  /** Millimètres saisis : virgule ou point décimal ; null si la valeur n'est pas un nombre. */
+  const parseMm = value => { const text = String(value || "").trim().replace(",", "."); const number = Number(text); return text && Number.isFinite(number) ? number : null; };
   function newId() { return "e" + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
   function draftKey() { return "bsDraft:" + (ed.id || "nouveau"); }
 
@@ -282,11 +285,12 @@
       const d = ed.design;
       return `<h2>Face — ${B().esc(page().name)}</h2><div class="bs-st-form">
         <label>Fond<input type="color" data-pp="background" value="${B().esc(page().background)}" ${lockAttr()}></label>
-        <label>Largeur (mm)<input class="input" type="number" data-pp="width" min="20" max="300" step="0.5" value="${d.width}" ${lockAttr()}></label>
-        <label>Hauteur (mm)<input class="input" type="number" data-pp="height" min="20" max="300" step="0.5" value="${d.height}" ${lockAttr()}></label>
+        <label>Largeur (mm)<input class="input" type="text" inputmode="decimal" data-pp="width" value="${mmText(d.width)}" aria-describedby="bs-st-size-help" ${lockAttr()}></label>
+        <label>Hauteur (mm)<input class="input" type="text" inputmode="decimal" data-pp="height" value="${mmText(d.height)}" aria-describedby="bs-st-size-help" ${lockAttr()}></label>
+        <p class="bs-muted" id="bs-st-size-help">Format de la carte : <strong data-st-format>${mmText(d.width)} × ${mmText(d.height)} mm</strong> (20 à 300 mm, virgule acceptée). Le PDF et l'impression utilisent exactement cette taille.</p>
         <button class="btn btn-ghost" data-st="swap-size" ${ed.readonly ? "disabled" : ""}>Inverser portrait / paysage</button>
         ${ed.readonly ? "" : `<div class="bs-chips" role="group" aria-label="Formats courants"><button data-st="format" data-w="54" data-h="86">CR80 portrait 54 × 86</button><button data-st="format" data-w="85.6" data-h="54">CR80 paysage 85,6 × 54</button></div>`}
-        <p class="bs-muted">Format CR80 : 54 × 86 mm. Sélectionnez un élément pour modifier ses propriétés ; Maj + clic pour en sélectionner plusieurs.</p></div>`;
+        <p class="bs-muted">Sélectionnez un élément pour modifier ses propriétés ; Maj + clic pour en sélectionner plusieurs.</p></div>`;
     }
     if (items.length > 1) return `<h2>${items.length} éléments</h2><div class="bs-st-form">${field("Opacité", "opacity", items[0].opacity, "num", { step: 0.05, min: 0, max: 1 })}<p class="bs-muted">Utilisez la disposition pour aligner, centrer, dupliquer ou verrouiller la sélection.</p></div>`;
     const el = items[0];
@@ -322,12 +326,31 @@
     view.querySelectorAll('[data-st="redo"]').forEach(b => { b.disabled = !ed.redo.length; });
   }
   function select(ids) { ed.sel = ids; renderCanvas(); refreshSide(); }
-  function fitZoom() {
+  function computeZoom() {
     const stage = ed.view && ed.view.querySelector("[data-st-stage]");
-    if (!stage) return;
+    if (!stage) return ed.zoom;
     const available = Math.max(260, stage.clientHeight || 560) - 90;
-    ed.zoom = Math.max(2, Math.min(12, Math.floor(Math.min(available / ed.design.height, (Math.max(320, stage.clientWidth) - 80) / ed.design.width) * 2) / 2));
+    return Math.max(2, Math.min(12, Math.floor(Math.min(available / ed.design.height, (Math.max(320, stage.clientWidth) - 80) / ed.design.width) * 2) / 2));
+  }
+  function fitZoom() {
+    if (!ed.view || !ed.view.querySelector("[data-st-stage]")) return;
+    ed.zoom = computeZoom();
     renderAll();
+  }
+  /** Taille de la carte modifiée : canevas, règles graduées, grille, zoom et format affiché mis à jour
+      sur place, à chaque frappe. Le panneau n'est pas reconstruit : le champ suivant (hauteur après
+      largeur) garde la saisie en cours. Les éléments gardent leurs coordonnées en millimètres. */
+  function resizeStage(refit) {
+    const view = ed.view, d = ed.design;
+    if (!view) return;
+    if (refit) ed.zoom = computeZoom();
+    const canvas = view.querySelector("[data-st-canvas]"), overlay = view.querySelector("[data-st-overlay]");
+    if (canvas) { canvas.style.width = `${d.width * ed.zoom}px`; canvas.style.height = `${d.height * ed.zoom}px`; }
+    if (overlay) overlay.setAttribute("viewBox", `0 0 ${d.width} ${d.height}`);
+    ["h", "v"].forEach(axis => { const ruler = view.querySelector(`[data-st-ruler="${axis}"]`); if (ruler) ruler.outerHTML = rulerSvg(axis); });
+    const zoom = view.querySelector('[data-st="zoom-fit"]'); if (zoom) zoom.textContent = `${Math.round(ed.zoom / 6 * 100)} %`;
+    const format = view.querySelector("[data-st-format]"); if (format) format.textContent = `${mmText(d.width)} × ${mmText(d.height)} mm`;
+    renderCanvas();
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -629,11 +652,15 @@
       }
       if (t.dataset.pp) {
         if (!ed.typing) { checkpoint(); ed.typing = true; }
-        if (t.dataset.pp === "background") page().background = t.value;
-        else { const v = Number(t.value); if (v >= 20 && v <= 300) ed.design[t.dataset.pp] = v; }
-        changed();
-        if (final) { ed.typing = false; if (t.dataset.pp !== "background") { renderAll(); return; } }
-        renderCanvas();
+        if (t.dataset.pp === "background") { page().background = t.value; changed(); if (final) ed.typing = false; renderCanvas(); return; }
+        const v = parseMm(t.value), valid = v !== null && v >= 20 && v <= 300;
+        if (valid && round(v) !== ed.design[t.dataset.pp]) { ed.design[t.dataset.pp] = round(v); changed(); }
+        if (final) {
+          ed.typing = false;
+          if (!valid) B().notify(`${t.dataset.pp === "width" ? "Largeur" : "Hauteur"} invalide : entre 20 et 300 mm (ex. 85,6).`, "error");
+          t.value = mmText(ed.design[t.dataset.pp]);
+        }
+        resizeStage(final);
         return;
       }
       const prop = t.dataset.p;
