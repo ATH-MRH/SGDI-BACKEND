@@ -16,6 +16,7 @@
     { key: "personnel", label: "EFFECTIF", icon: "users" },
     { key: "position", label: "Fiche de position", icon: "idcard" },
     { key: "pointage", label: "Pointage", icon: "list" },
+    { key: "couverture", label: "Couverture terrain", icon: "chart" },
     { key: "absences", label: "Absences", icon: "userx" },
     { key: "justificatifs", label: "Justificatifs", icon: "filecheck" },
     { key: "conges", label: "Congés", icon: "calendar" },
@@ -31,6 +32,7 @@
     dashboard: { title: "Tableau de bord", icon: "chart", sub: (scope) => `Vue d'ensemble de la gestion des effectifs — ${scope}` },
     personnel: { title: "EFFECTIF", icon: "users", sub: (scope) => `Annuaire — lecture seule · ${scope}` },
     position: { title: "Fiches de position", icon: "idcard", sub: (scope) => `Accueil → Lecture seule → ${scope.replace(/ — /g, " → ")}` },
+    couverture: { title: "Couverture terrain", icon: "chart", sub: () => "Suivi des effectifs par site et par vacation" },
   };
 
   let currentKey = null;
@@ -226,6 +228,8 @@
       navigate: (k) => { location.hash = "#/" + k; },
       // Ligne « Répartition par site » cliquable : consulte ce site (toujours dans le périmètre).
       selectSite: (siteId) => { const site = window.SW.scopeSites("").find((x) => String(x.id) === String(siteId)); if (site) changeScope({ society: site.society || "", site_id: String(site.id) }); },
+      // Sélecteurs Structure / Site intégrés à une vue : même périmètre que la barre du BEO.
+      changeScope: (next) => changeScope(next),
     };
     try {
       const cleanup = await view(container, ctx);

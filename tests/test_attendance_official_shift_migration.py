@@ -13,7 +13,7 @@ REVISION, PREVIOUS = "20261009_0001", "20261008_0001"
 # Jonction Pointeur / IRON Emploi / Studio Badges / lot d'import des contrats / circuit et
 # convocations du recrutement / code officiel des sites, sans réécriture des parents ; puis
 # champs autorisés de la Fiche de position BEO (20261024_0001).
-HEAD = "20261025_0001"
+HEAD = "20261026_0001"
 PG_URL = os.getenv("ATTENDANCE_PG_URL")
 
 

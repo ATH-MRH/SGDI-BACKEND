@@ -53,7 +53,7 @@ test('chaque compteur ouvre sa liste détaillée ; retour rapide à la vue gén�
     ['expected', 'Attendus', 12, /OUALI Amine/],
     ['absent', 'Absents / non pointés', 3, /TOUATI Walid.*ABSENT \/ NON POINTÉ/],
     ['present', 'Présents', 9, /AMRANI Sofiane/],
-    ['maintien', 'En maintien', 1, /AMRANI Sofiane.*EN MAINTIEN/],
+    ['maintien', 'En maintien', 1, /AMRANI Sofiane.*Maintenu/],
   ];
   for (const [key, title, count, sample] of cases) {
     t.kpi(key).click();

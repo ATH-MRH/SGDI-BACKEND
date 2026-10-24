@@ -87,7 +87,7 @@ test("menu : EFFECTIF puis « Fiche de position », routes existantes conservée
   const w = shellWindow(makeFetch([]));
   await w.SiteWorkforceShell.renderShell();
   const nav = [...w.document.querySelectorAll("[data-nav]")].map((b) => [b.dataset.nav, b.lastChild.textContent.trim()]);
-  assert.deepStrictEqual(nav.map(([k]) => k), ["dashboard", "personnel", "position", "pointage", "absences", "justificatifs", "conges", "maladies", "discipline", "reclamations"]);
+  assert.deepStrictEqual(nav.map(([k]) => k), ["dashboard", "personnel", "position", "pointage", "couverture", "absences", "justificatifs", "conges", "maladies", "discipline", "reclamations"]);
   assert.strictEqual(nav[1][1], "EFFECTIF");
   assert.strictEqual(nav[2][1], "Fiche de position");
   assert.ok(!nav.some(([, label]) => /Personnel/.test(label)), "libellé « Personnel » encore présent");

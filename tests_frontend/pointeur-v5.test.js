@@ -89,12 +89,12 @@ test('KPI personnes séparés de l\'activité du jour (mouvements)', async () =>
   assert.equal(t.d.getElementById('postKpis').contains(t.d.getElementById('entrantCount')), false);
 });
 
-test('présents actuellement : une carte par employé, badge EN POSTE / EN MAINTIEN', async () => {
+test('présents actuellement : une carte par employé, badge En poste / Maintenu (référence DG)', async () => {
   const t = await ready(boot({ live: [LIVE(POST())] }));
   const cards = [...t.d.querySelectorAll('#presentNowList .v5-person')];
   assert.equal(cards.length, 2); assert.equal(t.text('presentNowCount'), '2');
-  assert.match(cards[0].textContent, /ADDA IBRAHIM.*K162 · MAGASINIER · Groupe B.*Entrée réelle 13:40 · Vacation 14:00 → 22:00.*EN POSTE/);
-  assert.match(cards[1].textContent, /BENALI SAMIR.*EN MAINTIEN/); assert.equal(cards[0].querySelector('.v5-avatar').textContent, 'AI');
+  assert.match(cards[0].textContent, /ADDA IBRAHIM.*K162 · MAGASINIER · Groupe B.*Entrée réelle 13:40 · Vacation 14:00 → 22:00.*En poste/);
+  assert.match(cards[1].textContent, /BENALI SAMIR.*Maintenu/); assert.equal(cards[0].querySelector('.v5-avatar').textContent, 'AI');
   assert.equal(new Set(cards.map((c) => c.dataset.employee)).size, 2);
 });
 

@@ -78,8 +78,8 @@ test("navigation : sidebar et barre bleues fixes, EFFECTIF au lieu de Personnel,
   await settle();
   const doc = w.document;
   const labels = [...doc.querySelectorAll("[data-nav] .nav-link-label")].map((l) => l.textContent);
-  assert.deepStrictEqual(labels, ["Tableau de bord", "EFFECTIF", "Fiche de position", "Pointage", "Absences", "Justificatifs", "Congés", "Maladies", "Discipline", "Réclamations"]);
-  assert.ok(doc.querySelectorAll("[data-nav] svg.beo-ic").length === 10, "icône par entrée");
+  assert.deepStrictEqual(labels, ["Tableau de bord", "EFFECTIF", "Fiche de position", "Pointage", "Couverture terrain", "Absences", "Justificatifs", "Congés", "Maladies", "Discipline", "Réclamations"]);
+  assert.ok(doc.querySelectorAll("[data-nav] svg.beo-ic").length === 11, "icône par entrée");
   assert.doesNotMatch(doc.querySelector("#root").textContent, /Personnel|Toutes mes sociétés|Société/);
   assert.strictEqual(doc.querySelector(".scope-chip"), null);
   assert.strictEqual(doc.querySelector('[data-nav="dashboard"]').getAttribute("aria-current"), "page");

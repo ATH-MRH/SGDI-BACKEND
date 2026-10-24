@@ -1,0 +1,7 @@
+Recette locale, données fictives, base jetable PostgreSQL 16 — vacation en cours, par site
+Mine du Nord           2026-10-23 NUIT groupe C 16:30–08:00 | attendus OPS 3 · Pointeur 3 · BEO 3 | présents Pointeur 2 · BEO 2 | IDENTIQUE
+Concasseur Est         2026-10-23 NUIT groupe C 16:30–08:00 | attendus OPS 3 · Pointeur 3 · BEO 3 | présents Pointeur 2 · BEO 2 | IDENTIQUE
+Usine de traitement    2026-10-23 NUIT groupe C 16:30–08:00 | attendus OPS 2 · Pointeur 2 · BEO 2 | présents Pointeur 2 · BEO 2 | IDENTIQUE
+Campement              2026-10-23 NUIT groupe C 16:30–08:00 | attendus OPS 2 · Pointeur 2 · BEO 2 | présents Pointeur 1 · BEO 1 | IDENTIQUE
+Dépôt sans planning    sans planning publié
+RÉSULTAT : OPS = Pointeur = BEO

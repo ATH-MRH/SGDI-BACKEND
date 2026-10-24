@@ -90,8 +90,8 @@ LABELS = {
 def classify_entry(plan: dict[str, Any], at: datetime) -> dict[str, Any]:
     """Instantané d'une entrée à `at` sur la vacation officielle `plan` (travaillée)."""
     start = plan["scheduled_start"]
-    policy_v7 = (plan.get("model") or {}).get("code") == official.FIXED_MODEL_CODE
-    opens = start - (EARLY_WINDOW if policy_v7 else timedelta(minutes=30))
+    policy_v7 = bool(plan.get("configuration_id")) or (plan.get("model") or {}).get("code") == official.FIXED_MODEL_CODE
+    opens = start - (timedelta(minutes=plan["policy"]["early_minutes"]) if plan.get("configuration_id") else (EARLY_WINDOW if policy_v7 else timedelta(minutes=30)))
     if at < opens:
         status, counted_start = EARLY_OUTSIDE_WINDOW, None
     elif at <= start:
@@ -100,6 +100,7 @@ def classify_entry(plan: dict[str, Any], at: datetime) -> dict[str, Any]:
         status, counted_start = ENTRY_AFTER_START, at
     return {
         "policy_version": 7 if policy_v7 else 1,
+        **({"configuration_id":plan["configuration_id"], "configuration_version":plan["configuration_version"], "policy":plan["policy"]} if plan.get("configuration_id") else {}),
         "kind": KIND_NORMAL, "regime": plan["regime"], "group": plan["group"], "shift": plan["shift"],
         "work_date": plan["work_date"].isoformat(), "cycle_day": plan["cycle_day"],
         "model_version": (plan["model"] or {}).get("version"),
@@ -276,4 +277,4 @@ def view(data: Any) -> dict[str, Any] | None:
     kind = snapshot.get("kind", KIND_NORMAL)
     return {**snapshot, "kind": kind, "kind_label": KIND_LABELS.get(kind),
             "shift_label": official.SHIFT_LABELS.get(snapshot.get("shift") or ""),
-            "entry_status_label": ENTRY_STATUS_LABELS.get(snapshot.get("entry_status") or "")}
+            "entry_status_label": (f"Retard ≥ {snapshot['policy']['late_refusal_minutes']} minutes — poste de sécurité requis" if snapshot.get("policy") and snapshot.get("entry_status")==LATE_ENTRY_REFUSED else ENTRY_STATUS_LABELS.get(snapshot.get("entry_status") or ""))}

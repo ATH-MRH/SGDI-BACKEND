@@ -7,6 +7,7 @@ from app.modules.drh.candidate_import_routes import router as candidate_import_r
 from app.modules.drh.employee_import_routes import router as employee_import_router
 from app.modules.drh.badge_routes import router as badge_router
 from app.modules.ops.routes import router as ops_router
+from app.modules.rotations.routes import router as rotations_router
 from app.modules.materiel.routes import router as materiel_router
 from app.modules.commercial.routes import router as commercial_router
 from app.modules.irongs.routes import router as irongs_router
@@ -58,6 +59,7 @@ api_router.include_router(drh_router, prefix="/drh", tags=["DRH"])
 api_router.include_router(candidate_import_router, prefix="/drh", tags=["Recrutement — import Excel"])
 api_router.include_router(badge_router, prefix="/drh", tags=["DRH — badges"])
 api_router.include_router(ops_router, prefix="/ops", tags=["OPS"])
+api_router.include_router(rotations_router, prefix="/ops/central-rotations", tags=["OPS rotations"])
 api_router.include_router(materiel_router, prefix="/materiel", tags=["Matériel & équipement"])
 api_router.include_router(commercial_router, prefix="/commercial", tags=["Commercial"])
 api_router.include_router(irongs_router, prefix="/irongs", tags=["IRONGS BASE"])

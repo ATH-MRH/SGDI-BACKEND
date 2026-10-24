@@ -77,7 +77,7 @@ def _status(row: DailyPresence | None, plan: dict[str, Any], day: date, now: dat
     except ValueError:
         return "non_pointe"
     local_now = now.astimezone(core.TZ).replace(tzinfo=None)
-    cutoff = shift_start + timedelta(minutes=max(0, int(settings.attendance_late_tolerance_minutes)))
+    cutoff = shift_start + timedelta(minutes=max(0, int(plan.get("policy", {}).get("late_refusal_minutes", settings.attendance_late_tolerance_minutes))))
     return "absent" if local_now >= cutoff else "non_pointe"
 
 

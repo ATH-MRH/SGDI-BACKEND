@@ -1,0 +1,65 @@
+{
+  "status": "CANDIDAT FUSION — sous réserve de la CI du SHA publié et du GO DG",
+  "base_main": "5182212bc9151954913c53aab8aa85550a00fd31",
+  "branch": "feat/central-rotations-local",
+  "tests": {
+    "backend_with_postgresql": {
+      "passed": 3099,
+      "skipped": 127,
+      "xfailed": 1,
+      "failed": 0
+    },
+    "migration_matrix_and_postgresql": {
+      "passed": 41,
+      "failed": 0,
+      "scenarios": [
+        "pré-V7 (production actuelle)",
+        "ancienne V7 déjà appliquée"
+      ]
+    },
+    "frontend_pretest": {
+      "passed": 41,
+      "failed": 0
+    },
+    "frontend": {
+      "passed": 1352,
+      "failed": 0
+    },
+    "chrome_recette_four_screens": {
+      "widths": [
+        1920,
+        1440,
+        1280,
+        1024,
+        768,
+        390
+      ],
+      "measures": 24,
+      "defects": 0,
+      "js_errors": 0
+    },
+    "mobile": {
+      "passed": 41,
+      "failed": 0
+    },
+    "mobile_typecheck": "passed",
+    "mobile_lint": "passed",
+    "diff_check": "passed"
+  },
+  "test_commands": [
+    "TEST_POSTGRES_ADMIN_URL=<base jetable locale> python -m pytest -q",
+    "TEST_POSTGRES_ADMIN_URL=<base jetable locale> python -m pytest -q tests/test_pointeur_v7_migration.py tests/test_pointeur_v7_postgresql.py tests/test_central_rotation_expected_pg.py",
+    "npm test (pretest + test)",
+    "node shots.js (recette Chrome locale, données synthétiques) — résultats : chrome-recette.json",
+    "cd mobile/recruitment: npm test; npm run typecheck; npm run lint"
+  ],
+  "consistency": "Recette : OPS = Pointeur = BEO pour la vacation en cours de chaque site (coherence-ops-pointeur-beo.txt) ; PostgreSQL réel : moteur = simulation = Pointeur = BEO = 2 (tests/test_central_rotation_expected_pg.py)",
+  "visual_acceptance": "Quatre écrans recettés contre les références DG ; écarts documentés dans central-rotations-validation.md",
+  "safety": {
+    "production_migration": false,
+    "real_site_activation": false,
+    "merge": false,
+    "deployment": false
+  },
+  "arbitrage_dg": "24/10/2026 : Jour du week-end et des fériés couvert par B/C/D, occurrences quotidiennes, horaires explicites par site (démo 08:00 → 16:30), début de semaine versionné, variations masquées"
+}

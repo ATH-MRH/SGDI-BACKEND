@@ -823,6 +823,7 @@ function renderOPS(view,sub,arg){
     opsModuleTimeout(ptStartQrTabletTimer,100);
     return;
   }
+  if(sub==="rotations"){renderCentralRotations(view,arg);return}
   if(sub==="missions"){renderOpsMissions(view,arg);return}
   if(sub==="mouvements"){renderOpsMouvements(view);return}
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
@@ -1625,7 +1626,7 @@ function openInspectionScan(id){
   openModal(`<h3 class="font-bold text-lg mb-3">Scan QR - Inspection</h3><div class="text-sm text-slate-600 mb-3">${escapeHTML(inspectionSupervisorName(i.supervisorId))} · ${formatDate(i.date)}</div>${(i.siteIds||[]).map(siteId=>{const sc=(i.scans||{})[siteId]||{};return`<div class="card p-3 mb-2"><div class="font-bold mb-2">${escapeHTML(inspectionSiteName(siteId))}</div><div class="text-xs text-slate-500 mb-2">Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"} · Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inspectionScan('${i.id}','${siteId}','entree')">Scanner entrée</button><button class="btn btn-primary text-xs" onclick="inspectionScan('${i.id}','${siteId}','sortie')">Scanner sortie</button></div></div>`}).join("")}<div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
-SGDIModules.registerModule({key: "ops", routes: ["ops","superviseur"], dependencies: ["ops-1"], init: function(){}, destroy: opsModuleDestroy});
+SGDIModules.registerModule({key: "ops", routes: ["ops","superviseur"], dependencies: ["ops-1","ops-rotations"], init: function(){}, destroy: opsModuleDestroy});
 
 const opsModuleTimeouts=new Set();
 function opsModuleTimeout(callback,delay){

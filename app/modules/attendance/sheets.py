@@ -243,7 +243,12 @@ def attach_event(db: Session, *, event: AttendanceEvent, employee: Employee, sit
 
     if site is None or event.event_type not in (EVENT_ARRIVAL, EVENT_DEPARTURE):
         return None
+    frozen = (event.data or {}).get("counted") or {}
+    central = frozen.get("configuration_id") is not None
     setting = setting_for(db, site.id)
+    if central:
+        from types import SimpleNamespace
+        setting = SimpleNamespace(version=frozen["configuration_version"])
     if setting is None:
         return None
     if db.get(AttendanceSheetEvent, event.id) is not None:
@@ -262,7 +267,9 @@ def attach_event(db: Session, *, event: AttendanceEvent, employee: Employee, sit
             .order_by(AttendanceSheetLine.first_entry_at.desc(), AttendanceSheetLine.id.desc()).limit(1)
         ).scalar_one_or_none()
     if line is None:
-        window = window_at(setting, local, arrival=event.event_type == EVENT_ARRIVAL)
+        window = (Window(start=datetime.fromisoformat(frozen["scheduled_start"]),
+                         end=datetime.fromisoformat(frozen["scheduled_end"]), slot_index=0)
+                  if central else window_at(setting, local, arrival=event.event_type == EVENT_ARRIVAL))
         sheet = _get_or_create_sheet(db, site, setting, window, "EVENT")
         line = _get_or_create_line(db, sheet, employee.id, assignment.group_code if assignment else None)
 

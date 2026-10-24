@@ -312,6 +312,27 @@ def attendance_live(response: Response,
                      before_id=before_id, limit=limit, photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
 
 
+# Couverture terrain : attendus canoniques du planning officiel (moteur central ou V7), lecture seule.
+@router.get("/attendance/coverage")
+def attendance_coverage(response: Response, day: date | None = Query(None, alias="date"),
+                        shift: str = Query("", pattern="^(|JOUR|NUIT)$"), group: str = Query("", pattern="^(|A|B|C|D)$"),
+                        db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope), user: User = Depends(current_user)):
+    from app.modules.rotations.views import coverage
+    from app.modules.site_workforce import position_file
+    if not {"read", "admin"}.intersection(user.authorized_actions or []):
+        raise HTTPException(403, "Lecture du pointage non autorisée")
+    response.headers["Cache-Control"] = "no-store, private"
+    now = attendance_core._now_local()
+    current = day is None and not shift
+    if current:
+        # Ni date ni vacation choisies : la vacation en cours, identique à celle du Pointeur.
+        from app.modules.rotations.views import current_vacation
+        day, shift = current_vacation(db, set(scope.selected), now)
+    result = coverage(db, set(scope.selected), day or now.date(), now=now, shift_kind=shift, group=group,
+                      sites=dict(scope.sites), photo_allowed="identity.photo" in position_file.allowed_fields(db, user.id))
+    return {**result, "current": current, "sites": [scope.label(sid) for sid in scope.selected]}
+
+
 # ── Pointage (§9) ────────────────────────────────────────────────────────────────────────
 @router.get("/attendance")
 def attendance(presence_date: date, db: Session = Depends(get_db), scope: BeoScope = Depends(resolve_scope)):
@@ -779,6 +800,7 @@ def attendance_situations(db: Session = Depends(get_db), scope: BeoScope = Depen
     from app.modules.attendance import situations
     rows = db.scalars(select(AttendanceAnomaly).where(
         AttendanceAnomaly.site_id.in_(scope.selected or [-1]),
-        AttendanceAnomaly.employee_id.in_(assigned_employees_subquery(scope.selected)),
+        or_(AttendanceAnomaly.employee_id.is_(None),
+            AttendanceAnomaly.employee_id.in_(assigned_employees_subquery(scope.selected))),
     ).order_by(AttendanceAnomaly.id.desc()).limit(100)).all()
     return {"items": [{**situations.view(row), **scope.label(row.site_id)} for row in rows]}
